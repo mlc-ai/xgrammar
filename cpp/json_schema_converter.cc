@@ -1034,7 +1034,7 @@ std::string JSONSchemaToEBNFConverter::VisitObject(
   }
 
   return result;
-};
+}
 
 std::string JSONSchemaToEBNF(
     std::string schema,
