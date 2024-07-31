@@ -65,6 +65,7 @@ class IndentManager {
    * indent_manager.GetSep(); // get the start separator: "\"\n  \""
    * indent_manager.GetSep(); // get the middle separator: "\",\n  \""
    * indent_manager.GetSep(true); // get the end separator: "\"\n\""
+   * indent_manager.EndIndent();
    * \endcode
    */
   std::string NextSeparator(bool is_end = false);

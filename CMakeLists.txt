@@ -37,7 +37,6 @@ add_library(xgrammar_objs OBJECT ${SOURCES})
 target_include_directories(xgrammar_objs PUBLIC ${XGRAMMAR_INCLUDE})
 target_compile_definitions(xgrammar_objs PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
 
-add_library(xgrammar_lib $<TARGET_OBJECTS:xgrammar_objs>)
+add_library(xgrammar SHARED $<TARGET_OBJECTS:xgrammar_objs>)
 
 pybind11_add_module(xgrammar_bindings $<TARGET_OBJECTS:xgrammar_objs>)
-install(TARGETS xgrammar_bindings DESTINATION .)
