@@ -1,11 +1,15 @@
 cmake_minimum_required(VERSION 3.15)
 project(xgrammar LANGUAGES CXX)
 
-OPTION(BUILD_BINDINGS "Build Python bindings" ON)
+option(BUILD_BINDINGS "Build Python bindings" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+if(NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+endif()
 
 if(MSVC)
   set(CMAKE_CXX_FLAGS "/Wall /WX ${CMAKE_CXX_FLAGS}")
@@ -21,8 +25,9 @@ if(NOT CMAKE_BUILD_TYPE)
   )
 endif()
 
-set(XGRAMMAR_INCLUDE_PATH ${PROJECT_SOURCE_DIR}/3rdparty/picojson
-                     ${PROJECT_SOURCE_DIR}/3rdparty/dlpack/include ${PROJECT_SOURCE_DIR}/include
+set(XGRAMMAR_INCLUDE_PATH
+    ${PROJECT_SOURCE_DIR}/3rdparty/picojson ${PROJECT_SOURCE_DIR}/3rdparty/dlpack/include
+    ${PROJECT_SOURCE_DIR}/include
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
