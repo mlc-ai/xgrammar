@@ -2,7 +2,7 @@
  *  Copyright (c) 2024 by Contributors
  * \file xgrammar/support/logging.cc
  */
-#include <xgrammar/support/logging.h>
+#include "logging.h"
 
 namespace xgrammar {
 

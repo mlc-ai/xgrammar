@@ -6,11 +6,11 @@
 #ifndef XGRAMMAR_SUPPORT_DYNAMIC_BITSET_H_
 #define XGRAMMAR_SUPPORT_DYNAMIC_BITSET_H_
 
-#include <xgrammar/support/logging.h>
-
 #include <cstdint>
 #include <cstring>
 #include <vector>
+
+#include "logging.h"
 
 namespace xgrammar {
 

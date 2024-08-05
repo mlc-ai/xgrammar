@@ -3,7 +3,6 @@
  * \file xgrammar/json_schema_converter.cc
  */
 #include <picojson.h>
-#include <xgrammar/support/logging.h>
 
 #include <chrono>
 #include <iostream>
@@ -14,6 +13,8 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+
+#include "support/logging.h"
 
 namespace xgrammar {
 

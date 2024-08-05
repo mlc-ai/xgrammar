@@ -5,7 +5,6 @@
 
 #include <pybind11/pybind11.h>
 #include <xgrammar/grammar.h>
-#include <xgrammar/json_schema_converter.h>
 
 namespace py = pybind11;
 using namespace xgrammar;

@@ -8,11 +8,12 @@
 #define XGRAMMAR_GRAMMAR_AST_H_
 
 #include <xgrammar/grammar.h>
-#include <xgrammar/support/logging.h>
 #include <xgrammar/support/object.h>
 
 #include <string>
 #include <vector>
+
+#include "support/logging.h"
 
 namespace xgrammar {
 

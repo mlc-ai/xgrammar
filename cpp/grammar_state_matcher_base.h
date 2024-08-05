@@ -6,6 +6,7 @@
 #ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_BASE_H_
 #define XGRAMMAR_GRAMMAR_STATE_MATCHER_BASE_H_
 
+#include <xgrammar/support/encoding.h>
 #include <xgrammar/grammar.h>
 
 #include <algorithm>

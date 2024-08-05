@@ -4,12 +4,12 @@
  */
 
 #include <xgrammar/grammar.h>
-#include <xgrammar/json_schema_converter.h>
 
 #include "grammar_ast.h"
 #include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_serializer.h"
+#include "json_schema_converter.h"
 
 namespace xgrammar {
 

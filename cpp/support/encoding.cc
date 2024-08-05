@@ -3,9 +3,10 @@
  * \file xgrammar/support/encoding.cc
  */
 #include <xgrammar/support/encoding.h>
-#include <xgrammar/support/logging.h>
 
 #include <array>
+
+#include "logging.h"
 
 namespace xgrammar {
 

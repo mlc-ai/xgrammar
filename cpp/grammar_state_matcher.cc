@@ -4,7 +4,6 @@
  */
 // #define XGRAMMAR_ENABLE_LOG_DEBUG 1
 #include <xgrammar/grammar.h>
-#include <xgrammar/grammar_state_matcher.h>
 
 #include <chrono>
 #include <queue>

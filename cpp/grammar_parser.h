@@ -8,7 +8,8 @@
 #define XGRAMMAR_GRAMMAR_PARSER_H_
 
 #include <xgrammar/grammar.h>
-#include <xgrammar/support/logging.h>
+
+#include "support/logging.h"
 
 namespace xgrammar {
 

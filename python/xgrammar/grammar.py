@@ -18,27 +18,18 @@
 
 from typing import List, Optional, Tuple, Union
 
-# import tvm
-# import tvm._ffi
-# from tvm.runtime import Object
-
 # from ..tokenizers import Tokenizer
 # from . import _ffi_api
 
 
-@tvm._ffi.register_object("mlc.grammar.BNFGrammar")  # pylint: disable=protected-access
-class BNFGrammar(Object):
+class BNFGrammar:
     """This class stores the abstract syntax tree (AST) of the Backus-Naur Form (BNF) grammar and
     provides utilities to parse and print the AST. User should provide a BNF/EBNF (Extended
     Backus-Naur Form) grammar, and use from_ebnf_string to parse and simplify the grammar into an
     AST of BNF grammar.
     """
 
-    @staticmethod
-    def from_ebnf_string(
-        ebnf_string: str,
-        main_rule: str = "main",
-    ) -> "BNFGrammar":
+    def __init__(ebnf_string: str, main_rule: str = "main") -> None:
         r"""Construct a BNF grammar with a EBNF-formatted string. The grammar will be normalized
         (simplified) by default.
 
@@ -84,7 +75,7 @@ class BNFGrammar(Object):
         return self.to_string()
 
     @staticmethod
-    def from_json(json_string: str) -> "BNFGrammar":
+    def deserialize(json_string: str) -> "BNFGrammar":
         """Load a BNF grammar from the raw representation of the AST in JSON format.
 
         Parameters
@@ -99,7 +90,7 @@ class BNFGrammar(Object):
         """
         return _ffi_api.BNFGrammarFromJSON(json_string)  # type: ignore  # pylint: disable=no-member
 
-    def to_json(self, prettify: bool = True) -> str:
+    def serialize(self, prettify: bool = True) -> str:
         """Serialize the AST. Dump the raw representation of the AST to a JSON file.
 
         Parameters
@@ -117,13 +108,51 @@ class BNFGrammar(Object):
         )
 
     @staticmethod
-    def from_schema(
+    def _init_no_normalization(
+        ebnf_string: str,
+        main_rule: str = "main",
+    ) -> "BNFGrammar":
+        r"""Construct a BNF grammar with a EBNF-formatted string, but not normalize it.
+        For test purposes.
+
+        Parameters
+        ----------
+        ebnf_string : str
+            The grammar string.
+
+        main_rule : str
+            The name of the main rule. Default: "main".
+
+        Returns
+        -------
+        grammar : BNFGrammar
+            The parsed BNF grammar.
+        """
+        return _ffi_api.BNFGrammarDebugFromEBNFStringNoNormalize(  # type: ignore  # pylint: disable=no-member
+            ebnf_string, main_rule
+        )
+
+
+class BuiltinGrammar:
+    @staticmethod
+    def json() -> BNFGrammar:
+        """Get the grammar of standard JSON.
+
+        Returns
+        -------
+        grammar : BNFGrammar
+            The JSON grammar.
+        """
+        return _ffi_api.BNFGrammarGetGrammarOfJSON()  # type: ignore  # pylint: disable=no-member
+
+    @staticmethod
+    def json_schema(
         schema: str,
         *,
         indent: Optional[int] = 2,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True
-    ) -> "BNFGrammar":
+    ) -> BNFGrammar:
         """Construct a BNF grammar from the json schema string. The schema string should be in the
         format of the schema of a JSON file. We will parse the schema and generate a BNF grammar.
 
@@ -159,43 +188,7 @@ class BNFGrammar(Object):
         )
 
     @staticmethod
-    def get_grammar_of_json() -> "BNFGrammar":
-        """Get the grammar of standard JSON.
-
-        Returns
-        -------
-        grammar : BNFGrammar
-            The JSON grammar.
-        """
-        return _ffi_api.BNFGrammarGetGrammarOfJSON()  # type: ignore  # pylint: disable=no-member
-
-    @staticmethod
-    def debug_from_ebnf_string_no_normalize(
-        ebnf_string: str,
-        main_rule: str = "main",
-    ) -> "BNFGrammar":
-        r"""Construct a BNF grammar with a EBNF-formatted string, but not normalize it.
-        For test purposes.
-
-        Parameters
-        ----------
-        ebnf_string : str
-            The grammar string.
-
-        main_rule : str
-            The name of the main rule. Default: "main".
-
-        Returns
-        -------
-        grammar : BNFGrammar
-            The parsed BNF grammar.
-        """
-        return _ffi_api.BNFGrammarDebugFromEBNFStringNoNormalize(  # type: ignore  # pylint: disable=no-member
-            ebnf_string, main_rule
-        )
-
-    @staticmethod
-    def debug_json_schema_to_ebnf(
+    def _json_schema_to_ebnf(
         schema: str,
         *,
         indent: Optional[int] = 2,
