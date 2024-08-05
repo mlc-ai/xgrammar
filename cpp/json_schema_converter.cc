@@ -3,6 +3,7 @@
  * \file xgrammar/json_schema_converter.cc
  */
 #include <picojson.h>
+#include <xgrammar/grammar.h>
 
 #include <chrono>
 #include <iostream>
@@ -12,6 +13,7 @@
 #include <queue>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "support/logging.h"
@@ -1038,8 +1040,8 @@ std::string JSONSchemaToEBNFConverter::VisitObject(
   return result;
 }
 
-std::string JSONSchemaToEBNF(
-    std::string schema,
+std::string BuiltinGrammar::_JSONSchemaToEBNF(
+    const std::string& schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode

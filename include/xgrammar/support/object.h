@@ -11,7 +11,6 @@ namespace xgrammar {
 #define XGRAMMAR_DEFINE_PIMPL_METHODS(TypeName)                                \
  public:                                                                       \
   class Impl;                                                                  \
-  TypeName() = default;                                                        \
   explicit TypeName(std::shared_ptr<Impl> pimpl) : pimpl_(std::move(pimpl)) {} \
   TypeName(const TypeName& other) = default;                                   \
   TypeName(TypeName&& other) noexcept = default;                               \

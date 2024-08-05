@@ -90,7 +90,7 @@ class BNFGrammar:
         """
         return _ffi_api.BNFGrammarFromJSON(json_string)  # type: ignore  # pylint: disable=no-member
 
-    def serialize(self, prettify: bool = True) -> str:
+    def serialize(self, prettify: bool = False) -> str:
         """Serialize the AST. Dump the raw representation of the AST to a JSON file.
 
         Parameters
