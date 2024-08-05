@@ -427,8 +427,7 @@ class GrammarInitContextCache::Impl {
 
 inline GrammarInitContextCache::Impl::Impl(const std::vector<std::string>& token_table)
     : token_table_(token_table) {
-  init_ctx_for_json_ =
-      GrammarStateMatcher::CreateInitContext(BNFGrammar::GetGrammarOfJSON(), token_table_);
+  init_ctx_for_json_ = GrammarStateMatcher::CreateInitContext(BuiltinGrammar::JSON(), token_table_);
 }
 
 inline std::shared_ptr<GrammarStateInitContext>
@@ -438,7 +437,7 @@ GrammarInitContextCache::Impl::GetInitContextForJSONSchema(const std::string& sc
     return it->second;
   }
   auto init_ctx =
-      GrammarStateMatcher::CreateInitContext(BNFGrammar::FromSchema(schema), token_table_);
+      GrammarStateMatcher::CreateInitContext(BuiltinGrammar::JSONSchema(schema), token_table_);
   init_ctx_for_schema_cache_[schema] = init_ctx;
   return init_ctx;
 }

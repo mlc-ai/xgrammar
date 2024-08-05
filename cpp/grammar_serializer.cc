@@ -128,6 +128,35 @@ std::string BNFGrammarPrinter::ToString() {
   return result;
 }
 
+
+std::string BNFGrammarJSONSerializer::ToString() {
+  picojson::object grammar_json_obj;
+
+  picojson::array rules_json;
+  for (const auto& rule : grammar_->rules_) {
+    picojson::object rule_json;
+    rule_json["name"] = picojson::value(rule.name);
+    rule_json["body_expr_id"] = picojson::value(static_cast<int64_t>(rule.body_expr_id));
+    rules_json.push_back(picojson::value(rule_json));
+  }
+  grammar_json_obj["rules"] = picojson::value(rules_json);
+
+  picojson::array rule_expr_data_json;
+  for (const auto& data : grammar_->rule_expr_data_) {
+    rule_expr_data_json.push_back(picojson::value(static_cast<int64_t>(data)));
+  }
+  grammar_json_obj["rule_expr_data"] = picojson::value(rule_expr_data_json);
+  picojson::array rule_expr_indptr_json;
+  for (const auto& index_ptr : grammar_->rule_expr_indptr_) {
+    rule_expr_indptr_json.push_back(picojson::value(static_cast<int64_t>(index_ptr)));
+  }
+  grammar_json_obj["rule_expr_indptr"] = picojson::value(rule_expr_indptr_json);
+
+  auto grammar_json = picojson::value(grammar_json_obj);
+  return grammar_json.serialize(prettify_);
+}
+
+
 // TVM_REGISTER_GLOBAL("mlc.grammar.BNFGrammarToString").set_body_typed([](const BNFGrammar&
 // grammar) {
 //   return BNFGrammarPrinter(grammar).ToString();

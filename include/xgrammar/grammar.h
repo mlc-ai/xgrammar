@@ -88,8 +88,6 @@ class BNFGrammar {
   static BNFGrammar Deserialize(const std::string& json_string);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(BNFGrammar);
-
-  friend class BNFGrammarBuilder;
 };
 
 class BuiltinGrammar {

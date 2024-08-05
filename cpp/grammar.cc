@@ -28,6 +28,14 @@ std::ostream& operator<<(std::ostream& os, const BNFGrammar& grammar) {
   return os;
 }
 
+std::string BNFGrammar::Serialize(bool prettify) const {
+  return BNFGrammarJSONSerializer(*this).ToString();
+}
+
+BNFGrammar BNFGrammar::Deserialize(const std::string& json_string) {
+  return BNFJSONParser::Parse(json_string);
+}
+
 // Parse the EBNF string but not normalize it
 BNFGrammar BNFGrammar_InitNoNormalization(
     const std::string& ebnf_string, const std::string& main_rule

@@ -78,6 +78,38 @@ class BNFGrammarPrinter : public BNFGrammarSerializer {
   std::string PrintChoices(const RuleExpr& rule_expr);
 };
 
+/*!
+ * \brief Serialize the raw representation of the BNF AST to a string with JSON format.
+ * \sa BNFJSONParser::Parse for parsing the JSON string.
+ * \details JSON format:
+ *  {
+ *    "rules": [
+ *      {"name": "...", "rule_expr": rule_expr_id},
+ *      {"name": "...", "rule_expr": rule_expr_id},
+ *    ],
+ *    "rule_expr_data": [integers...],
+ *    "rule_expr_indptr": [integers...],
+ *  }
+ */
+class BNFGrammarJSONSerializer : public BNFGrammarSerializer {
+ public:
+  /*!
+   * \brief Constructor.
+   * \param grammar The grammar to print.
+   */
+  explicit BNFGrammarJSONSerializer(const BNFGrammar& grammar, bool prettify = true)
+      : BNFGrammarSerializer(grammar), prettify_(prettify) {}
+
+  /*!
+   * \brief Dump the raw representation of the AST to a JSON file.
+   * \param prettify Whether to format the JSON string. If false, all whitespaces will be removed.
+   */
+  std::string ToString() final;
+
+ private:
+  bool prettify_;
+};
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_GRAMMAR_SERIALIZER_H_
