@@ -86,9 +86,9 @@ def get_dll_directories():
     """Get extra mlc llm dll directories"""
     source_dir = os.path.dirname(CURRENT_DIR)
     dll_path = [
-        CURRENT_DIR,
         os.path.join(source_dir, "build"),
         os.path.join(source_dir, "build", "Release"),
+        CURRENT_DIR,
     ]
     if "CONDA_PREFIX" in os.environ:
         dll_path.append(os.path.join(os.environ["CONDA_PREFIX"], "lib"))
@@ -98,7 +98,7 @@ def get_dll_directories():
         dll_path.extend(get_env_paths("DYLD_LIBRARY_PATH", ":"))
     elif sys.platform.startswith("win32"):
         dll_path.extend(get_env_paths("PATH", ";"))
-    return [os.path.abspath(p) for p in dll_path if os.path.isdir(p)]
+    return [os.path.abspath(p) for p in dll_path]
 
 
 def get_xgrammar_libs() -> List[str]:

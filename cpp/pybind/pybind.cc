@@ -10,16 +10,15 @@
 namespace py = pybind11;
 using namespace xgrammar;
 
-PYBIND11_MODULE(xgrammar_bindings, m) {
-  auto pyBNFGrammar = py::class_<BNFGrammar>(m, "BNFGrammar");
-  pyBNFGrammar.def_static("from_ebnf_string", &BNFGrammar::FromEBNFString)
-  .def("to_string", &BNFGrammar::ToString)
-  
+// PYBIND11_MODULE(xgrammar_bindings, m) {
+//   auto pyBNFGrammar = py::class_<BNFGrammar>(m, "BNFGrammar");
+//   pyBNFGrammar.def_static("from_ebnf_string", &BNFGrammar::FromEBNFString)
+//   .def("to_string", &BNFGrammar::ToString)
 
-                .def_static("from_json", &BNFGrammar::FromJSON)
-                .def_static("from_schema", &BNFGrammar::FromSchema)
-                .def_static("get_grammar_of_json", &BNFGrammar::GetGrammarOfJSON);
-}
+//                 .def_static("from_json", &BNFGrammar::FromJSON)
+//                 .def_static("from_schema", &BNFGrammar::FromSchema)
+//                 .def_static("get_grammar_of_json", &BNFGrammar::GetGrammarOfJSON);
+// }
 
 // namespace xgrammar {
 
