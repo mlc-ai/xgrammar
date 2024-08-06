@@ -11,6 +11,7 @@
 #include <dlpack/dlpack.h>
 #include <xgrammar/support/object.h>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>

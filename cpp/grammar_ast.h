@@ -8,7 +8,6 @@
 #define XGRAMMAR_GRAMMAR_AST_H_
 
 #include <xgrammar/grammar.h>
-#include <xgrammar/support/object.h>
 
 #include <string>
 #include <vector>

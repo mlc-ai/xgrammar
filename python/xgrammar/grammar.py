@@ -74,22 +74,6 @@ class BNFGrammar:
     def __str__(self) -> str:
         return self.to_string()
 
-    @staticmethod
-    def deserialize(json_string: str) -> "BNFGrammar":
-        """Load a BNF grammar from the raw representation of the AST in JSON format.
-
-        Parameters
-        ----------
-        json_string : str
-            The JSON string.
-
-        Returns
-        -------
-        grammar : BNFGrammar
-            The loaded BNF grammar.
-        """
-        return _ffi_api.BNFGrammarFromJSON(json_string)  # type: ignore  # pylint: disable=no-member
-
     def serialize(self, prettify: bool = False) -> str:
         """Serialize the AST. Dump the raw representation of the AST to a JSON file.
 
@@ -106,6 +90,22 @@ class BNFGrammar:
         return str(
             _ffi_api.BNFGrammarToJSON(self, prettify)  # type: ignore  # pylint: disable=no-member
         )
+
+    @staticmethod
+    def deserialize(json_string: str) -> "BNFGrammar":
+        """Load a BNF grammar from the raw representation of the AST in JSON format.
+
+        Parameters
+        ----------
+        json_string : str
+            The JSON string.
+
+        Returns
+        -------
+        grammar : BNFGrammar
+            The loaded BNF grammar.
+        """
+        return _ffi_api.BNFGrammarFromJSON(json_string)  # type: ignore  # pylint: disable=no-member
 
     @staticmethod
     def _init_no_normalization(
@@ -229,8 +229,7 @@ class BuiltinGrammar:
         )
 
 
-@tvm._ffi.register_object("mlc.grammar.GrammarStateMatcher")  # pylint: disable=protected-access
-class GrammarStateMatcher(Object):
+class GrammarStateMatcher:
     """A stateful matcher to match tokens to the specified BNF grammar. This class is the core logic
     of the grammar-guided generation.
 
