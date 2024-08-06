@@ -28,12 +28,16 @@ from setuptools.command.build_ext import build_ext
 from setuptools.dist import Distribution
 
 CONDA_BUILD = os.getenv("CONDA_BUILD") is not None
-CURRENT_DIR = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
+PYTHON_DIR = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
+PROJECT_DIR = os.path.dirname(PYTHON_DIR)
 
 
 def get_version():
-    with open("xgrammar/version.py") as f:
-        code = compile(f.read(), "xgrammar/version.py", "exec")
+    version_path = os.path.join(PYTHON_DIR, "xgrammar", "version.py")
+    if not os.path.exists(version_path) or not os.path.isfile(version_path):
+        raise RuntimeError(f"Version file not found: {version_path}")
+    with open(version_path) as f:
+        code = compile(f.read(), version_path, "exec")
     loc = {}
     exec(code, loc)
     if "__version__" not in loc:
@@ -82,32 +86,31 @@ def get_env_paths(env_var, splitter):
     return []
 
 
-def get_dll_directories():
+def get_lib_directories():
     """Get extra mlc llm dll directories"""
-    source_dir = os.path.dirname(CURRENT_DIR)
-    dll_path = [
-        os.path.join(source_dir, "build"),
-        os.path.join(source_dir, "build", "Release"),
-        CURRENT_DIR,
+    lib_path = [
+        os.path.join(PROJECT_DIR, "build"),
+        os.path.join(PROJECT_DIR, "build", "Release"),
+        PYTHON_DIR,
     ]
     if "CONDA_PREFIX" in os.environ:
-        dll_path.append(os.path.join(os.environ["CONDA_PREFIX"], "lib"))
+        lib_path.append(os.path.join(os.environ["CONDA_PREFIX"], "lib"))
     if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
-        dll_path.extend(get_env_paths("LD_LIBRARY_PATH", ":"))
+        lib_path.extend(get_env_paths("LD_LIBRARY_PATH", ":"))
     elif sys.platform.startswith("darwin"):
-        dll_path.extend(get_env_paths("DYLD_LIBRARY_PATH", ":"))
+        lib_path.extend(get_env_paths("DYLD_LIBRARY_PATH", ":"))
     elif sys.platform.startswith("win32"):
-        dll_path.extend(get_env_paths("PATH", ";"))
-    return [os.path.abspath(p) for p in dll_path]
+        lib_path.extend(get_env_paths("PATH", ";"))
+    return [os.path.abspath(p) for p in lib_path]
 
 
 def get_xgrammar_libs() -> List[str]:
-    dll_paths = get_dll_directories()
+    lib_dir_paths = get_lib_directories()
     if platform.system() == "Windows":
         lib_glob = "xgrammar_bindings.*.pyd"
     else:
         lib_glob = "xgrammar_bindings.*.so"
-    candidates = [os.path.join(p, lib_glob) for p in dll_paths]
+    candidates = [os.path.join(p, lib_glob) for p in lib_dir_paths]
     lib_paths = sum((glob.glob(p) for p in candidates), [])
     if len(lib_paths) == 0 or not os.path.isfile(lib_paths[0]):
         raise RuntimeError(
@@ -133,7 +136,7 @@ def main():
         with open("MANIFEST.in", "w", encoding="utf-8") as fo:
             for path in lib_list:
                 if os.path.isfile(path):
-                    shutil.copy(path, os.path.join(CURRENT_DIR, "xgrammar"))
+                    shutil.copy(path, os.path.join(PYTHON_DIR, "xgrammar"))
                     _, libname = os.path.split(path)
                     fo.write(f"include xgrammar/{libname}\n")
         setup_kwargs = {"include_package_data": True}
@@ -143,7 +146,7 @@ def main():
         version=get_version(),
         author="MLC Team",
         description="Cross-platform Near-zero Overhead Grammar-guided Generation for LLMs",
-        long_description=open("../README.md").read(),
+        long_description=open(os.path.join(PYTHON_DIR, "..", "README.md")).read(),
         licence="Apache 2.0",
         classifiers=[
             "License :: OSI Approved :: Apache Software License",
@@ -167,7 +170,7 @@ def main():
         os.remove("MANIFEST.in")
         for path in lib_list:
             _, libname = os.path.split(path)
-            remove_path(os.path.join(CURRENT_DIR, "xgrammar", libname))
+            remove_path(os.path.join(PYTHON_DIR, "xgrammar", libname))
 
 
 main()

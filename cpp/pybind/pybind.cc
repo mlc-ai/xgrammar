@@ -6,18 +6,24 @@
 #include <pybind11/pybind11.h>
 #include <xgrammar/grammar.h>
 
+#include "../debug_methods.h"
+
 namespace py = pybind11;
 using namespace xgrammar;
 
-// PYBIND11_MODULE(xgrammar_bindings, m) {
-//   auto pyBNFGrammar = py::class_<BNFGrammar>(m, "BNFGrammar");
-//   pyBNFGrammar.def_static("from_ebnf_string", &BNFGrammar::FromEBNFString)
-//   .def("to_string", &BNFGrammar::ToString)
+PYBIND11_MODULE(xgrammar_bindings, m) {
+  auto pyBNFGrammar = py::class_<BNFGrammar>(m, "BNFGrammar");
+  pyBNFGrammar.def(py::init<const std::string&, const std::string&>())
+      .def("to_string", &BNFGrammar::ToString)
+      .def("serialize", &BNFGrammar::Serialize)
+      .def_static("deserialize", &BNFGrammar::Deserialize)
+      .def_static("_init_no_normalization", &BNFGrammar_InitNoNormalization);
 
-//                 .def_static("from_json", &BNFGrammar::FromJSON)
-//                 .def_static("from_schema", &BNFGrammar::FromSchema)
-//                 .def_static("get_grammar_of_json", &BNFGrammar::GetGrammarOfJSON);
-// }
+  auto pyBuiltinGrammar = py::class_<BuiltinGrammar>(m, "BuiltinGrammar");
+  pyBuiltinGrammar.def_static("json", &BuiltinGrammar::JSON)
+      .def_static("json_schema", &BuiltinGrammar::JSONSchema)
+      .def_static("_json_schema_to_ebnf", &BuiltinGrammar::_JSONSchemaToEBNF);
+}
 
 // namespace xgrammar {
 

@@ -3,9 +3,6 @@ import json
 import os
 
 import pytest
-import tvm.testing
-from tvm import TVMError
-
 from mlc_llm.grammar import BNFGrammar
 
 
