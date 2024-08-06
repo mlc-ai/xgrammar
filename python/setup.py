@@ -17,14 +17,11 @@
 import glob
 import os
 import platform
-import re
 import shutil
-import subprocess
 import sys
 from typing import List
 
-from setuptools import Extension, find_packages, setup
-from setuptools.command.build_ext import build_ext
+from setuptools import find_packages, setup
 from setuptools.dist import Distribution
 
 CONDA_BUILD = os.getenv("CONDA_BUILD") is not None
