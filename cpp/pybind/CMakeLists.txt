@@ -21,3 +21,6 @@ pybind11_add_module(xgrammar_bindings ${XGRAMMAR_BINDINGS_PATH})
 target_include_directories(xgrammar_bindings PUBLIC ${XGRAMMAR_INCLUDE_PATH})
 target_compile_definitions(xgrammar_bindings PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
 target_link_libraries(xgrammar_bindings PUBLIC xgrammar)
+set_target_properties(
+  xgrammar_bindings PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/python/xgrammar"
+)

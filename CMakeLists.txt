@@ -7,10 +7,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-if(NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-endif()
-
 if(MSVC)
   set(CMAKE_CXX_FLAGS "/Wall /WX ${CMAKE_CXX_FLAGS}")
 else()
@@ -39,11 +35,15 @@ endif()
 file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH "${PROJECT_SOURCE_DIR}/cpp/*.cc")
 list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/pybind/.*\\.cc")
 
-add_library(xgrammar SHARED ${XGRAMMAR_SOURCES_PATH})
+add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
 target_include_directories(xgrammar PUBLIC ${XGRAMMAR_INCLUDE_PATH})
 target_compile_definitions(xgrammar PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
 
 if(BUILD_BINDINGS)
-  message(STATUS "XGrammar Python bindings will be built")
+  message(STATUS "XGrammar built with Python bindings")
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)
+else()
+  message(STATUS "XGrammar built without Python bindings. If Python bindings are needed, set "
+                 "BUILD_BINDINGS=ON."
+  )
 endif()
