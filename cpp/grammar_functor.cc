@@ -5,8 +5,8 @@
 
 #include "grammar_functor.h"
 
-#include <xgrammar/grammar.h>
 #include <xgrammar/support/encoding.h>
+#include <xgrammar/xgrammar.h>
 
 #include "grammar_ast.h"
 

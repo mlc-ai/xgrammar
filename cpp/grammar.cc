@@ -3,7 +3,7 @@
  * \file xgrammar/grammar.cc
  */
 
-#include <xgrammar/grammar.h>
+#include <xgrammar/xgrammar.h>
 
 #include "grammar_ast.h"
 #include "grammar_functor.h"

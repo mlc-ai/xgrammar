@@ -25,12 +25,12 @@ from setuptools import find_packages, setup
 from setuptools.dist import Distribution
 
 CONDA_BUILD = os.getenv("CONDA_BUILD") is not None
-PYTHON_DIR = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
-PROJECT_DIR = os.path.dirname(PYTHON_DIR)
+PYTHON_SRC_DIR = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
+PROJECT_DIR = os.path.dirname(PYTHON_SRC_DIR)
 
 
 def get_version():
-    version_path = os.path.join(PYTHON_DIR, "xgrammar", "version.py")
+    version_path = os.path.join(PYTHON_SRC_DIR, "xgrammar", "version.py")
     if not os.path.exists(version_path) or not os.path.isfile(version_path):
         raise RuntimeError(f"Version file not found: {version_path}")
     with open(version_path) as f:
@@ -76,74 +76,38 @@ class BinaryDistribution(Distribution):
         return False
 
 
-def get_env_paths(env_var, splitter):
-    """Get path in env variable"""
-    if os.environ.get(env_var, None):
-        return [p.strip() for p in os.environ[env_var].split(splitter)]
-    return []
-
-
-def get_lib_directories():
-    """Get extra mlc llm dll directories"""
-    lib_path = [
-        os.path.join(PROJECT_DIR, "build"),
-        os.path.join(PROJECT_DIR, "build", "Release"),
-        PYTHON_DIR,
-    ]
-    if "CONDA_PREFIX" in os.environ:
-        lib_path.append(os.path.join(os.environ["CONDA_PREFIX"], "lib"))
-    if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
-        lib_path.extend(get_env_paths("LD_LIBRARY_PATH", ":"))
-    elif sys.platform.startswith("darwin"):
-        lib_path.extend(get_env_paths("DYLD_LIBRARY_PATH", ":"))
-    elif sys.platform.startswith("win32"):
-        lib_path.extend(get_env_paths("PATH", ";"))
-    return [os.path.abspath(p) for p in lib_path]
-
-
-def get_xgrammar_libs() -> List[str]:
-    lib_dir_paths = get_lib_directories()
+def get_xgrammar_lib() -> str:
     if platform.system() == "Windows":
         lib_glob = "xgrammar_bindings.*.pyd"
     else:
         lib_glob = "xgrammar_bindings.*.so"
-    candidates = [os.path.join(p, lib_glob) for p in lib_dir_paths]
-    lib_paths = sum((glob.glob(p) for p in candidates), [])
+    lib_glob = os.path.join(PYTHON_SRC_DIR, "xgrammar", lib_glob)
+
+    lib_paths = glob.glob(lib_glob)
     if len(lib_paths) == 0 or not os.path.isfile(lib_paths[0]):
         raise RuntimeError(
-            "Cannot find xgrammar bindings library. Please build the library first. List of "
-            f"candidates: {candidates}"
+            "Cannot find xgrammar bindings library. Please build the library first. Search path: "
+            f"{lib_glob}"
         )
-    return lib_paths[:1]
+    elif len(lib_paths) > 1:
+        raise RuntimeError(
+            f"Found multiple xgrammar bindings libraries: {lib_paths}. "
+            "Please remove the extra ones."
+        )
 
-
-def remove_path(path):
-    if os.path.exists(path):
-        if os.path.isfile(path):
-            os.remove(path)
-        elif os.path.isdir(path):
-            shutil.rmtree(path)
+    return lib_paths[0]
 
 
 def main():
     setup_kwargs = {}
-    lib_list = get_xgrammar_libs()
-
-    if not CONDA_BUILD:
-        with open("MANIFEST.in", "w", encoding="utf-8") as fo:
-            for path in lib_list:
-                if os.path.isfile(path):
-                    shutil.copy(path, os.path.join(PYTHON_DIR, "xgrammar"))
-                    _, libname = os.path.split(path)
-                    fo.write(f"include xgrammar/{libname}\n")
-        setup_kwargs = {"include_package_data": True}
+    xgrammar_lib_path = get_xgrammar_lib()
 
     setup(
         name="xgrammar",
         version=get_version(),
         author="MLC Team",
         description="Cross-platform Near-zero Overhead Grammar-guided Generation for LLMs",
-        long_description=open(os.path.join(PYTHON_DIR, "..", "README.md")).read(),
+        long_description=open(os.path.join(PROJECT_DIR, "README.md")).read(),
         licence="Apache 2.0",
         classifiers=[
             "License :: OSI Approved :: Apache Software License",
@@ -153,6 +117,7 @@ def main():
             "Intended Audience :: Science/Research",
         ],
         keywords="machine learning inference",
+        package_data={"xgrammar": [xgrammar_lib_path]},
         zip_safe=False,
         install_requires=parse_requirements("requirements.txt")[0],
         python_requires=">=3.7, <4",
@@ -161,13 +126,6 @@ def main():
         distclass=BinaryDistribution,
         **setup_kwargs,
     )
-
-    if not CONDA_BUILD:
-        # Wheel cleanup
-        os.remove("MANIFEST.in")
-        for path in lib_list:
-            _, libname = os.path.split(path)
-            remove_path(os.path.join(PYTHON_DIR, "xgrammar", libname))
 
 
 main()

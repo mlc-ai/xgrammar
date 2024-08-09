@@ -3,7 +3,7 @@
  * \file xgrammar/json_schema_converter.cc
  */
 #include <picojson.h>
-#include <xgrammar/grammar.h>
+#include <xgrammar/xgrammar.h>
 
 #include <chrono>
 #include <iostream>

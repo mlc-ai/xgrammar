@@ -18,8 +18,17 @@
 
 from typing import List, Optional, Tuple, Union
 
-# from ..tokenizers import Tokenizer
-# from . import _ffi_api
+import torch
+from transformers import PreTrainedTokenizerBase
+
+from . import xgrammar_bindings as _core
+
+
+def _init_object_with_handle(type, handle):
+    """Initialize an object with a handle."""
+    obj = type.__new__(type)
+    obj._handle = handle
+    return obj
 
 
 class BNFGrammar:
@@ -29,7 +38,7 @@ class BNFGrammar:
     AST of BNF grammar.
     """
 
-    def __init__(ebnf_string: str, main_rule: str = "main") -> None:
+    def __init__(self, ebnf_string: str, main_rule: str = "main") -> None:
         r"""Construct a BNF grammar with a EBNF-formatted string. The grammar will be normalized
         (simplified) by default.
 
@@ -57,9 +66,7 @@ class BNFGrammar:
         grammar : BNFGrammar
             The parsed BNF grammar.
         """
-        return _ffi_api.BNFGrammarFromEBNFString(  # type: ignore  # pylint: disable=no-member
-            ebnf_string, main_rule
-        )
+        self._handle = _core.BNFGrammar(ebnf_string, main_rule)
 
     def to_string(self) -> str:
         """Print the BNF grammar to a string, in standard BNF format.
@@ -69,7 +76,7 @@ class BNFGrammar:
         grammar_string : str
             The BNF grammar string.
         """
-        return str(_ffi_api.BNFGrammarToString(self))  # type: ignore  # pylint: disable=no-member
+        return self._handle.to_string()
 
     def __str__(self) -> str:
         return self.to_string()
@@ -87,9 +94,7 @@ class BNFGrammar:
         json_string : str
             The JSON string.
         """
-        return str(
-            _ffi_api.BNFGrammarToJSON(self, prettify)  # type: ignore  # pylint: disable=no-member
-        )
+        return self._handle.serialize(prettify)
 
     @staticmethod
     def deserialize(json_string: str) -> "BNFGrammar":
@@ -105,7 +110,7 @@ class BNFGrammar:
         grammar : BNFGrammar
             The loaded BNF grammar.
         """
-        return _ffi_api.BNFGrammarFromJSON(json_string)  # type: ignore  # pylint: disable=no-member
+        return _init_object_with_handle(BNFGrammar, _core.BNFGrammar.deserialize(json_string))
 
     @staticmethod
     def _init_no_normalization(
@@ -128,8 +133,8 @@ class BNFGrammar:
         grammar : BNFGrammar
             The parsed BNF grammar.
         """
-        return _ffi_api.BNFGrammarDebugFromEBNFStringNoNormalize(  # type: ignore  # pylint: disable=no-member
-            ebnf_string, main_rule
+        return _init_object_with_handle(
+            BNFGrammar, _core.BNFGrammar._init_no_normalization(ebnf_string, main_rule)
         )
 
 
@@ -143,7 +148,7 @@ class BuiltinGrammar:
         grammar : BNFGrammar
             The JSON grammar.
         """
-        return _ffi_api.BNFGrammarGetGrammarOfJSON()  # type: ignore  # pylint: disable=no-member
+        return _init_object_with_handle(BNFGrammar, _core.BuiltinGrammar.json())
 
     @staticmethod
     def json_schema(
@@ -183,8 +188,9 @@ class BuiltinGrammar:
         grammar : BNFGrammar
             The generated BNF grammar.
         """
-        return _ffi_api.BNFGrammarFromSchema(  # type: ignore  # pylint: disable=no-member
-            schema, indent, separators, strict_mode
+        return _init_object_with_handle(
+            BNFGrammar,
+            _core.BuiltinGrammar.json_schema(schema, indent, separators, strict_mode),
         )
 
     @staticmethod
@@ -224,9 +230,7 @@ class BuiltinGrammar:
         ebnf_string : str
             The EBNF grammar string.
         """
-        return _ffi_api.DebugJSONSchemaToEBNF(  # type: ignore  # pylint: disable=no-member
-            schema, indent, separators, strict_mode
-        )
+        return _core.BuiltinGrammar._json_schema_to_ebnf(schema, indent, separators, strict_mode)
 
 
 class GrammarStateMatcher:
@@ -259,7 +263,7 @@ class GrammarStateMatcher:
     def __init__(
         self,
         grammar: BNFGrammar,
-        tokenizer: Union[None, Tokenizer, List[str]] = None,
+        tokenizer: Union[None, PreTrainedTokenizerBase, List[str]] = None,
         max_rollback_steps: int = 0,
     ):
         if isinstance(tokenizer, list):
@@ -301,7 +305,7 @@ class GrammarStateMatcher:
         """
         return _ffi_api.GrammarStateMatcherAcceptToken(self, token_id)  # type: ignore  # pylint: disable=no-member
 
-    def find_next_rejected_tokens(self, verbose: bool = False) -> List[int]:
+    def find_next_token_bitmask(self, verbose: bool = False) -> torch.Tensor:
         """Find the ids of the rejected tokens for the next step.
 
         Parameters
@@ -312,22 +316,60 @@ class GrammarStateMatcher:
 
         Returns
         -------
-        rejected_token_ids : List[int]
-            A list of rejected token ids.
+        rejected_token_bitmask : torch.Tensor
+            A tensor of rejected token ids.
         """
+        return _ffi_api.GrammarStateMatcherFindNextRejectedTokenBitmask(self, verbose)
 
-        return _ffi_api.GrammarStateMatcherFindNextRejectedTokens(self, verbose)  # type: ignore  # pylint: disable=no-member
+    @staticmethod
+    def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor) -> List[int]:
+        """Get the ids of the rejected tokens from the bitmask.
 
-    def find_next_token_bitmask_as_ndarray(self) -> tvm.nd.array:
-        """Find the ids of the rejected tokens for the next step.
+        Parameters
+        ----------
+        bitmask : torch.Tensor
+            The rejected token bitmask.
 
         Returns
         -------
         rejected_token_ids : List[int]
             A list of rejected token ids.
         """
+        return None
 
-        return _ffi_api.GrammarStateMatcherFindNextTokenBitmaskAsNDArray(self)  # type: ignore  # pylint: disable=no-member
+    @staticmethod
+    def apply_token_bitmask(tensor: torch.Tensor, bitmask: torch.Tensor) -> torch.Tensor:
+        """Apply the bitmask to the tensor.
+
+        Parameters
+        ----------
+        tensor : torch.Tensor
+            The tensor to apply the bitmask to.
+
+        bitmask : torch.Tensor
+            The bitmask to apply.
+
+        Returns
+        -------
+        masked_tensor : torch.Tensor
+            The masked tensor.
+        """
+        return None
+
+    def reset_state(self) -> None:
+        """Reset the matcher to the initial state."""
+        _ffi_api.GrammarStateMatcherResetState(self)  # type: ignore  # pylint: disable=no-member
+
+    def is_terminated(self) -> bool:
+        """Check if the matcher has accepted the stop token and terminated. See also
+        GrammarStateMatcher.accept_token.
+
+        Returns
+        -------
+        terminated : bool
+            Whether the matcher has terminated.
+        """
+        return _ffi_api.GrammarStateMatcherIsTerminated(self)  # type: ignore  # pylint: disable=no-member
 
     def find_jump_forward_string(self) -> str:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that
@@ -364,21 +406,6 @@ class GrammarStateMatcher:
             The maximum number of rollback steps.
         """
         return _ffi_api.GrammarStateMatcherMaxRollbackSteps(self)  # type: ignore  # pylint: disable=no-member
-
-    def reset_state(self) -> None:
-        """Reset the matcher to the initial state."""
-        _ffi_api.GrammarStateMatcherResetState(self)  # type: ignore  # pylint: disable=no-member
-
-    def is_terminated(self) -> bool:
-        """Check if the matcher has accepted the stop token and terminated. See also
-        GrammarStateMatcher.accept_token.
-
-        Returns
-        -------
-        terminated : bool
-            Whether the matcher has terminated.
-        """
-        return _ffi_api.GrammarStateMatcherIsTerminated(self)  # type: ignore  # pylint: disable=no-member
 
     def debug_accept_char(self, codepoint: int, verbose: bool = False) -> bool:
         """Accept one unicode codepoint to the current state. For test purposes.

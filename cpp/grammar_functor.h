@@ -7,7 +7,7 @@
 #ifndef XGRAMMAR_GRAMMAR_FUNCTOR_H_
 #define XGRAMMAR_GRAMMAR_FUNCTOR_H_
 
-#include <xgrammar/grammar.h>
+#include <xgrammar/xgrammar.h>
 
 #include <queue>
 #include <string>

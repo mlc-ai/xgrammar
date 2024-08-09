@@ -7,7 +7,7 @@
 #ifndef XGRAMMAR_DEBUG_METHODS_H_
 #define XGRAMMAR_DEBUG_METHODS_H_
 
-#include <xgrammar/grammar.h>
+#include <xgrammar/xgrammar.h>
 
 #include <string>
 #include <vector>

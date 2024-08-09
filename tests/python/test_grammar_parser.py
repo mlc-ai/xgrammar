@@ -1,9 +1,8 @@
 # pylint: disable=missing-module-docstring,missing-function-docstring
 import json
-import os
 
 import pytest
-from mlc_llm.grammar import BNFGrammar
+from xgrammar import BNFGrammar
 
 
 def test_bnf_simple():
@@ -15,10 +14,8 @@ c ::= "c"
 b ::= (("b"))
 c ::= (("c"))
 """
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar = BNFGrammar(before, "main")
     after = bnf_grammar.to_string()
-    print(after)
-    print(expected)
     assert after == expected
 
 
@@ -36,7 +33,7 @@ b_1 ::= ("" | ("ab" b_1))
 c_1 ::= (([acep-z] c_1) | ([acep-z]))
 d_1 ::= ("" | ("d"))
 """
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar = BNFGrammar(before, "main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -57,7 +54,7 @@ c_1 ::= ("" | ("b" c_1))
 d_1 ::= ("" | (d_1_choice d_1))
 d_1_choice ::= (("bcd") | ("pq"))
 """
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar = BNFGrammar(before, "main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -75,7 +72,7 @@ c ::= (("a") | ("b")) (=([a-z] "b"))
 d ::= (("ac") | ("b" d_choice)) (=("abc"))
 d_choice ::= (("e") | ("d"))
 """
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar = BNFGrammar(before, "main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -90,7 +87,7 @@ rest ::= (([a-zA-Z0-9\-] [\u0234-\u0345] [\u6d4b-\u8bd5] [\--\]] rest1))
 rest1 ::= (("\?\"\'\u6d4b\u8bd5\u3042c\U0001f440ab"))
 """
     # Disable unwrap_nesting_rules to expose the result before unwrapping.
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar = BNFGrammar(before, "main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -105,7 +102,7 @@ main::="a"  "b" ("c""d"
 """
     expected = """main ::= (("abcde") | ("f") | ("g"))
 """
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar = BNFGrammar(before, "main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -116,7 +113,7 @@ def test_nest():
     expected = """main ::= (("a" main_choice) | ("ef"))
 main_choice ::= (("b") | ("cd"))
 """
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar = BNFGrammar(before, "main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -137,13 +134,12 @@ nested_rest ::= (("a") | ("bc") | ("d") | ("ef") | ("g"))
 empty_test ::= ("" | ("d") | ("a"))
 sequence_test_choice ::= (("c") | ("d"))
 """
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar = BNFGrammar(before, "main")
     after = bnf_grammar.to_string()
-    print(after)
     assert after == expected
 
 
-def test_json():
+def test_json_grammar():
     # Adopted from https://www.crockford.com/mckeeman.html. Not optimized
     before = r"""main ::= element
 value ::= object | array | string | number | "true" | "false" | "null"
@@ -193,7 +189,7 @@ exponent_choice ::= (("e") | ("E"))
 exponent_choice_1 ::= ("" | ("+") | ("-"))
 """
 
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar = BNFGrammar(before, "main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -210,9 +206,9 @@ c_1 ::= ((c_2 c_1) | (c_2)) (=("abc" [a-z]))
 c_2 ::= (([acep-z]))
 d_1 ::= ("" | ("d"))
 """
-    bnf_grammar_1 = BNFGrammar.from_ebnf_string(before, "main")
+    bnf_grammar_1 = BNFGrammar(before, "main")
     output_string_1 = bnf_grammar_1.to_string()
-    bnf_grammar_2 = BNFGrammar.from_ebnf_string(output_string_1, "main")
+    bnf_grammar_2 = BNFGrammar(output_string_1, "main")
     output_string_2 = bnf_grammar_2.to_string()
     assert before == output_string_1
     assert output_string_1 == output_string_2
@@ -220,71 +216,69 @@ d_1 ::= ("" | ("d"))
 
 def test_error():
     with pytest.raises(
-        TVMError, match='TVMError: EBNF parse error at line 1, column 11: Rule "a" is not defined'
+        RuntimeError,
+        match='EBNF parse error at line 1, column 11: Rule "a" is not defined',
     ):
-        BNFGrammar.from_ebnf_string("main ::= a b")
+        BNFGrammar("main ::= a b")
+
+    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 15: Expect element"):
+        BNFGrammar('main ::= "a" |')
+
+    with pytest.raises(RuntimeError, match='EBNF parse error at line 1, column 15: Expect "'):
+        BNFGrammar('main ::= "a" "')
 
     with pytest.raises(
-        TVMError, match="TVMError: EBNF parse error at line 1, column 15: Expect element"
+        RuntimeError, match="EBNF parse error at line 1, column 1: Expect rule name"
     ):
-        BNFGrammar.from_ebnf_string('main ::= "a" |')
-
-    with pytest.raises(TVMError, match='TVMError: EBNF parse error at line 1, column 15: Expect "'):
-        BNFGrammar.from_ebnf_string('main ::= "a" "')
+        BNFGrammar('::= "a"')
 
     with pytest.raises(
-        TVMError, match="TVMError: EBNF parse error at line 1, column 1: Expect rule name"
-    ):
-        BNFGrammar.from_ebnf_string('::= "a"')
-
-    with pytest.raises(
-        TVMError,
-        match="TVMError: EBNF parse error at line 1, column 12: Character class should not contain "
+        RuntimeError,
+        match="EBNF parse error at line 1, column 12: Character class should not contain "
         "newline",
     ):
-        BNFGrammar.from_ebnf_string("main ::= [a\n]")
+        BNFGrammar("main ::= [a\n]")
 
     with pytest.raises(
-        TVMError, match="TVMError: EBNF parse error at line 1, column 11: Invalid escape sequence"
+        RuntimeError,
+        match="EBNF parse error at line 1, column 11: Invalid escape sequence",
     ):
-        BNFGrammar.from_ebnf_string(r'main ::= "\@"')
+        BNFGrammar(r'main ::= "\@"')
 
     with pytest.raises(
-        TVMError, match="TVMError: EBNF parse error at line 1, column 11: Invalid escape sequence"
+        RuntimeError,
+        match="EBNF parse error at line 1, column 11: Invalid escape sequence",
     ):
-        BNFGrammar.from_ebnf_string(r'main ::= "\uFF"')
+        BNFGrammar(r'main ::= "\uFF"')
 
     with pytest.raises(
-        TVMError,
-        match="TVMError: EBNF parse error at line 1, column 14: Invalid character class: "
+        RuntimeError,
+        match="EBNF parse error at line 1, column 14: Invalid character class: "
         "lower bound is larger than upper bound",
     ):
-        BNFGrammar.from_ebnf_string(r"main ::= [Z-A]")
+        BNFGrammar(r"main ::= [Z-A]")
+
+    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 6: Expect ::="):
+        BNFGrammar(r'main := "a"')
 
     with pytest.raises(
-        TVMError, match="TVMError: EBNF parse error at line 1, column 6: Expect ::="
+        RuntimeError,
+        match='EBNF parse error at line 2, column 9: Rule "main" is defined multiple ' "times",
     ):
-        BNFGrammar.from_ebnf_string(r'main := "a"')
+        BNFGrammar('main ::= "a"\nmain ::= "b"')
 
     with pytest.raises(
-        TVMError,
-        match='TVMError: EBNF parse error at line 2, column 9: Rule "main" is defined multiple '
-        "times",
-    ):
-        BNFGrammar.from_ebnf_string('main ::= "a"\nmain ::= "b"')
-
-    with pytest.raises(
-        TVMError,
-        match="TVMError: EBNF parse error at line 1, column 10: "
+        RuntimeError,
+        match="EBNF parse error at line 1, column 10: "
         'The main rule with name "main" is not found.',
     ):
-        BNFGrammar.from_ebnf_string('a ::= "a"')
+        BNFGrammar('a ::= "a"')
 
     with pytest.raises(
-        TVMError,
-        match="TVMError: EBNF parse error at line 1, column 21: Unexpected lookahead assertion",
+        RuntimeError,
+        match="EBNF parse error at line 1, column 21: Unexpected lookahead assertion",
     ):
-        BNFGrammar.from_ebnf_string('main ::= "a" (="a") (="b")')
+        BNFGrammar('main ::= "a" (="a") (="b")')
 
 
 def test_to_json():
@@ -306,9 +300,8 @@ c ::= [a-z]
             # fmt: on
         ],
     }
-    bnf_grammar = BNFGrammar.from_ebnf_string(before, "main")
-    print(bnf_grammar)
-    after_str = bnf_grammar.to_json(False)
+    bnf_grammar = BNFGrammar(before, "main")
+    after_str = bnf_grammar.serialize(False)
     after_obj = json.loads(after_str)
     assert after_obj == expected_obj
 
@@ -323,14 +316,14 @@ c_1 ::= ((c_2 c_1) | (c_2))
 c_2 ::= (([acep-z]))
 d_1 ::= ("" | ("d"))
 """
-    bnf_grammar_1 = BNFGrammar.from_ebnf_string(before, "main")
-    output_json_1 = bnf_grammar_1.to_json(False)
-    bnf_grammar_2 = BNFGrammar.from_json(output_json_1)
-    output_json_2 = bnf_grammar_2.to_json(False)
+    bnf_grammar_1 = BNFGrammar(before, "main")
+    output_json_1 = bnf_grammar_1.serialize(False)
+    bnf_grammar_2 = BNFGrammar.deserialize(output_json_1)
+    output_json_2 = bnf_grammar_2.serialize(False)
     output_str = bnf_grammar_2.to_string()
     assert output_json_1 == output_json_2
     assert output_str == before
 
 
 if __name__ == "__main__":
-    tvm.testing.main()
+    pytest.main([__file__])

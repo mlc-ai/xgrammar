@@ -198,7 +198,7 @@ class GrammarStateMatcher {
    * construction of GrammarStateMatcher.
    * \param grammar The grammar that the matcher follows.
    * \param token_table The tokens that the matcher requires for matching.
-   */
+   */ 
   static std::shared_ptr<GrammarStateInitContext> CreateInitContext(
       const BNFGrammar& grammar, const std::vector<std::string>& token_table
   );

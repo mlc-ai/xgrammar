@@ -14,9 +14,3 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-[build-system]
-requires = [
-    "setuptools>=42",
-    "pybind11>=2.10.0",
-    "ninja",
-]

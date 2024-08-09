@@ -6,8 +6,8 @@
 #ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_PREPROC_H_
 #define XGRAMMAR_GRAMMAR_STATE_MATCHER_PREPROC_H_
 
-#include <xgrammar/grammar.h>
 #include <xgrammar/support/encoding.h>
+#include <xgrammar/xgrammar.h>
 
 #include <unordered_set>
 #include <vector>

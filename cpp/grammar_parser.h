@@ -7,7 +7,7 @@
 #ifndef XGRAMMAR_GRAMMAR_PARSER_H_
 #define XGRAMMAR_GRAMMAR_PARSER_H_
 
-#include <xgrammar/grammar.h>
+#include <xgrammar/xgrammar.h>
 
 #include "support/logging.h"
 

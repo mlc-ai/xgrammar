@@ -16,7 +16,7 @@ namespace xgrammar {
 
 /*!
  * \brief exception class that will be thrown by
- *  default logger if DMLC_LOG_FATAL_THROW == 1
+ *  default logger
  */
 struct Error : public std::runtime_error {
   /*!

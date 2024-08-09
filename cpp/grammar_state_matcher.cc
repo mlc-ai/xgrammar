@@ -3,7 +3,7 @@
  * \file xgrammar/grammar_state_matcher.cc
  */
 // #define XGRAMMAR_ENABLE_LOG_DEBUG 1
-#include <xgrammar/grammar.h>
+#include <xgrammar/xgrammar.h>
 
 #include <chrono>
 #include <queue>

@@ -6,7 +6,7 @@
 #ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_STATE_H_
 #define XGRAMMAR_GRAMMAR_STATE_MATCHER_STATE_H_
 
-#include <xgrammar/grammar.h>
+#include <xgrammar/xgrammar.h>
 
 #include <queue>
 #include <unordered_set>

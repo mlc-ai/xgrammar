@@ -4,7 +4,7 @@
  */
 
 #include <pybind11/pybind11.h>
-#include <xgrammar/grammar.h>
+#include <xgrammar/xgrammar.h>
 
 #include "../debug_methods.h"
 
