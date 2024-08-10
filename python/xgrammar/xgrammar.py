@@ -281,7 +281,7 @@ class GrammarStateMatcher:
                 max_rollback_steps,
             )
 
-    def accept_token(self, token_id: int) -> bool:
+    def accept_token(self, token_id: int, verbose: bool = False) -> bool:
         """Accept one token and update the state of the matcher.
 
         Parameters
@@ -304,6 +304,18 @@ class GrammarStateMatcher:
         using Rollback().
         """
         return _ffi_api.GrammarStateMatcherAcceptToken(self, token_id)  # type: ignore  # pylint: disable=no-member
+
+    def _accept_string(self, input_str: str, verbose: bool = False) -> bool:
+        """Accept one unicode codepoint to the current state. For test purposes.
+
+        Parameters
+        ----------
+        codepoint : int
+            The unicode codepoint of the character to be accepted.
+        """
+        return _ffi_api.GrammarStateMatcherDebugAcceptChar(  # type: ignore  # pylint: disable=no-member
+            self, codepoint, verbose
+        )
 
     def find_next_token_bitmask(self, verbose: bool = False) -> torch.Tensor:
         """Find the ids of the rejected tokens for the next step.
@@ -356,21 +368,6 @@ class GrammarStateMatcher:
         """
         return None
 
-    def reset_state(self) -> None:
-        """Reset the matcher to the initial state."""
-        _ffi_api.GrammarStateMatcherResetState(self)  # type: ignore  # pylint: disable=no-member
-
-    def is_terminated(self) -> bool:
-        """Check if the matcher has accepted the stop token and terminated. See also
-        GrammarStateMatcher.accept_token.
-
-        Returns
-        -------
-        terminated : bool
-            Whether the matcher has terminated.
-        """
-        return _ffi_api.GrammarStateMatcherIsTerminated(self)  # type: ignore  # pylint: disable=no-member
-
     def find_jump_forward_string(self) -> str:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that
         will be valid according to the current syntax.
@@ -407,25 +404,17 @@ class GrammarStateMatcher:
         """
         return _ffi_api.GrammarStateMatcherMaxRollbackSteps(self)  # type: ignore  # pylint: disable=no-member
 
-    def debug_accept_char(self, codepoint: int, verbose: bool = False) -> bool:
-        """Accept one unicode codepoint to the current state. For test purposes.
+    def is_terminated(self) -> bool:
+        """Check if the matcher has accepted the stop token and terminated. See also
+        GrammarStateMatcher.accept_token.
 
-        Parameters
-        ----------
-        codepoint : int
-            The unicode codepoint of the character to be accepted.
+        Returns
+        -------
+        terminated : bool
+            Whether the matcher has terminated.
         """
-        return _ffi_api.GrammarStateMatcherDebugAcceptChar(  # type: ignore  # pylint: disable=no-member
-            self, codepoint, verbose
-        )
+        return _ffi_api.GrammarStateMatcherIsTerminated(self)  # type: ignore  # pylint: disable=no-member
 
-    def debug_match_complete_string(self, string: str, verbose: bool = False) -> bool:
-        """Check if the matcher can accept the complete string, and then reach the end of the
-        grammar. Does not change the state of the GrammarStateMatcher. For test purposes.
-
-        Parameters
-        ----------
-        string : str
-            The string to be matched.
-        """
-        return _ffi_api.GrammarStateMatcherDebugMatchCompleteString(self, string, verbose)  # type: ignore  # pylint: disable=no-member
+    def reset_state(self) -> None:
+        """Reset the matcher to the initial state."""
+        _ffi_api.GrammarStateMatcherResetState(self)  # type: ignore  # pylint: disable=no-member

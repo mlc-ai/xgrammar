@@ -198,7 +198,7 @@ class GrammarStateMatcher {
    * construction of GrammarStateMatcher.
    * \param grammar The grammar that the matcher follows.
    * \param token_table The tokens that the matcher requires for matching.
-   */ 
+   */
   static std::shared_ptr<GrammarStateInitContext> CreateInitContext(
       const BNFGrammar& grammar, const std::vector<std::string>& token_table
   );
@@ -215,11 +215,15 @@ class GrammarStateMatcher {
    */
   bool AcceptToken(int32_t token_id, bool verbose = false);
 
+  bool _AcceptString(const std::string& input_str, bool verbose = false);
+
+  static uint32_t GetBufferSize(uint32_t vocab_size);
+
   /*!
    * \brief Find the set of tokens that are acceptable for the next step and store them in a
    * bitmask.
-   * \param next_token_bitmask The bitmask to store the result. The bitmask must be pre-allocated,
-   * and its shape needs to be (ceil(vocab_size, 32),), with a dtype of uint32.
+   * \param next_token_bitmask The bitmask to store the result. The bitmask must be pre-allocated
+   * and with shape (GetBufferSize(vocab_size),) and dtype uint32.
    */
   void FindNextTokenBitmask(DLTensor* next_token_bitmask);
 

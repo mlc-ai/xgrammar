@@ -6,7 +6,7 @@
 #include <pybind11/pybind11.h>
 #include <xgrammar/xgrammar.h>
 
-#include "../debug_methods.h"
+#include "../python_methods.h"
 
 namespace py = pybind11;
 using namespace xgrammar;

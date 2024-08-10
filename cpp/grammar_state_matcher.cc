@@ -130,6 +130,8 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
 
   bool AcceptToken(int32_t token_id, bool verbose = false);
 
+  bool _AcceptString(const std::string& input_str, bool verbose = false);
+
   void FindNextTokenBitmask(DLTensor* next_token_bitmask);
 
   std::string FindJumpForwardString();
@@ -196,11 +198,16 @@ bool GrammarStateMatcher::Impl::AcceptStopToken() {
   return true;
 }
 
+// TODO(yixin): Polish verbose logging
 bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
-  XGRAMMAR_CHECK(!IsTerminated()
-  ) << "GrammarStateMatcher has terminated after accepting the stop token, but is trying to "
-       "accept another token id "
-    << token_id;
+  if (IsTerminated()) {
+    if (verbose) {
+      XGRAMMAR_LOG(INFO) << "The matcher has terminated after accepting the stop token, but is "
+                            "trying to accept new token with id "
+                         << token_id;
+    }
+    return false;
+  }
 
   XGRAMMAR_CHECK(token_id >= 0 && token_id < static_cast<int>(init_ctx_->vocab_size))
       << "Invalid token id " << token_id << " for GrammarStateMatcher";
@@ -248,6 +255,31 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
   }
   if (verbose) {
     XGRAMMAR_LOG(INFO) << "The token is accepted. State after accepting:\n" << PrintStackState();
+  }
+  return true;
+}
+
+bool GrammarStateMatcher::Impl::_AcceptString(const std::string& input_str, bool verbose) {
+  int accepted_cnt = 0;
+  for (auto char_value : input_str) {
+    if (!AcceptChar(char_value, verbose)) {
+      if (verbose) {
+        XGRAMMAR_LOG(INFO) << "Matching failed after accepting " << accepted_cnt << " characters";
+      }
+      RollbackChars(accepted_cnt);
+      return false;
+    }
+    ++accepted_cnt;
+  }
+  token_length_history.push_back(input_str.size());
+  if (static_cast<int>(token_length_history.size()) > max_rollback_steps_) {
+    DiscardEarliestChars(token_length_history.front());
+    token_length_history.pop_front();
+  }
+  if (verbose) {
+    XGRAMMAR_LOG(INFO) << "String \"" << PrintAsEscapedUTF8(input_str)
+                       << "\" is accepted. State after accepting:\n"
+                       << PrintStackState();
   }
   return true;
 }
@@ -547,6 +579,14 @@ GrammarStateMatcher::GrammarStateMatcher(
 
 bool GrammarStateMatcher::AcceptToken(int32_t token_id, bool verbose) {
   return pimpl_->AcceptToken(token_id, verbose);
+}
+
+bool GrammarStateMatcher::_AcceptString(const std::string& input_str, bool verbose) {
+  return pimpl_->_AcceptString(input_str, verbose);
+}
+
+uint32_t GrammarStateMatcher::GetBufferSize(uint32_t vocab_size) {
+  return DynamicBitset::CalculateBufferSize(vocab_size);
 }
 
 void GrammarStateMatcher::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
