@@ -217,7 +217,7 @@ class GrammarStateMatcher {
 
   bool _AcceptString(const std::string& input_str, bool verbose = false);
 
-  static uint32_t GetBufferSize(uint32_t vocab_size);
+  static uint32_t GetBufferSize(size_t vocab_size);
 
   /*!
    * \brief Find the set of tokens that are acceptable for the next step and store them in a
@@ -243,6 +243,8 @@ class GrammarStateMatcher {
 
   /*! \brief Get the maximum number of rollback steps allowed. */
   int MaxRollbackSteps() const;
+
+  size_t GetVocabSize() const;
 
   /*!
    * \brief Check if the matcher has accepted the stop token and terminated.

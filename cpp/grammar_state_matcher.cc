@@ -140,6 +140,8 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
 
   int MaxRollbackSteps() const { return max_rollback_steps_; }
 
+  size_t GetVocabSize() const { return init_ctx_->vocab_size; }
+
   bool IsTerminated() { return stack_tops_history_.GetLatest().empty(); }
 
   void ResetState() {
@@ -585,7 +587,7 @@ bool GrammarStateMatcher::_AcceptString(const std::string& input_str, bool verbo
   return pimpl_->_AcceptString(input_str, verbose);
 }
 
-uint32_t GrammarStateMatcher::GetBufferSize(uint32_t vocab_size) {
+uint32_t GrammarStateMatcher::GetBufferSize(size_t vocab_size) {
   return DynamicBitset::CalculateBufferSize(vocab_size);
 }
 
@@ -598,6 +600,8 @@ std::string GrammarStateMatcher::FindJumpForwardString() { return pimpl_->FindJu
 void GrammarStateMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
 
 int GrammarStateMatcher::MaxRollbackSteps() const { return pimpl_->MaxRollbackSteps(); }
+
+size_t GrammarStateMatcher::GetVocabSize() const { return pimpl_->GetVocabSize(); }
 
 bool GrammarStateMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
 

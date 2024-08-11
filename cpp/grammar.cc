@@ -36,13 +36,6 @@ BNFGrammar BNFGrammar::Deserialize(const std::string& json_string) {
   return BNFJSONParser::Parse(json_string);
 }
 
-// Parse the EBNF string but not normalize it
-BNFGrammar BNFGrammar_InitNoNormalization(
-    const std::string& ebnf_string, const std::string& main_rule
-) {
-  return EBNFParser::Parse(ebnf_string, main_rule);
-}
-
 // Optimized json grammar for the speed of the grammar state matcher
 const std::string kJSONGrammarString = R"(
 main ::= (

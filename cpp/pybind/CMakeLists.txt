@@ -16,11 +16,39 @@ else()
 endif()
 find_package(pybind11 CONFIG REQUIRED)
 
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} "-c" "import torch; print(torch.utils.cmake_prefix_path,end='');"
+  RESULT_VARIABLE TORCH_CMAKE_DIR_RET
+  OUTPUT_VARIABLE TORCH_CMAKE_DIR
+)
+if(TORCH_CMAKE_DIR_RET MATCHES 0)
+  list(APPEND CMAKE_PREFIX_PATH "${TORCH_CMAKE_DIR}")
+else()
+  message(FATAL_ERROR "PyTorch is not installed. Please install PyTorch with pip or conda first")
+endif()
+find_package(Torch CONFIG REQUIRED)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+
+message(STATUS "Torch flags: ${TORCH_CXX_FLAGS}")
+message(STATUS "Torch libs: ${TORCH_LIBRARIES}")
+message(STATUS "Torch include: ${TORCH_INCLUDE_DIRS}")
+
 file(GLOB_RECURSE XGRAMMAR_BINDINGS_PATH ${PROJECT_SOURCE_DIR}/cpp/pybind/*.cc)
 pybind11_add_module(xgrammar_bindings ${XGRAMMAR_BINDINGS_PATH})
 target_include_directories(xgrammar_bindings PUBLIC ${XGRAMMAR_INCLUDE_PATH})
 target_compile_definitions(xgrammar_bindings PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
+target_link_libraries(xgrammar_bindings PUBLIC "${TORCH_LIBRARIES}")
 target_link_libraries(xgrammar_bindings PUBLIC xgrammar)
 set_target_properties(
   xgrammar_bindings PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/python/xgrammar"
 )
+
+if (MSVC)
+  file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
+  add_custom_command(TARGET xgrammar_bindings
+                     POST_BUILD
+                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                     ${TORCH_DLLS}
+                     $<TARGET_FILE_DIR:xgrammar_bindings>)
+endif (MSVC)

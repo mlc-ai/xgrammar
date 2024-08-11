@@ -4,12 +4,28 @@
  */
 
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <xgrammar/xgrammar.h>
 
-#include "../python_methods.h"
+#include "python_methods.h"
 
 namespace py = pybind11;
 using namespace xgrammar;
+
+// GrammarStateMatcher GrammarStateMatcher_Init(
+//     const BNFGrammar& grammar, const std::vector<std::string>& token_table, int
+//     max_rollback_steps
+// );
+
+// GrammarStateMatcher GrammarStateMatcher_Init(
+//     const BNFGrammar& grammar, std::nullopt_t nullopt, int max_rollback_steps
+// );
+
+// GrammarStateMatcher GrammarStateMatcher_Init(
+//     const BNFGrammar& grammar,
+//     const std::unordered_map<std::string, int>& token_table,
+//     int max_rollback_steps
+// );
 
 PYBIND11_MODULE(xgrammar_bindings, m) {
   auto pyBNFGrammar = py::class_<BNFGrammar>(m, "BNFGrammar");
@@ -23,6 +39,25 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
   pyBuiltinGrammar.def_static("json", &BuiltinGrammar::JSON)
       .def_static("json_schema", &BuiltinGrammar::JSONSchema)
       .def_static("_json_schema_to_ebnf", &BuiltinGrammar::_JSONSchemaToEBNF);
+
+  auto pyGrammarStateMatcher = py::class_<GrammarStateMatcher>(m, "GrammarStateMatcher");
+  pyGrammarStateMatcher
+      .def(py::init(py::overload_cast<const BNFGrammar&, const std::vector<std::string>&, int>(
+          &GrammarStateMatcher_Init
+      )))
+      .def(py::init(
+          py::overload_cast<const BNFGrammar&, std::nullptr_t, int>(&GrammarStateMatcher_Init)
+      ))
+      .def(py::init(
+          py::overload_cast<const BNFGrammar&, const std::unordered_map<std::string, int>&, int>(
+              &GrammarStateMatcher_Init
+          )
+      ))
+      .def("accept_token", &GrammarStateMatcher::AcceptToken)
+      .def("_accept_string", &GrammarStateMatcher::_AcceptString)
+      .def("find_next_token_bitmask", &GrammarStateMatcher_FindNextTokenBitmask)
+      .def("is_terminated", &GrammarStateMatcher::IsTerminated)
+      .def("reset_state", &GrammarStateMatcher::ResetState);
 }
 
 // namespace xgrammar {

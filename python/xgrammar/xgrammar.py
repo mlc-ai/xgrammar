@@ -263,22 +263,21 @@ class GrammarStateMatcher:
     def __init__(
         self,
         grammar: BNFGrammar,
-        tokenizer: Union[None, PreTrainedTokenizerBase, List[str]] = None,
+        tokenizer_or_vocab: Union[None, PreTrainedTokenizerBase, List[str]] = None,
         max_rollback_steps: int = 0,
     ):
-        if isinstance(tokenizer, list):
-            self.__init_handle_by_constructor__(
-                _ffi_api.GrammarStateMatcherFromTokenTable,  # type: ignore  # pylint: disable=no-member
-                grammar,
-                tokenizer,
-                max_rollback_steps,
+        if tokenizer_or_vocab is None or isinstance(tokenizer_or_vocab, list):
+            self._handle = _core.GrammarStateMatcher(
+                grammar, tokenizer_or_vocab, max_rollback_steps
             )
         else:
-            self.__init_handle_by_constructor__(
-                _ffi_api.GrammarStateMatcherFromTokenizer,  # type: ignore  # pylint: disable=no-member
-                grammar,
-                tokenizer,
-                max_rollback_steps,
+            if not hasattr(tokenizer_or_vocab, "get_vocab"):
+                raise ValueError(
+                    "Cannot get the vocabulary of the provided tokenizer. The tokenizer should "
+                    "have a get_vocab method."
+                )
+            self._handle = _core.GrammarStateMatcher(
+                grammar, tokenizer_or_vocab.get_vocab(), max_rollback_steps
             )
 
     def accept_token(self, token_id: int, verbose: bool = False) -> bool:
@@ -303,7 +302,7 @@ class GrammarStateMatcher:
         find_next_rejected_tokens operations can be performed. The termination state can be canceled
         using Rollback().
         """
-        return _ffi_api.GrammarStateMatcherAcceptToken(self, token_id)  # type: ignore  # pylint: disable=no-member
+        return self._handle.accept_token(token_id, verbose)
 
     def _accept_string(self, input_str: str, verbose: bool = False) -> bool:
         """Accept one unicode codepoint to the current state. For test purposes.
@@ -313,11 +312,9 @@ class GrammarStateMatcher:
         codepoint : int
             The unicode codepoint of the character to be accepted.
         """
-        return _ffi_api.GrammarStateMatcherDebugAcceptChar(  # type: ignore  # pylint: disable=no-member
-            self, codepoint, verbose
-        )
+        return self._handle._accept_string(input_str, verbose)
 
-    def find_next_token_bitmask(self, verbose: bool = False) -> torch.Tensor:
+    def find_next_token_bitmask(self) -> torch.Tensor:
         """Find the ids of the rejected tokens for the next step.
 
         Parameters
@@ -331,78 +328,78 @@ class GrammarStateMatcher:
         rejected_token_bitmask : torch.Tensor
             A tensor of rejected token ids.
         """
-        return _ffi_api.GrammarStateMatcherFindNextRejectedTokenBitmask(self, verbose)
+        return self._handle.find_next_token_bitmask()
 
-    @staticmethod
-    def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor) -> List[int]:
-        """Get the ids of the rejected tokens from the bitmask.
+    # @staticmethod
+    # def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor) -> List[int]:
+    #     """Get the ids of the rejected tokens from the bitmask.
 
-        Parameters
-        ----------
-        bitmask : torch.Tensor
-            The rejected token bitmask.
+    #     Parameters
+    #     ----------
+    #     bitmask : torch.Tensor
+    #         The rejected token bitmask.
 
-        Returns
-        -------
-        rejected_token_ids : List[int]
-            A list of rejected token ids.
-        """
-        return None
+    #     Returns
+    #     -------
+    #     rejected_token_ids : List[int]
+    #         A list of rejected token ids.
+    #     """
+    #     return None
 
-    @staticmethod
-    def apply_token_bitmask(tensor: torch.Tensor, bitmask: torch.Tensor) -> torch.Tensor:
-        """Apply the bitmask to the tensor.
+    # @staticmethod
+    # def apply_token_bitmask(tensor: torch.Tensor, bitmask: torch.Tensor) -> torch.Tensor:
+    #     """Apply the bitmask to the tensor.
 
-        Parameters
-        ----------
-        tensor : torch.Tensor
-            The tensor to apply the bitmask to.
+    #     Parameters
+    #     ----------
+    #     tensor : torch.Tensor
+    #         The tensor to apply the bitmask to.
 
-        bitmask : torch.Tensor
-            The bitmask to apply.
+    #     bitmask : torch.Tensor
+    #         The bitmask to apply.
 
-        Returns
-        -------
-        masked_tensor : torch.Tensor
-            The masked tensor.
-        """
-        return None
+    #     Returns
+    #     -------
+    #     masked_tensor : torch.Tensor
+    #         The masked tensor.
+    #     """
+    #     return None
 
-    def find_jump_forward_string(self) -> str:
-        """Find the jump-forward string for jump-forward decoding. This is the longest string that
-        will be valid according to the current syntax.
+    # def find_jump_forward_string(self) -> str:
+    #     """Find the jump-forward string for jump-forward decoding. This is the longest string that
+    #     will be valid according to the current syntax.
 
-        Notes
-        -----
-        This method does not change the grammar state.
+    #     Notes
+    #     -----
+    #     This method does not change the grammar state.
 
-        Returns
-        -------
-        jump_forward_string : str
-            The jump-forward string.
-        """
-        return _ffi_api.GrammarStateMatcherFindJumpForwardString(self)  # type: ignore  # pylint: disable=no-member
+    #     Returns
+    #     -------
+    #     jump_forward_string : str
+    #         The jump-forward string.
+    #     """
+    #     return _ffi_api.GrammarStateMatcherFindJumpForwardString(self)  # type: ignore  # pylint: disable=no-member
 
-    def rollback(self, num_tokens: int) -> None:
-        """Rollback the matcher to a previous state.
+    # def rollback(self, num_tokens: int) -> None:
+    #     """Rollback the matcher to a previous state.
 
-        Parameters
-        ----------
-        num_tokens : int
-            The number of tokens to rollback. It cannot exceed the current number of steps, nor can
-            it exceed the specified maximum number of rollback steps.
-        """
-        _ffi_api.GrammarStateMatcherRollback(self, num_tokens)  # type: ignore  # pylint: disable=no-member
+    #     Parameters
+    #     ----------
+    #     num_tokens : int
+    #         The number of tokens to rollback. It cannot exceed the current number of steps, nor can
+    #         it exceed the specified maximum number of rollback steps.
+    #     """
+    #     _ffi_api.GrammarStateMatcherRollback(self, num_tokens)  # type: ignore  # pylint: disable=no-member
 
-    def max_rollback_steps(self) -> int:
-        """Get the maximum number of rollback steps allowed.
+    # def max_rollback_steps(self) -> int:
+    #     """Get the maximum number of rollback steps allowed.
 
-        Returns
-        -------
-        max_rollback_steps : int
-            The maximum number of rollback steps.
-        """
-        return _ffi_api.GrammarStateMatcherMaxRollbackSteps(self)  # type: ignore  # pylint: disable=no-member
+    #     Returns
+    #     -------
+    #     max_rollback_steps : int
+    #         The maximum number of rollback steps.
+    #     """
+    #     return _ffi_api.GrammarStateMatcherMaxRollbackSteps(self)  # type: ignore  # pylint: disable=no-member
 
     def is_terminated(self) -> bool:
         """Check if the matcher has accepted the stop token and terminated. See also
@@ -413,8 +410,8 @@ class GrammarStateMatcher:
         terminated : bool
             Whether the matcher has terminated.
         """
-        return _ffi_api.GrammarStateMatcherIsTerminated(self)  # type: ignore  # pylint: disable=no-member
+        return self._handle.is_terminated()
 
     def reset_state(self) -> None:
         """Reset the matcher to the initial state."""
-        _ffi_api.GrammarStateMatcherResetState(self)  # type: ignore  # pylint: disable=no-member
+        return self._handle.reset_state()
