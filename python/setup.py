@@ -99,7 +99,6 @@ def get_xgrammar_lib() -> str:
 
 
 def main():
-    setup_kwargs = {}
     xgrammar_lib_path = get_xgrammar_lib()
 
     setup(
@@ -117,14 +116,13 @@ def main():
             "Intended Audience :: Science/Research",
         ],
         keywords="machine learning inference",
+        packages=find_packages(),
         package_data={"xgrammar": [xgrammar_lib_path]},
         zip_safe=False,
         install_requires=parse_requirements("requirements.txt")[0],
         python_requires=">=3.7, <4",
         url="https://github.com/mlc-ai/xgrammar",
-        packages=find_packages(),
         distclass=BinaryDistribution,
-        **setup_kwargs,
     )
 
 

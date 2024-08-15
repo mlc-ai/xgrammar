@@ -5,7 +5,7 @@
 
 #include "python_methods.h"
 
-#include <ATen/DLConvertor.h>
+// #include <ATen/DLConvertor.h>
 #include <xgrammar/xgrammar.h>
 
 #include <algorithm>
@@ -62,12 +62,12 @@ GrammarStateMatcher GrammarStateMatcher_Init(
   return GrammarStateMatcher_Init(grammar, tokens_ordered_by_id, max_rollback_steps);
 }
 
-torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher) {
-  auto buffer_size = GrammarStateMatcher::GetBufferSize(matcher.GetVocabSize());
-  auto result = torch::empty({buffer_size}, torch::dtype(torch::kUInt32).device(torch::kCPU, 0));
-  auto result_dltensor = at::toDLPack(result)->dl_tensor;
-  matcher.FindNextTokenBitmask(&result_dltensor);
-  return result;
-}
+// torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher) {
+//   auto buffer_size = GrammarStateMatcher::GetBufferSize(matcher.GetVocabSize());
+//   auto result = torch::empty({buffer_size}, torch::dtype(torch::kUInt32).device(torch::kCPU, 0));
+//   auto result_dltensor = at::toDLPack(result)->dl_tensor;
+//   matcher.FindNextTokenBitmask(&result_dltensor);
+//   return result;
+// }
 
 }  // namespace xgrammar

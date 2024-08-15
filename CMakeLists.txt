@@ -42,6 +42,7 @@ target_compile_definitions(xgrammar PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
 if(BUILD_BINDINGS)
   message(STATUS "XGrammar built with Python bindings")
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)
+  target_compile_options(xgrammar PUBLIC ${TORCH_CXX_FLAGS})
 else()
   message(STATUS "XGrammar built without Python bindings. If Python bindings are needed, set "
                  "BUILD_BINDINGS=ON."

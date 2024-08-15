@@ -242,6 +242,9 @@ inline bool GrammarStateMatcherBase::AcceptChar(uint8_t char_value, bool verbose
     return false;
   }
   stack_tops_history_.PushHistory(tmp_new_stack_tops_);
+  for (auto new_top : tmp_new_stack_tops_) {
+    std::cout << "new top: " << tree_.PrintNode(new_top) << std::endl;
+  }
   if (verbose) {
     XGRAMMAR_LOG(INFO) << "Character: " << static_cast<int>(char_value) << " \""
                        << PrintAsEscapedUTF8(char_value) << "\" Accepted";
@@ -391,11 +394,13 @@ inline bool GrammarStateMatcherBase::ExpandRulePosition(
       }
     } else if (element.type == RuleExprType::kCharacterClass || element.type == RuleExprType::kByteString) {
       // Case 3. Character class or byte string. cannot be empty.
+      std::cout << "new stack tops: " << tree_.PrintNode(new_node_id) << std::endl;
       new_stack_tops->push_back(new_node_id);
       can_be_empty = false;
     } else {
       XGRAMMAR_DCHECK(element.type == RuleExprType::kCharacterClassStar);
       // Case 4. Character class star. Might be empty.
+      std::cout << "new stack tops 1: " << tree_.PrintNode(new_node_id) << std::endl;
       new_stack_tops->push_back(new_node_id);
       can_be_empty = cur_rule_position.left_utf8_bytes == 0;
     }

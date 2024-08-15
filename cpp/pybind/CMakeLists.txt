@@ -30,9 +30,9 @@ find_package(Torch CONFIG REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
-message(STATUS "Torch flags: ${TORCH_CXX_FLAGS}")
-message(STATUS "Torch libs: ${TORCH_LIBRARIES}")
-message(STATUS "Torch include: ${TORCH_INCLUDE_DIRS}")
+# message(STATUS "Torch flags: ${TORCH_CXX_FLAGS}")
+# message(STATUS "Torch libs: ${TORCH_LIBRARIES}")
+# message(STATUS "Torch include: ${TORCH_INCLUDE_DIRS}")
 
 file(GLOB_RECURSE XGRAMMAR_BINDINGS_PATH ${PROJECT_SOURCE_DIR}/cpp/pybind/*.cc)
 pybind11_add_module(xgrammar_bindings ${XGRAMMAR_BINDINGS_PATH})
@@ -52,3 +52,5 @@ if (MSVC)
                      ${TORCH_DLLS}
                      $<TARGET_FILE_DIR:xgrammar_bindings>)
 endif (MSVC)
+
+set(TORCH_CXX_FLAGS ${TORCH_CXX_FLAGS} PARENT_SCOPE)

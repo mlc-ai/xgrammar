@@ -7,7 +7,7 @@
 #ifndef XGRAMMAR_DEBUG_METHODS_H_
 #define XGRAMMAR_DEBUG_METHODS_H_
 
-#include <torch/extension.h>
+// #include <torch/extension.h>
 #include <xgrammar/xgrammar.h>
 
 #include <optional>
@@ -35,7 +35,7 @@ GrammarStateMatcher GrammarStateMatcher_Init(
     int max_rollback_steps
 );
 
-torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher);
+// torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher);
 
 }  // namespace xgrammar
 

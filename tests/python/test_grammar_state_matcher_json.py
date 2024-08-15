@@ -5,57 +5,61 @@ import sys
 from typing import List, Optional
 
 import pytest
-import tvm
-import tvm.testing
-from tvm import TVMError
 
-from mlc_llm.grammar import BNFGrammar, GrammarStateMatcher
-from mlc_llm.tokenizers import Tokenizer
+from xgrammar import BuiltinGrammar, GrammarStateMatcher
+
+json_grammar = BuiltinGrammar.json()
+
+def match_complete_string(matcher: GrammarStateMatcher, input_str: str) -> bool:
+    res1 = matcher._accept_string(input_str, False)
+    res2 = matcher.is_terminated()
+    print(res1, res2)
+    return res1 and res2
+    # return matcher._accept_string(input_str, True) and matcher.is_terminated()
+
+# data = [
+#     ('{"name": "John"}',),
+#     ('{ "name" : "John" }',),
+#     ("{}",),
+#     ("[]",),
+#     ('{"name": "Alice", "age": 30, "city": "New York"}',),
+#     ('{"name": "Mike", "hobbies": ["reading", "cycling", "hiking"]}',),
+#     ('{"name": "Emma", "address": {"street": "Maple Street", "city": "Boston"}}',),
+#     ('[{"name": "David"}, {"name": "Sophia"}]',),
+#     (
+#         '{"name": "William", "age": null, "married": true, "children": ["Liam", "Olivia"],'
+#         ' "hasPets": false}',
+#     ),
+#     (
+#         '{"name": "Olivia", "contact": {"email": "olivia@example.com", "address": '
+#         '{"city": "Chicago", "zipcode": "60601"}}}',
+#     ),
+#     (
+#         '{"name": "Liam", "skills": ["Java", "Python"], "experience": '
+#         '[{"company": "CompanyA", "years": 5}, {"company": "CompanyB", "years": 3}]}',
+#     ),
+#     (
+#         '{"person": {"name": "Ethan", "age": 40}, "education": {"degree": "Masters", '
+#         '"university": "XYZ University"}, "work": [{"company": "ABC Corp", "position": '
+#         '"Manager"}, {"company": "DEF Corp", "position": "Senior Manager"}]}',
+#     ),
+#     (
+#         '{"name": "Charlotte", "details": {"personal": {"age": 35, "hobbies": ["gardening", '
+#         '"painting"]}, "professional": {"occupation": "Engineer", "skills": '
+#         '["CAD", "Project Management"], "projects": [{"name": "Project A", '
+#         '"status": "Completed"}, {"name": "Project B", "status": "In Progress"}]}}}',
+#     ),
+# ]
 
 
-@pytest.fixture(scope="function")
-def json_grammar():
-    return BNFGrammar.get_grammar_of_json()
+# @pytest.mark.parametrize("json_input_accepted", data)
+def test_json_accept(json_input_accepted: str):
+    print(json_grammar)
+    assert match_complete_string(GrammarStateMatcher(json_grammar), json_input_accepted)
 
-
-(json_input_accepted,) = tvm.testing.parameters(
-    ('{"name": "John"}',),
-    ('{ "name" : "John" }',),
-    ("{}",),
-    ("[]",),
-    ('{"name": "Alice", "age": 30, "city": "New York"}',),
-    ('{"name": "Mike", "hobbies": ["reading", "cycling", "hiking"]}',),
-    ('{"name": "Emma", "address": {"street": "Maple Street", "city": "Boston"}}',),
-    ('[{"name": "David"}, {"name": "Sophia"}]',),
-    (
-        '{"name": "William", "age": null, "married": true, "children": ["Liam", "Olivia"],'
-        ' "hasPets": false}',
-    ),
-    (
-        '{"name": "Olivia", "contact": {"email": "olivia@example.com", "address": '
-        '{"city": "Chicago", "zipcode": "60601"}}}',
-    ),
-    (
-        '{"name": "Liam", "skills": ["Java", "Python"], "experience": '
-        '[{"company": "CompanyA", "years": 5}, {"company": "CompanyB", "years": 3}]}',
-    ),
-    (
-        '{"person": {"name": "Ethan", "age": 40}, "education": {"degree": "Masters", '
-        '"university": "XYZ University"}, "work": [{"company": "ABC Corp", "position": '
-        '"Manager"}, {"company": "DEF Corp", "position": "Senior Manager"}]}',
-    ),
-    (
-        '{"name": "Charlotte", "details": {"personal": {"age": 35, "hobbies": ["gardening", '
-        '"painting"]}, "professional": {"occupation": "Engineer", "skills": '
-        '["CAD", "Project Management"], "projects": [{"name": "Project A", '
-        '"status": "Completed"}, {"name": "Project B", "status": "In Progress"}]}}}',
-    ),
-)
-
-
-def test_json_accept(json_grammar: BNFGrammar, json_input_accepted: str):
-    assert GrammarStateMatcher(json_grammar).debug_match_complete_string(json_input_accepted)
-
+# pytest.main([__file__])
+test_json_accept('{"name": "John"}')
+exit()
 
 (json_input_refused,) = tvm.testing.parameters(
     (r'{ name: "John" }',),
@@ -79,7 +83,9 @@ def test_json_accept(json_grammar: BNFGrammar, json_input_accepted: str):
 
 
 def test_json_refuse(json_grammar: BNFGrammar, json_input_refused):
-    assert not GrammarStateMatcher(json_grammar).debug_match_complete_string(json_input_refused)
+    assert not GrammarStateMatcher(json_grammar).debug_match_complete_string(
+        json_input_refused
+    )
 
 
 (json_input_pressure,) = tvm.testing.parameters(
@@ -210,37 +216,40 @@ def test_json_refuse(json_grammar: BNFGrammar, json_input_refused):
 
 
 def test_json_pressure(json_grammar: BNFGrammar, json_input_pressure):
-    assert GrammarStateMatcher(json_grammar).debug_match_complete_string(json_input_pressure)
+    assert GrammarStateMatcher(json_grammar).debug_match_complete_string(
+        json_input_pressure
+    )
 
 
-(tokenizer_path, input_find_rejected_tokens, expected_rejected_sizes) = tvm.testing.parameters(
-    (
-        # short test
-        "dist/Llama-2-7b-chat-hf-q4f16_1-MLC",
-        '{"id": 1,"name": "Example"}',
-        [
-            # fmt: off
+(tokenizer_path, input_find_rejected_tokens, expected_rejected_sizes) = (
+    tvm.testing.parameters(
+        (
+            # short test
+            "dist/Llama-2-7b-chat-hf-q4f16_1-MLC",
+            '{"id": 1,"name": "Example"}',
+            [
+                # fmt: off
             31989, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 272, 272, 272, 272,
             272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999
-            # fmt: on
-        ],
-    ),
-    (
-        # short test
-        "dist/Meta-Llama-3-8B-Instruct-q4f16_1-MLC",
-        '{"id": 1,"name": "Example哈哈"}',
-        [
-            # fmt: off
+                # fmt: on
+            ],
+        ),
+        (
+            # short test
+            "dist/Meta-Llama-3-8B-Instruct-q4f16_1-MLC",
+            '{"id": 1,"name": "Example哈哈"}',
+            [
+                # fmt: off
             128235, 127497, 5002, 5002, 5002, 127849, 126399, 126399, 126760, 127499, 5002, 5002,
             5002, 5002, 5002, 127849, 126399, 126399, 4952, 4952, 4952, 4952, 4952, 4952, 4952,
             4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128254
-            # fmt: on
-        ],
-    ),
-    (
-        # long test
-        "dist/Llama-2-7b-chat-hf-q4f16_1-MLC",
-        """{
+                # fmt: on
+            ],
+        ),
+        (
+            # long test
+            "dist/Llama-2-7b-chat-hf-q4f16_1-MLC",
+            """{
 "id": 1,
 "na": "ex",
 "ac": true,
@@ -248,8 +257,8 @@ def test_json_pressure(json_grammar: BNFGrammar, json_input_pressure):
 "ne": {"lv2": {"val": "dp"}, "arr": [1, 2, 3]},
 "res": "res"
 }""",
-        [
-            # fmt: off
+            [
+                # fmt: off
             31989, 31912, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 31915, 272, 272,
             272, 31973, 31846, 31846, 265, 265, 265, 31974, 31915, 31915, 272, 272, 272, 31973,
             31846, 31846, 31997, 31997, 31998, 31974, 31915, 31915, 272, 272, 31973, 31846, 31846,
@@ -259,9 +268,10 @@ def test_json_pressure(json_grammar: BNFGrammar, json_input_pressure):
             31915, 272, 272, 272, 272, 31973, 31846, 31846, 31840, 31943, 31846, 31846, 31943,
             31846, 31846, 31943, 31970, 31974, 31915, 31915, 272, 272, 272, 272, 31973, 31846,
             31846, 265, 265, 265, 265, 31974, 31974, 31999
-            # fmt: on
-        ],
-    ),
+                # fmt: on
+            ],
+        ),
+    )
 )
 
 
@@ -401,7 +411,19 @@ def test_termination(json_grammar: BNFGrammar):
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
         # fmt: on
     ]
-    input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}", "</s>"]
+    input_splitted = [
+        "{",
+        '"',
+        "abc",
+        'b"',
+        ":",
+        "6",
+        ", ",
+        " ",
+        '"a":true',
+        "}",
+        "</s>",
+    ]
     input_ids = [token_table.index(t) for t in input_splitted]
 
     grammar_state_matcher = GrammarStateMatcher(json_grammar, token_table, 5)

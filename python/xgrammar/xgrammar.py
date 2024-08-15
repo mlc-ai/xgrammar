@@ -110,7 +110,9 @@ class BNFGrammar:
         grammar : BNFGrammar
             The loaded BNF grammar.
         """
-        return _init_object_with_handle(BNFGrammar, _core.BNFGrammar.deserialize(json_string))
+        return _init_object_with_handle(
+            BNFGrammar, _core.BNFGrammar.deserialize(json_string)
+        )
 
     @staticmethod
     def _init_no_normalization(
@@ -230,7 +232,9 @@ class BuiltinGrammar:
         ebnf_string : str
             The EBNF grammar string.
         """
-        return _core.BuiltinGrammar._json_schema_to_ebnf(schema, indent, separators, strict_mode)
+        return _core.BuiltinGrammar._json_schema_to_ebnf(
+            schema, indent, separators, strict_mode
+        )
 
 
 class GrammarStateMatcher:
@@ -268,7 +272,7 @@ class GrammarStateMatcher:
     ):
         if tokenizer_or_vocab is None or isinstance(tokenizer_or_vocab, list):
             self._handle = _core.GrammarStateMatcher(
-                grammar, tokenizer_or_vocab, max_rollback_steps
+                grammar._handle, tokenizer_or_vocab, max_rollback_steps
             )
         else:
             if not hasattr(tokenizer_or_vocab, "get_vocab"):
@@ -277,7 +281,7 @@ class GrammarStateMatcher:
                     "have a get_vocab method."
                 )
             self._handle = _core.GrammarStateMatcher(
-                grammar, tokenizer_or_vocab.get_vocab(), max_rollback_steps
+                grammar._handle, tokenizer_or_vocab.get_vocab(), max_rollback_steps
             )
 
     def accept_token(self, token_id: int, verbose: bool = False) -> bool:

@@ -241,7 +241,7 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
   const auto& token = init_ctx_->token_table[token_id];
   int pos = 0;
   for (auto char_value : token) {
-    if (!AcceptChar(char_value, false)) {
+    if (!AcceptChar(char_value, verbose)) {
       if (verbose) {
         XGRAMMAR_LOG(INFO) << "The token is rejected at position " << pos << ", character "
                            << PrintAsEscapedUTF8(char_value);

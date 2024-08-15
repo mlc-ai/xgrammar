@@ -221,10 +221,14 @@ def test_error():
     ):
         BNFGrammar("main ::= a b")
 
-    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 15: Expect element"):
+    with pytest.raises(
+        RuntimeError, match="EBNF parse error at line 1, column 15: Expect element"
+    ):
         BNFGrammar('main ::= "a" |')
 
-    with pytest.raises(RuntimeError, match='EBNF parse error at line 1, column 15: Expect "'):
+    with pytest.raises(
+        RuntimeError, match='EBNF parse error at line 1, column 15: Expect "'
+    ):
         BNFGrammar('main ::= "a" "')
 
     with pytest.raises(
@@ -258,12 +262,15 @@ def test_error():
     ):
         BNFGrammar(r"main ::= [Z-A]")
 
-    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 6: Expect ::="):
+    with pytest.raises(
+        RuntimeError, match="EBNF parse error at line 1, column 6: Expect ::="
+    ):
         BNFGrammar(r'main := "a"')
 
     with pytest.raises(
         RuntimeError,
-        match='EBNF parse error at line 2, column 9: Rule "main" is defined multiple ' "times",
+        match='EBNF parse error at line 2, column 9: Rule "main" is defined multiple '
+        "times",
     ):
         BNFGrammar('main ::= "a"\nmain ::= "b"')
 
