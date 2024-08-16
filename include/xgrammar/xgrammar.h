@@ -242,7 +242,7 @@ class GrammarStateMatcher {
   void Rollback(int num_tokens);
 
   /*! \brief Get the maximum number of rollback steps allowed. */
-  int MaxRollbackSteps() const;
+  int GetMaxRollbackSteps() const;
 
   size_t GetVocabSize() const;
 
@@ -253,7 +253,7 @@ class GrammarStateMatcher {
   bool IsTerminated() const;
 
   /*! \brief Reset the matcher to the initial state. */
-  void ResetState();
+  void Reset();
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarStateMatcher);
 };

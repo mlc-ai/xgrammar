@@ -24,7 +24,7 @@ from transformers import PreTrainedTokenizerBase
 from . import xgrammar_bindings as _core
 
 
-def _init_object_with_handle(type, handle):
+def __init_object_with_handle(type, handle):
     """Initialize an object with a handle."""
     obj = type.__new__(type)
     obj._handle = handle
@@ -110,7 +110,7 @@ class BNFGrammar:
         grammar : BNFGrammar
             The loaded BNF grammar.
         """
-        return _init_object_with_handle(
+        return __init_object_with_handle(
             BNFGrammar, _core.BNFGrammar.deserialize(json_string)
         )
 
@@ -135,7 +135,7 @@ class BNFGrammar:
         grammar : BNFGrammar
             The parsed BNF grammar.
         """
-        return _init_object_with_handle(
+        return __init_object_with_handle(
             BNFGrammar, _core.BNFGrammar._init_no_normalization(ebnf_string, main_rule)
         )
 
@@ -150,7 +150,7 @@ class BuiltinGrammar:
         grammar : BNFGrammar
             The JSON grammar.
         """
-        return _init_object_with_handle(BNFGrammar, _core.BuiltinGrammar.json())
+        return __init_object_with_handle(BNFGrammar, _core.BuiltinGrammar.json())
 
     @staticmethod
     def json_schema(
@@ -190,7 +190,7 @@ class BuiltinGrammar:
         grammar : BNFGrammar
             The generated BNF grammar.
         """
-        return _init_object_with_handle(
+        return __init_object_with_handle(
             BNFGrammar,
             _core.BuiltinGrammar.json_schema(schema, indent, separators, strict_mode),
         )
@@ -234,6 +234,28 @@ class BuiltinGrammar:
         """
         return _core.BuiltinGrammar._json_schema_to_ebnf(
             schema, indent, separators, strict_mode
+        )
+
+    @staticmethod
+    def _with_suffix(base_grammar: BNFGrammar, suffix_string: str) -> BNFGrammar:
+        """Add a suffix to the main rule of the grammar.
+
+        Parameters
+        ----------
+        base_grammar : BNFGrammar
+            The base grammar.
+
+        suffix_string : str
+            The suffix string.
+
+        Returns
+        -------
+        grammar : BNFGrammar
+            The grammar with suffix.
+        """
+        return __init_object_with_handle(
+            BNFGrammar,
+            _core.BuiltinGrammar._with_suffix(base_grammar._handle, suffix_string),
         )
 
 
@@ -416,6 +438,6 @@ class GrammarStateMatcher:
         """
         return self._handle.is_terminated()
 
-    def reset_state(self) -> None:
+    def reset(self) -> None:
         """Reset the matcher to the initial state."""
-        return self._handle.reset_state()
+        return self._handle.reset()

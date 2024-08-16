@@ -80,7 +80,7 @@ class GrammarStateInitContext {
   /*! \brief All (id, token) pairs sorted in lexicographic order. This sorting is done to
    * maximize prefix reuse during matching. Special tokens and stop tokens are not included. */
   std::vector<std::pair<int32_t, std::string>> sorted_token_table;
-  /*! \brief The stop tokens. When the GrammarStateMatcher can reach the end of the= grammar,
+  /*! \brief The stop tokens. When the GrammarStateMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
   std::vector<int32_t> stop_token_ids;
   /*! \brief The special tokens. These tokens are ignored (masked out) during the grammar-guided
@@ -449,7 +449,6 @@ GrammarInitContextCache::Impl::GetInitContextForJSON() {
 
 inline void GrammarInitContextCache::Impl::Clear() { init_ctx_for_schema_cache_.clear(); }
 
-// pImpl idioms: function forwarding
 GrammarInitContextCache::GrammarInitContextCache(const std::vector<std::string>& token_table)
     : pimpl_(std::make_shared<Impl>(token_table)) {}
 

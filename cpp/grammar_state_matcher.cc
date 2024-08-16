@@ -138,13 +138,13 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
 
   void Rollback(int num_tokens);
 
-  int MaxRollbackSteps() const { return max_rollback_steps_; }
+  int GetMaxRollbackSteps() const { return max_rollback_steps_; }
 
   size_t GetVocabSize() const { return init_ctx_->vocab_size; }
 
   bool IsTerminated() { return stack_tops_history_.GetLatest().empty(); }
 
-  void ResetState() {
+  void Reset() {
     stack_tops_history_.Reset();
     token_length_history.clear();
     PushInitialState(kInvalidRulePosition, true);
@@ -599,13 +599,13 @@ std::string GrammarStateMatcher::FindJumpForwardString() { return pimpl_->FindJu
 
 void GrammarStateMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
 
-int GrammarStateMatcher::MaxRollbackSteps() const { return pimpl_->MaxRollbackSteps(); }
+int GrammarStateMatcher::GetMaxRollbackSteps() const { return pimpl_->GetMaxRollbackSteps(); }
 
 size_t GrammarStateMatcher::GetVocabSize() const { return pimpl_->GetVocabSize(); }
 
 bool GrammarStateMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
 
-void GrammarStateMatcher::ResetState() { pimpl_->ResetState(); }
+void GrammarStateMatcher::Reset() { pimpl_->Reset(); }
 
 // #ifndef COMPILE_MLC_WASM_RUNTIME
 // // This creates tokenizer dependency issue in WASM building for web, hence skipped

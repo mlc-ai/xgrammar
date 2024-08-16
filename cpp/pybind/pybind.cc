@@ -57,7 +57,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def("_accept_string", &GrammarStateMatcher::_AcceptString)
     //   .def("find_next_token_bitmask", &GrammarStateMatcher_FindNextTokenBitmask)
       .def("is_terminated", &GrammarStateMatcher::IsTerminated)
-      .def("reset_state", &GrammarStateMatcher::ResetState);
+      .def("reset", &GrammarStateMatcher::Reset);
 }
 
 // namespace xgrammar {

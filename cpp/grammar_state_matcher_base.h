@@ -17,7 +17,8 @@
 
 namespace xgrammar {
 
-/*! \brief The base class of GrammarStateMatcher. It implements a character-based matching
+/*!
+ * \brief The base class of GrammarStateMatcher. It implements a character-based matching
  * automata, and supports accepting a character, rolling back by character, etc.
  */
 class GrammarStateMatcherBase {
