@@ -42,20 +42,27 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
 
   auto pyGrammarStateMatcher = py::class_<GrammarStateMatcher>(m, "GrammarStateMatcher");
   pyGrammarStateMatcher
-      .def(py::init(py::overload_cast<const BNFGrammar&, const std::vector<std::string>&, int>(
-          &GrammarStateMatcher_Init
-      )))
-      .def(py::init(
-          py::overload_cast<const BNFGrammar&, std::nullptr_t, int>(&GrammarStateMatcher_Init)
-      ))
-      .def(py::init(
-          py::overload_cast<const BNFGrammar&, const std::unordered_map<std::string, int>&, int>(
-              &GrammarStateMatcher_Init
-          )
-      ))
+      .def(py::init(py::overload_cast<
+                    const BNFGrammar&,
+                    const std::vector<std::string>&,
+                    std::optional<std::vector<int>>,
+                    bool,
+                    int>(&GrammarStateMatcher_Init)))
+      .def(py::init(py::overload_cast<
+                    const BNFGrammar&,
+                    std::nullptr_t,
+                    std::optional<std::vector<int>>,
+                    bool,
+                    int>(&GrammarStateMatcher_Init)))
+      .def(py::init(py::overload_cast<
+                    const BNFGrammar&,
+                    const std::unordered_map<std::string, int>&,
+                    std::optional<std::vector<int>>,
+                    bool,
+                    int>(&GrammarStateMatcher_Init)))
       .def("accept_token", &GrammarStateMatcher::AcceptToken)
       .def("_accept_string", &GrammarStateMatcher::_AcceptString)
-    //   .def("find_next_token_bitmask", &GrammarStateMatcher_FindNextTokenBitmask)
+      //   .def("find_next_token_bitmask", &GrammarStateMatcher_FindNextTokenBitmask)
       .def("is_terminated", &GrammarStateMatcher::IsTerminated)
       .def("reset", &GrammarStateMatcher::Reset);
 }

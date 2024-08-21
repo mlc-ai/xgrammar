@@ -16,7 +16,7 @@ endif()
 if(NOT CMAKE_BUILD_TYPE)
   message(STATUS "No build type specified; defaulting to CMAKE_BUILD_TYPE=Debug.")
   set(CMAKE_BUILD_TYPE
-      "Debug"
+      "RelWithDebugInfo"
       CACHE STRING "The build type" FORCE
   )
 endif()

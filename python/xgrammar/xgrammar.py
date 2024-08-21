@@ -24,7 +24,7 @@ from transformers import PreTrainedTokenizerBase
 from . import xgrammar_bindings as _core
 
 
-def __init_object_with_handle(type, handle):
+def _init_object_with_handle(type, handle):
     """Initialize an object with a handle."""
     obj = type.__new__(type)
     obj._handle = handle
@@ -110,7 +110,7 @@ class BNFGrammar:
         grammar : BNFGrammar
             The loaded BNF grammar.
         """
-        return __init_object_with_handle(
+        return _init_object_with_handle(
             BNFGrammar, _core.BNFGrammar.deserialize(json_string)
         )
 
@@ -135,7 +135,7 @@ class BNFGrammar:
         grammar : BNFGrammar
             The parsed BNF grammar.
         """
-        return __init_object_with_handle(
+        return _init_object_with_handle(
             BNFGrammar, _core.BNFGrammar._init_no_normalization(ebnf_string, main_rule)
         )
 
@@ -150,7 +150,7 @@ class BuiltinGrammar:
         grammar : BNFGrammar
             The JSON grammar.
         """
-        return __init_object_with_handle(BNFGrammar, _core.BuiltinGrammar.json())
+        return _init_object_with_handle(BNFGrammar, _core.BuiltinGrammar.json())
 
     @staticmethod
     def json_schema(
@@ -190,7 +190,7 @@ class BuiltinGrammar:
         grammar : BNFGrammar
             The generated BNF grammar.
         """
-        return __init_object_with_handle(
+        return _init_object_with_handle(
             BNFGrammar,
             _core.BuiltinGrammar.json_schema(schema, indent, separators, strict_mode),
         )
@@ -253,10 +253,28 @@ class BuiltinGrammar:
         grammar : BNFGrammar
             The grammar with suffix.
         """
-        return __init_object_with_handle(
+        return _init_object_with_handle(
             BNFGrammar,
             _core.BuiltinGrammar._with_suffix(base_grammar._handle, suffix_string),
         )
+
+
+class TokenizerInfo:
+    def __init__(self, tokenizer: PreTrainedTokenizerBase):
+        self._handle = _core.TokenizerInfo(tokenizer)
+
+    def __str__(self) -> str:
+        return None
+
+    def get_decoded_token_table(self) -> str:
+        """Get the token table of the tokenizer.
+
+        Returns
+        -------
+        token_table : str
+            The token table.
+        """
+        return self._handle.decode_token_table()
 
 
 class GrammarStateMatcher:
@@ -290,11 +308,20 @@ class GrammarStateMatcher:
         self,
         grammar: BNFGrammar,
         tokenizer_or_vocab: Union[None, PreTrainedTokenizerBase, List[str]] = None,
+        stop_token_ids: Union[None, int, List[int]] = None,
+        terminate_without_stop_token: bool = False,
         max_rollback_steps: int = 0,
     ):
+        if isinstance(stop_token_ids, int):
+            stop_token_ids = [stop_token_ids]
+
         if tokenizer_or_vocab is None or isinstance(tokenizer_or_vocab, list):
             self._handle = _core.GrammarStateMatcher(
-                grammar._handle, tokenizer_or_vocab, max_rollback_steps
+                grammar._handle,
+                tokenizer_or_vocab,
+                stop_token_ids,
+                terminate_without_stop_token,
+                max_rollback_steps,
             )
         else:
             if not hasattr(tokenizer_or_vocab, "get_vocab"):
@@ -303,7 +330,11 @@ class GrammarStateMatcher:
                     "have a get_vocab method."
                 )
             self._handle = _core.GrammarStateMatcher(
-                grammar._handle, tokenizer_or_vocab.get_vocab(), max_rollback_steps
+                grammar._handle,
+                tokenizer_or_vocab.get_vocab(),
+                stop_token_ids,
+                terminate_without_stop_token,
+                max_rollback_steps,
             )
 
     def accept_token(self, token_id: int, verbose: bool = False) -> bool:

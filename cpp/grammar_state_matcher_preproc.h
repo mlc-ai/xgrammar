@@ -82,7 +82,7 @@ class GrammarStateInitContext {
   std::vector<std::pair<int32_t, std::string>> sorted_token_table;
   /*! \brief The stop tokens. When the GrammarStateMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
-  std::vector<int32_t> stop_token_ids;
+  std::vector<int32_t> detected_stop_token_ids;
   /*! \brief The special tokens. These tokens are ignored (masked out) during the grammar-guided
    * generation. */
   std::unordered_set<int32_t> special_token_ids;
@@ -340,7 +340,7 @@ std::shared_ptr<GrammarStateInitContext> GrammarStateMatcher::CreateInitContext(
     // Gemma: <eos>, <end_of_turn>
     if (token == "</s>" || token == "<|end_of_text|>" || token == "<|eot_id|>" ||
         token == "<|endoftext|>" || token == "<eos>" || token == "<end_of_turn>") {
-      ptr->stop_token_ids.push_back(i);
+      ptr->detected_stop_token_ids.push_back(i);
     } else if ((token[0] == '<' && token.back() == '>' && token.size() >= 3) || token == "[@BOS@]") {
       // gemma treats [@BOS@] as a special token
       ptr->special_token_ids.insert(i);

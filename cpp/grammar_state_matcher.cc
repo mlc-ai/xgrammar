@@ -122,11 +122,21 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
   using SaveType = CatagorizedTokens::SaveType;
 
  public:
-  Impl(std::shared_ptr<GrammarStateInitContext> init_ctx, int max_rollback_steps = 0)
+  Impl(
+      std::shared_ptr<GrammarStateInitContext> init_ctx,
+      std::optional<std::vector<int>> stop_token_ids = std::nullopt,
+      bool terminate_without_stop_token = false,
+      int max_rollback_steps = 0
+  )
       : GrammarStateMatcherBase(init_ctx->grammar),
         init_ctx_(init_ctx),
+        stop_token_ids_(stop_token_ids.value_or(init_ctx->detected_stop_token_ids)),
+        terminate_without_stop_token_(terminate_without_stop_token),
         max_rollback_steps_(max_rollback_steps),
-        tmp_accepted_bitset_(init_ctx_->vocab_size) {}
+        tmp_accepted_bitset_(init_ctx_->vocab_size) {
+    XGRAMMAR_CHECK(!stop_token_ids.has_value() || !stop_token_ids->empty())
+        << "The stop_token_ids should not be empty";
+  }
 
   bool AcceptToken(int32_t token_id, bool verbose = false);
 
@@ -142,7 +152,7 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
 
   size_t GetVocabSize() const { return init_ctx_->vocab_size; }
 
-  bool IsTerminated() { return stack_tops_history_.GetLatest().empty(); }
+  bool IsTerminated() const;
 
   void Reset() {
     stack_tops_history_.Reset();
@@ -183,6 +193,8 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
   // friend NDArray FindNextTokenBitmaskAsNDArray(GrammarStateMatcher matcher);
 
   std::shared_ptr<GrammarStateInitContext> init_ctx_;
+  std::vector<int> stop_token_ids_;
+  bool terminate_without_stop_token_;
   int max_rollback_steps_;
   std::deque<int> token_length_history;
 
@@ -193,11 +205,21 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
 };
 
 bool GrammarStateMatcher::Impl::AcceptStopToken() {
+  if (terminate_without_stop_token_) {
+    return false;
+  }
   if (!CanReachEnd()) {
     return false;
   }
   stack_tops_history_.PushHistory({});  // Terminate the matcher by setting the stack to empty
   return true;
+}
+
+bool GrammarStateMatcher::Impl::IsTerminated() const {
+  if (terminate_without_stop_token_) {
+    return CanReachEnd();
+  }
+  return stack_tops_history_.GetLatest().empty();
 }
 
 // TODO(yixin): Polish verbose logging
@@ -222,8 +244,8 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
   }
 
   // Handle the stop token
-  if (std::find(init_ctx_->stop_token_ids.begin(), init_ctx_->stop_token_ids.end(), token_id) !=
-      init_ctx_->stop_token_ids.end()) {
+  if (std::find(stop_token_ids_.begin(), stop_token_ids_.end(), token_id) !=
+      stop_token_ids_.end()) {
     bool accepted = AcceptStopToken();
     if (verbose) {
       XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << accepted;
@@ -262,6 +284,15 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
 }
 
 bool GrammarStateMatcher::Impl::_AcceptString(const std::string& input_str, bool verbose) {
+  if (IsTerminated()) {
+    if (verbose) {
+      XGRAMMAR_LOG(INFO) << "The matcher has terminated after accepting the stop token, but is "
+                            "trying to accept new string "
+                         << PrintAsEscapedUTF8(input_str);
+    }
+    return false;
+  }
+
   int accepted_cnt = 0;
   for (auto char_value : input_str) {
     if (!AcceptChar(char_value, verbose)) {
@@ -523,7 +554,7 @@ void GrammarStateMatcher::Impl::SetTokenBitmask(
 
     if (can_reach_end) {
       // add end tokens
-      for (int id : init_ctx_->stop_token_ids) {
+      for (int id : stop_token_ids_) {
         next_token_bitset.Set(id, true);
       }
     }
@@ -542,7 +573,7 @@ void GrammarStateMatcher::Impl::SetTokenBitmask(
       next_token_bitset.Set(id, false);
     }
     if (!can_reach_end) {
-      for (int id : init_ctx_->stop_token_ids) {
+      for (int id : stop_token_ids_) {
         next_token_bitset.Set(id, false);
       }
     }
@@ -575,9 +606,14 @@ int GrammarStateMatcher::Impl::GetNextUncertainToken(
 }
 
 GrammarStateMatcher::GrammarStateMatcher(
-    std::shared_ptr<GrammarStateInitContext> init_ctx, int max_rollback_steps
+    std::shared_ptr<GrammarStateInitContext> init_ctx,
+    std::optional<std::vector<int>> stop_token_ids,
+    bool terminate_without_stop_token,
+    int max_rollback_steps
 )
-    : pimpl_(std::make_shared<GrammarStateMatcher::Impl>(init_ctx, max_rollback_steps)) {}
+    : pimpl_(std::make_shared<GrammarStateMatcher::Impl>(
+          init_ctx, stop_token_ids, terminate_without_stop_token, max_rollback_steps
+      )) {}
 
 bool GrammarStateMatcher::AcceptToken(int32_t token_id, bool verbose) {
   return pimpl_->AcceptToken(token_id, verbose);

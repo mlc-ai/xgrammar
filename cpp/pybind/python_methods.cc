@@ -22,24 +22,40 @@ BNFGrammar BNFGrammar_InitNoNormalization(
 }
 
 GrammarStateMatcher GrammarStateMatcher_Init(
-    const BNFGrammar& grammar, const std::vector<std::string>& token_table, int max_rollback_steps
+    const BNFGrammar& grammar,
+    const std::vector<std::string>& token_table,
+    std::optional<std::vector<int>> stop_token_ids,
+    bool terminate_without_stop_token,
+    int max_rollback_steps
 ) {
   return GrammarStateMatcher(
-      GrammarStateMatcher::CreateInitContext(grammar, token_table), max_rollback_steps
+      GrammarStateMatcher::CreateInitContext(grammar, token_table),
+      stop_token_ids,
+      terminate_without_stop_token,
+      max_rollback_steps
   );
 }
 
 GrammarStateMatcher GrammarStateMatcher_Init(
-    const BNFGrammar& grammar, std::nullptr_t, int max_rollback_steps
+    const BNFGrammar& grammar,
+    std::nullptr_t,
+    std::optional<std::vector<int>> stop_token_ids,
+    bool terminate_without_stop_token,
+    int max_rollback_steps
 ) {
   return GrammarStateMatcher(
-      GrammarStateMatcher::CreateInitContext(grammar, {}), max_rollback_steps
+      GrammarStateMatcher::CreateInitContext(grammar, {}),
+      stop_token_ids,
+      terminate_without_stop_token,
+      max_rollback_steps
   );
 }
 
 GrammarStateMatcher GrammarStateMatcher_Init(
     const BNFGrammar& grammar,
     const std::unordered_map<std::string, int>& token_table,
+    std::optional<std::vector<int>> stop_token_ids,
+    bool terminate_without_stop_token,
     int max_rollback_steps
 ) {
   std::vector<std::pair<const std::string*, int>> sorted_token_and_ids;
@@ -59,7 +75,13 @@ GrammarStateMatcher GrammarStateMatcher_Init(
     tokens_ordered_by_id.push_back(*item.first);
   }
 
-  return GrammarStateMatcher_Init(grammar, tokens_ordered_by_id, max_rollback_steps);
+  return GrammarStateMatcher_Init(
+      grammar,
+      tokens_ordered_by_id,
+      stop_token_ids,
+      terminate_without_stop_token,
+      max_rollback_steps
+  );
 }
 
 // torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher) {

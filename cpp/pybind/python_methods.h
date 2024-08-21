@@ -22,16 +22,25 @@ BNFGrammar BNFGrammar_InitNoNormalization(
 );
 
 GrammarStateMatcher GrammarStateMatcher_Init(
-    const BNFGrammar& grammar, const std::vector<std::string>& token_table, int max_rollback_steps
-);
-
-GrammarStateMatcher GrammarStateMatcher_Init(
-    const BNFGrammar& grammar, std::nullptr_t, int max_rollback_steps
+    const BNFGrammar& grammar,
+    const std::vector<std::string>& token_table,
+    std::optional<std::vector<int>> stop_token_ids,
+    bool terminate_without_stop_token,
+    int max_rollback_steps
 );
 
 GrammarStateMatcher GrammarStateMatcher_Init(
     const BNFGrammar& grammar,
+    std::nullptr_t,
+    std::optional<std::vector<int>> stop_token_ids,
+    bool terminate_without_stop_token,
+    int max_rollback_steps
+);
+GrammarStateMatcher GrammarStateMatcher_Init(
+    const BNFGrammar& grammar,
     const std::unordered_map<std::string, int>& token_table,
+    std::optional<std::vector<int>> stop_token_ids,
+    bool terminate_without_stop_token,
     int max_rollback_steps
 );
 
