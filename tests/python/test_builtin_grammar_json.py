@@ -14,16 +14,9 @@ json_grammar = BuiltinGrammar.json()
 
 
 def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
-    # tm0 = time.monotonic_ns()
     matcher = GrammarStateMatcher(grammar, terminate_without_stop_token=True)
-    # tm1 = time.monotonic_ns()
     can_accept = matcher._accept_string(input_str)
-    # tm2 = time.monotonic_ns()
     can_terminate = matcher.is_terminated()
-    # tm3 = time.monotonic_ns()
-    # print(
-    # f"Accept time: {(tm2 - tm1)/1000} us, Termination time: {(tm3 - tm2)/1000} us"
-    # )
     return can_accept and can_terminate
 
 
