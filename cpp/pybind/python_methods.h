@@ -7,7 +7,8 @@
 #ifndef XGRAMMAR_DEBUG_METHODS_H_
 #define XGRAMMAR_DEBUG_METHODS_H_
 
-// #include <torch/extension.h>
+#include <pybind11/pybind11.h>
+#include <torch/extension.h>
 #include <xgrammar/xgrammar.h>
 
 #include <optional>
@@ -36,15 +37,12 @@ GrammarStateMatcher GrammarStateMatcher_Init(
     bool terminate_without_stop_token,
     int max_rollback_steps
 );
-GrammarStateMatcher GrammarStateMatcher_Init(
-    const BNFGrammar& grammar,
-    const std::unordered_map<std::string, int>& token_table,
-    std::optional<std::vector<int>> stop_token_ids,
-    bool terminate_without_stop_token,
-    int max_rollback_steps
+
+std::vector<pybind11::bytes> TokenizerInfo_GetDecodedTokenTable(
+    const TokenizerInfo& tokenizer_info, const std::unordered_map<std::string, int>& raw_token_table
 );
 
-// torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher);
+torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher);
 
 }  // namespace xgrammar
 

@@ -5,10 +5,11 @@
 
 #include "python_methods.h"
 
-// #include <ATen/DLConvertor.h>
+#include <ATen/DLConvertor.h>
 #include <xgrammar/xgrammar.h>
 
 #include <algorithm>
+#include <chrono>
 
 #include "../grammar_parser.h"
 
@@ -51,45 +52,24 @@ GrammarStateMatcher GrammarStateMatcher_Init(
   );
 }
 
-GrammarStateMatcher GrammarStateMatcher_Init(
-    const BNFGrammar& grammar,
-    const std::unordered_map<std::string, int>& token_table,
-    std::optional<std::vector<int>> stop_token_ids,
-    bool terminate_without_stop_token,
-    int max_rollback_steps
+std::vector<pybind11::bytes> TokenizerInfo_GetDecodedTokenTable(
+    const TokenizerInfo& tokenizer_info, const std::unordered_map<std::string, int>& raw_token_table
 ) {
-  std::vector<std::pair<const std::string*, int>> sorted_token_and_ids;
-  sorted_token_and_ids.reserve(token_table.size());
-  for (const auto& pair : token_table) {
-    sorted_token_and_ids.emplace_back(&pair.first, pair.second);
+  auto result = tokenizer_info.GetDecodedTokenTable(raw_token_table);
+  std::vector<pybind11::bytes> py_result;
+  py_result.reserve(result.size());
+  for (const auto& item : result) {
+    py_result.emplace_back(pybind11::bytes(item));
   }
-  std::sort(
-      sorted_token_and_ids.begin(),
-      sorted_token_and_ids.end(),
-      [](const auto& a, const auto& b) { return a.second < b.second; }
-  );
-
-  std::vector<std::string> tokens_ordered_by_id;
-  tokens_ordered_by_id.reserve(sorted_token_and_ids.size());
-  for (const auto& item : sorted_token_and_ids) {
-    tokens_ordered_by_id.push_back(*item.first);
-  }
-
-  return GrammarStateMatcher_Init(
-      grammar,
-      tokens_ordered_by_id,
-      stop_token_ids,
-      terminate_without_stop_token,
-      max_rollback_steps
-  );
+  return py_result;
 }
 
-// torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher) {
-//   auto buffer_size = GrammarStateMatcher::GetBufferSize(matcher.GetVocabSize());
-//   auto result = torch::empty({buffer_size}, torch::dtype(torch::kUInt32).device(torch::kCPU, 0));
-//   auto result_dltensor = at::toDLPack(result)->dl_tensor;
-//   matcher.FindNextTokenBitmask(&result_dltensor);
-//   return result;
-// }
+torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher) {
+  auto buffer_size = GrammarStateMatcher::GetBufferSize(matcher.GetVocabSize());
+  auto result = torch::empty({buffer_size}, torch::dtype(torch::kUInt32).device(torch::kCPU, 0));
+  auto result_dltensor = at::toDLPack(result)->dl_tensor;
+  matcher.FindNextTokenBitmask(&result_dltensor);
+  return result;
+}
 
 }  // namespace xgrammar

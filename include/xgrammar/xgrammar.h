@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace xgrammar {
@@ -144,6 +145,17 @@ class BuiltinGrammar {
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
       bool strict_mode = true
   );
+};
+
+class TokenizerInfo {
+ public:
+  TokenizerInfo(const std::string& hf_tokenizer_str);
+  std::string ToString() const;
+  std::vector<std::string> GetDecodedTokenTable(
+      const std::unordered_map<std::string, int>& raw_token_table
+  ) const;
+
+  XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
 };
 
 /*!

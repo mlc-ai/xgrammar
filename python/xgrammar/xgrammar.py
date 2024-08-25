@@ -16,7 +16,8 @@
 # under the License.
 """Classes handling the grammar guided generation of MLC LLM serving"""
 
-from typing import List, Optional, Tuple, Union
+import logging
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 from transformers import PreTrainedTokenizerBase
@@ -261,12 +262,22 @@ class BuiltinGrammar:
 
 class TokenizerInfo:
     def __init__(self, tokenizer: PreTrainedTokenizerBase):
-        self._handle = _core.TokenizerInfo(tokenizer)
+        try:
+            backend_str = tokenizer.backend_tokenizer.to_str()
+        except AttributeError:
+            logging.warning(
+                "Cannot detect TokenizerInfo from tokenizer type %s. Only huggingface or "
+                "sentencepiece tokenizer is supported yet. Falling back to the default "
+                "TokenizerInfo.",
+                type(tokenizer),
+            )
+            backend_str = None
+        self._handle = _core.TokenizerInfo(backend_str)
 
     def __str__(self) -> str:
-        return None
+        return self._handle.to_string()
 
-    def get_decoded_token_table(self) -> str:
+    def get_decoded_token_table(self, raw_token_table: Dict[str, int]) -> List[bytes]:
         """Get the token table of the tokenizer.
 
         Returns
@@ -274,7 +285,7 @@ class TokenizerInfo:
         token_table : str
             The token table.
         """
-        return self._handle.decode_token_table()
+        return self._handle.get_decoded_token_table(raw_token_table)
 
 
 class GrammarStateMatcher:
@@ -307,7 +318,9 @@ class GrammarStateMatcher:
     def __init__(
         self,
         grammar: BNFGrammar,
-        tokenizer_or_vocab: Union[None, PreTrainedTokenizerBase, List[str]] = None,
+        tokenizer_or_vocab: Union[
+            None, PreTrainedTokenizerBase, List[bytes], List[str]
+        ] = None,
         stop_token_ids: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
         max_rollback_steps: int = 0,
@@ -316,26 +329,25 @@ class GrammarStateMatcher:
             stop_token_ids = [stop_token_ids]
 
         if tokenizer_or_vocab is None or isinstance(tokenizer_or_vocab, list):
-            self._handle = _core.GrammarStateMatcher(
-                grammar._handle,
-                tokenizer_or_vocab,
-                stop_token_ids,
-                terminate_without_stop_token,
-                max_rollback_steps,
-            )
+            vocab = tokenizer_or_vocab
         else:
             if not hasattr(tokenizer_or_vocab, "get_vocab"):
                 raise ValueError(
                     "Cannot get the vocabulary of the provided tokenizer. The tokenizer should "
                     "have a get_vocab method."
                 )
-            self._handle = _core.GrammarStateMatcher(
-                grammar._handle,
-                tokenizer_or_vocab.get_vocab(),
-                stop_token_ids,
-                terminate_without_stop_token,
-                max_rollback_steps,
+            tokenizer_info = TokenizerInfo(tokenizer_or_vocab)
+            vocab = tokenizer_info.get_decoded_token_table(
+                tokenizer_or_vocab.get_vocab()
             )
+
+        self._handle = _core.GrammarStateMatcher(
+            grammar._handle,
+            vocab,
+            stop_token_ids,
+            terminate_without_stop_token,
+            max_rollback_steps,
+        )
 
     def accept_token(self, token_id: int, verbose: bool = False) -> bool:
         """Accept one token and update the state of the matcher.
@@ -387,21 +399,21 @@ class GrammarStateMatcher:
         """
         return self._handle.find_next_token_bitmask()
 
-    # @staticmethod
-    # def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor) -> List[int]:
-    #     """Get the ids of the rejected tokens from the bitmask.
+    @staticmethod
+    def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor) -> List[int]:
+        """Get the ids of the rejected tokens from the bitmask.
 
-    #     Parameters
-    #     ----------
-    #     bitmask : torch.Tensor
-    #         The rejected token bitmask.
+        Parameters
+        ----------
+        bitmask : torch.Tensor
+            The rejected token bitmask.
 
-    #     Returns
-    #     -------
-    #     rejected_token_ids : List[int]
-    #         A list of rejected token ids.
-    #     """
-    #     return None
+        Returns
+        -------
+        rejected_token_ids : List[int]
+            A list of rejected token ids.
+        """
+        return _core.GrammarStateMatcher.get_rejected_tokens_from_bitmask(bitmask)
 
     # @staticmethod
     # def apply_token_bitmask(tensor: torch.Tensor, bitmask: torch.Tensor) -> torch.Tensor:
@@ -422,20 +434,20 @@ class GrammarStateMatcher:
     #     """
     #     return None
 
-    # def find_jump_forward_string(self) -> str:
-    #     """Find the jump-forward string for jump-forward decoding. This is the longest string that
-    #     will be valid according to the current syntax.
+    def find_jump_forward_string(self) -> str:
+        """Find the jump-forward string for jump-forward decoding. This is the longest string that
+        will be valid according to the current syntax.
 
-    #     Notes
-    #     -----
-    #     This method does not change the grammar state.
+        Notes
+        -----
+        This method does not change the grammar state.
 
-    #     Returns
-    #     -------
-    #     jump_forward_string : str
-    #         The jump-forward string.
-    #     """
-    #     return _ffi_api.GrammarStateMatcherFindJumpForwardString(self)  # type: ignore  # pylint: disable=no-member
+        Returns
+        -------
+        jump_forward_string : str
+            The jump-forward string.
+        """
+        return _ffi_api.GrammarStateMatcherFindJumpForwardString(self)  # type: ignore  # pylint: disable=no-member
 
     # def rollback(self, num_tokens: int) -> None:
     #     """Rollback the matcher to a previous state.

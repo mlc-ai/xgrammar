@@ -40,6 +40,11 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("json_schema", &BuiltinGrammar::JSONSchema)
       .def_static("_json_schema_to_ebnf", &BuiltinGrammar::_JSONSchemaToEBNF);
 
+  auto pyTokenizerInfo = py::class_<TokenizerInfo>(m, "TokenizerInfo");
+  pyTokenizerInfo.def(py::init<const std::string&>())
+      .def("to_string", &TokenizerInfo::ToString)
+      .def("get_decoded_token_table", &TokenizerInfo_GetDecodedTokenTable);
+
   auto pyGrammarStateMatcher = py::class_<GrammarStateMatcher>(m, "GrammarStateMatcher");
   pyGrammarStateMatcher
       .def(py::init(py::overload_cast<
@@ -54,15 +59,9 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
                     std::optional<std::vector<int>>,
                     bool,
                     int>(&GrammarStateMatcher_Init)))
-      .def(py::init(py::overload_cast<
-                    const BNFGrammar&,
-                    const std::unordered_map<std::string, int>&,
-                    std::optional<std::vector<int>>,
-                    bool,
-                    int>(&GrammarStateMatcher_Init)))
       .def("accept_token", &GrammarStateMatcher::AcceptToken)
       .def("_accept_string", &GrammarStateMatcher::_AcceptString)
-      //   .def("find_next_token_bitmask", &GrammarStateMatcher_FindNextTokenBitmask)
+      .def("find_next_token_bitmask", &GrammarStateMatcher_FindNextTokenBitmask)
       .def("is_terminated", &GrammarStateMatcher::IsTerminated)
       .def("reset", &GrammarStateMatcher::Reset);
 }
