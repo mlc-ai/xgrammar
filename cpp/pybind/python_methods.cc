@@ -72,4 +72,13 @@ torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matc
   return result;
 }
 
+std::vector<int> GrammarStateMatcher_GetRejectedTokensFromBitMask(
+    torch::Tensor token_bitmask, size_t vocab_size
+) {
+  std::vector<int> result;
+  auto token_bitmask_dltensor = at::toDLPack(token_bitmask)->dl_tensor;
+  GrammarStateMatcher::GetRejectedTokensFromBitMask(token_bitmask_dltensor, vocab_size, &result);
+  return result;
+}
+
 }  // namespace xgrammar

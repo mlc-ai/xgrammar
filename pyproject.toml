@@ -1,2 +1,2 @@
 [tool.pytest.ini_options]
-addopts = "-rA"
+addopts = "-rA --durations=0"

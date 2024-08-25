@@ -44,6 +44,10 @@ std::vector<pybind11::bytes> TokenizerInfo_GetDecodedTokenTable(
 
 torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher);
 
+std::vector<int> GrammarStateMatcher_GetRejectedTokensFromBitMask(
+    torch::Tensor token_bitmask, size_t vocab_size
+);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_DEBUG_METHODS_H_

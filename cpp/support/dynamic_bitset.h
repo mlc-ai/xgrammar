@@ -21,6 +21,7 @@ namespace xgrammar {
  * - When passing nullptr to data, it maintains an internal buffer for the bitset.
  * - When passing a pointer to a buffer with enough size, it uses the external buffer for the
  *   bitset.
+ * \details Part of the implementation is adopted from Boost::dynamic_bitset.
  */
 class DynamicBitset {
  public:
@@ -127,7 +128,43 @@ class DynamicBitset {
     return *this;
   }
 
+  int FindFirstZero() const { return DoFindZeroFrom(0); }
+
+  int FindNextZero(int pos) const {
+    if (pos >= size_ - 1 || size_ == 0) return -1;
+    ++pos;
+    int blk = pos / BITS_PER_BLOCK;
+    int ind = pos % BITS_PER_BLOCK;
+    uint32_t fore = (~data_[blk]) >> ind;
+    return fore ? pos + LowestBit(fore) : DoFindZeroFrom(blk + 1);
+  }
+
  private:
+  static int LowestBit(uint32_t value) {
+#ifdef __GNUC__
+    return __builtin_ctz(value);
+#else   // __GNUC__
+    // From https://stackoverflow.com/a/757266
+    static const int MultiplyDeBruijnBitPosition[32] = {0,  1,  28, 2,  29, 14, 24, 3,  30, 22, 20,
+                                                        15, 25, 17, 4,  8,  31, 27, 13, 23, 21, 19,
+                                                        16, 7,  26, 12, 18, 6,  11, 5,  10, 9};
+    return MultiplyDeBruijnBitPosition[((uint32_t)((v & -v) * 0x077CB531U)) >> 27];
+#endif  // __GNUC__
+  }
+
+  int DoFindZeroFrom(int first_block) const {
+    int position = -1;
+    for (int i = first_block; i < buffer_size_; ++i) {
+      if (data_[i] != ~static_cast<uint32_t>(0)) {
+        position = i;
+        break;
+      }
+    }
+    if (position == -1) return -1;
+    return position * BITS_PER_BLOCK + LowestBit(~data_[position]);
+  }
+
+  static constexpr int BITS_PER_BLOCK = 32;
   // The size of the bitset.
   int size_;
   // The size of the buffer.

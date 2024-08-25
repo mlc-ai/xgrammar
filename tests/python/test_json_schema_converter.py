@@ -2,24 +2,31 @@ import json
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
-import tvm.testing
+import pytest
 from pydantic import BaseModel, Field, TypeAdapter
-
-from mlc_llm.grammar import BNFGrammar, GrammarStateMatcher
+from xgrammar import BuiltinGrammar, GrammarStateMatcher
+from xgrammar.xgrammar import BNFGrammar
 
 
 def check_schema_with_grammar(
     schema: Dict[str, Any],
-    expected_grammar: str,
+    expected_grammar_ebnf: str,
     indent: Optional[int] = None,
     separators: Optional[Tuple[str, str]] = None,
     strict_mode: bool = True,
 ):
     schema_str = json.dumps(schema)
-    grammar = BNFGrammar.debug_json_schema_to_ebnf(
+    json_schema_ebnf = BuiltinGrammar._json_schema_to_ebnf(
         schema_str, indent=indent, separators=separators, strict_mode=strict_mode
     )
-    assert grammar == expected_grammar
+    assert json_schema_ebnf == expected_grammar_ebnf
+
+
+def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
+    matcher = GrammarStateMatcher(grammar, terminate_without_stop_token=True)
+    can_accept = matcher._accept_string(input_str)
+    can_terminate = matcher.is_terminated()
+    return can_accept and can_terminate
 
 
 def check_schema_with_json(
@@ -30,15 +37,17 @@ def check_schema_with_json(
     separators: Optional[Tuple[str, str]] = None,
     strict_mode: bool = True,
 ):
-    ebnf_grammar = BNFGrammar.from_schema(
-        json.dumps(schema, indent=2), indent=indent, separators=separators, strict_mode=strict_mode
+    json_schema_grammar = BuiltinGrammar.json_schema(
+        json.dumps(schema),
+        indent=indent,
+        separators=separators,
+        strict_mode=strict_mode,
     )
-    matcher = GrammarStateMatcher(ebnf_grammar)
 
     if check_accepted:
-        assert matcher.debug_match_complete_string(json_str)
+        assert match_complete_string(json_schema_grammar, json_str)
     else:
-        assert not matcher.debug_match_complete_string(json_str)
+        assert not match_complete_string(json_schema_grammar, json_str)
 
 
 def check_schema_with_instance(
@@ -51,7 +60,9 @@ def check_schema_with_instance(
 ):
     instance_obj = instance.model_dump(mode="json", round_trip=True)
     instance_str = json.dumps(instance_obj, indent=indent, separators=separators)
-    check_schema_with_json(schema, instance_str, check_accepted, indent, separators, strict_mode)
+    check_schema_with_json(
+        schema, instance_str, check_accepted, indent, separators, strict_mode
+    )
 
 
 def test_basic() -> None:
@@ -226,7 +237,9 @@ main ::= "{" "" "\"bars\"" ": " main_prop_0 ", " "\"str_values\"" ": " main_prop
 """
 
     schema = MainModel.model_json_schema()
-    instance = MainModel(foo="a", values=1, bars="a", str_values='a\n\r"', field=Field.FOO)
+    instance = MainModel(
+        foo="a", values=1, bars="a", str_values='a\n\r"', field=Field.FOO
+    )
     check_schema_with_grammar(schema, ebnf_grammar)
     check_schema_with_instance(schema, instance)
 
@@ -315,7 +328,9 @@ main ::= ("{" "" (("\"size\"" ": " basic_integer main_part_0) | ("\"state\"" ": 
 
     check_schema_with_grammar(schema, ebnf_grammar_non_strict, strict_mode=False)
 
-    check_schema_with_json(schema, '{"size": 1, "num": 1.5, "other": false}', strict_mode=False)
+    check_schema_with_json(
+        schema, '{"size": 1, "num": 1.5, "other": false}', strict_mode=False
+    )
     check_schema_with_json(schema, '{"other": false}', strict_mode=False)
 
 
@@ -441,10 +456,14 @@ main ::= "{" "" "\"name\"" ": " basic_string "" "}"
     check_schema_with_grammar(MainModel.model_json_schema(), ebnf_grammar)
 
     instance = MainModel(name="kitty")
-    instance_str = json.dumps(instance.model_dump(mode="json", round_trip=True, by_alias=False))
+    instance_str = json.dumps(
+        instance.model_dump(mode="json", round_trip=True, by_alias=False)
+    )
     check_schema_with_json(MainModel.model_json_schema(by_alias=False), instance_str)
 
-    instance_str = json.dumps(instance.model_dump(mode="json", round_trip=True, by_alias=True))
+    instance_str = json.dumps(
+        instance.model_dump(mode="json", round_trip=True, by_alias=True)
+    )
     check_schema_with_json(MainModel.model_json_schema(by_alias=True), instance_str)
 
     # property name contains space
@@ -471,8 +490,10 @@ main ::= "{" "" "\"name 1\"" ": " main_prop_0 "" "}"
     instance_space_str = json.dumps(
         instance_space.model_dump(mode="json", round_trip=True, by_alias=True)
     )
-    check_schema_with_json(MainModelSpace.model_json_schema(by_alias=True), instance_space_str)
+    check_schema_with_json(
+        MainModelSpace.model_json_schema(by_alias=True), instance_space_str
+    )
 
 
 if __name__ == "__main__":
-    tvm.testing.main()
+    pytest.main([__file__])

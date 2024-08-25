@@ -106,7 +106,7 @@ std::tuple<bool, int, TCodepoint> HandleUTF8FirstByte(uint8_t byte) {
      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
      3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,
-     4,  4,  4,  4,  4,  4,  4,  4, -1, -1, -1, -1, -1, -1, -1, -1,
+    4,  4,  4,  4,  4,  4,  4,  4, -1, -1, -1, -1, -1, -1, -1, -1,
   };
   // clang-format on
   auto num_bytes = kUtf8Bytes[static_cast<uint8_t>(byte)];

@@ -261,36 +261,22 @@ inline std::string DecodeToken(const std::string& token, const std::string& toke
 std::vector<std::string> TokenizerInfo::Impl::GetDecodedTokenTable(
     const std::unordered_map<std::string, int>& raw_token_table
 ) const {
-  // auto tm1 = std::chrono::high_resolution_clock::now();
   std::vector<std::pair<const std::string*, int>> sorted_token_and_ids;
   sorted_token_and_ids.reserve(raw_token_table.size());
   for (const auto& pair : raw_token_table) {
     sorted_token_and_ids.emplace_back(&pair.first, pair.second);
   }
-  // auto tm2 = std::chrono::high_resolution_clock::now();
   std::sort(
       sorted_token_and_ids.begin(),
       sorted_token_and_ids.end(),
       [](const auto& a, const auto& b) { return a.second < b.second; }
   );
-  // auto tm3 = std::chrono::high_resolution_clock::now();
 
   std::vector<std::string> decoded_token_table;
   decoded_token_table.reserve(sorted_token_and_ids.size());
   for (const auto& item : sorted_token_and_ids) {
     decoded_token_table.emplace_back(DecodeToken(*item.first, token_decoder_type));
   }
-  // auto tm4 = std::chrono::high_resolution_clock::now();
-  // std::cout << "push back: "
-  //           << std::chrono::duration_cast<std::chrono::microseconds>(tm2 - tm1).count() << "us"
-  //           << std::endl;
-  // std::cout << "sort: " << std::chrono::duration_cast<std::chrono::microseconds>(tm3 - tm2).count()
-  //           << "us" << std::endl;
-  // std::cout << "decode: "
-  //           << std::chrono::duration_cast<std::chrono::microseconds>(tm4 - tm3).count() << "us"
-  //           << std::endl;
-  // std::cout << "duration1: " << duration1.count() << "us" << std::endl;
-  // std::cout << "duration2: " << duration2.count() << "us" << std::endl;
   return decoded_token_table;
 }
 

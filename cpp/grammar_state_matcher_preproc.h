@@ -56,7 +56,7 @@ struct CatagorizedTokens {
   CatagorizedTokens() = default;
 
   CatagorizedTokens(
-      int vocab_size,
+      size_t vocab_size,
       const std::vector<std::pair<int32_t, std::string>>& sorted_token_table,
       const std::vector<int32_t>& accepted_indices,
       const std::vector<int32_t>& rejected_indices,
@@ -133,7 +133,7 @@ class GrammarStateMatcherForInitContext : public GrammarStateMatcherBase {
    * no uncertain tokens. Useful for the main rule.
    */
   CatagorizedTokens GetCatagorizedTokens(
-      int vocab_size,
+      size_t vocab_size,
       const std::vector<std::pair<int32_t, std::string>>& sorted_token_table,
       bool consider_parent_rule
   );
@@ -159,7 +159,7 @@ class GrammarStateMatcherForInitContext : public GrammarStateMatcherBase {
 };
 
 inline CatagorizedTokens::CatagorizedTokens(
-    int vocab_size,
+    size_t vocab_size,
     const std::vector<std::pair<int32_t, std::string>>& sorted_token_table,
     const std::vector<int32_t>& accepted_indices,
     const std::vector<int32_t>& rejected_indices,
@@ -232,7 +232,7 @@ bool GrammarStateMatcherForInitContext::IsTokenPassLookaheadAssertion(
 }
 
 inline CatagorizedTokens GrammarStateMatcherForInitContext::GetCatagorizedTokens(
-    int vocab_size,
+    size_t vocab_size,
     const std::vector<std::pair<int32_t, std::string>>& sorted_token_table,
     bool consider_parent_rule
 ) {

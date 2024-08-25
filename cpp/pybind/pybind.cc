@@ -12,21 +12,6 @@
 namespace py = pybind11;
 using namespace xgrammar;
 
-// GrammarStateMatcher GrammarStateMatcher_Init(
-//     const BNFGrammar& grammar, const std::vector<std::string>& token_table, int
-//     max_rollback_steps
-// );
-
-// GrammarStateMatcher GrammarStateMatcher_Init(
-//     const BNFGrammar& grammar, std::nullopt_t nullopt, int max_rollback_steps
-// );
-
-// GrammarStateMatcher GrammarStateMatcher_Init(
-//     const BNFGrammar& grammar,
-//     const std::unordered_map<std::string, int>& token_table,
-//     int max_rollback_steps
-// );
-
 PYBIND11_MODULE(xgrammar_bindings, m) {
   auto pyBNFGrammar = py::class_<BNFGrammar>(m, "BNFGrammar");
   pyBNFGrammar.def(py::init<const std::string&, const std::string&>())
@@ -62,8 +47,15 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def("accept_token", &GrammarStateMatcher::AcceptToken)
       .def("_accept_string", &GrammarStateMatcher::_AcceptString)
       .def("find_next_token_bitmask", &GrammarStateMatcher_FindNextTokenBitmask)
+      .def_static(
+          "get_rejected_tokens_from_bitmask", &GrammarStateMatcher_GetRejectedTokensFromBitMask
+      )
       .def("is_terminated", &GrammarStateMatcher::IsTerminated)
-      .def("reset", &GrammarStateMatcher::Reset);
+      .def("reset", &GrammarStateMatcher::Reset)
+      .def("get_vocab_size", &GrammarStateMatcher::GetVocabSize)
+      .def("find_jumpforward_string", &GrammarStateMatcher::FindJumpForwardString)
+      .def("rollback", &GrammarStateMatcher::Rollback)
+      .def("get_max_rollback_steps", &GrammarStateMatcher::GetMaxRollbackSteps);
 }
 
 // namespace xgrammar {

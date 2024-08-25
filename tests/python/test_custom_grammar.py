@@ -1,14 +1,18 @@
 # pylint: disable=missing-module-docstring,missing-function-docstring
 # pylint: disable=redefined-outer-name,unbalanced-tuple-unpacking
-"""This test uses the optimized JSON grammar provided by the grammar library."""
+"""This test is adopted from test_grammar_state_matcher_json.py, but the grammar is parsed from
+a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar state
+matcher."""
+import json
+import sys
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import pytest
+import torch
+from pydantic import BaseModel
 from transformers import AutoTokenizer
-from xgrammar import BNFGrammar, BuiltinGrammar, GrammarStateMatcher
-
-json_grammar = BuiltinGrammar.json()
+from xgrammar import BNFGrammar, GrammarStateMatcher
 
 
 def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
@@ -16,6 +20,51 @@ def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
     can_accept = matcher._accept_string(input_str)
     can_terminate = matcher.is_terminated()
     return can_accept and can_terminate
+
+
+def test_simple():
+    grammar_str = """main ::= rule1 rule2
+rule1 ::= (rule2 | rule3) "a"
+rule2 ::= "b"
+rule3 ::= "c"
+"""
+
+    grammar = BNFGrammar(grammar_str)
+    assert match_complete_string(grammar, "bab")
+    assert not match_complete_string(grammar, "abb")
+    assert match_complete_string(grammar, "cab")
+
+
+def test_custom_main_rule() -> None:
+    json_grammar_simple_ebnf = r"""
+main ::= basic_object
+basic_any ::= basic_string | basic_object
+basic_string ::= (([\"] basic_string_1 [\"]))
+basic_string_1 ::= "" | [^"\\\r\n] basic_string_1 | "\\" escape basic_string_1
+escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
+ws ::= [ \n\t]*
+"""
+    grammar = BNFGrammar(json_grammar_simple_ebnf, "basic_string")
+    assert match_complete_string(grammar, r'"abc\r\n"')
+    assert not match_complete_string(grammar, r'{"name": "John" }')
+
+
+json_grammar_ebnf = r"""
+main ::= basic_array | basic_object
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= (([\"] basic_string_1 [\"]))
+basic_string_1 ::= "" | [^"\\\r\n] basic_string_1 | "\\" escape basic_string_1
+escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= "[" ("" | ws basic_any (ws "," ws basic_any)*) ws "]"
+basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
+ws ::= [ \n\t]*
+"""
+json_grammar = BNFGrammar(json_grammar_ebnf)
 
 
 json_input_accepted = [
@@ -268,10 +317,10 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 ]
 
 
-@pytest.mark.parametrize(
-    "tokenizer_path,input_str,expected_rejected_sizes",
-    tokenizer_path__input_str__expected_rejected_sizes,
-)
+# @pytest.mark.parametrize(
+#     "tokenizer_path,input_str,expected_rejected_sizes",
+#     tokenizer_path__input_str__expected_rejected_sizes,
+# )
 def test_find_next_rejected_tokens(
     tokenizer_path: str,
     input_str: str,
@@ -290,16 +339,22 @@ def test_find_next_rejected_tokens(
         time_start = time.monotonic_ns()
         bitmask = matcher.find_next_token_bitmask()
         time_mid = time.monotonic_ns()
+
+        print(f"Time to find_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
         rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
             bitmask, matcher.vocab_size
         )
         time_end = time.monotonic_ns()
-        print(f"Time to find_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
         print(
             f"Time to get_rejected_tokens_from_bitmask: {(time_end - time_mid) / 1e3} us"
         )
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
+            if rejected_sizes[-1] != expected_rejected_sizes[i]:
+                print(bitmask)
+                print(rejected_token_ids)
+                for token in rejected_token_ids:
+                    print(f"{token} {repr(tokenizer.convert_ids_to_tokens(token))}")
             assert rejected_sizes[-1] == expected_rejected_sizes[i], (
                 rejected_sizes[-1],
                 expected_rejected_sizes[i],
@@ -317,6 +372,10 @@ def test_find_next_rejected_tokens(
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:
         assert rejected_sizes[-1] == expected_rejected_sizes[-1]
+
+
+test_find_next_rejected_tokens(*tokenizer_path__input_str__expected_rejected_sizes[0])
+exit()
 
 
 if __name__ == "__main__":

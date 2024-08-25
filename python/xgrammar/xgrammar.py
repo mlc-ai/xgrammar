@@ -159,7 +159,7 @@ class BuiltinGrammar:
         *,
         indent: Optional[int] = 2,
         separators: Optional[Tuple[str, str]] = None,
-        strict_mode: bool = True
+        strict_mode: bool = True,
     ) -> BNFGrammar:
         """Construct a BNF grammar from the json schema string. The schema string should be in the
         format of the schema of a JSON file. We will parse the schema and generate a BNF grammar.
@@ -202,7 +202,7 @@ class BuiltinGrammar:
         *,
         indent: Optional[int] = 2,
         separators: Optional[Tuple[str, str]] = None,
-        strict_mode: bool = True
+        strict_mode: bool = True,
     ) -> str:
         """Convert JSON schema string to EBNF grammar string. For test purposes.
 
@@ -321,6 +321,7 @@ class GrammarStateMatcher:
         tokenizer_or_vocab: Union[
             None, PreTrainedTokenizerBase, List[bytes], List[str]
         ] = None,
+        *,
         stop_token_ids: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
         max_rollback_steps: int = 0,
@@ -400,7 +401,9 @@ class GrammarStateMatcher:
         return self._handle.find_next_token_bitmask()
 
     @staticmethod
-    def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor) -> List[int]:
+    def get_rejected_tokens_from_bitmask(
+        bitmask: torch.Tensor, vocab_size: bool
+    ) -> List[int]:
         """Get the ids of the rejected tokens from the bitmask.
 
         Parameters
@@ -413,7 +416,9 @@ class GrammarStateMatcher:
         rejected_token_ids : List[int]
             A list of rejected token ids.
         """
-        return _core.GrammarStateMatcher.get_rejected_tokens_from_bitmask(bitmask)
+        return _core.GrammarStateMatcher.get_rejected_tokens_from_bitmask(
+            bitmask, vocab_size
+        )
 
     # @staticmethod
     # def apply_token_bitmask(tensor: torch.Tensor, bitmask: torch.Tensor) -> torch.Tensor:
@@ -449,26 +454,27 @@ class GrammarStateMatcher:
         """
         return _ffi_api.GrammarStateMatcherFindJumpForwardString(self)  # type: ignore  # pylint: disable=no-member
 
-    # def rollback(self, num_tokens: int) -> None:
-    #     """Rollback the matcher to a previous state.
+    def rollback(self, num_tokens: int) -> None:
+        """Rollback the matcher to a previous state.
 
-    #     Parameters
-    #     ----------
-    #     num_tokens : int
-    #         The number of tokens to rollback. It cannot exceed the current number of steps, nor can
-    #         it exceed the specified maximum number of rollback steps.
-    #     """
-    #     _ffi_api.GrammarStateMatcherRollback(self, num_tokens)  # type: ignore  # pylint: disable=no-member
+        Parameters
+        ----------
+        num_tokens : int
+            The number of tokens to rollback. It cannot exceed the current number of steps, nor can
+            it exceed the specified maximum number of rollback steps.
+        """
+        self._handle.rollback(num_tokens)
 
-    # def max_rollback_steps(self) -> int:
-    #     """Get the maximum number of rollback steps allowed.
+    @property
+    def max_rollback_steps(self) -> int:
+        """Get the maximum number of rollback steps allowed.
 
-    #     Returns
-    #     -------
-    #     max_rollback_steps : int
-    #         The maximum number of rollback steps.
-    #     """
-    #     return _ffi_api.GrammarStateMatcherMaxRollbackSteps(self)  # type: ignore  # pylint: disable=no-member
+        Returns
+        -------
+        max_rollback_steps : int
+            The maximum number of rollback steps.
+        """
+        return self._handle.get_max_rollback_steps()
 
     def is_terminated(self) -> bool:
         """Check if the matcher has accepted the stop token and terminated. See also
@@ -484,3 +490,7 @@ class GrammarStateMatcher:
     def reset(self) -> None:
         """Reset the matcher to the initial state."""
         return self._handle.reset()
+
+    @property
+    def vocab_size(self) -> int:
+        return self._handle.get_vocab_size()

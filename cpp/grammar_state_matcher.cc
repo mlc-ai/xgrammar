@@ -144,6 +144,10 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
 
   void FindNextTokenBitmask(DLTensor* next_token_bitmask);
 
+  static void GetRejectedTokensFromBitMask(
+      const DLTensor& token_bitmask, size_t vocab_size, std::vector<int>* rejected_tokens
+  );
+
   std::string FindJumpForwardString();
 
   void Rollback(int num_tokens);
@@ -174,6 +178,8 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
       const std::vector<int>& uncertain_indices,
       const std::vector<bool>& uncertain_tokens_bitset
   );
+
+  static void CheckTokenBitmaskValidity(const DLTensor& token_bitmask, size_t vocab_size);
 
   /*! \brief Set the acceptable next token in next_token_bitmask. */
   void SetTokenBitmask(
@@ -317,10 +323,23 @@ bool GrammarStateMatcher::Impl::_AcceptString(const std::string& input_str, bool
   return true;
 }
 
+void GrammarStateMatcher::Impl::CheckTokenBitmaskValidity(
+    const DLTensor& token_bitmask, size_t vocab_size
+) {
+  XGRAMMAR_CHECK(
+      token_bitmask.dtype.code == kDLUInt && token_bitmask.dtype.bits == 32 && token_bitmask.data &&
+      token_bitmask.ndim == 1 && token_bitmask.shape
+  ) << "The provied bitmask's shape or dtype is not valid.";
+  XGRAMMAR_CHECK(token_bitmask.shape[0] >= DynamicBitset::CalculateBufferSize(vocab_size))
+      << "The provided bitmask is not large enough to store the token set. The length should be "
+      << DynamicBitset::CalculateBufferSize(vocab_size) << " at least";
+}
+
 void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
   XGRAMMAR_CHECK(!IsTerminated()
   ) << "GrammarStateMatcher has terminated after accepting the stop token, but is trying to "
        "find the next token mask";
+  CheckTokenBitmaskValidity(*next_token_bitmask, init_ctx_->vocab_size);
   const auto& sorted_token_table = init_ctx_->sorted_token_table;
   const auto& catagorized_tokens_for_grammar = init_ctx_->catagorized_tokens_for_grammar;
   const auto& latest_stack_tops = stack_tops_history_.GetLatest();
@@ -429,6 +448,18 @@ void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmas
   SetTokenBitmask(next_token_bitmask, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end);
 }
 
+void GrammarStateMatcher::Impl::GetRejectedTokensFromBitMask(
+    const DLTensor& token_bitmask, size_t vocab_size, std::vector<int>* rejected_tokens
+) {
+  CheckTokenBitmaskValidity(token_bitmask, vocab_size);
+  DynamicBitset bitset(vocab_size, reinterpret_cast<uint32_t*>(token_bitmask.data));
+  rejected_tokens->clear();
+  for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+    std::cout << i << std::endl;
+    rejected_tokens->push_back(i);
+  }
+}
+
 std::string GrammarStateMatcher::Impl::FindJumpForwardString() {
   XGRAMMAR_CHECK(!IsTerminated()
   ) << "GrammarStateMatcher has terminated after accepting the stop token, but is trying to "
@@ -533,15 +564,6 @@ void GrammarStateMatcher::Impl::SetTokenBitmask(
   //    (when rejected_ids != {-1}, i.e. rejected_ids is not the universal set)
   // 2. accepted_ids
   //    (otherwise, when rejected_ids is the universal set)
-  XGRAMMAR_CHECK(
-      next_token_bitmask->dtype.code == kDLUInt && next_token_bitmask->dtype.bits == 32 &&
-      next_token_bitmask->data && next_token_bitmask->ndim == 1 && next_token_bitmask->shape
-  ) << "The provied bitmask's shape or dtype is not valid.";
-  XGRAMMAR_CHECK(
-      next_token_bitmask->shape[0] >= DynamicBitset::CalculateBufferSize(init_ctx_->vocab_size)
-  ) << "The provided bitmask is not large enough to store the token set. The length should be "
-    << DynamicBitset::CalculateBufferSize(init_ctx_->vocab_size) << " at least";
-
   DynamicBitset next_token_bitset(
       init_ctx_->vocab_size, reinterpret_cast<uint32_t*>(next_token_bitmask->data)
   );
@@ -629,6 +651,12 @@ uint32_t GrammarStateMatcher::GetBufferSize(size_t vocab_size) {
 
 void GrammarStateMatcher::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
   pimpl_->FindNextTokenBitmask(next_token_bitmask);
+}
+
+void GrammarStateMatcher::GetRejectedTokensFromBitMask(
+    const DLTensor& token_bitmask, size_t vocab_size, std::vector<int>* rejected_tokens
+) {
+  return Impl::GetRejectedTokensFromBitMask(token_bitmask, vocab_size, rejected_tokens);
 }
 
 std::string GrammarStateMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }
