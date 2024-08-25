@@ -455,7 +455,6 @@ void GrammarStateMatcher::Impl::GetRejectedTokensFromBitMask(
   DynamicBitset bitset(vocab_size, reinterpret_cast<uint32_t*>(token_bitmask.data));
   rejected_tokens->clear();
   for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-    std::cout << i << std::endl;
     rejected_tokens->push_back(i);
   }
 }

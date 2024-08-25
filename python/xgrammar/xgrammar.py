@@ -452,7 +452,7 @@ class GrammarStateMatcher:
         jump_forward_string : str
             The jump-forward string.
         """
-        return _ffi_api.GrammarStateMatcherFindJumpForwardString(self)  # type: ignore  # pylint: disable=no-member
+        return self._handle.find_jump_forward_string()  # type: ignore  # pylint: disable=no-member
 
     def rollback(self, num_tokens: int) -> None:
         """Rollback the matcher to a previous state.

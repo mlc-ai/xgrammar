@@ -3,14 +3,10 @@
 """This test is adopted from test_grammar_state_matcher_json.py, but the grammar is parsed from
 a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar state
 matcher."""
-import json
-import sys
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 import pytest
-import torch
-from pydantic import BaseModel
 from transformers import AutoTokenizer
 from xgrammar import BNFGrammar, GrammarStateMatcher
 
@@ -35,7 +31,7 @@ rule3 ::= "c"
     assert match_complete_string(grammar, "cab")
 
 
-def test_custom_main_rule() -> None:
+def test_custom_main_rule():
     json_grammar_simple_ebnf = r"""
 main ::= basic_object
 basic_any ::= basic_string | basic_object
@@ -56,7 +52,7 @@ basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_a
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= (([\"] basic_string_1 [\"]))
-basic_string_1 ::= "" | [^"\\\r\n] basic_string_1 | "\\" escape basic_string_1
+basic_string_1 ::= "" | [^"\\\x00-\x1F] basic_string_1 | "\\" escape basic_string_1
 escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
@@ -317,10 +313,10 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 ]
 
 
-# @pytest.mark.parametrize(
-#     "tokenizer_path,input_str,expected_rejected_sizes",
-#     tokenizer_path__input_str__expected_rejected_sizes,
-# )
+@pytest.mark.parametrize(
+    "tokenizer_path,input_str,expected_rejected_sizes",
+    tokenizer_path__input_str__expected_rejected_sizes,
+)
 def test_find_next_rejected_tokens(
     tokenizer_path: str,
     input_str: str,
@@ -350,11 +346,6 @@ def test_find_next_rejected_tokens(
         )
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
-            if rejected_sizes[-1] != expected_rejected_sizes[i]:
-                print(bitmask)
-                print(rejected_token_ids)
-                for token in rejected_token_ids:
-                    print(f"{token} {repr(tokenizer.convert_ids_to_tokens(token))}")
             assert rejected_sizes[-1] == expected_rejected_sizes[i], (
                 rejected_sizes[-1],
                 expected_rejected_sizes[i],
@@ -372,10 +363,6 @@ def test_find_next_rejected_tokens(
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:
         assert rejected_sizes[-1] == expected_rejected_sizes[-1]
-
-
-test_find_next_rejected_tokens(*tokenizer_path__input_str__expected_rejected_sizes[0])
-exit()
 
 
 if __name__ == "__main__":

@@ -8,13 +8,15 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 import pytest
-import tvm
-import tvm.testing
 from pydantic import BaseModel
 
 from xgrammar import BNFGrammar, GrammarStateMatcher
+from xgrammar.xgrammar import BuiltinGrammar
 
-def test_find_next_rejected_tokens_schema() -> None:
+from transformers import AutoTokenizer
+
+
+def test_json_schema_accept_find_token():
     class MainModel(BaseModel):
         integer_field: int
         number_field: float
@@ -27,7 +29,7 @@ def test_find_next_rejected_tokens_schema() -> None:
 
     schema = MainModel.model_json_schema()
     schema_str = json.dumps(schema)
-    ebnf_grammar = BNFGrammar.from_schema(schema_str, indent=2)
+    grammar = BuiltinGrammar.json_schema(schema_str, indent=2)
 
     instance = MainModel(
         integer_field=42,
@@ -41,18 +43,23 @@ def test_find_next_rejected_tokens_schema() -> None:
     )
     instance_str = instance.model_dump_json(indent=2, round_trip=True)
 
-    tokenizer_path = "dist/Llama-2-7b-chat-hf-q4f16_1-MLC"
-    tokenizer = Tokenizer(tokenizer_path)
-    matcher = GrammarStateMatcher(ebnf_grammar, tokenizer)
+    tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True)
+    matcher = GrammarStateMatcher(grammar, tokenizer)
 
     for c in instance_str:
-        matcher.find_next_rejected_tokens(True)
-        print("Accepting char:", c, file=sys.stderr)
-        assert matcher.debug_accept_char(ord(c))
-    assert 2 not in matcher.find_next_rejected_tokens(True)
+        matcher.find_next_token_bitmask()
+        assert matcher._accept_string(c)
+    final_bitmask = matcher.find_next_token_bitmask()
+    final_rejected_tokens = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
+        final_bitmask, matcher.vocab_size
+    )
+    assert 2 not in final_rejected_tokens
+    assert matcher.accept_token(2)
+    assert matcher.is_terminated()
 
 
-def test_find_jump_forward_string_schema():
+def test_json_schema_find_jump_forward_string():
     class MainModel(BaseModel):
         integer_field: int
         number_field: float
@@ -65,7 +72,7 @@ def test_find_jump_forward_string_schema():
 
     schema = MainModel.model_json_schema()
     schema_str = json.dumps(schema)
-    ebnf_grammar = BNFGrammar.from_schema(schema_str, indent=2)
+    grammar = BuiltinGrammar.json_schema(schema_str, indent=2)
 
     instance = MainModel(
         integer_field=42,
@@ -79,18 +86,16 @@ def test_find_jump_forward_string_schema():
     )
     instance_str = instance.model_dump_json(indent=2, round_trip=True)
 
-    tokenizer_path = "dist/Llama-2-7b-chat-hf-q4f16_1-MLC"
-    tokenizer = Tokenizer(tokenizer_path)
-    matcher = GrammarStateMatcher(ebnf_grammar, tokenizer)
+    tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True)
+    matcher = GrammarStateMatcher(grammar, tokenizer)
 
     for i, c in enumerate(instance_str):
         jump_forward_str = matcher.find_jump_forward_string()
-        print(f"Jump forward string at {i}: {jump_forward_str}")
         assert instance_str[i : i + len(jump_forward_str)] == jump_forward_str
-        print("Accepting char:", c, file=sys.stderr)
-        assert matcher.debug_accept_char(ord(c))
+        assert matcher._accept_string(c)
     assert matcher.find_jump_forward_string() == ""
 
 
 if __name__ == "__main__":
-    tvm.testing.main()
+    pytest.main([__file__])
