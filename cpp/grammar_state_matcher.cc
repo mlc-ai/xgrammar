@@ -2,13 +2,11 @@
  *  Copyright (c) 2024 by Contributors
  * \file xgrammar/grammar_state_matcher.cc
  */
-// #define XGRAMMAR_ENABLE_LOG_DEBUG 1
 #include <xgrammar/xgrammar.h>
 
 #include <chrono>
 #include <queue>
 
-// #include "../tokenizers/tokenizers.h"
 #include "grammar_ast.h"
 #include "grammar_serializer.h"
 #include "grammar_state_matcher_base.h"
@@ -327,7 +325,7 @@ void GrammarStateMatcher::Impl::CheckTokenBitmaskValidity(
     const DLTensor& token_bitmask, size_t vocab_size
 ) {
   XGRAMMAR_CHECK(
-      token_bitmask.dtype.code == kDLUInt && token_bitmask.dtype.bits == 32 && token_bitmask.data &&
+      token_bitmask.dtype.code == kDLInt && token_bitmask.dtype.bits == 32 && token_bitmask.data &&
       token_bitmask.ndim == 1 && token_bitmask.shape
   ) << "The provied bitmask's shape or dtype is not valid.";
   XGRAMMAR_CHECK(token_bitmask.shape[0] >= DynamicBitset::CalculateBufferSize(vocab_size))
@@ -669,216 +667,5 @@ size_t GrammarStateMatcher::GetVocabSize() const { return pimpl_->GetVocabSize()
 bool GrammarStateMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
 
 void GrammarStateMatcher::Reset() { pimpl_->Reset(); }
-
-// #ifndef COMPILE_MLC_WASM_RUNTIME
-// // This creates tokenizer dependency issue in WASM building for web, hence skipped
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherFromTokenizer")
-//     .set_body_typed([](BNFGrammar grammar, Optional<Tokenizer> tokenizer, int max_rollback_steps)
-//     {
-//       auto preproc_start = std::chrono::high_resolution_clock::now();
-//       std::shared_ptr<mlc::llm::serve::GrammarStateInitContext> init_ctx;
-//       if (tokenizer) {
-//         init_ctx = GrammarStateMatcher::CreateInitContext(
-//             grammar, tokenizer.value()->PostProcessedTokenTable()
-//         );
-//       } else {
-//         init_ctx = GrammarStateMatcher::CreateInitContext(grammar, {});
-//       }
-
-//       auto preproc_end = std::chrono::high_resolution_clock::now();
-//       XGRAMMAR_LOG(INFO
-//       ) << "GrammarStateMatcher preprocess takes "
-//         << std::chrono::duration_cast<std::chrono::microseconds>(preproc_end - preproc_start)
-//                .count()
-//         << "us";
-//       return GrammarStateMatcher(init_ctx, max_rollback_steps);
-//     });
-// #endif
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherFromTokenTable")
-//     .set_body([](TVMArgs args, TVMRetValue* rv) {
-//       BNFGrammar grammar = args[0];
-//       Array<String> token_table_arr = args[1];
-//       std::vector<std::string> token_table;
-//       for (int i = 0; i < token_table_arr.size(); ++i) {
-//         token_table.push_back(token_table_arr[i]);
-//       }
-//       int max_rollback_steps = args[args.size() - 1];
-//       auto init_ctx = GrammarStateMatcher::CreateInitContext(grammar, token_table);
-//       *rv = GrammarStateMatcher(init_ctx, max_rollback_steps);
-//     });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherDebugAcceptChar")
-//     .set_body_typed([](GrammarStateMatcher matcher, int32_t codepoint, bool verbose) {
-//       auto mutable_node =
-//           const_cast<GrammarStateMatcher::Impl*>(matcher.as<GrammarStateMatcher::Impl>());
-//       return mutable_node->AcceptChar(codepoint, verbose);
-//     });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherAcceptToken")
-//     .set_body_typed([](GrammarStateMatcher matcher, int32_t token_id, bool verbose) {
-//       return matcher->AcceptToken(token_id, verbose);
-//     });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherFindJumpForwardString")
-//     .set_body_typed([](GrammarStateMatcher matcher) { return matcher->FindJumpForwardString();
-//     });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherRollback")
-//     .set_body_typed([](GrammarStateMatcher matcher, int num_tokens) {
-//       matcher->Rollback(num_tokens);
-//     });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherMaxRollbackSteps")
-//     .set_body_typed([](GrammarStateMatcher matcher) { return matcher->MaxRollbackSteps(); });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherIsTerminated")
-//     .set_body_typed([](GrammarStateMatcher matcher) { return matcher->IsTerminated(); });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherResetState")
-//     .set_body_typed([](GrammarStateMatcher matcher) { matcher->ResetState(); });
-
-// /*! \brief Check if a matcher can accept the complete string, and then reach the end of the
-//  * grammar. Does not change the state of the GrammarStateMatcher. For test purpose. */
-// bool MatchCompleteString(GrammarStateMatcher matcher, String str, bool verbose) {
-//   auto mutable_node =
-//       const_cast<GrammarStateMatcher::Impl*>(matcher.as<GrammarStateMatcher::Impl>());
-//   int accepted_cnt = 0;
-//   for (auto char_value : str.operator std::string()) {
-//     if (!mutable_node->AcceptChar(char_value, verbose)) {
-//       if (verbose) {
-//         XGRAMMAR_LOG(INFO) << "Matching failed after accepting " << accepted_cnt << "
-//         characters";
-//       }
-//       mutable_node->RollbackChars(accepted_cnt);
-//       return false;
-//     }
-//     ++accepted_cnt;
-//   }
-//   auto accepted = mutable_node->CanReachEnd();
-//   if (verbose) {
-//     if (accepted) {
-//       XGRAMMAR_LOG(INFO) << "Matching succeed after accepting " << accepted_cnt << " characters";
-//     } else {
-//       XGRAMMAR_LOG(INFO) << "Matching failed due to the end state not reached after all "
-//                          << accepted_cnt << " characters are accepted";
-//     }
-//   }
-//   mutable_node->RollbackChars(accepted_cnt);
-//   return accepted;
-// }
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherDebugMatchCompleteString")
-//     .set_body_typed([](GrammarStateMatcher matcher, String str, bool verbose) {
-//       return MatchCompleteString(matcher, str, verbose);
-//     });
-
-/*! \brief Print the accepted and rejected tokens stored in the bitset. For debug purposes. */
-// std::string PrintAcceptedRejectedTokens(
-//     const std::shared_ptr<mlc::llm::serve::GrammarStateInitContext>& init_ctx,
-//     const DynamicBitset& bitset,
-//     int threshold = 300
-// ) {
-//   std::stringstream ss;
-//   auto vocab_size = init_ctx->vocab_size;
-//   std::vector<int64_t> accepted_ids;
-//   std::vector<int64_t> rejected_ids;
-//   for (int i = 0; i < vocab_size; i++) {
-//     if (bitset[i]) {
-//       accepted_ids.push_back(i);
-//     } else {
-//       rejected_ids.push_back(i);
-//     }
-//   }
-
-//   ss << "Accepted: ";
-//   auto end_it =
-//       accepted_ids.size() > threshold ? accepted_ids.begin() + threshold : accepted_ids.end();
-//   for (auto it = accepted_ids.begin(); it != end_it; ++it) {
-//     ss << "<" << PrintAsEscapedUTF8(init_ctx->token_table[*it]) << "> ";
-//   }
-//   if (accepted_ids.size() > threshold) {
-//     ss << "...";
-//   }
-//   ss << "\n";
-
-//   ss << "Rejected: ";
-//   end_it = rejected_ids.size() > threshold ? rejected_ids.begin() + threshold :
-//   rejected_ids.end(); for (auto it = rejected_ids.begin(); it != end_it; ++it) {
-//     ss << "<" << PrintAsEscapedUTF8(init_ctx->token_table[*it]) << "> ";
-//   }
-//   if (rejected_ids.size() > threshold) {
-//     ss << "...";
-//   }
-//   ss << "\n";
-//   return ss.str();
-// }
-
-/*!
- * \brief Find the ids of the rejected tokens for the next step. For debug purposes.
- * \param matcher The matcher to test.
- * \param verbose Whether to print information about the timing and results to stderr.
- * \returns A tuple of rejected token ids.
- */
-// IntTuple FindNextRejectedTokens(GrammarStateMatcher matcher, bool verbose = false) {
-//   auto init_ctx = matcher.as<GrammarStateMatcher::Impl>()->init_ctx_;
-//   auto vocab_size = init_ctx->vocab_size;
-//   auto bitset_size = DynamicBitset::CalculateBufferSize(vocab_size);
-//   auto ndarray = NDArray::Empty(
-//       ShapeTuple{static_cast<long>(bitset_size)}, DLDataType{kDLUInt, 32, 1}, DLDevice{kDLCPU, 0}
-//   );
-//   auto dltensor = const_cast<DLTensor*>(ndarray.operator->());
-
-//   std::chrono::time_point<std::chrono::high_resolution_clock> start, end;
-//   if (verbose) {
-//     start = std::chrono::high_resolution_clock::now();
-//   }
-//   matcher->FindNextTokenBitmask(dltensor);
-//   if (verbose) {
-//     end = std::chrono::high_resolution_clock::now();
-//   }
-
-//   auto bitset = DynamicBitset(vocab_size, reinterpret_cast<uint32_t*>(dltensor->data));
-//   std::vector<int64_t> rejected_ids;
-//   for (int i = 0; i < vocab_size; i++) {
-//     if (bitset[i] == 0) {
-//       rejected_ids.push_back(i);
-//     }
-//   }
-
-//   if (verbose) {
-//     XGRAMMAR_LOG(INFO) << "FindNextTokenBitmask takes "
-//                        << std::chrono::duration_cast<std::chrono::microseconds>(end -
-//                        start).count()
-//                        << "us"
-//                        << ", found accepted: " << vocab_size - rejected_ids.size()
-//                        << ", rejected: " << rejected_ids.size();
-//   }
-
-//   auto ret = IntTuple(rejected_ids);
-//   return ret;
-// }
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherFindNextRejectedTokens")
-//     .set_body_typed(FindNextRejectedTokens);
-
-// /*!
-//  * \brief Find the bitmask for the next token as an NDArray.
-//  * \returns An NDArray of the bitmask for the next token of shape (bitmask_size,).
-//  */
-// NDArray FindNextTokenBitmaskAsNDArray(GrammarStateMatcher matcher) {
-//   auto init_ctx = matcher.as<GrammarStateMatcher::Impl>()->init_ctx_;
-//   auto vocab_size = init_ctx->vocab_size;
-//   auto bitset_size = DynamicBitset::CalculateBufferSize(vocab_size);
-//   auto bitmask = NDArray::Empty(
-//       ShapeTuple{static_cast<long>(bitset_size)}, DLDataType{kDLUInt, 32, 1}, DLDevice{kDLCPU, 0}
-//   );
-//   auto dltensor = const_cast<DLTensor*>(bitmask.operator->());
-//   matcher->FindNextTokenBitmask(dltensor);
-//   return bitmask;
-// }
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.GrammarStateMatcherFindNextTokenBitmaskAsNDArray")
-//     .set_body_typed(FindNextTokenBitmaskAsNDArray);
 
 }  // namespace xgrammar

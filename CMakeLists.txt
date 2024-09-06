@@ -10,11 +10,17 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
   set(CMAKE_CXX_FLAGS "/Wall /WX ${CMAKE_CXX_FLAGS}")
 else()
-  set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -pedantic -Wno-unused-parameter ${CMAKE_CXX_FLAGS}")
+  if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_CXX_FLAGS "-Ofast ${CMAKE_CXX_FLAGS}")
+  endif()
+
+  set(CMAKE_CXX_FLAGS
+      "-Wall -Wextra -Werror -pedantic -Wno-unused-parameter -flto=auto ${CMAKE_CXX_FLAGS}"
+  )
 endif()
 
 if(NOT CMAKE_BUILD_TYPE)
-  message(STATUS "No build type specified; defaulting to CMAKE_BUILD_TYPE=Debug.")
+  message(STATUS "No build type specified; defaulting to CMAKE_BUILD_TYPE=RelWithDebugInfo.")
   set(CMAKE_BUILD_TYPE
       "RelWithDebugInfo"
       CACHE STRING "The build type" FORCE

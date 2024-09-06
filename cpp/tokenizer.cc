@@ -7,6 +7,7 @@
 #include <xgrammar/support/encoding.h>
 #include <xgrammar/xgrammar.h>
 
+#include <array>
 #include <chrono>
 #include <memory>
 #include <unordered_map>
@@ -179,10 +180,6 @@ inline std::string SpaceReplacerDecoder(const std::string& token) {
   return result;
 }
 
-// declare a chrono duration accumulator
-std::chrono::microseconds duration1(0);
-std::chrono::microseconds duration2(0);
-
 /*!
  * \brief ByteLevel decoder: inverses the bytes-to-unicode transformation in the encoding process
  * as in
@@ -211,14 +208,10 @@ inline std::string ByteLevelDecoder(const std::string& token) {
   };
   // clang-format on
 
-  auto tm1 = std::chrono::high_resolution_clock::now();
-
   auto unicode_codepoints = ParseUTF8(token.c_str(), UTF8ErrorPolicy::kReturnInvalid);
   if (unicode_codepoints.size() == 1 && unicode_codepoints[0] == kInvalidUTF8) {
     return token;
   }
-  auto tm2 = std::chrono::high_resolution_clock::now();
-  auto tm3 = std::chrono::high_resolution_clock::now();
 
   std::string decoded;
   decoded.reserve(unicode_codepoints.size());
@@ -232,16 +225,6 @@ inline std::string ByteLevelDecoder(const std::string& token) {
     }
     decoded += static_cast<char>(char_to_byte_map[unicode_codepoint]);
   }
-  auto tm4 = std::chrono::high_resolution_clock::now();
-
-  // logic: duration1 += tm2 - tm1 - tm3 + tm2
-  duration1 += std::chrono::duration_cast<std::chrono::microseconds>(tm2 - tm1);
-  //  -
-  //  std::chrono::duration_cast<std::chrono::microseconds>(tm3 - tm2);
-  duration2 += std::chrono::duration_cast<std::chrono::microseconds>(tm4 - tm3);
-  //  -
-  //  std::chrono::duration_cast<std::chrono::microseconds>(tm3 - tm2);
-
   return decoded;
 }
 

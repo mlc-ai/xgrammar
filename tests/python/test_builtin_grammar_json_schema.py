@@ -4,16 +4,14 @@
 a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar state
 matcher."""
 import json
-import sys
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import pytest
 from pydantic import BaseModel
+from transformers import AutoTokenizer
 
 from xgrammar import BNFGrammar, GrammarStateMatcher
 from xgrammar.xgrammar import BuiltinGrammar
-
-from transformers import AutoTokenizer
 
 
 def test_json_schema_accept_find_token():

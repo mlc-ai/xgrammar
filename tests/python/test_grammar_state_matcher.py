@@ -1,12 +1,12 @@
 # pylint: disable=missing-module-docstring,missing-function-docstring
 # pylint: disable=redefined-outer-name,unbalanced-tuple-unpacking
 """This test uses the optimized JSON grammar provided by the grammar library."""
-import time
 from typing import List, Optional
 
 import pytest
 import torch
 from transformers import AutoTokenizer
+
 from xgrammar import BNFGrammar, BuiltinGrammar, GrammarStateMatcher
 
 json_grammar = BuiltinGrammar.json()
