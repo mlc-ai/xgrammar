@@ -13,6 +13,20 @@ from transformers import AutoTokenizer
 from xgrammar import BNFGrammar, GrammarStateMatcher
 from xgrammar.xgrammar import BuiltinGrammar
 
+# class UI(BaseModel):
+#     children: List["UI"]
+
+
+# UI.model_rebuild()  # This is required to enable recursive types
+
+
+# class Response(BaseModel):
+#     ui: UI
+
+
+# grammar = BuiltinGrammar.json_schema(Response, indent=2)
+# exit()
+
 
 def test_json_schema_accept_find_token():
     class MainModel(BaseModel):
@@ -25,9 +39,7 @@ def test_json_schema_accept_find_token():
         object_field: Dict[str, int]
         nested_object_field: Dict[str, Dict[str, int]]
 
-    schema = MainModel.model_json_schema()
-    schema_str = json.dumps(schema)
-    grammar = BuiltinGrammar.json_schema(schema_str, indent=2)
+    grammar = BuiltinGrammar.json_schema(MainModel, indent=2)
 
     instance = MainModel(
         integer_field=42,
@@ -68,9 +80,7 @@ def test_json_schema_find_jump_forward_string():
         object_field: Dict[str, int]
         nested_object_field: Dict[str, Dict[str, int]]
 
-    schema = MainModel.model_json_schema()
-    schema_str = json.dumps(schema)
-    grammar = BuiltinGrammar.json_schema(schema_str, indent=2)
+    grammar = BuiltinGrammar.json_schema(MainModel, indent=2)
 
     instance = MainModel(
         integer_field=42,

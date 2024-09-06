@@ -4,6 +4,7 @@ find_package(
   COMPONENTS Interpreter Development
   REQUIRED
 )
+
 execute_process(
   COMMAND ${Python3_EXECUTABLE} "-c" "import pybind11 as pb11; print(pb11.get_cmake_dir(),end='');"
   RESULT_VARIABLE PYBIND_CMAKE_DIR_RET
@@ -29,10 +30,6 @@ endif()
 find_package(Torch CONFIG REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-
-# message(STATUS "Torch flags: ${TORCH_CXX_FLAGS}")
-# message(STATUS "Torch libs: ${TORCH_LIBRARIES}")
-# message(STATUS "Torch include: ${TORCH_INCLUDE_DIRS}")
 
 find_library(TORCH_PYTHON_LIBRARY torch_python PATH "${TORCH_INSTALL_PREFIX}/lib")
 

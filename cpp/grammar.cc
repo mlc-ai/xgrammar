@@ -132,39 +132,4 @@ BNFGrammar BuiltinGrammar::JSONSchema(
   return BNFGrammar(_JSONSchemaToEBNF(schema, indent, separators, strict_mode));
 }
 
-// TVM_REGISTER_GLOBAL("mlc.grammar.BNFGrammarFromEBNFString")
-//     .set_body_typed([](String ebnf_string, String main_rule) {
-//       return BNFGrammar::FromEBNFString(ebnf_string, main_rule);
-//     });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.BNFGrammarDebugFromEBNFStringNoNormalize")
-//     .set_body_typed([](String ebnf_string, String main_rule) {
-//       return DebugFromEBNFStringNoNormalize(ebnf_string, main_rule);
-//     });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.BNFGrammarFromSchema").set_body([](TVMArgs args, TVMRetValue*
-// rv) {
-//   std::optional<int> indent;
-//   if (args[1].type_code() != kTVMNullptr) {
-//     indent = args[1];
-//   } else {
-//     indent = std::nullopt;
-//   }
-
-//   std::optional<std::pair<std::string, std::string>> separators;
-//   if (args[2].type_code() != kTVMNullptr) {
-//     Array<String> separators_arr = args[2];
-//     XGRAMMAR_CHECK(separators_arr.size() == 2);
-//     separators = std::make_pair(separators_arr[0], separators_arr[1]);
-//   } else {
-//     separators = std::nullopt;
-//   }
-
-//   *rv = BNFGrammar::FromSchema(args[0], indent, separators, args[3]);
-// });
-
-// TVM_REGISTER_GLOBAL("mlc.grammar.BNFGrammarGetGrammarOfJSON").set_body_typed([]() {
-//   return BNFGrammar::GetGrammarOfJSON();
-// });
-
 }  // namespace xgrammar

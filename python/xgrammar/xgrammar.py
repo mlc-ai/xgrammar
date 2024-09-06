@@ -16,10 +16,12 @@
 # under the License.
 """Classes handling the grammar guided generation of MLC LLM serving"""
 
+import json
 import logging
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 import torch
+from pydantic import BaseModel
 from transformers import PreTrainedTokenizerBase
 
 from . import xgrammar_bindings as _core
@@ -155,7 +157,7 @@ class BuiltinGrammar:
 
     @staticmethod
     def json_schema(
-        schema: str,
+        schema: Union[str, Type[BaseModel]],
         *,
         indent: Optional[int] = 2,
         separators: Optional[Tuple[str, str]] = None,
@@ -191,6 +193,9 @@ class BuiltinGrammar:
         grammar : BNFGrammar
             The generated BNF grammar.
         """
+        if issubclass(schema, BaseModel):
+            schema = json.dumps(schema.model_json_schema())
+
         return _init_object_with_handle(
             BNFGrammar,
             _core.BuiltinGrammar.json_schema(schema, indent, separators, strict_mode),
