@@ -92,7 +92,7 @@ namespace xgrammar {
  * The stacks in the current step is: (A, B, F), (A, H, I), (G,)
  *
  * ## Preprocess (see grammar_state_matcher_preproc.h)
- * We will store all information about tokens that needed in matching in a GrammarStateInitContext
+ * We will store all information about tokens that needed in matching in a GrammarMatcherInitContext
  * object. Tokens are sorted by codepoint, allowing us to reuse the repeated prefixes between
  * different tokens.
  *
@@ -121,7 +121,7 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
 
  public:
   Impl(
-      std::shared_ptr<GrammarStateInitContext> init_ctx,
+      std::shared_ptr<GrammarMatcherInitContext> init_ctx,
       std::optional<std::vector<int>> stop_token_ids = std::nullopt,
       bool terminate_without_stop_token = false,
       int max_rollback_steps = 0
@@ -196,7 +196,7 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
   // friend IntTuple FindNextRejectedTokens(GrammarStateMatcher matcher, bool verbose);
   // friend NDArray FindNextTokenBitmaskAsNDArray(GrammarStateMatcher matcher);
 
-  std::shared_ptr<GrammarStateInitContext> init_ctx_;
+  std::shared_ptr<GrammarMatcherInitContext> init_ctx_;
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
   int max_rollback_steps_;
@@ -625,7 +625,7 @@ int GrammarStateMatcher::Impl::GetNextUncertainToken(
 }
 
 GrammarStateMatcher::GrammarStateMatcher(
-    std::shared_ptr<GrammarStateInitContext> init_ctx,
+    std::shared_ptr<GrammarMatcherInitContext> init_ctx,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
     int max_rollback_steps

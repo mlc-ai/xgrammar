@@ -162,7 +162,7 @@ class TokenizerInfo {
  * \brief The init context of a GrammarStateMatcher. It contains the preprocessing results of the
  * grammar and tokenizer.
  */
-class GrammarStateInitContext;
+class GrammarMatcherInitContext;
 
 /*!
  * \brief A stateful matcher to match tokens to the specified BNF grammar. This class is the core
@@ -196,12 +196,12 @@ class GrammarStateMatcher {
  public:
   /*!
    * \brief Construct a GrammarStateMatcher from the preprocessing result of type
-   * GrammarStateInitContext.
+   * GrammarMatcherInitContext.
    * \param init_ctx The init context. It is obtained through
    * CreateInitContext as a result of preprocessing the grammar and tokenizer.
    */
   GrammarStateMatcher(
-      std::shared_ptr<GrammarStateInitContext> init_ctx,
+      std::shared_ptr<GrammarMatcherInitContext> init_ctx,
       std::optional<std::vector<int>> stop_token_ids = std::nullopt,
       bool terminate_without_stop_token = false,
       int max_rollback_steps = 0
@@ -214,7 +214,7 @@ class GrammarStateMatcher {
    * \param grammar The grammar that the matcher follows.
    * \param token_table The tokens that the matcher requires for matching.
    */
-  static std::shared_ptr<GrammarStateInitContext> CreateInitContext(
+  static std::shared_ptr<GrammarMatcherInitContext> CreateInitContext(
       const BNFGrammar& grammar, const std::vector<std::string>& token_table
   );
 
@@ -279,7 +279,7 @@ class GrammarStateMatcher {
 
 /*!
  * \brief A cache to get the grammar state init context for grammar or schema. This class avoids
- * redundant preprocessing of the grammar or schema when constructing a GrammarStateInitContext.
+ * redundant preprocessing of the grammar or schema when constructing a GrammarMatcherInitContext.
  * \note This class is associated with a token table when constructed. The token table is used to
  * create every grammar state init context. If multiple toke tables are used to create init
  * contexts, an instance of this class for each token table should be created.
@@ -294,10 +294,10 @@ class GrammarInitContextCache {
   GrammarInitContextCache(const std::vector<std::string>& token_table);
 
   /*! \brief Get the init context for pure JSON. */
-  std::shared_ptr<GrammarStateInitContext> GetInitContextForJSON();
+  std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSON();
 
   /*! \brief Get the init context for a JSON schema string. */
-  std::shared_ptr<GrammarStateInitContext> GetInitContextForJSONSchema(const std::string& schema);
+  std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSONSchema(const std::string& schema);
 
   /*! \brief Clear the interal cache of init contexts. */
   void Clear();

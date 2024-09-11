@@ -28,7 +28,7 @@ namespace xgrammar {
  *
  * \note uncertain indices are stored directly. Accepted / rejected indices have three ways to
  * store to reduce memory and computation usage. See SaveType.
- * \note These indices are the indices of sorted_token_table in the GrammarStateInitContext
+ * \note These indices are the indices of sorted_token_table in the GrammarMatcherInitContext
  * object, instead of the token ids. That helps the matching process.
  */
 struct CatagorizedTokens {
@@ -69,7 +69,7 @@ struct CatagorizedTokens {
  * It is the result of preprocessing.
  * \sa mlc::llm::serve::GrammarStateMatcher
  */
-class GrammarStateInitContext {
+class GrammarMatcherInitContext {
  public:
   /******************* Information about the tokenizer *******************/
 
@@ -316,11 +316,11 @@ inline CatagorizedTokens GrammarStateMatcherForInitContext::GetCatagorizedTokens
   );
 }
 
-std::shared_ptr<GrammarStateInitContext> GrammarStateMatcher::CreateInitContext(
+std::shared_ptr<GrammarMatcherInitContext> GrammarStateMatcher::CreateInitContext(
     const BNFGrammar& grammar, const std::vector<std::string>& token_table
 ) {
   using RuleExprType = BNFGrammar::Impl::RuleExprType;
-  auto ptr = std::make_shared<GrammarStateInitContext>();
+  auto ptr = std::make_shared<GrammarMatcherInitContext>();
 
   ptr->grammar = grammar;
   ptr->vocab_size = token_table.size();
@@ -409,9 +409,9 @@ class GrammarInitContextCache::Impl {
  public:
   Impl(const std::vector<std::string>& token_table);
 
-  std::shared_ptr<GrammarStateInitContext> GetInitContextForJSONSchema(const std::string& schema);
+  std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSONSchema(const std::string& schema);
 
-  std::shared_ptr<GrammarStateInitContext> GetInitContextForJSON();
+  std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSON();
 
   void Clear();
 
@@ -419,10 +419,10 @@ class GrammarInitContextCache::Impl {
   /*! \brief The token table associated with this storage class. */
   std::vector<std::string> token_table_;
   /*! \brief The cache for the init context of a JSON schema. */
-  std::unordered_map<std::string, std::shared_ptr<GrammarStateInitContext>>
+  std::unordered_map<std::string, std::shared_ptr<GrammarMatcherInitContext>>
       init_ctx_for_schema_cache_;
   /*! \brief The init context for JSON. */
-  std::shared_ptr<GrammarStateInitContext> init_ctx_for_json_;
+  std::shared_ptr<GrammarMatcherInitContext> init_ctx_for_json_;
 };
 
 inline GrammarInitContextCache::Impl::Impl(const std::vector<std::string>& token_table)
@@ -430,7 +430,7 @@ inline GrammarInitContextCache::Impl::Impl(const std::vector<std::string>& token
   init_ctx_for_json_ = GrammarStateMatcher::CreateInitContext(BuiltinGrammar::JSON(), token_table_);
 }
 
-inline std::shared_ptr<GrammarStateInitContext>
+inline std::shared_ptr<GrammarMatcherInitContext>
 GrammarInitContextCache::Impl::GetInitContextForJSONSchema(const std::string& schema) {
   auto it = init_ctx_for_schema_cache_.find(schema);
   if (it != init_ctx_for_schema_cache_.end()) {
@@ -442,7 +442,7 @@ GrammarInitContextCache::Impl::GetInitContextForJSONSchema(const std::string& sc
   return init_ctx;
 }
 
-inline std::shared_ptr<GrammarStateInitContext>
+inline std::shared_ptr<GrammarMatcherInitContext>
 GrammarInitContextCache::Impl::GetInitContextForJSON() {
   return init_ctx_for_json_;
 }
@@ -452,11 +452,11 @@ inline void GrammarInitContextCache::Impl::Clear() { init_ctx_for_schema_cache_.
 GrammarInitContextCache::GrammarInitContextCache(const std::vector<std::string>& token_table)
     : pimpl_(std::make_shared<Impl>(token_table)) {}
 
-std::shared_ptr<GrammarStateInitContext> GrammarInitContextCache::GetInitContextForJSON() {
+std::shared_ptr<GrammarMatcherInitContext> GrammarInitContextCache::GetInitContextForJSON() {
   return pimpl_->GetInitContextForJSON();
 }
 
-std::shared_ptr<GrammarStateInitContext> GrammarInitContextCache::GetInitContextForJSONSchema(
+std::shared_ptr<GrammarMatcherInitContext> GrammarInitContextCache::GetInitContextForJSONSchema(
     const std::string& schema
 ) {
   return pimpl_->GetInitContextForJSONSchema(schema);
