@@ -25,10 +25,14 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("json_schema", &BuiltinGrammar::JSONSchema)
       .def_static("_json_schema_to_ebnf", &BuiltinGrammar::_JSONSchemaToEBNF);
 
-  auto pyTokenizerInfo = py::class_<TokenizerInfo>(m, "TokenizerInfo");
-  pyTokenizerInfo.def(py::init<const std::string&>())
-      .def("to_string", &TokenizerInfo::ToString)
-      .def("get_decoded_vocab", &TokenizerInfo_GetDecodedVocab);
+  auto pyXGTokenizer = py::class_<XGTokenizer>(m, "XGTokenizer");
+  pyXGTokenizer.def(py::init<const std::string&, const std::unordered_map<std::string, int>&>())
+      .def("to_string", &XGTokenizer::ToString)
+      .def_property_readonly("decoder_type", &XGTokenizer::GetDecoderType)
+      .def_property_readonly(
+          "prepend_space_in_tokenization", &XGTokenizer::GetPrependSpaceInTokenization
+      )
+      .def_property_readonly("decoded_vocab", &XGTokenizer_GetDecodedVocab);
 
   auto pyGrammarStateMatcher = py::class_<GrammarStateMatcher>(m, "GrammarStateMatcher");
   pyGrammarStateMatcher
@@ -52,8 +56,8 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       )
       .def("is_terminated", &GrammarStateMatcher::IsTerminated)
       .def("reset", &GrammarStateMatcher::Reset)
-      .def("get_vocab_size", &GrammarStateMatcher::GetVocabSize)
+      .def_property_readonly("vocab_size", &GrammarStateMatcher::GetVocabSize)
       .def("find_jump_forward_string", &GrammarStateMatcher::FindJumpForwardString)
       .def("rollback", &GrammarStateMatcher::Rollback)
-      .def("get_max_rollback_steps", &GrammarStateMatcher::GetMaxRollbackSteps);
+      .def_property_readonly("max_rollback_steps", &GrammarStateMatcher::GetMaxRollbackSteps);
 }

@@ -193,7 +193,7 @@ class BuiltinGrammar:
         grammar : BNFGrammar
             The generated BNF grammar.
         """
-        if issubclass(schema, BaseModel):
+        if isinstance(schema, type) and issubclass(schema, BaseModel):
             schema = json.dumps(schema.model_json_schema())
 
         return _init_object_with_handle(
@@ -242,60 +242,94 @@ class BuiltinGrammar:
             schema, indent, separators, strict_mode
         )
 
-    @staticmethod
-    def _with_suffix(base_grammar: BNFGrammar, suffix_string: str) -> BNFGrammar:
-        """Add a suffix to the main rule of the grammar.
+    # @staticmethod
+    # def _with_suffix(base_grammar: BNFGrammar, suffix_string: str) -> BNFGrammar:
+    #     """Add a suffix to the main rule of the grammar.
 
-        Parameters
-        ----------
-        base_grammar : BNFGrammar
-            The base grammar.
+    #     Parameters
+    #     ----------
+    #     base_grammar : BNFGrammar
+    #         The base grammar.
 
-        suffix_string : str
-            The suffix string.
+    #     suffix_string : str
+    #         The suffix string.
 
-        Returns
-        -------
-        grammar : BNFGrammar
-            The grammar with suffix.
-        """
-        return _init_object_with_handle(
-            BNFGrammar,
-            _core.BuiltinGrammar._with_suffix(base_grammar._handle, suffix_string),
-        )
+    #     Returns
+    #     -------
+    #     grammar : BNFGrammar
+    #         The grammar with suffix.
+    #     """
+    #     return _init_object_with_handle(
+    #         BNFGrammar,
+    #         _core.BuiltinGrammar._with_suffix(base_grammar._handle, suffix_string),
+    #     )
 
 
-class TokenizerInfo:
+class XGTokenizer:
     def __init__(self, tokenizer: PreTrainedTokenizerBase):
         try:
             backend_str = tokenizer.backend_tokenizer.to_str()
         except AttributeError:
             logging.warning(
-                "Cannot detect TokenizerInfo from tokenizer type %s. Only huggingface or "
-                "sentencepiece tokenizer is supported yet. Falling back to the default "
-                "TokenizerInfo.",
+                "Cannot detect tokenizer type from tokenizer %s. Only huggingface or "
+                "sentencepiece tokenizer is supported yet. The tokenizer type is set to the "
+                "default byte_fallback tokenizer.",
                 type(tokenizer),
             )
             backend_str = None
-        self._handle = _core.TokenizerInfo(backend_str)
+
+        try:
+            # Use the get_vocab method to get the vocabulary, since the backend_str may not
+            # contain the full vocab. Some special tokens may be omitted.
+            vocab = tokenizer.get_vocab()
+        except AttributeError:
+            raise ValueError(
+                f"Cannot get the vocabulary of the tokenizer {type(tokenizer)}. The tokenizer "
+                "should have a get_vocab method."
+            )
+
+        self._handle = _core.XGTokenizer(backend_str, vocab)
 
     def __str__(self) -> str:
         return self._handle.to_string()
 
-    def get_decoded_vocab(self, raw_vocab: Dict[str, int]) -> List[bytes]:
-        """Get the decoded vocabulary of the tokenizer.
+    @property
+    def decoder_type(self) -> str:
+        """Get the decoder type of the tokenizer.
 
         Returns
         -------
-        vocab : str
-            The vocabulary.
+        decoder_type : str
+            The decoder type.
         """
-        return self._handle.get_decoded_vocab(raw_vocab)
+        return self._handle.decoder_type
+
+    @property
+    def prepend_space_in_tokenization(self) -> bool:
+        """Whether the tokenizer will prepend a space in tokenization.
+
+        Returns
+        -------
+        prepend_space_in_tokenization : bool
+            Whether the tokenizer will prepend a space in tokenization.
+        """
+        return self._handle.prepend_space_in_tokenization
+
+    @property
+    def decoded_vocab(self) -> List[bytes]:
+        """Get the decoded vocabulary of the tokenizer. This property is lazy evaluated.
+
+        Returns
+        -------
+        decoded_vocab : str
+            The decoded vocabulary.
+        """
+        return self._handle.decoded_vocab
 
 
 class GrammarMatcherInitContext:
-    def __init__(self, grammar: BNFGrammar, vocab: Optional[List[str]]):
-        self._handle = _core.GrammarMatcherInitContext(grammar._handle, vocab)
+    def __init__(self, grammar: BNFGrammar, decoded_vocab: Optional[List[str]]):
+        self._handle = _core.GrammarMatcherInitContext(grammar._handle, decoded_vocab)
 
 
 # class GrammarInitContextCache {
@@ -368,14 +402,14 @@ class GrammarStateMatcher:
 
         if tokenizer_or_vocab is None or isinstance(tokenizer_or_vocab, list):
             vocab = tokenizer_or_vocab
+        elif isinstance(tokenizer_or_vocab, PreTrainedTokenizerBase):
+            xg_tokenizer = XGTokenizer(tokenizer_or_vocab)
+            vocab = xg_tokenizer.decoded_vocab
         else:
-            if not hasattr(tokenizer_or_vocab, "get_vocab"):
-                raise ValueError(
-                    "Cannot get the vocabulary of the provided tokenizer. The tokenizer should "
-                    "have a get_vocab method."
-                )
-            tokenizer_info = TokenizerInfo(tokenizer_or_vocab)
-            vocab = tokenizer_info.get_decoded_vocab(tokenizer_or_vocab.get_vocab())
+            raise ValueError(
+                "The tokenizer_or_vocab should be None, a PreTrainedTokenizerBase, or a list of "
+                "strings."
+            )
 
         self._handle = _core.GrammarStateMatcher(
             grammar._handle,
@@ -509,7 +543,7 @@ class GrammarStateMatcher:
         max_rollback_steps : int
             The maximum number of rollback steps.
         """
-        return self._handle.get_max_rollback_steps()
+        return self._handle.max_rollback_steps
 
     def is_terminated(self) -> bool:
         """Check if the matcher has accepted the stop token and terminated. See also
@@ -528,4 +562,4 @@ class GrammarStateMatcher:
 
     @property
     def vocab_size(self) -> int:
-        return self._handle.get_vocab_size()
+        return self._handle.vocab_size

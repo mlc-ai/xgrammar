@@ -107,7 +107,7 @@ def test_find_next_rejected_tokens(
         assert rejected_sizes[-1] == expected_rejected_sizes[-1]
 
 
-def test_token_based_operations():
+def test_token_operations():
     """Test accepting token and finding the next token mask."""
     vocab = [
         # fmt: off
@@ -262,9 +262,9 @@ def test_get_jump_forward_string():
 other_rule ::= "a" sub_rule "b"
 sub_rule ::= "b"
 """
-    grammar = BNFGrammar.from_ebnf_string(grammar_ebnf)
+    grammar = BNFGrammar(grammar_ebnf)
     matcher = GrammarStateMatcher(grammar)
-    assert matcher.debug_accept_char(ord("a"), True)
+    assert matcher._accept_string("a")
     assert matcher.find_jump_forward_string() == "bb"
 
 

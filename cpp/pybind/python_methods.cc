@@ -52,10 +52,8 @@ GrammarStateMatcher GrammarStateMatcher_Init(
   );
 }
 
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(
-    const TokenizerInfo& tokenizer_info, const std::unordered_map<std::string, int>& raw_vocab
-) {
-  auto result = tokenizer_info.GetDecodedVocab(raw_vocab);
+std::vector<pybind11::bytes> XGTokenizer_GetDecodedVocab(XGTokenizer& tokenizer) {
+  auto result = tokenizer.GetDecodedVocab();
   std::vector<pybind11::bytes> py_result;
   py_result.reserve(result.size());
   for (const auto& item : result) {

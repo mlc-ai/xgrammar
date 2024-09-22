@@ -147,14 +147,21 @@ class BuiltinGrammar {
   );
 };
 
-class TokenizerInfo {
+class XGTokenizer {
  public:
-  TokenizerInfo(const std::string& hf_tokenizer_str);
-  std::string ToString() const;
-  std::vector<std::string> GetDecodedVocab(const std::unordered_map<std::string, int>& raw_vocab
-  ) const;
+  XGTokenizer(
+      const std::string& hf_tokenizer_str, const std::unordered_map<std::string, int>& raw_vocab
+  );
 
-  XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
+  std::string ToString() const;
+
+  std::string GetDecoderType() const;
+
+  bool GetPrependSpaceInTokenization() const;
+
+  const std::vector<std::string>& GetDecodedVocab();
+
+  XGRAMMAR_DEFINE_PIMPL_METHODS(XGTokenizer);
 };
 
 /*!

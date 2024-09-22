@@ -242,7 +242,8 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
 
   if (verbose) {
     XGRAMMAR_LOG(INFO) << "Accepting token id " << token_id << ", string: \""
-                       << PrintAsEscapedUTF8(init_ctx_->decoded_vocab[token_id]) << "\", state state:\n"
+                       << PrintAsEscapedUTF8(init_ctx_->decoded_vocab[token_id])
+                       << "\", state state:\n"
                        << PrintStackState();
   }
 

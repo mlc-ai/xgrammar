@@ -38,9 +38,7 @@ GrammarStateMatcher GrammarStateMatcher_Init(
     int max_rollback_steps
 );
 
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(
-    const TokenizerInfo& tokenizer_info, const std::unordered_map<std::string, int>& raw_vocab
-);
+std::vector<pybind11::bytes> XGTokenizer_GetDecodedVocab(XGTokenizer& tokenizer);
 
 torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher);
 

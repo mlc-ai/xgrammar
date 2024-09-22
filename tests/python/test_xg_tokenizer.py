@@ -1,7 +1,7 @@
 # pylint: disable=missing-module-docstring,missing-function-docstring
 import pytest
 from transformers import AutoTokenizer
-from xgrammar import TokenizerInfo
+from xgrammar import XGTokenizer
 
 tokenizer_paths = [
     "luodian/llama-7b-hf",
@@ -50,14 +50,14 @@ tokenizer_path_expected = list(
 
 
 @pytest.mark.parametrize("tokenizer_path,expected", tokenizer_path_expected)
-def test_tokenizer_info(tokenizer_path: str, expected: str):
+def test_properties(tokenizer_path: str, expected: str):
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_path,
         use_fast=True,
         trust_remote_code=True,
     )
-    tokenizer_info = TokenizerInfo(tokenizer)
-    assert str(tokenizer_info) == expected
+    xg_tokenizer = XGTokenizer(tokenizer)
+    assert str(xg_tokenizer) == expected
 
 
 @pytest.mark.parametrize("tokenizer_path", tokenizer_paths)
@@ -67,12 +67,11 @@ def test_get_decoded_vocab(tokenizer_path: str):
         use_fast=True,
         trust_remote_code=True,
     )
-    tokenizer_info = TokenizerInfo(tokenizer)
-    raw_vocab = tokenizer.get_vocab()
-    decoded_vocab = tokenizer_info.get_decoded_vocab(raw_vocab)
+    xg_tokenizer = XGTokenizer(tokenizer)
+    decoded_vocab = xg_tokenizer.decoded_vocab
     assert isinstance(decoded_vocab, list)
     assert all(isinstance(token, bytes) for token in decoded_vocab)
-    assert len(decoded_vocab) == len(raw_vocab)
+    assert len(decoded_vocab) == len(tokenizer.get_vocab())
 
 
 if __name__ == "__main__":
