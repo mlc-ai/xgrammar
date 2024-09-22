@@ -3,7 +3,6 @@
 """This test is adopted from test_grammar_state_matcher_json.py, but the grammar is parsed from
 a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar state
 matcher."""
-import json
 from typing import Dict, List, Tuple
 
 import pytest
@@ -12,20 +11,6 @@ from transformers import AutoTokenizer
 
 from xgrammar import BNFGrammar, GrammarStateMatcher
 from xgrammar.xgrammar import BuiltinGrammar
-
-# class UI(BaseModel):
-#     children: List["UI"]
-
-
-# UI.model_rebuild()  # This is required to enable recursive types
-
-
-# class Response(BaseModel):
-#     ui: UI
-
-
-# grammar = BuiltinGrammar.json_schema(Response, indent=2)
-# exit()
 
 
 def test_json_schema_accept_find_token():

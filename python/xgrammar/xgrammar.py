@@ -18,7 +18,7 @@
 
 import json
 import logging
-from typing import Dict, List, Optional, Tuple, Type, Union
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 from pydantic import BaseModel
@@ -332,31 +332,9 @@ class GrammarMatcherInitContext:
         self._handle = _core.GrammarMatcherInitContext(grammar._handle, decoded_vocab)
 
 
-# class GrammarInitContextCache {
-#  public:
-#   /*!
-#    * \brief Construct a GrammarInitContextCache with a vocabulary. This class will always create
-#    * grammar state init contexts with this vocabulary.
-#    * \param vocab The vocabulary that the grammar will use.
-#    */
-#   GrammarInitContextCache(const std::vector<std::string>& vocab);
-
-#   /*! \brief Get the init context for pure JSON. */
-#   std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSON();
-
-#   /*! \brief Get the init context for a JSON schema string. */
-#   std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSONSchema(const std::string& schema);
-
-#   /*! \brief Clear the interal cache of init contexts. */
-#   void Clear();
-
-#   XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarInitContextCache);
-# };
-
-
-class GrammarInitContextCache:
-    def __init__(self, vocab: List[bytes]):
-        self._handle = _core.GrammarInitContextCache(cache._handle)
+# class GrammarInitContextCache:
+#     def __init__(self, vocab: List[bytes]):
+#         self._handle = _core.GrammarInitContextCache(cache._handle)
 
 
 class GrammarStateMatcher:
