@@ -23,41 +23,45 @@ tokenizer_paths = [
     "Qwen/Qwen2-7B-Instruct",
 ]
 
-tokenizer_path_expected = list(
-    zip(
-        tokenizer_paths,
-        [
-            '{"token_postproc_method":"byte_fallback","prepend_space_in_encode":true}',
-            '{"token_postproc_method":"byte_fallback","prepend_space_in_encode":true}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_fallback","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_fallback","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_fallback","prepend_space_in_encode":true}',
-            '{"token_postproc_method":"byte_fallback","prepend_space_in_encode":true}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-            '{"token_postproc_method":"byte_level","prepend_space_in_encode":false}',
-        ],
-    )
+# [decoder_type, prepend_space_in_tokenization]
+tokenizer_properties = [
+    ["byte_fallback", True],
+    ["byte_fallback", True],
+    ["byte_level", False],
+    ["byte_level", False],
+    ["byte_fallback", False],
+    ["byte_level", False],
+    ["byte_level", False],
+    ["byte_fallback", False],
+    ["byte_level", False],
+    ["byte_level", False],
+    ["byte_level", False],
+    ["byte_level", False],
+    ["byte_level", False],
+    ["byte_fallback", True],
+    ["byte_fallback", True],
+    ["byte_level", False],
+    ["byte_level", False],
+]
+
+tokenizer_path_properties = list(zip(tokenizer_paths, *zip(*tokenizer_properties)))
+
+
+@pytest.mark.parametrize(
+    "tokenizer_path,decoder_type,prepend_space_in_tokenization",
+    tokenizer_path_properties,
 )
-
-
-@pytest.mark.parametrize("tokenizer_path,expected", tokenizer_path_expected)
-def test_properties(tokenizer_path: str, expected: str):
+def test_properties(
+    tokenizer_path: str, decoder_type: str, prepend_space_in_tokenization: bool
+):
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_path,
         use_fast=True,
         trust_remote_code=True,
     )
     xg_tokenizer = XGTokenizer(tokenizer)
-    assert str(xg_tokenizer) == expected
+    assert xg_tokenizer.decoder_type == decoder_type
+    assert xg_tokenizer.prepend_space_in_tokenization == prepend_space_in_tokenization
 
 
 @pytest.mark.parametrize("tokenizer_path", tokenizer_paths)
@@ -72,6 +76,19 @@ def test_get_decoded_vocab(tokenizer_path: str):
     assert isinstance(decoded_vocab, list)
     assert all(isinstance(token, bytes) for token in decoded_vocab)
     assert len(decoded_vocab) == len(tokenizer.get_vocab())
+
+
+def test_str():
+    tokenizer = AutoTokenizer.from_pretrained(
+        "meta-llama/Llama-2-7b-chat-hf",
+        use_fast=True,
+        trust_remote_code=True,
+    )
+    xg_tokenizer = XGTokenizer(tokenizer)
+    assert (
+        str(xg_tokenizer)
+        == '{"decoder_type":"byte_fallback","prepend_space_in_tokenization":true}'
+    )
 
 
 if __name__ == "__main__":

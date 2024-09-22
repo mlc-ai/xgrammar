@@ -244,8 +244,8 @@ XGTokenizer::Impl::Impl(
 
 std::string XGTokenizer::Impl::ToString() const {
   picojson::object obj;
-  obj["token_postproc_method"] = picojson::value(decoder_type_);
-  obj["prepend_space_in_encode"] = picojson::value(prepend_space_in_tokenization_);
+  obj["decoder_type"] = picojson::value(decoder_type_);
+  obj["prepend_space_in_tokenization"] = picojson::value(prepend_space_in_tokenization_);
   return picojson::value(obj).serialize(false);
 }
 
