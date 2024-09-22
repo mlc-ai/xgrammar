@@ -18,10 +18,13 @@ repos:
     hooks:
       - id: check-added-large-files
       - id: check-case-conflict
+      - id: check-executables-have-shebangs
       - id: check-merge-conflict
       - id: check-symlinks
+      - id: check-json
       - id: check-yaml
         exclude: ^conda\.recipe/meta\.yaml$
+      - id: check-toml
       - id: debug-statements
       - id: end-of-file-fixer
       - id: mixed-line-ending
@@ -30,7 +33,7 @@ repos:
 
   # Lints code
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.4.2"
+    rev: v0.6.7
     hooks:
       - id: ruff
         args: ["--fix", "--show-fixes"]
@@ -44,7 +47,7 @@ repos:
       - id: remove-crlf
 
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v16.0.0
+    rev: v18.1.8
     hooks:
       - id: clang-format
         types_or: [c++, c, cuda]
@@ -52,16 +55,22 @@ repos:
           (?x)^(.*cubin.cpp$ | .*fmha_cubin.h)$
 
   - repo: https://github.com/cheshirekow/cmake-format-precommit
-    rev: v0.6.10
+    rev: v0.6.13
     hooks:
       - id: cmake-format
 
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.4
+    rev: v2.3.0
     hooks:
       - id: codespell
         args:
           - --skip=".git,3rdparty"
-          - --exclude-file=examples/whisper/tokenizer.py
-          - --ignore-words-list=rouge,inout,atleast,strat,nd,subtile
-        exclude: "tests/llm-test-defs/turtle/test_input_files"
+          - --ignore-words-list=xg
+
+  - repo: local
+    hooks:
+    - id: check-bash-syntax
+      name: Check Shell scripts syntax correctness
+      language: system
+      entry: bash -n
+      files: \.sh$
