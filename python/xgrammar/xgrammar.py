@@ -282,15 +282,47 @@ class TokenizerInfo:
     def __str__(self) -> str:
         return self._handle.to_string()
 
-    def get_decoded_token_table(self, raw_token_table: Dict[str, int]) -> List[bytes]:
-        """Get the token table of the tokenizer.
+    def get_decoded_vocab(self, raw_vocab: Dict[str, int]) -> List[bytes]:
+        """Get the decoded vocabulary of the tokenizer.
 
         Returns
         -------
-        token_table : str
-            The token table.
+        vocab : str
+            The vocabulary.
         """
-        return self._handle.get_decoded_token_table(raw_token_table)
+        return self._handle.get_decoded_vocab(raw_vocab)
+
+
+class GrammarMatcherInitContext:
+    def __init__(self, grammar: BNFGrammar, vocab: Optional[List[str]]):
+        self._handle = _core.GrammarMatcherInitContext(grammar._handle, vocab)
+
+
+# class GrammarInitContextCache {
+#  public:
+#   /*!
+#    * \brief Construct a GrammarInitContextCache with a vocabulary. This class will always create
+#    * grammar state init contexts with this vocabulary.
+#    * \param vocab The vocabulary that the grammar will use.
+#    */
+#   GrammarInitContextCache(const std::vector<std::string>& vocab);
+
+#   /*! \brief Get the init context for pure JSON. */
+#   std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSON();
+
+#   /*! \brief Get the init context for a JSON schema string. */
+#   std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSONSchema(const std::string& schema);
+
+#   /*! \brief Clear the interal cache of init contexts. */
+#   void Clear();
+
+#   XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarInitContextCache);
+# };
+
+
+class GrammarInitContextCache:
+    def __init__(self, vocab: List[bytes]):
+        self._handle = _core.GrammarInitContextCache(cache._handle)
 
 
 class GrammarStateMatcher:
@@ -343,9 +375,7 @@ class GrammarStateMatcher:
                     "have a get_vocab method."
                 )
             tokenizer_info = TokenizerInfo(tokenizer_or_vocab)
-            vocab = tokenizer_info.get_decoded_token_table(
-                tokenizer_or_vocab.get_vocab()
-            )
+            vocab = tokenizer_info.get_decoded_vocab(tokenizer_or_vocab.get_vocab())
 
         self._handle = _core.GrammarStateMatcher(
             grammar._handle,

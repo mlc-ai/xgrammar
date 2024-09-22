@@ -151,8 +151,7 @@ class TokenizerInfo {
  public:
   TokenizerInfo(const std::string& hf_tokenizer_str);
   std::string ToString() const;
-  std::vector<std::string> GetDecodedTokenTable(
-      const std::unordered_map<std::string, int>& raw_token_table
+  std::vector<std::string> GetDecodedVocab(const std::unordered_map<std::string, int>& raw_vocab
   ) const;
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
@@ -180,7 +179,7 @@ class GrammarMatcherInitContext;
  * \code
  * Tokenizer tokenizer = ...;
  * auto init_ctx = GrammarStateMatcher::CreateInitContext(grammar,
- *                                                        tokenizer->PostProcessedTokenTable());
+ *                                                        tokenizer->PostProcessedVocab());
  * GrammarStateMatcher matcher(init_ctx, 10);
  * matcher->AcceptToken(67);
  *
@@ -208,14 +207,14 @@ class GrammarStateMatcher {
   );
 
   /*!
-   * \brief Specify a grammar and token_table to return their preprocessing results. These results
-   * are used to construct a GrammarStateMatcher. They can be stored elsewhere for quick
+   * \brief Specify a grammar and decoded vocabulary to return their preprocessing results. These
+   * results are used to construct a GrammarStateMatcher. They can be stored elsewhere for quick
    * construction of GrammarStateMatcher.
    * \param grammar The grammar that the matcher follows.
-   * \param token_table The tokens that the matcher requires for matching.
+   * \param decoded_vocab The tokens that the matcher requires for matching.
    */
   static std::shared_ptr<GrammarMatcherInitContext> CreateInitContext(
-      const BNFGrammar& grammar, const std::vector<std::string>& token_table
+      const BNFGrammar& grammar, const std::vector<std::string>& decoded_vocab
   );
 
   /*!
@@ -280,18 +279,18 @@ class GrammarStateMatcher {
 /*!
  * \brief A cache to get the grammar state init context for grammar or schema. This class avoids
  * redundant preprocessing of the grammar or schema when constructing a GrammarMatcherInitContext.
- * \note This class is associated with a token table when constructed. The token table is used to
+ * \note This class is associated with a vocabulary when constructed. The vocabulary is used to
  * create every grammar state init context. If multiple toke tables are used to create init
- * contexts, an instance of this class for each token table should be created.
+ * contexts, an instance of this class for each vocabulary should be created.
  */
 class GrammarInitContextCache {
  public:
   /*!
-   * \brief Construct a GrammarInitContextCache with a token table. This class will always create
-   * grammar state init contexts with this token table.
-   * \param token_table The token table that the grammar will use.
+   * \brief Construct a GrammarInitContextCache with a vocabulary. This class will always create
+   * grammar state init contexts with this vocabulary.
+   * \param decoded_vocab The vocabulary that the grammar will use.
    */
-  GrammarInitContextCache(const std::vector<std::string>& token_table);
+  GrammarInitContextCache(const std::vector<std::string>& decoded_vocab);
 
   /*! \brief Get the init context for pure JSON. */
   std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSON();

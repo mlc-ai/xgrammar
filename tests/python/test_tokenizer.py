@@ -61,7 +61,7 @@ def test_tokenizer_info(tokenizer_path: str, expected: str):
 
 
 @pytest.mark.parametrize("tokenizer_path", tokenizer_paths)
-def test_get_decoded_token_table(tokenizer_path: str):
+def test_get_decoded_vocab(tokenizer_path: str):
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_path,
         use_fast=True,
@@ -69,10 +69,10 @@ def test_get_decoded_token_table(tokenizer_path: str):
     )
     tokenizer_info = TokenizerInfo(tokenizer)
     raw_vocab = tokenizer.get_vocab()
-    decoded_token_table = tokenizer_info.get_decoded_token_table(raw_vocab)
-    assert isinstance(decoded_token_table, list)
-    assert all(isinstance(token, bytes) for token in decoded_token_table)
-    assert len(decoded_token_table) == len(raw_vocab)
+    decoded_vocab = tokenizer_info.get_decoded_vocab(raw_vocab)
+    assert isinstance(decoded_vocab, list)
+    assert all(isinstance(token, bytes) for token in decoded_vocab)
+    assert len(decoded_vocab) == len(raw_vocab)
 
 
 if __name__ == "__main__":

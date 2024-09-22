@@ -20,8 +20,7 @@ class TokenizerInfo::Impl {
  public:
   Impl(const std::string& hf_tokenizer_str);
   std::string ToString() const;
-  std::vector<std::string> GetDecodedTokenTable(
-      const std::unordered_map<std::string, int>& raw_token_table
+  std::vector<std::string> GetDecodedVocab(const std::unordered_map<std::string, int>& raw_vocab
   ) const;
 
  private:
@@ -241,12 +240,12 @@ inline std::string DecodeToken(const std::string& token, const std::string& toke
   }
 }
 
-std::vector<std::string> TokenizerInfo::Impl::GetDecodedTokenTable(
-    const std::unordered_map<std::string, int>& raw_token_table
+std::vector<std::string> TokenizerInfo::Impl::GetDecodedVocab(
+    const std::unordered_map<std::string, int>& raw_vocab
 ) const {
   std::vector<std::pair<const std::string*, int>> sorted_token_and_ids;
-  sorted_token_and_ids.reserve(raw_token_table.size());
-  for (const auto& pair : raw_token_table) {
+  sorted_token_and_ids.reserve(raw_vocab.size());
+  for (const auto& pair : raw_vocab) {
     sorted_token_and_ids.emplace_back(&pair.first, pair.second);
   }
   std::sort(
@@ -255,12 +254,12 @@ std::vector<std::string> TokenizerInfo::Impl::GetDecodedTokenTable(
       [](const auto& a, const auto& b) { return a.second < b.second; }
   );
 
-  std::vector<std::string> decoded_token_table;
-  decoded_token_table.reserve(sorted_token_and_ids.size());
+  std::vector<std::string> decoded_vocab;
+  decoded_vocab.reserve(sorted_token_and_ids.size());
   for (const auto& item : sorted_token_and_ids) {
-    decoded_token_table.emplace_back(DecodeToken(*item.first, token_decoder_type));
+    decoded_vocab.emplace_back(DecodeToken(*item.first, token_decoder_type));
   }
-  return decoded_token_table;
+  return decoded_vocab;
 }
 
 TokenizerInfo::TokenizerInfo(const std::string& hf_tokenizer_str)
@@ -268,10 +267,10 @@ TokenizerInfo::TokenizerInfo(const std::string& hf_tokenizer_str)
 
 std::string TokenizerInfo::ToString() const { return pimpl_->ToString(); }
 
-std::vector<std::string> TokenizerInfo::GetDecodedTokenTable(
-    const std::unordered_map<std::string, int>& raw_token_table
+std::vector<std::string> TokenizerInfo::GetDecodedVocab(
+    const std::unordered_map<std::string, int>& raw_vocab
 ) const {
-  return pimpl_->GetDecodedTokenTable(raw_token_table);
+  return pimpl_->GetDecodedVocab(raw_vocab);
 }
 
 }  // namespace xgrammar

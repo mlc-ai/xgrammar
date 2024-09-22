@@ -28,7 +28,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
   auto pyTokenizerInfo = py::class_<TokenizerInfo>(m, "TokenizerInfo");
   pyTokenizerInfo.def(py::init<const std::string&>())
       .def("to_string", &TokenizerInfo::ToString)
-      .def("get_decoded_token_table", &TokenizerInfo_GetDecodedTokenTable);
+      .def("get_decoded_vocab", &TokenizerInfo_GetDecodedVocab);
 
   auto pyGrammarStateMatcher = py::class_<GrammarStateMatcher>(m, "GrammarStateMatcher");
   pyGrammarStateMatcher

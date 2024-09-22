@@ -24,13 +24,13 @@ BNFGrammar BNFGrammar_InitNoNormalization(
 
 GrammarStateMatcher GrammarStateMatcher_Init(
     const BNFGrammar& grammar,
-    const std::vector<std::string>& token_table,
+    const std::vector<std::string>& vocab,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
     int max_rollback_steps
 ) {
   return GrammarStateMatcher(
-      GrammarStateMatcher::CreateInitContext(grammar, token_table),
+      GrammarStateMatcher::CreateInitContext(grammar, vocab),
       stop_token_ids,
       terminate_without_stop_token,
       max_rollback_steps
@@ -52,10 +52,10 @@ GrammarStateMatcher GrammarStateMatcher_Init(
   );
 }
 
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedTokenTable(
-    const TokenizerInfo& tokenizer_info, const std::unordered_map<std::string, int>& raw_token_table
+std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(
+    const TokenizerInfo& tokenizer_info, const std::unordered_map<std::string, int>& raw_vocab
 ) {
-  auto result = tokenizer_info.GetDecodedTokenTable(raw_token_table);
+  auto result = tokenizer_info.GetDecodedVocab(raw_vocab);
   std::vector<pybind11::bytes> py_result;
   py_result.reserve(result.size());
   for (const auto& item : result) {

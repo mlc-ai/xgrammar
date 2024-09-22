@@ -24,7 +24,7 @@ BNFGrammar BNFGrammar_InitNoNormalization(
 
 GrammarStateMatcher GrammarStateMatcher_Init(
     const BNFGrammar& grammar,
-    const std::vector<std::string>& token_table,
+    const std::vector<std::string>& vocab,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
     int max_rollback_steps
@@ -38,8 +38,8 @@ GrammarStateMatcher GrammarStateMatcher_Init(
     int max_rollback_steps
 );
 
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedTokenTable(
-    const TokenizerInfo& tokenizer_info, const std::unordered_map<std::string, int>& raw_token_table
+std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(
+    const TokenizerInfo& tokenizer_info, const std::unordered_map<std::string, int>& raw_vocab
 );
 
 torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher);

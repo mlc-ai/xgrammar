@@ -242,8 +242,7 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
 
   if (verbose) {
     XGRAMMAR_LOG(INFO) << "Accepting token id " << token_id << ", string: \""
-                       << PrintAsEscapedUTF8(init_ctx_->token_table[token_id])
-                       << "\", state state:\n"
+                       << PrintAsEscapedUTF8(init_ctx_->decoded_vocab[token_id]) << "\", state state:\n"
                        << PrintStackState();
   }
 
@@ -260,11 +259,11 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
   if (init_ctx_->special_token_ids.count(token_id) > 0) {
     XGRAMMAR_LOG(FATAL
     ) << "Token id "
-      << token_id << ": " << init_ctx_->token_table[token_id]
+      << token_id << ": " << init_ctx_->decoded_vocab[token_id]
       << " is regarded as a special token, and cannot be accepted by the GrammarStateMatcher";
   }
 
-  const auto& token = init_ctx_->token_table[token_id];
+  const auto& token = init_ctx_->decoded_vocab[token_id];
   int pos = 0;
   for (auto char_value : token) {
     if (!AcceptChar(char_value, verbose)) {
@@ -338,7 +337,7 @@ void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmas
   ) << "GrammarStateMatcher has terminated after accepting the stop token, but is trying to "
        "find the next token mask";
   CheckTokenBitmaskValidity(*next_token_bitmask, init_ctx_->vocab_size);
-  const auto& sorted_token_table = init_ctx_->sorted_token_table;
+  const auto& sorted_decoded_tokens = init_ctx_->sorted_decoded_tokens;
   const auto& catagorized_tokens_for_grammar = init_ctx_->catagorized_tokens_for_grammar;
   const auto& latest_stack_tops = stack_tops_history_.GetLatest();
 
@@ -347,7 +346,7 @@ void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmas
   // The final accepted token set is the union of the accepted token sets of all stacks.
   // The final rejected token set is the intersection of the rejected token sets of all stacks.
 
-  // Note these indices store the indices in sorted_token_table, instead of the token ids.
+  // Note these indices store the indices in sorted_decoded_tokens, instead of the token ids.
   tmp_accepted_bitset_.Reset();
   // {-1} means the universal set, i.e. all tokens initially
   tmp_rejected_indices_.assign({-1});
@@ -378,7 +377,7 @@ void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmas
     int prev_matched_size = 0;
 
     for (auto cur_token_idx : catagorized_tokens.uncertain_indices) {
-      const auto& cur_token = sorted_token_table[cur_token_idx].second;
+      const auto& cur_token = sorted_decoded_tokens[cur_token_idx].second;
       bool accepted = true;
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
@@ -412,7 +411,7 @@ void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmas
       if (catagorized_tokens.save_type == SaveType::kAcceptedBitset ||
           catagorized_tokens.save_type == SaveType::kAccepted) {
         if (accepted) {
-          tmp_accepted_bitset_.Set(sorted_token_table[cur_token_idx].first, true);
+          tmp_accepted_bitset_.Set(sorted_decoded_tokens[cur_token_idx].first, true);
         }
       } else {
         if (!accepted) {
@@ -430,7 +429,7 @@ void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmas
       tmp_accepted_bitset_ |= catagorized_tokens.accepted_bitset;
     } else if (catagorized_tokens.save_type == SaveType::kAccepted) {
       for (auto idx : catagorized_tokens.accepted_indices) {
-        tmp_accepted_bitset_.Set(sorted_token_table[idx].first, true);
+        tmp_accepted_bitset_.Set(sorted_decoded_tokens[idx].first, true);
       }
     } else {
       // rejected_indices = Intersect(
@@ -564,7 +563,7 @@ void GrammarStateMatcher::Impl::SetTokenBitmask(
   DynamicBitset next_token_bitset(
       init_ctx_->vocab_size, reinterpret_cast<uint32_t*>(next_token_bitmask->data)
   );
-  const auto& sorted_token_table = init_ctx_->sorted_token_table;
+  const auto& sorted_decoded_tokens = init_ctx_->sorted_decoded_tokens;
 
   if (rejected_indices.size() == 1 && rejected_indices[0] == -1) {
     // If rejected_indices is the universal set, the final accepted token set is just
@@ -582,7 +581,7 @@ void GrammarStateMatcher::Impl::SetTokenBitmask(
     next_token_bitset.Set();
 
     for (auto i : rejected_indices) {
-      auto id = sorted_token_table[i].first;
+      auto id = sorted_decoded_tokens[i].first;
       if (!accepted_bitset[id]) {
         next_token_bitset.Set(id, false);
       }
