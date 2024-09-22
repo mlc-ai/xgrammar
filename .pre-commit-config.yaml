@@ -32,12 +32,12 @@ repos:
       - id: trailing-whitespace
 
   # Lints code
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.7
-    hooks:
-      - id: ruff
-        args: ["--fix", "--show-fixes"]
-      - id: ruff-format
+  # - repo: https://github.com/astral-sh/ruff-pre-commit
+  #   rev: v0.6.7
+  #   hooks:
+  #     - id: ruff
+  #       args: ["--fix", "--show-fixes"]
+      # - id: ruff-format
 
   # Changes tabs to spaces
   - repo: https://github.com/Lucas-C/pre-commit-hooks

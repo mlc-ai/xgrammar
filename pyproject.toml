@@ -1,2 +1,44 @@
 [tool.pytest.ini_options]
 addopts = "-rA --durations=0"
+
+[tool.mypy]
+strict = true
+
+[tool.ruff]
+exclude = ["3rdparty"]
+
+[tool.ruff.lint]
+select = [
+    # "E",  # pycodestyle errors
+    # "W",  # pycodestyle warnings
+    # "F",  # pyflakes
+    # "I",  # isort
+    # "B",  # flake8-bugbear
+    # "C4",  # flake8-comprehensions
+    # "UP",  # pyupgrade
+    # "PL",  # pylint
+    # "RUF",  # ruff,
+    # "D",
+    "ALL",
+]
+ignore = [
+    "E501", # line too long, handled by black
+    "PTH",
+    "D100",
+    "D103",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"setup.py" = ["INP001"]
+"__init__.py" = ["F401"]
+"tests/*" = ["E741", "PLR2004"]
+
+[tool.black]
+line-length = 100
+exclude = "3rdparty/*"
+
+[tool.ruff.lint.pylint]
+max-args = 10
+
+[tool.codespell]
+skip = 'tests/python/test_builtin_grammar_json.py,tests/python/test_custom_grammar.py'

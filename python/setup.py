@@ -17,9 +17,6 @@
 import glob
 import os
 import platform
-import shutil
-import sys
-from typing import List
 
 from setuptools import find_packages, setup
 from setuptools.dist import Distribution
@@ -29,7 +26,7 @@ PYTHON_SRC_DIR = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
 PROJECT_DIR = os.path.dirname(PYTHON_SRC_DIR)
 
 
-def get_version():
+def get_version() -> str:
     version_path = os.path.join(PYTHON_SRC_DIR, "xgrammar", "version.py")
     if not os.path.exists(version_path) or not os.path.isfile(version_path):
         raise RuntimeError(f"Version file not found: {version_path}")
@@ -43,7 +40,7 @@ def get_version():
     return loc["__version__"]
 
 
-def parse_requirements(filename: os.PathLike):
+def parse_requirements(filename: os.PathLike) -> list[str]:
     with open(filename) as f:
         requirements = f.read().splitlines()
 
@@ -87,12 +84,12 @@ def get_xgrammar_lib() -> str:
     if len(lib_paths) == 0 or not os.path.isfile(lib_paths[0]):
         raise RuntimeError(
             "Cannot find xgrammar bindings library. Please build the library first. Search path: "
-            f"{lib_glob}"
+            f"{lib_glob}",
         )
-    elif len(lib_paths) > 1:
+    if len(lib_paths) > 1:
         raise RuntimeError(
             f"Found multiple xgrammar bindings libraries: {lib_paths}. "
-            "Please remove the extra ones."
+            "Please remove the extra ones.",
         )
 
     return lib_paths[0]

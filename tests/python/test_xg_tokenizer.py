@@ -1,4 +1,3 @@
-# pylint: disable=missing-module-docstring,missing-function-docstring
 import pytest
 from transformers import AutoTokenizer
 from xgrammar import XGTokenizer
@@ -51,9 +50,7 @@ tokenizer_path_properties = list(zip(tokenizer_paths, *zip(*tokenizer_properties
     "tokenizer_path,decoder_type,prepend_space_in_tokenization",
     tokenizer_path_properties,
 )
-def test_properties(
-    tokenizer_path: str, decoder_type: str, prepend_space_in_tokenization: bool
-):
+def test_properties(tokenizer_path: str, decoder_type: str, prepend_space_in_tokenization: bool):
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_path,
         use_fast=True,
@@ -86,8 +83,7 @@ def test_str():
     )
     xg_tokenizer = XGTokenizer(tokenizer)
     assert (
-        str(xg_tokenizer)
-        == '{"decoder_type":"byte_fallback","prepend_space_in_tokenization":true}'
+        str(xg_tokenizer) == '{"decoder_type":"byte_fallback","prepend_space_in_tokenization":true}'
     )
 
 

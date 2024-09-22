@@ -1,8 +1,7 @@
-# pylint: disable=missing-module-docstring,missing-function-docstring
-# pylint: disable=redefined-outer-name,unbalanced-tuple-unpacking
 """This test is adopted from test_grammar_state_matcher_json.py, but the grammar is parsed from
 a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar state
-matcher."""
+matcher.
+"""
 import time
 from typing import List, Optional
 
@@ -269,7 +268,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         [
             # fmt: off
             31989, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 272, 272, 272, 272,
-            272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999
+            272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999,
             # fmt: on
         ],
     ),
@@ -294,7 +293,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
             31906, 272, 272, 272, 272, 31973, 31846, 31846, 264, 264, 264, 31968, 31970, 31915,
             31915, 272, 272, 272, 272, 31973, 31846, 31846, 31840, 31943, 31846, 31846, 31943,
             31846, 31846, 31943, 31970, 31974, 31915, 31915, 272, 272, 272, 272, 31973, 31846,
-            31846, 265, 265, 265, 265, 31974, 31974, 31999
+            31846, 265, 265, 265, 265, 31974, 31974, 31999,
             # fmt: on
         ],
     ),
@@ -306,7 +305,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
             # fmt: off
             128235, 127497, 5002, 5002, 5002, 127849, 126399, 126399, 126760, 127499, 5002, 5002,
             5002, 5002, 5002, 127849, 126399, 126399, 4952, 4952, 4952, 4952, 4952, 4952, 4952,
-            4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128254
+            4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128254,
             # fmt: on
         ],
     ),
@@ -338,12 +337,10 @@ def test_find_next_rejected_tokens(
 
         print(f"Time to find_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
         rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
+            bitmask, matcher.vocab_size,
         )
         time_end = time.monotonic_ns()
-        print(
-            f"Time to get_rejected_tokens_from_bitmask: {(time_end - time_mid) / 1e3} us"
-        )
+        print(f"Time to get_rejected_tokens_from_bitmask: {(time_end - time_mid) / 1e3} us")
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
             assert rejected_sizes[-1] == expected_rejected_sizes[i], (
@@ -358,7 +355,7 @@ def test_find_next_rejected_tokens(
 
     bitmask = matcher.find_next_token_bitmask()
     rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
+        bitmask, matcher.vocab_size,
     )
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:

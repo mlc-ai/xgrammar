@@ -1,12 +1,9 @@
-# pylint: disable=missing-module-docstring,missing-function-docstring
-# pylint: disable=redefined-outer-name,unbalanced-tuple-unpacking
 """This test uses the optimized JSON grammar provided by the grammar library."""
 from typing import List, Optional
 
 import pytest
 import torch
 from transformers import AutoTokenizer
-
 from xgrammar import BNFGrammar, BuiltinGrammar, GrammarStateMatcher
 
 json_grammar = BuiltinGrammar.json()
@@ -48,7 +45,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         [
             # fmt: off
             31989, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 272, 272, 272, 272,
-            272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999
+            272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999,
             # fmt: on
         ],
     ),
@@ -60,7 +57,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
             # fmt: off
             128235, 127497, 5002, 5002, 5002, 127849, 126399, 126399, 126760, 127499, 5002, 5002,
             5002, 5002, 5002, 127849, 126399, 126399, 4952, 4952, 4952, 4952, 4952, 4952, 4952,
-            4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128254
+            4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128254,
             # fmt: on
         ],
     ),
@@ -88,7 +85,7 @@ def test_find_next_rejected_tokens(
     for i, c in enumerate(input_bytes):
         bitmask = matcher.find_next_token_bitmask()
         rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
+            bitmask, matcher.vocab_size,
         )
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
@@ -100,7 +97,7 @@ def test_find_next_rejected_tokens(
 
     bitmask = matcher.find_next_token_bitmask()
     rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
+        bitmask, matcher.vocab_size,
     )
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:
@@ -138,7 +135,7 @@ def test_token_operations():
     for id in input_ids:
         bitmask = matcher.find_next_token_bitmask()
         rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
+            bitmask, matcher.vocab_size,
         )
         accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
         accepted_tokens = [vocab[i] for i in accepted]
@@ -148,7 +145,7 @@ def test_token_operations():
 
     bitmask = matcher.find_next_token_bitmask()
     rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
+        bitmask, matcher.vocab_size,
     )
     accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
     accepted_tokens = [vocab[i] for i in accepted]
@@ -184,9 +181,7 @@ def test_rollback():
         assert matcher.accept_token(i_1)
         result_after_rollback.append(matcher.find_next_token_bitmask())
         assert matcher.accept_token(i_2)
-        assert all(
-            torch.all(l == r) for l, r in zip(orig_result, result_after_rollback)
-        )
+        assert all(torch.all(l == r) for l, r in zip(orig_result, result_after_rollback))
 
 
 def test_reset():

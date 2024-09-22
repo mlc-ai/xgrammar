@@ -17,7 +17,7 @@ def check_schema_with_grammar(
 ):
     schema_str = json.dumps(schema)
     json_schema_ebnf = BuiltinGrammar._json_schema_to_ebnf(
-        schema_str, indent=indent, separators=separators, strict_mode=strict_mode
+        schema_str, indent=indent, separators=separators, strict_mode=strict_mode,
     )
     assert json_schema_ebnf == expected_grammar_ebnf
 
@@ -60,9 +60,7 @@ def check_schema_with_instance(
 ):
     instance_obj = instance.model_dump(mode="json", round_trip=True)
     instance_str = json.dumps(instance_obj, indent=indent, separators=separators)
-    check_schema_with_json(
-        schema, instance_str, check_accepted, indent, separators, strict_mode
-    )
+    check_schema_with_json(schema, instance_str, check_accepted, indent, separators, strict_mode)
 
 
 def test_basic() -> None:
@@ -237,9 +235,7 @@ main ::= "{" "" "\"bars\"" ": " main_prop_0 ", " "\"str_values\"" ": " main_prop
 """
 
     schema = MainModel.model_json_schema()
-    instance = MainModel(
-        foo="a", values=1, bars="a", str_values='a\n\r"', field=Field.FOO
-    )
+    instance = MainModel(foo="a", values=1, bars="a", str_values='a\n\r"', field=Field.FOO)
     check_schema_with_grammar(schema, ebnf_grammar)
     check_schema_with_instance(schema, instance)
 
@@ -328,9 +324,7 @@ main ::= ("{" "" (("\"size\"" ": " basic_integer main_part_0) | ("\"state\"" ": 
 
     check_schema_with_grammar(schema, ebnf_grammar_non_strict, strict_mode=False)
 
-    check_schema_with_json(
-        schema, '{"size": 1, "num": 1.5, "other": false}', strict_mode=False
-    )
+    check_schema_with_json(schema, '{"size": 1, "num": 1.5, "other": false}', strict_mode=False)
     check_schema_with_json(schema, '{"other": false}', strict_mode=False)
 
 
@@ -456,14 +450,10 @@ main ::= "{" "" "\"name\"" ": " basic_string "" "}"
     check_schema_with_grammar(MainModel.model_json_schema(), ebnf_grammar)
 
     instance = MainModel(name="kitty")
-    instance_str = json.dumps(
-        instance.model_dump(mode="json", round_trip=True, by_alias=False)
-    )
+    instance_str = json.dumps(instance.model_dump(mode="json", round_trip=True, by_alias=False))
     check_schema_with_json(MainModel.model_json_schema(by_alias=False), instance_str)
 
-    instance_str = json.dumps(
-        instance.model_dump(mode="json", round_trip=True, by_alias=True)
-    )
+    instance_str = json.dumps(instance.model_dump(mode="json", round_trip=True, by_alias=True))
     check_schema_with_json(MainModel.model_json_schema(by_alias=True), instance_str)
 
     # property name contains space
@@ -488,11 +478,9 @@ main ::= "{" "" "\"name 1\"" ": " main_prop_0 "" "}"
 
     instance_space = MainModelSpace(**{"name 1": "abc"})
     instance_space_str = json.dumps(
-        instance_space.model_dump(mode="json", round_trip=True, by_alias=True)
+        instance_space.model_dump(mode="json", round_trip=True, by_alias=True),
     )
-    check_schema_with_json(
-        MainModelSpace.model_json_schema(by_alias=True), instance_space_str
-    )
+    check_schema_with_json(MainModelSpace.model_json_schema(by_alias=True), instance_space_str)
 
 
 if __name__ == "__main__":

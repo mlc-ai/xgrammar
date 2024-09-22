@@ -68,6 +68,7 @@ class BNFGrammar:
         -------
         grammar : BNFGrammar
             The parsed BNF grammar.
+
         """
         self._handle = _core.BNFGrammar(ebnf_string, main_rule)
 
@@ -78,6 +79,7 @@ class BNFGrammar:
         -------
         grammar_string : str
             The BNF grammar string.
+
         """
         return self._handle.to_string()
 
@@ -96,6 +98,7 @@ class BNFGrammar:
         -------
         json_string : str
             The JSON string.
+
         """
         return self._handle.serialize(prettify)
 
@@ -112,10 +115,9 @@ class BNFGrammar:
         -------
         grammar : BNFGrammar
             The loaded BNF grammar.
+
         """
-        return _init_object_with_handle(
-            BNFGrammar, _core.BNFGrammar.deserialize(json_string)
-        )
+        return _init_object_with_handle(BNFGrammar, _core.BNFGrammar.deserialize(json_string))
 
     @staticmethod
     def _init_no_normalization(
@@ -137,9 +139,10 @@ class BNFGrammar:
         -------
         grammar : BNFGrammar
             The parsed BNF grammar.
+
         """
         return _init_object_with_handle(
-            BNFGrammar, _core.BNFGrammar._init_no_normalization(ebnf_string, main_rule)
+            BNFGrammar, _core.BNFGrammar._init_no_normalization(ebnf_string, main_rule),
         )
 
 
@@ -152,6 +155,7 @@ class BuiltinGrammar:
         -------
         grammar : BNFGrammar
             The JSON grammar.
+
         """
         return _init_object_with_handle(BNFGrammar, _core.BuiltinGrammar.json())
 
@@ -192,6 +196,7 @@ class BuiltinGrammar:
         -------
         grammar : BNFGrammar
             The generated BNF grammar.
+
         """
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             schema = json.dumps(schema.model_json_schema())
@@ -237,10 +242,9 @@ class BuiltinGrammar:
         -------
         ebnf_string : str
             The EBNF grammar string.
+
         """
-        return _core.BuiltinGrammar._json_schema_to_ebnf(
-            schema, indent, separators, strict_mode
-        )
+        return _core.BuiltinGrammar._json_schema_to_ebnf(schema, indent, separators, strict_mode)
 
     # @staticmethod
     # def _with_suffix(base_grammar: BNFGrammar, suffix_string: str) -> BNFGrammar:
@@ -282,11 +286,11 @@ class XGTokenizer:
             # Use the get_vocab method to get the vocabulary, since the backend_str may not
             # contain the full vocab. Some special tokens may be omitted.
             vocab = tokenizer.get_vocab()
-        except AttributeError:
+        except AttributeError as e:
             raise ValueError(
                 f"Cannot get the vocabulary of the tokenizer {type(tokenizer)}. The tokenizer "
-                "should have a get_vocab method."
-            )
+                "should have a get_vocab method.",
+            ) from e
 
         self._handle = _core.XGTokenizer(backend_str, vocab)
 
@@ -301,6 +305,7 @@ class XGTokenizer:
         -------
         decoder_type : str
             The decoder type.
+
         """
         return self._handle.decoder_type
 
@@ -312,6 +317,7 @@ class XGTokenizer:
         -------
         prepend_space_in_tokenization : bool
             Whether the tokenizer will prepend a space in tokenization.
+
         """
         return self._handle.prepend_space_in_tokenization
 
@@ -323,6 +329,7 @@ class XGTokenizer:
         -------
         decoded_vocab : str
             The decoded vocabulary.
+
         """
         return self._handle.decoded_vocab
 
@@ -362,14 +369,13 @@ class GrammarStateMatcher:
 
     max_rollback_steps : int
         The maximum number of steps to rollback when backtracking. Default: 0.
+
     """
 
     def __init__(
         self,
         grammar: BNFGrammar,
-        tokenizer_or_vocab: Union[
-            None, PreTrainedTokenizerBase, List[bytes], List[str]
-        ] = None,
+        tokenizer_or_vocab: Union[None, PreTrainedTokenizerBase, List[bytes], List[str]] = None,
         *,
         stop_token_ids: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
@@ -386,7 +392,7 @@ class GrammarStateMatcher:
         else:
             raise ValueError(
                 "The tokenizer_or_vocab should be None, a PreTrainedTokenizerBase, or a list of "
-                "strings."
+                "strings.",
             )
 
         self._handle = _core.GrammarStateMatcher(
@@ -418,6 +424,7 @@ class GrammarStateMatcher:
         The matcher is terminated after accepting the stop token, i.e. no accept_token or
         find_next_rejected_tokens operations can be performed. The termination state can be canceled
         using Rollback().
+
         """
         return self._handle.accept_token(token_id, verbose)
 
@@ -428,6 +435,7 @@ class GrammarStateMatcher:
         ----------
         codepoint : int
             The unicode codepoint of the character to be accepted.
+
         """
         return self._handle._accept_string(input_str, verbose)
 
@@ -444,13 +452,12 @@ class GrammarStateMatcher:
         -------
         rejected_token_bitmask : torch.Tensor
             A tensor of rejected token ids.
+
         """
         return self._handle.find_next_token_bitmask()
 
     @staticmethod
-    def get_rejected_tokens_from_bitmask(
-        bitmask: torch.Tensor, vocab_size: bool
-    ) -> List[int]:
+    def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor, vocab_size: bool) -> List[int]:
         """Get the ids of the rejected tokens from the bitmask.
 
         Parameters
@@ -462,10 +469,9 @@ class GrammarStateMatcher:
         -------
         rejected_token_ids : List[int]
             A list of rejected token ids.
+
         """
-        return _core.GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, vocab_size
-        )
+        return _core.GrammarStateMatcher.get_rejected_tokens_from_bitmask(bitmask, vocab_size)
 
     # @staticmethod
     # def apply_token_bitmask(tensor: torch.Tensor, bitmask: torch.Tensor) -> torch.Tensor:
@@ -498,8 +504,9 @@ class GrammarStateMatcher:
         -------
         jump_forward_string : str
             The jump-forward string.
+
         """
-        return self._handle.find_jump_forward_string()  # type: ignore  # pylint: disable=no-member
+        return self._handle.find_jump_forward_string()
 
     def rollback(self, num_tokens: int) -> None:
         """Rollback the matcher to a previous state.
@@ -509,6 +516,7 @@ class GrammarStateMatcher:
         num_tokens : int
             The number of tokens to rollback. It cannot exceed the current number of steps, nor can
             it exceed the specified maximum number of rollback steps.
+
         """
         self._handle.rollback(num_tokens)
 
@@ -520,6 +528,7 @@ class GrammarStateMatcher:
         -------
         max_rollback_steps : int
             The maximum number of rollback steps.
+
         """
         return self._handle.max_rollback_steps
 
@@ -531,6 +540,7 @@ class GrammarStateMatcher:
         -------
         terminated : bool
             Whether the matcher has terminated.
+
         """
         return self._handle.is_terminated()
 
