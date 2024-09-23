@@ -226,7 +226,7 @@ def test_error():
         BNFGrammar('main ::= "a" "')
 
     with pytest.raises(
-        RuntimeError, match="EBNF parse error at line 1, column 1: Expect rule name",
+        RuntimeError, match="EBNF parse error at line 1, column 1: Expect rule name"
     ):
         BNFGrammar('::= "a"')
 
@@ -261,7 +261,7 @@ def test_error():
 
     with pytest.raises(
         RuntimeError,
-        match='EBNF parse error at line 2, column 9: Rule "main" is defined multiple ' "times",
+        match='EBNF parse error at line 2, column 9: Rule "main" is defined multiple times',
     ):
         BNFGrammar('main ::= "a"\nmain ::= "b"')
 
@@ -299,7 +299,7 @@ c ::= [a-z]
         ],
     }
     bnf_grammar = BNFGrammar(before, "main")
-    after_str = bnf_grammar.serialize(False)
+    after_str = bnf_grammar.serialize(prettify=False)
     after_obj = json.loads(after_str)
     assert after_obj == expected_obj
 
@@ -315,9 +315,9 @@ c_2 ::= (([acep-z]))
 d_1 ::= ("" | ("d"))
 """
     bnf_grammar_1 = BNFGrammar(before, "main")
-    output_json_1 = bnf_grammar_1.serialize(False)
+    output_json_1 = bnf_grammar_1.serialize(prettify=False)
     bnf_grammar_2 = BNFGrammar.deserialize(output_json_1)
-    output_json_2 = bnf_grammar_2.serialize(False)
+    output_json_2 = bnf_grammar_2.serialize(prettify=False)
     output_str = bnf_grammar_2.to_string()
     assert output_json_1 == output_json_2
     assert output_str == before

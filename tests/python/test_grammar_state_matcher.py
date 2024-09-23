@@ -1,4 +1,5 @@
 """This test uses the optimized JSON grammar provided by the grammar library."""
+
 from typing import List, Optional
 
 import pytest
@@ -65,7 +66,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 
 
 @pytest.mark.parametrize(
-    "tokenizer_path,input_str,expected_rejected_sizes",
+    ("tokenizer_path", "input_str", "expected_rejected_sizes"),
     tokenizer_path__input_str__expected_rejected_sizes,
 )
 def test_find_next_rejected_tokens(
@@ -85,7 +86,7 @@ def test_find_next_rejected_tokens(
     for i, c in enumerate(input_bytes):
         bitmask = matcher.find_next_token_bitmask()
         rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size,
+            bitmask, matcher.vocab_size
         )
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
@@ -97,7 +98,7 @@ def test_find_next_rejected_tokens(
 
     bitmask = matcher.find_next_token_bitmask()
     rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size,
+        bitmask, matcher.vocab_size
     )
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:
@@ -135,7 +136,7 @@ def test_token_operations():
     for id in input_ids:
         bitmask = matcher.find_next_token_bitmask()
         rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size,
+            bitmask, matcher.vocab_size
         )
         accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
         accepted_tokens = [vocab[i] for i in accepted]
@@ -145,7 +146,7 @@ def test_token_operations():
 
     bitmask = matcher.find_next_token_bitmask()
     rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size,
+        bitmask, matcher.vocab_size
     )
     accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
     accepted_tokens = [vocab[i] for i in accepted]

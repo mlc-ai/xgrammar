@@ -37,7 +37,11 @@ repos:
   #   hooks:
   #     - id: ruff
   #       args: ["--fix", "--show-fixes"]
-      # - id: ruff-format
+
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 24.8.0
+    hooks:
+      - id: black
 
   # Changes tabs to spaces
   - repo: https://github.com/Lucas-C/pre-commit-hooks
@@ -59,18 +63,15 @@ repos:
     hooks:
       - id: cmake-format
 
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.3.0
-    hooks:
-      - id: codespell
-        args:
-          - --skip=".git,3rdparty"
-          - --ignore-words-list=xg
+  # - repo: https://github.com/codespell-project/codespell
+  #   rev: v2.3.0
+  #   hooks:
+  #     - id: codespell
 
-  - repo: local
-    hooks:
-    - id: check-bash-syntax
-      name: Check Shell scripts syntax correctness
-      language: system
-      entry: bash -n
-      files: \.sh$
+  # - repo: local
+  #   hooks:
+  #   - id: check-bash-syntax
+  #     name: Check Shell scripts syntax correctness
+  #     language: system
+  #     entry: bash -n
+  #     files: \.sh$

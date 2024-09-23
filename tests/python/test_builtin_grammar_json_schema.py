@@ -2,6 +2,7 @@
 a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar state
 matcher.
 """
+
 from typing import Dict, List, Tuple
 
 import pytest
@@ -45,7 +46,7 @@ def test_json_schema_accept_find_token():
         assert matcher._accept_string(c)
     final_bitmask = matcher.find_next_token_bitmask()
     final_rejected_tokens = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
-        final_bitmask, matcher.vocab_size,
+        final_bitmask, matcher.vocab_size
     )
     assert 2 not in final_rejected_tokens
     assert matcher.accept_token(2)

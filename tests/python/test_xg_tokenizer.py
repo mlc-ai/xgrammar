@@ -47,7 +47,7 @@ tokenizer_path_properties = list(zip(tokenizer_paths, *zip(*tokenizer_properties
 
 
 @pytest.mark.parametrize(
-    "tokenizer_path,decoder_type,prepend_space_in_tokenization",
+    ("tokenizer_path", "decoder_type", "prepend_space_in_tokenization"),
     tokenizer_path_properties,
 )
 def test_properties(tokenizer_path: str, decoder_type: str, prepend_space_in_tokenization: bool):

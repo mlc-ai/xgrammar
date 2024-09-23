@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Classes handling the grammar guided generation of MLC LLM serving"""
+"""Classes handling the grammar guided generation of MLC LLM serving."""
 
 import json
 import logging
@@ -27,7 +27,7 @@ from transformers import PreTrainedTokenizerBase
 from . import xgrammar_bindings as _core
 
 
-def _init_object_with_handle(type, handle):
+def _init_object_with_handle(type, handle):  # noqa
     """Initialize an object with a handle."""
     obj = type.__new__(type)
     obj._handle = handle
@@ -86,7 +86,7 @@ class BNFGrammar:
     def __str__(self) -> str:
         return self.to_string()
 
-    def serialize(self, prettify: bool = False) -> str:
+    def serialize(self, *, prettify: bool = False) -> str:
         """Serialize the AST. Dump the raw representation of the AST to a JSON file.
 
         Parameters
@@ -142,7 +142,8 @@ class BNFGrammar:
 
         """
         return _init_object_with_handle(
-            BNFGrammar, _core.BNFGrammar._init_no_normalization(ebnf_string, main_rule),
+            BNFGrammar,
+            _core.BNFGrammar._init_no_normalization(ebnf_string, main_rule),
         )
 
 
@@ -244,7 +245,12 @@ class BuiltinGrammar:
             The EBNF grammar string.
 
         """
-        return _core.BuiltinGrammar._json_schema_to_ebnf(schema, indent, separators, strict_mode)
+        return _core.BuiltinGrammar._json_schema_to_ebnf(
+            schema,
+            indent,
+            separators,
+            strict_mode,
+        )
 
     # @staticmethod
     # def _with_suffix(base_grammar: BNFGrammar, suffix_string: str) -> BNFGrammar:
@@ -270,7 +276,7 @@ class BuiltinGrammar:
 
 
 class XGTokenizer:
-    def __init__(self, tokenizer: PreTrainedTokenizerBase):
+    def __init__(self, tokenizer: PreTrainedTokenizerBase) -> None:
         try:
             backend_str = tokenizer.backend_tokenizer.to_str()
         except AttributeError:
@@ -287,10 +293,11 @@ class XGTokenizer:
             # contain the full vocab. Some special tokens may be omitted.
             vocab = tokenizer.get_vocab()
         except AttributeError as e:
-            raise ValueError(
+            msg = (
                 f"Cannot get the vocabulary of the tokenizer {type(tokenizer)}. The tokenizer "
-                "should have a get_vocab method.",
-            ) from e
+                "should have a get_vocab method."
+            )
+            raise ValueError(msg) from e
 
         self._handle = _core.XGTokenizer(backend_str, vocab)
 
@@ -335,7 +342,7 @@ class XGTokenizer:
 
 
 class GrammarMatcherInitContext:
-    def __init__(self, grammar: BNFGrammar, decoded_vocab: Optional[List[str]]):
+    def __init__(self, grammar: BNFGrammar, decoded_vocab: Optional[List[str]]) -> None:
         self._handle = _core.GrammarMatcherInitContext(grammar._handle, decoded_vocab)
 
 
@@ -380,7 +387,7 @@ class GrammarStateMatcher:
         stop_token_ids: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
         max_rollback_steps: int = 0,
-    ):
+    ) -> None:
         if isinstance(stop_token_ids, int):
             stop_token_ids = [stop_token_ids]
 
@@ -390,10 +397,11 @@ class GrammarStateMatcher:
             xg_tokenizer = XGTokenizer(tokenizer_or_vocab)
             vocab = xg_tokenizer.decoded_vocab
         else:
-            raise ValueError(
+            msg = (
                 "The tokenizer_or_vocab should be None, a PreTrainedTokenizerBase, or a list of "
-                "strings.",
+                "strings."
             )
+            raise ValueError(msg)
 
         self._handle = _core.GrammarStateMatcher(
             grammar._handle,
@@ -403,7 +411,7 @@ class GrammarStateMatcher:
             max_rollback_steps,
         )
 
-    def accept_token(self, token_id: int, verbose: bool = False) -> bool:
+    def accept_token(self, token_id: int, *, verbose: bool = False) -> bool:
         """Accept one token and update the state of the matcher.
 
         Parameters
@@ -428,7 +436,7 @@ class GrammarStateMatcher:
         """
         return self._handle.accept_token(token_id, verbose)
 
-    def _accept_string(self, input_str: str, verbose: bool = False) -> bool:
+    def _accept_string(self, input_str: str, *, verbose: bool = False) -> bool:
         """Accept one unicode codepoint to the current state. For test purposes.
 
         Parameters
@@ -457,7 +465,7 @@ class GrammarStateMatcher:
         return self._handle.find_next_token_bitmask()
 
     @staticmethod
-    def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor, vocab_size: bool) -> List[int]:
+    def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor, vocab_size: int) -> List[int]:
         """Get the ids of the rejected tokens from the bitmask.
 
         Parameters

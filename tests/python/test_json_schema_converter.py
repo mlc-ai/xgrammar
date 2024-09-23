@@ -17,7 +17,10 @@ def check_schema_with_grammar(
 ):
     schema_str = json.dumps(schema)
     json_schema_ebnf = BuiltinGrammar._json_schema_to_ebnf(
-        schema_str, indent=indent, separators=separators, strict_mode=strict_mode,
+        schema_str,
+        indent=indent,
+        separators=separators,
+        strict_mode=strict_mode,
     )
     assert json_schema_ebnf == expected_grammar_ebnf
 
