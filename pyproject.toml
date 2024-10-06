@@ -40,6 +40,3 @@ exclude = "3rdparty/*"
 
 [tool.ruff.lint.pylint]
 max-args = 10
-
-[tool.codespell]
-skip = 'tests/python/test_builtin_grammar_json.py,tests/python/test_custom_grammar.py,.git,3rdparty'

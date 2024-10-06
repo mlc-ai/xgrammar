@@ -18,7 +18,6 @@ repos:
     hooks:
       - id: check-added-large-files
       - id: check-case-conflict
-      - id: check-executables-have-shebangs
       - id: check-merge-conflict
       - id: check-symlinks
       - id: end-of-file-fixer
@@ -26,17 +25,17 @@ repos:
       - id: requirements-txt-fixer
       - id: trailing-whitespace
 
-  - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 24.8.0
-    hooks:
-      - id: black
-
   # Changes tabs to spaces
   - repo: https://github.com/Lucas-C/pre-commit-hooks
     rev: v1.5.5
     hooks:
       - id: remove-tabs
       - id: remove-crlf
+
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 24.8.0
+    hooks:
+      - id: black
 
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v18.1.8
@@ -51,11 +50,3 @@ repos:
     hooks:
       - id: cmake-format
         additional_dependencies: [pyyaml>=5.1]
-
-  # - repo: local
-  #   hooks:
-  #   - id: check-bash-syntax
-  #     name: Check Shell scripts syntax correctness
-  #     language: system
-  #     entry: bash -n
-  #     files: \.sh$
