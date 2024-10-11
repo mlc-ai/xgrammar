@@ -41,12 +41,14 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
                     const std::vector<std::string>&,
                     std::optional<std::vector<int>>,
                     bool,
+                    std::optional<int>,
                     int>(&GrammarStateMatcher_Init)))
       .def(py::init(py::overload_cast<
                     const BNFGrammar&,
                     std::nullptr_t,
                     std::optional<std::vector<int>>,
                     bool,
+                    std::optional<int>,
                     int>(&GrammarStateMatcher_Init)))
       .def("accept_token", &GrammarStateMatcher::AcceptToken)
       .def("_accept_string", &GrammarStateMatcher::_AcceptString)

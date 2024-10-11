@@ -4,7 +4,6 @@
  */
 
 #include <picojson.h>
-#include <xgrammar/support/encoding.h>
 #include <xgrammar/xgrammar.h>
 
 #include <array>
@@ -12,6 +11,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include "support/encoding.h"
 #include "support/logging.h"
 
 namespace xgrammar {

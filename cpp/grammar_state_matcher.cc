@@ -124,14 +124,16 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
       std::shared_ptr<GrammarMatcherInitContext> init_ctx,
       std::optional<std::vector<int>> stop_token_ids = std::nullopt,
       bool terminate_without_stop_token = false,
+      std::optional<int> mask_vocab_size = std::nullopt,
       int max_rollback_steps = 0
   )
       : GrammarStateMatcherBase(init_ctx->grammar),
         init_ctx_(init_ctx),
         stop_token_ids_(stop_token_ids.value_or(init_ctx->detected_stop_token_ids)),
         terminate_without_stop_token_(terminate_without_stop_token),
+        mask_vocab_size_(mask_vocab_size.value_or(init_ctx_->vocab_size)),
         max_rollback_steps_(max_rollback_steps),
-        tmp_accepted_bitset_(init_ctx_->vocab_size) {
+        tmp_accepted_bitset_(mask_vocab_size_) {
     XGRAMMAR_CHECK(!stop_token_ids.has_value() || !stop_token_ids->empty())
         << "The stop_token_ids should not be empty";
   }
@@ -152,7 +154,7 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
 
   int GetMaxRollbackSteps() const { return max_rollback_steps_; }
 
-  size_t GetVocabSize() const { return init_ctx_->vocab_size; }
+  size_t GetVocabSize() const { return mask_vocab_size_; }
 
   bool IsTerminated() const;
 
@@ -199,6 +201,7 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
   std::shared_ptr<GrammarMatcherInitContext> init_ctx_;
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
+  size_t mask_vocab_size_;
   int max_rollback_steps_;
   std::deque<int> token_length_history;
 
@@ -337,7 +340,7 @@ void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmas
   XGRAMMAR_CHECK(!IsTerminated()
   ) << "GrammarStateMatcher has terminated after accepting the stop token, but is trying to "
        "find the next token mask";
-  CheckTokenBitmaskValidity(*next_token_bitmask, init_ctx_->vocab_size);
+  CheckTokenBitmaskValidity(*next_token_bitmask, mask_vocab_size_);
   const auto& sorted_decoded_tokens = init_ctx_->sorted_decoded_tokens;
   const auto& catagorized_tokens_for_grammar = init_ctx_->catagorized_tokens_for_grammar;
   const auto& latest_stack_tops = stack_tops_history_.GetLatest();
@@ -562,7 +565,7 @@ void GrammarStateMatcher::Impl::SetTokenBitmask(
   // 2. accepted_ids
   //    (otherwise, when rejected_ids is the universal set)
   DynamicBitset next_token_bitset(
-      init_ctx_->vocab_size, reinterpret_cast<uint32_t*>(next_token_bitmask->data)
+      mask_vocab_size_, reinterpret_cast<uint32_t*>(next_token_bitmask->data)
   );
   const auto& sorted_decoded_tokens = init_ctx_->sorted_decoded_tokens;
 
@@ -628,10 +631,15 @@ GrammarStateMatcher::GrammarStateMatcher(
     std::shared_ptr<GrammarMatcherInitContext> init_ctx,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
+    std::optional<int> mask_vocab_size,
     int max_rollback_steps
 )
     : pimpl_(std::make_shared<GrammarStateMatcher::Impl>(
-          init_ctx, stop_token_ids, terminate_without_stop_token, max_rollback_steps
+          init_ctx,
+          stop_token_ids,
+          terminate_without_stop_token,
+          mask_vocab_size,
+          max_rollback_steps
       )) {}
 
 bool GrammarStateMatcher::AcceptToken(int32_t token_id, bool verbose) {

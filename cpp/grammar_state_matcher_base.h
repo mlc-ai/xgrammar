@@ -6,7 +6,6 @@
 #ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_BASE_H_
 #define XGRAMMAR_GRAMMAR_STATE_MATCHER_BASE_H_
 
-#include <xgrammar/support/encoding.h>
 #include <xgrammar/xgrammar.h>
 
 #include <algorithm>
@@ -14,6 +13,7 @@
 
 #include "grammar_ast.h"
 #include "grammar_state_matcher_state.h"
+#include "support/encoding.h"
 
 namespace xgrammar {
 
@@ -392,7 +392,8 @@ inline bool GrammarStateMatcherBase::ExpandRulePosition(
         // Find the positions in every choice of the referred rule
         can_be_empty |= ExpandRulePosition(ref_rule_position, new_stack_tops, false);
       }
-    } else if (element.type == RuleExprType::kCharacterClass || element.type == RuleExprType::kByteString) {
+    } else if (element.type == RuleExprType::kCharacterClass ||
+               element.type == RuleExprType::kByteString) {
       // Case 3. Character class or byte string. cannot be empty.
       new_stack_tops->push_back(new_node_id);
       can_be_empty = false;

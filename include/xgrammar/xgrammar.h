@@ -210,6 +210,7 @@ class GrammarStateMatcher {
       std::shared_ptr<GrammarMatcherInitContext> init_ctx,
       std::optional<std::vector<int>> stop_token_ids = std::nullopt,
       bool terminate_without_stop_token = false,
+      std::optional<int> mask_vocab_size = std::nullopt,
       int max_rollback_steps = 0
   );
 

@@ -264,5 +264,21 @@ sub_rule ::= "b"
     assert matcher.find_jump_forward_string() == "bb"
 
 
+def test_mask_vocab_size():
+    vocab = [
+        # fmt: off
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
+        # fmt: on
+    ]
+    matcher = GrammarStateMatcher(json_grammar, vocab, mask_vocab_size=64)
+    assert matcher.vocab_size == 64
+
+    mask = matcher.find_next_token_bitmask()
+    assert mask.shape == (2,)
+
+    rejected_tokens = GrammarStateMatcher.get_rejected_tokens_from_bitmask(mask, matcher.vocab_size)
+    assert rejected_tokens == [i for i in range(64) if i != 7]
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

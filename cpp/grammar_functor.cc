@@ -5,10 +5,10 @@
 
 #include "grammar_functor.h"
 
-#include <xgrammar/support/encoding.h>
 #include <xgrammar/xgrammar.h>
 
 #include "grammar_ast.h"
+#include "support/encoding.h"
 
 namespace xgrammar {
 

@@ -6,12 +6,12 @@
 #include "grammar_parser.h"
 
 #include <picojson.h>
-#include <xgrammar/support/encoding.h>
 
 #include <memory>
 
 #include "grammar_ast.h"
 #include "grammar_builder.h"
+#include "support/encoding.h"
 
 namespace xgrammar {
 
@@ -139,7 +139,8 @@ std::string EBNFParserImpl::ParseName(bool accept_empty) {
 int32_t EBNFParserImpl::ParseCharacterClass() {
   static constexpr TCodepoint kUnknownUpperBound = -4;
   static const std::unordered_map<std::string, TCodepoint> kCustomEscapeMap = {
-      {"\\-", '-'}, {"\\]", ']'}};
+      {"\\-", '-'}, {"\\]", ']'}
+  };
 
   std::vector<BNFGrammarBuilder::CharacterClassElement> elements;
 

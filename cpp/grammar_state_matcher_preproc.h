@@ -6,7 +6,6 @@
 #ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_PREPROC_H_
 #define XGRAMMAR_GRAMMAR_STATE_MATCHER_PREPROC_H_
 
-#include <xgrammar/support/encoding.h>
 #include <xgrammar/xgrammar.h>
 
 #include <unordered_set>
@@ -15,6 +14,7 @@
 #include "grammar_ast.h"
 #include "grammar_state_matcher_base.h"
 #include "support/dynamic_bitset.h"
+#include "support/encoding.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -296,7 +296,8 @@ inline CatagorizedTokens GrammarStateMatcherForInitContext::GetCatagorizedTokens
 
     if (accepted) {
       tmp_accepted_indices_.push_back(i);
-    } else if (can_reach_end && consider_parent_rule && IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_)) {
+    } else if (can_reach_end && consider_parent_rule &&
+               IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_)) {
       // 1. If the current rule is the main rule (consider_parent_rule=false), there are no
       // uncertain tokens. Not accepted tokens are just rejected.
       // 2. If a token cannot pass the lookahead assertion, it is rejected.
@@ -341,7 +342,8 @@ std::shared_ptr<GrammarMatcherInitContext> GrammarStateMatcher::CreateInitContex
     if (token == "</s>" || token == "<|end_of_text|>" || token == "<|eot_id|>" ||
         token == "<|endoftext|>" || token == "<eos>" || token == "<end_of_turn>") {
       ptr->detected_stop_token_ids.push_back(i);
-    } else if ((token[0] == '<' && token.back() == '>' && token.size() >= 3) || token == "[@BOS@]") {
+    } else if ((token[0] == '<' && token.back() == '>' && token.size() >= 3) ||
+               token == "[@BOS@]") {
       // gemma treats [@BOS@] as a special token
       ptr->special_token_ids.insert(i);
     } else {

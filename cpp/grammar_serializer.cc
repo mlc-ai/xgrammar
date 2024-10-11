@@ -6,7 +6,8 @@
 #include "grammar_serializer.h"
 
 #include <picojson.h>
-#include <xgrammar/support/encoding.h>
+
+#include "support/encoding.h"
 
 namespace xgrammar {
 
@@ -64,7 +65,8 @@ std::string BNFGrammarPrinter::PrintByteString(const RuleExpr& rule_expr) {
 
 std::string BNFGrammarPrinter::PrintCharacterClass(const RuleExpr& rule_expr) {
   static const std::unordered_map<TCodepoint, std::string> kCustomEscapeMap = {
-      {'-', "\\-"}, {']', "\\]"}};
+      {'-', "\\-"}, {']', "\\]"}
+  };
   std::string result = "[";
   bool is_negative = static_cast<bool>(rule_expr[0]);
   if (is_negative) {
@@ -128,7 +130,6 @@ std::string BNFGrammarPrinter::ToString() {
   return result;
 }
 
-
 std::string BNFGrammarJSONSerializer::ToString() {
   picojson::object grammar_json_obj;
 
@@ -155,7 +156,6 @@ std::string BNFGrammarJSONSerializer::ToString() {
   auto grammar_json = picojson::value(grammar_json_obj);
   return grammar_json.serialize(prettify_);
 }
-
 
 // TVM_REGISTER_GLOBAL("mlc.grammar.BNFGrammarToString").set_body_typed([](const BNFGrammar&
 // grammar) {

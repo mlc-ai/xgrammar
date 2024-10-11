@@ -5,7 +5,7 @@
  */
 #ifndef XGRAMMAR_SUPPORT_ENCODING_H_
 #define XGRAMMAR_SUPPORT_ENCODING_H_
-// TODO(yixin): move major logic to cpp/; enhance performance
+// TODO(yixin): enhance performance
 #include <string>
 #include <unordered_map>
 #include <vector>

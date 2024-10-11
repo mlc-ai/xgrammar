@@ -386,6 +386,7 @@ class GrammarStateMatcher:
         *,
         stop_token_ids: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
+        mask_vocab_size: Optional[int] = None,
         max_rollback_steps: int = 0,
     ) -> None:
         if isinstance(stop_token_ids, int):
@@ -408,6 +409,7 @@ class GrammarStateMatcher:
             vocab,
             stop_token_ids,
             terminate_without_stop_token,
+            mask_vocab_size,
             max_rollback_steps,
         )
 

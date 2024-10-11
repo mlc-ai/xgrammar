@@ -27,6 +27,7 @@ GrammarStateMatcher GrammarStateMatcher_Init(
     const std::vector<std::string>& vocab,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
+    std::optional<int> mask_vocab_size,
     int max_rollback_steps
 );
 
@@ -35,6 +36,7 @@ GrammarStateMatcher GrammarStateMatcher_Init(
     std::nullptr_t,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
+    std::optional<int> mask_vocab_size,
     int max_rollback_steps
 );
 

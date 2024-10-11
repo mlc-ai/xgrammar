@@ -2,7 +2,7 @@
  *  Copyright (c) 2024 by Contributors
  * \file xgrammar/support/encoding.cc
  */
-#include <xgrammar/support/encoding.h>
+#include "encoding.h"
 
 #include <array>
 
@@ -51,7 +51,8 @@ std::string PrintAsEscapedUTF8(
       {'\t', "\\t"},
       {'\v', "\\v"},
       {'\0', "\\0"},
-      {'\x1B', "\\e"}};
+      {'\x1B', "\\e"}
+  };
 
   if (auto it = additional_escape_map.find(codepoint); it != additional_escape_map.end()) {
     return it->second;
@@ -182,7 +183,8 @@ std::pair<TCodepoint, const char*> ParseNextUTF8OrEscaped(
       {"\\t", '\t'},
       {"\\v", '\v'},
       {"\\0", '\0'},
-      {"\\e", '\x1B'}};
+      {"\\e", '\x1B'}
+  };
   if (utf8[0] != '\\') {
     return ParseNextUTF8(utf8, UTF8ErrorPolicy::kReturnInvalid);
   }
