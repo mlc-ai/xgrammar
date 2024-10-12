@@ -25,14 +25,17 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("json_schema", &BuiltinGrammar::JSONSchema)
       .def_static("_json_schema_to_ebnf", &BuiltinGrammar::_JSONSchemaToEBNF);
 
-  auto pyXGTokenizer = py::class_<XGTokenizer>(m, "XGTokenizer");
-  pyXGTokenizer.def(py::init<const std::string&, const std::unordered_map<std::string, int>&>())
-      .def("to_string", &XGTokenizer::ToString)
-      .def_property_readonly("decoder_type", &XGTokenizer::GetDecoderType)
+  auto pyTokenizerInfo = py::class_<TokenizerInfo>(m, "TokenizerInfo");
+  pyTokenizerInfo.def(py::init(&TokenizerInfo_Init))
+      .def_property_readonly("vocab_size", &TokenizerInfo::GetVocabSize)
+      .def_property_readonly("vocab_type", &TokenizerInfo_GetVocabType)
       .def_property_readonly(
-          "prepend_space_in_tokenization", &XGTokenizer::GetPrependSpaceInTokenization
+          "prepend_space_in_tokenization", &TokenizerInfo::GetPrependSpaceInTokenization
       )
-      .def_property_readonly("decoded_vocab", &XGTokenizer_GetDecodedVocab);
+      .def_property_readonly("raw_vocab", &TokenizerInfo_GetRawVocab)
+      .def("dump_metadata", &TokenizerInfo::DumpMetadata)
+      .def_static("from_huggingface", &TokenizerInfo::FromHuggingFace)
+      .def_static("from_vocab_and_metadata", &TokenizerInfo::FromVocabAndMetadata);
 
   auto pyGrammarStateMatcher = py::class_<GrammarStateMatcher>(m, "GrammarStateMatcher");
   pyGrammarStateMatcher

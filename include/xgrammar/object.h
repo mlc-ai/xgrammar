@@ -1,10 +1,14 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/support/object.h
+ * \file xgrammar/object.h
  * \brief Utilities for creating objects.
  */
-#ifndef XGRAMMAR_SUPPORT_OBJECT_H_
-#define XGRAMMAR_SUPPORT_OBJECT_H_
+
+#ifndef XGRAMMAR_OBJECT_H_
+#define XGRAMMAR_OBJECT_H_
+
+#include <memory>
+#include <utility>
 
 namespace xgrammar {
 
@@ -30,4 +34,4 @@ namespace xgrammar {
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_SUPPORT_OBJECT_H_
+#endif  // XGRAMMAR_OBJECT_H_

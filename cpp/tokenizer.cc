@@ -16,28 +16,43 @@
 
 namespace xgrammar {
 
-class XGTokenizer::Impl {
+class TokenizerInfo::Impl {
  public:
-  Impl(const std::string& hf_tokenizer_str, const std::unordered_map<std::string, int>& raw_vocab);
+  Impl(
+      const std::vector<std::string>& vocab,
+      VocabType vocab_type,
+      bool prepend_space_in_tokenization
+  )
+      : vocab_type_(vocab_type),
+        prepend_space_in_tokenization_(prepend_space_in_tokenization),
+        original_vocab_(vocab) {}
 
-  std::string ToString() const;
-  std::string GetDecoderType() const { return decoder_type_; }
+  int GetVocabSize() const { return std::max(original_vocab_.size(), raw_vocab_.size()); }
+  VocabType GetVocabType() const { return vocab_type_; }
   bool GetPrependSpaceInTokenization() const { return prepend_space_in_tokenization_; }
-  const std::vector<std::string>& GetDecodedVocab();
+  const std::vector<std::string>& GetRawVocab();
+  std::string DumpMetadata() const;
 
  private:
-  std::string decoder_type_ = "byte_fallback";
-  bool prepend_space_in_tokenization_ = false;
-  std::unordered_map<std::string, int> raw_vocab_;
-  std::vector<std::string> decoded_vocab_;
+  VocabType vocab_type_;
+  bool prepend_space_in_tokenization_;
+  std::vector<std::string> original_vocab_;
+  std::vector<std::string> raw_vocab_;
 };
 
-inline std::string DetectDecoderType(const picojson::object& hf_tokenizer_obj) {
-#define CHECK_AND_WARNING(condition, message)                                                   \
-  if (!(condition)) {                                                                           \
-    XGRAMMAR_LOG(WARNING) << "Token decoder type not detected: (" #condition                    \
-                          << ") is false: " << (message) << " Using byte_fallback as default."; \
-    return "byte_fallback";                                                                     \
+/************* Metadata detection from huggingface tokenizer.json *************/
+
+/*!
+ * \brief Detect the vocabulary type from tokenizer.json.
+ * \details Find {"type": "ByteFallback"} or {"type": "ByteLevel"} in "decoder" field of the
+ * tokenizer.
+ */
+inline VocabType DetectVocabType(const picojson::object& hf_tokenizer_obj) {
+#define CHECK_AND_WARNING(condition, message)                                                    \
+  if (!(condition)) {                                                                            \
+    XGRAMMAR_LOG(WARNING) << "Vocab type detection failed: (" #condition                         \
+                          << ") is false: " << (message) << " Using VocabType::RAW as default."; \
+    return VocabType::RAW;                                                                       \
   }
 
   CHECK_AND_WARNING(
@@ -72,21 +87,23 @@ inline std::string DetectDecoderType(const picojson::object& hf_tokenizer_obj) {
     );
     auto type = decoder_obj.at("type").get<std::string>();
     if (type == "ByteLevel") {
-      return "byte_level";
+      return VocabType::BYTE_LEVEL;
     } else if (type == "ByteFallback") {
-      return "byte_fallback";
+      return VocabType::BYTE_FALLBACK;
     }
   }
 
-  XGRAMMAR_LOG(WARNING) << "Neither byte_level nor byte_fallback decoder is detected in "
-                           "tokenizer.json. Use byte_fallback as default.";
-  return "byte_fallback";
+  // If neither byte_level nor byte_fallback decoder is detected, return RAW.
+  return VocabType::RAW;
 
 #undef CHECK_AND_WARNING
 }
 
+/*!
+ * \brief Detect whether prepend space in tokenization from tokenizer.json.
+ * \details Find {"type": "Prepend", "prepend": "▁"} in "normalizer" field of the tokenizer.
+ */
 inline bool DetectPrependSpaceInTokenization(const picojson::object& hf_tokenizer_obj) {
-  // Find {"type": "Prepend", "prepend": "▁"} in "normalizer" field of the tokenizer
   if (!hf_tokenizer_obj.count("normalizer") ||
       !hf_tokenizer_obj.at("normalizer").is<picojson::object>()) {
     return false;
@@ -130,6 +147,8 @@ inline bool DetectPrependSpaceInTokenization(const picojson::object& hf_tokenize
   }
   return false;
 }
+
+/************* Token decoders: ByteFallback and ByteLevel *************/
 
 /*! \brief ByteFallback decoder: transform tokens like <0x1B> to hex char byte 1B */
 inline std::string ByteFallbackDecoder(const std::string& token) {
@@ -214,77 +233,102 @@ inline std::string ByteLevelDecoder(const std::string& token) {
 /*!
  * \brief Post-process a raw token to the actual token with the given post-processing method.
  */
-inline std::string DecodeToken(const std::string& token, const std::string& decoder_type) {
-  if (decoder_type == "byte_fallback") {
+inline std::string DecodeToken(const std::string& token, VocabType vocab_type) {
+  if (vocab_type == VocabType::BYTE_FALLBACK) {
     return SpaceReplacerDecoder(ByteFallbackDecoder(token));
-  } else if (decoder_type == "byte_level") {
+  } else if (vocab_type == VocabType::BYTE_LEVEL) {
     return ByteLevelDecoder(token);
   } else {
-    XGRAMMAR_LOG(FATAL) << "Unknown token decoder type: " << decoder_type;
+    return token;
   }
 }
 
-XGTokenizer::Impl::Impl(
-    const std::string& hf_tokenizer_str, const std::unordered_map<std::string, int>& raw_vocab
-)
-    : raw_vocab_(raw_vocab) {
-  picojson::value v;
-  std::string err = picojson::parse(v, hf_tokenizer_str);
-  if (!err.empty() || !v.is<picojson::object>()) {
-    XGRAMMAR_LOG(WARNING) << "Failed to parse JSON object. " << err;
-    return;
+/************* TokenizerInfo *************/
+
+const std::vector<std::string>& TokenizerInfo::Impl::GetRawVocab() {
+  if (!raw_vocab_.empty() || original_vocab_.empty()) {
+    return raw_vocab_;
   }
-  const picojson::object& obj = v.get<picojson::object>();
 
-  decoder_type_ = DetectDecoderType(obj);
-  prepend_space_in_tokenization_ = DetectPrependSpaceInTokenization(obj);
+  raw_vocab_.reserve(original_vocab_.size());
+  for (const auto& item : original_vocab_) {
+    raw_vocab_.emplace_back(DecodeToken(item, vocab_type_));
+  }
 
-  XGRAMMAR_CHECK(!raw_vocab.empty()) << "Tokenizer vocabulary is empty";
+  std::vector<std::string>().swap(original_vocab_);
+  return raw_vocab_;
 }
 
-std::string XGTokenizer::Impl::ToString() const {
+std::string TokenizerInfo::Impl::DumpMetadata() const {
+  static const std::string VOCAB_TYPE_NAMES[] = {"RAW", "BYTE_FALLBACK", "BYTE_LEVEL"};
   picojson::object obj;
-  obj["decoder_type"] = picojson::value(decoder_type_);
+  obj["vocab_type"] = picojson::value(VOCAB_TYPE_NAMES[static_cast<int>(vocab_type_)]);
   obj["prepend_space_in_tokenization"] = picojson::value(prepend_space_in_tokenization_);
   return picojson::value(obj).serialize(false);
 }
 
-const std::vector<std::string>& XGTokenizer::Impl::GetDecodedVocab() {
-  if (!decoded_vocab_.empty()) {
-    return decoded_vocab_;
-  }
-
-  std::vector<std::pair<const std::string*, int>> sorted_token_and_ids;
-  sorted_token_and_ids.reserve(raw_vocab_.size());
-  for (const auto& pair : raw_vocab_) {
-    sorted_token_and_ids.emplace_back(&pair.first, pair.second);
-  }
-  std::sort(
-      sorted_token_and_ids.begin(),
-      sorted_token_and_ids.end(),
-      [](const auto& a, const auto& b) { return a.second < b.second; }
-  );
-
-  decoded_vocab_.reserve(sorted_token_and_ids.size());
-  for (const auto& item : sorted_token_and_ids) {
-    decoded_vocab_.emplace_back(DecodeToken(*item.first, decoder_type_));
-  }
-  return decoded_vocab_;
-}
-
-XGTokenizer::XGTokenizer(
-    const std::string& hf_tokenizer_str, const std::unordered_map<std::string, int>& raw_vocab
+TokenizerInfo::TokenizerInfo(
+    const std::vector<std::string>& vocab, VocabType vocab_type, bool prepend_space_in_tokenization
 )
-    : pimpl_(std::make_shared<Impl>(hf_tokenizer_str, raw_vocab)) {}
+    : pimpl_(std::make_shared<Impl>(vocab, vocab_type, prepend_space_in_tokenization)) {}
 
-std::string XGTokenizer::ToString() const { return pimpl_->ToString(); }
-
-std::string XGTokenizer::GetDecoderType() const { return pimpl_->GetDecoderType(); }
-
-bool XGTokenizer::GetPrependSpaceInTokenization() const {
+int TokenizerInfo::GetVocabSize() const { return pimpl_->GetVocabSize(); }
+VocabType TokenizerInfo::GetVocabType() const { return pimpl_->GetVocabType(); }
+bool TokenizerInfo::GetPrependSpaceInTokenization() const {
   return pimpl_->GetPrependSpaceInTokenization();
 }
+const std::vector<std::string>& TokenizerInfo::GetRawVocab() const { return pimpl_->GetRawVocab(); }
+std::string TokenizerInfo::DumpMetadata() const { return pimpl_->DumpMetadata(); }
 
-const std::vector<std::string>& XGTokenizer::GetDecodedVocab() { return pimpl_->GetDecodedVocab(); }
+TokenizerInfo TokenizerInfo::FromVocabAndMetadata(
+    const std::vector<std::string>& vocab, const std::string& metadata
+) {
+  static const std::unordered_map<std::string, VocabType> VOCAB_TYPE_MAP = {
+      {"RAW", VocabType::RAW},
+      {"BYTE_FALLBACK", VocabType::BYTE_FALLBACK},
+      {"BYTE_LEVEL", VocabType::BYTE_LEVEL},
+  };
+
+  picojson::value v;
+  std::string err = picojson::parse(v, metadata);
+  XGRAMMAR_CHECK(err.empty()) << "Failed to parse metadata: " << err;
+  const picojson::object& obj = v.get<picojson::object>();
+  XGRAMMAR_CHECK(obj.count("vocab_type") && obj["vocab_type"].is<std::string>())
+      << "Missing or invalid 'vocab_type' in metadata";
+  XGRAMMAR_CHECK(
+      obj.count("prepend_space_in_tokenization") && obj["prepend_space_in_tokenization"].is<bool>()
+  ) << "Missing or invalid 'prepend_space_in_tokenization' in metadata";
+
+  std::string vocab_type_str = obj["vocab_type"].get<std::string>();
+  VocabType vocab_type;
+  if (vocab_type_str == "RAW") {
+    vocab_type = VocabType::RAW;
+  } else if (vocab_type_str == "BYTE_FALLBACK") {
+    vocab_type = VocabType::BYTE_FALLBACK;
+  } else if (vocab_type_str == "BYTE_LEVEL") {
+    vocab_type = VocabType::BYTE_LEVEL;
+  } else {
+    XGRAMMAR_CHECK(false) << "Invalid vocab_type in metadata: " << vocab_type_str;
+  }
+
+  bool prepend_space_in_tokenization = obj["prepend_space_in_tokenization"].get<bool>();
+  return TokenizerInfo(vocab, vocab_type, prepend_space_in_tokenization);
+}
+
+TokenizerInfo TokenizerInfo::FromHuggingFace(
+    const std::vector<std::string>& vocab, const std::string& backend_str
+) {
+  picojson::value v;
+  std::string err = picojson::parse(v, backend_str);
+  if (!err.empty() || !v.is<picojson::object>()) {
+    XGRAMMAR_LOG(WARNING) << "Failed to parse JSON object. " << err;
+    return TokenizerInfo(vocab, VocabType::RAW, false);
+  }
+  const picojson::object& obj = v.get<picojson::object>();
+
+  VocabType vocab_type = DetectVocabType(obj);
+  bool prepend_space_in_tokenization = DetectPrependSpaceInTokenization(obj);
+  return TokenizerInfo(vocab, vocab_type, prepend_space_in_tokenization);
+}
 
 }  // namespace xgrammar

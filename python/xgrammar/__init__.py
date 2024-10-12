@@ -17,7 +17,8 @@
 from .xgrammar import (
     BNFGrammar,
     BuiltinGrammar,
+    VocabType,
+    TokenizerInfo,
     GrammarMatcherInitContext,
     GrammarStateMatcher,
-    XGTokenizer,
 )

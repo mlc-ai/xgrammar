@@ -16,25 +16,34 @@
 # under the License.
 """Classes handling the grammar guided generation of MLC LLM serving."""
 
+from enum import Enum
 import json
-import logging
 from typing import List, Optional, Tuple, Type, Union
 
 import torch
 from pydantic import BaseModel
-from transformers import PreTrainedTokenizerBase
+from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
 from . import xgrammar_bindings as _core
 
 
-def _init_object_with_handle(type, handle):  # noqa
-    """Initialize an object with a handle."""
-    obj = type.__new__(type)
-    obj._handle = handle
-    return obj
+class XGObject:
+    @classmethod
+    def from_handle(cls, handle) -> "XGObject":
+        """Initialize an object with a handle."""
+        obj = cls.__new__(cls)
+        obj._handle = handle
+        return obj
+
+    def init_with_handle(self, handle):
+        self._handle = handle
+
+    @property
+    def handle(self):
+        return self._handle
 
 
-class BNFGrammar:
+class BNFGrammar(XGObject):
     """This class stores the abstract syntax tree (AST) of the Backus-Naur Form (BNF) grammar and
     provides utilities to parse and print the AST. User should provide a BNF/EBNF (Extended
     Backus-Naur Form) grammar, and use from_ebnf_string to parse and simplify the grammar into an
@@ -70,7 +79,7 @@ class BNFGrammar:
             The parsed BNF grammar.
 
         """
-        self._handle = _core.BNFGrammar(ebnf_string, main_rule)
+        self.init_with_handle(_core.BNFGrammar(ebnf_string, main_rule))
 
     def to_string(self) -> str:
         """Print the BNF grammar to a string, in standard BNF format.
@@ -81,7 +90,7 @@ class BNFGrammar:
             The BNF grammar string.
 
         """
-        return self._handle.to_string()
+        return self.handle.to_string()
 
     def __str__(self) -> str:
         return self.to_string()
@@ -100,7 +109,7 @@ class BNFGrammar:
             The JSON string.
 
         """
-        return self._handle.serialize(prettify)
+        return self.handle.serialize(prettify)
 
     @staticmethod
     def deserialize(json_string: str) -> "BNFGrammar":
@@ -117,7 +126,7 @@ class BNFGrammar:
             The loaded BNF grammar.
 
         """
-        return _init_object_with_handle(BNFGrammar, _core.BNFGrammar.deserialize(json_string))
+        return BNFGrammar.from_handle(_core.BNFGrammar.deserialize(json_string))
 
     @staticmethod
     def _init_no_normalization(
@@ -141,8 +150,7 @@ class BNFGrammar:
             The parsed BNF grammar.
 
         """
-        return _init_object_with_handle(
-            BNFGrammar,
+        return BNFGrammar.from_handle(
             _core.BNFGrammar._init_no_normalization(ebnf_string, main_rule),
         )
 
@@ -158,7 +166,7 @@ class BuiltinGrammar:
             The JSON grammar.
 
         """
-        return _init_object_with_handle(BNFGrammar, _core.BuiltinGrammar.json())
+        return BNFGrammar.from_handle(_core.BuiltinGrammar.json())
 
     @staticmethod
     def json_schema(
@@ -202,8 +210,7 @@ class BuiltinGrammar:
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             schema = json.dumps(schema.model_json_schema())
 
-        return _init_object_with_handle(
-            BNFGrammar,
+        return BNFGrammar.from_handle(
             _core.BuiltinGrammar.json_schema(schema, indent, separators, strict_mode),
         )
 
@@ -275,23 +282,44 @@ class BuiltinGrammar:
     #     )
 
 
-class XGTokenizer:
-    def __init__(self, tokenizer: PreTrainedTokenizerBase) -> None:
-        try:
-            backend_str = tokenizer.backend_tokenizer.to_str()
-        except AttributeError:
-            logging.warning(
-                "Cannot detect tokenizer type from tokenizer %s. Only huggingface or "
-                "sentencepiece tokenizer is supported yet. The tokenizer type is set to the "
-                "default byte_fallback tokenizer.",
-                type(tokenizer),
-            )
-            backend_str = None
+class VocabType(Enum):
+    RAW = "RAW"
+    BYTE_FALLBACK = "BYTE_FALLBACK"
+    BYTE_LEVEL = "BYTE_LEVEL"
 
+
+class TokenizerInfo(XGObject):
+    def __init__(
+        self,
+        vocab: Union[List[bytes], List[str]],
+        vocab_type: VocabType = VocabType.RAW,
+        prepend_space_in_tokenization: bool = False,
+    ) -> None:
+        self.init_with_handle(
+            _core.TokenizerInfo(vocab, vocab_type.value, prepend_space_in_tokenization)
+        )
+
+    @property
+    def vocab_size(self) -> int:
+        return self.handle.vocab_size
+
+    @property
+    def vocab_type(self) -> VocabType:
+        return VocabType(self.handle.vocab_type)
+
+    @property
+    def prepend_space_in_tokenization(self) -> bool:
+        return self.handle.prepend_space_in_tokenization
+
+    @property
+    def raw_vocab(self) -> List[bytes]:
+        return self.handle.raw_vocab
+
+    @staticmethod
+    def from_huggingface(tokenizer: PreTrainedTokenizerBase) -> "TokenizerInfo":
         try:
-            # Use the get_vocab method to get the vocabulary, since the backend_str may not
-            # contain the full vocab. Some special tokens may be omitted.
             vocab = tokenizer.get_vocab()
+            vocab = [token for token, _ in sorted(vocab.items(), key=lambda x: x[1])]
         except AttributeError as e:
             msg = (
                 f"Cannot get the vocabulary of the tokenizer {type(tokenizer)}. The tokenizer "
@@ -299,59 +327,46 @@ class XGTokenizer:
             )
             raise ValueError(msg) from e
 
-        self._handle = _core.XGTokenizer(backend_str, vocab)
+        if isinstance(tokenizer, PreTrainedTokenizerFast):
+            # huggingface fast tokenizer
+            # Note this backend_str may not contain the full vocab. Some special tokens may
+            # be omitted. So we still need to pass the vocab to the constructor.
+            backend_str = tokenizer.backend_tokenizer.to_str()
+            return TokenizerInfo.from_handle(
+                _core.TokenizerInfo.from_huggingface(vocab, backend_str)
+            )
+        elif (
+            "vocab_file" in tokenizer.vocab_files_names
+            and "tiktoken" in tokenizer.vocab_files_names["vocab_file"]
+        ):
+            # tiktoken tokenizer
+            # e.g. Phi-3-small-8k-instruct, Qwen-7B-Chat, stablelm-2-12b-chat (previously)
+            return TokenizerInfo(vocab, VocabType.RAW, False)
+        else:
+            # TODO(yixin): sentencepiece tokenizer
+            raise ValueError(f"Unsupported tokenizer type: {type(tokenizer)}")
 
-    def __str__(self) -> str:
-        return self._handle.to_string()
+    def dump_metadata(self) -> str:
+        return self.handle.dump_metadata()
 
-    @property
-    def decoder_type(self) -> str:
-        """Get the decoder type of the tokenizer.
-
-        Returns
-        -------
-        decoder_type : str
-            The decoder type.
-
-        """
-        return self._handle.decoder_type
-
-    @property
-    def prepend_space_in_tokenization(self) -> bool:
-        """Whether the tokenizer will prepend a space in tokenization.
-
-        Returns
-        -------
-        prepend_space_in_tokenization : bool
-            Whether the tokenizer will prepend a space in tokenization.
-
-        """
-        return self._handle.prepend_space_in_tokenization
-
-    @property
-    def decoded_vocab(self) -> List[bytes]:
-        """Get the decoded vocabulary of the tokenizer. This property is lazy evaluated.
-
-        Returns
-        -------
-        decoded_vocab : str
-            The decoded vocabulary.
-
-        """
-        return self._handle.decoded_vocab
+    @staticmethod
+    def from_vocab_and_metadata(vocab: List[Union[bytes, str]], metadata: str) -> "TokenizerInfo":
+        return TokenizerInfo.from_handle(
+            _core.TokenizerInfo.from_vocab_and_metadata(vocab, metadata),
+        )
 
 
 class GrammarMatcherInitContext:
     def __init__(self, grammar: BNFGrammar, decoded_vocab: Optional[List[str]]) -> None:
-        self._handle = _core.GrammarMatcherInitContext(grammar._handle, decoded_vocab)
+        self.handle = _core.GrammarMatcherInitContext(grammar.handle, decoded_vocab)
 
 
 # class GrammarInitContextCache:
 #     def __init__(self, vocab: List[bytes]):
-#         self._handle = _core.GrammarInitContextCache(cache._handle)
+#         self.handle = _core.GrammarInitContextCache(cache.handle)
 
 
-class GrammarStateMatcher:
+class GrammarStateMatcher(XGObject):
     """A stateful matcher to match tokens to the specified BNF grammar. This class is the core logic
     of the grammar-guided generation.
 
@@ -404,13 +419,15 @@ class GrammarStateMatcher:
             )
             raise ValueError(msg)
 
-        self._handle = _core.GrammarStateMatcher(
-            grammar._handle,
-            vocab,
-            stop_token_ids,
-            terminate_without_stop_token,
-            mask_vocab_size,
-            max_rollback_steps,
+        self.init_with_handle(
+            _core.GrammarStateMatcher(
+                grammar.handle,
+                vocab,
+                stop_token_ids,
+                terminate_without_stop_token,
+                mask_vocab_size,
+                max_rollback_steps,
+            )
         )
 
     def accept_token(self, token_id: int, *, verbose: bool = False) -> bool:
@@ -436,7 +453,7 @@ class GrammarStateMatcher:
         using Rollback().
 
         """
-        return self._handle.accept_token(token_id, verbose)
+        return self.handle.accept_token(token_id, verbose)
 
     def _accept_string(self, input_str: str, *, verbose: bool = False) -> bool:
         """Accept one unicode codepoint to the current state. For test purposes.
@@ -447,7 +464,7 @@ class GrammarStateMatcher:
             The unicode codepoint of the character to be accepted.
 
         """
-        return self._handle._accept_string(input_str, verbose)
+        return self.handle._accept_string(input_str, verbose)
 
     def find_next_token_bitmask(self) -> torch.Tensor:
         """Find the ids of the rejected tokens for the next step.
@@ -464,7 +481,7 @@ class GrammarStateMatcher:
             A tensor of rejected token ids.
 
         """
-        return self._handle.find_next_token_bitmask()
+        return self.handle.find_next_token_bitmask()
 
     @staticmethod
     def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor, vocab_size: int) -> List[int]:
@@ -516,7 +533,7 @@ class GrammarStateMatcher:
             The jump-forward string.
 
         """
-        return self._handle.find_jump_forward_string()
+        return self.handle.find_jump_forward_string()
 
     def rollback(self, num_tokens: int) -> None:
         """Rollback the matcher to a previous state.
@@ -528,7 +545,7 @@ class GrammarStateMatcher:
             it exceed the specified maximum number of rollback steps.
 
         """
-        self._handle.rollback(num_tokens)
+        self.handle.rollback(num_tokens)
 
     @property
     def max_rollback_steps(self) -> int:
@@ -540,7 +557,7 @@ class GrammarStateMatcher:
             The maximum number of rollback steps.
 
         """
-        return self._handle.max_rollback_steps
+        return self.handle.max_rollback_steps
 
     def is_terminated(self) -> bool:
         """Check if the matcher has accepted the stop token and terminated. See also
@@ -552,12 +569,12 @@ class GrammarStateMatcher:
             Whether the matcher has terminated.
 
         """
-        return self._handle.is_terminated()
+        return self.handle.is_terminated()
 
     def reset(self) -> None:
         """Reset the matcher to the initial state."""
-        return self._handle.reset()
+        return self.handle.reset()
 
     @property
     def vocab_size(self) -> int:
-        return self._handle.vocab_size
+        return self.handle.vocab_size

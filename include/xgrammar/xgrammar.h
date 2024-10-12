@@ -1,15 +1,15 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar.h
+ * \file xgrammar/xgrammar.h
  * \brief The header for the support of grammar-guided generation. The header for the support of
  * matching tokens to BNF grammar. This is the core logic of the grammar-guided generation.
  */
 
-#ifndef XGRAMMAR_GRAMMAR_H_
-#define XGRAMMAR_GRAMMAR_H_
+#ifndef XGRAMMAR_XGRAMMAR_H_
+#define XGRAMMAR_XGRAMMAR_H_
 
 #include <dlpack/dlpack.h>
-#include <xgrammar/support/object.h>
+#include <xgrammar/object.h>
 
 #include <cstdint>
 #include <memory>
@@ -147,22 +147,53 @@ class BuiltinGrammar {
   );
 };
 
-class XGTokenizer {
+enum class VocabType : int {
+  RAW = 0,
+  BYTE_FALLBACK = 1,
+  BYTE_LEVEL = 2,
+};
+
+class TokenizerInfo {
  public:
-  XGTokenizer(
-      const std::string& hf_tokenizer_str, const std::unordered_map<std::string, int>& raw_vocab
+  TokenizerInfo(
+      const std::vector<std::string>& vocab,
+      VocabType vocab_type = VocabType::RAW,
+      bool prepend_space_in_tokenization = false
+  );
+  int GetVocabSize() const;
+  VocabType GetVocabType() const;
+  bool GetPrependSpaceInTokenization() const;
+  const std::vector<std::string>& GetRawVocab() const;
+
+  static TokenizerInfo FromHuggingFace(
+      const std::vector<std::string>& vocab, const std::string& backend_str
   );
 
-  std::string ToString() const;
+  std::string DumpMetadata() const;
+  static TokenizerInfo FromVocabAndMetadata(
+      const std::vector<std::string>& vocab, const std::string& metadata
+  );
 
-  std::string GetDecoderType() const;
-
-  bool GetPrependSpaceInTokenization() const;
-
-  const std::vector<std::string>& GetDecodedVocab();
-
-  XGRAMMAR_DEFINE_PIMPL_METHODS(XGTokenizer);
+ private:
+  XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
 };
+
+// class TokenizerInfo {
+//  public:
+//   TokenizerInfo(
+//       const std::string& hf_tokenizer_str, const std::unordered_map<std::string, int>& raw_vocab
+//   );
+
+//   std::string ToString() const;
+
+//   std::string GetDecoderType() const;
+
+//   bool GetPrependSpaceInTokenization() const;
+
+//   const std::vector<std::string>& GetDecodedVocab();
+
+//   XGRAMMAR_DEFINE_PIMPL_METHODS(Tok);
+// };
 
 /*!
  * \brief The init context of a GrammarStateMatcher. It contains the preprocessing results of the
@@ -314,4 +345,4 @@ class GrammarInitContextCache {
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_H_
+#endif  // XGRAMMAR_XGRAMMAR_H_
