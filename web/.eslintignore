@@ -1,0 +1,7 @@
+dist
+debug
+lib
+build
+node_modules
+xgrammar_binding.js
+.eslintrc.cjs

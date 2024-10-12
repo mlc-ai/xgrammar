@@ -1,0 +1,9 @@
+src/xgrammar_binding.js
+build
+node_modules
+dist
+lib
+.cache
+.vscode
+.parcel-cache
+example/package-lock.json

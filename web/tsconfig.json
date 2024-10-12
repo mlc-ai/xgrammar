@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "outDir": "lib",
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "strict": true,
+    "noImplicitAny": false, // to allow importing xgrammar_binding.js
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "rollup.config.js"
+  ]
+}

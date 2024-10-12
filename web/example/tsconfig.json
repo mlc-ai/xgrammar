@@ -1,0 +1,6 @@
+{
+  "compilerOptions": {
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "build", "dist", "rollup.config.js"]
+}
