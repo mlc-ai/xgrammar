@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import pytest
 from pydantic import BaseModel, Field, TypeAdapter
-from xgrammar import BuiltinGrammar, GrammarStateMatcher
+from xgrammar import BuiltinGrammar, GrammarMatcher
 from xgrammar.xgrammar import BNFGrammar
 
 
@@ -26,7 +26,7 @@ def check_schema_with_grammar(
 
 
 def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
-    matcher = GrammarStateMatcher(grammar, terminate_without_stop_token=True)
+    matcher = GrammarMatcher(grammar, terminate_without_stop_token=True)
     can_accept = matcher._accept_string(input_str)
     can_terminate = matcher.is_terminated()
     return can_accept and can_terminate

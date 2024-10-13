@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_state_matcher_base.h
- * \brief The base class of GrammarStateMatcher. It implements a character-based matching automata.
+ * \file xgrammar/grammar_matcher_base.h
+ * \brief The base class of GrammarMatcher. It implements a character-based matching automata.
  */
 #ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_BASE_H_
 #define XGRAMMAR_GRAMMAR_STATE_MATCHER_BASE_H_
@@ -12,30 +12,30 @@
 #include <vector>
 
 #include "grammar_ast.h"
-#include "grammar_state_matcher_state.h"
+#include "grammar_matcher_state.h"
 #include "support/encoding.h"
 
 namespace xgrammar {
 
 /*!
- * \brief The base class of GrammarStateMatcher. It implements a character-based matching
+ * \brief The base class of GrammarMatcher. It implements a character-based matching
  * automata, and supports accepting a character, rolling back by character, etc.
  */
-class GrammarStateMatcherBase {
+class GrammarMatcherBase {
  protected:
   using RuleExpr = BNFGrammar::Impl::RuleExpr;
   using RuleExprType = BNFGrammar::Impl::RuleExprType;
 
  public:
   /*!
-   * \brief Construct a GrammarStateMatcherBase with the given grammar and initial rule position.
+   * \brief Construct a GrammarMatcherBase with the given grammar and initial rule position.
    * \param grammar The grammar to match.
    * \param init_rule_position The initial rule position. If not specified, the main rule will be
    * used.
    * \param expand_init_rule_position Whether to expand the initial rule position to all possible
    * locations. See ExpandRulePosition.
    */
-  GrammarStateMatcherBase(
+  GrammarMatcherBase(
       const BNFGrammar& grammar,
       RulePosition init_rule_position = kInvalidRulePosition,
       bool expand_init_rule_position = true
@@ -123,7 +123,7 @@ class GrammarStateMatcherBase {
 };
 
 /*! \brief Check the codepoint is contained in the character class. */
-inline bool GrammarStateMatcherBase::CheckIfAccepted(
+inline bool GrammarMatcherBase::CheckIfAccepted(
     const RulePosition& rule_position, uint8_t char_value
 ) const {
   auto current_sequence = grammar_->GetRuleExpr(rule_position.sequence_id);
@@ -155,7 +155,7 @@ inline bool GrammarStateMatcherBase::CheckIfAccepted(
   }
 }
 
-inline RulePosition GrammarStateMatcherBase::UpdatePositionWithChar(
+inline RulePosition GrammarMatcherBase::UpdatePositionWithChar(
     const RulePosition& rule_position, uint8_t char_value
 ) const {
   auto current_sequence = grammar_->GetRuleExpr(rule_position.sequence_id);
@@ -203,7 +203,7 @@ inline RulePosition GrammarStateMatcherBase::UpdatePositionWithChar(
   }
 }
 
-inline bool GrammarStateMatcherBase::AcceptChar(uint8_t char_value, bool verbose) {
+inline bool GrammarMatcherBase::AcceptChar(uint8_t char_value, bool verbose) {
   if (verbose) {
     XGRAMMAR_LOG(INFO) << "Matching char: " << static_cast<int>(char_value) << " \""
                        << PrintAsEscapedUTF8(char_value) << "\"";
@@ -256,26 +256,26 @@ inline bool GrammarStateMatcherBase::AcceptChar(uint8_t char_value, bool verbose
   return true;
 }
 
-inline bool GrammarStateMatcherBase::CanReachEnd() const {
+inline bool GrammarMatcherBase::CanReachEnd() const {
   const auto& last_stack_tops = stack_tops_history_.GetLatest();
   return std::any_of(last_stack_tops.begin(), last_stack_tops.end(), [&](int32_t id) {
     return tree_.IsEndPosition(tree_[id]);
   });
 }
 
-inline void GrammarStateMatcherBase::RollbackChars(int rollback_cnt) {
+inline void GrammarMatcherBase::RollbackChars(int rollback_cnt) {
   stack_tops_history_.Rollback(rollback_cnt);
 }
 
-inline void GrammarStateMatcherBase::DiscardEarliestChars(int discard_cnt) {
+inline void GrammarMatcherBase::DiscardEarliestChars(int discard_cnt) {
   stack_tops_history_.DiscardEarliest(discard_cnt);
 }
 
-inline std::string GrammarStateMatcherBase::PrintStackState(int steps_behind_latest) const {
+inline std::string GrammarMatcherBase::PrintStackState(int steps_behind_latest) const {
   return stack_tops_history_.PrintHistory(steps_behind_latest);
 }
 
-inline void GrammarStateMatcherBase::PushInitialState(
+inline void GrammarMatcherBase::PushInitialState(
     RulePosition init_rule_position, bool expand_init_rule_position
 ) {
   if (init_rule_position == kInvalidRulePosition) {
@@ -303,7 +303,7 @@ inline void GrammarStateMatcherBase::PushInitialState(
   }
 }
 
-inline std::pair<bool, RulePosition> GrammarStateMatcherBase::GetNextPositionInSequence(
+inline std::pair<bool, RulePosition> GrammarMatcherBase::GetNextPositionInSequence(
     const RulePosition& rule_position, bool consider_parent
 ) const {
   auto sequence = grammar_->GetRuleExpr(rule_position.sequence_id);
@@ -341,7 +341,7 @@ inline std::pair<bool, RulePosition> GrammarStateMatcherBase::GetNextPositionInS
   return {true, next_position};
 }
 
-inline bool GrammarStateMatcherBase::ExpandRulePosition(
+inline bool GrammarMatcherBase::ExpandRulePosition(
     RulePosition cur_rule_position,
     std::vector<int32_t>* new_stack_tops,
     bool consider_parent,

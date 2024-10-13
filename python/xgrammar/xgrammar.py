@@ -339,12 +339,12 @@ class GrammarMatcherInitContext:
         self.handle = _core.GrammarMatcherInitContext(grammar.handle, decoded_vocab)
 
 
-# class GrammarInitContextCache:
+# class GrammarMatcherInitContextCache:
 #     def __init__(self, vocab: List[bytes]):
-#         self.handle = _core.GrammarInitContextCache(cache.handle)
+#         self.handle = _core.GrammarMatcherInitContextCache(cache.handle)
 
 
-class GrammarStateMatcher(XGObject):
+class GrammarMatcher(XGObject):
     """A stateful matcher to match tokens to the specified BNF grammar. This class is the core logic
     of the grammar-guided generation.
 
@@ -399,7 +399,7 @@ class GrammarStateMatcher(XGObject):
             raise ValueError(f"Unsupported tokenizer_or_vocab type: {type(tokenizer_or_vocab)}")
 
         self.init_with_handle(
-            _core.GrammarStateMatcher(
+            _core.GrammarMatcher(
                 grammar.handle,
                 tokenizer_or_vocab.handle,
                 stop_token_ids,
@@ -477,7 +477,7 @@ class GrammarStateMatcher(XGObject):
             A list of rejected token ids.
 
         """
-        return _core.GrammarStateMatcher.get_rejected_tokens_from_bitmask(bitmask, vocab_size)
+        return _core.GrammarMatcher.get_rejected_tokens_from_bitmask(bitmask, vocab_size)
 
     # @staticmethod
     # def apply_token_bitmask(tensor: torch.Tensor, bitmask: torch.Tensor) -> torch.Tensor:
@@ -540,7 +540,7 @@ class GrammarStateMatcher(XGObject):
 
     def is_terminated(self) -> bool:
         """Check if the matcher has accepted the stop token and terminated. See also
-        GrammarStateMatcher.accept_token.
+        GrammarMatcher.accept_token.
 
         Returns
         -------

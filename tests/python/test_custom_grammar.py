@@ -1,6 +1,5 @@
-"""This test is adopted from test_grammar_state_matcher_json.py, but the grammar is parsed from
-a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar state
-matcher.
+"""This test is adopted from test_builtin_grammar_json.py, but the grammar is parsed from
+a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar matcher.
 """
 
 import time
@@ -8,11 +7,11 @@ from typing import List, Optional
 
 import pytest
 from transformers import AutoTokenizer
-from xgrammar import BNFGrammar, GrammarStateMatcher
+from xgrammar import BNFGrammar, GrammarMatcher
 
 
 def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
-    matcher = GrammarStateMatcher(grammar, terminate_without_stop_token=True)
+    matcher = GrammarMatcher(grammar, terminate_without_stop_token=True)
     can_accept = matcher._accept_string(input_str)
     can_terminate = matcher.is_terminated()
     return can_accept and can_terminate
@@ -327,7 +326,7 @@ def test_find_next_rejected_tokens(
         use_fast=True,
         trust_remote_code=True,
     )
-    matcher = GrammarStateMatcher(json_grammar, tokenizer)
+    matcher = GrammarMatcher(json_grammar, tokenizer)
     input_bytes = input_str.encode("utf-8")
     rejected_sizes = []
 
@@ -337,7 +336,7 @@ def test_find_next_rejected_tokens(
         time_mid = time.monotonic_ns()
 
         print(f"Time to find_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
-        rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
+        rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
             bitmask, matcher.vocab_size
         )
         time_end = time.monotonic_ns()
@@ -355,7 +354,7 @@ def test_find_next_rejected_tokens(
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
     bitmask = matcher.find_next_token_bitmask()
-    rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
+    rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
         bitmask, matcher.vocab_size
     )
     rejected_sizes.append(len(rejected_token_ids))

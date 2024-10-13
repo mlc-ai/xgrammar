@@ -36,7 +36,7 @@ BNFGrammar BNFGrammar::Deserialize(const std::string& json_string) {
   return BNFJSONParser::Parse(json_string);
 }
 
-// Optimized json grammar for the speed of the grammar state matcher
+// Optimized json grammar for the speed of the gramma matcher
 const std::string kJSONGrammarString = R"(
 main ::= (
     "{" [ \n\t]* members_and_embrace |

@@ -50,7 +50,7 @@ std::vector<pybind11::bytes> TokenizerInfo_GetRawVocab(TokenizerInfo& tokenizer)
   return py_result;
 }
 
-GrammarStateMatcher GrammarStateMatcher_Init(
+GrammarMatcher GrammarMatcher_Init(
     const BNFGrammar& grammar,
     const TokenizerInfo& tokenizer_info,
     std::optional<std::vector<int>> stop_token_ids,
@@ -58,8 +58,8 @@ GrammarStateMatcher GrammarStateMatcher_Init(
     std::optional<int> mask_vocab_size,
     int max_rollback_steps
 ) {
-  return GrammarStateMatcher(
-      GrammarStateMatcher::CreateInitContext(grammar, tokenizer_info),
+  return GrammarMatcher(
+      GrammarMatcher::CreateInitContext(grammar, tokenizer_info),
       stop_token_ids,
       terminate_without_stop_token,
       mask_vocab_size,
@@ -67,20 +67,20 @@ GrammarStateMatcher GrammarStateMatcher_Init(
   );
 }
 
-torch::Tensor GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher) {
-  auto buffer_size = GrammarStateMatcher::GetBufferSize(matcher.GetVocabSize());
+torch::Tensor GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher) {
+  auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetVocabSize());
   auto result = torch::empty({buffer_size}, torch::dtype(torch::kInt32).device(torch::kCPU, 0));
   auto result_dltensor = at::toDLPack(result)->dl_tensor;
   matcher.FindNextTokenBitmask(&result_dltensor);
   return result;
 }
 
-std::vector<int> GrammarStateMatcher_GetRejectedTokensFromBitMask(
+std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(
     torch::Tensor token_bitmask, size_t vocab_size
 ) {
   std::vector<int> result;
   auto token_bitmask_dltensor = at::toDLPack(token_bitmask)->dl_tensor;
-  GrammarStateMatcher::GetRejectedTokensFromBitMask(token_bitmask_dltensor, vocab_size, &result);
+  GrammarMatcher::GetRejectedTokensFromBitMask(token_bitmask_dltensor, vocab_size, &result);
   return result;
 }
 

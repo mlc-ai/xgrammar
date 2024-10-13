@@ -196,7 +196,7 @@ class TokenizerInfo {
 // };
 
 /*!
- * \brief The init context of a GrammarStateMatcher. It contains the preprocessing results of the
+ * \brief The init context of a GrammarMatcher. It contains the preprocessing results of the
  * grammar and tokenizer.
  */
 class GrammarMatcherInitContext;
@@ -216,9 +216,9 @@ class GrammarMatcherInitContext;
  * \example
  * \code
  * Tokenizer tokenizer = ...;
- * auto init_ctx = GrammarStateMatcher::CreateInitContext(grammar,
+ * auto init_ctx = GrammarMatcher::CreateInitContext(grammar,
  *                                                        tokenizer->PostProcessedVocab());
- * GrammarStateMatcher matcher(init_ctx, 10);
+ * GrammarMatcher matcher(init_ctx, 10);
  * matcher->AcceptToken(67);
  *
  * // Construct a DLTensor with shape (tokenizer.GetVocabSize() + 31) / 32, and dtype uint32.
@@ -229,15 +229,15 @@ class GrammarMatcherInitContext;
  * matcher->Rollback(1);
  * \endcode
  */
-class GrammarStateMatcher {
+class GrammarMatcher {
  public:
   /*!
-   * \brief Construct a GrammarStateMatcher from the preprocessing result of type
+   * \brief Construct a GrammarMatcher from the preprocessing result of type
    * GrammarMatcherInitContext.
    * \param init_ctx The init context. It is obtained through
    * CreateInitContext as a result of preprocessing the grammar and tokenizer.
    */
-  GrammarStateMatcher(
+  GrammarMatcher(
       std::shared_ptr<GrammarMatcherInitContext> init_ctx,
       std::optional<std::vector<int>> stop_token_ids = std::nullopt,
       bool terminate_without_stop_token = false,
@@ -247,8 +247,8 @@ class GrammarStateMatcher {
 
   /*!
    * \brief Specify a grammar and decoded vocabulary to return their preprocessing results. These
-   * results are used to construct a GrammarStateMatcher. They can be stored elsewhere for quick
-   * construction of GrammarStateMatcher.
+   * results are used to construct a GrammarMatcher. They can be stored elsewhere for quick
+   * construction of GrammarMatcher.
    * \param grammar The grammar that the matcher follows.
    * \param decoded_vocab The tokens that the matcher requires for matching.
    */
@@ -316,7 +316,7 @@ class GrammarStateMatcher {
   /*! \brief Reset the matcher to the initial state. */
   void Reset();
 
-  XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarStateMatcher);
+  XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcher);
 };
 
 /*!
@@ -326,14 +326,14 @@ class GrammarStateMatcher {
  * create every grammar state init context. If multiple toke tables are used to create init
  * contexts, an instance of this class for each vocabulary should be created.
  */
-class GrammarInitContextCache {
+class GrammarMatcherInitContextCache {
  public:
   /*!
-   * \brief Construct a GrammarInitContextCache with a vocabulary. This class will always create
-   * grammar state init contexts with this vocabulary.
+   * \brief Construct a GrammarMatcherInitContextCache with a vocabulary. This class will always
+   * create grammar state init contexts with this vocabulary.
    * \param decoded_vocab The vocabulary that the grammar will use.
    */
-  GrammarInitContextCache(const std::vector<std::string>& decoded_vocab);
+  GrammarMatcherInitContextCache(const std::vector<std::string>& decoded_vocab);
 
   /*! \brief Get the init context for pure JSON. */
   std::shared_ptr<GrammarMatcherInitContext> GetInitContextForJSON();
@@ -344,7 +344,7 @@ class GrammarInitContextCache {
   /*! \brief Clear the interal cache of init contexts. */
   void Clear();
 
-  XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarInitContextCache);
+  XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcherInitContextCache);
 };
 
 }  // namespace xgrammar

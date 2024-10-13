@@ -20,5 +20,5 @@ from .xgrammar import (
     VocabType,
     TokenizerInfo,
     GrammarMatcherInitContext,
-    GrammarStateMatcher,
+    GrammarMatcher,
 )

@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_state_matcher_preproc.h
- * \brief The header for the preprocessing of the grammar state matcher.
+ * \file xgrammar/grammar_matcher_preproc.h
+ * \brief The header for the preprocessing of the gramma matcher.
  */
 #ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_PREPROC_H_
 #define XGRAMMAR_GRAMMAR_STATE_MATCHER_PREPROC_H_
@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "grammar_ast.h"
-#include "grammar_state_matcher_base.h"
+#include "grammar_matcher_base.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
 #include "support/utils.h"
@@ -67,7 +67,7 @@ struct CatagorizedTokens {
 /*!
  * \brief All information that we need to match tokens in the tokenizer to the specified grammar.
  * It is the result of preprocessing.
- * \sa mlc::llm::serve::GrammarStateMatcher
+ * \sa mlc::llm::serve::GrammarMatcher
  */
 class GrammarMatcherInitContext {
  public:
@@ -80,7 +80,7 @@ class GrammarMatcherInitContext {
   /*! \brief All (id, token) pairs sorted in lexicographic order. This sorting is done to
    * maximize prefix reuse during matching. Special tokens and stop tokens are not included. */
   std::vector<std::pair<int32_t, std::string>> sorted_decoded_tokens;
-  /*! \brief The stop tokens. When the GrammarStateMatcher can reach the end of the grammar,
+  /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
   std::vector<int32_t> detected_stop_token_ids;
   /*! \brief The special tokens. These tokens are ignored (masked out) during the grammar-guided
@@ -89,7 +89,7 @@ class GrammarMatcherInitContext {
 
   /******************* Information about the grammar *******************/
 
-  /*! \brief The grammar for the GrammarStateMatcher. */
+  /*! \brief The grammar for the GrammarMatcher. */
   BNFGrammar grammar;
 
   /******************* Grammar-specific tokenizer information *******************/
@@ -118,13 +118,13 @@ class GrammarMatcherInitContext {
       catagorized_tokens_for_grammar;
 };
 
-/*! \brief The concrete implementation of GrammarStateMatcherNode. */
-class GrammarStateMatcherForInitContext : public GrammarStateMatcherBase {
+/*! \brief The concrete implementation of GrammarMatcherNode. */
+class GrammarMatcherForInitContext : public GrammarMatcherBase {
  public:
   // Do not expand the initial rule position: we want to find the accepted/rejected tokens
   // that exactly start from the initial rule position.
-  GrammarStateMatcherForInitContext(const BNFGrammar& grammar, RulePosition init_rule_position)
-      : GrammarStateMatcherBase(grammar, init_rule_position, false),
+  GrammarMatcherForInitContext(const BNFGrammar& grammar, RulePosition init_rule_position)
+      : GrammarMatcherBase(grammar, init_rule_position, false),
         init_rule_id(init_rule_position.rule_id) {}
 
   /*!
@@ -187,7 +187,7 @@ inline CatagorizedTokens::CatagorizedTokens(
   this->uncertain_indices = uncertain_indices;
 }
 
-bool GrammarStateMatcherForInitContext::IsTokenPassLookaheadAssertion(
+bool GrammarMatcherForInitContext::IsTokenPassLookaheadAssertion(
     const std::string& token, const std::vector<bool>& can_reach_end_stack
 ) {
   auto lookahead_assertion_id = grammar_->GetRule(init_rule_id).lookahead_assertion_id;
@@ -231,7 +231,7 @@ bool GrammarStateMatcherForInitContext::IsTokenPassLookaheadAssertion(
   return false;
 }
 
-inline CatagorizedTokens GrammarStateMatcherForInitContext::GetCatagorizedTokens(
+inline CatagorizedTokens GrammarMatcherForInitContext::GetCatagorizedTokens(
     size_t vocab_size,
     const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_tokens,
     bool consider_parent_rule
@@ -317,7 +317,7 @@ inline CatagorizedTokens GrammarStateMatcherForInitContext::GetCatagorizedTokens
   );
 }
 
-std::shared_ptr<GrammarMatcherInitContext> GrammarStateMatcher::CreateInitContext(
+std::shared_ptr<GrammarMatcherInitContext> GrammarMatcher::CreateInitContext(
     const BNFGrammar& grammar, const std::vector<std::string>& decoded_vocab
 ) {
   using RuleExprType = BNFGrammar::Impl::RuleExprType;
@@ -378,8 +378,8 @@ std::shared_ptr<GrammarMatcherInitContext> GrammarStateMatcher::CreateInitContex
         }
 
         auto add_catagorized_tokens = [&](const RulePosition& rule_position) {
-          auto grammar_state_matcher = GrammarStateMatcherForInitContext(grammar, rule_position);
-          auto cur_catagorized_tokens_for_grammar = grammar_state_matcher.GetCatagorizedTokens(
+          auto grammar_matcher = GrammarMatcherForInitContext(grammar, rule_position);
+          auto cur_catagorized_tokens_for_grammar = grammar_matcher.GetCatagorizedTokens(
               ptr->vocab_size, ptr->sorted_decoded_tokens, rule_id != main_rule_id
           );
           ptr->catagorized_tokens_for_grammar[rule_position] = cur_catagorized_tokens_for_grammar;
@@ -407,13 +407,13 @@ std::shared_ptr<GrammarMatcherInitContext> GrammarStateMatcher::CreateInitContex
   return ptr;
 }
 
-std::shared_ptr<GrammarMatcherInitContext> GrammarStateMatcher::CreateInitContext(
+std::shared_ptr<GrammarMatcherInitContext> GrammarMatcher::CreateInitContext(
     const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info
 ) {
-  return GrammarStateMatcher::CreateInitContext(grammar, tokenizer_info.GetRawVocab());
+  return GrammarMatcher::CreateInitContext(grammar, tokenizer_info.GetRawVocab());
 }
 
-class GrammarInitContextCache::Impl {
+class GrammarMatcherInitContextCache::Impl {
  public:
   Impl(const std::vector<std::string>& decoded_vocab);
 
@@ -433,45 +433,45 @@ class GrammarInitContextCache::Impl {
   std::shared_ptr<GrammarMatcherInitContext> init_ctx_for_json_;
 };
 
-inline GrammarInitContextCache::Impl::Impl(const std::vector<std::string>& decoded_vocab)
+inline GrammarMatcherInitContextCache::Impl::Impl(const std::vector<std::string>& decoded_vocab)
     : decoded_vocab_(decoded_vocab) {
-  init_ctx_for_json_ =
-      GrammarStateMatcher::CreateInitContext(BuiltinGrammar::JSON(), decoded_vocab_);
+  init_ctx_for_json_ = GrammarMatcher::CreateInitContext(BuiltinGrammar::JSON(), decoded_vocab_);
 }
 
 inline std::shared_ptr<GrammarMatcherInitContext>
-GrammarInitContextCache::Impl::GetInitContextForJSONSchema(const std::string& schema) {
+GrammarMatcherInitContextCache::Impl::GetInitContextForJSONSchema(const std::string& schema) {
   auto it = init_ctx_for_schema_cache_.find(schema);
   if (it != init_ctx_for_schema_cache_.end()) {
     return it->second;
   }
   auto init_ctx =
-      GrammarStateMatcher::CreateInitContext(BuiltinGrammar::JSONSchema(schema), decoded_vocab_);
+      GrammarMatcher::CreateInitContext(BuiltinGrammar::JSONSchema(schema), decoded_vocab_);
   init_ctx_for_schema_cache_[schema] = init_ctx;
   return init_ctx;
 }
 
 inline std::shared_ptr<GrammarMatcherInitContext>
-GrammarInitContextCache::Impl::GetInitContextForJSON() {
+GrammarMatcherInitContextCache::Impl::GetInitContextForJSON() {
   return init_ctx_for_json_;
 }
 
-inline void GrammarInitContextCache::Impl::Clear() { init_ctx_for_schema_cache_.clear(); }
+inline void GrammarMatcherInitContextCache::Impl::Clear() { init_ctx_for_schema_cache_.clear(); }
 
-GrammarInitContextCache::GrammarInitContextCache(const std::vector<std::string>& decoded_vocab)
+GrammarMatcherInitContextCache::GrammarMatcherInitContextCache(
+    const std::vector<std::string>& decoded_vocab
+)
     : pimpl_(std::make_shared<Impl>(decoded_vocab)) {}
 
-std::shared_ptr<GrammarMatcherInitContext> GrammarInitContextCache::GetInitContextForJSON() {
+std::shared_ptr<GrammarMatcherInitContext> GrammarMatcherInitContextCache::GetInitContextForJSON() {
   return pimpl_->GetInitContextForJSON();
 }
 
-std::shared_ptr<GrammarMatcherInitContext> GrammarInitContextCache::GetInitContextForJSONSchema(
-    const std::string& schema
-) {
+std::shared_ptr<GrammarMatcherInitContext>
+GrammarMatcherInitContextCache::GetInitContextForJSONSchema(const std::string& schema) {
   return pimpl_->GetInitContextForJSONSchema(schema);
 }
 
-void GrammarInitContextCache::Clear() { pimpl_->Clear(); }
+void GrammarMatcherInitContextCache::Clear() { pimpl_->Clear(); }
 
 }  // namespace xgrammar
 

@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_state_matcher.cc
+ * \file xgrammar/grammar_matcher.cc
  */
 #include <xgrammar/xgrammar.h>
 
@@ -8,10 +8,10 @@
 #include <queue>
 
 #include "grammar_ast.h"
+#include "grammar_matcher_base.h"
+#include "grammar_matcher_preproc.h"
+#include "grammar_matcher_state.h"
 #include "grammar_serializer.h"
-#include "grammar_state_matcher_base.h"
-#include "grammar_state_matcher_preproc.h"
-#include "grammar_state_matcher_state.h"
 #include "support/dynamic_bitset.h"
 #include "support/int_set.h"
 
@@ -26,13 +26,13 @@ namespace xgrammar {
  * several stacks, each of which represents a possible path in the NPDA, and update the stacks
  * during matching.
  *
- * ## Stack Structure (see grammar_state_matcher_state.h)
+ * ## Stack Structure (see grammar_matcher_state.h)
  * The element of every stack is a RulePosition object, referring a position in the grammar. If a
  * RulePosition is a RuleRef element (referring to another rule), the next element of the stack will
  * be a position in this rule. If a RulePosition is a CharacterClass element, it will be the last
  * in the stack, meaning *the next* character to match.
  *
- * ## Matching Process (see grammar_state_matcher_base.h)
+ * ## Matching Process (see grammar_matcher_base.h)
  * When accepting a new character and it is accepted by a stack, the last element of the stack will
  * be advanced to the next position in the grammar. If it gets to the end of the rule, several
  * elements at the end may be popped out, and the last element of the stack will be advanced.
@@ -41,7 +41,7 @@ namespace xgrammar {
  * stacks with different top elements will be added. When one stack cannot accept the new character,
  * it will be removed from the stacks.
  *
- * ## Storage of Stacks (see grammar_state_matcher_state.h)
+ * ## Storage of Stacks (see grammar_matcher_state.h)
  * Note these stacks form a tree structure as when splitting, the new stacks share the same prefix.
  * We store all RulePositions as a tree, where every path from tree root to a node represents a
  * stack. To represent stack tops, we attach additional pointers pointing the stack top nodes.
@@ -91,7 +91,7 @@ namespace xgrammar {
  * << means the stack top pointers in the current step.
  * The stacks in the current step is: (A, B, F), (A, H, I), (G,)
  *
- * ## Preprocess (see grammar_state_matcher_preproc.h)
+ * ## Preprocess (see grammar_matcher_preproc.h)
  * We will store all information about tokens that needed in matching in a GrammarMatcherInitContext
  * object. Tokens are sorted by codepoint, allowing us to reuse the repeated prefixes between
  * different tokens.
@@ -112,8 +112,8 @@ namespace xgrammar {
  * process.
  */
 
-/* \brief The concrete implementation of GrammarStateMatcherNode. */
-class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
+/* \brief The concrete implementation of GrammarMatcherNode. */
+class GrammarMatcher::Impl : public GrammarMatcherBase {
  private:
   using RuleExpr = BNFGrammar::Impl::RuleExpr;
   using RuleExprType = BNFGrammar::Impl::RuleExprType;
@@ -127,7 +127,7 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
       std::optional<int> mask_vocab_size = std::nullopt,
       int max_rollback_steps = 0
   )
-      : GrammarStateMatcherBase(init_ctx->grammar),
+      : GrammarMatcherBase(init_ctx->grammar),
         init_ctx_(init_ctx),
         stop_token_ids_(stop_token_ids.value_or(init_ctx->detected_stop_token_ids)),
         terminate_without_stop_token_(terminate_without_stop_token),
@@ -195,8 +195,8 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
    */
   bool AcceptStopToken();
 
-  // friend IntTuple FindNextRejectedTokens(GrammarStateMatcher matcher, bool verbose);
-  // friend NDArray FindNextTokenBitmaskAsNDArray(GrammarStateMatcher matcher);
+  // friend IntTuple FindNextRejectedTokens(GrammarMatcher matcher, bool verbose);
+  // friend NDArray FindNextTokenBitmaskAsNDArray(GrammarMatcher matcher);
 
   std::shared_ptr<GrammarMatcherInitContext> init_ctx_;
   std::vector<int> stop_token_ids_;
@@ -211,7 +211,7 @@ class GrammarStateMatcher::Impl : public GrammarStateMatcherBase {
   std::vector<int32_t> tmp_rejected_indices_delta_;
 };
 
-bool GrammarStateMatcher::Impl::AcceptStopToken() {
+bool GrammarMatcher::Impl::AcceptStopToken() {
   if (terminate_without_stop_token_) {
     return false;
   }
@@ -222,7 +222,7 @@ bool GrammarStateMatcher::Impl::AcceptStopToken() {
   return true;
 }
 
-bool GrammarStateMatcher::Impl::IsTerminated() const {
+bool GrammarMatcher::Impl::IsTerminated() const {
   if (terminate_without_stop_token_) {
     return CanReachEnd();
   }
@@ -230,7 +230,7 @@ bool GrammarStateMatcher::Impl::IsTerminated() const {
 }
 
 // TODO(yixin): Polish verbose logging
-bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
+bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
   if (IsTerminated()) {
     if (verbose) {
       XGRAMMAR_LOG(INFO) << "The matcher has terminated after accepting the stop token, but is "
@@ -241,7 +241,7 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
   }
 
   XGRAMMAR_CHECK(token_id >= 0 && token_id < static_cast<int>(init_ctx_->vocab_size))
-      << "Invalid token id " << token_id << " for GrammarStateMatcher";
+      << "Invalid token id " << token_id << " for GrammarMatcher";
 
   if (verbose) {
     XGRAMMAR_LOG(INFO) << "Accepting token id " << token_id << ", string: \""
@@ -264,7 +264,7 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
     XGRAMMAR_LOG(FATAL
     ) << "Token id "
       << token_id << ": " << init_ctx_->decoded_vocab[token_id]
-      << " is regarded as a special token, and cannot be accepted by the GrammarStateMatcher";
+      << " is regarded as a special token, and cannot be accepted by the GrammarMatcher";
   }
 
   const auto& token = init_ctx_->decoded_vocab[token_id];
@@ -290,7 +290,7 @@ bool GrammarStateMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
   return true;
 }
 
-bool GrammarStateMatcher::Impl::_AcceptString(const std::string& input_str, bool verbose) {
+bool GrammarMatcher::Impl::_AcceptString(const std::string& input_str, bool verbose) {
   if (IsTerminated()) {
     if (verbose) {
       XGRAMMAR_LOG(INFO) << "The matcher has terminated after accepting the stop token, but is "
@@ -324,7 +324,7 @@ bool GrammarStateMatcher::Impl::_AcceptString(const std::string& input_str, bool
   return true;
 }
 
-void GrammarStateMatcher::Impl::CheckTokenBitmaskValidity(
+void GrammarMatcher::Impl::CheckTokenBitmaskValidity(
     const DLTensor& token_bitmask, size_t vocab_size
 ) {
   XGRAMMAR_CHECK(
@@ -336,9 +336,9 @@ void GrammarStateMatcher::Impl::CheckTokenBitmaskValidity(
       << DynamicBitset::CalculateBufferSize(vocab_size) << " at least";
 }
 
-void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
+void GrammarMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
   XGRAMMAR_CHECK(!IsTerminated()
-  ) << "GrammarStateMatcher has terminated after accepting the stop token, but is trying to "
+  ) << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
        "find the next token mask";
   CheckTokenBitmaskValidity(*next_token_bitmask, mask_vocab_size_);
   const auto& sorted_decoded_tokens = init_ctx_->sorted_decoded_tokens;
@@ -449,7 +449,7 @@ void GrammarStateMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmas
   SetTokenBitmask(next_token_bitmask, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end);
 }
 
-void GrammarStateMatcher::Impl::GetRejectedTokensFromBitMask(
+void GrammarMatcher::Impl::GetRejectedTokensFromBitMask(
     const DLTensor& token_bitmask, size_t vocab_size, std::vector<int>* rejected_tokens
 ) {
   CheckTokenBitmaskValidity(token_bitmask, vocab_size);
@@ -460,9 +460,9 @@ void GrammarStateMatcher::Impl::GetRejectedTokensFromBitMask(
   }
 }
 
-std::string GrammarStateMatcher::Impl::FindJumpForwardString() {
+std::string GrammarMatcher::Impl::FindJumpForwardString() {
   XGRAMMAR_CHECK(!IsTerminated()
-  ) << "GrammarStateMatcher has terminated after accepting the stop token, but is trying to "
+  ) << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
        "get the jump forward string";
 
   std::string result;
@@ -541,7 +541,7 @@ std::string GrammarStateMatcher::Impl::FindJumpForwardString() {
   return result;
 }
 
-void GrammarStateMatcher::Impl::Rollback(int num_tokens) {
+void GrammarMatcher::Impl::Rollback(int num_tokens) {
   XGRAMMAR_CHECK(num_tokens <= static_cast<int>(token_length_history.size()))
       << "Intended to rollback " << num_tokens << " tokens, but only the last "
       << token_length_history.size() << " steps of history are saved";
@@ -553,7 +553,7 @@ void GrammarStateMatcher::Impl::Rollback(int num_tokens) {
   }
 }
 
-void GrammarStateMatcher::Impl::SetTokenBitmask(
+void GrammarMatcher::Impl::SetTokenBitmask(
     DLTensor* next_token_bitmask,
     const DynamicBitset& accepted_bitset,
     const std::vector<int32_t>& rejected_indices,
@@ -602,7 +602,7 @@ void GrammarStateMatcher::Impl::SetTokenBitmask(
   }
 }
 
-int GrammarStateMatcher::Impl::GetNextUncertainToken(
+int GrammarMatcher::Impl::GetNextUncertainToken(
     bool is_uncertain_saved,
     int* iterator_uncertain,
     const std::vector<int>& uncertain_indices,
@@ -627,14 +627,14 @@ int GrammarStateMatcher::Impl::GetNextUncertainToken(
   }
 }
 
-GrammarStateMatcher::GrammarStateMatcher(
+GrammarMatcher::GrammarMatcher(
     std::shared_ptr<GrammarMatcherInitContext> init_ctx,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
     std::optional<int> mask_vocab_size,
     int max_rollback_steps
 )
-    : pimpl_(std::make_shared<GrammarStateMatcher::Impl>(
+    : pimpl_(std::make_shared<GrammarMatcher::Impl>(
           init_ctx,
           stop_token_ids,
           terminate_without_stop_token,
@@ -642,38 +642,38 @@ GrammarStateMatcher::GrammarStateMatcher(
           max_rollback_steps
       )) {}
 
-bool GrammarStateMatcher::AcceptToken(int32_t token_id, bool verbose) {
+bool GrammarMatcher::AcceptToken(int32_t token_id, bool verbose) {
   return pimpl_->AcceptToken(token_id, verbose);
 }
 
-bool GrammarStateMatcher::_AcceptString(const std::string& input_str, bool verbose) {
+bool GrammarMatcher::_AcceptString(const std::string& input_str, bool verbose) {
   return pimpl_->_AcceptString(input_str, verbose);
 }
 
-uint32_t GrammarStateMatcher::GetBufferSize(size_t vocab_size) {
+uint32_t GrammarMatcher::GetBufferSize(size_t vocab_size) {
   return DynamicBitset::CalculateBufferSize(vocab_size);
 }
 
-void GrammarStateMatcher::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
+void GrammarMatcher::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
   pimpl_->FindNextTokenBitmask(next_token_bitmask);
 }
 
-void GrammarStateMatcher::GetRejectedTokensFromBitMask(
+void GrammarMatcher::GetRejectedTokensFromBitMask(
     const DLTensor& token_bitmask, size_t vocab_size, std::vector<int>* rejected_tokens
 ) {
   return Impl::GetRejectedTokensFromBitMask(token_bitmask, vocab_size, rejected_tokens);
 }
 
-std::string GrammarStateMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }
+std::string GrammarMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }
 
-void GrammarStateMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
+void GrammarMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
 
-int GrammarStateMatcher::GetMaxRollbackSteps() const { return pimpl_->GetMaxRollbackSteps(); }
+int GrammarMatcher::GetMaxRollbackSteps() const { return pimpl_->GetMaxRollbackSteps(); }
 
-size_t GrammarStateMatcher::GetVocabSize() const { return pimpl_->GetVocabSize(); }
+size_t GrammarMatcher::GetVocabSize() const { return pimpl_->GetVocabSize(); }
 
-bool GrammarStateMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
+bool GrammarMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
 
-void GrammarStateMatcher::Reset() { pimpl_->Reset(); }
+void GrammarMatcher::Reset() { pimpl_->Reset(); }
 
 }  // namespace xgrammar

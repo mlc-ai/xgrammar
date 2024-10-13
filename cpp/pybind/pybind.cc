@@ -37,18 +37,16 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("from_huggingface", &TokenizerInfo::FromHuggingFace)
       .def_static("from_vocab_and_metadata", &TokenizerInfo::FromVocabAndMetadata);
 
-  auto pyGrammarStateMatcher = py::class_<GrammarStateMatcher>(m, "GrammarStateMatcher");
-  pyGrammarStateMatcher.def(py::init(&GrammarStateMatcher_Init))
-      .def("accept_token", &GrammarStateMatcher::AcceptToken)
-      .def("_accept_string", &GrammarStateMatcher::_AcceptString)
-      .def("find_next_token_bitmask", &GrammarStateMatcher_FindNextTokenBitmask)
-      .def_static(
-          "get_rejected_tokens_from_bitmask", &GrammarStateMatcher_GetRejectedTokensFromBitMask
-      )
-      .def("is_terminated", &GrammarStateMatcher::IsTerminated)
-      .def("reset", &GrammarStateMatcher::Reset)
-      .def_property_readonly("vocab_size", &GrammarStateMatcher::GetVocabSize)
-      .def("find_jump_forward_string", &GrammarStateMatcher::FindJumpForwardString)
-      .def("rollback", &GrammarStateMatcher::Rollback)
-      .def_property_readonly("max_rollback_steps", &GrammarStateMatcher::GetMaxRollbackSteps);
+  auto pyGrammarMatcher = py::class_<GrammarMatcher>(m, "GrammarMatcher");
+  pyGrammarMatcher.def(py::init(&GrammarMatcher_Init))
+      .def("accept_token", &GrammarMatcher::AcceptToken)
+      .def("_accept_string", &GrammarMatcher::_AcceptString)
+      .def("find_next_token_bitmask", &GrammarMatcher_FindNextTokenBitmask)
+      .def_static("get_rejected_tokens_from_bitmask", &GrammarMatcher_GetRejectedTokensFromBitMask)
+      .def("is_terminated", &GrammarMatcher::IsTerminated)
+      .def("reset", &GrammarMatcher::Reset)
+      .def_property_readonly("vocab_size", &GrammarMatcher::GetVocabSize)
+      .def("find_jump_forward_string", &GrammarMatcher::FindJumpForwardString)
+      .def("rollback", &GrammarMatcher::Rollback)
+      .def_property_readonly("max_rollback_steps", &GrammarMatcher::GetMaxRollbackSteps);
 }

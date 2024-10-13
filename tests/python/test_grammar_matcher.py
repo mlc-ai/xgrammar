@@ -5,13 +5,13 @@ from typing import List, Optional
 import pytest
 import torch
 from transformers import AutoTokenizer
-from xgrammar import BNFGrammar, BuiltinGrammar, GrammarStateMatcher
+from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher
 
 json_grammar = BuiltinGrammar.json()
 
 
 def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
-    matcher = GrammarStateMatcher(grammar, terminate_without_stop_token=True)
+    matcher = GrammarMatcher(grammar, terminate_without_stop_token=True)
     can_accept = matcher._accept_string(input_str)
     can_terminate = matcher.is_terminated()
     return can_accept and can_terminate
@@ -79,13 +79,13 @@ def test_find_next_rejected_tokens(
         use_fast=True,
         trust_remote_code=True,
     )
-    matcher = GrammarStateMatcher(json_grammar, tokenizer)
+    matcher = GrammarMatcher(json_grammar, tokenizer)
     input_bytes = input_str.encode("utf-8")
     rejected_sizes = []
 
     for i, c in enumerate(input_bytes):
         bitmask = matcher.find_next_token_bitmask()
-        rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
+        rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
             bitmask, matcher.vocab_size
         )
         rejected_sizes.append(len(rejected_token_ids))
@@ -97,7 +97,7 @@ def test_find_next_rejected_tokens(
         assert matcher._accept_string(bytes([c]))
 
     bitmask = matcher.find_next_token_bitmask()
-    rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
+    rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
         bitmask, matcher.vocab_size
     )
     rejected_sizes.append(len(rejected_token_ids))
@@ -115,7 +115,7 @@ def test_token_operations():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    matcher = GrammarStateMatcher(json_grammar, vocab)
+    matcher = GrammarMatcher(json_grammar, vocab)
 
     expected = [
         ["{"],
@@ -135,7 +135,7 @@ def test_token_operations():
 
     for id in input_ids:
         bitmask = matcher.find_next_token_bitmask()
-        rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
+        rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
             bitmask, matcher.vocab_size
         )
         accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
@@ -145,7 +145,7 @@ def test_token_operations():
         assert matcher.accept_token(id)
 
     bitmask = matcher.find_next_token_bitmask()
-    rejected_token_ids = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
+    rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
         bitmask, matcher.vocab_size
     )
     accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
@@ -164,7 +164,7 @@ def test_rollback():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    matcher = GrammarStateMatcher(json_grammar, vocab, max_rollback_steps=5)
+    matcher = GrammarMatcher(json_grammar, vocab, max_rollback_steps=5)
 
     assert matcher.max_rollback_steps == 5
 
@@ -194,7 +194,7 @@ def test_reset():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    matcher = GrammarStateMatcher(json_grammar, vocab)
+    matcher = GrammarMatcher(json_grammar, vocab)
 
     orig_result = []
 
@@ -234,7 +234,7 @@ def test_termination():
     ]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    matcher = GrammarStateMatcher(json_grammar, vocab, max_rollback_steps=5)
+    matcher = GrammarMatcher(json_grammar, vocab, max_rollback_steps=5)
 
     for i in input_ids:
         matcher.find_next_token_bitmask()
@@ -259,7 +259,7 @@ other_rule ::= "a" sub_rule "b"
 sub_rule ::= "b"
 """
     grammar = BNFGrammar(grammar_ebnf)
-    matcher = GrammarStateMatcher(grammar)
+    matcher = GrammarMatcher(grammar)
     assert matcher._accept_string("a")
     assert matcher.find_jump_forward_string() == "bb"
 
@@ -270,13 +270,13 @@ def test_mask_vocab_size():
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
         # fmt: on
     ]
-    matcher = GrammarStateMatcher(json_grammar, vocab, mask_vocab_size=64)
+    matcher = GrammarMatcher(json_grammar, vocab, mask_vocab_size=64)
     assert matcher.vocab_size == 64
 
     mask = matcher.find_next_token_bitmask()
     assert mask.shape == (2,)
 
-    rejected_tokens = GrammarStateMatcher.get_rejected_tokens_from_bitmask(mask, matcher.vocab_size)
+    rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(mask, matcher.vocab_size)
     assert rejected_tokens == [i for i in range(64) if i != 7]
 
 

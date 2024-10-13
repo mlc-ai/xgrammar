@@ -1,14 +1,9 @@
-"""This test is adopted from test_grammar_state_matcher_json.py, but the grammar is parsed from
-a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar state
-matcher.
-"""
-
 from typing import Dict, List, Tuple
 
 import pytest
 from pydantic import BaseModel
 from transformers import AutoTokenizer
-from xgrammar import GrammarStateMatcher
+from xgrammar import GrammarMatcher
 from xgrammar.xgrammar import BuiltinGrammar
 
 
@@ -39,13 +34,13 @@ def test_json_schema_accept_find_token():
 
     tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True)
-    matcher = GrammarStateMatcher(grammar, tokenizer)
+    matcher = GrammarMatcher(grammar, tokenizer)
 
     for c in instance_str:
         matcher.find_next_token_bitmask()
         assert matcher._accept_string(c)
     final_bitmask = matcher.find_next_token_bitmask()
-    final_rejected_tokens = GrammarStateMatcher.get_rejected_tokens_from_bitmask(
+    final_rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(
         final_bitmask, matcher.vocab_size
     )
     assert 2 not in final_rejected_tokens
@@ -80,7 +75,7 @@ def test_json_schema_find_jump_forward_string():
 
     tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True)
-    matcher = GrammarStateMatcher(grammar, tokenizer)
+    matcher = GrammarMatcher(grammar, tokenizer)
 
     for i, c in enumerate(instance_str):
         jump_forward_str = matcher.find_jump_forward_string()
