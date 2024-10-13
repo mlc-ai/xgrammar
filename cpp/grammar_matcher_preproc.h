@@ -474,6 +474,9 @@ GrammarMatcherInitContextCache::GrammarMatcherInitContextCache(
 )
     : pimpl_(std::make_shared<Impl>(raw_vocab)) {}
 
+GrammarMatcherInitContextCache::GrammarMatcherInitContextCache(const TokenizerInfo& tokenizer_info)
+    : pimpl_(std::make_shared<Impl>(tokenizer_info.GetRawVocab())) {}
+
 GrammarMatcherInitContext GrammarMatcherInitContextCache::GetInitContextForJSON() {
   return pimpl_->GetInitContextForJSON();
 }

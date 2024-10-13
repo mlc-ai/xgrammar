@@ -42,6 +42,15 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
   pyGrammarMatcherInitContext.def(py::init<const BNFGrammar&, const std::vector<std::string>&>())
       .def(py::init<const BNFGrammar&, const TokenizerInfo&>());
 
+  auto pyGrammarMatcherInitContextCache =
+      py::class_<GrammarMatcherInitContextCache>(m, "GrammarMatcherInitContextCache");
+  pyGrammarMatcherInitContextCache.def(py::init<const TokenizerInfo&>())
+      .def("get_init_context_for_json", &GrammarMatcherInitContextCache::GetInitContextForJSON)
+      .def(
+          "get_init_context_for_json_schema",
+          &GrammarMatcherInitContextCache::GetInitContextForJSONSchema
+      );
+
   auto pyGrammarMatcher = py::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher
       .def(py::init<

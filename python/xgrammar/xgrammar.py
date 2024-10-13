@@ -357,9 +357,28 @@ class GrammarMatcherInitContext(XGObject):
         )
 
 
-# class GrammarMatcherInitContextCache:
-#     def __init__(self, vocab: List[bytes]):
-#         self.handle = _core.GrammarMatcherInitContextCache(cache.handle)
+class GrammarMatcherInitContextCache:
+    def __init__(
+        self,
+        tokenizer_or_vocab: Union[PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]],
+    ):
+        # convert tokenizer_or_vocab to TokenizerInfo
+        if isinstance(tokenizer_or_vocab, PreTrainedTokenizerBase):
+            tokenizer_or_vocab = TokenizerInfo.from_huggingface(tokenizer_or_vocab)
+        elif isinstance(tokenizer_or_vocab, list):
+            tokenizer_or_vocab = TokenizerInfo(tokenizer_or_vocab)
+        if not isinstance(tokenizer_or_vocab, TokenizerInfo):
+            raise ValueError(f"Unsupported tokenizer_or_vocab type: {type(tokenizer_or_vocab)}")
+
+        self.init_with_handle(_core.GrammarMatcherInitContextCache(tokenizer_or_vocab.handle))
+
+    def get_init_context_for_json(self) -> GrammarMatcherInitContext:
+        return GrammarMatcherInitContext.from_handle(self.handle.get_init_context_for_json())
+
+    def get_init_context_for_json_schema(self, schema: str) -> GrammarMatcherInitContext:
+        return GrammarMatcherInitContext.from_handle(
+            self.handle.get_init_context_for_json_schema(schema)
+        )
 
 
 class GrammarMatcher(XGObject):

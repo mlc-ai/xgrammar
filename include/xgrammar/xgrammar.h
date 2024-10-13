@@ -316,6 +316,8 @@ class GrammarMatcherInitContextCache {
    */
   GrammarMatcherInitContextCache(const std::vector<std::string>& raw_vocab);
 
+  GrammarMatcherInitContextCache(const TokenizerInfo& tokenizer_info);
+
   /*! \brief Get the init context for pure JSON. */
   GrammarMatcherInitContext GetInitContextForJSON();
 
