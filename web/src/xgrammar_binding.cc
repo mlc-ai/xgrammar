@@ -28,15 +28,15 @@ std::vector<std::string> DecodeTokenTable(
 /*!
  * \brief Constructor for grammar state matcher in JS.
  */
-GrammarStateMatcher GrammarStateMatcher_Init(
+GrammarMatcher GrammarMatcher_Init(
     const BNFGrammar& grammar,
     const std::vector<std::string>& vocab,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
     int max_rollback_steps
 ) {
-  return GrammarStateMatcher(
-      GrammarStateMatcher::CreateInitContext(grammar, vocab),
+  return GrammarMatcher(
+      GrammarMatcher::CreateInitContext(grammar, vocab),
       stop_token_ids,
       terminate_without_stop_token,
       max_rollback_steps
@@ -46,9 +46,9 @@ GrammarStateMatcher GrammarStateMatcher_Init(
 /*!
  * \brief Finds the next token bitmask of the matcher.
  */
-std::vector<int32_t> GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatcher& matcher) {
+std::vector<int32_t> GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher) {
   // 1. Initialize std::vector result
-  auto buffer_size = GrammarStateMatcher::GetBufferSize(matcher.GetVocabSize());
+  auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetVocabSize());
   std::vector<int32_t> result(buffer_size);
   // 2. Initialize DLTensor with the data pointer of the std vector.
   DLTensor tensor;
@@ -70,7 +70,7 @@ std::vector<int32_t> GrammarStateMatcher_FindNextTokenBitmask(GrammarStateMatche
  * \brief Return the list of rejected token IDs based on the bit mask.
  * \note This method is mainly used in testing, so performance is not as important.
  */
-std::vector<int> GrammarStateMatcher_GetRejectedTokensFromBitMask(
+std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(
     std::vector<int32_t> token_bitmask, size_t vocab_size
 ) {
   // 1. Convert token_bitmask into DLTensor
@@ -86,7 +86,7 @@ std::vector<int> GrammarStateMatcher_GetRejectedTokensFromBitMask(
   tensor.byte_offset = 0;
   // 2. Get rejected token IDs
   std::vector<int> result;
-  GrammarStateMatcher::GetRejectedTokensFromBitMask(tensor, vocab_size, &result);
+  GrammarMatcher::GetRejectedTokensFromBitMask(tensor, vocab_size, &result);
   return result;
 }
 
@@ -109,7 +109,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       select_overload<std::vector<std::string>(const emscripten::val&)>(&vecFromJSArray)
   );
 
-  // Register std::optional<std::vector<int>> for GrammarStateMatcher_Init
+  // Register std::optional<std::vector<int>> for GrammarMatcher_Init
   register_vector<int>("VectorInt");
   register_optional<std::vector<int>>();
   function(
@@ -134,19 +134,17 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
 
   function("DecodeTokenTable", &DecodeTokenTable);
 
-  class_<GrammarStateMatcher>("GrammarStateMatcher")
-      .constructor(&GrammarStateMatcher_Init)
-      .smart_ptr<std::shared_ptr<GrammarStateMatcher>>("GrammarStateMatcher")
-      .function("GetVocabSize", &GrammarStateMatcher::GetVocabSize)
-      .function("GetMaxRollbackSteps", &GrammarStateMatcher::GetMaxRollbackSteps)
-      .function("AcceptToken", &GrammarStateMatcher::AcceptToken)
-      .function("FindNextTokenBitmask", &GrammarStateMatcher_FindNextTokenBitmask)
-      .class_function(
-          "GetRejectedTokensFromBitMask", &GrammarStateMatcher_GetRejectedTokensFromBitMask
-      )
-      .function("IsTerminated", &GrammarStateMatcher::IsTerminated)
-      .function("Reset", &GrammarStateMatcher::Reset)
-      .function("FindJumpForwardString", &GrammarStateMatcher::FindJumpForwardString)
-      .function("Rollback", &GrammarStateMatcher::Rollback)
-      .function("_AcceptString", &GrammarStateMatcher::_AcceptString);
+  class_<GrammarMatcher>("GrammarMatcher")
+      .constructor(&GrammarMatcher_Init)
+      .smart_ptr<std::shared_ptr<GrammarMatcher>>("GrammarMatcher")
+      .function("GetVocabSize", &GrammarMatcher::GetVocabSize)
+      .function("GetMaxRollbackSteps", &GrammarMatcher::GetMaxRollbackSteps)
+      .function("AcceptToken", &GrammarMatcher::AcceptToken)
+      .function("FindNextTokenBitmask", &GrammarMatcher_FindNextTokenBitmask)
+      .class_function("GetRejectedTokensFromBitMask", &GrammarMatcher_GetRejectedTokensFromBitMask)
+      .function("IsTerminated", &GrammarMatcher::IsTerminated)
+      .function("Reset", &GrammarMatcher::Reset)
+      .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
+      .function("Rollback", &GrammarMatcher::Rollback)
+      .function("_AcceptString", &GrammarMatcher::_AcceptString);
 }

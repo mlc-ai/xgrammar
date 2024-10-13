@@ -1,4 +1,4 @@
-import { BNFGrammar, BuiltinGrammar, GrammarStateMatcher, XGTokenTable } from "@mlc-ai/web-xgrammar"
+import { BNFGrammar, BuiltinGrammar, GrammarMatcher, XGTokenTable } from "@mlc-ai/web-xgrammar"
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 import { Type, Static } from "@sinclair/typebox";
 
@@ -31,11 +31,11 @@ async function jsonExample() {
 
     // 1. Initialize grammar state matcher with JSON grammar
     const bnfGrammar: BNFGrammar = await BuiltinGrammar.json();
-    const grammarStateMatcher = await GrammarStateMatcher.createGrammarStateMatcher(
+    const grammarMatcher = await GrammarMatcher.createGrammarMatcher(
         bnfGrammar,
         decodedTokenTable,
     );
-    console.log(grammarStateMatcher);
+    console.log(grammarMatcher);
 
     // 2. Simulated generation of an LLM
     const input = String.raw`{"hi": 1}<|end_of_text|>`;
@@ -44,27 +44,27 @@ async function jsonExample() {
     // 3. We expect the matcher to accept all tokens generated since it is a valid JSON
     for (let i = 0; i < encodedTokens.length; i++) {
         // 3.1 Generate token bitmask that will modify logits of the LLM
-        if (!grammarStateMatcher.isTerminated()) {
-            const bitmask = await grammarStateMatcher.findNextTokenBitmask();
+        if (!grammarMatcher.isTerminated()) {
+            const bitmask = await grammarMatcher.findNextTokenBitmask();
             // For debugging, we can check the rejected token IDs from the mask
-            const rejectedIDs = await GrammarStateMatcher.getRejectedTokensFromBitmask(
+            const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
                 bitmask,
-                grammarStateMatcher.getVocabSize()
+                grammarMatcher.getVocabSize()
             );
         }
         // 3.2 Say the LLM generated `curToken`, which is simulated here, we use `acceptToken()`
         // to update the state of the matcher, so it will generate a new bitmask for the next
         // auto-regressive generation
         const curToken = encodedTokens[i];
-        const accepted = grammarStateMatcher.acceptToken(curToken);
+        const accepted = grammarMatcher.acceptToken(curToken);
         if (!accepted) {
             throw Error("Expect token to be accepted");
         }
     }
 
     // 4. The last token is and stop token, so the matcher has terminated.
-    console.log("grammarStateMatcher.isTerminated(): ", grammarStateMatcher.isTerminated());
-    grammarStateMatcher.dispose();
+    console.log("grammarMatcher.isTerminated(): ", grammarMatcher.isTerminated());
+    grammarMatcher.dispose();
 }
 
 async function jsonSchemaExample() {
@@ -111,11 +111,11 @@ async function jsonSchemaExample() {
 
     // 1. Instantiate matcher with a grammar defined by the above schema
     const bnfGrammar: BNFGrammar = await BuiltinGrammar.jsonSchema(schema);
-    const grammarStateMatcher = await GrammarStateMatcher.createGrammarStateMatcher(
+    const grammarMatcher = await GrammarMatcher.createGrammarMatcher(
         bnfGrammar,
         decodedTokenTable,
     );
-    console.log(grammarStateMatcher);
+    console.log(grammarMatcher);
 
     // 2. Simulated generation of an LLM
     const input = String.raw`{
@@ -136,27 +136,27 @@ async function jsonSchemaExample() {
     // 3. We expect the matcher to accept all tokens generated since it is a valid JSON
     for (let i = 0; i < encodedTokens.length; i++) {
         // 3.1 Generate token bitmask that will modify logits of the LLM
-        if (!grammarStateMatcher.isTerminated()) {
-            const bitmask = await grammarStateMatcher.findNextTokenBitmask();
+        if (!grammarMatcher.isTerminated()) {
+            const bitmask = await grammarMatcher.findNextTokenBitmask();
             // For debugging, we can check the rejected token IDs from the mask
-            const rejectedIDs = await GrammarStateMatcher.getRejectedTokensFromBitmask(
+            const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
                 bitmask,
-                grammarStateMatcher.getVocabSize()
+                grammarMatcher.getVocabSize()
             );
         }
         // 3.2 Say the LLM generated `curToken`, which is simulated here, we use `acceptToken()`
         // to update the state of the matcher, so it will generate a new bitmask for the next
         // auto-regressive generation
         const curToken = encodedTokens[i];
-        const accepted = grammarStateMatcher.acceptToken(curToken);
+        const accepted = grammarMatcher.acceptToken(curToken);
         if (!accepted) {
             throw Error("Expect token to be accepted");
         }
     }
 
     // 4. The last token is and stop token, so the matcher has terminated.
-    console.log("grammarStateMatcher.isTerminated(): ", grammarStateMatcher.isTerminated());
-    grammarStateMatcher.dispose();
+    console.log("grammarMatcher.isTerminated(): ", grammarMatcher.isTerminated());
+    grammarMatcher.dispose();
 }
 
 async function testAll() {

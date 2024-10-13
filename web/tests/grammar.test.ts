@@ -4,7 +4,7 @@
  * thoroughly since that is done in `tests/python`.
  */
 import { describe, expect, test } from "@jest/globals";
-import { BNFGrammar, BuiltinGrammar, XGTokenTable, GrammarStateMatcher } from "..";
+import { BNFGrammar, BuiltinGrammar, XGTokenTable, GrammarMatcher } from "..";
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 
 async function getXGTokenTableFromUrl(tokenizerUrl: string, decoderType: string): Promise<XGTokenTable> {
@@ -151,7 +151,7 @@ describe("Test XGTokenTable", () => {
 
 
 // Identical to tests in `test_grammar_state_matcher.py`
-describe("Test GrammarStateMatcher E2E", () => {
+describe("Test GrammarMatcher E2E", () => {
   const vocab = [
     "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
   ];
@@ -167,7 +167,7 @@ describe("Test GrammarStateMatcher E2E", () => {
     const tokenTable = await XGTokenTable.createXGTokenTable(
       vocab, "byte_level"
     );
-    const matcher = await GrammarStateMatcher.createGrammarStateMatcher(jsonGrammar, tokenTable);
+    const matcher = await GrammarMatcher.createGrammarMatcher(jsonGrammar, tokenTable);
     tokenTable.dispose();
 
     // 2. Test
@@ -189,7 +189,7 @@ describe("Test GrammarStateMatcher E2E", () => {
       const input_id = input_ids[i];
       // Find rejected IDs
       const bitmask = await matcher.findNextTokenBitmask();
-      const rejectedIDs = await GrammarStateMatcher.getRejectedTokensFromBitmask(
+      const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
         bitmask, matcher.getVocabSize()
       );
       // Find accepted tokens
@@ -222,7 +222,7 @@ describe("Test GrammarStateMatcher E2E", () => {
       vocab, "byte_level"
     );
     // TODO(Charlie): Specifying only 0 still makes 1 a valid stop token -- is this what we want?
-    const matcher = await GrammarStateMatcher.createGrammarStateMatcher(jsonGrammar, tokenTable, [0, 1]);
+    const matcher = await GrammarMatcher.createGrammarMatcher(jsonGrammar, tokenTable, [0, 1]);
     tokenTable.dispose();
 
     // 2. Test
@@ -244,7 +244,7 @@ describe("Test GrammarStateMatcher E2E", () => {
       const input_id = input_ids[i];
       // Find rejected IDs
       const bitmask = await matcher.findNextTokenBitmask();
-      const rejectedIDs = await GrammarStateMatcher.getRejectedTokensFromBitmask(
+      const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
         bitmask, matcher.getVocabSize()
       );
       // Find accepted tokens
@@ -275,7 +275,7 @@ describe("Test GrammarStateMatcher E2E", () => {
     const tokenTable = await XGTokenTable.createXGTokenTable(
       vocab, "byte_level"
     );
-    const matcher = await GrammarStateMatcher.createGrammarStateMatcher(
+    const matcher = await GrammarMatcher.createGrammarMatcher(
       jsonGrammar,
       tokenTable,
       undefined,
@@ -333,7 +333,7 @@ describe("Test GrammarStateMatcher E2E", () => {
     const tokenTable = await XGTokenTable.createXGTokenTable(
       vocab, "byte_level"
     );
-    const matcher = await GrammarStateMatcher.createGrammarStateMatcher(
+    const matcher = await GrammarMatcher.createGrammarMatcher(
       jsonGrammar,
       tokenTable,
       undefined,
@@ -393,7 +393,7 @@ sub_rule ::= "b"
     const tokenTable = await XGTokenTable.createXGTokenTable(
       vocab, "byte_level"
     );
-    const matcher = await GrammarStateMatcher.createGrammarStateMatcher(grammar, tokenTable);
+    const matcher = await GrammarMatcher.createGrammarMatcher(grammar, tokenTable);
     tokenTable.dispose();
     expect(matcher.acceptToken(0)).toEqual(true);
     expect(matcher.findJumpForwardString()).toEqual("bb");
@@ -456,7 +456,7 @@ describe("Test json schema E2E", () => {
 
     // 4. Instantiate matcher
     const grammar = await BuiltinGrammar.jsonSchema(schemaStr, 2);
-    const matcher = await GrammarStateMatcher.createGrammarStateMatcher(grammar, tokenTable);
+    const matcher = await GrammarMatcher.createGrammarMatcher(grammar, tokenTable);
     tokenTable.dispose();
     const inputIds = tokenizer.encode(instanceStr);
 
@@ -471,7 +471,7 @@ describe("Test json schema E2E", () => {
     // 6. Check finalization
     const final_bitmask = await matcher.findNextTokenBitmask();
     expect(final_bitmask.length).toEqual(Math.ceil(128256 / 32));
-    const final_rejected_tokens = (await GrammarStateMatcher.getRejectedTokensFromBitmask(
+    const final_rejected_tokens = (await GrammarMatcher.getRejectedTokensFromBitmask(
       final_bitmask, matcher.getVocabSize()
     ));
     expect(final_rejected_tokens.indexOf(128001)).toEqual(-1);  // stop token not rejected
@@ -501,7 +501,7 @@ describe("Test json schema E2E", () => {
 
     // 4. Instantiate matcher
     const grammar = await BuiltinGrammar.jsonSchema(schemaStr, 2);
-    const matcher = await GrammarStateMatcher.createGrammarStateMatcher(grammar, tokenTable);
+    const matcher = await GrammarMatcher.createGrammarMatcher(grammar, tokenTable);
     tokenTable.dispose();
 
     // 5. Expect to accept all inputIds
@@ -519,7 +519,7 @@ describe("Test json schema E2E", () => {
     // TODO(Charlie): Uncomment this when we incorporate fix equivalent to this
     // https://github.com/mlc-ai/mlc-llm/pull/2651
     // expect(final_bitmask.length).toEqual(Math.ceil(32064 / 32));
-    const final_rejected_tokens = (await GrammarStateMatcher.getRejectedTokensFromBitmask(
+    const final_rejected_tokens = (await GrammarMatcher.getRejectedTokensFromBitmask(
       final_bitmask, matcher.getVocabSize()
     ));
     expect(final_rejected_tokens.indexOf(2)).toEqual(-1);  // stop token not rejected

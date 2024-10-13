@@ -172,7 +172,7 @@ export class BuiltinGrammar {
 }
 
 /**
- * A class that wraps a decoded token table, needed to instantiate GrammarStateMatcher.
+ * A class that wraps a decoded token table, needed to instantiate GrammarMatcher.
  */
 export class XGTokenTable {
   /** A handle to the decoded token table of type binding.VectorString. */
@@ -229,13 +229,13 @@ export class XGTokenTable {
  * It is particularly capable of finding the set of tokens that are acceptable for the next step
  * and storing them in a bitmask. This aids in grammar-guided generation.
  */
-export class GrammarStateMatcher {
+export class GrammarMatcher {
   private handle: any;
 
   /**
    * @internal
    * Private constructor. Factory methods are used since binding initialization is asynchronous.
-   * @param {any} handle handle of GrammarStateMatcher created by binding.
+   * @param {any} handle handle of GrammarMatcher created by binding.
    */
   private constructor(handle: any) {
     this.handle = handle;
@@ -249,21 +249,21 @@ export class GrammarStateMatcher {
   }
 
   /**
-   * Construct a GrammarStateMatcher.
+   * Construct a GrammarMatcher.
    * @param {BNFGrammar} bnfGrammar The BNF grammar to match.
    * @param {XGTokenTable} tokenTable The decoded token table.
    * @param {number[] | number} [stopTokenIds=undefined] Stop tokens to override the default ones.
    * @param {boolean} [terminateWithoutStopToken=false] Whether to terminate without stop token.
    * @param {number} [maxRollbackSteps=0] Max rollback steps.
-   * @returns {GrammarStateMatcher} The constructed GrammarStateMatcher.
+   * @returns {GrammarMatcher} The constructed GrammarMatcher.
    */
-  static async createGrammarStateMatcher(
+  static async createGrammarMatcher(
     bnfGrammar: BNFGrammar,
     tokenTable: XGTokenTable,
     stopTokenIds?: number[] | number,
     terminateWithoutStopToken: boolean = false,
     maxRollbackSteps: number = 0,
-  ): Promise<GrammarStateMatcher> {
+  ): Promise<GrammarMatcher> {
     await asyncInitBinding();
     // Convert stopTokenIds to std::vector<int> if not undefined
     if (stopTokenIds !== undefined) {
@@ -272,7 +272,7 @@ export class GrammarStateMatcher {
       }
       stopTokenIds = binding.vecIntFromJSArray(stopTokenIds);
     }
-    return new GrammarStateMatcher(new binding.GrammarStateMatcher(
+    return new GrammarMatcher(new binding.GrammarMatcher(
       bnfGrammar.handle,
       tokenTable.decodedTokenTable,
       stopTokenIds,
@@ -341,7 +341,7 @@ export class GrammarStateMatcher {
   ): Promise<Int32Array> {
     await asyncInitBinding();
     const bitmaskIntVector = binding.vecIntFromJSArray(bitmask);
-    const rejectedIDsIntVector = binding.GrammarStateMatcher.GetRejectedTokensFromBitMask(
+    const rejectedIDsIntVector = binding.GrammarMatcher.GetRejectedTokensFromBitMask(
       bitmaskIntVector,
       vocabSize
     );
@@ -353,7 +353,7 @@ export class GrammarStateMatcher {
 
   /**
    * Check if the matcher has accepted the stop token and terminated. See also
-   * GrammarStateMatcher.acceptToken.
+   * GrammarMatcher.acceptToken.
    */
   isTerminated(): boolean {
     return this.handle.IsTerminated();

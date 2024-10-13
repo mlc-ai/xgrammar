@@ -1,4 +1,4 @@
-import { BNFGrammar, BuiltinGrammar, GrammarStateMatcher, XGTokenTable } from "./xgrammar"
+import { BNFGrammar, BuiltinGrammar, GrammarMatcher, XGTokenTable } from "./xgrammar"
 
-export { BNFGrammar, BuiltinGrammar, GrammarStateMatcher, XGTokenTable }
-export default { BNFGrammar, BuiltinGrammar, GrammarStateMatcher, XGTokenTable }
+export { BNFGrammar, BuiltinGrammar, GrammarMatcher, XGTokenTable }
+export default { BNFGrammar, BuiltinGrammar, GrammarMatcher, XGTokenTable }
