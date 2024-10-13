@@ -37,8 +37,19 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("from_huggingface", &TokenizerInfo::FromHuggingFace)
       .def_static("from_vocab_and_metadata", &TokenizerInfo::FromVocabAndMetadata);
 
+  auto pyGrammarMatcherInitContext =
+      py::class_<GrammarMatcherInitContext>(m, "GrammarMatcherInitContext");
+  pyGrammarMatcherInitContext.def(py::init<const BNFGrammar&, const std::vector<std::string>&>())
+      .def(py::init<const BNFGrammar&, const TokenizerInfo&>());
+
   auto pyGrammarMatcher = py::class_<GrammarMatcher>(m, "GrammarMatcher");
-  pyGrammarMatcher.def(py::init(&GrammarMatcher_Init))
+  pyGrammarMatcher
+      .def(py::init<
+           const GrammarMatcherInitContext&,
+           std::optional<std::vector<int>>,
+           bool,
+           std::optional<int>,
+           int>())
       .def("accept_token", &GrammarMatcher::AcceptToken)
       .def("_accept_string", &GrammarMatcher::_AcceptString)
       .def("find_next_token_bitmask", &GrammarMatcher_FindNextTokenBitmask)

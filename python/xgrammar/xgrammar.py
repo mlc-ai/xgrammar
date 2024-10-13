@@ -14,11 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Classes handling the grammar guided generation of MLC LLM serving."""
+"""Classes handling the grammar guided generation."""
 
-from enum import Enum
 import json
-from typing import List, Optional, Tuple, Type, Union
+from enum import Enum
+from typing import List, Optional, Tuple, Type, Union, overload
 
 import torch
 from pydantic import BaseModel
@@ -334,9 +334,27 @@ class TokenizerInfo(XGObject):
         )
 
 
-class GrammarMatcherInitContext:
-    def __init__(self, grammar: BNFGrammar, decoded_vocab: Optional[List[str]]) -> None:
-        self.handle = _core.GrammarMatcherInitContext(grammar.handle, decoded_vocab)
+class GrammarMatcherInitContext(XGObject):
+    def __init__(
+        self,
+        grammar: BNFGrammar,
+        tokenizer_or_vocab: Union[
+            None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]
+        ] = None,
+    ) -> None:
+        # convert tokenizer_or_vocab to TokenizerInfo
+        if isinstance(tokenizer_or_vocab, PreTrainedTokenizerBase):
+            tokenizer_or_vocab = TokenizerInfo.from_huggingface(tokenizer_or_vocab)
+        elif isinstance(tokenizer_or_vocab, list):
+            tokenizer_or_vocab = TokenizerInfo(tokenizer_or_vocab)
+        elif tokenizer_or_vocab is None:
+            tokenizer_or_vocab = TokenizerInfo([])
+        if not isinstance(tokenizer_or_vocab, TokenizerInfo):
+            raise ValueError(f"Unsupported tokenizer_or_vocab type: {type(tokenizer_or_vocab)}")
+
+        self.init_with_handle(
+            _core.GrammarMatcherInitContext(grammar.handle, tokenizer_or_vocab.handle)
+        )
 
 
 # class GrammarMatcherInitContextCache:
@@ -372,6 +390,7 @@ class GrammarMatcher(XGObject):
 
     """
 
+    @overload
     def __init__(
         self,
         grammar: BNFGrammar,
@@ -383,25 +402,44 @@ class GrammarMatcher(XGObject):
         terminate_without_stop_token: bool = False,
         mask_vocab_size: Optional[int] = None,
         max_rollback_steps: int = 0,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        grammar_matcher_init_context: GrammarMatcherInitContext,
+        *,
+        stop_token_ids: Union[None, int, List[int]] = None,
+        terminate_without_stop_token: bool = False,
+        mask_vocab_size: Optional[int] = None,
+        max_rollback_steps: int = 0,
+    ) -> None: ...
+
+    def __init__(
+        self,
+        grammar_or_context: Union[BNFGrammar, GrammarMatcherInitContext],
+        tokenizer_or_vocab: Union[
+            None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]
+        ] = None,
+        *,
+        stop_token_ids: Union[None, int, List[int]] = None,
+        terminate_without_stop_token: bool = False,
+        mask_vocab_size: Optional[int] = None,
+        max_rollback_steps: int = 0,
     ) -> None:
+        if isinstance(grammar_or_context, BNFGrammar):
+            grammar_matcher_init_context = GrammarMatcherInitContext(
+                grammar_or_context, tokenizer_or_vocab
+            )
+        else:
+            grammar_matcher_init_context = grammar_or_context
+
         if isinstance(stop_token_ids, int):
             stop_token_ids = [stop_token_ids]
 
-        # convert tokenizer_or_vocab to TokenizerInfo
-        if isinstance(tokenizer_or_vocab, PreTrainedTokenizerBase):
-            tokenizer_or_vocab = TokenizerInfo.from_huggingface(tokenizer_or_vocab)
-        elif isinstance(tokenizer_or_vocab, list):
-            tokenizer_or_vocab = TokenizerInfo(tokenizer_or_vocab)
-        elif tokenizer_or_vocab is None:
-            tokenizer_or_vocab = TokenizerInfo([])
-
-        if not isinstance(tokenizer_or_vocab, TokenizerInfo):
-            raise ValueError(f"Unsupported tokenizer_or_vocab type: {type(tokenizer_or_vocab)}")
-
         self.init_with_handle(
             _core.GrammarMatcher(
-                grammar.handle,
-                tokenizer_or_vocab.handle,
+                grammar_matcher_init_context.handle,
                 stop_token_ids,
                 terminate_without_stop_token,
                 mask_vocab_size,

@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2024 by Contributors
  * \file xgrammar/grammar_matcher_state.h
- * \brief The header for the definition of the state used in the gramma matcher.
+ * \brief The header for the definition of the state used in the grammar matcher.
  */
 #ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_STATE_H_
 #define XGRAMMAR_GRAMMAR_STATE_MATCHER_STATE_H_

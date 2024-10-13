@@ -50,23 +50,6 @@ std::vector<pybind11::bytes> TokenizerInfo_GetRawVocab(TokenizerInfo& tokenizer)
   return py_result;
 }
 
-GrammarMatcher GrammarMatcher_Init(
-    const BNFGrammar& grammar,
-    const TokenizerInfo& tokenizer_info,
-    std::optional<std::vector<int>> stop_token_ids,
-    bool terminate_without_stop_token,
-    std::optional<int> mask_vocab_size,
-    int max_rollback_steps
-) {
-  return GrammarMatcher(
-      GrammarMatcher::CreateInitContext(grammar, tokenizer_info),
-      stop_token_ids,
-      terminate_without_stop_token,
-      mask_vocab_size,
-      max_rollback_steps
-  );
-}
-
 torch::Tensor GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher) {
   auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetVocabSize());
   auto result = torch::empty({buffer_size}, torch::dtype(torch::kInt32).device(torch::kCPU, 0));

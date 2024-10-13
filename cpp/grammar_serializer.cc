@@ -157,9 +157,4 @@ std::string BNFGrammarJSONSerializer::ToString() {
   return grammar_json.serialize(prettify_);
 }
 
-// TVM_REGISTER_GLOBAL("mlc.grammar.BNFGrammarToString").set_body_typed([](const BNFGrammar&
-// grammar) {
-//   return BNFGrammarPrinter(grammar).ToString();
-// });
-
 }  // namespace xgrammar

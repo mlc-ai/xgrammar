@@ -32,15 +32,6 @@ std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 
 std::vector<pybind11::bytes> TokenizerInfo_GetRawVocab(TokenizerInfo& tokenizer);
 
-GrammarMatcher GrammarMatcher_Init(
-    const BNFGrammar& grammar,
-    const TokenizerInfo& tokenizer_info,
-    std::optional<std::vector<int>> stop_token_ids,
-    bool terminate_without_stop_token,
-    std::optional<int> mask_vocab_size,
-    int max_rollback_steps
-);
-
 torch::Tensor GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher);
 
 std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(

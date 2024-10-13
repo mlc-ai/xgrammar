@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
-addopts = "-rA --durations=0"
+addopts = "-rA --durations=0 --ignore=3rdparty"
 
 [tool.mypy]
 strict = true
