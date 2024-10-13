@@ -12,6 +12,15 @@
 #include <sstream>
 #include <string>
 
+/*!
+ * \brief Whether or not customize the logging output.
+ *  If log customize is enabled, the user must implement
+ *  xgrammar::LogFatalImpl and xgrammar::LogMessageImpl.
+ */
+#ifndef XGRAMMAR_LOG_CUSTOMIZE
+#define XGRAMMAR_LOG_CUSTOMIZE 0
+#endif
+
 namespace xgrammar {
 
 /*!
@@ -72,6 +81,65 @@ class InternalError : public Error {
   std::time_t time_;
   std::string full_message_;  // holds the full error string
 };
+
+// Provide support for customized logging.
+#if XGRAMMAR_LOG_CUSTOMIZE
+/*!
+ * \brief Custom implementations of LogFatal.
+ *
+ * \sa XGRAMMAR_LOG_CUSTOMIZE
+ */
+[[noreturn]] void LogFatalImpl(const std::string& file, int lineno, const std::string& message);
+
+/*!
+ * \brief Custom implementations of LogMessage.
+ *
+ * \sa XGRAMMAR_LOG_CUSTOMIZE
+ */
+void LogMessageImpl(const std::string& file, int lineno, int level, const std::string& message);
+
+/*!
+ * \brief Class to accumulate an error message and throw it. Do not use
+ * directly, instead use LOG(FATAL).
+ */
+class LogFatal {
+ public:
+  LogFatal(const std::string& file, int lineno) : file_(file), lineno_(lineno) {}
+#ifdef _MSC_VER
+#pragma disagnostic push
+#pragma warning(disable : 4722)
+#endif
+  [[noreturn]] ~LogFatal() noexcept(false) { LogFatalImpl(file_, lineno_, stream_.str()); }
+#ifdef _MSC_VER
+#pragma disagnostic pop
+#endif
+  std::ostringstream& stream() { return stream_; }
+
+ private:
+  std::ostringstream stream_;
+  std::string file_;
+  int lineno_;
+};
+
+/*!
+ * \brief Class to accumulate an log message. Do not use directly, instead use
+ * LOG(INFO), LOG(WARNING), LOG(ERROR).
+ */
+class LogMessage {
+ public:
+  LogMessage(const std::string& file, int lineno, int level)
+      : file_(file), lineno_(lineno), level_(level) {}
+  ~LogMessage() { LogMessageImpl(file_, lineno_, level_, stream_.str()); }
+  std::ostringstream& stream() { return stream_; }
+
+ private:
+  std::string file_;
+  int lineno_;
+  int level_;
+  std::ostringstream stream_;
+};
+
+#else  // if XGRAMMAR_LOG_CUSTOMIZE
 
 /*!
  * \brief Class to accumulate an error message and throw it. Do not use
@@ -135,6 +203,8 @@ class LogMessage {
   std::ostringstream stream_;
   static const char* level_strings_[];
 };
+
+#endif  // if XGRAMMAR_LOG_CUSTOMIZE
 
 #define XGRAMMAR_LOG_LEVEL_DEBUG 0
 #define XGRAMMAR_LOG_LEVEL_INFO 1

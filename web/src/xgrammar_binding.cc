@@ -1,10 +1,38 @@
+/*
+ * \file xgrammar_binding.cc
+ * \brief XGrammar wasm runtime library pack.
+ */
+
+// Configuration for XGRAMMAR_LOG()
+#define XGRAMMAR_LOG_CUSTOMIZE 1
+
 #include <emscripten.h>
 #include <emscripten/bind.h>
 #include <xgrammar/xgrammar.h>
 
+#include <iostream>
 #include <memory>
 
 // #include "../../cpp/support/logging.h"
+
+namespace xgrammar {
+// Override logging mechanism
+[[noreturn]] void LogFatalImpl(const std::string& file, int lineno, const std::string& message) {
+  std::cerr << "[FATAL] " << file << ":" << lineno << ": " << message << std::endl;
+  abort();
+}
+
+void LogMessageImpl(const std::string& file, int lineno, int level, const std::string& message) {
+  static const char* level_strings_[] = {
+      "[DEBUG] ",
+      "[INFO] ",
+      "[WARNING] ",
+      "[ERROR] ",
+  };
+  std::cout << level_strings_[level] << file << ":" << lineno << ": " << message << std::endl;
+}
+
+}  // namespace xgrammar
 
 using namespace emscripten;
 using namespace xgrammar;
