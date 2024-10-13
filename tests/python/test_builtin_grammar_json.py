@@ -7,6 +7,7 @@ import pytest
 from transformers import AutoTokenizer
 from xgrammar import BNFGrammar, BuiltinGrammar, GrammarStateMatcher
 
+
 json_grammar = BuiltinGrammar.json()
 
 

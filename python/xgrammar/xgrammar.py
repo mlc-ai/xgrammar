@@ -259,28 +259,6 @@ class BuiltinGrammar:
             strict_mode,
         )
 
-    # @staticmethod
-    # def _with_suffix(base_grammar: BNFGrammar, suffix_string: str) -> BNFGrammar:
-    #     """Add a suffix to the main rule of the grammar.
-
-    #     Parameters
-    #     ----------
-    #     base_grammar : BNFGrammar
-    #         The base grammar.
-
-    #     suffix_string : str
-    #         The suffix string.
-
-    #     Returns
-    #     -------
-    #     grammar : BNFGrammar
-    #         The grammar with suffix.
-    #     """
-    #     return _init_object_with_handle(
-    #         BNFGrammar,
-    #         _core.BuiltinGrammar._with_suffix(base_grammar._handle, suffix_string),
-    #     )
-
 
 class VocabType(Enum):
     RAW = "RAW"
@@ -397,7 +375,9 @@ class GrammarStateMatcher(XGObject):
     def __init__(
         self,
         grammar: BNFGrammar,
-        tokenizer_or_vocab: Union[None, PreTrainedTokenizerBase, List[bytes], List[str]] = None,
+        tokenizer_or_vocab: Union[
+            None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]
+        ] = None,
         *,
         stop_token_ids: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
@@ -407,22 +387,21 @@ class GrammarStateMatcher(XGObject):
         if isinstance(stop_token_ids, int):
             stop_token_ids = [stop_token_ids]
 
-        if tokenizer_or_vocab is None or isinstance(tokenizer_or_vocab, list):
-            vocab = tokenizer_or_vocab
-        elif isinstance(tokenizer_or_vocab, PreTrainedTokenizerBase):
-            xg_tokenizer = XGTokenizer(tokenizer_or_vocab)
-            vocab = xg_tokenizer.decoded_vocab
-        else:
-            msg = (
-                "The tokenizer_or_vocab should be None, a PreTrainedTokenizerBase, or a list of "
-                "strings."
-            )
-            raise ValueError(msg)
+        # convert tokenizer_or_vocab to TokenizerInfo
+        if isinstance(tokenizer_or_vocab, PreTrainedTokenizerBase):
+            tokenizer_or_vocab = TokenizerInfo.from_huggingface(tokenizer_or_vocab)
+        elif isinstance(tokenizer_or_vocab, list):
+            tokenizer_or_vocab = TokenizerInfo(tokenizer_or_vocab)
+        elif tokenizer_or_vocab is None:
+            tokenizer_or_vocab = TokenizerInfo([])
+
+        if not isinstance(tokenizer_or_vocab, TokenizerInfo):
+            raise ValueError(f"Unsupported tokenizer_or_vocab type: {type(tokenizer_or_vocab)}")
 
         self.init_with_handle(
             _core.GrammarStateMatcher(
                 grammar.handle,
-                vocab,
+                tokenizer_or_vocab.handle,
                 stop_token_ids,
                 terminate_without_stop_token,
                 mask_vocab_size,

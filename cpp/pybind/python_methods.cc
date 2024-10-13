@@ -52,31 +52,14 @@ std::vector<pybind11::bytes> TokenizerInfo_GetRawVocab(TokenizerInfo& tokenizer)
 
 GrammarStateMatcher GrammarStateMatcher_Init(
     const BNFGrammar& grammar,
-    const std::vector<std::string>& vocab,
+    const TokenizerInfo& tokenizer_info,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
     std::optional<int> mask_vocab_size,
     int max_rollback_steps
 ) {
   return GrammarStateMatcher(
-      GrammarStateMatcher::CreateInitContext(grammar, vocab),
-      stop_token_ids,
-      terminate_without_stop_token,
-      mask_vocab_size,
-      max_rollback_steps
-  );
-}
-
-GrammarStateMatcher GrammarStateMatcher_Init(
-    const BNFGrammar& grammar,
-    std::nullptr_t,
-    std::optional<std::vector<int>> stop_token_ids,
-    bool terminate_without_stop_token,
-    std::optional<int> mask_vocab_size,
-    int max_rollback_steps
-) {
-  return GrammarStateMatcher(
-      GrammarStateMatcher::CreateInitContext(grammar, {}),
+      GrammarStateMatcher::CreateInitContext(grammar, tokenizer_info),
       stop_token_ids,
       terminate_without_stop_token,
       mask_vocab_size,

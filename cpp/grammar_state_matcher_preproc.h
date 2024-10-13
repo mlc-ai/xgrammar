@@ -407,6 +407,12 @@ std::shared_ptr<GrammarMatcherInitContext> GrammarStateMatcher::CreateInitContex
   return ptr;
 }
 
+std::shared_ptr<GrammarMatcherInitContext> GrammarStateMatcher::CreateInitContext(
+    const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info
+) {
+  return GrammarStateMatcher::CreateInitContext(grammar, tokenizer_info.GetRawVocab());
+}
+
 class GrammarInitContextCache::Impl {
  public:
   Impl(const std::vector<std::string>& decoded_vocab);

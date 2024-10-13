@@ -256,6 +256,10 @@ class GrammarStateMatcher {
       const BNFGrammar& grammar, const std::vector<std::string>& decoded_vocab
   );
 
+  static std::shared_ptr<GrammarMatcherInitContext> CreateInitContext(
+      const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info
+  );
+
   /*!
    * \brief Accept one token and update the state of the matcher.
    * \param token_id The id of the token to accept.
