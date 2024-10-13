@@ -9,36 +9,32 @@
 using namespace emscripten;
 using namespace xgrammar;
 
-/*!
- * \brief Decode an entire token table with the provided decoder type. Used for instantiating
- * XGTokenTable in JS side.
- */
-std::vector<std::string> DecodeTokenTable(
-    const std::vector<std::string>& rawTokenTable, const std::string& decoderType
+TokenizerInfo TokenizerInfo_Init(
+    const std::vector<std::string>& vocab,
+    std::string vocab_type,
+    bool prepend_space_in_tokenization
 ) {
-  std::vector<std::string> decodedTokenTable;
-  decodedTokenTable.reserve(rawTokenTable.size());
-  for (const std::string& rawToken : rawTokenTable) {
-    decodedTokenTable.push_back(XGTokenizer::DecodeToken(rawToken, decoderType));
-  }
-  return decodedTokenTable;
+  static const std::unordered_map<std::string, VocabType> VOCAB_TYPE_MAP = {
+      {"RAW", VocabType::RAW},
+      {"BYTE_FALLBACK", VocabType::BYTE_FALLBACK},
+      {"BYTE_LEVEL", VocabType::BYTE_LEVEL},
+  };
+  return TokenizerInfo(vocab, VOCAB_TYPE_MAP.at(vocab_type), prepend_space_in_tokenization);
 }
 
-// TODO(Charlie): Should this return pointer, and use `allow_raw_pointers()`?
-/*!
- * \brief Constructor for grammar state matcher in JS.
- */
 GrammarMatcher GrammarMatcher_Init(
     const BNFGrammar& grammar,
-    const std::vector<std::string>& vocab,
+    const TokenizerInfo& tokenizer_info,
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
+    std::optional<int> mask_vocab_size,
     int max_rollback_steps
 ) {
   return GrammarMatcher(
-      GrammarMatcher::CreateInitContext(grammar, vocab),
+      GrammarMatcher::CreateInitContext(grammar, tokenizer_info),
       stop_token_ids,
       terminate_without_stop_token,
+      mask_vocab_size,
       max_rollback_steps
   );
 }
@@ -102,7 +98,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   register_optional<int>();
   register_optional<std::pair<std::string, std::string>>();
 
-  // Register std::vector<std::string> for DecodeTokenTable
+  // Register std::vector<std::string> for TokenizerInfo.GetRawVocab()
   register_vector<std::string>("VectorString");
   function(
       "vecStringFromJSArray",
@@ -132,7 +128,10 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .class_function("JSONSchema", &BuiltinGrammar::JSONSchema)
       .class_function("_JSONSchemaToEBNF", &BuiltinGrammar::_JSONSchemaToEBNF);
 
-  function("DecodeTokenTable", &DecodeTokenTable);
+  class_<TokenizerInfo>("TokenizerInfo")
+      .constructor(&TokenizerInfo_Init)
+      .function("GetVocabSize", &TokenizerInfo::GetVocabSize)
+      .function("GetRawVocab", &TokenizerInfo::GetRawVocab);
 
   class_<GrammarMatcher>("GrammarMatcher")
       .constructor(&GrammarMatcher_Init)

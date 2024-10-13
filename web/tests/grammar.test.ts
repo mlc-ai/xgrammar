@@ -4,22 +4,22 @@
  * thoroughly since that is done in `tests/python`.
  */
 import { describe, expect, test } from "@jest/globals";
-import { BNFGrammar, BuiltinGrammar, XGTokenTable, GrammarMatcher } from "..";
+import { BNFGrammar, BuiltinGrammar, TokenizerInfo, GrammarMatcher } from "..";
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 
-async function getXGTokenTableFromUrl(tokenizerUrl: string, decoderType: string): Promise<XGTokenTable> {
+async function getTokenizerInfoFromUrl(tokenizerUrl: string, vocabType: string, prependSpace: boolean): Promise<TokenizerInfo> {
   // 1. Get tokenizer
   const jsonBuffer = await (await fetch(tokenizerUrl)).arrayBuffer();
   const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
-  // 2. Get raw token table
-  const rawTokenTable: string[] = [];
+  // 2. Get raw vocab
+  const rawVocab: string[] = [];
   const vocabSize = tokenizer.getVocabSize();
   for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
-    rawTokenTable.push(tokenizer.idToToken(tokenId));
+    rawVocab.push(tokenizer.idToToken(tokenId));
   }
   // 3. Decode
-  const decodedTokenTable = await XGTokenTable.createXGTokenTable(rawTokenTable, decoderType);
-  return decodedTokenTable;
+  const decodedVocab = await TokenizerInfo.createTokenizerInfo(rawVocab, vocabType, prependSpace);
+  return decodedVocab;
 }
 
 /**
@@ -114,38 +114,40 @@ main ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " main_p
   });
 });
 
-describe("Test XGTokenTable", () => {
-  test("Test basic token tables", async () => {
-    const dummyTokenTable = ["!", "éĶ¦"];
-    const dummyDecoderType = "byte_level";
-    const tokenTable = await XGTokenTable.createXGTokenTable(
-      dummyTokenTable, dummyDecoderType
+describe("Test TokenizerInfo", () => {
+  test("Test basic tokenizer info", async () => {
+    const dummyVocab = ["!", "éĶ¦"];
+    const dummyVocabType = "byte_level";
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+      dummyVocab, dummyVocabType, false
     );
-    expect(tokenTable.decodedTokenTable.get(0)).toEqual("!");
-    expect(tokenTable.decodedTokenTable.get(1)).toEqual("锦");
-    tokenTable.dispose();
+    expect(tokenizerInfo.getRawVocabHandle().get(0)).toEqual("!");
+    expect(tokenizerInfo.getRawVocabHandle().get(1)).toEqual("锦");
+    tokenizerInfo.dispose();
   });
 
   test("Test with Llama3.2, byte_level", async () => {
-    const decodedTokenTable = await getXGTokenTableFromUrl(
+    const tokenizerInfo = await getTokenizerInfoFromUrl(
       "https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_0-MLC/raw/main/tokenizer.json",
-      "byte_level"
+      "byte_level",
+      false,
     );
-    expect(decodedTokenTable.decodedTokenTable.size()).toEqual(128256);
-    decodedTokenTable.dispose();
+    expect(tokenizerInfo.getRawVocabHandle().size()).toEqual(128256);
+    tokenizerInfo.dispose();
   })
 
   test("Test with Phi3.5, byte_fallback", async () => {
-    const decodedTokenTable = await getXGTokenTableFromUrl(
+    const tokenizerInfo = await getTokenizerInfoFromUrl(
       "https://huggingface.co/mlc-ai/Phi-3.5-mini-instruct-q4f16_1-MLC/raw/main/tokenizer.json",
-      "byte_fallback"
+      "byte_fallback",
+      true,
     );
     // phi-3.5 though vocab size is 32064 in config.json, has 32011 actual vocab. The size of the
     // table (i.e. tokenizer.getVocabSize()) may be smaller than the `vocab_size` in config.json
     // (length of logits), see https://github.com/QwenLM/Qwen2/issues/147 and
     // https://huggingface.co/microsoft/Phi-3-mini-4k-instruct/discussions/47.
-    expect(decodedTokenTable.decodedTokenTable.size()).toEqual(32011);
-    decodedTokenTable.dispose();
+    expect(tokenizerInfo.getRawVocabHandle().size()).toEqual(32011);
+    tokenizerInfo.dispose();
   })
 });
 
@@ -164,11 +166,11 @@ describe("Test GrammarMatcher E2E", () => {
   test("test_token_operations", async () => {
     // 1. Instantiate matcher
     const jsonGrammar = await BuiltinGrammar.json();
-    const tokenTable = await XGTokenTable.createXGTokenTable(
-      vocab, "byte_level"
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+      vocab, "byte_level", false
     );
-    const matcher = await GrammarMatcher.createGrammarMatcher(jsonGrammar, tokenTable);
-    tokenTable.dispose();
+    const matcher = await GrammarMatcher.createGrammarMatcher(jsonGrammar, tokenizerInfo);
+    tokenizerInfo.dispose();
 
     // 2. Test
     const expected = [
@@ -218,12 +220,12 @@ describe("Test GrammarMatcher E2E", () => {
   test("test_token_operations with customized stop token id", async () => {
     // 1. Instantiate matcher
     const jsonGrammar = await BuiltinGrammar.json();
-    const tokenTable = await XGTokenTable.createXGTokenTable(
-      vocab, "byte_level"
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+      vocab, "byte_level", false
     );
     // TODO(Charlie): Specifying only 0 still makes 1 a valid stop token -- is this what we want?
-    const matcher = await GrammarMatcher.createGrammarMatcher(jsonGrammar, tokenTable, [0, 1]);
-    tokenTable.dispose();
+    const matcher = await GrammarMatcher.createGrammarMatcher(jsonGrammar, tokenizerInfo, [0, 1]);
+    tokenizerInfo.dispose();
 
     // 2. Test
     const expected = [
@@ -272,17 +274,18 @@ describe("Test GrammarMatcher E2E", () => {
   test("test_roll_back", async () => {
     // 1. Instantiate matcher
     const jsonGrammar = await BuiltinGrammar.json();
-    const tokenTable = await XGTokenTable.createXGTokenTable(
-      vocab, "byte_level"
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+      vocab, "byte_level", false
     );
     const matcher = await GrammarMatcher.createGrammarMatcher(
       jsonGrammar,
-      tokenTable,
+      tokenizerInfo,
+      undefined,
       undefined,
       undefined,
       5,
     );
-    tokenTable.dispose();
+    tokenizerInfo.dispose();
     expect(matcher.getMaxRollbackSteps()).toEqual(5);
 
     // 2. Test
@@ -330,17 +333,18 @@ describe("Test GrammarMatcher E2E", () => {
 
     // 1. Instantiate matcher
     const jsonGrammar = await BuiltinGrammar.json();
-    const tokenTable = await XGTokenTable.createXGTokenTable(
-      vocab, "byte_level"
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+      vocab, "byte_level", false
     );
     const matcher = await GrammarMatcher.createGrammarMatcher(
       jsonGrammar,
-      tokenTable,
+      tokenizerInfo,
+      undefined,
       undefined,
       undefined,
       5
     );
-    tokenTable.dispose();
+    tokenizerInfo.dispose();
 
     // 2. Accept all one time
     const orig_result: Int32Array[] = [];
@@ -390,11 +394,11 @@ sub_rule ::= "b"
 `;
     const vocab = ["a", "bb"];
     const grammar = await BNFGrammar.createBNFGrammar(grammar_ebnf);
-    const tokenTable = await XGTokenTable.createXGTokenTable(
-      vocab, "byte_level"
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+      vocab, "byte_level", false
     );
-    const matcher = await GrammarMatcher.createGrammarMatcher(grammar, tokenTable);
-    tokenTable.dispose();
+    const matcher = await GrammarMatcher.createGrammarMatcher(grammar, tokenizerInfo);
+    tokenizerInfo.dispose();
     expect(matcher.acceptToken(0)).toEqual(true);
     expect(matcher.findJumpForwardString()).toEqual("bb");
   });
@@ -445,19 +449,19 @@ describe("Test json schema E2E", () => {
       "https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_0-MLC/raw/main/tokenizer.json"
     )).arrayBuffer();
     const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
-    // 2. Get raw token table
-    const rawTokenTable: string[] = [];
+    // 2. Get raw vocab
+    const rawVocab: string[] = [];
     const vocabSize = tokenizer.getVocabSize();
     for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
-      rawTokenTable.push(tokenizer.idToToken(tokenId));
+      rawVocab.push(tokenizer.idToToken(tokenId));
     }
     // 3. Decode
-    const tokenTable = await XGTokenTable.createXGTokenTable(rawTokenTable, "byte_level");
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(rawVocab, "byte_level", false);
 
     // 4. Instantiate matcher
     const grammar = await BuiltinGrammar.jsonSchema(schemaStr, 2);
-    const matcher = await GrammarMatcher.createGrammarMatcher(grammar, tokenTable);
-    tokenTable.dispose();
+    const matcher = await GrammarMatcher.createGrammarMatcher(grammar, tokenizerInfo);
+    tokenizerInfo.dispose();
     const inputIds = tokenizer.encode(instanceStr);
 
     // 5. Expect to accept all inputIds
@@ -490,19 +494,19 @@ describe("Test json schema E2E", () => {
       "https://huggingface.co/mlc-ai/Phi-3.5-mini-instruct-q4f16_1-MLC/raw/main/tokenizer.json",
     )).arrayBuffer();
     const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
-    // 2. Get raw token table
-    const rawTokenTable: string[] = [];
+    // 2. Get raw vocab
+    const rawVocab: string[] = [];
     const vocabSize = tokenizer.getVocabSize();
     for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
-      rawTokenTable.push(tokenizer.idToToken(tokenId));
+      rawVocab.push(tokenizer.idToToken(tokenId));
     }
     // 3. Decode
-    const tokenTable = await XGTokenTable.createXGTokenTable(rawTokenTable, "byte_fallback");
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(rawVocab, "byte_fallback", false);
 
-    // 4. Instantiate matcher
+    // 4. Instantiate matcher; note that phi-3.5 has 32064 as vocab size in `config.json`
     const grammar = await BuiltinGrammar.jsonSchema(schemaStr, 2);
-    const matcher = await GrammarMatcher.createGrammarMatcher(grammar, tokenTable);
-    tokenTable.dispose();
+    const matcher = await GrammarMatcher.createGrammarMatcher(grammar, tokenizerInfo, undefined, false, 32064);
+    tokenizerInfo.dispose();
 
     // 5. Expect to accept all inputIds
     for (let i = 0; i < instanceStr.length; i++) {
@@ -516,9 +520,8 @@ describe("Test json schema E2E", () => {
 
     // 6. Check finalization
     const final_bitmask = await matcher.findNextTokenBitmask();
-    // TODO(Charlie): Uncomment this when we incorporate fix equivalent to this
-    // https://github.com/mlc-ai/mlc-llm/pull/2651
-    // expect(final_bitmask.length).toEqual(Math.ceil(32064 / 32));
+    // Tests how phi3.5 has dummy padded tokens. See https://github.com/mlc-ai/mlc-llm/pull/2651
+    expect(final_bitmask.length).toEqual(Math.ceil(32064 / 32));
     const final_rejected_tokens = (await GrammarMatcher.getRejectedTokensFromBitmask(
       final_bitmask, matcher.getVocabSize()
     ));

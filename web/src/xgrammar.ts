@@ -172,48 +172,63 @@ export class BuiltinGrammar {
 }
 
 /**
- * A class that wraps a decoded token table, needed to instantiate GrammarMatcher.
+ * A class that wraps a preprocessed vocab, needed to instantiate GrammarMatcher.
  */
-export class XGTokenTable {
-  /** A handle to the decoded token table of type binding.VectorString. */
-  decodedTokenTable: any;
+export class TokenizerInfo {
+  handle: any;
 
   /**
    * @internal
    * Private constructor. Factory methods are used since binding initialization is asynchronous.
-   * @param {any} decodedTokenTable Post-processed token table.
+   * @param {any} handle  handle of TokenizerInfo created by binding.
    */
-  private constructor(decodedTokenTable: any) {
-    this.decodedTokenTable = decodedTokenTable;
+  private constructor(handle: any) {
+    this.handle = handle;
   };
 
   /**
-   * Dispose this token table.
+   * Dispose this tokenizer info object.
    */
   dispose() {
-    this.decodedTokenTable.delete();
+    this.handle.delete();
   }
 
   /**
-   * Instantiate with raw token table and the decoder type by internally post-processing
-   * the raw token table by decoding each token with the provided decoder type.
-   * @param {string[]} rawTokenTable: the token table in the form of a string list of tokens,
-   * ordered by their token id. It should include all the special tokens.
-   * @param {string} decoderType: either "byte_fallback", or "byte_level". See `tokenizer.cc` for
-   * its semantic.
+   * Get the vocab size.
    */
-  static async createXGTokenTable(
-    rawTokenTable: string[],
-    decoderType: string,
-  ): Promise<XGTokenTable> {
+  getVocabSize(): number {
+    return this.handle.GetVocabSize();
+  }
+
+  /**
+   * Get the post-processed vocab. Returned as a handle of type binding.VectorString
+   */
+  getRawVocabHandle(): any {
+    return this.handle.GetRawVocab();
+  }
+
+  /**
+   * Instantiate with raw vocab and the vocab type by internally post-processing
+   * the raw vocab by decoding each token with the provided vocab type.
+   * @param {string[]} rawVocab: the vocab in the form of a string list of tokens,
+   * ordered by their token id. It should include all the special tokens.
+   * @param {string} vocabType: either "byte_fallback", "byte_level", or `raw`. See `tokenizer.cc`
+   * for its semantic.
+   */
+  static async createTokenizerInfo(
+    rawVocab: string[],
+    vocabType: string,
+    prependSpaceInTokenization: boolean,
+  ): Promise<TokenizerInfo> {
     await asyncInitBinding();
     // Convert string[] to std::vector<std::string>
-    const rawTokenTableVec = binding.vecStringFromJSArray(rawTokenTable);
-    // Returns of type binding.VectorString
-    const decodedTokenTable = binding.DecodeTokenTable(rawTokenTableVec, decoderType);
-    rawTokenTableVec.delete();
-    // Instantiate XGTokenTable
-    return new XGTokenTable(decodedTokenTable);
+    const rawVocabVec = binding.vecStringFromJSArray(rawVocab);
+    // Instantiate TokenizerInfo
+    return new TokenizerInfo(new binding.TokenizerInfo(
+      rawVocabVec,
+      vocabType.toUpperCase(),
+      prependSpaceInTokenization,
+    ));
   }
 }
 
@@ -251,7 +266,7 @@ export class GrammarMatcher {
   /**
    * Construct a GrammarMatcher.
    * @param {BNFGrammar} bnfGrammar The BNF grammar to match.
-   * @param {XGTokenTable} tokenTable The decoded token table.
+   * @param {TokenizerInfo} tokenizerInfo The tokenizer info that contains preprocessed vocab.
    * @param {number[] | number} [stopTokenIds=undefined] Stop tokens to override the default ones.
    * @param {boolean} [terminateWithoutStopToken=false] Whether to terminate without stop token.
    * @param {number} [maxRollbackSteps=0] Max rollback steps.
@@ -259,9 +274,10 @@ export class GrammarMatcher {
    */
   static async createGrammarMatcher(
     bnfGrammar: BNFGrammar,
-    tokenTable: XGTokenTable,
+    tokenizerInfo: TokenizerInfo,
     stopTokenIds?: number[] | number,
     terminateWithoutStopToken: boolean = false,
+    maskVocabSize?: number,
     maxRollbackSteps: number = 0,
   ): Promise<GrammarMatcher> {
     await asyncInitBinding();
@@ -274,9 +290,10 @@ export class GrammarMatcher {
     }
     return new GrammarMatcher(new binding.GrammarMatcher(
       bnfGrammar.handle,
-      tokenTable.decodedTokenTable,
+      tokenizerInfo.handle,
       stopTokenIds,
       terminateWithoutStopToken,
+      maskVocabSize,
       maxRollbackSteps,
     ));
   }

@@ -1,39 +1,41 @@
-import { BNFGrammar, BuiltinGrammar, GrammarMatcher, XGTokenTable } from "@mlc-ai/web-xgrammar"
+import { BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo } from "@mlc-ai/web-xgrammar"
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 import { Type, Static } from "@sinclair/typebox";
 
-async function getXGTokenTableAndTokenizerFromUrl(
+async function getTokenizerInfoAndTokenizerFromUrl(
     tokenizerUrl: string,
-    decoderType: string
-): Promise<[XGTokenTable, Tokenizer]> {
+    vocabType: string,
+    prependSpaceInTokenization: boolean,
+): Promise<[TokenizerInfo, Tokenizer]> {
     // 1. Get tokenizer, we use "@mlc-ai/web-tokenizers" here, but any should work
     const jsonBuffer = await (await fetch(tokenizerUrl)).arrayBuffer();
     const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
-    // 2. Get raw token table
+    // 2. Get raw vocab
     const rawTokenTable: string[] = [];
     const vocabSize = tokenizer.getVocabSize();
     for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
         rawTokenTable.push(tokenizer.idToToken(tokenId));
     }
-    // 3. Post process token table
-    const decodedTokenTable = await XGTokenTable.createXGTokenTable(rawTokenTable, decoderType);
-    return [decodedTokenTable, tokenizer];
+    // 3. Post process vocab
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(rawTokenTable, vocabType, prependSpaceInTokenization);
+    return [tokenizerInfo, tokenizer];
 }
 
 async function jsonExample() {
     console.log("json example");
-    const result = await getXGTokenTableAndTokenizerFromUrl(
+    const result = await getTokenizerInfoAndTokenizerFromUrl(
         "https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_0-MLC/raw/main/tokenizer.json",
-        "byte_level"
+        "byte_level",
+        false,
     );
-    const decodedTokenTable = result[0];
+    const tokenizerInfo = result[0];
     const tokenizer = result[1];
 
     // 1. Initialize grammar state matcher with JSON grammar
     const bnfGrammar: BNFGrammar = await BuiltinGrammar.json();
     const grammarMatcher = await GrammarMatcher.createGrammarMatcher(
         bnfGrammar,
-        decodedTokenTable,
+        tokenizerInfo,
     );
     console.log(grammarMatcher);
 
@@ -102,18 +104,19 @@ async function jsonSchemaExample() {
     const schema = JSON.stringify(T);
     console.log("schema: ", schema);
 
-    const result = await getXGTokenTableAndTokenizerFromUrl(
+    const result = await getTokenizerInfoAndTokenizerFromUrl(
         "https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_0-MLC/raw/main/tokenizer.json",
-        "byte_level"
+        "byte_level",
+        false,
     );
-    const decodedTokenTable = result[0];
+    const tokenizerInfo = result[0];
     const tokenizer = result[1];
 
     // 1. Instantiate matcher with a grammar defined by the above schema
     const bnfGrammar: BNFGrammar = await BuiltinGrammar.jsonSchema(schema);
     const grammarMatcher = await GrammarMatcher.createGrammarMatcher(
         bnfGrammar,
-        decodedTokenTable,
+        tokenizerInfo,
     );
     console.log(grammarMatcher);
 
