@@ -41,7 +41,7 @@ escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
 ws ::= [ \n\t]*
 """
-    grammar = BNFGrammar(json_grammar_simple_ebnf, "basic_string")
+    grammar = BNFGrammar(json_grammar_simple_ebnf, main_rule="basic_string")
     assert match_complete_string(grammar, r'"abc\r\n"')
     assert not match_complete_string(grammar, r'{"name": "John" }')
 
@@ -338,7 +338,7 @@ def test_find_next_rejected_tokens(
 
         print(f"Time to find_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
         rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
+            bitmask, matcher.mask_vocab_size
         )
         time_end = time.monotonic_ns()
         print(f"Time to get_rejected_tokens_from_bitmask: {(time_end - time_mid) / 1e3} us")
@@ -356,7 +356,7 @@ def test_find_next_rejected_tokens(
 
     bitmask = matcher.find_next_token_bitmask()
     rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
+        bitmask, matcher.mask_vocab_size
     )
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:

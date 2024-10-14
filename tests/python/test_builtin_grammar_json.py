@@ -291,7 +291,7 @@ def test_find_next_rejected_tokens(
         bitmask = matcher.find_next_token_bitmask()
         time_mid = time.monotonic_ns()
         rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
+            bitmask, matcher.mask_vocab_size
         )
         time_end = time.monotonic_ns()
         print(f"Time to find_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
@@ -310,7 +310,7 @@ def test_find_next_rejected_tokens(
 
     bitmask = matcher.find_next_token_bitmask()
     rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
+        bitmask, matcher.mask_vocab_size
     )
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:

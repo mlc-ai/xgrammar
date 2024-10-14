@@ -65,8 +65,8 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("get_rejected_tokens_from_bitmask", &GrammarMatcher_GetRejectedTokensFromBitMask)
       .def("is_terminated", &GrammarMatcher::IsTerminated)
       .def("reset", &GrammarMatcher::Reset)
-      .def_property_readonly("vocab_size", &GrammarMatcher::GetVocabSize)
+      .def_property_readonly("mask_vocab_size", &GrammarMatcher::GetMaskVocabSize)
       .def("find_jump_forward_string", &GrammarMatcher::FindJumpForwardString)
       .def("rollback", &GrammarMatcher::Rollback)
-      .def_property_readonly("max_rollback_steps", &GrammarMatcher::GetMaxRollbackSteps);
+      .def_property_readonly("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens);
 }

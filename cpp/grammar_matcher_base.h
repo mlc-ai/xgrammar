@@ -3,8 +3,8 @@
  * \file xgrammar/grammar_matcher_base.h
  * \brief The base class of GrammarMatcher. It implements a character-based matching automata.
  */
-#ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_BASE_H_
-#define XGRAMMAR_GRAMMAR_STATE_MATCHER_BASE_H_
+#ifndef XGRAMMAR_GRAMMAR_MATCHER_BASE_H_
+#define XGRAMMAR_GRAMMAR_MATCHER_BASE_H_
 
 #include <xgrammar/xgrammar.h>
 
@@ -413,4 +413,4 @@ inline bool GrammarMatcherBase::ExpandRulePosition(
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_STATE_MATCHER_BASE_H_
+#endif  // XGRAMMAR_GRAMMAR_MATCHER_BASE_H_

@@ -56,14 +56,14 @@ GrammarMatcher GrammarMatcher_Init(
     std::optional<std::vector<int>> stop_token_ids,
     bool terminate_without_stop_token,
     std::optional<int> mask_vocab_size,
-    int max_rollback_steps
+    int max_rollback_tokens
 ) {
   return GrammarMatcher(
       GrammarMatcherInitContext(grammar, tokenizer_info),
       stop_token_ids,
       terminate_without_stop_token,
       mask_vocab_size,
-      max_rollback_steps
+      max_rollback_tokens
   );
 }
 
@@ -72,7 +72,7 @@ GrammarMatcher GrammarMatcher_Init(
  */
 std::vector<int32_t> GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher) {
   // 1. Initialize std::vector result
-  auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetVocabSize());
+  auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetMaskVocabSize());
   std::vector<int32_t> result(buffer_size);
   // 2. Initialize DLTensor with the data pointer of the std vector.
   DLTensor tensor;
@@ -95,7 +95,7 @@ std::vector<int32_t> GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher
  * \note This method is mainly used in testing, so performance is not as important.
  */
 std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(
-    std::vector<int32_t> token_bitmask, size_t vocab_size
+    std::vector<int32_t> token_bitmask, size_t mask_vocab_size
 ) {
   // 1. Convert token_bitmask into DLTensor
   DLTensor tensor;
@@ -110,7 +110,7 @@ std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(
   tensor.byte_offset = 0;
   // 2. Get rejected token IDs
   std::vector<int> result;
-  GrammarMatcher::GetRejectedTokensFromBitMask(tensor, vocab_size, &result);
+  GrammarMatcher::GetRejectedTokensFromBitMask(tensor, mask_vocab_size, &result);
   return result;
 }
 
@@ -164,8 +164,8 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   class_<GrammarMatcher>("GrammarMatcher")
       .constructor(&GrammarMatcher_Init)
       .smart_ptr<std::shared_ptr<GrammarMatcher>>("GrammarMatcher")
-      .function("GetVocabSize", &GrammarMatcher::GetVocabSize)
-      .function("GetMaxRollbackSteps", &GrammarMatcher::GetMaxRollbackSteps)
+      .function("GetMaskVocabSize", &GrammarMatcher::GetMaskVocabSize)
+      .function("GetMaxRollbackTokens", &GrammarMatcher::GetMaxRollbackTokens)
       .function("AcceptToken", &GrammarMatcher::AcceptToken)
       .function("FindNextTokenBitmask", &GrammarMatcher_FindNextTokenBitmask)
       .class_function("GetRejectedTokensFromBitMask", &GrammarMatcher_GetRejectedTokensFromBitMask)

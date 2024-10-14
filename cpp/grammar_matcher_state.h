@@ -3,8 +3,8 @@
  * \file xgrammar/grammar_matcher_state.h
  * \brief The header for the definition of the state used in the grammar matcher.
  */
-#ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_STATE_H_
-#define XGRAMMAR_GRAMMAR_STATE_MATCHER_STATE_H_
+#ifndef XGRAMMAR_GRAMMAR_MATCHER_STATE_H_
+#define XGRAMMAR_GRAMMAR_MATCHER_STATE_H_
 
 #include <xgrammar/xgrammar.h>
 
@@ -224,15 +224,15 @@ class RulePositionTree {
  * \details This class helps to maintain nodes by automatically maintaining the attached references.
  * If a node is not existing in any stack in the history record, it will be freed.
  *
- * It can store up to the previous max_rollback_steps + 1 steps of history, and thus supports
- * rolling back up to max_rollback_steps steps.
+ * It can store up to the previous max_rollback_tokens + 1 steps of history, and thus supports
+ * rolling back up to max_rollback_tokens steps.
  */
 class StackTopsHistory {
  public:
   /*!
    * \param tree The RulePositionTree to be associated with. Possibly modify the tree by attaching
    * and removing references to the stack top nodes.
-   * \param max_rollback_steps The maximum number of rollback steps to be supported.
+   * \param max_rollback_tokens The maximum number of rollback tokens to be supported.
    */
   StackTopsHistory(RulePositionTree* tree) : tree_(tree) {}
 
@@ -254,7 +254,7 @@ class StackTopsHistory {
    * any more. */
   void Rollback(int rollback_steps) {
     XGRAMMAR_DCHECK(rollback_steps < static_cast<int>(stack_tops_history_.size()))
-        << "The number of requested rollback steps is greater than or equal to the current "
+        << "The number of requested rollback tokens is greater than or equal to the current "
            "history "
         << "size: " << rollback_steps << " vs " << stack_tops_history_.size() << ".";
     while (rollback_steps--) {
@@ -443,4 +443,4 @@ inline void StackTopsHistory::CheckWellFormed() const {
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_STATE_MATCHER_STATE_H_
+#endif  // XGRAMMAR_GRAMMAR_MATCHER_STATE_H_

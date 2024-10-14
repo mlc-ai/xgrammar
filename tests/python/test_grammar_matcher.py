@@ -87,7 +87,7 @@ def test_find_next_rejected_tokens(
     for i, c in enumerate(input_bytes):
         bitmask = matcher.find_next_token_bitmask()
         rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
+            bitmask, matcher.mask_vocab_size
         )
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
@@ -99,7 +99,7 @@ def test_find_next_rejected_tokens(
 
     bitmask = matcher.find_next_token_bitmask()
     rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
+        bitmask, matcher.mask_vocab_size
     )
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:
@@ -137,7 +137,7 @@ def test_token_operations():
     for id in input_ids:
         bitmask = matcher.find_next_token_bitmask()
         rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
+            bitmask, matcher.mask_vocab_size
         )
         accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
         accepted_tokens = [vocab[i] for i in accepted]
@@ -147,7 +147,7 @@ def test_token_operations():
 
     bitmask = matcher.find_next_token_bitmask()
     rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
+        bitmask, matcher.mask_vocab_size
     )
     accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
     accepted_tokens = [vocab[i] for i in accepted]
@@ -165,9 +165,9 @@ def test_rollback():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    matcher = GrammarMatcher(json_grammar, vocab, max_rollback_steps=5)
+    matcher = GrammarMatcher(json_grammar, vocab, max_rollback_tokens=5)
 
-    assert matcher.max_rollback_steps == 5
+    assert matcher.max_rollback_tokens == 5
 
     input_ids_splitted = [input_ids[i : i + 2] for i in range(0, len(input_ids), 2)]
 
@@ -235,7 +235,7 @@ def test_termination():
     ]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    matcher = GrammarMatcher(json_grammar, vocab, max_rollback_steps=5)
+    matcher = GrammarMatcher(json_grammar, vocab, max_rollback_tokens=5)
 
     for i in input_ids:
         matcher.find_next_token_bitmask()
@@ -272,12 +272,12 @@ def test_mask_vocab_size():
         # fmt: on
     ]
     matcher = GrammarMatcher(json_grammar, vocab, mask_vocab_size=64)
-    assert matcher.vocab_size == 64
+    assert matcher.mask_vocab_size == 64
 
     mask = matcher.find_next_token_bitmask()
     assert mask.shape == (2,)
 
-    rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(mask, matcher.vocab_size)
+    rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(mask, matcher.mask_vocab_size)
     assert rejected_tokens == [i for i in range(64) if i != 7]
 
 

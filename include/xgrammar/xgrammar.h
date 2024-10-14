@@ -217,7 +217,7 @@ class GrammarMatcherInitContext {
  * GrammarMatcher matcher(init_ctx, 10);
  * matcher->AcceptToken(67);
  *
- * // Construct a DLTensor with shape (tokenizer.GetVocabSize() + 31) / 32, and dtype uint32.
+ * // Construct a DLTensor with shape (tokenizer.GetMaskVocabSize() + 31) / 32, and dtype uint32.
  * DLTensor next_token_bitmask = ...;
  * matcher->FindNextTokenBitmask(&next_token_bitmask);
  *
@@ -238,7 +238,7 @@ class GrammarMatcher {
       std::optional<std::vector<int>> stop_token_ids = std::nullopt,
       bool terminate_without_stop_token = false,
       std::optional<int> mask_vocab_size = std::nullopt,
-      int max_rollback_steps = 0
+      int max_rollback_tokens = 0
   );
 
   /*!
@@ -255,18 +255,18 @@ class GrammarMatcher {
 
   bool AcceptString(const std::string& input_str, bool verbose = false);
 
-  static uint32_t GetBufferSize(size_t vocab_size);
+  static uint32_t GetBufferSize(size_t mask_vocab_size);
 
   /*!
    * \brief Find the set of tokens that are acceptable for the next step and store them in a
    * bitmask.
    * \param next_token_bitmask The bitmask to store the result. The bitmask must be pre-allocated
-   * and with shape (GetBufferSize(vocab_size),) and dtype uint32.
+   * and with shape (GetBufferSize(mask_vocab_size),) and dtype uint32.
    */
   void FindNextTokenBitmask(DLTensor* next_token_bitmask);
 
   static void GetRejectedTokensFromBitMask(
-      const DLTensor& token_bitmask, size_t vocab_size, std::vector<int>* rejected_tokens
+      const DLTensor& token_bitmask, size_t mask_vocab_size, std::vector<int>* rejected_tokens
   );
 
   /*!
@@ -279,14 +279,14 @@ class GrammarMatcher {
   /*!
    * \brief Rollback the matcher to a previous state.
    * \param num_tokens The number of tokens to rollback. It cannot exceed the current number of
-   * steps, nor can it exceed the specified maximum number of rollback steps.
+   * steps, nor can it exceed the specified maximum number of rollback tokens.
    */
   void Rollback(int num_tokens = 1);
 
-  /*! \brief Get the maximum number of rollback steps allowed. */
-  int GetMaxRollbackSteps() const;
+  /*! \brief Get the maximum number of rollback tokens allowed. */
+  int GetMaxRollbackTokens() const;
 
-  size_t GetVocabSize() const;
+  size_t GetMaskVocabSize() const;
 
   /*!
    * \brief Check if the matcher has accepted the stop token and terminated.

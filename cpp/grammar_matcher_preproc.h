@@ -3,8 +3,8 @@
  * \file xgrammar/grammar_matcher_preproc.h
  * \brief The header for the preprocessing of the grammar matcher.
  */
-#ifndef XGRAMMAR_GRAMMAR_STATE_MATCHER_PREPROC_H_
-#define XGRAMMAR_GRAMMAR_STATE_MATCHER_PREPROC_H_
+#ifndef XGRAMMAR_GRAMMAR_MATCHER_PREPROC_H_
+#define XGRAMMAR_GRAMMAR_MATCHER_PREPROC_H_
 
 #include <xgrammar/xgrammar.h>
 
@@ -508,4 +508,4 @@ void GrammarMatcherInitContextCache::Clear() { pimpl_->Clear(); }
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_STATE_MATCHER_PREPROC_H_
+#endif  // XGRAMMAR_GRAMMAR_MATCHER_PREPROC_H_

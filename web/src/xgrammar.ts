@@ -95,7 +95,7 @@ export class BuiltinGrammar {
   }
 
   /**
-   * Construct a BNF grammar from the json schema string. The schema string should be in the 
+   * Construct a BNF grammar from the json schema string. The schema string should be in the
    * format of the schema of a JSON file. We will parse the schema and generate a BNF grammar.
    *
    * @param {string} schema The schema string.
@@ -269,7 +269,7 @@ export class GrammarMatcher {
    * @param {TokenizerInfo} tokenizerInfo The tokenizer info that contains preprocessed vocab.
    * @param {number[] | number} [stopTokenIds=undefined] Stop tokens to override the default ones.
    * @param {boolean} [terminateWithoutStopToken=false] Whether to terminate without stop token.
-   * @param {number} [maxRollbackSteps=0] Max rollback steps.
+   * @param {number} [maxRollbackTokens=0] Max rollback tokens.
    * @returns {GrammarMatcher} The constructed GrammarMatcher.
    */
   static async createGrammarMatcher(
@@ -278,7 +278,7 @@ export class GrammarMatcher {
     stopTokenIds?: number[] | number,
     terminateWithoutStopToken: boolean = false,
     maskVocabSize?: number,
-    maxRollbackSteps: number = 0,
+    maxRollbackTokens: number = 0,
   ): Promise<GrammarMatcher> {
     await asyncInitBinding();
     // Convert stopTokenIds to std::vector<int> if not undefined
@@ -294,7 +294,7 @@ export class GrammarMatcher {
       stopTokenIds,
       terminateWithoutStopToken,
       maskVocabSize,
-      maxRollbackSteps,
+      maxRollbackTokens,
     ));
   }
 
@@ -302,14 +302,14 @@ export class GrammarMatcher {
    * Get the vocab size.
    */
   getVocabSize(): number {
-    return this.handle.GetVocabSize();
+    return this.handle.GetMaskVocabSize();
   }
 
   /**
-   * Get the maximum number of rollback steps allowed.
+   * Get the maximum number of rollback tokens allowed.
    */
-  getMaxRollbackSteps(): number {
-    return this.handle.GetMaxRollbackSteps();
+  getMaxRollbackTokens(): number {
+    return this.handle.GetMaxRollbackTokens();
   }
 
   /**
@@ -333,7 +333,7 @@ export class GrammarMatcher {
   }
 
   /**
-   * Returns a bitmask in the form of an Int32Array of length ceildiv(vocab_size, 32)
+   * Returns a bitmask in the form of an Int32Array of length ceildiv(mask_vocab_size, 32)
    * based on what tokens can/cannot be accepted by the current state of the grammar state matcher.
    *
    * @returns {Int32Array} An array representing the bitmask that masks the rejected token IDs
@@ -347,7 +347,7 @@ export class GrammarMatcher {
   }
 
   /**
-   * 
+   *
    * @param {Int32Array} bitmask Bitmask returned by findNextTokenBitmask().
    * @param {number} vocabSize Vocab size returned by getVocabSize().
    * @returns An array of vocab ID that will be rejected as a result of the bitmask.
@@ -395,7 +395,7 @@ export class GrammarMatcher {
   /**
    * Rollback the matcher to a previous state.
    * @param {number} numTokens The number of tokens to rollback. It cannot exceed the current
-   * number of steps, nor can it exceed the specified maximum number of rollback steps.
+   * number of steps, nor can it exceed the specified maximum number of rollback tokens.
    */
   rollBack(numTokens: number): void {
     this.handle.Rollback(numTokens);

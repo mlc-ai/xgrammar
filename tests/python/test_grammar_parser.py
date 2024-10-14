@@ -1,6 +1,7 @@
 import json
 
 import pytest
+
 from xgrammar import BNFGrammar
 
 
@@ -13,7 +14,7 @@ c ::= "c"
 b ::= (("b"))
 c ::= (("c"))
 """
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -32,7 +33,7 @@ b_1 ::= ("" | ("ab" b_1))
 c_1 ::= (([acep-z] c_1) | ([acep-z]))
 d_1 ::= ("" | ("d"))
 """
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -53,7 +54,7 @@ c_1 ::= ("" | ("b" c_1))
 d_1 ::= ("" | (d_1_choice d_1))
 d_1_choice ::= (("bcd") | ("pq"))
 """
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -71,7 +72,7 @@ c ::= (("a") | ("b")) (=([a-z] "b"))
 d ::= (("ac") | ("b" d_choice)) (=("abc"))
 d_choice ::= (("e") | ("d"))
 """
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -86,7 +87,7 @@ rest ::= (([a-zA-Z0-9\-] [\u0234-\u0345] [\u6d4b-\u8bd5] [\--\]] rest1))
 rest1 ::= (("\?\"\'\u6d4b\u8bd5\u3042c\U0001f440ab"))
 """
     # Disable unwrap_nesting_rules to expose the result before unwrapping.
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -101,7 +102,7 @@ main::="a"  "b" ("c""d"
 """
     expected = """main ::= (("abcde") | ("f") | ("g"))
 """
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -112,7 +113,7 @@ def test_nest():
     expected = """main ::= (("a" main_choice) | ("ef"))
 main_choice ::= (("b") | ("cd"))
 """
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -133,7 +134,7 @@ nested_rest ::= (("a") | ("bc") | ("d") | ("ef") | ("g"))
 empty_test ::= ("" | ("d") | ("a"))
 sequence_test_choice ::= (("c") | ("d"))
 """
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -188,7 +189,7 @@ exponent_choice ::= (("e") | ("E"))
 exponent_choice_1 ::= ("" | ("+") | ("-"))
 """
 
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after = bnf_grammar.to_string()
     assert after == expected
 
@@ -204,9 +205,9 @@ c_1 ::= ((c_2 c_1) | (c_2)) (=("abc" [a-z]))
 c_2 ::= (([acep-z]))
 d_1 ::= ("" | ("d"))
 """
-    bnf_grammar_1 = BNFGrammar(before, "main")
+    bnf_grammar_1 = BNFGrammar(before, main_rule="main")
     output_string_1 = bnf_grammar_1.to_string()
-    bnf_grammar_2 = BNFGrammar(output_string_1, "main")
+    bnf_grammar_2 = BNFGrammar(output_string_1, main_rule="main")
     output_string_2 = bnf_grammar_2.to_string()
     assert before == output_string_1
     assert output_string_1 == output_string_2
@@ -298,7 +299,7 @@ c ::= [a-z]
             # fmt: on
         ],
     }
-    bnf_grammar = BNFGrammar(before, "main")
+    bnf_grammar = BNFGrammar(before, main_rule="main")
     after_str = bnf_grammar.serialize(prettify=False)
     after_obj = json.loads(after_str)
     assert after_obj == expected_obj
@@ -314,7 +315,7 @@ c_1 ::= ((c_2 c_1) | (c_2))
 c_2 ::= (([acep-z]))
 d_1 ::= ("" | ("d"))
 """
-    bnf_grammar_1 = BNFGrammar(before, "main")
+    bnf_grammar_1 = BNFGrammar(before, main_rule="main")
     output_json_1 = bnf_grammar_1.serialize(prettify=False)
     bnf_grammar_2 = BNFGrammar.deserialize(output_json_1)
     output_json_2 = bnf_grammar_2.serialize(prettify=False)

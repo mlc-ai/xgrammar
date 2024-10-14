@@ -152,7 +152,7 @@ describe("Test TokenizerInfo", () => {
 });
 
 
-// Identical to tests in `test_grammar_state_matcher.py`
+// Identical to tests in `test_grammar_matcher.py`
 describe("Test GrammarMatcher E2E", () => {
   const vocab = [
     "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
@@ -286,7 +286,7 @@ describe("Test GrammarMatcher E2E", () => {
       5,
     );
     tokenizerInfo.dispose();
-    expect(matcher.getMaxRollbackSteps()).toEqual(5);
+    expect(matcher.getMaxRollbackTokens()).toEqual(5);
 
     // 2. Test
     const input_ids_splitted: number[][] = [];

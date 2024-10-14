@@ -1,8 +1,9 @@
 from typing import List
+
 import pytest
 from transformers import AutoTokenizer
-from xgrammar import TokenizerInfo, VocabType
 
+from xgrammar import TokenizerInfo, VocabType
 
 tokenizer_paths = [
     "luodian/llama-7b-hf",
