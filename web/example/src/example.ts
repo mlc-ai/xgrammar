@@ -11,13 +11,17 @@ async function getTokenizerInfoAndTokenizerFromUrl(
     const jsonBuffer = await (await fetch(tokenizerUrl)).arrayBuffer();
     const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
     // 2. Get raw vocab
+    const tstartGetToken = performance.now();
     const rawTokenTable: string[] = [];
     const vocabSize = tokenizer.getVocabSize();
     for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
         rawTokenTable.push(tokenizer.idToToken(tokenId));
     }
+    console.log("Get raw token table (ms): ", (performance.now() - tstartGetToken));
     // 3. Post process vocab
+    const tstartGetTokenizerInfo = performance.now();
     const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(rawTokenTable, vocabType, prependSpaceInTokenization);
+    console.log("createTokenizerInfo (ms): ", (performance.now() - tstartGetTokenizerInfo));
     return [tokenizerInfo, tokenizer];
 }
 
@@ -113,11 +117,13 @@ async function jsonSchemaExample() {
     const tokenizer = result[1];
 
     // 1. Instantiate matcher with a grammar defined by the above schema
+    const tstartInitMatcher = performance.now();
     const bnfGrammar: BNFGrammar = await BuiltinGrammar.jsonSchema(schema);
     const grammarMatcher = await GrammarMatcher.createGrammarMatcher(
         bnfGrammar,
         tokenizerInfo,
     );
+    console.log("createGrammarMatcher (ms): ", (performance.now() - tstartInitMatcher));
     console.log(grammarMatcher);
 
     // 2. Simulated generation of an LLM
@@ -183,9 +189,9 @@ ws ::= [ \n\t]*
 }
 
 async function testAll() {
-    await jsonExample();
+    // await jsonExample();
     await jsonSchemaExample();
-    await testEBNFGrammar();
+    // await testEBNFGrammar();
 }
 
 testAll();
