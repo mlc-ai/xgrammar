@@ -70,10 +70,8 @@ class EBNFParserImpl {
 
   // Throw a ParseError with the given message and the line and column number.
   [[noreturn]] void ThrowParseError(const std::string& msg) {
-    throw ParseError(
-        "EBNF parse error at line " + std::to_string(cur_line_) + ", column " +
-        std::to_string(cur_column_) + ": " + msg
-    );
+    XGRAMMAR_LOG(FATAL) << "EBNF parse error at line " + std::to_string(cur_line_) + ", column " +
+                               std::to_string(cur_column_) + ": " + msg;
   }
 
   // The grammar builder

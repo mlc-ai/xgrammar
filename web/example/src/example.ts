@@ -162,9 +162,30 @@ async function jsonSchemaExample() {
     grammarMatcher.dispose();
 }
 
+async function testEBNFGrammar() {
+    const jsonGrammarStr = String.raw`
+main ::= basic_array | basic_object
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= (([\"] basic_string_1 [\"]))
+basic_string_1 ::= "" | [^"\\\x00-\x1F] basic_string_1 | "\\" escape basic_string_1
+escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= "[" ("" | ws basic_any (ws "," ws basic_any)*) ws "]"
+basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
+ws ::= [ \n\t]*
+`;
+
+    const grammar = await BNFGrammar.createBNFGrammar(jsonGrammarStr);
+    console.log(grammar);
+}
+
 async function testAll() {
     await jsonExample();
     await jsonSchemaExample();
+    await testEBNFGrammar();
 }
 
 testAll();

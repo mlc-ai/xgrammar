@@ -3,7 +3,7 @@
  * \file xgrammar/support/logging.cc
  */
 #include "logging.h"
-
+#if (XGRAMMAR_LOG_CUSTOMIZE == 0)
 namespace xgrammar {
 
 LogFatal::Entry& LogFatal::GetEntry() {
@@ -19,3 +19,4 @@ const char* LogMessage::level_strings_[] = {
 };
 
 }  // namespace xgrammar
+#endif  // XGRAMMAR_LOG_CUSTOMIZE
