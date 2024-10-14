@@ -1,15 +1,13 @@
 """This test uses the optimized JSON grammar provided by the grammar library."""
 
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import pytest
-import torch
 from pydantic import BaseModel
 from transformers import AutoTokenizer
 
 from xgrammar import (
-    BNFGrammar,
     BuiltinGrammar,
     GrammarMatcher,
     GrammarMatcherInitContext,

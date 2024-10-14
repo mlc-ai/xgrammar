@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Classes handling the grammar guided generation."""
+"""The main functionality of XGrammar. The functions here are Python bindings of the C++ logic."""
 
 import json
 from enum import Enum
@@ -28,6 +28,8 @@ from . import xgrammar_bindings as _core
 
 
 class XGObject:
+    """"""
+
     @classmethod
     def from_handle(cls, handle) -> "XGObject":
         """Initialize an object with a handle."""
