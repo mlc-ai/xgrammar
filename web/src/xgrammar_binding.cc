@@ -59,7 +59,7 @@ GrammarMatcher GrammarMatcher_Init(
     int max_rollback_steps
 ) {
   return GrammarMatcher(
-      GrammarMatcher::CreateInitContext(grammar, tokenizer_info),
+      GrammarMatcherInitContext(grammar, tokenizer_info),
       stop_token_ids,
       terminate_without_stop_token,
       mask_vocab_size,
@@ -173,5 +173,5 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("Reset", &GrammarMatcher::Reset)
       .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
       .function("Rollback", &GrammarMatcher::Rollback)
-      .function("_AcceptString", &GrammarMatcher::_AcceptString);
+      .function("_AcceptString", &GrammarMatcher::AcceptString);
 }
