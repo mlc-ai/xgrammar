@@ -15,6 +15,8 @@ if(NOT CMAKE_BUILD_TYPE)
   )
 endif()
 
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
 if(MSVC)
   set(CMAKE_CXX_FLAGS "/Wall /WX ${CMAKE_CXX_FLAGS}")
 else()

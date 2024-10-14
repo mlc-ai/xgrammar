@@ -60,7 +60,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
            std::optional<int>,
            int>())
       .def("accept_token", &GrammarMatcher::AcceptToken)
-      .def("_accept_string", &GrammarMatcher::_AcceptString)
+      .def("accept_string", &GrammarMatcher::AcceptString)
       .def("find_next_token_bitmask", &GrammarMatcher_FindNextTokenBitmask)
       .def_static("get_rejected_tokens_from_bitmask", &GrammarMatcher_GetRejectedTokensFromBitMask)
       .def("is_terminated", &GrammarMatcher::IsTerminated)

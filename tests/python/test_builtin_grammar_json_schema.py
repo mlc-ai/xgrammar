@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple
 import pytest
 from pydantic import BaseModel
 from transformers import AutoTokenizer
+
 from xgrammar import GrammarMatcher
 from xgrammar.xgrammar import BuiltinGrammar
 
@@ -38,7 +39,7 @@ def test_json_schema_accept_find_token():
 
     for c in instance_str:
         matcher.find_next_token_bitmask()
-        assert matcher._accept_string(c)
+        assert matcher.accept_string(c)
     final_bitmask = matcher.find_next_token_bitmask()
     final_rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(
         final_bitmask, matcher.vocab_size
@@ -80,7 +81,7 @@ def test_json_schema_find_jump_forward_string():
     for i, c in enumerate(instance_str):
         jump_forward_str = matcher.find_jump_forward_string()
         assert instance_str[i : i + len(jump_forward_str)] == jump_forward_str
-        assert matcher._accept_string(c)
+        assert matcher.accept_string(c)
     assert matcher.find_jump_forward_string() == ""
 
 

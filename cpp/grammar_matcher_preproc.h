@@ -126,9 +126,14 @@ class GrammarMatcherInitContext::Impl {
 
 class GrammarMatcherInitContextCache::Impl {
  public:
-  Impl(const std::vector<std::string>& raw_vocab);
+  Impl(const std::vector<std::string>& raw_vocab) : raw_vocab_(raw_vocab) {}
 
-  GrammarMatcherInitContext GetInitContextForJSONSchema(const std::string& schema);
+  GrammarMatcherInitContext GetInitContextForJSONSchema(
+      const std::string& schema,
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool strict_mode = true
+  );
 
   GrammarMatcherInitContext GetInitContextForJSON();
 
@@ -138,9 +143,11 @@ class GrammarMatcherInitContextCache::Impl {
   /*! \brief The vocabulary associated with this storage class. */
   std::vector<std::string> raw_vocab_;
   /*! \brief The cache for the init context of a JSON schema. */
-  std::unordered_map<std::string, GrammarMatcherInitContext> init_ctx_for_schema_cache_;
+  using SchemaKey =
+      std::tuple<std::string, std::optional<int>, std::pair<std::string, std::string>, bool>;
+  std::unordered_map<SchemaKey, GrammarMatcherInitContext> init_ctx_for_schema_cache_;
   /*! \brief The init context for JSON. */
-  GrammarMatcherInitContext init_ctx_for_json_;
+  std::optional<GrammarMatcherInitContext> init_ctx_for_json_;
 };
 
 /******************* Use GrammarMatcher to generate GrammarMatcherInitContext *******************/
@@ -446,25 +453,32 @@ GrammarMatcherInitContext::GrammarMatcherInitContext(
 
 /******************* GrammarMatcherInitContextCache *******************/
 
-inline GrammarMatcherInitContextCache::Impl::Impl(const std::vector<std::string>& raw_vocab)
-    : raw_vocab_(raw_vocab) {
-  init_ctx_for_json_ = GrammarMatcherInitContext(BuiltinGrammar::JSON(), raw_vocab_);
-}
-
 inline GrammarMatcherInitContext GrammarMatcherInitContextCache::Impl::GetInitContextForJSONSchema(
-    const std::string& schema
+    const std::string& schema,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode
 ) {
-  auto it = init_ctx_for_schema_cache_.find(schema);
+  auto separators_value = separators.value_or(
+      (indent == std::nullopt) ? std::make_pair(", ", ": ") : std::make_pair(",", ": ")
+  );
+  auto key = std::make_tuple(schema, indent, separators_value, strict_mode);
+  auto it = init_ctx_for_schema_cache_.find(key);
   if (it != init_ctx_for_schema_cache_.end()) {
     return it->second;
   }
-  auto init_ctx = GrammarMatcherInitContext(BuiltinGrammar::JSONSchema(schema), raw_vocab_);
-  init_ctx_for_schema_cache_[schema] = init_ctx;
+  auto init_ctx = GrammarMatcherInitContext(
+      BuiltinGrammar::JSONSchema(schema, indent, separators_value, strict_mode), raw_vocab_
+  );
+  init_ctx_for_schema_cache_[key] = init_ctx;
   return init_ctx;
 }
 
 inline GrammarMatcherInitContext GrammarMatcherInitContextCache::Impl::GetInitContextForJSON() {
-  return init_ctx_for_json_;
+  if (!init_ctx_for_json_) {
+    init_ctx_for_json_ = GrammarMatcherInitContext(BuiltinGrammar::JSON(), raw_vocab_);
+  }
+  return init_ctx_for_json_.value();
 }
 
 inline void GrammarMatcherInitContextCache::Impl::Clear() { init_ctx_for_schema_cache_.clear(); }
@@ -482,9 +496,12 @@ GrammarMatcherInitContext GrammarMatcherInitContextCache::GetInitContextForJSON(
 }
 
 GrammarMatcherInitContext GrammarMatcherInitContextCache::GetInitContextForJSONSchema(
-    const std::string& schema
+    const std::string& schema,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode
 ) {
-  return pimpl_->GetInitContextForJSONSchema(schema);
+  return pimpl_->GetInitContextForJSONSchema(schema, indent, separators, strict_mode);
 }
 
 void GrammarMatcherInitContextCache::Clear() { pimpl_->Clear(); }

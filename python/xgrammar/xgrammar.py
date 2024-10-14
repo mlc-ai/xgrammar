@@ -172,7 +172,7 @@ class BuiltinGrammar:
     def json_schema(
         schema: Union[str, Type[BaseModel]],
         *,
-        indent: Optional[int] = 2,
+        indent: Optional[int] = None,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
     ) -> BNFGrammar:
@@ -218,7 +218,7 @@ class BuiltinGrammar:
     def _json_schema_to_ebnf(
         schema: str,
         *,
-        indent: Optional[int] = 2,
+        indent: Optional[int] = None,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
     ) -> str:
@@ -357,7 +357,7 @@ class GrammarMatcherInitContext(XGObject):
         )
 
 
-class GrammarMatcherInitContextCache:
+class GrammarMatcherInitContextCache(XGObject):
     def __init__(
         self,
         tokenizer_or_vocab: Union[PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]],
@@ -375,9 +375,19 @@ class GrammarMatcherInitContextCache:
     def get_init_context_for_json(self) -> GrammarMatcherInitContext:
         return GrammarMatcherInitContext.from_handle(self.handle.get_init_context_for_json())
 
-    def get_init_context_for_json_schema(self, schema: str) -> GrammarMatcherInitContext:
+    def get_init_context_for_json_schema(
+        self,
+        schema: Union[str, Type[BaseModel]],
+        *,
+        indent: Optional[int] = None,
+        separators: Optional[Tuple[str, str]] = None,
+        strict_mode: bool = True,
+    ) -> GrammarMatcherInitContext:
+        if isinstance(schema, type) and issubclass(schema, BaseModel):
+            schema = json.dumps(schema.model_json_schema())
+
         return GrammarMatcherInitContext.from_handle(
-            self.handle.get_init_context_for_json_schema(schema)
+            self.handle.get_init_context_for_json_schema(schema, indent, separators, strict_mode)
         )
 
 
@@ -491,7 +501,7 @@ class GrammarMatcher(XGObject):
         """
         return self.handle.accept_token(token_id, verbose)
 
-    def _accept_string(self, input_str: str, *, verbose: bool = False) -> bool:
+    def accept_string(self, input_str: Union[str, bytes], *, verbose: bool = False) -> bool:
         """Accept one unicode codepoint to the current state. For test purposes.
 
         Parameters
@@ -500,7 +510,7 @@ class GrammarMatcher(XGObject):
             The unicode codepoint of the character to be accepted.
 
         """
-        return self.handle._accept_string(input_str, verbose)
+        return self.handle.accept_string(input_str, verbose)
 
     def find_next_token_bitmask(self) -> torch.Tensor:
         """Find the ids of the rejected tokens for the next step.
@@ -571,7 +581,7 @@ class GrammarMatcher(XGObject):
         """
         return self.handle.find_jump_forward_string()
 
-    def rollback(self, num_tokens: int) -> None:
+    def rollback(self, num_tokens: int = 1) -> None:
         """Rollback the matcher to a previous state.
 
         Parameters

@@ -140,7 +140,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
 
   bool AcceptToken(int32_t token_id, bool verbose = false);
 
-  bool _AcceptString(const std::string& input_str, bool verbose = false);
+  bool AcceptString(const std::string& input_str, bool verbose = false);
 
   void FindNextTokenBitmask(DLTensor* next_token_bitmask);
 
@@ -289,7 +289,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
   return true;
 }
 
-bool GrammarMatcher::Impl::_AcceptString(const std::string& input_str, bool verbose) {
+bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool verbose) {
   if (IsTerminated()) {
     if (verbose) {
       XGRAMMAR_LOG(INFO) << "The matcher has terminated after accepting the stop token, but is "
@@ -645,8 +645,8 @@ bool GrammarMatcher::AcceptToken(int32_t token_id, bool verbose) {
   return pimpl_->AcceptToken(token_id, verbose);
 }
 
-bool GrammarMatcher::_AcceptString(const std::string& input_str, bool verbose) {
-  return pimpl_->_AcceptString(input_str, verbose);
+bool GrammarMatcher::AcceptString(const std::string& input_str, bool verbose) {
+  return pimpl_->AcceptString(input_str, verbose);
 }
 
 uint32_t GrammarMatcher::GetBufferSize(size_t vocab_size) {

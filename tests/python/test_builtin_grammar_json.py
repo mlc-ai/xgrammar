@@ -5,15 +5,15 @@ from typing import List, Optional
 
 import pytest
 from transformers import AutoTokenizer
-from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher
 
+from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher
 
 json_grammar = BuiltinGrammar.json()
 
 
 def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
     matcher = GrammarMatcher(grammar, terminate_without_stop_token=True)
-    can_accept = matcher._accept_string(input_str)
+    can_accept = matcher.accept_string(input_str)
     can_terminate = matcher.is_terminated()
     return can_accept and can_terminate
 
@@ -304,7 +304,7 @@ def test_find_next_rejected_tokens(
             )
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
-        assert matcher._accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 

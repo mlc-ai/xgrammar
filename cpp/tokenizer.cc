@@ -22,21 +22,17 @@ class TokenizerInfo::Impl {
       const std::vector<std::string>& vocab,
       VocabType vocab_type,
       bool prepend_space_in_tokenization
-  )
-      : vocab_type_(vocab_type),
-        prepend_space_in_tokenization_(prepend_space_in_tokenization),
-        original_vocab_(vocab) {}
+  );
 
-  int GetVocabSize() const { return std::max(original_vocab_.size(), raw_vocab_.size()); }
+  int GetVocabSize() const { return raw_vocab_.size(); }
   VocabType GetVocabType() const { return vocab_type_; }
   bool GetPrependSpaceInTokenization() const { return prepend_space_in_tokenization_; }
-  const std::vector<std::string>& GetRawVocab();
+  const std::vector<std::string>& GetRawVocab() { return raw_vocab_; }
   std::string DumpMetadata() const;
 
  private:
   VocabType vocab_type_;
   bool prepend_space_in_tokenization_;
-  std::vector<std::string> original_vocab_;
   std::vector<std::string> raw_vocab_;
 };
 
@@ -245,18 +241,14 @@ inline std::string DecodeToken(const std::string& token, VocabType vocab_type) {
 
 /************* TokenizerInfo *************/
 
-const std::vector<std::string>& TokenizerInfo::Impl::GetRawVocab() {
-  if (!raw_vocab_.empty() || original_vocab_.empty()) {
-    return raw_vocab_;
-  }
-
-  raw_vocab_.reserve(original_vocab_.size());
-  for (const auto& item : original_vocab_) {
+TokenizerInfo::Impl::Impl(
+    const std::vector<std::string>& vocab, VocabType vocab_type, bool prepend_space_in_tokenization
+)
+    : vocab_type_(vocab_type), prepend_space_in_tokenization_(prepend_space_in_tokenization) {
+  raw_vocab_.reserve(vocab.size());
+  for (const auto& item : vocab) {
     raw_vocab_.emplace_back(DecodeToken(item, vocab_type_));
   }
-
-  std::vector<std::string>().swap(original_vocab_);
-  return raw_vocab_;
 }
 
 std::string TokenizerInfo::Impl::DumpMetadata() const {

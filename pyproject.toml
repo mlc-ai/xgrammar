@@ -40,3 +40,6 @@ exclude = "3rdparty/*"
 
 [tool.ruff.lint.pylint]
 max-args = 10
+
+[tool.isort]
+profile = "black"

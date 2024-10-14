@@ -7,6 +7,8 @@
 #define XGRAMMAR_SUPPORT_UTILS_H_
 
 #include <cstdint>
+#include <functional>
+#include <tuple>
 
 namespace xgrammar {
 
@@ -29,5 +31,25 @@ uint32_t HashCombine(Args... args) {
 }
 
 }  // namespace xgrammar
+
+namespace std {
+
+template <typename T, typename U>
+struct hash<std::pair<T, U>> {
+  size_t operator()(const std::pair<T, U>& pair) const {
+    return xgrammar::HashCombine(std::hash<T>{}(pair.first), std::hash<U>{}(pair.second));
+  }
+};
+
+template <typename... Args>
+struct hash<std::tuple<Args...>> {
+  size_t operator()(const std::tuple<Args...>& tuple) const {
+    return std::apply(
+        [](const Args&... args) { return xgrammar::HashCombine(std::hash<Args>{}(args)...); }, tuple
+    );
+  }
+};
+
+}  // namespace std
 
 #endif  // XGRAMMAR_SUPPORT_UTILS_H_

@@ -253,7 +253,7 @@ class GrammarMatcher {
    */
   bool AcceptToken(int32_t token_id, bool verbose = false);
 
-  bool _AcceptString(const std::string& input_str, bool verbose = false);
+  bool AcceptString(const std::string& input_str, bool verbose = false);
 
   static uint32_t GetBufferSize(size_t vocab_size);
 
@@ -281,7 +281,7 @@ class GrammarMatcher {
    * \param num_tokens The number of tokens to rollback. It cannot exceed the current number of
    * steps, nor can it exceed the specified maximum number of rollback steps.
    */
-  void Rollback(int num_tokens);
+  void Rollback(int num_tokens = 1);
 
   /*! \brief Get the maximum number of rollback steps allowed. */
   int GetMaxRollbackSteps() const;
@@ -322,7 +322,12 @@ class GrammarMatcherInitContextCache {
   GrammarMatcherInitContext GetInitContextForJSON();
 
   /*! \brief Get the init context for a JSON schema string. */
-  GrammarMatcherInitContext GetInitContextForJSONSchema(const std::string& schema);
+  GrammarMatcherInitContext GetInitContextForJSONSchema(
+      const std::string& schema,
+      std::optional<int> indent = std::nullopt,
+      std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
+      bool strict_mode = true
+  );
 
   /*! \brief Clear the interal cache of init contexts. */
   void Clear();

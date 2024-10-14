@@ -17,8 +17,9 @@
 from .xgrammar import (
     BNFGrammar,
     BuiltinGrammar,
-    VocabType,
-    TokenizerInfo,
-    GrammarMatcherInitContext,
     GrammarMatcher,
+    GrammarMatcherInitContext,
+    GrammarMatcherInitContextCache,
+    TokenizerInfo,
+    VocabType,
 )
