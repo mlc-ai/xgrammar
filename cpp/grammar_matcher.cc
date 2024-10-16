@@ -156,6 +156,8 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
 
   size_t GetMaskVocabSize() const { return mask_vocab_size_; }
 
+  const std::vector<int>& GetStopTokenIds() const { return stop_token_ids_; }
+
   bool IsTerminated() const;
 
   void Reset() {
@@ -670,6 +672,10 @@ void GrammarMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
 int GrammarMatcher::GetMaxRollbackTokens() const { return pimpl_->GetMaxRollbackTokens(); }
 
 size_t GrammarMatcher::GetMaskVocabSize() const { return pimpl_->GetMaskVocabSize(); }
+
+const std::vector<int>& GrammarMatcher::GetStopTokenIds() const {
+  return pimpl_->GetStopTokenIds();
+}
 
 bool GrammarMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
 

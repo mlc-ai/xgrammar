@@ -734,24 +734,28 @@ class GrammarMatcher(XGObject):
         """
         return _core.GrammarMatcher.get_rejected_tokens_from_bitmask(bitmask, mask_vocab_size)
 
-    # @staticmethod
-    # def apply_token_bitmask(tensor: torch.Tensor, bitmask: torch.Tensor) -> torch.Tensor:
-    #     """Apply the bitmask to the tensor.
+    @staticmethod
+    def apply_token_bitmask(logits: torch.Tensor, bitmask: torch.Tensor):
+        """Apply the bitmask to the logits in-place.
 
-    #     Parameters
-    #     ----------
-    #     tensor : torch.Tensor
-    #         The tensor to apply the bitmask to.
+        Parameters
+        ----------
+        logits : torch.Tensor
+            The tensor to apply the bitmask to. This should be a 1D tensor,
+            with the dimension of the vocabulary.
 
-    #     bitmask : torch.Tensor
-    #         The bitmask to apply.
+        bitmask : torch.Tensor
+            The bitmask to apply. This should be a 1D tensor of int32 values,
+            where each bit represents whether a token is allowed (1) or not (0).
 
-    #     Returns
-    #     -------
-    #     masked_tensor : torch.Tensor
-    #         The masked tensor.
-    #     """
-    #     return None
+        Returns
+        -------
+        masked_tensor : torch.Tensor
+            The masked tensor, where disallowed tokens are set to negative infinity.
+        """
+        rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(bitmask, logits.shape[-1])
+        print(rejected_tokens)
+        logits[rejected_tokens] = float("-inf")
 
     def find_jump_forward_string(self) -> str:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that
@@ -778,17 +782,6 @@ class GrammarMatcher(XGObject):
         """
         self.handle.rollback(num_tokens)
 
-    @property
-    def max_rollback_tokens(self) -> int:
-        """Get the maximum number of rollback tokens allowed.
-
-        Returns
-        -------
-        max_rollback_tokens : int
-            The maximum number of rollback tokens.
-        """
-        return self.handle.max_rollback_tokens
-
     def is_terminated(self) -> bool:
         """Check if the matcher has terminated. If terminate_without_stop_token is False, the
         matcher will terminate if it has accepted the stop token. Otherwise, the matcher will
@@ -806,6 +799,17 @@ class GrammarMatcher(XGObject):
         return self.handle.reset()
 
     @property
+    def max_rollback_tokens(self) -> int:
+        """Get the maximum number of rollback tokens allowed.
+
+        Returns
+        -------
+        max_rollback_tokens : int
+            The maximum number of rollback tokens.
+        """
+        return self.handle.max_rollback_tokens
+
+    @property
     def mask_vocab_size(self) -> int:
         """The size of the vocabulary in the generated mask.
 
@@ -815,3 +819,14 @@ class GrammarMatcher(XGObject):
             The size of the vocabulary in the generated mask.
         """
         return self.handle.mask_vocab_size
+
+    @property
+    def stop_token_ids(self) -> List[int]:
+        """The ids of the stop tokens used in the matcher.
+
+        Returns
+        -------
+        stop_token_ids : List[int]
+            The ids of the stop tokens.
+        """
+        return self.handle.stop_token_ids

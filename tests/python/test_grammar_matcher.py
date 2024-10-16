@@ -6,7 +6,7 @@ import pytest
 import torch
 from transformers import AutoTokenizer
 
-from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher
+from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo
 
 json_grammar = BuiltinGrammar.json()
 
@@ -156,6 +156,17 @@ def test_token_operations():
     assert result == expected
 
 
+def test_apply_token_bitmask():
+    neginf = float("-inf")
+    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
+    logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0])
+    expected = torch.where(bool_mask, logits, neginf)
+    bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
+
+    GrammarMatcher.apply_token_bitmask(logits, bitmask)
+    assert torch.all(logits == expected)
+
+
 def test_rollback():
     vocab = [
         # fmt: off
@@ -279,6 +290,21 @@ def test_mask_vocab_size():
 
     rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(mask, matcher.mask_vocab_size)
     assert rejected_tokens == [i for i in range(64) if i != 7]
+
+
+tokenizer_path_stop_token_ids = [
+    ("meta-llama/Llama-2-7b-chat-hf", [2]),
+    ("meta-llama/Meta-Llama-3-8B-Instruct", [128001, 128009]),
+    ("deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct", [100001]),
+]
+
+
+@pytest.mark.parametrize(("tokenizer_path", "stop_token_ids"), tokenizer_path_stop_token_ids)
+def test_stop_token_ids(tokenizer_path: str, stop_token_ids: List[int]):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
+    matcher = GrammarMatcher(json_grammar, tokenizer_info)
+    assert matcher.stop_token_ids == stop_token_ids
 
 
 if __name__ == "__main__":

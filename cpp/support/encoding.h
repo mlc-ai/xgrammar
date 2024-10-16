@@ -6,6 +6,8 @@
 #ifndef XGRAMMAR_SUPPORT_ENCODING_H_
 #define XGRAMMAR_SUPPORT_ENCODING_H_
 // TODO(yixin): enhance performance
+
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>

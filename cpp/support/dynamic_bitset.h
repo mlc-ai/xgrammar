@@ -136,7 +136,8 @@ class DynamicBitset {
     int blk = pos / BITS_PER_BLOCK;
     int ind = pos % BITS_PER_BLOCK;
     uint32_t fore = (~data_[blk]) >> ind;
-    return fore ? pos + LowestBit(fore) : DoFindZeroFrom(blk + 1);
+    int result = fore ? pos + LowestBit(fore) : DoFindZeroFrom(blk + 1);
+    return result < size_ ? result : -1;
   }
 
  private:

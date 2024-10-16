@@ -283,6 +283,8 @@ class GrammarMatcher {
    */
   void Rollback(int num_tokens = 1);
 
+  const std::vector<int>& GetStopTokenIds() const;
+
   /*! \brief Get the maximum number of rollback tokens allowed. */
   int GetMaxRollbackTokens() const;
 
