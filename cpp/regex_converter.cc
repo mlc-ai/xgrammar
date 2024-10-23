@@ -32,7 +32,7 @@ class RegexConverter {
   RegexConverter(const std::string& regex) : regex_(regex) {
     regex_codepoints_ = ParseUTF8(regex_.c_str(), false);
     if (regex_codepoints_[0] == kInvalidUTF8) {
-      XGRAMMAR_LOG(ERROR) << "The regex is not a valid UTF-8 string.";
+      XGRAMMAR_LOG(FATAL) << "The regex is not a valid UTF-8 string.";
       XGRAMMAR_UNREACHABLE();
     }
     regex_codepoints_.push_back(0);  // Add a null terminator
@@ -48,6 +48,7 @@ class RegexConverter {
   std::string HandleRepetitionRange();
   std::string HandleCharEscape();
   std::string HandleEscape();
+  std::string HandleEscapeInCharClass();
   std::string regex_;
   std::vector<TCodepoint> regex_codepoints_;
   TCodepoint* start_;
@@ -65,7 +66,7 @@ void RegexConverter::AddEBNFSegment(const std::string& element, bool add_space) 
 }
 
 void RegexConverter::RaiseError(const std::string& message) {
-  XGRAMMAR_LOG(ERROR) << "Regex parsing error at position " << current_ - start_ + 1 << ": "
+  XGRAMMAR_LOG(FATAL) << "Regex parsing error at position " << current_ - start_ + 1 << ": "
                       << message;
   XGRAMMAR_UNREACHABLE();
 }
@@ -78,9 +79,9 @@ void RegexConverter::RaiseWarning(const std::string& message) {
 std::string RegexConverter::HandleCharacterClass() {
   std::string char_class = "[";
   ++current_;
-  while ((*current_ != ']' || *(current_ - 1) != '\\') && current_ != end_) {
+  while (*current_ != ']' && current_ != end_) {
     if (*current_ == '\\') {
-      char_class += HandleCharEscape();
+      char_class += HandleEscapeInCharClass();
     } else {
       char_class += PrintAsUTF8(*current_);
       ++current_;
@@ -93,21 +94,27 @@ std::string RegexConverter::HandleCharacterClass() {
   ++current_;
   return char_class;
 }
-
+// {x}: Match exactly x occurrences of the preceding regular expression.
+// {x,}
+// {x,y}
 std::string RegexConverter::HandleRepetitionRange() {
   std::string result = "{";
-  if (!isdigit(*current_) && *current_ != ',') {
+  if (!isdigit(*current_)) {
     RaiseError("Invalid repetition count.");
   }
   while (isdigit(*current_)) {
     result += static_cast<char>(*current_);
     ++current_;
   }
-  if (*current_ != ',') {
+  if (*current_ != ',' && *current_ != '}') {
     RaiseError("Invalid repetition count.");
   }
-  result += ',';
+  result += static_cast<char>(*current_);
   ++current_;
+  if (current_[-1] == '}') {
+    // Matches {x}
+    return result;
+  }
   if (!isdigit(*current_) && *current_ != '}') {
     RaiseError("Invalid repetition count.");
   }
@@ -120,7 +127,7 @@ std::string RegexConverter::HandleRepetitionRange() {
   }
   result += '}';
   ++current_;
-  return result_ebnf_;
+  return result;
 }
 
 std::string RegexConverter::HandleCharEscape() {
@@ -128,7 +135,7 @@ std::string RegexConverter::HandleCharEscape() {
   static const std::unordered_map<char, TCodepoint> CUSTOM_ESCAPE_MAP = {
       {'^', '^'}, {'$', '$'}, {'.', '.'}, {'*', '*'}, {'+', '+'}, {'?', '?'}, {'\\', '\\'},
       {'(', '('}, {')', ')'}, {'[', '['}, {']', ']'}, {'{', '{'}, {'}', '}'}, {'|', '|'},
-      {'/', '/'}
+      {'/', '/'}, {'-', '-'}
   };
   // clang-format on
   if (end_ - current_ < 2 || (current_[1] == 'u' && end_ - current_ < 5) ||
@@ -158,14 +165,46 @@ std::string RegexConverter::HandleCharEscape() {
       RaiseError("Invalid control character escape sequence.");
     }
     ++current_;
-    return PrintAsEscapedUTF8((*current_) % 32);
+    return PrintAsEscapedUTF8((*(current_ - 1)) % 32);
   } else {
     RaiseWarning(
         "Escape sequence '\\" + PrintAsEscapedUTF8(current_[1]) +
         "' is not recognized. The character itself will be matched"
     );
     current_ += 2;
-    return PrintAsEscapedUTF8(current_[1]);
+    return PrintAsEscapedUTF8(current_[-1]);
+  }
+}
+
+std::string RegexConverter::HandleEscapeInCharClass() {
+  if (end_ - current_ < 2) {
+    RaiseError("Escape sequence is not finished.");
+  }
+  if (current_[1] == 'd') {
+    current_ += 2;
+    return "0-9";
+  } else if (current_[1] == 'D') {
+    current_ += 2;
+    return R"(\x00-\x2F\x3A-\U0010FFFF)";
+  } else if (current_[1] == 'w') {
+    current_ += 2;
+    return "a-zA-Z0-9_";
+  } else if (current_[1] == 'W') {
+    current_ += 2;
+    return R"(\x00-\x2F\x3A-\x40\x5B-\x5E\x60\x7B-\U0010FFFF)";
+  } else if (current_[1] == 's') {
+    current_ += 2;
+    return R"(\f\n\r\t\v\u0020\u00a0)";
+  } else if (current_[1] == 'S') {
+    current_ += 2;
+    return R"(\x00-\x08\x0E-\x1F\x21-\x9F\xA1-\U0010FFFF)";
+  } else {
+    auto res = HandleCharEscape();
+    if (res == "]" || res == "-") {
+      return "\\" + res;
+    } else {
+      return res;
+    }
   }
 }
 
@@ -186,19 +225,19 @@ std::string RegexConverter::HandleEscape() {
   } else if (current_[1] == 'D') {
     current_ += 2;
     return "[^0-9]";
-  } else if (current_[1] == 's') {
-    current_ += 2;
-    return "[a-zA-Z0-9_]";
-  } else if (current_[1] == 'S') {
-    current_ += 2;
-    return "[^a-zA-Z0-9_]";
   } else if (current_[1] == 'w') {
     current_ += 2;
-    return R"([\f\n\r\t\v\u0020\u00a0])";
+    return "[a-zA-Z0-9_]";
   } else if (current_[1] == 'W') {
     current_ += 2;
+    return "[^a-zA-Z0-9_]";
+  } else if (current_[1] == 's') {
+    current_ += 2;
+    return R"([\f\n\r\t\v\u0020\u00a0])";
+  } else if (current_[1] == 'S') {
+    current_ += 2;
     return R"([^[\f\n\r\t\v\u0020\u00a0])";
-  } else if ((current_[1] >= '0' && current_[1] <= '9') || current_[1] == 'k') {
+  } else if ((current_[1] >= '1' && current_[1] <= '9') || current_[1] == 'k') {
     RaiseError("Backreference is not supported yet.");
   } else if (current_[1] == 'p' || current_[1] == 'P') {
     RaiseError("Unicode character class escape sequence is not supported yet.");
@@ -238,28 +277,34 @@ std::string RegexConverter::Convert() {
       }
       ++parenthesis_level_;
       AddEBNFSegment("(");
+      ++current_;
     } else if (*current_ == ')') {
       --parenthesis_level_;
       AddEBNFSegment(")");
+      ++current_;
     } else if (*current_ == '*' || *current_ == '+' || *current_ == '?') {
       result_ebnf_ += static_cast<char>(*current_);
       ++current_;
     } else if (*current_ == '{') {
-      HandleRepetitionRange();
+      result_ebnf_ += HandleRepetitionRange();
     } else if (*current_ == '|') {
       AddEBNFSegment("|");
       ++current_;
     } else if (*current_ == '\\') {
       AddEBNFSegment(HandleEscape());
     } else if (*current_ == '.') {
-      AddEBNFSegment("[\\u0000-\\\U0010FFFF]");
+      AddEBNFSegment(R"([\u0000-\U0010FFFF])");
+      ++current_;
     } else {
       // Non-special characters are matched literally.
       AddEBNFSegment("\"" + PrintAsEscapedUTF8(*current_) + "\"");
       ++current_;
     }
   }
-  return "main ::= " + result_ebnf_;
+  if (parenthesis_level_ != 0) {
+    RaiseError("The paranthesis is not closed.");
+  }
+  return "main ::= " + result_ebnf_ + "\n";
 }
 
 std::string BuiltinGrammar::_RegexToEBNF(const std::string& regex) {
