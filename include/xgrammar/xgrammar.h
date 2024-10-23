@@ -145,6 +145,13 @@ class BuiltinGrammar {
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
       bool strict_mode = true
   );
+
+  /*!
+   * \brief Convert regex string to EBNF grammar string.
+   * \param regex The regex string.
+   * \returns The EBNF grammar string.
+   */
+  static std::string _RegexToEBNF(const std::string& regex);
 };
 
 enum class VocabType : int {

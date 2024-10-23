@@ -280,6 +280,10 @@ class BuiltinGrammar:
             strict_mode,
         )
 
+    @staticmethod
+    def _regex_to_ebnf(regex: str) -> str:
+        return _core.BuiltinGrammar._regex_to_ebnf(regex)
+
 
 class VocabType(Enum):
     """The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of

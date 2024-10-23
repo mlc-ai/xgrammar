@@ -8,6 +8,7 @@
 // TODO(yixin): enhance performance
 
 #include <cstdint>
+#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -56,6 +57,18 @@ std::string PrintAsEscapedUTF8(uint8_t raw_char);
  */
 std::string PrintAsEscapedUTF8(std::string raw_str);
 
+inline int HexCharToInt(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  } else if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  } else if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  } else {
+    return -1;
+  }
+}
+
 /*!
  * \brief Represents an error when handling characters. Will be returned as a special TCodepoint
  * value.
@@ -68,33 +81,16 @@ enum CharHandlingError : TCodepoint {
 };
 
 /*!
- * \brief The method to handle invalid UTF-8 sequence.
- */
-enum class UTF8ErrorPolicy {
-  /*! \brief Return an error codepoint when an error is encountered. */
-  kReturnInvalid,
-  /*! \brief Skip the error and continue parsing. */
-  kReturnByte,
-};
-
-/*!
- * \brief Parse the first codepoint in a UTF-8 string.
- * \param utf8 The UTF-8 string.
- * \return The codepoint and new pointer. If the UTF-8 string is invalid, and the error policy is
- * kReturnInvalid, the function returns (CharHandlingError::kInvalidUTF8, input char pointer).
- */
-std::pair<TCodepoint, const char*> ParseNextUTF8(
-    const char* utf8, UTF8ErrorPolicy error_policy = UTF8ErrorPolicy::kReturnInvalid
-);
-
-/*!
  * \brief Parse all codepoints in a UTF-8 string.
  * \param utf8 The UTF-8 string.
  * \return All codepoints. If the UTF-8 string is invalid, and the error policy is
  * kReturnInvalid, the function returns {CharHandlingError::kInvalidUTF8}.
  */
-std::vector<TCodepoint> ParseUTF8(
-    const char* utf8, UTF8ErrorPolicy error_policy = UTF8ErrorPolicy::kReturnInvalid
+std::vector<TCodepoint> ParseUTF8(const char* utf8, bool return_byte_on_error = false);
+
+template <typename CharType>
+std::pair<TCodepoint, int32_t> HandleEscape(
+    const CharType* data, const std::unordered_map<char, TCodepoint>& additional_escape_map = {}
 );
 
 /*!
@@ -107,9 +103,72 @@ std::vector<TCodepoint> ParseUTF8(
  * invalid, and the error policy is kReturnInvalid, the function returns
  * (CharHandlingError::kInvalidUTF8, input char pointer).
  */
-std::pair<TCodepoint, const char*> ParseNextUTF8OrEscaped(
-    const char* utf8, const std::unordered_map<std::string, TCodepoint>& additional_escape_map = {}
+std::pair<TCodepoint, int32_t> ParseNextUTF8OrEscaped(
+    const char* utf8, const std::unordered_map<char, TCodepoint>& additional_escape_map = {}
 );
+
+// Template implementation
+template <typename CharType>
+std::pair<TCodepoint, int32_t> HandleEscape(
+    const CharType* data, const std::unordered_map<char, TCodepoint>& additional_escape_map
+) {
+  static const std::unordered_map<char, TCodepoint> kEscapeToCodepoint = {
+      {'\'', '\''},
+      {'\"', '\"'},
+      {'\?', '\?'},
+      {'\\', '\\'},
+      {'a', '\a'},
+      {'b', '\b'},
+      {'f', '\f'},
+      {'n', '\n'},
+      {'r', '\r'},
+      {'t', '\t'},
+      {'v', '\v'},
+      {'0', '\0'},
+      {'e', '\x1B'}
+  };
+  if (data[0] != '\\') {
+    return {CharHandlingError::kInvalidEscape, 0};
+  }
+  if (auto it = additional_escape_map.find(static_cast<char>(data[1]));
+      it != additional_escape_map.end()) {
+    return {it->second, 2};
+  }
+  if (auto it = kEscapeToCodepoint.find(static_cast<char>(data[1]));
+      it != kEscapeToCodepoint.end()) {
+    return {it->second, 2};
+  }
+
+  if (data[1] == 'x') {
+    // arbitrary length hex
+    int len = 0;
+    TCodepoint codepoint = 0;
+    int32_t digit;
+    while ((digit = HexCharToInt(data[2 + len])) != -1) {
+      codepoint = codepoint * 16 + digit;
+      ++len;
+    }
+    if (len == 0) {
+      return {CharHandlingError::kInvalidEscape, 0};
+    }
+    return {codepoint, len + 2};
+  } else if (data[1] == 'u' || data[1] == 'U') {
+    // 4- or 8-digit hex
+    int len = data[1] == 'u' ? 4 : 8;
+    TCodepoint codepoint = 0;
+
+    for (int i = 0; i < len; ++i) {
+      auto digit = HexCharToInt(data[i + 2]);
+      if (digit == -1) {
+        return {CharHandlingError::kInvalidEscape, 0};
+      }
+      codepoint = codepoint * 16 + digit;
+    }
+    return {codepoint, len + 2};
+  } else {
+    return {CharHandlingError::kInvalidEscape, 0};
+  }
+}
 
 }  // namespace xgrammar
 

@@ -81,7 +81,7 @@ std::string PrintAsEscapedUTF8(uint8_t raw_char) {
 
 std::string PrintAsEscapedUTF8(std::string raw_str) {
   std::string res;
-  auto codepoints = ParseUTF8(raw_str.c_str(), UTF8ErrorPolicy::kReturnByte);
+  auto codepoints = ParseUTF8(raw_str.c_str(), true);
   for (auto c : codepoints) {
     res += PrintAsEscapedUTF8(c);
   }
@@ -117,7 +117,13 @@ std::tuple<bool, int, TCodepoint> HandleUTF8FirstByte(uint8_t byte) {
   return {true, num_bytes, byte & kFirstByteMask[num_bytes]};
 }
 
-std::pair<TCodepoint, const char*> ParseNextUTF8(const char* utf8, UTF8ErrorPolicy error_policy) {
+/*!
+ * \brief Parse the first codepoint in a UTF-8 string.
+ * \param utf8 The UTF-8 string.
+ * \return The codepoint and new pointer. If the UTF-8 string is invalid, and the error policy is
+ * kReturnInvalid, the function returns (CharHandlingError::kInvalidUTF8, input char pointer).
+ */
+std::pair<TCodepoint, const char*> ParseNextUTF8(const char* utf8, bool return_byte_on_error) {
   auto [accepted, num_bytes, res] = HandleUTF8FirstByte(utf8[0]);
   if (accepted) {
     for (int i = 1; i < num_bytes; ++i) {
@@ -132,21 +138,21 @@ std::pair<TCodepoint, const char*> ParseNextUTF8(const char* utf8, UTF8ErrorPoli
 
   if (!accepted) {
     // invalid utf8
-    if (error_policy == UTF8ErrorPolicy::kReturnInvalid) {
-      return {CharHandlingError::kInvalidUTF8, utf8};
-    } else {
+    if (return_byte_on_error) {
       return {static_cast<unsigned char>(utf8[0]), utf8 + 1};
+    } else {
+      return {CharHandlingError::kInvalidUTF8, utf8};
     }
   }
 
   return {res, utf8 + num_bytes};
 }
 
-std::vector<TCodepoint> ParseUTF8(const char* utf8, UTF8ErrorPolicy error_policy) {
+std::vector<TCodepoint> ParseUTF8(const char* utf8, bool return_byte_on_error) {
   std::vector<TCodepoint> codepoints;
   while (*utf8 != 0) {
     TCodepoint codepoint;
-    std::tie(codepoint, utf8) = ParseNextUTF8(utf8, error_policy);
+    std::tie(codepoint, utf8) = ParseNextUTF8(utf8, return_byte_on_error);
     if (codepoint == CharHandlingError::kInvalidUTF8) {
       return {codepoint};
     }
@@ -155,79 +161,64 @@ std::vector<TCodepoint> ParseUTF8(const char* utf8, UTF8ErrorPolicy error_policy
   return codepoints;
 }
 
-inline int HexCharToInt(char c) {
-  if (c >= '0' && c <= '9') {
-    return c - '0';
-  } else if (c >= 'a' && c <= 'f') {
-    return c - 'a' + 10;
-  } else if (c >= 'A' && c <= 'F') {
-    return c - 'A' + 10;
-  } else {
-    return -1;
-  }
-}
-
-std::pair<TCodepoint, const char*> ParseNextUTF8OrEscaped(
-    const char* utf8, const std::unordered_map<std::string, TCodepoint>& additional_escape_map
+std::pair<TCodepoint, int32_t> ParseNextUTF8OrEscaped(
+    const char* utf8, const std::unordered_map<char, TCodepoint>& additional_escape_map
 ) {
-  static const std::unordered_map<std::string, TCodepoint> kEscapeToCodepoint = {
-      {"\\\'", '\''},
-      {"\\\"", '\"'},
-      {"\\\?", '\?'},
-      {"\\\\", '\\'},
-      {"\\a", '\a'},
-      {"\\b", '\b'},
-      {"\\f", '\f'},
-      {"\\n", '\n'},
-      {"\\r", '\r'},
-      {"\\t", '\t'},
-      {"\\v", '\v'},
-      {"\\0", '\0'},
-      {"\\e", '\x1B'}
+  static const std::unordered_map<char, TCodepoint> kEscapeToCodepoint = {
+      {'\'', '\''},
+      {'\"', '\"'},
+      {'\?', '\?'},
+      {'\\', '\\'},
+      {'a', '\a'},
+      {'b', '\b'},
+      {'f', '\f'},
+      {'n', '\n'},
+      {'r', '\r'},
+      {'t', '\t'},
+      {'v', '\v'},
+      {'0', '\0'},
+      {'e', '\x1B'}
   };
   if (utf8[0] != '\\') {
-    return ParseNextUTF8(utf8, UTF8ErrorPolicy::kReturnInvalid);
+    auto result = ParseNextUTF8(utf8, false);
+    return {result.first, result.second - utf8};
   }
 
-  auto escape_sequence = std::string(utf8, 2);
-  if (auto it = additional_escape_map.find(escape_sequence); it != additional_escape_map.end()) {
-    return {it->second, utf8 + 2};
+  if (auto it = additional_escape_map.find(utf8[1]); it != additional_escape_map.end()) {
+    return {it->second, 2};
   }
-  if (auto it = kEscapeToCodepoint.find(escape_sequence); it != kEscapeToCodepoint.end()) {
-    return {it->second, utf8 + 2};
+  if (auto it = kEscapeToCodepoint.find(utf8[1]); it != kEscapeToCodepoint.end()) {
+    return {it->second, 2};
   }
 
   if (utf8[1] == 'x') {
     // arbitrary length hex
     int len = 0;
-    int32_t codepoint = 0;
-    while (true) {
-      auto digit = HexCharToInt(utf8[2 + len]);
-      if (digit == -1) {
-        break;
-      }
+    TCodepoint codepoint = 0;
+    int32_t digit;
+    while ((digit = HexCharToInt(utf8[2 + len])) != -1) {
       codepoint = codepoint * 16 + digit;
       ++len;
     }
     if (len == 0) {
-      return {CharHandlingError::kInvalidEscape, utf8};
+      return {CharHandlingError::kInvalidEscape, 0};
     }
-    return {codepoint, utf8 + len + 2};
+    return {codepoint, len + 2};
   } else if (utf8[1] == 'u' || utf8[1] == 'U') {
     // 4- or 8-digit hex
     int len = utf8[1] == 'u' ? 4 : 8;
-    int32_t codepoint = 0;
+    TCodepoint codepoint = 0;
 
     for (int i = 0; i < len; ++i) {
       auto digit = HexCharToInt(utf8[i + 2]);
       if (digit == -1) {
-        return {CharHandlingError::kInvalidEscape, utf8};
+        return {CharHandlingError::kInvalidEscape, 0};
       }
       codepoint = codepoint * 16 + digit;
     }
-    return {codepoint, utf8 + len + 2};
+    return {codepoint, len + 2};
   } else {
-    return {CharHandlingError::kInvalidEscape, utf8};
+    return {CharHandlingError::kInvalidEscape, 0};
   }
 }
 

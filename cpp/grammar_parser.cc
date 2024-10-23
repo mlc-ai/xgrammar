@@ -136,9 +136,7 @@ std::string EBNFParserImpl::ParseName(bool accept_empty) {
 // Character class should not contain newlines.
 int32_t EBNFParserImpl::ParseCharacterClass() {
   static constexpr TCodepoint kUnknownUpperBound = -4;
-  static const std::unordered_map<std::string, TCodepoint> kCustomEscapeMap = {
-      {"\\-", '-'}, {"\\]", ']'}
-  };
+  static const std::unordered_map<char, TCodepoint> CUSTOM_ESCAPE_MAP = {{'-', '-'}, {']', ']'}};
 
   std::vector<BNFGrammarBuilder::CharacterClassElement> elements;
 
@@ -160,14 +158,14 @@ int32_t EBNFParserImpl::ParseCharacterClass() {
       continue;
     }
 
-    auto [codepoint, new_cur] = ParseNextUTF8OrEscaped(cur_, kCustomEscapeMap);
+    auto [codepoint, len] = ParseNextUTF8OrEscaped(cur_, CUSTOM_ESCAPE_MAP);
     if (codepoint == CharHandlingError::kInvalidUTF8) {
       ThrowParseError("Invalid UTF8 sequence");
     }
     if (codepoint == CharHandlingError::kInvalidEscape) {
       ThrowParseError("Invalid escape sequence");
     }
-    Consume(new_cur - cur_);
+    Consume(len);
     if (past_is_hyphen) {
       XGRAMMAR_ICHECK(!elements.empty());
       if (elements.back().lower > codepoint) {
@@ -199,19 +197,23 @@ int32_t EBNFParserImpl::ParseString() {
       ThrowParseError("There should be no newline character in a string literal");
     }
 
-    auto [codepoint, new_cur] = ParseNextUTF8OrEscaped(cur_);
+    auto [codepoint, len] = ParseNextUTF8OrEscaped(cur_);
     if (codepoint == CharHandlingError::kInvalidUTF8) {
       ThrowParseError("Invalid utf8 sequence");
     }
     if (codepoint == CharHandlingError::kInvalidEscape) {
       ThrowParseError("Invalid escape sequence");
     }
-    Consume(new_cur - cur_);
+    Consume(len);
     codepoints.push_back(codepoint);
   }
   if (codepoints.empty()) {
     return builder_.AddEmptyStr();
   }
+
+  // for (auto codepoint : codepoints) {
+  //   std::cout << "codepoint: " << codepoint << std::endl;
+  // }
 
   // convert codepoints to string
   std::string str;
@@ -221,7 +223,8 @@ int32_t EBNFParserImpl::ParseString() {
   // convert str to int32_t vector
   std::vector<int32_t> bytes;
   for (auto c : str) {
-    bytes.push_back(static_cast<int32_t>(c));
+    bytes.push_back(static_cast<int32_t>(static_cast<uint8_t>(c)));
+    // std::cout << "new byte: " << static_cast<int32_t>(static_cast<uint8_t>(c)) << std::endl;
   }
   return builder_.AddByteString(bytes);
 }

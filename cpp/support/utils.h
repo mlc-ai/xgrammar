@@ -30,6 +30,14 @@ uint32_t HashCombine(Args... args) {
   return seed;
 }
 
+// Sometimes GCC fails to detect some branches will not return, such as when we use LOG(FATAL)
+// to raise an error. This macro manually mark them as unreachable to avoid warnings.
+#ifdef __GNUC__
+#define XGRAMMAR_UNREACHABLE() __builtin_unreachable()
+#else
+#define XGRAMMAR_UNREACHABLE()
+#endif
+
 }  // namespace xgrammar
 
 namespace std {

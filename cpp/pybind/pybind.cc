@@ -23,7 +23,8 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
   auto pyBuiltinGrammar = py::class_<BuiltinGrammar>(m, "BuiltinGrammar");
   pyBuiltinGrammar.def_static("json", &BuiltinGrammar::JSON)
       .def_static("json_schema", &BuiltinGrammar::JSONSchema)
-      .def_static("_json_schema_to_ebnf", &BuiltinGrammar::_JSONSchemaToEBNF);
+      .def_static("_json_schema_to_ebnf", &BuiltinGrammar::_JSONSchemaToEBNF)
+      .def_static("_regex_to_ebnf", &BuiltinGrammar::_RegexToEBNF);
 
   auto pyTokenizerInfo = py::class_<TokenizerInfo>(m, "TokenizerInfo");
   pyTokenizerInfo.def(py::init(&TokenizerInfo_Init))

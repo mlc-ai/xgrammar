@@ -65,6 +65,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+/Testing/
 
 # Translations
 *.mo
@@ -137,7 +138,7 @@ venv.bak/
 *.pyc
 *~
 config.mk
-config.cmake
+/config.cmake
 Win32
 *.dir
 perf

@@ -206,7 +206,7 @@ inline std::string ByteLevelDecoder(const std::string& token) {
       // clang-format on
   };
 
-  auto unicode_codepoints = ParseUTF8(token.c_str(), UTF8ErrorPolicy::kReturnInvalid);
+  auto unicode_codepoints = ParseUTF8(token.c_str(), false);
   if (unicode_codepoints.size() == 1 && unicode_codepoints[0] == kInvalidUTF8) {
     return token;
   }

@@ -20,15 +20,6 @@
 
 namespace xgrammar {
 
-// TODO(yixin): test it
-// EMCC somehow cannot pickup operator overload from picojson.h, so we copy here.
-// #ifdef COMPILE_MLC_WASM_RUNTIME
-// inline std::ostream& operator<<(std::ostream& os, const picojson::value& x) {
-//   x.serialize(std::ostream_iterator<char>(os));
-//   return os;
-// }
-// #endif
-
 /*!
  * \brief Manage the indent and separator for the generation of EBNF grammar.
  * \param indent The number of spaces for each indent. If it is std::nullopt, there will be no
@@ -621,7 +612,8 @@ std::string JSONSchemaToEBNFConverter::VisitEnum(
 
 std::string JSONSchemaToEBNFConverter::JSONStrToPrintableStr(const std::string& json_str) {
   static const std::vector<std::pair<std::string, std::string>> kReplaceMapping = {
-      {"\\", "\\\\"}, {"\"", "\\\""}};
+      {"\\", "\\\\"}, {"\"", "\\\""}
+  };
   std::string result = json_str;
   for (const auto& [k, v] : kReplaceMapping) {
     size_t pos = 0;

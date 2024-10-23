@@ -55,7 +55,7 @@ std::string BNFGrammarPrinter::PrintByteString(const RuleExpr& rule_expr) {
   for (int i = 0; i < rule_expr.data_len; ++i) {
     internal_str += static_cast<char>(rule_expr[i]);
   }
-  auto codepoints = ParseUTF8(internal_str.c_str(), UTF8ErrorPolicy::kReturnByte);
+  auto codepoints = ParseUTF8(internal_str.c_str(), true);
   std::string result;
   for (auto codepoint : codepoints) {
     result += PrintAsEscapedUTF8(codepoint);
