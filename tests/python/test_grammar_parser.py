@@ -21,7 +21,7 @@ c ::= (("c"))
 
 
 def test_ebnf():
-    before = """root ::= b c | b main
+    before = """root ::= b c | b root
 b ::= "ab"*
 c ::= [acep-z]+
 d ::= "d"?
@@ -282,7 +282,7 @@ def test_error():
 
 
 def test_to_json():
-    before = """root ::= b c | b main
+    before = """root ::= b c | b root
 b ::= "bcd"
 c ::= [a-z]
 """
