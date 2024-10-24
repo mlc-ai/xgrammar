@@ -17,9 +17,9 @@ namespace xgrammar {
 
 // Parse the EBNF string but not normalize it
 BNFGrammar BNFGrammar_InitNoNormalization(
-    const std::string& ebnf_string, const std::string& main_rule
+    const std::string& ebnf_string, const std::string& root_rule
 ) {
-  return EBNFParser::Parse(ebnf_string, main_rule);
+  return EBNFParser::Parse(ebnf_string, root_rule);
 }
 
 TokenizerInfo TokenizerInfo_Init(

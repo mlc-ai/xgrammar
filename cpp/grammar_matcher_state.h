@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "grammar_ast.h"
+#include "grammar_data_structure.h"
 #include "grammar_serializer.h"
 
 namespace xgrammar {
@@ -156,7 +156,7 @@ class RulePositionTree {
 
   /*!
    * \brief Check if the given RulePosition points to the end of the grammar. For a position, if its
-   * rule id is the main rule id, and the element id equals to the length of the sequence it refers
+   * rule id is the root rule id, and the element id equals to the length of the sequence it refers
    * to, it would be the end position.
    */
   bool IsEndPosition(const RulePosition& rule_position) const;

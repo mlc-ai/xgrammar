@@ -1,5 +1,6 @@
 """This test uses the optimized JSON grammar provided by the grammar library."""
 
+import sys
 import time
 from typing import Dict, List, Tuple
 
@@ -123,4 +124,4 @@ def test_init_context_cache_json_schema():
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    pytest.main(sys.argv)

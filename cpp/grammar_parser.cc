@@ -9,8 +9,8 @@
 
 #include <memory>
 
-#include "grammar_ast.h"
 #include "grammar_builder.h"
+#include "grammar_data_structure.h"
 #include "support/encoding.h"
 
 namespace xgrammar {
@@ -18,7 +18,7 @@ namespace xgrammar {
 class EBNFParserImpl {
  public:
   /*! \brief The logic of parsing the grammar string. */
-  BNFGrammar DoParse(std::string ebnf_string, std::string main_rule);
+  BNFGrammar DoParse(std::string ebnf_string, std::string root_rule);
 
  private:
   using Rule = BNFGrammar::Impl::Rule;
@@ -428,7 +428,7 @@ void EBNFParserImpl::ResetStringIterator(const char* cur) {
   in_parentheses_ = false;
 }
 
-BNFGrammar EBNFParserImpl::DoParse(std::string ebnf_string, std::string main_rule) {
+BNFGrammar EBNFParserImpl::DoParse(std::string ebnf_string, std::string root_rule) {
   ResetStringIterator(ebnf_string.c_str());
   BuildRuleNameToId();
 
@@ -447,68 +447,17 @@ BNFGrammar EBNFParserImpl::DoParse(std::string ebnf_string, std::string main_rul
     ConsumeSpace();
   }
 
-  // Check that the main rule is defined
-  if (builder_.GetRuleId(main_rule) == -1) {
-    ThrowParseError("The main rule with name \"" + main_rule + "\" is not found.");
+  // Check that the root rule is defined
+  if (builder_.GetRuleId(root_rule) == -1) {
+    ThrowParseError("The root rule with name \"" + root_rule + "\" is not found.");
   }
 
-  return builder_.Get(main_rule);
+  return builder_.Get(root_rule);
 }
 
-BNFGrammar EBNFParser::Parse(std::string ebnf_string, std::string main_rule) {
+BNFGrammar EBNFParser::Parse(std::string ebnf_string, std::string root_rule) {
   EBNFParserImpl parser;
-  return parser.DoParse(ebnf_string, main_rule);
-}
-
-BNFGrammar BNFJSONParser::Parse(std::string json_string) {
-  auto node = std::make_shared<BNFGrammar::Impl>();
-
-  auto checker = [&](bool condition) {
-    XGRAMMAR_CHECK(condition) << "Failed to deserialize XGrammar object: " << json_string;
-  };
-
-  picojson::value serialized_value;
-  std::string err = picojson::parse(serialized_value, json_string);
-
-  checker(err.empty() && serialized_value.is<picojson::object>());
-  auto serialized_obj = serialized_value.get<picojson::object>();
-
-  // rules
-  checker(serialized_obj.count("rules") && serialized_obj["rules"].is<picojson::array>());
-  auto rules_array = serialized_obj["rules"].get<picojson::array>();
-
-  checker(rules_array.size() > 0);
-  for (const auto& rule_value : rules_array) {
-    checker(rule_value.is<picojson::object>());
-    auto rule_obj = rule_value.get<picojson::object>();
-    checker(rule_obj.count("name") && rule_obj["name"].is<std::string>());
-    auto name = rule_obj["name"].get<std::string>();
-    checker(rule_obj.count("body_expr_id") && rule_obj["body_expr_id"].is<int64_t>());
-    auto rule_expr = static_cast<int32_t>(rule_obj["body_expr_id"].get<int64_t>());
-    node->rules_.push_back(BNFGrammar::Impl::Rule({name, rule_expr}));
-  }
-
-  // rule_expr_data
-  checker(
-      serialized_obj.count("rule_expr_data") &&
-      serialized_obj["rule_expr_data"].is<picojson::array>()
-  );
-  auto rule_expr_data_array = serialized_obj["rule_expr_data"].get<picojson::array>();
-  for (const auto& data_json : rule_expr_data_array) {
-    node->rule_expr_data_.push_back(static_cast<int32_t>(data_json.get<int64_t>()));
-  }
-
-  // rule_expr_indptr
-  checker(
-      serialized_obj.count("rule_expr_indptr") &&
-      serialized_obj["rule_expr_indptr"].is<picojson::array>()
-  );
-  auto rule_expr_indptr_array = serialized_obj["rule_expr_indptr"].get<picojson::array>();
-  for (const auto& index_ptr_json : rule_expr_indptr_array) {
-    node->rule_expr_indptr_.push_back(static_cast<int32_t>(index_ptr_json.get<int64_t>()));
-  }
-
-  return BNFGrammar(node);
+  return parser.DoParse(ebnf_string, root_rule);
 }
 
 }  // namespace xgrammar

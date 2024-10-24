@@ -1,5 +1,6 @@
 """This test uses the optimized JSON grammar provided by the grammar library."""
 
+import sys
 import time
 from typing import List, Optional
 
@@ -269,7 +270,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 
 
 @pytest.mark.parametrize(
-    ("tokenizer_path", "input_str", "expected_rejected_sizes"),
+    "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
 )
 def test_find_next_rejected_tokens(
@@ -318,4 +319,4 @@ def test_find_next_rejected_tokens(
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    pytest.main(sys.argv)

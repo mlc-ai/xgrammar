@@ -12,8 +12,8 @@
 #include <queue>
 #include <string>
 
-#include "grammar_ast.h"
 #include "grammar_builder.h"
+#include "grammar_data_structure.h"
 #include "grammar_serializer.h"
 
 namespace xgrammar {
@@ -48,7 +48,8 @@ class BNFGrammarFunctor {
         VisitExpr(rule.body_expr_id);
         VisitLookaheadAssertion(rule.lookahead_assertion_id);
       }
-    } else if constexpr (std::is_same<T, int32_t>::value && std::is_same<ReturnType, BNFGrammar>::value) {
+    } else if constexpr (std::is_same<T, int32_t>::value &&
+                         std::is_same<ReturnType, BNFGrammar>::value) {
       // First add empty rules to ensure the new rule ids the same as the old ones, then update
       // the rule bodies
       for (int i = 0; i < static_cast<int>(grammar_->NumRules()); ++i) {

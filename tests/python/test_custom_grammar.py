@@ -2,6 +2,7 @@
 a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar matcher.
 """
 
+import sys
 import time
 from typing import List, Optional
 
@@ -19,7 +20,7 @@ def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
 
 
 def test_simple():
-    grammar_str = """main ::= rule1 rule2
+    grammar_str = """root ::= rule1 rule2
 rule1 ::= (rule2 | rule3) "a"
 rule2 ::= "b"
 rule3 ::= "c"
@@ -31,9 +32,9 @@ rule3 ::= "c"
     assert match_complete_string(grammar, "cab")
 
 
-def test_custom_main_rule():
+def test_custom_root_rule():
     json_grammar_simple_ebnf = r"""
-main ::= basic_object
+root ::= basic_object
 basic_any ::= basic_string | basic_object
 basic_string ::= (([\"] basic_string_1 [\"]))
 basic_string_1 ::= "" | [^"\\\r\n] basic_string_1 | "\\" escape basic_string_1
@@ -41,13 +42,13 @@ escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
 ws ::= [ \n\t]*
 """
-    grammar = BNFGrammar(json_grammar_simple_ebnf, main_rule="basic_string")
+    grammar = BNFGrammar(json_grammar_simple_ebnf, root_rule="basic_string")
     assert match_complete_string(grammar, r'"abc\r\n"')
     assert not match_complete_string(grammar, r'{"name": "John" }')
 
 
 json_grammar_ebnf = r"""
-main ::= basic_array | basic_object
+root ::= basic_array | basic_object
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
@@ -314,7 +315,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 
 
 @pytest.mark.parametrize(
-    ("tokenizer_path", "input_str", "expected_rejected_sizes"),
+    "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
 )
 def test_find_next_rejected_tokens(
@@ -364,4 +365,4 @@ def test_find_next_rejected_tokens(
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    pytest.main(sys.argv)

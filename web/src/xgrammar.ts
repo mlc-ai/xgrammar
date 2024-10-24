@@ -42,17 +42,17 @@ export class BNFGrammar {
    * 3. A-B (match A and not match B) is not supported yet
    * 4. Lookahead assertion can be added at the end of a rule to speed up matching. E.g.
    * ```
-   * main ::= "ab" a [a-z]
+   * root ::= "ab" a [a-z]
    * a ::= "cd" (=[a-z])
    * ```
    * The assertion (=[a-z]) means a must be followed by [a-z].
    * @param {string} ebnfString The grammar string
-   * @param {string} [mainRule="main"] The name of the main rule. Default: "main".
+   * @param {string} [rootRule="root"] The name of the root rule. Default: "root".
    * @returns {BNFGrammar} The parsed BNF grammar.
    */
-  static async createBNFGrammar(ebnfString: string, mainRule = "main"): Promise<BNFGrammar> {
+  static async createBNFGrammar(ebnfString: string, rootRule = "root"): Promise<BNFGrammar> {
     await asyncInitBinding();
-    return new BNFGrammar(new binding.BNFGrammar(ebnfString, mainRule));
+    return new BNFGrammar(new binding.BNFGrammar(ebnfString, rootRule));
   }
 
   /**

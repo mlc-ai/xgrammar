@@ -5,21 +5,21 @@
 
 #include <xgrammar/xgrammar.h>
 
-#include "grammar_ast.h"
+#include "grammar_data_structure.h"
 #include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_serializer.h"
 
 namespace xgrammar {
 
-inline BNFGrammar BNFGrammarCtor(const std::string& ebnf_string, const std::string& main_rule) {
-  auto grammar = EBNFParser::Parse(ebnf_string, main_rule);
+inline BNFGrammar BNFGrammarCtor(const std::string& ebnf_string, const std::string& root_rule) {
+  auto grammar = EBNFParser::Parse(ebnf_string, root_rule);
   grammar = BNFGrammarNormalizer().Apply(grammar);
   return grammar;
 }
 
-BNFGrammar::BNFGrammar(const std::string& ebnf_string, const std::string& main_rule)
-    : BNFGrammar(BNFGrammarCtor(ebnf_string, main_rule)) {}
+BNFGrammar::BNFGrammar(const std::string& ebnf_string, const std::string& root_rule)
+    : BNFGrammar(BNFGrammarCtor(ebnf_string, root_rule)) {}
 
 std::string BNFGrammar::ToString() const { return BNFGrammarPrinter(*this).ToString(); }
 
@@ -29,16 +29,16 @@ std::ostream& operator<<(std::ostream& os, const BNFGrammar& grammar) {
 }
 
 std::string BNFGrammar::Serialize(bool prettify) const {
-  return BNFGrammarJSONSerializer(*this).ToString();
+  return BNFGrammarSerializer(*this, prettify).Serialize();
 }
 
 BNFGrammar BNFGrammar::Deserialize(const std::string& json_string) {
-  return BNFJSONParser::Parse(json_string);
+  return BNFGrammarDeserializer::Deserialize(json_string);
 }
 
 // Optimized json grammar for the speed of the grammar matcher
 const std::string kJSONGrammarString = R"(
-main ::= (
+root ::= (
     "{" [ \n\t]* members_and_embrace |
     "[" [ \n\t]* elements_or_embrace
 )

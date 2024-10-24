@@ -1,3 +1,4 @@
+import sys
 import time
 
 import pytest
@@ -23,7 +24,7 @@ def match_string_to_grammar(grammar_str: str, input_str: str) -> bool:
 def test_basic():
     regex = "123"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    expected_grammar = r"""main ::= "1" "2" "3"
+    expected_grammar = r"""root ::= "1" "2" "3"
 """
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, "123")
@@ -33,7 +34,7 @@ def test_basic():
 def test_unicode():
     regex = "ww我😁"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    expected_grammar = r"""main ::= "w" "w" "\u6211" "\U0001f601"
+    expected_grammar = r"""root ::= "w" "w" "\u6211" "\U0001f601"
 """
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, regex)
@@ -42,25 +43,25 @@ def test_unicode():
 regex_expected_grammar_instance = [
     (
         r"\^\$\.\*\+\?\\\(\)\[\]\{\}\|\/",
-        r"""main ::= "^" "$" "." "*" "+" "\?" "\\" "(" ")" "[" "]" "{" "}" "|" "/"
+        r"""root ::= "^" "$" "." "*" "+" "\?" "\\" "(" ")" "[" "]" "{" "}" "|" "/"
 """,
         "^$.*+?\\()[]{}|/",
     ),
     (
         r"\"\'\a\f\n\r\t\v\0\e",
-        r"""main ::= "\"" "\'" "\a" "\f" "\n" "\r" "\t" "\v" "\0" "\e"
+        r"""root ::= "\"" "\'" "\a" "\f" "\n" "\r" "\t" "\v" "\0" "\e"
 """,
         "\"'\a\f\n\r\t\v\0\x1B",
     ),
     (
         r"\u{20BB7}\u0300\x1F\cJ",
-        r"""main ::= "\U00020bb7" "\u0300" "\x1f" "\n"
+        r"""root ::= "\U00020bb7" "\u0300" "\x1f" "\n"
 """,
         "\U00020BB7\u0300\x1F\n",
     ),
     (
         r"[\r\n\$\u0010-\u006F\]\--]+",
-        r"""main ::= [\r\n$\x10-o\]\--]+
+        r"""root ::= [\r\n$\x10-o\]\--]+
 """,
         "\r\n$\u0020-",  # TODO(yixin): add unicode tests
     ),
@@ -80,8 +81,7 @@ def test_escaped_char_class():
     regex = r"\w\w\W\d\D\s\S"
     instance = "A_ 1b 0"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    print(grammar_str)
-    expected_grammar = r"""main ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [\f\n\r\t\v\u0020\u00a0] [^[\f\n\r\t\v\u0020\u00a0]
+    expected_grammar = r"""root ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [\f\n\r\t\v\u0020\u00a0] [^[\f\n\r\t\v\u0020\u00a0]
 """
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, instance)
@@ -91,7 +91,7 @@ def test_char_class():
     regex = r"[-a-zA-Z+--]+"
     instance = "a-+"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    expected_grammar = r"""main ::= [-a-zA-Z+--]+
+    expected_grammar = r"""root ::= [-a-zA-Z+--]+
 """
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, instance)
@@ -101,7 +101,7 @@ def test_boundary():
     regex = r"^abc$"
     instance = "abc"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    expected_grammar = r"""main ::= "a" "b" "c"
+    expected_grammar = r"""root ::= "a" "b" "c"
 """
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, instance)
@@ -111,7 +111,7 @@ def test_disjunction():
     regex = r"abc|de(f|g)"
     instance = "deg"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    expected_grammar = r"""main ::= "a" "b" "c" | "d" "e" ( "f" | "g" )
+    expected_grammar = r"""root ::= "a" "b" "c" | "d" "e" ( "f" | "g" )
 """
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, instance)
@@ -121,7 +121,7 @@ def test_space():
     regex = r" abc | df | g "
     instance = " df "
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    expected_grammar = r"""main ::= " " "a" "b" "c" " " | " " "d" "f" " " | " " "g" " "
+    expected_grammar = r"""root ::= " " "a" "b" "c" " " | " " "d" "f" " " | " " "g" " "
 """
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, instance)
@@ -132,7 +132,7 @@ def test_quantifier():
     instance = "adddabcabc"
     instance1 = "z"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    expected_grammar = r"""main ::= ( "a" | "b" )? [a-z]+ ( "a" "b" "c" )*
+    expected_grammar = r"""root ::= ( "a" | "b" )? [a-z]+ ( "a" "b" "c" )*
 """
     # TODO(yixin): add tests for repetition range
     assert grammar_str == expected_grammar
@@ -144,7 +144,7 @@ def test_group():
     regex = r"(a|b)(c|d)"
     instance = "ac"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    expected_grammar = r"""main ::= ( "a" | "b" ) ( "c" | "d" )
+    expected_grammar = r"""root ::= ( "a" | "b" ) ( "c" | "d" )
 """
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, instance)
@@ -154,8 +154,7 @@ def test_any():
     regex = r".+a.+"
     instance = "bbbabb"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    print(grammar_str)
-    expected_grammar = r"""main ::= [\u0000-\U0010FFFF]+ "a" [\u0000-\U0010FFFF]+
+    expected_grammar = r"""root ::= [\u0000-\U0010FFFF]+ "a" [\u0000-\U0010FFFF]+
 """
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, instance)
@@ -165,7 +164,7 @@ def test_ipv4():
     regex = r"((25[0-5]|2[0-4]\d|[01]?\d\d?).)((25[0-5]|2[0-4]\d|[01]?\d\d?).)((25[0-5]|2[0-4]\d|[01]?\d\d?).)(25[0-5]|2[0-4]\d|[01]?\d\d?)"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
     expected_grammar = (
-        r"""main ::= ( ( "2" "5" [0-5] | "2" [0-4] [0-9] | [01]? [0-9] [0-9]? ) """
+        r"""root ::= ( ( "2" "5" [0-5] | "2" [0-4] [0-9] | [01]? [0-9] [0-9]? ) """
         r"""[\u0000-\U0010FFFF] ) ( ( "2" "5" [0-5] | "2" [0-4] [0-9] | [01]? [0-9] """
         r"""[0-9]? ) [\u0000-\U0010FFFF] ) ( ( "2" "5" [0-5] | "2" [0-4] [0-9] | [01]? [0-9] """
         r"""[0-9]? ) [\u0000-\U0010FFFF] ) ( "2" "5" [0-5] | "2" [0-4] [0-9] | [01]? [0-9] [0-9]? )
@@ -193,12 +192,11 @@ def test_date_time(instance: str, accepted: bool):
     regex = r"^\d\d\d\d-(0[1-9]|1[0-2])-([0-2]\d|3[01])T([01]\d|2[0123]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]([01]\d|2[0123]):[0-5]\d)$"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
     expected_grammar = (
-        r"""main ::= [0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( [0-2] [0-9] """
+        r"""root ::= [0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( [0-2] [0-9] """
         r"""| "3" [01] ) "T" ( [01] [0-9] | "2" [0123] ) ":" [0-5] [0-9] ":" [0-5] [0-9] """
         r"""( "." [0-9]+ )? ( "Z" | [+-] ( [01] [0-9] | "2" [0123] ) ":" [0-5] [0-9] )
 """
     )
-    print(grammar_str)
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, instance) == accepted
 
@@ -216,9 +214,8 @@ date_instances_accepted = [
 def test_date(instance: str, accepted: bool):
     regex = r"^\d\d\d\d-(0[1-9]|1[0-2])-([0-2]\d|3[01])$"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    print(grammar_str)
     expected_grammar = (
-        r"""main ::= [0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" """
+        r"""root ::= [0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" """
         r"""( [0-2] [0-9] | "3" [01] )
 """
     )
@@ -242,11 +239,10 @@ def test_time(instance: str, accepted: bool):
     regex = r"^([01]\d|2[0123]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]([01]\d|2[0123]):[0-5]\d)$"
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
     expected_grammar = (
-        r"""main ::= ( [01] [0-9] | "2" [0123] ) ":" [0-5] [0-9] ":" [0-5] [0-9] """
+        r"""root ::= ( [01] [0-9] | "2" [0123] ) ":" [0-5] [0-9] ":" [0-5] [0-9] """
         r"""( "." [0-9]+ )? ( "Z" | [+-] ( [01] [0-9] | "2" [0123] ) ":" [0-5] [0-9] )
 """
     )
-    print(grammar_str)
     assert grammar_str == expected_grammar
     assert match_string_to_grammar(grammar_str, instance) == accepted
 
@@ -277,7 +273,6 @@ def test_email(instance: str, accepted: bool):
         r"""[a-z0-9]([a-z0-9-]*[a-z0-9])?)$"""
     )
     grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    print(grammar_str)
     assert match_string_to_grammar(grammar_str, instance) == accepted
 
 
@@ -338,4 +333,4 @@ def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    pytest.main(sys.argv)

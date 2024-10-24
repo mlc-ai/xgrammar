@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "grammar_ast.h"
+#include "grammar_data_structure.h"
 #include "grammar_matcher_state.h"
 #include "support/encoding.h"
 
@@ -30,7 +30,7 @@ class GrammarMatcherBase {
   /*!
    * \brief Construct a GrammarMatcherBase with the given grammar and initial rule position.
    * \param grammar The grammar to match.
-   * \param init_rule_position The initial rule position. If not specified, the main rule will be
+   * \param init_rule_position The initial rule position. If not specified, the root rule will be
    * used.
    * \param expand_init_rule_position Whether to expand the initial rule position to all possible
    * locations. See ExpandRulePosition.
@@ -47,7 +47,7 @@ class GrammarMatcherBase {
   /*! \brief Accept one character. */
   bool AcceptChar(uint8_t char_value, bool verbose = false);
 
-  /*! \brief Check if the end of the main rule is reached. If so, the stop token can be accepted. */
+  /*! \brief Check if the end of the root rule is reached. If so, the stop token can be accepted. */
   bool CanReachEnd() const;
 
   /*! \brief Rollback the matcher to a previous state by the number of characters. */
@@ -61,7 +61,7 @@ class GrammarMatcherBase {
 
  protected:
   // Push an initial stack state according to the given rule position.
-  // If init_rule_position is kInvalidRulePosition, init the stack with the main rule.
+  // If init_rule_position is kInvalidRulePosition, init the stack with the root rule.
   void PushInitialState(RulePosition init_rule_position, bool expand_init_rule_position);
 
   // Check if the character is accepted by the current rule position.
@@ -279,11 +279,11 @@ inline void GrammarMatcherBase::PushInitialState(
     RulePosition init_rule_position, bool expand_init_rule_position
 ) {
   if (init_rule_position == kInvalidRulePosition) {
-    // Initialize the stack with the main rule.
-    auto main_rule = grammar_->GetMainRule();
-    auto main_rule_body = grammar_->GetRuleExpr(main_rule.body_expr_id);
+    // Initialize the stack with the root rule.
+    auto root_rule = grammar_->GetMainRule();
+    auto root_rule_body = grammar_->GetRuleExpr(root_rule.body_expr_id);
     tmp_new_stack_tops_.clear();
-    for (auto i : main_rule_body) {
+    for (auto i : root_rule_body) {
       auto init_rule_position = RulePosition(0, i, 0, RulePosition::kNoParent);
       if (expand_init_rule_position) {
         ExpandRulePosition(init_rule_position, &tmp_new_stack_tops_, true);

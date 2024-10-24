@@ -1,3 +1,4 @@
+import sys
 from typing import Dict, List, Tuple
 
 import pytest
@@ -86,4 +87,4 @@ def test_json_schema_find_jump_forward_string():
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    pytest.main(sys.argv)

@@ -11,7 +11,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "grammar_ast.h"
+#include "grammar_data_structure.h"
 #include "grammar_matcher_base.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
@@ -164,7 +164,7 @@ class GrammarMatcherForInitContext : public GrammarMatcherBase {
   /*!
    * \brief Get the catagorized tokens for the given RulePosition.
    * \param consider_parent_rule Whether to consider the parent rule. If false, there will be
-   * no uncertain tokens. Useful for the main rule.
+   * no uncertain tokens. Useful for the root rule.
    */
   CatagorizedTokens GetCatagorizedTokens(
       size_t vocab_size,
@@ -332,7 +332,7 @@ inline CatagorizedTokens GrammarMatcherForInitContext::GetCatagorizedTokens(
       tmp_accepted_indices_.push_back(i);
     } else if (can_reach_end && consider_parent_rule &&
                IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_)) {
-      // 1. If the current rule is the main rule (consider_parent_rule=false), there are no
+      // 1. If the current rule is the root rule (consider_parent_rule=false), there are no
       // uncertain tokens. Not accepted tokens are just rejected.
       // 2. If a token cannot pass the lookahead assertion, it is rejected.
       tmp_uncertain_indices_.push_back(i);
@@ -396,7 +396,7 @@ GrammarMatcherInitContext::Impl::Impl(
   // Find the corresponding catagorized tokens for:
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)
   // 2. All byte strings (with element_in_string=0, 1, 2, ...)
-  auto main_rule_id = grammar->GetMainRuleId();
+  auto root_rule_id = grammar->GetMainRuleId();
   for (int rule_id = 0; rule_id < static_cast<int>(grammar->NumRules()); ++rule_id) {
     auto rule = grammar->GetRule(rule_id);
     auto rule_body = grammar->GetRuleExpr(rule.body_expr_id);
@@ -416,7 +416,7 @@ GrammarMatcherInitContext::Impl::Impl(
         auto add_catagorized_tokens = [&](const RulePosition& rule_position) {
           auto grammar_matcher = GrammarMatcherForInitContext(grammar, rule_position);
           auto cur_catagorized_tokens_for_grammar = grammar_matcher.GetCatagorizedTokens(
-              this->vocab_size, this->sorted_raw_vocab, rule_id != main_rule_id
+              this->vocab_size, this->sorted_raw_vocab, rule_id != root_rule_id
           );
           this->catagorized_tokens_for_grammar[rule_position] = cur_catagorized_tokens_for_grammar;
         };

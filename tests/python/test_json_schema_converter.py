@@ -1,4 +1,5 @@
 import json
+import sys
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
@@ -88,14 +89,14 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main_prop_3 ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
-main_prop_4 ::= ("[" "" basic_string (", " basic_string)* "" "]") | "[]"
-main_prop_5_item_2 ::= ("[" "" basic_string (", " basic_string)* "" "]") | "[]"
-main_prop_5 ::= "[" "" basic_string ", " basic_integer ", " main_prop_5_item_2 "" "]"
-main_prop_6 ::= ("{" "" basic_string ": " basic_integer (", " basic_string ": " basic_integer)* "" "}") | "{}"
-main_prop_7_addl ::= ("{" "" basic_string ": " basic_integer (", " basic_string ": " basic_integer)* "" "}") | "{}"
-main_prop_7 ::= ("{" "" basic_string ": " main_prop_7_addl (", " basic_string ": " main_prop_7_addl)* "" "}") | "{}"
-main ::= "{" "" "\"integer_field\"" ": " basic_integer ", " "\"number_field\"" ": " basic_number ", " "\"boolean_field\"" ": " basic_boolean ", " "\"any_array_field\"" ": " main_prop_3 ", " "\"array_field\"" ": " main_prop_4 ", " "\"tuple_field\"" ": " main_prop_5 ", " "\"object_field\"" ": " main_prop_6 ", " "\"nested_object_field\"" ": " main_prop_7 "" "}"
+root_prop_3 ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
+root_prop_4 ::= ("[" "" basic_string (", " basic_string)* "" "]") | "[]"
+root_prop_5_item_2 ::= ("[" "" basic_string (", " basic_string)* "" "]") | "[]"
+root_prop_5 ::= "[" "" basic_string ", " basic_integer ", " root_prop_5_item_2 "" "]"
+root_prop_6 ::= ("{" "" basic_string ": " basic_integer (", " basic_string ": " basic_integer)* "" "}") | "{}"
+root_prop_7_addl ::= ("{" "" basic_string ": " basic_integer (", " basic_string ": " basic_integer)* "" "}") | "{}"
+root_prop_7 ::= ("{" "" basic_string ": " root_prop_7_addl (", " basic_string ": " root_prop_7_addl)* "" "}") | "{}"
+root ::= "{" "" "\"integer_field\"" ": " basic_integer ", " "\"number_field\"" ": " basic_number ", " "\"boolean_field\"" ": " basic_boolean ", " "\"any_array_field\"" ": " root_prop_3 ", " "\"array_field\"" ": " root_prop_4 ", " "\"tuple_field\"" ": " root_prop_5 ", " "\"object_field\"" ": " root_prop_6 ", " "\"nested_object_field\"" ": " root_prop_7 "" "}"
 """
 
     schema = MainModel.model_json_schema()
@@ -144,11 +145,11 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any ("," basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any ("," basic_string ": " basic_any)* "" "}") | "{}"
-main_prop_0 ::= ("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | "[]"
-main_prop_1_item_2 ::= ("[" "\n      " basic_string (",\n      " basic_string)* "\n    " "]") | "[]"
-main_prop_1 ::= "[" "\n    " basic_string ",\n    " basic_integer ",\n    " main_prop_1_item_2 "\n  " "]"
-main_prop_2 ::= ("{" "\n    " basic_string ": " basic_integer (",\n    " basic_string ": " basic_integer)* "\n  " "}") | "{}"
-main ::= "{" "\n  " "\"array_field\"" ": " main_prop_0 ",\n  " "\"tuple_field\"" ": " main_prop_1 ",\n  " "\"object_field\"" ": " main_prop_2 "\n" "}"
+root_prop_0 ::= ("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | "[]"
+root_prop_1_item_2 ::= ("[" "\n      " basic_string (",\n      " basic_string)* "\n    " "]") | "[]"
+root_prop_1 ::= "[" "\n    " basic_string ",\n    " basic_integer ",\n    " root_prop_1_item_2 "\n  " "]"
+root_prop_2 ::= ("{" "\n    " basic_string ": " basic_integer (",\n    " basic_string ": " basic_integer)* "\n  " "}") | "{}"
+root ::= "{" "\n  " "\"array_field\"" ": " root_prop_0 ",\n  " "\"tuple_field\"" ": " root_prop_1 ",\n  " "\"object_field\"" ": " root_prop_2 "\n" "}"
 """
 
     instance = MainModel(
@@ -181,10 +182,10 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any ("," basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any ("," basic_string ": " basic_any)* "" "}") | "{}"
-main_prop_0_item_1 ::= "[" "\n      " basic_integer ",\n      " basic_integer (",\n      " basic_any)* "\n    " "]"
-main_prop_0 ::= "[" "\n    " basic_string ",\n    " main_prop_0_item_1 (",\n    " basic_any)* "\n  " "]"
-main_prop_1 ::= ("{" "\n    " basic_string ": " basic_any (",\n    " basic_string ": " basic_any)* "\n  " "}") | "{}"
-main ::= "{" "\n  " "\"tuple_field\"" ": " main_prop_0 ",\n  " "\"foo_field\"" ": " main_prop_1 (",\n  " basic_string ": " basic_any)* "\n" "}"
+root_prop_0_item_1 ::= "[" "\n      " basic_integer ",\n      " basic_integer (",\n      " basic_any)* "\n    " "]"
+root_prop_0 ::= "[" "\n    " basic_string ",\n    " root_prop_0_item_1 (",\n    " basic_any)* "\n  " "]"
+root_prop_1 ::= ("{" "\n    " basic_string ": " basic_any (",\n    " basic_string ": " basic_any)* "\n  " "}") | "{}"
+root ::= "{" "\n  " "\"tuple_field\"" ": " root_prop_0 ",\n  " "\"foo_field\"" ": " root_prop_1 (",\n  " basic_string ": " basic_any)* "\n" "}"
 """
 
     instance_json = """{
@@ -230,12 +231,12 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main_prop_0 ::= "\"a\""
-main_prop_1 ::= "\"a\\n\\r\\\"\""
-main_prop_2 ::= ("\"a\"") | ("\"b\"") | ("\"c\"")
-main_prop_3 ::= ("1") | ("\"a\"") | ("true")
-main_prop_4 ::= ("\"foo\"") | ("\"bar\"")
-main ::= "{" "" "\"bars\"" ": " main_prop_0 ", " "\"str_values\"" ": " main_prop_1 ", " "\"foo\"" ": " main_prop_2 ", " "\"values\"" ": " main_prop_3 ", " "\"field\"" ": " main_prop_4 "" "}"
+root_prop_0 ::= "\"a\""
+root_prop_1 ::= "\"a\\n\\r\\\"\""
+root_prop_2 ::= ("\"a\"") | ("\"b\"") | ("\"c\"")
+root_prop_3 ::= ("1") | ("\"a\"") | ("true")
+root_prop_4 ::= ("\"foo\"") | ("\"bar\"")
+root ::= "{" "" "\"bars\"" ": " root_prop_0 ", " "\"str_values\"" ": " root_prop_1 ", " "\"foo\"" ": " root_prop_2 ", " "\"values\"" ": " root_prop_3 ", " "\"field\"" ": " root_prop_4 "" "}"
 """
 
     schema = MainModel.model_json_schema()
@@ -261,9 +262,9 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main_prop_1 ::= basic_boolean | basic_null
-main_prop_2 ::= basic_number | basic_null
-main ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " main_prop_1 ", ")? "\"size\"" ": " main_prop_2 (", " "\"name\"" ": " basic_string)? "" "}"
+root_prop_1 ::= basic_boolean | basic_null
+root_prop_2 ::= basic_number | basic_null
+root ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " root_prop_1 ", ")? "\"size\"" ": " root_prop_2 (", " "\"name\"" ": " basic_string)? "" "}"
 """
 
     schema = MainModel.model_json_schema()
@@ -296,9 +297,9 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main_part_1 ::= "" | ", " "\"num\"" ": " basic_number ""
-main_part_0 ::= main_part_1 | ", " "\"state\"" ": " basic_boolean main_part_1
-main ::= ("{" "" (("\"size\"" ": " basic_integer main_part_0) | ("\"state\"" ": " basic_boolean main_part_1) | ("\"num\"" ": " basic_number "")) "" "}") | "{}"
+root_part_1 ::= "" | ", " "\"num\"" ": " basic_number ""
+root_part_0 ::= root_part_1 | ", " "\"state\"" ": " basic_boolean root_part_1
+root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": " basic_boolean root_part_1) | ("\"num\"" ": " basic_number "")) "" "}") | "{}"
 """
 
     schema = MainModel.model_json_schema()
@@ -320,10 +321,10 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main_part_2 ::= (", " basic_string ": " basic_any)*
-main_part_1 ::= main_part_2 | ", " "\"num\"" ": " basic_number main_part_2
-main_part_0 ::= main_part_1 | ", " "\"state\"" ": " basic_boolean main_part_1
-main ::= ("{" "" (("\"size\"" ": " basic_integer main_part_0) | ("\"state\"" ": " basic_boolean main_part_1) | ("\"num\"" ": " basic_number main_part_2) | basic_string ": " basic_any main_part_2) "" "}") | "{}"
+root_part_2 ::= (", " basic_string ": " basic_any)*
+root_part_1 ::= root_part_2 | ", " "\"num\"" ": " basic_number root_part_2
+root_part_0 ::= root_part_1 | ", " "\"state\"" ": " basic_boolean root_part_1
+root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": " basic_boolean root_part_1) | ("\"num\"" ": " basic_number root_part_2) | basic_string ": " basic_any root_part_2) "" "}") | "{}"
 """
 
     check_schema_with_grammar(schema, ebnf_grammar_non_strict, strict_mode=False)
@@ -346,7 +347,7 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main ::= "{" "}"
+root ::= "{" "}"
 """
 
     schema = MainModel.model_json_schema()
@@ -386,12 +387,12 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main_prop_0_prop_1 ::= basic_number | basic_null
-main_prop_0 ::= "{" "" "\"count\"" ": " basic_integer (", " "\"size\"" ": " main_prop_0_prop_1)? "" "}"
-main_prop_1_items_part_0 ::= "" | ", " "\"banana\"" ": " basic_string ""
-main_prop_1_items ::= ("{" "" (("\"apple\"" ": " basic_string main_prop_1_items_part_0) | ("\"banana\"" ": " basic_string "")) "" "}") | "{}"
-main_prop_1 ::= ("[" "" main_prop_1_items (", " main_prop_1_items)* "" "]") | "[]"
-main ::= "{" "" "\"foo\"" ": " main_prop_0 ", " "\"bars\"" ": " main_prop_1 "" "}"
+root_prop_0_prop_1 ::= basic_number | basic_null
+root_prop_0 ::= "{" "" "\"count\"" ": " basic_integer (", " "\"size\"" ": " root_prop_0_prop_1)? "" "}"
+root_prop_1_items_part_0 ::= "" | ", " "\"banana\"" ": " basic_string ""
+root_prop_1_items ::= ("{" "" (("\"apple\"" ": " basic_string root_prop_1_items_part_0) | ("\"banana\"" ": " basic_string "")) "" "}") | "{}"
+root_prop_1 ::= ("[" "" root_prop_1_items (", " root_prop_1_items)* "" "]") | "[]"
+root ::= "{" "" "\"foo\"" ": " root_prop_0 ", " "\"bars\"" ": " root_prop_1 "" "}"
 """
 
     schema = MainModel.model_json_schema()
@@ -422,9 +423,9 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main_case_0 ::= "{" "" "\"name\"" ": " basic_string ", " "\"color\"" ": " basic_string "" "}"
-main_case_1 ::= "{" "" "\"name\"" ": " basic_string ", " "\"breed\"" ": " basic_string "" "}"
-main ::= main_case_0 | main_case_1
+root_case_0 ::= "{" "" "\"name\"" ": " basic_string ", " "\"color\"" ": " basic_string "" "}"
+root_case_1 ::= "{" "" "\"name\"" ": " basic_string ", " "\"breed\"" ": " basic_string "" "}"
+root ::= root_case_0 | root_case_1
 """
 
     check_schema_with_grammar(model_schema, ebnf_grammar)
@@ -448,7 +449,7 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main ::= "{" "" "\"name\"" ": " basic_string "" "}"
+root ::= "{" "" "\"name\"" ": " basic_string "" "}"
 """
 
     check_schema_with_grammar(MainModel.model_json_schema(), ebnf_grammar)
@@ -474,8 +475,8 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main_prop_0 ::= "\"abc\""
-main ::= "{" "" "\"name 1\"" ": " main_prop_0 "" "}"
+root_prop_0 ::= "\"abc\""
+root ::= "{" "" "\"name 1\"" ": " root_prop_0 "" "}"
 """
 
     check_schema_with_grammar(MainModelSpace.model_json_schema(), ebnf_grammar_space)
@@ -488,4 +489,4 @@ main ::= "{" "" "\"name 1\"" ": " main_prop_0 "" "}"
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    pytest.main(sys.argv)

@@ -1,5 +1,6 @@
 """This test uses the optimized JSON grammar provided by the grammar library."""
 
+import sys
 from typing import List, Optional
 
 import pytest
@@ -67,7 +68,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 
 
 @pytest.mark.parametrize(
-    ("tokenizer_path", "input_str", "expected_rejected_sizes"),
+    "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
 )
 def test_find_next_rejected_tokens(
@@ -266,7 +267,7 @@ def test_termination():
 
 
 def test_get_jump_forward_string():
-    grammar_ebnf = r"""main ::= "abb" | "abbd" | other_rule
+    grammar_ebnf = r"""root ::= "abb" | "abbd" | other_rule
 other_rule ::= "a" sub_rule "b"
 sub_rule ::= "b"
 """
@@ -299,7 +300,7 @@ tokenizer_path_stop_token_ids = [
 ]
 
 
-@pytest.mark.parametrize(("tokenizer_path", "stop_token_ids"), tokenizer_path_stop_token_ids)
+@pytest.mark.parametrize("tokenizer_path, stop_token_ids", tokenizer_path_stop_token_ids)
 def test_stop_token_ids(tokenizer_path: str, stop_token_ids: List[int]):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
@@ -308,4 +309,4 @@ def test_stop_token_ids(tokenizer_path: str, stop_token_ids: List[int]):
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    pytest.main(sys.argv)

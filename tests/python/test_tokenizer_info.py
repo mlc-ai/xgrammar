@@ -1,3 +1,4 @@
+import sys
 from typing import List
 
 import pytest
@@ -52,7 +53,7 @@ tokenizer_metadata = [
 
 
 @pytest.mark.parametrize(
-    ("tokenizer_path", "vocab_type", "prepend_space_in_tokenization"),
+    "tokenizer_path, vocab_type, prepend_space_in_tokenization",
     list(zip(tokenizer_paths, *zip(*tokenizer_metadata))),
 )
 def test_properties(
@@ -103,7 +104,7 @@ tokenizer_paths_token_ids_raw_tokens = [
 
 
 @pytest.mark.parametrize(
-    ("tokenizer_path", "token_ids", "raw_tokens"),
+    "tokenizer_path, token_ids, raw_tokens",
     tokenizer_paths_token_ids_raw_tokens,
 )
 def test_vocab_conversion(tokenizer_path: str, token_ids: List[int], raw_tokens: List[bytes]):
@@ -155,4 +156,4 @@ def test_dump_metadata_load(tokenizer_path: str, metadata_str: str):
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    pytest.main(sys.argv)

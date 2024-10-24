@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <unordered_map>
 
-#include "grammar_ast.h"
+#include "grammar_data_structure.h"
 
 namespace xgrammar {
 
@@ -29,15 +29,15 @@ class BNFGrammarBuilder {
   BNFGrammarBuilder() : grammar_(std::make_shared<BNFGrammar::Impl>()) {}
 
   /*!
-   * \brief Get the result grammar. This function will also set the main rule to the rule with the
+   * \brief Get the result grammar. This function will also set the root rule to the rule with the
    * specified name. The rule should be already added to the grammar.
-   * \param main_rule The name of the main rule. Default is "main".
+   * \param root_rule The name of the root rule. Default is "root".
    */
-  BNFGrammar Get(const std::string& main_rule = "main") {
-    int32_t main_rule_id = GetRuleId(main_rule);
-    XGRAMMAR_CHECK(main_rule_id != -1)
-        << "The main rule with name \"" << main_rule << "\" is not found.";
-    grammar_->main_rule_id_ = main_rule_id;
+  BNFGrammar Get(const std::string& root_rule = "root") {
+    int32_t root_rule_id = GetRuleId(root_rule);
+    XGRAMMAR_CHECK(root_rule_id != -1)
+        << "The root rule with name \"" << root_rule << "\" is not found.";
+    grammar_->root_rule_id_ = root_rule_id;
 
     return BNFGrammar(grammar_);
   }

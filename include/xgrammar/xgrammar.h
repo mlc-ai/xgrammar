@@ -71,9 +71,9 @@ class BNFGrammar {
    * \brief Construct a BNF grammar with a EBNF-formatted string. The grammar will be normalized
    * (simplified) by default.
    * \param ebnf_string The EBNF-formatted string.
-   * \param main_rule The name of the main rule.
+   * \param root_rule The name of the root rule.
    */
-  BNFGrammar(const std::string& ebnf_string, const std::string& main_rule = "main");
+  BNFGrammar(const std::string& ebnf_string, const std::string& root_rule = "root");
 
   std::string ToString() const;
 
@@ -253,7 +253,7 @@ class GrammarMatcher {
    * \param token_id The id of the token to accept.
    * \return Whether the token is accepted.
    * \note Termination state.
-   * When the end of the main rule is reached, the matcher can only accept the stop token.
+   * When the end of the root rule is reached, the matcher can only accept the stop token.
    * The matcher is terminated after accepting the stop token, i.e. no AcceptToken or
    * FindNextTokenMask operations can be performed. The termination state can be canceled
    * using Rollback().

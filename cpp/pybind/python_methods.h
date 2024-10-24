@@ -19,7 +19,7 @@
 namespace xgrammar {
 
 BNFGrammar BNFGrammar_InitNoNormalization(
-    const std::string& ebnf_string, const std::string& main_rule
+    const std::string& ebnf_string, const std::string& root_rule
 );
 
 TokenizerInfo TokenizerInfo_Init(

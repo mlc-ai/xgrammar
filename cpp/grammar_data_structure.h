@@ -4,8 +4,8 @@
  * \brief The header for the support of grammar-guided generation.
  */
 
-#ifndef XGRAMMAR_GRAMMAR_AST_H_
-#define XGRAMMAR_GRAMMAR_AST_H_
+#ifndef XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
+#define XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
 
 #include <xgrammar/xgrammar.h>
 
@@ -82,13 +82,13 @@ class BNFGrammar::Impl {
         << "rule_id " << rule_id << " is out of bound";
     return rules_[rule_id];
   }
-  /*! \brief Get the main rule id of the grammar. */
-  int32_t GetMainRuleId() const { return main_rule_id_; }
-  /*! \brief Get the main rule of the grammar. */
+  /*! \brief Get the root rule id of the grammar. */
+  int32_t GetMainRuleId() const { return root_rule_id_; }
+  /*! \brief Get the root rule of the grammar. */
   const Rule& GetMainRule() const {
-    XGRAMMAR_DCHECK(main_rule_id_ >= 0 && main_rule_id_ < static_cast<int32_t>(rules_.size()))
-        << "main_rule_id " << main_rule_id_ << " is out of bound";
-    return rules_[main_rule_id_];
+    XGRAMMAR_DCHECK(root_rule_id_ >= 0 && root_rule_id_ < static_cast<int32_t>(rules_.size()))
+        << "root_rule_id " << root_rule_id_ << " is out of bound";
+    return rules_[root_rule_id_];
   }
 
   /*! \brief The type of the rule expr. */
@@ -152,14 +152,14 @@ class BNFGrammar::Impl {
   /*! \brief The start index of every rule_expr in rule_expr_data_. rule_expr_id is the index
    * to the elements in this vector. */
   std::vector<int32_t> rule_expr_indptr_;
-  /*! \brief The id of the main rule. */
-  int32_t main_rule_id_ = -1;
+  /*! \brief The id of the root rule. */
+  int32_t root_rule_id_ = -1;
 
   friend class BNFGrammarBuilder;
-  friend class BNFGrammarJSONSerializer;
-  friend class BNFJSONParser;
+  friend class BNFGrammarSerializer;
+  friend class BNFGrammarDeserializer;
 };
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_AST_H_
+#endif  // XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_

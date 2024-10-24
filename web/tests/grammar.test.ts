@@ -28,7 +28,7 @@ async function getTokenizerInfoFromUrl(tokenizerUrl: string, vocabType: string, 
  */
 describe("Test all BNFGrammar APIs", () => {
   test("Test 1", async () => {
-    const before = `main ::= ((b c) | (b main))
+    const before = `root ::= ((b c) | (b root))
 b ::= ((b_1 d [a]*))
 c ::= ((c_1))
 d ::= ((d_1))
@@ -58,9 +58,9 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
-main_prop_1 ::= basic_boolean | basic_null
-main_prop_2 ::= basic_number | basic_null
-main ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " main_prop_1 ", ")? "\"size\"" ": " main_prop_2 (", " "\"name\"" ": " basic_string)? "" "}"
+root_prop_1 ::= basic_boolean | basic_null
+root_prop_2 ::= basic_number | basic_null
+root ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " root_prop_1 ", ")? "\"size\"" ": " root_prop_2 (", " "\"name\"" ": " basic_string)? "" "}"
 `
 
   /**
@@ -388,7 +388,7 @@ describe("Test GrammarMatcher E2E", () => {
   });
 
   test("test_get_jump_forward_string", async () => {
-    const grammar_ebnf = String.raw`main ::= "abb" | "abbd" | other_rule
+    const grammar_ebnf = String.raw`root ::= "abb" | "abbd" | other_rule
 other_rule ::= "a" sub_rule "b"
 sub_rule ::= "b"
 `;
