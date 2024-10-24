@@ -156,14 +156,14 @@ def test_token_operations():
     assert result == expected
 
 
-def test_apply_token_bitmask():
+def test_apply_token_bitmask_inplace():
     neginf = float("-inf")
     bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
     logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0])
     expected = torch.where(bool_mask, logits, neginf)
     bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
 
-    GrammarMatcher.apply_token_bitmask(logits, bitmask)
+    GrammarMatcher.apply_token_bitmask_inplace(logits, bitmask)
     assert torch.all(logits == expected)
 
 

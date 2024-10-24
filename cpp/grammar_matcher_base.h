@@ -148,8 +148,6 @@ inline bool GrammarMatcherBase::CheckIfAccepted(
     }
     return is_negative;
   } else if (current_element.type == RuleExprType::kByteString) {
-    // std::cout << "current_element: " << current_element[rule_position.element_in_string]
-    //           << std::endl;
     return current_element[rule_position.element_in_string] == char_value;
   } else {
     XGRAMMAR_LOG(FATAL) << "Unexpected RuleExprType in CheckIfAccepted: "

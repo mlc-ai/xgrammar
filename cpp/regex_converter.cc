@@ -1,18 +1,13 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/json_schema_converter.cc
+ * \file xgrammar/regex_converter.cc
  */
-#include <picojson.h>
 #include <xgrammar/xgrammar.h>
 
-#include <chrono>
 #include <iostream>
-#include <map>
-#include <memory>
 #include <optional>
-#include <queue>
 #include <string>
-#include <unordered_set>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 

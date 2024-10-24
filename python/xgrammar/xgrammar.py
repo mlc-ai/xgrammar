@@ -282,6 +282,29 @@ class BuiltinGrammar:
 
     @staticmethod
     def _regex_to_ebnf(regex: str) -> str:
+        """Convert a regex string to EBNF grammar string. For test purposes. The regex grammar
+        follows the syntax in JavaScript (ECMA 262). Check
+        https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions
+        for a tutorial. Currently the following features are not supported:
+        1. Backreference (\1)
+        2. non-capturing group, naming capture groups and assertions ((?...))
+        3. Unicode character class escape (\p{...})
+        4. Word boundary (\b)
+        5. Unicode property escapes (\p{...})
+        6. Quantifier with range {x,y}. Now user can just repeat the element as a workaround.
+
+        This method is primarily intended for testing and debugging purposes.
+
+        Parameters
+        ----------
+        regex : str
+            The regex string to be converted.
+
+        Returns
+        -------
+        ebnf_string : str
+            The EBNF grammar string converted from the input regex.
+        """
         return _core.BuiltinGrammar._regex_to_ebnf(regex)
 
 
@@ -739,7 +762,7 @@ class GrammarMatcher(XGObject):
         return _core.GrammarMatcher.get_rejected_tokens_from_bitmask(bitmask, mask_vocab_size)
 
     @staticmethod
-    def apply_token_bitmask(logits: torch.Tensor, bitmask: torch.Tensor):
+    def apply_token_bitmask_inplace_inplace(logits: torch.Tensor, bitmask: torch.Tensor):
         """Apply the bitmask to the logits in-place.
 
         Parameters
@@ -826,7 +849,8 @@ class GrammarMatcher(XGObject):
 
     @property
     def stop_token_ids(self) -> List[int]:
-        """The ids of the stop tokens used in the matcher.
+        """The ids of the stop tokens used in the matcher. If specified, the provided stop tokens
+        will be used. Otherwise, the stop tokens will be detected from the vocabulary.
 
         Returns
         -------

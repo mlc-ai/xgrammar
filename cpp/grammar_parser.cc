@@ -211,10 +211,6 @@ int32_t EBNFParserImpl::ParseString() {
     return builder_.AddEmptyStr();
   }
 
-  // for (auto codepoint : codepoints) {
-  //   std::cout << "codepoint: " << codepoint << std::endl;
-  // }
-
   // convert codepoints to string
   std::string str;
   for (auto codepoint : codepoints) {
@@ -224,7 +220,6 @@ int32_t EBNFParserImpl::ParseString() {
   std::vector<int32_t> bytes;
   for (auto c : str) {
     bytes.push_back(static_cast<int32_t>(static_cast<uint8_t>(c)));
-    // std::cout << "new byte: " << static_cast<int32_t>(static_cast<uint8_t>(c)) << std::endl;
   }
   return builder_.AddByteString(bytes);
 }
