@@ -40,7 +40,7 @@ endif()
 
 set(XGRAMMAR_INCLUDE_PATH
     ${PROJECT_SOURCE_DIR}/3rdparty/picojson ${PROJECT_SOURCE_DIR}/3rdparty/dlpack/include
-    ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/cpp
+    ${PROJECT_SOURCE_DIR}/include
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -58,5 +58,4 @@ target_compile_definitions(xgrammar PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
 
 if(BUILD_PYTHON_BINDINGS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)
-  target_compile_options(xgrammar PUBLIC ${TORCH_CXX_FLAGS})
 endif()
