@@ -7,8 +7,8 @@ from transformers import AutoTokenizer
 from xgrammar import (
     BNFGrammar,
     BuiltinGrammar,
+    CompiledGrammar,
     GrammarMatcher,
-    GrammarMatcherInitContext,
     TokenizerInfo,
 )
 
@@ -313,10 +313,10 @@ def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     grammar = BNFGrammar(BuiltinGrammar._regex_to_ebnf(regex))
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
     time_start = time.monotonic_ns()
-    matcher_init_ctx = GrammarMatcherInitContext(grammar, tokenizer_info)
+    matcher_compiled_grammar = CompiledGrammar(grammar, tokenizer_info)
     time_end = time.monotonic_ns()
     print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
-    matcher = GrammarMatcher(matcher_init_ctx)
+    matcher = GrammarMatcher(matcher_compiled_grammar)
     for c in instance.encode("utf-8"):
         time_start = time.monotonic_ns()
         matcher.find_next_token_bitmask()

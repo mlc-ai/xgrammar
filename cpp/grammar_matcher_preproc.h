@@ -19,7 +19,7 @@
 
 namespace xgrammar {
 
-/******************* GrammarMatcherInitContext Datastructures *******************/
+/******************* CompiledGrammar Datastructures *******************/
 
 /*!
  * \brief Preprocessed information, for a given specific RulePosition, divides the token set
@@ -30,7 +30,7 @@ namespace xgrammar {
  *
  * \note uncertain indices are stored directly. Accepted / rejected indices have three ways to
  * store to reduce memory and computation usage. See SaveType.
- * \note These indices are the indices of sorted_raw_vocab in the GrammarMatcherInitContext
+ * \note These indices are the indices of sorted_raw_vocab in the CompiledGrammar
  * object, instead of the token ids. That helps the matching process.
  */
 struct CatagorizedTokens {
@@ -71,7 +71,7 @@ struct CatagorizedTokens {
  * It is the result of preprocessing.
  * \sa xgrammar::GrammarMatcher
  */
-class GrammarMatcherInitContext::Impl {
+class CompiledGrammar::Impl {
  public:
   Impl(const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab);
   Impl(const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info)
@@ -124,40 +124,40 @@ class GrammarMatcherInitContext::Impl {
       catagorized_tokens_for_grammar;
 };
 
-class GrammarMatcherInitContextCache::Impl {
+class CachedGrammarCompiler::Impl {
  public:
   Impl(const std::vector<std::string>& raw_vocab) : raw_vocab_(raw_vocab) {}
 
-  GrammarMatcherInitContext GetInitContextForJSONSchema(
+  CompiledGrammar GetCompiledGrammarForJSONSchema(
       const std::string& schema,
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
       bool strict_mode = true
   );
 
-  GrammarMatcherInitContext GetInitContextForJSON();
+  CompiledGrammar GetCompiledGrammarForJSON();
 
   void Clear();
 
  private:
   /*! \brief The vocabulary associated with this storage class. */
   std::vector<std::string> raw_vocab_;
-  /*! \brief The cache for the init context of a JSON schema. */
+  /*! \brief The cache for the compiled grammar of a JSON schema. */
   using SchemaKey =
       std::tuple<std::string, std::optional<int>, std::pair<std::string, std::string>, bool>;
-  std::unordered_map<SchemaKey, GrammarMatcherInitContext> init_ctx_for_schema_cache_;
-  /*! \brief The init context for JSON. */
-  std::optional<GrammarMatcherInitContext> init_ctx_for_json_;
+  std::unordered_map<SchemaKey, CompiledGrammar> compiled_grammar_for_schema_cache_;
+  /*! \brief The compiled grammar for JSON. */
+  std::optional<CompiledGrammar> compiled_grammar_for_json_;
 };
 
-/******************* Use GrammarMatcher to generate GrammarMatcherInitContext *******************/
+/******************* Use GrammarMatcher to generate CompiledGrammar *******************/
 
 /*! \brief The concrete implementation of GrammarMatcherNode. */
-class GrammarMatcherForInitContext : public GrammarMatcherBase {
+class GrammarMatcherForCompiler : public GrammarMatcherBase {
  public:
   // Do not expand the initial rule position: we want to find the accepted/rejected tokens
   // that exactly start from the initial rule position.
-  GrammarMatcherForInitContext(const BNFGrammar& grammar, RulePosition init_rule_position)
+  GrammarMatcherForCompiler(const BNFGrammar& grammar, RulePosition init_rule_position)
       : GrammarMatcherBase(grammar, init_rule_position, false),
         init_rule_id(init_rule_position.rule_id) {}
 
@@ -221,7 +221,7 @@ inline CatagorizedTokens::CatagorizedTokens(
   this->uncertain_indices = uncertain_indices;
 }
 
-bool GrammarMatcherForInitContext::IsTokenPassLookaheadAssertion(
+bool GrammarMatcherForCompiler::IsTokenPassLookaheadAssertion(
     const std::string& token, const std::vector<bool>& can_reach_end_stack
 ) {
   auto lookahead_assertion_id = grammar_->GetRule(init_rule_id).lookahead_assertion_id;
@@ -265,7 +265,7 @@ bool GrammarMatcherForInitContext::IsTokenPassLookaheadAssertion(
   return false;
 }
 
-inline CatagorizedTokens GrammarMatcherForInitContext::GetCatagorizedTokens(
+inline CatagorizedTokens GrammarMatcherForCompiler::GetCatagorizedTokens(
     size_t vocab_size,
     const std::vector<std::pair<int32_t, std::string>>& sorted_raw_vocab,
     bool consider_parent_rule
@@ -351,11 +351,9 @@ inline CatagorizedTokens GrammarMatcherForInitContext::GetCatagorizedTokens(
   );
 }
 
-/******************* GrammarMatcherInitContext *******************/
+/******************* CompiledGrammar *******************/
 
-GrammarMatcherInitContext::Impl::Impl(
-    const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab
-) {
+CompiledGrammar::Impl::Impl(const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab) {
   using RuleExprType = BNFGrammar::Impl::RuleExprType;
 
   this->grammar = grammar;
@@ -414,7 +412,7 @@ GrammarMatcherInitContext::Impl::Impl(
         }
 
         auto add_catagorized_tokens = [&](const RulePosition& rule_position) {
-          auto grammar_matcher = GrammarMatcherForInitContext(grammar, rule_position);
+          auto grammar_matcher = GrammarMatcherForCompiler(grammar, rule_position);
           auto cur_catagorized_tokens_for_grammar = grammar_matcher.GetCatagorizedTokens(
               this->vocab_size, this->sorted_raw_vocab, rule_id != root_rule_id
           );
@@ -442,19 +440,17 @@ GrammarMatcherInitContext::Impl::Impl(
   }
 }
 
-GrammarMatcherInitContext::GrammarMatcherInitContext(
+CompiledGrammar::CompiledGrammar(
     const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab
 )
     : pimpl_(std::make_shared<Impl>(grammar, raw_vocab)) {}
 
-GrammarMatcherInitContext::GrammarMatcherInitContext(
-    const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info
-)
+CompiledGrammar::CompiledGrammar(const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info)
     : pimpl_(std::make_shared<Impl>(grammar, tokenizer_info)) {}
 
-/******************* GrammarMatcherInitContextCache *******************/
+/******************* CachedGrammarCompiler *******************/
 
-inline GrammarMatcherInitContext GrammarMatcherInitContextCache::Impl::GetInitContextForJSONSchema(
+inline CompiledGrammar CachedGrammarCompiler::Impl::GetCompiledGrammarForJSONSchema(
     const std::string& schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
@@ -464,48 +460,46 @@ inline GrammarMatcherInitContext GrammarMatcherInitContextCache::Impl::GetInitCo
       (indent == std::nullopt) ? std::make_pair(", ", ": ") : std::make_pair(",", ": ")
   );
   auto key = std::make_tuple(schema, indent, separators_value, strict_mode);
-  auto it = init_ctx_for_schema_cache_.find(key);
-  if (it != init_ctx_for_schema_cache_.end()) {
+  auto it = compiled_grammar_for_schema_cache_.find(key);
+  if (it != compiled_grammar_for_schema_cache_.end()) {
     return it->second;
   }
-  auto init_ctx = GrammarMatcherInitContext(
+  auto compiled_grammar = CompiledGrammar(
       BuiltinGrammar::JSONSchema(schema, indent, separators_value, strict_mode), raw_vocab_
   );
-  init_ctx_for_schema_cache_[key] = init_ctx;
-  return init_ctx;
+  compiled_grammar_for_schema_cache_[key] = compiled_grammar;
+  return compiled_grammar;
 }
 
-inline GrammarMatcherInitContext GrammarMatcherInitContextCache::Impl::GetInitContextForJSON() {
-  if (!init_ctx_for_json_) {
-    init_ctx_for_json_ = GrammarMatcherInitContext(BuiltinGrammar::JSON(), raw_vocab_);
+inline CompiledGrammar CachedGrammarCompiler::Impl::GetCompiledGrammarForJSON() {
+  if (!compiled_grammar_for_json_) {
+    compiled_grammar_for_json_ = CompiledGrammar(BuiltinGrammar::JSON(), raw_vocab_);
   }
-  return init_ctx_for_json_.value();
+  return compiled_grammar_for_json_.value();
 }
 
-inline void GrammarMatcherInitContextCache::Impl::Clear() { init_ctx_for_schema_cache_.clear(); }
+inline void CachedGrammarCompiler::Impl::Clear() { compiled_grammar_for_schema_cache_.clear(); }
 
-GrammarMatcherInitContextCache::GrammarMatcherInitContextCache(
-    const std::vector<std::string>& raw_vocab
-)
+CachedGrammarCompiler::CachedGrammarCompiler(const std::vector<std::string>& raw_vocab)
     : pimpl_(std::make_shared<Impl>(raw_vocab)) {}
 
-GrammarMatcherInitContextCache::GrammarMatcherInitContextCache(const TokenizerInfo& tokenizer_info)
+CachedGrammarCompiler::CachedGrammarCompiler(const TokenizerInfo& tokenizer_info)
     : pimpl_(std::make_shared<Impl>(tokenizer_info.GetRawVocab())) {}
 
-GrammarMatcherInitContext GrammarMatcherInitContextCache::GetInitContextForJSON() {
-  return pimpl_->GetInitContextForJSON();
+CompiledGrammar CachedGrammarCompiler::GetCompiledGrammarForJSON() {
+  return pimpl_->GetCompiledGrammarForJSON();
 }
 
-GrammarMatcherInitContext GrammarMatcherInitContextCache::GetInitContextForJSONSchema(
+CompiledGrammar CachedGrammarCompiler::GetCompiledGrammarForJSONSchema(
     const std::string& schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode
 ) {
-  return pimpl_->GetInitContextForJSONSchema(schema, indent, separators, strict_mode);
+  return pimpl_->GetCompiledGrammarForJSONSchema(schema, indent, separators, strict_mode);
 }
 
-void GrammarMatcherInitContextCache::Clear() { pimpl_->Clear(); }
+void CachedGrammarCompiler::Clear() { pimpl_->Clear(); }
 
 }  // namespace xgrammar
 

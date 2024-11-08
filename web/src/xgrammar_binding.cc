@@ -59,7 +59,7 @@ GrammarMatcher GrammarMatcher_Init(
     int max_rollback_tokens
 ) {
   return GrammarMatcher(
-      GrammarMatcherInitContext(grammar, tokenizer_info),
+      CompiledGrammar(grammar, tokenizer_info),
       stop_token_ids,
       terminate_without_stop_token,
       mask_vocab_size,

@@ -185,10 +185,10 @@ class TokenizerInfo {
 };
 
 /*!
- * \brief The init context of a GrammarMatcher. It contains the preprocessing results of the
+ * \brief The compiled grammar of a GrammarMatcher. It contains the preprocessing results of the
  * grammar and tokenizer.
  */
-class GrammarMatcherInitContext {
+class CompiledGrammar {
  public:
   /*!
    * \brief Specify a grammar and raw vocabulary to return their preprocessing results. These
@@ -197,11 +197,11 @@ class GrammarMatcherInitContext {
    * \param grammar The grammar that the matcher follows.
    * \param raw_vocab The tokens that the matcher requires for matching.
    */
-  GrammarMatcherInitContext(const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab);
+  CompiledGrammar(const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab);
 
-  GrammarMatcherInitContext(const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info);
+  CompiledGrammar(const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info);
 
-  XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcherInitContext);
+  XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);
 };
 
 /*!
@@ -219,9 +219,9 @@ class GrammarMatcherInitContext {
  * \example
  * \code
  * Tokenizer tokenizer = ...;
- * auto init_ctx = GrammarMatcher::CreateInitContext(grammar,
+ * auto compiled_grammar = GrammarMatcher::CreateCompiledGrammar(grammar,
  *                                                        tokenizer->PostProcessedVocab());
- * GrammarMatcher matcher(init_ctx, 10);
+ * GrammarMatcher matcher(compiled_grammar, 10);
  * matcher->AcceptToken(67);
  *
  * // Construct a DLTensor with shape (tokenizer.GetMaskVocabSize() + 31) / 32, and dtype uint32.
@@ -236,12 +236,12 @@ class GrammarMatcher {
  public:
   /*!
    * \brief Construct a GrammarMatcher from the preprocessing result of type
-   * GrammarMatcherInitContext.
-   * \param init_ctx The init context. It is obtained through
-   * CreateInitContext as a result of preprocessing the grammar and tokenizer.
+   * CompiledGrammar.
+   * \param compiled_grammar The compiled grammar. It is obtained through
+   * CreateCompiledGrammar as a result of preprocessing the grammar and tokenizer.
    */
   GrammarMatcher(
-      const GrammarMatcherInitContext& init_ctx,
+      const CompiledGrammar& compiled_grammar,
       std::optional<std::vector<int>> stop_token_ids = std::nullopt,
       bool terminate_without_stop_token = false,
       std::optional<int> mask_vocab_size = std::nullopt,
@@ -310,38 +310,38 @@ class GrammarMatcher {
 };
 
 /*!
- * \brief A cache to get the grammar state init context for grammar or schema. This class avoids
- * redundant preprocessing of the grammar or schema when constructing a GrammarMatcherInitContext.
+ * \brief A cache to get the grammar state compiled grammar for grammar or schema. This class avoids
+ * redundant preprocessing of the grammar or schema when constructing a CompiledGrammar.
  * \note This class is associated with a vocabulary when constructed. The vocabulary is used to
- * create every grammar state init context. If multiple toke tables are used to create init
+ * create every grammar state compiled grammar. If multiple toke tables are used to create init
  * contexts, an instance of this class for each vocabulary should be created.
  */
-class GrammarMatcherInitContextCache {
+class CachedGrammarCompiler {
  public:
   /*!
-   * \brief Construct a GrammarMatcherInitContextCache with a vocabulary. This class will always
-   * create grammar state init contexts with this vocabulary.
+   * \brief Construct a CachedGrammarCompiler with a vocabulary. This class will always
+   * create grammar state compiled grammars with this vocabulary.
    * \param raw_vocab The vocabulary that the grammar will use.
    */
-  GrammarMatcherInitContextCache(const std::vector<std::string>& raw_vocab);
+  CachedGrammarCompiler(const std::vector<std::string>& raw_vocab);
 
-  GrammarMatcherInitContextCache(const TokenizerInfo& tokenizer_info);
+  CachedGrammarCompiler(const TokenizerInfo& tokenizer_info);
 
-  /*! \brief Get the init context for pure JSON. */
-  GrammarMatcherInitContext GetInitContextForJSON();
+  /*! \brief Get the compiled grammar for pure JSON. */
+  CompiledGrammar GetCompiledGrammarForJSON();
 
-  /*! \brief Get the init context for a JSON schema string. */
-  GrammarMatcherInitContext GetInitContextForJSONSchema(
+  /*! \brief Get the compiled grammar for a JSON schema string. */
+  CompiledGrammar GetCompiledGrammarForJSONSchema(
       const std::string& schema,
       std::optional<int> indent = std::nullopt,
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
       bool strict_mode = true
   );
 
-  /*! \brief Clear the interal cache of init contexts. */
+  /*! \brief Clear the interal cache of compiled grammars. */
   void Clear();
 
-  XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcherInitContextCache);
+  XGRAMMAR_DEFINE_PIMPL_METHODS(CachedGrammarCompiler);
 };
 
 }  // namespace xgrammar

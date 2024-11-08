@@ -456,7 +456,7 @@ class TokenizerInfo(XGObject):
         )
 
 
-class GrammarMatcherInitContext(XGObject):
+class CompiledGrammar(XGObject):
     """The initialization context for the grammar matcher. This object is used to fast initialize
     the grammar matcher. It contains the grammar, the raw vocabulary, and the preprocessed cache
     for the generating the mask in the grammar-guided generation.
@@ -492,14 +492,12 @@ class GrammarMatcherInitContext(XGObject):
         if not isinstance(tokenizer_or_vocab, TokenizerInfo):
             raise ValueError(f"Unsupported tokenizer_or_vocab type: {type(tokenizer_or_vocab)}")
 
-        self.init_with_handle(
-            _core.GrammarMatcherInitContext(grammar.handle, tokenizer_or_vocab.handle)
-        )
+        self.init_with_handle(_core.CompiledGrammar(grammar.handle, tokenizer_or_vocab.handle))
 
 
-class GrammarMatcherInitContextCache(XGObject):
+class CachedGrammarCompiler(XGObject):
     """The cache for the grammar matcher initialization context. It is for eliminating the overhead
-    of constructing the GrammarMatcherInitContext of the same grammar for many times. This cache
+    of constructing the CompiledGrammar of the same grammar for many times. This cache
     is tokenizer-specific, i.e. different tokenizers should have different caches.
 
     Parameters
@@ -520,27 +518,27 @@ class GrammarMatcherInitContextCache(XGObject):
         if not isinstance(tokenizer_or_vocab, TokenizerInfo):
             raise ValueError(f"Unsupported tokenizer_or_vocab type: {type(tokenizer_or_vocab)}")
 
-        self.init_with_handle(_core.GrammarMatcherInitContextCache(tokenizer_or_vocab.handle))
+        self.init_with_handle(_core.CachedGrammarCompiler(tokenizer_or_vocab.handle))
 
-    def get_init_context_for_json(self) -> GrammarMatcherInitContext:
-        """Get GrammarMatcherInitContext from the standard JSON.
+    def get_compiled_grammar_for_json(self) -> CompiledGrammar:
+        """Get CompiledGrammar from the standard JSON.
 
         Returns
         -------
-        init_context : GrammarMatcherInitContext
+        compiled_grammar : CompiledGrammar
             The initialization context for the grammar matcher.
         """
-        return GrammarMatcherInitContext.from_handle(self.handle.get_init_context_for_json())
+        return CompiledGrammar.from_handle(self.handle.get_compiled_grammar_for_json())
 
-    def get_init_context_for_json_schema(
+    def get_compiled_grammar_for_json_schema(
         self,
         schema: Union[str, Type[BaseModel]],
         *,
         indent: Optional[int] = None,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
-    ) -> GrammarMatcherInitContext:
-        """Get GrammarMatcherInitContext from the specified JSON schema and format. The indent
+    ) -> CompiledGrammar:
+        """Get CompiledGrammar from the specified JSON schema and format. The indent
         and separators parameters follow the same convention as in json.dumps().
 
         Parameters
@@ -563,14 +561,16 @@ class GrammarMatcherInitContextCache(XGObject):
 
         Returns
         -------
-        init_context : GrammarMatcherInitContext
+        compiled_grammar : CompiledGrammar
             The initialization context for the grammar matcher.
         """
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             schema = json.dumps(schema.model_json_schema())
 
-        return GrammarMatcherInitContext.from_handle(
-            self.handle.get_init_context_for_json_schema(schema, indent, separators, strict_mode)
+        return CompiledGrammar.from_handle(
+            self.handle.get_compiled_grammar_for_json_schema(
+                schema, indent, separators, strict_mode
+            )
         )
 
 
@@ -644,7 +644,7 @@ class GrammarMatcher(XGObject):
     @overload
     def __init__(
         self,
-        grammar_matcher_init_context: GrammarMatcherInitContext,
+        compiled_grammar: CompiledGrammar,
         *,
         stop_token_ids: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
@@ -656,14 +656,14 @@ class GrammarMatcher(XGObject):
 
         Parameters
         ----------
-        grammar_matcher_init_context : GrammarMatcherInitContext
+        compiled_grammar : CompiledGrammar
             The initialization context for the grammar matcher.
         """
         ...
 
     def __init__(
         self,
-        grammar_or_context: Union[BNFGrammar, GrammarMatcherInitContext],
+        grammar_or_context: Union[BNFGrammar, CompiledGrammar],
         tokenizer_or_vocab: Union[
             None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]
         ] = None,
@@ -674,18 +674,16 @@ class GrammarMatcher(XGObject):
         max_rollback_tokens: int = 0,
     ) -> None:
         if isinstance(grammar_or_context, BNFGrammar):
-            grammar_matcher_init_context = GrammarMatcherInitContext(
-                grammar_or_context, tokenizer_or_vocab
-            )
+            compiled_grammar = CompiledGrammar(grammar_or_context, tokenizer_or_vocab)
         else:
-            grammar_matcher_init_context = grammar_or_context
+            compiled_grammar = grammar_or_context
 
         if isinstance(stop_token_ids, int):
             stop_token_ids = [stop_token_ids]
 
         self.init_with_handle(
             _core.GrammarMatcher(
-                grammar_matcher_init_context.handle,
+                compiled_grammar.handle,
                 stop_token_ids,
                 terminate_without_stop_token,
                 mask_vocab_size,

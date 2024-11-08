@@ -38,24 +38,22 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("from_huggingface", &TokenizerInfo::FromHuggingFace)
       .def_static("from_vocab_and_metadata", &TokenizerInfo::FromVocabAndMetadata);
 
-  auto pyGrammarMatcherInitContext =
-      py::class_<GrammarMatcherInitContext>(m, "GrammarMatcherInitContext");
-  pyGrammarMatcherInitContext.def(py::init<const BNFGrammar&, const std::vector<std::string>&>())
+  auto pyCompiledGrammar = py::class_<CompiledGrammar>(m, "CompiledGrammar");
+  pyCompiledGrammar.def(py::init<const BNFGrammar&, const std::vector<std::string>&>())
       .def(py::init<const BNFGrammar&, const TokenizerInfo&>());
 
-  auto pyGrammarMatcherInitContextCache =
-      py::class_<GrammarMatcherInitContextCache>(m, "GrammarMatcherInitContextCache");
-  pyGrammarMatcherInitContextCache.def(py::init<const TokenizerInfo&>())
-      .def("get_init_context_for_json", &GrammarMatcherInitContextCache::GetInitContextForJSON)
+  auto pyCachedGrammarCompiler = py::class_<CachedGrammarCompiler>(m, "CachedGrammarCompiler");
+  pyCachedGrammarCompiler.def(py::init<const TokenizerInfo&>())
+      .def("get_compiled_grammar_for_json", &CachedGrammarCompiler::GetCompiledGrammarForJSON)
       .def(
-          "get_init_context_for_json_schema",
-          &GrammarMatcherInitContextCache::GetInitContextForJSONSchema
+          "get_compiled_grammar_for_json_schema",
+          &CachedGrammarCompiler::GetCompiledGrammarForJSONSchema
       );
 
   auto pyGrammarMatcher = py::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher
       .def(py::init<
-           const GrammarMatcherInitContext&,
+           const CompiledGrammar&,
            std::optional<std::vector<int>>,
            bool,
            std::optional<int>,

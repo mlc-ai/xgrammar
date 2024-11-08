@@ -8,23 +8,18 @@ import pytest
 from pydantic import BaseModel
 from transformers import AutoTokenizer
 
-from xgrammar import (
-    BuiltinGrammar,
-    GrammarMatcher,
-    GrammarMatcherInitContext,
-    TokenizerInfo,
-)
-from xgrammar.xgrammar import GrammarMatcherInitContextCache
+from xgrammar import BuiltinGrammar, CompiledGrammar, GrammarMatcher, TokenizerInfo
+from xgrammar.xgrammar import CachedGrammarCompiler
 
 
-def test_init_context():
+def test_compiled_grammar():
     grammar = BuiltinGrammar.json()
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
     time_start = time.monotonic_ns()
-    context = GrammarMatcherInitContext(grammar, tokenizer_info)
+    context = CompiledGrammar(grammar, tokenizer_info)
     time_end = time.monotonic_ns()
-    print(f"Time to init context: {(time_end - time_start) / 1e3} us")
+    print(f"Time to get compiled grammar: {(time_end - time_start) / 1e3} us")
 
     def check_matcher(matcher: GrammarMatcher):
         assert matcher.mask_vocab_size == 32000
@@ -45,13 +40,13 @@ def test_init_context():
     check_matcher(matcher_2)
 
 
-def test_init_context_cache_json():
+def test_cached_grammar_compiler_json():
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
     time_start = time.monotonic_ns()
-    init_context_cache = GrammarMatcherInitContextCache(tokenizer_info)
+    cached_grammar_compiler = CachedGrammarCompiler(tokenizer_info)
     time_end = time.monotonic_ns()
-    print(f"Time to init context cache: {(time_end - time_start) / 1e3} us")
+    print(f"Time to init cached grammar compiler: {(time_end - time_start) / 1e3} us")
 
     def check_matcher(matcher: GrammarMatcher):
         assert matcher.mask_vocab_size == 32000
@@ -61,24 +56,24 @@ def test_init_context_cache_json():
         assert matcher.is_terminated()
 
     time_start = time.monotonic_ns()
-    init_context = init_context_cache.get_init_context_for_json()
+    compiled_grammar = cached_grammar_compiler.get_compiled_grammar_for_json()
     time_end = time.monotonic_ns()
-    print(f"Time to get init context 1: {(time_end - time_start) / 1e3} us")
-    matcher = GrammarMatcher(init_context, terminate_without_stop_token=True)
+    print(f"Time to get compiled grammar 1: {(time_end - time_start) / 1e3} us")
+    matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
     check_matcher(matcher)
 
     time_start = time.monotonic_ns()
-    init_context = init_context_cache.get_init_context_for_json()
+    compiled_grammar = cached_grammar_compiler.get_compiled_grammar_for_json()
     time_end = time.monotonic_ns()
-    print(f"Time to get init context 2: {(time_end - time_start) / 1e3} us")
-    matcher = GrammarMatcher(init_context, terminate_without_stop_token=True)
+    print(f"Time to get compiled grammar 2: {(time_end - time_start) / 1e3} us")
+    matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
     check_matcher(matcher)
 
 
-def test_init_context_cache_json_schema():
+def test_cached_grammar_compiler_json_schema():
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
-    init_context_cache = GrammarMatcherInitContextCache(tokenizer_info)
+    cached_grammar_compiler = CachedGrammarCompiler(tokenizer_info)
 
     class MainModel(BaseModel):
         integer_field: int
@@ -105,12 +100,12 @@ def test_init_context_cache_json_schema():
         instance_str = instance.model_dump_json(indent=indent, round_trip=True)
 
         time_start = time.monotonic_ns()
-        init_context = init_context_cache.get_init_context_for_json_schema(
+        compiled_grammar = cached_grammar_compiler.get_compiled_grammar_for_json_schema(
             MainModel, indent=indent, separators=separators
         )
         time_end = time.monotonic_ns()
-        print(f"Time to get init context {test_id}: {(time_end - time_start) / 1e3} us")
-        matcher = GrammarMatcher(init_context, terminate_without_stop_token=True)
+        print(f"Time to get compiled grammar {test_id}: {(time_end - time_start) / 1e3} us")
+        matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
 
         assert matcher.mask_vocab_size == 32000
         assert not matcher.is_terminated()
