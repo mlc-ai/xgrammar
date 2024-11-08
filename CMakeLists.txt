@@ -9,7 +9,7 @@ else()
   endif()
 endif()
 
-option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
+option(XGRAMMAR_BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,7 +24,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "Build Python bindings: ${BUILD_PYTHON_BINDINGS}")
+message(STATUS "Build Python bindings: ${XGRAMMAR_BUILD_PYTHON_BINDINGS}")
 
 if(MSVC)
   set(CMAKE_CXX_FLAGS "/Wall /WX ${CMAKE_CXX_FLAGS}")
@@ -56,6 +56,6 @@ add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
 target_include_directories(xgrammar PUBLIC ${XGRAMMAR_INCLUDE_PATH})
 target_compile_definitions(xgrammar PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
 
-if(BUILD_PYTHON_BINDINGS)
+if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)
 endif()
