@@ -573,6 +573,10 @@ class CachedGrammarCompiler(XGObject):
             )
         )
 
+    def clear(self) -> None:
+        """Clear all cached compiled grammars."""
+        self.handle.clear()
+
 
 class GrammarMatcher(XGObject):
     """Match the output of the LLM to the specified grammar, then generate the mask for the next

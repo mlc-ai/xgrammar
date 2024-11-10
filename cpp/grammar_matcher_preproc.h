@@ -15,6 +15,7 @@
 #include "grammar_matcher_base.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
+#include "support/thread_safe_cache.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -126,7 +127,16 @@ class CompiledGrammar::Impl {
 
 class CachedGrammarCompiler::Impl {
  public:
-  Impl(const std::vector<std::string>& raw_vocab) : raw_vocab_(raw_vocab) {}
+  Impl(const std::vector<std::string>& raw_vocab)
+      : raw_vocab_(raw_vocab),
+        compiled_grammar_for_json_cache_([this]() {
+          return CompiledGrammar(BuiltinGrammar::JSON(), this->raw_vocab_);
+        }),
+        compiled_grammar_for_schema_cache_([this](const SchemaKey& key) {
+          return this->ComputeCompiledGrammarForJSONSchema(key);
+        }) {}
+
+  CompiledGrammar GetCompiledGrammarForJSON();
 
   CompiledGrammar GetCompiledGrammarForJSONSchema(
       const std::string& schema,
@@ -135,19 +145,27 @@ class CachedGrammarCompiler::Impl {
       bool strict_mode = true
   );
 
-  CompiledGrammar GetCompiledGrammarForJSON();
-
   void Clear();
 
  private:
-  /*! \brief The vocabulary associated with this storage class. */
-  std::vector<std::string> raw_vocab_;
   /*! \brief The cache for the compiled grammar of a JSON schema. */
   using SchemaKey =
       std::tuple<std::string, std::optional<int>, std::pair<std::string, std::string>, bool>;
-  std::unordered_map<SchemaKey, CompiledGrammar> compiled_grammar_for_schema_cache_;
-  /*! \brief The compiled grammar for JSON. */
-  std::optional<CompiledGrammar> compiled_grammar_for_json_;
+
+  /*! \brief Compute the compiled grammar for a JSON schema. */
+  CompiledGrammar ComputeCompiledGrammarForJSONSchema(const SchemaKey& key) {
+    auto [schema, indent, separators, strict_mode] = key;
+    return CompiledGrammar(
+        BuiltinGrammar::JSONSchema(schema, indent, separators, strict_mode), raw_vocab_
+    );
+  }
+
+  /*! \brief The vocabulary associated with this storage class. */
+  std::vector<std::string> raw_vocab_;
+  /*! \brief The cache for the compiled grammar for JSON. */
+  ThreadSafeCache<CompiledGrammar> compiled_grammar_for_json_cache_;
+  /*! \brief The cache for the compiled grammar of a JSON schema. */
+  ThreadSafeCache<SchemaKey, CompiledGrammar> compiled_grammar_for_schema_cache_;
 };
 
 /******************* Use GrammarMatcher to generate CompiledGrammar *******************/
@@ -450,6 +468,10 @@ CompiledGrammar::CompiledGrammar(const BNFGrammar& grammar, const TokenizerInfo&
 
 /******************* CachedGrammarCompiler *******************/
 
+inline CompiledGrammar CachedGrammarCompiler::Impl::GetCompiledGrammarForJSON() {
+  return compiled_grammar_for_json_cache_.Get();
+}
+
 inline CompiledGrammar CachedGrammarCompiler::Impl::GetCompiledGrammarForJSONSchema(
     const std::string& schema,
     std::optional<int> indent,
@@ -460,25 +482,13 @@ inline CompiledGrammar CachedGrammarCompiler::Impl::GetCompiledGrammarForJSONSch
       (indent == std::nullopt) ? std::make_pair(", ", ": ") : std::make_pair(",", ": ")
   );
   auto key = std::make_tuple(schema, indent, separators_value, strict_mode);
-  auto it = compiled_grammar_for_schema_cache_.find(key);
-  if (it != compiled_grammar_for_schema_cache_.end()) {
-    return it->second;
-  }
-  auto compiled_grammar = CompiledGrammar(
-      BuiltinGrammar::JSONSchema(schema, indent, separators_value, strict_mode), raw_vocab_
-  );
-  compiled_grammar_for_schema_cache_[key] = compiled_grammar;
-  return compiled_grammar;
+  return compiled_grammar_for_schema_cache_.Get(key);
 }
 
-inline CompiledGrammar CachedGrammarCompiler::Impl::GetCompiledGrammarForJSON() {
-  if (!compiled_grammar_for_json_) {
-    compiled_grammar_for_json_ = CompiledGrammar(BuiltinGrammar::JSON(), raw_vocab_);
-  }
-  return compiled_grammar_for_json_.value();
+inline void CachedGrammarCompiler::Impl::Clear() {
+  compiled_grammar_for_json_cache_.Clear();
+  compiled_grammar_for_schema_cache_.Clear();
 }
-
-inline void CachedGrammarCompiler::Impl::Clear() { compiled_grammar_for_schema_cache_.clear(); }
 
 CachedGrammarCompiler::CachedGrammarCompiler(const std::vector<std::string>& raw_vocab)
     : pimpl_(std::make_shared<Impl>(raw_vocab)) {}
