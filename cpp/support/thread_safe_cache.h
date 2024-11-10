@@ -3,8 +3,6 @@
  * \file xgrammar/support/thread_safe_cache.h
  * \brief The header for thread-safe caching functionality.
  */
-#undef XGRAMMAR_ENABLE_LOG_DEBUG
-#define XGRAMMAR_ENABLE_LOG_DEBUG 1
 #ifndef XGRAMMAR_SUPPORT_THREAD_SAFE_CACHE_H_
 #define XGRAMMAR_SUPPORT_THREAD_SAFE_CACHE_H_
 
