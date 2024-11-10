@@ -122,27 +122,27 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
  public:
   Impl(
       const CompiledGrammar& compiled_grammar,
-      std::optional<std::vector<int>> stop_token_ids = std::nullopt,
+      std::optional<std::vector<int>> override_stop_tokens = std::nullopt,
       bool terminate_without_stop_token = false,
       std::optional<int> mask_vocab_size = std::nullopt,
       int max_rollback_tokens = 0
   )
       : GrammarMatcherBase(compiled_grammar->grammar),
         compiled_grammar_(compiled_grammar),
-        stop_token_ids_(stop_token_ids.value_or(compiled_grammar->detected_stop_token_ids)),
+        stop_token_ids_(override_stop_tokens.value_or(compiled_grammar->detected_stop_token_ids)),
         terminate_without_stop_token_(terminate_without_stop_token),
         mask_vocab_size_(mask_vocab_size.value_or(compiled_grammar_->vocab_size)),
         max_rollback_tokens_(max_rollback_tokens),
         tmp_accepted_bitset_(mask_vocab_size_) {
-    XGRAMMAR_CHECK(!stop_token_ids.has_value() || !stop_token_ids->empty())
-        << "The stop_token_ids should not be empty";
+    XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
+        << "The override_stop_tokens should not be empty";
   }
 
   bool AcceptToken(int32_t token_id, bool verbose = false);
 
   bool AcceptString(const std::string& input_str, bool verbose = false);
 
-  void FindNextTokenBitmask(DLTensor* next_token_bitmask);
+  void GetNextTokenBitmask(DLTensor* next_token_bitmask);
 
   static void GetRejectedTokensFromBitMask(
       const DLTensor& token_bitmask, size_t mask_vocab_size, std::vector<int>* rejected_tokens
@@ -207,7 +207,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
   int max_rollback_tokens_;
   std::deque<int> token_length_history;
 
-  // Temporary data for FindNextTokenBitmask. They are stored here to avoid repeated allocation.
+  // Temporary data for GetNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
@@ -247,7 +247,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
 
   if (verbose) {
     XGRAMMAR_LOG(INFO) << "Accepting token id " << token_id << ", string: \""
-                       << PrintAsEscapedUTF8(compiled_grammar_->raw_vocab[token_id])
+                       << PrintAsEscapedUTF8(compiled_grammar_->decoded_vocab[token_id])
                        << "\", state state:\n"
                        << PrintStackState();
   }
@@ -265,11 +265,11 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
   if (compiled_grammar_->special_token_ids.count(token_id) > 0) {
     XGRAMMAR_LOG(FATAL
     ) << "Token id "
-      << token_id << ": " << compiled_grammar_->raw_vocab[token_id]
+      << token_id << ": " << compiled_grammar_->decoded_vocab[token_id]
       << " is regarded as a special token, and cannot be accepted by the GrammarMatcher";
   }
 
-  const auto& token = compiled_grammar_->raw_vocab[token_id];
+  const auto& token = compiled_grammar_->decoded_vocab[token_id];
   int pos = 0;
   for (auto char_value : token) {
     if (!AcceptChar(char_value, verbose)) {
@@ -338,12 +338,12 @@ void GrammarMatcher::Impl::CheckTokenBitmaskValidity(
       << DynamicBitset::CalculateBufferSize(mask_vocab_size) << " at least";
 }
 
-void GrammarMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
+void GrammarMatcher::Impl::GetNextTokenBitmask(DLTensor* next_token_bitmask) {
   XGRAMMAR_CHECK(!IsTerminated()
   ) << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
        "find the next token mask";
   CheckTokenBitmaskValidity(*next_token_bitmask, mask_vocab_size_);
-  const auto& sorted_raw_vocab = compiled_grammar_->sorted_raw_vocab;
+  const auto& sorted_decoded_vocab = compiled_grammar_->sorted_decoded_vocab;
   const auto& catagorized_tokens_for_grammar = compiled_grammar_->catagorized_tokens_for_grammar;
   const auto& latest_stack_tops = stack_tops_history_.GetLatest();
 
@@ -352,7 +352,7 @@ void GrammarMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
   // The final accepted token set is the union of the accepted token sets of all stacks.
   // The final rejected token set is the intersection of the rejected token sets of all stacks.
 
-  // Note these indices store the indices in sorted_raw_vocab, instead of the token ids.
+  // Note these indices store the indices in sorted_decoded_vocab, instead of the token ids.
   tmp_accepted_bitset_.Reset();
   // {-1} means the universal set, i.e. all tokens initially
   tmp_rejected_indices_.assign({-1});
@@ -383,7 +383,7 @@ void GrammarMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
     int prev_matched_size = 0;
 
     for (auto cur_token_idx : catagorized_tokens.uncertain_indices) {
-      const auto& cur_token = sorted_raw_vocab[cur_token_idx].second;
+      const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
       bool accepted = true;
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
@@ -417,7 +417,7 @@ void GrammarMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
       if (catagorized_tokens.save_type == SaveType::kAcceptedBitset ||
           catagorized_tokens.save_type == SaveType::kAccepted) {
         if (accepted) {
-          tmp_accepted_bitset_.Set(sorted_raw_vocab[cur_token_idx].first, true);
+          tmp_accepted_bitset_.Set(sorted_decoded_vocab[cur_token_idx].first, true);
         }
       } else {
         if (!accepted) {
@@ -435,7 +435,7 @@ void GrammarMatcher::Impl::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
       tmp_accepted_bitset_ |= catagorized_tokens.accepted_bitset;
     } else if (catagorized_tokens.save_type == SaveType::kAccepted) {
       for (auto idx : catagorized_tokens.accepted_indices) {
-        tmp_accepted_bitset_.Set(sorted_raw_vocab[idx].first, true);
+        tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
     } else {
       // rejected_indices = Intersect(
@@ -569,7 +569,7 @@ void GrammarMatcher::Impl::SetTokenBitmask(
   DynamicBitset next_token_bitset(
       mask_vocab_size_, reinterpret_cast<uint32_t*>(next_token_bitmask->data)
   );
-  const auto& sorted_raw_vocab = compiled_grammar_->sorted_raw_vocab;
+  const auto& sorted_decoded_vocab = compiled_grammar_->sorted_decoded_vocab;
 
   if (rejected_indices.size() == 1 && rejected_indices[0] == -1) {
     // If rejected_indices is the universal set, the final accepted token set is just
@@ -587,7 +587,7 @@ void GrammarMatcher::Impl::SetTokenBitmask(
     next_token_bitset.Set();
 
     for (auto i : rejected_indices) {
-      auto id = sorted_raw_vocab[i].first;
+      auto id = sorted_decoded_vocab[i].first;
       if (!accepted_bitset[id]) {
         next_token_bitset.Set(id, false);
       }
@@ -631,14 +631,14 @@ int GrammarMatcher::Impl::GetNextUncertainToken(
 
 GrammarMatcher::GrammarMatcher(
     const CompiledGrammar& compiled_grammar,
-    std::optional<std::vector<int>> stop_token_ids,
+    std::optional<std::vector<int>> override_stop_tokens,
     bool terminate_without_stop_token,
     std::optional<int> mask_vocab_size,
     int max_rollback_tokens
 )
     : pimpl_(std::make_shared<GrammarMatcher::Impl>(
           compiled_grammar,
-          stop_token_ids,
+          override_stop_tokens,
           terminate_without_stop_token,
           mask_vocab_size,
           max_rollback_tokens
@@ -656,8 +656,8 @@ uint32_t GrammarMatcher::GetBufferSize(size_t mask_vocab_size) {
   return DynamicBitset::CalculateBufferSize(mask_vocab_size);
 }
 
-void GrammarMatcher::FindNextTokenBitmask(DLTensor* next_token_bitmask) {
-  pimpl_->FindNextTokenBitmask(next_token_bitmask);
+void GrammarMatcher::GetNextTokenBitmask(DLTensor* next_token_bitmask) {
+  pimpl_->GetNextTokenBitmask(next_token_bitmask);
 }
 
 void GrammarMatcher::GetRejectedTokensFromBitMask(

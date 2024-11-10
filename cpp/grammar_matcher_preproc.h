@@ -31,7 +31,7 @@ namespace xgrammar {
  *
  * \note uncertain indices are stored directly. Accepted / rejected indices have three ways to
  * store to reduce memory and computation usage. See SaveType.
- * \note These indices are the indices of sorted_raw_vocab in the CompiledGrammar
+ * \note These indices are the indices of sorted_decoded_vocab in the CompiledGrammar
  * object, instead of the token ids. That helps the matching process.
  */
 struct CatagorizedTokens {
@@ -60,7 +60,7 @@ struct CatagorizedTokens {
 
   CatagorizedTokens(
       size_t vocab_size,
-      const std::vector<std::pair<int32_t, std::string>>& sorted_raw_vocab,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
       const std::vector<int32_t>& accepted_indices,
       const std::vector<int32_t>& rejected_indices,
       const std::vector<int32_t>& uncertain_indices
@@ -74,19 +74,19 @@ struct CatagorizedTokens {
  */
 class CompiledGrammar::Impl {
  public:
-  Impl(const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab);
+  Impl(const BNFGrammar& grammar, const std::vector<std::string>& decoded_vocab);
   Impl(const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info)
-      : Impl(grammar, tokenizer_info.GetRawVocab()) {}
+      : Impl(grammar, tokenizer_info.GetDecodedVocab()) {}
 
   /******************* Information about the tokenizer *******************/
 
   /*! \brief The vocabulary size of the tokenizer. Special tokens are included. */
   size_t vocab_size;
   /*! \brief The vocabulary. Special tokens are included. */
-  std::vector<std::string> raw_vocab;
+  std::vector<std::string> decoded_vocab;
   /*! \brief All (id, token) pairs sorted in lexicographic order. This sorting is done to
    * maximize prefix reuse during matching. Special tokens and stop tokens are not included. */
-  std::vector<std::pair<int32_t, std::string>> sorted_raw_vocab;
+  std::vector<std::pair<int32_t, std::string>> sorted_decoded_vocab;
   /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
   std::vector<int32_t> detected_stop_token_ids;
@@ -127,10 +127,10 @@ class CompiledGrammar::Impl {
 
 class CachedGrammarCompiler::Impl {
  public:
-  Impl(const std::vector<std::string>& raw_vocab)
-      : raw_vocab_(raw_vocab),
+  Impl(const std::vector<std::string>& decoded_vocab)
+      : decoded_vocab_(decoded_vocab),
         compiled_grammar_for_json_cache_([this]() {
-          return CompiledGrammar(BuiltinGrammar::JSON(), this->raw_vocab_);
+          return CompiledGrammar(BuiltinGrammar::JSON(), this->decoded_vocab_);
         }),
         compiled_grammar_for_schema_cache_([this](const SchemaKey& key) {
           return this->ComputeCompiledGrammarForJSONSchema(key);
@@ -156,12 +156,12 @@ class CachedGrammarCompiler::Impl {
   CompiledGrammar ComputeCompiledGrammarForJSONSchema(const SchemaKey& key) {
     auto [schema, indent, separators, strict_mode] = key;
     return CompiledGrammar(
-        BuiltinGrammar::JSONSchema(schema, indent, separators, strict_mode), raw_vocab_
+        BuiltinGrammar::JSONSchema(schema, indent, separators, strict_mode), decoded_vocab_
     );
   }
 
   /*! \brief The vocabulary associated with this storage class. */
-  std::vector<std::string> raw_vocab_;
+  std::vector<std::string> decoded_vocab_;
   /*! \brief The cache for the compiled grammar for JSON. */
   ThreadSafeCache<CompiledGrammar> compiled_grammar_for_json_cache_;
   /*! \brief The cache for the compiled grammar of a JSON schema. */
@@ -186,7 +186,7 @@ class GrammarMatcherForCompiler : public GrammarMatcherBase {
    */
   CatagorizedTokens GetCatagorizedTokens(
       size_t vocab_size,
-      const std::vector<std::pair<int32_t, std::string>>& sorted_raw_vocab,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
       bool consider_parent_rule
   );
 
@@ -212,7 +212,7 @@ class GrammarMatcherForCompiler : public GrammarMatcherBase {
 
 inline CatagorizedTokens::CatagorizedTokens(
     size_t vocab_size,
-    const std::vector<std::pair<int32_t, std::string>>& sorted_raw_vocab,
+    const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
     const std::vector<int32_t>& accepted_indices,
     const std::vector<int32_t>& rejected_indices,
     const std::vector<int32_t>& uncertain_indices
@@ -228,7 +228,7 @@ inline CatagorizedTokens::CatagorizedTokens(
   if (save_type == SaveType::kAcceptedBitset) {
     accepted_bitset = DynamicBitset(vocab_size);
     for (auto idx : accepted_indices) {
-      accepted_bitset.Set(sorted_raw_vocab[idx].first, true);
+      accepted_bitset.Set(sorted_decoded_vocab[idx].first, true);
     }
   } else if (save_type == SaveType::kAccepted) {
     this->accepted_indices = accepted_indices;
@@ -285,7 +285,7 @@ bool GrammarMatcherForCompiler::IsTokenPassLookaheadAssertion(
 
 inline CatagorizedTokens GrammarMatcherForCompiler::GetCatagorizedTokens(
     size_t vocab_size,
-    const std::vector<std::pair<int32_t, std::string>>& sorted_raw_vocab,
+    const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
     bool consider_parent_rule
 ) {
   tmp_accepted_indices_.clear();
@@ -298,15 +298,15 @@ inline CatagorizedTokens GrammarMatcherForCompiler::GetCatagorizedTokens(
   tmp_can_reach_end_prefix_or_stack_.assign({tmp_can_reach_end_stack_.back()});
 
   int prev_matched_size = 0;
-  for (int i = 0; i < static_cast<int>(sorted_raw_vocab.size()); ++i) {
-    const auto& token = sorted_raw_vocab[i].second;
+  for (int i = 0; i < static_cast<int>(sorted_decoded_vocab.size()); ++i) {
+    const auto& token = sorted_decoded_vocab[i].second;
 
     bool accepted = true;
 
     // Many tokens may contain the same prefix, so we will avoid unnecessary matching
     // by finding the longest common prefix with the previous token.
     if (i > 0) {
-      const auto& prev_token = sorted_raw_vocab[i - 1].second;
+      const auto& prev_token = sorted_decoded_vocab[i - 1].second;
       int lcp_len =
           std::mismatch(token.begin(), token.end(), prev_token.begin(), prev_token.end()).first -
           token.begin();
@@ -362,7 +362,7 @@ inline CatagorizedTokens GrammarMatcherForCompiler::GetCatagorizedTokens(
   RollbackChars(prev_matched_size);
   return CatagorizedTokens(
       vocab_size,
-      sorted_raw_vocab,
+      sorted_decoded_vocab,
       tmp_accepted_indices_,
       tmp_rejected_indices_,
       tmp_uncertain_indices_
@@ -371,19 +371,21 @@ inline CatagorizedTokens GrammarMatcherForCompiler::GetCatagorizedTokens(
 
 /******************* CompiledGrammar *******************/
 
-CompiledGrammar::Impl::Impl(const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab) {
+CompiledGrammar::Impl::Impl(
+    const BNFGrammar& grammar, const std::vector<std::string>& decoded_vocab
+) {
   using RuleExprType = BNFGrammar::Impl::RuleExprType;
 
   this->grammar = grammar;
-  this->vocab_size = raw_vocab.size();
-  this->raw_vocab = raw_vocab;
+  this->vocab_size = decoded_vocab.size();
+  this->decoded_vocab = decoded_vocab;
 
   if (this->vocab_size == 0) {
     return;
   }
 
-  for (int i = 0; i < static_cast<int>(raw_vocab.size()); ++i) {
-    const auto& token = raw_vocab[i];
+  for (int i = 0; i < static_cast<int>(decoded_vocab.size()); ++i) {
+    const auto& token = decoded_vocab[i];
     // TODO(yixin): Now we detect stop tokens from the token string. We should be able to pass
     // the stop token set in.
     // LLaMA2: </s>
@@ -399,7 +401,7 @@ CompiledGrammar::Impl::Impl(const BNFGrammar& grammar, const std::vector<std::st
       // gemma treats [@BOS@] as a special token
       this->special_token_ids.insert(i);
     } else {
-      this->sorted_raw_vocab.push_back({i, token});
+      this->sorted_decoded_vocab.push_back({i, token});
     }
   }
 
@@ -407,7 +409,7 @@ CompiledGrammar::Impl::Impl(const BNFGrammar& grammar, const std::vector<std::st
                             const std::pair<int32_t, std::string>& b) {
     return a.second < b.second;
   };
-  std::sort(this->sorted_raw_vocab.begin(), this->sorted_raw_vocab.end(), f_compare_token);
+  std::sort(this->sorted_decoded_vocab.begin(), this->sorted_decoded_vocab.end(), f_compare_token);
 
   // Find the corresponding catagorized tokens for:
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)
@@ -432,7 +434,7 @@ CompiledGrammar::Impl::Impl(const BNFGrammar& grammar, const std::vector<std::st
         auto add_catagorized_tokens = [&](const RulePosition& rule_position) {
           auto grammar_matcher = GrammarMatcherForCompiler(grammar, rule_position);
           auto cur_catagorized_tokens_for_grammar = grammar_matcher.GetCatagorizedTokens(
-              this->vocab_size, this->sorted_raw_vocab, rule_id != root_rule_id
+              this->vocab_size, this->sorted_decoded_vocab, rule_id != root_rule_id
           );
           this->catagorized_tokens_for_grammar[rule_position] = cur_catagorized_tokens_for_grammar;
         };
@@ -459,9 +461,9 @@ CompiledGrammar::Impl::Impl(const BNFGrammar& grammar, const std::vector<std::st
 }
 
 CompiledGrammar::CompiledGrammar(
-    const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab
+    const BNFGrammar& grammar, const std::vector<std::string>& decoded_vocab
 )
-    : pimpl_(std::make_shared<Impl>(grammar, raw_vocab)) {}
+    : pimpl_(std::make_shared<Impl>(grammar, decoded_vocab)) {}
 
 CompiledGrammar::CompiledGrammar(const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info)
     : pimpl_(std::make_shared<Impl>(grammar, tokenizer_info)) {}
@@ -490,11 +492,11 @@ inline void CachedGrammarCompiler::Impl::Clear() {
   compiled_grammar_for_schema_cache_.Clear();
 }
 
-CachedGrammarCompiler::CachedGrammarCompiler(const std::vector<std::string>& raw_vocab)
-    : pimpl_(std::make_shared<Impl>(raw_vocab)) {}
+CachedGrammarCompiler::CachedGrammarCompiler(const std::vector<std::string>& decoded_vocab)
+    : pimpl_(std::make_shared<Impl>(decoded_vocab)) {}
 
 CachedGrammarCompiler::CachedGrammarCompiler(const TokenizerInfo& tokenizer_info)
-    : pimpl_(std::make_shared<Impl>(tokenizer_info.GetRawVocab())) {}
+    : pimpl_(std::make_shared<Impl>(tokenizer_info.GetDecodedVocab())) {}
 
 CompiledGrammar CachedGrammarCompiler::GetCompiledGrammarForJSON() {
   return pimpl_->GetCompiledGrammarForJSON();

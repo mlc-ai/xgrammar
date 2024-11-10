@@ -338,14 +338,18 @@ class VocabType(Enum):
 
 class TokenizerInfo(XGObject):
     """The tokenizer info, which contains the vocabulary, the type of the vocabulary, and necessary
-    information for the grammar-guided generation.
+    information for the grammar-guided generation. This class should be the first choice when
+    handling tokenizers in XGrammar. It eliminates the overhead of converting the vocabulary between
+    C++ and Python.
 
-    This class should be the first choice when handling tokenizers in XGrammar. It eliminates the
-    overhead of converting the vocabulary between C++ and Python.
+    Note that the vocabulary in TokenizerInfo is in the decoded format. Some tokenizers will encode
+    the tokens in a special format. E.g. "<0x1B>" for "\u001B" in the ByteFallback tokenizer, and
+    "Ġ" for " " in the Byte-Level BPE tokenizer. Huggingface tokenizer.get_vocab() will return
+    the encoded vocabulary. TokenizerInfo will decode the vocabulary to the original format.
 
     Parameters
     ----------
-    vocab : Union[List[bytes], List[str]]
+    encoded_vocab : Union[List[bytes], List[str]]
         The vocabulary of the tokenizer.
 
     vocab_type : VocabType, default: VocabType.RAW
@@ -357,12 +361,12 @@ class TokenizerInfo(XGObject):
 
     def __init__(
         self,
-        vocab: Union[List[bytes], List[str]],
+        encoded_vocab: Union[List[bytes], List[str]],
         vocab_type: VocabType = VocabType.RAW,
         prepend_space_in_tokenization: bool = False,
     ) -> None:
         self.init_with_handle(
-            _core.TokenizerInfo(vocab, vocab_type.value, prepend_space_in_tokenization)
+            _core.TokenizerInfo(encoded_vocab, vocab_type.value, prepend_space_in_tokenization)
         )
 
     @property
@@ -382,12 +386,12 @@ class TokenizerInfo(XGObject):
         return self.handle.prepend_space_in_tokenization
 
     @property
-    def raw_vocab(self) -> List[bytes]:
+    def decoded_vocab(self) -> List[bytes]:
         """The raw vocabulary of the tokenizer. This converts the tokens in the LLM's vocabulary
         back to the original format of the input text. E.g. for type ByteFallback, the token
         <0x1B> is converted back to "\u001B" in the raw vocabulary.
         """
-        return self.handle.raw_vocab
+        return self.handle.decoded_vocab
 
     @staticmethod
     def from_huggingface(tokenizer: PreTrainedTokenizerBase) -> "TokenizerInfo":
@@ -406,8 +410,10 @@ class TokenizerInfo(XGObject):
         """
 
         try:
-            vocab = tokenizer.get_vocab()
-            vocab = [token for token, _ in sorted(vocab.items(), key=lambda x: x[1])]
+            encoded_vocab = tokenizer.get_vocab()
+            encoded_vocab = [
+                token for token, _ in sorted(encoded_vocab.items(), key=lambda x: x[1])
+            ]
         except AttributeError as e:
             msg = (
                 f"Cannot get the vocabulary of the tokenizer {type(tokenizer)}. The tokenizer "
@@ -421,7 +427,7 @@ class TokenizerInfo(XGObject):
             # be omitted. So we still need to pass the vocab to the constructor.
             backend_str = tokenizer.backend_tokenizer.to_str()
             return TokenizerInfo.from_handle(
-                _core.TokenizerInfo.from_huggingface(vocab, backend_str)
+                _core.TokenizerInfo.from_huggingface(encoded_vocab, backend_str)
             )
         elif (
             "vocab_file" in tokenizer.vocab_files_names
@@ -429,7 +435,7 @@ class TokenizerInfo(XGObject):
         ):
             # tiktoken tokenizer
             # e.g. Phi-3-small-8k-instruct, Qwen-7B-Chat, stablelm-2-12b-chat (previously)
-            return TokenizerInfo(vocab, VocabType.RAW, False)
+            return TokenizerInfo(encoded_vocab, VocabType.RAW, False)
         else:
             # TODO(yixin): sentencepiece tokenizer
             raise ValueError(f"Unsupported tokenizer type: {type(tokenizer)}")
@@ -440,19 +446,21 @@ class TokenizerInfo(XGObject):
         return self.handle.dump_metadata()
 
     @staticmethod
-    def from_vocab_and_metadata(vocab: List[Union[bytes, str]], metadata: str) -> "TokenizerInfo":
+    def from_vocab_and_metadata(
+        encoded_vocab: List[Union[bytes, str]], metadata: str
+    ) -> "TokenizerInfo":
         """Construct the tokenizer info from the vocabulary and the metadata string.
 
         Parameters
         ----------
-        vocab : List[Union[bytes, str]]
+        encoded_vocab : List[Union[bytes, str]]
             The vocabulary of the tokenizer.
 
         metadata : str
             The metadata string.
         """
         return TokenizerInfo.from_handle(
-            _core.TokenizerInfo.from_vocab_and_metadata(vocab, metadata),
+            _core.TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata),
         )
 
 
@@ -603,7 +611,7 @@ class GrammarMatcher(XGObject):
             None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]
         ] = None,
         *,
-        stop_token_ids: Union[None, int, List[int]] = None,
+        override_stop_tokens: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
         mask_vocab_size: Optional[int] = None,
         max_rollback_tokens: int = 0,
@@ -623,7 +631,7 @@ class GrammarMatcher(XGObject):
             operations. If a huggingface tokenizer or a list of raw tokens are provided, a TokenizerInfo
             object will be constructed from the tokenizer or the vocabulary.
 
-        stop_token_ids : Union[None, int, List[int]], default: None
+        override_stop_tokens : Union[None, int, List[int]], default: None
             The ids of the stop tokens. If None, the stop tokens are detected from the vocabulary.
 
         terminate_without_stop_token : bool, default: False
@@ -650,7 +658,7 @@ class GrammarMatcher(XGObject):
         self,
         compiled_grammar: CompiledGrammar,
         *,
-        stop_token_ids: Union[None, int, List[int]] = None,
+        override_stop_tokens: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
         mask_vocab_size: Optional[int] = None,
         max_rollback_tokens: int = 0,
@@ -672,7 +680,7 @@ class GrammarMatcher(XGObject):
             None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]
         ] = None,
         *,
-        stop_token_ids: Union[None, int, List[int]] = None,
+        override_stop_tokens: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
         mask_vocab_size: Optional[int] = None,
         max_rollback_tokens: int = 0,
@@ -682,13 +690,13 @@ class GrammarMatcher(XGObject):
         else:
             compiled_grammar = grammar_or_context
 
-        if isinstance(stop_token_ids, int):
-            stop_token_ids = [stop_token_ids]
+        if isinstance(override_stop_tokens, int):
+            override_stop_tokens = [override_stop_tokens]
 
         self.init_with_handle(
             _core.GrammarMatcher(
                 compiled_grammar.handle,
-                stop_token_ids,
+                override_stop_tokens,
                 terminate_without_stop_token,
                 mask_vocab_size,
                 max_rollback_tokens,
@@ -734,8 +742,8 @@ class GrammarMatcher(XGObject):
         """
         return self.handle.accept_string(input_str, verbose)
 
-    def find_next_token_bitmask(self) -> torch.Tensor:
-        """Find the bitmask for the next token prediction. The mask is packed in 32-bit integers,
+    def get_next_token_bitmask(self) -> torch.Tensor:
+        """Get the bitmask for the next token prediction. The mask is packed in 32-bit integers,
         where each bit corresponds to one token. Allowed tokens are ones, while disallowed tokens
         are zeros.
 
@@ -745,7 +753,7 @@ class GrammarMatcher(XGObject):
             The bitmask for the next token prediction. It is a tensor on CPU with dtype torch.int32
             and shape (ceil(mask_vocab_size / 32),).
         """
-        return self.handle.find_next_token_bitmask()
+        return self.handle.get_next_token_bitmask()
 
     @staticmethod
     def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor, mask_vocab_size: int) -> List[int]:

@@ -163,22 +163,22 @@ enum class VocabType : int {
 class TokenizerInfo {
  public:
   TokenizerInfo(
-      const std::vector<std::string>& vocab,
+      const std::vector<std::string>& encoded_vocab,
       VocabType vocab_type = VocabType::RAW,
       bool prepend_space_in_tokenization = false
   );
   int GetVocabSize() const;
   VocabType GetVocabType() const;
   bool GetPrependSpaceInTokenization() const;
-  const std::vector<std::string>& GetRawVocab() const;
+  const std::vector<std::string>& GetDecodedVocab() const;
 
   static TokenizerInfo FromHuggingFace(
-      const std::vector<std::string>& vocab, const std::string& backend_str
+      const std::vector<std::string>& encoded_vocab, const std::string& backend_str
   );
 
   std::string DumpMetadata() const;
   static TokenizerInfo FromVocabAndMetadata(
-      const std::vector<std::string>& vocab, const std::string& metadata
+      const std::vector<std::string>& encoded_vocab, const std::string& metadata
   );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
@@ -195,9 +195,9 @@ class CompiledGrammar {
    * results are used to construct a GrammarMatcher. They can be stored elsewhere for quick
    * construction of GrammarMatcher.
    * \param grammar The grammar that the matcher follows.
-   * \param raw_vocab The tokens that the matcher requires for matching.
+   * \param decoded_vocab The tokens that the matcher requires for matching.
    */
-  CompiledGrammar(const BNFGrammar& grammar, const std::vector<std::string>& raw_vocab);
+  CompiledGrammar(const BNFGrammar& grammar, const std::vector<std::string>& decoded_vocab);
 
   CompiledGrammar(const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info);
 
@@ -226,7 +226,7 @@ class CompiledGrammar {
  *
  * // Construct a DLTensor with shape (tokenizer.GetMaskVocabSize() + 31) / 32, and dtype uint32.
  * DLTensor next_token_bitmask = ...;
- * matcher->FindNextTokenBitmask(&next_token_bitmask);
+ * matcher->GetNextTokenBitmask(&next_token_bitmask);
  *
  * // Rollback is supported
  * matcher->Rollback(1);
@@ -242,7 +242,7 @@ class GrammarMatcher {
    */
   GrammarMatcher(
       const CompiledGrammar& compiled_grammar,
-      std::optional<std::vector<int>> stop_token_ids = std::nullopt,
+      std::optional<std::vector<int>> override_stop_tokens = std::nullopt,
       bool terminate_without_stop_token = false,
       std::optional<int> mask_vocab_size = std::nullopt,
       int max_rollback_tokens = 0
@@ -265,12 +265,12 @@ class GrammarMatcher {
   static uint32_t GetBufferSize(size_t mask_vocab_size);
 
   /*!
-   * \brief Find the set of tokens that are acceptable for the next step and store them in a
+   * \brief Get the set of tokens that are acceptable for the next step and store them in a
    * bitmask.
    * \param next_token_bitmask The bitmask to store the result. The bitmask must be pre-allocated
    * and with shape (GetBufferSize(mask_vocab_size),) and dtype uint32.
    */
-  void FindNextTokenBitmask(DLTensor* next_token_bitmask);
+  void GetNextTokenBitmask(DLTensor* next_token_bitmask);
 
   static void GetRejectedTokensFromBitMask(
       const DLTensor& token_bitmask, size_t mask_vocab_size, std::vector<int>* rejected_tokens
@@ -321,9 +321,9 @@ class CachedGrammarCompiler {
   /*!
    * \brief Construct a CachedGrammarCompiler with a vocabulary. This class will always
    * create grammar state compiled grammars with this vocabulary.
-   * \param raw_vocab The vocabulary that the grammar will use.
+   * \param decoded_vocab The vocabulary that the grammar will use.
    */
-  CachedGrammarCompiler(const std::vector<std::string>& raw_vocab);
+  CachedGrammarCompiler(const std::vector<std::string>& decoded_vocab);
 
   CachedGrammarCompiler(const TokenizerInfo& tokenizer_info);
 

@@ -10,7 +10,7 @@ async function getTokenizerInfoAndTokenizerFromUrl(
     // 1. Get tokenizer, we use "@mlc-ai/web-tokenizers" here, but any should work
     const jsonBuffer = await (await fetch(tokenizerUrl)).arrayBuffer();
     const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
-    // 2. Get raw vocab
+    // 2. Get encoded vocab
     const tstartGetToken = performance.now();
     const rawTokenTable: string[] = [];
     const vocabSize = tokenizer.getVocabSize();
@@ -51,7 +51,7 @@ async function jsonExample() {
     for (let i = 0; i < encodedTokens.length; i++) {
         // 3.1 Generate token bitmask that will modify logits of the LLM
         if (!grammarMatcher.isTerminated()) {
-            const bitmask = await grammarMatcher.findNextTokenBitmask();
+            const bitmask = await grammarMatcher.getNextTokenBitmask();
             // For debugging, we can check the rejected token IDs from the mask
             const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
                 bitmask,
@@ -146,7 +146,7 @@ async function jsonSchemaExample() {
     for (let i = 0; i < encodedTokens.length; i++) {
         // 3.1 Generate token bitmask that will modify logits of the LLM
         if (!grammarMatcher.isTerminated()) {
-            const bitmask = await grammarMatcher.findNextTokenBitmask();
+            const bitmask = await grammarMatcher.getNextTokenBitmask();
             // For debugging, we can check the rejected token IDs from the mask
             const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
                 bitmask,

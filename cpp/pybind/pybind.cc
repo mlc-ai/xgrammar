@@ -33,7 +33,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_property_readonly(
           "prepend_space_in_tokenization", &TokenizerInfo::GetPrependSpaceInTokenization
       )
-      .def_property_readonly("raw_vocab", &TokenizerInfo_GetRawVocab)
+      .def_property_readonly("decoded_vocab", &TokenizerInfo_GetDecodedVocab)
       .def("dump_metadata", &TokenizerInfo::DumpMetadata)
       .def_static("from_huggingface", &TokenizerInfo::FromHuggingFace)
       .def_static("from_vocab_and_metadata", &TokenizerInfo::FromVocabAndMetadata);
@@ -66,7 +66,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
            int>())
       .def("accept_token", &GrammarMatcher::AcceptToken)
       .def("accept_string", &GrammarMatcher::AcceptString)
-      .def("find_next_token_bitmask", &GrammarMatcher_FindNextTokenBitmask)
+      .def("get_next_token_bitmask", &GrammarMatcher_FindNextTokenBitmask)
       .def_static("get_rejected_tokens_from_bitmask", &GrammarMatcher_GetRejectedTokensFromBitMask)
       .def("is_terminated", &GrammarMatcher::IsTerminated)
       .def("reset", &GrammarMatcher::Reset)

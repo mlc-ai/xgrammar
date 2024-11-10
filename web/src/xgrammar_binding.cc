@@ -38,7 +38,7 @@ using namespace emscripten;
 using namespace xgrammar;
 
 TokenizerInfo TokenizerInfo_Init(
-    const std::vector<std::string>& vocab,
+    const std::vector<std::string>& encoded_vocab,
     std::string vocab_type,
     bool prepend_space_in_tokenization
 ) {
@@ -47,20 +47,20 @@ TokenizerInfo TokenizerInfo_Init(
       {"BYTE_FALLBACK", VocabType::BYTE_FALLBACK},
       {"BYTE_LEVEL", VocabType::BYTE_LEVEL},
   };
-  return TokenizerInfo(vocab, VOCAB_TYPE_MAP.at(vocab_type), prepend_space_in_tokenization);
+  return TokenizerInfo(encoded_vocab, VOCAB_TYPE_MAP.at(vocab_type), prepend_space_in_tokenization);
 }
 
 GrammarMatcher GrammarMatcher_Init(
     const BNFGrammar& grammar,
     const TokenizerInfo& tokenizer_info,
-    std::optional<std::vector<int>> stop_token_ids,
+    std::optional<std::vector<int>> override_stop_tokens,
     bool terminate_without_stop_token,
     std::optional<int> mask_vocab_size,
     int max_rollback_tokens
 ) {
   return GrammarMatcher(
       CompiledGrammar(grammar, tokenizer_info),
-      stop_token_ids,
+      override_stop_tokens,
       terminate_without_stop_token,
       mask_vocab_size,
       max_rollback_tokens
@@ -86,7 +86,7 @@ std::vector<int32_t> GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher
   tensor.strides = &strides[0];
   tensor.byte_offset = 0;
   // 3. Populate tensor, hence result
-  matcher.FindNextTokenBitmask(&tensor);
+  matcher.GetNextTokenBitmask(&tensor);
   return result;
 }
 
@@ -126,7 +126,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   register_optional<int>();
   register_optional<std::pair<std::string, std::string>>();
 
-  // Register std::vector<std::string> for TokenizerInfo.GetRawVocab()
+  // Register std::vector<std::string> for TokenizerInfo.GetDecodedVocab()
   register_vector<std::string>("VectorString");
   function(
       "vecStringFromJSArray",
@@ -159,7 +159,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   class_<TokenizerInfo>("TokenizerInfo")
       .constructor(&TokenizerInfo_Init)
       .function("GetVocabSize", &TokenizerInfo::GetVocabSize)
-      .function("GetRawVocab", &TokenizerInfo::GetRawVocab);
+      .function("GetDecodedVocab", &TokenizerInfo::GetDecodedVocab);
 
   class_<GrammarMatcher>("GrammarMatcher")
       .constructor(&GrammarMatcher_Init)
@@ -167,7 +167,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("GetMaskVocabSize", &GrammarMatcher::GetMaskVocabSize)
       .function("GetMaxRollbackTokens", &GrammarMatcher::GetMaxRollbackTokens)
       .function("AcceptToken", &GrammarMatcher::AcceptToken)
-      .function("FindNextTokenBitmask", &GrammarMatcher_FindNextTokenBitmask)
+      .function("GetNextTokenBitmask", &GrammarMatcher_FindNextTokenBitmask)
       .class_function("GetRejectedTokensFromBitMask", &GrammarMatcher_GetRejectedTokensFromBitMask)
       .function("IsTerminated", &GrammarMatcher::IsTerminated)
       .function("Reset", &GrammarMatcher::Reset)

@@ -23,14 +23,14 @@ BNFGrammar BNFGrammar_InitNoNormalization(
 );
 
 TokenizerInfo TokenizerInfo_Init(
-    const std::vector<std::string>& vocab,
+    const std::vector<std::string>& encoded_vocab,
     std::string vocab_type,
     bool prepend_space_in_tokenization
 );
 
 std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 
-std::vector<pybind11::bytes> TokenizerInfo_GetRawVocab(TokenizerInfo& tokenizer);
+std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(TokenizerInfo& tokenizer);
 
 torch::Tensor GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher);
 

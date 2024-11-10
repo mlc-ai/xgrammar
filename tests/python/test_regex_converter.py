@@ -319,17 +319,17 @@ def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     matcher = GrammarMatcher(matcher_compiled_grammar)
     for c in instance.encode("utf-8"):
         time_start = time.monotonic_ns()
-        matcher.find_next_token_bitmask()
+        matcher.get_next_token_bitmask()
         time_end = time.monotonic_ns()
-        print(f"Time for find_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+        print(f"Time for get_next_token_bitmask: {(time_end - time_start) / 1e3} us")
         accepted = matcher.accept_string(bytes([c]))
         assert accepted
         print(f"Accepting {c}")
 
     time_start = time.monotonic_ns()
-    matcher.find_next_token_bitmask()
+    matcher.get_next_token_bitmask()
     time_end = time.monotonic_ns()
-    print(f"Time for find_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+    print(f"Time for get_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
 
 if __name__ == "__main__":

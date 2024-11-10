@@ -12,13 +12,13 @@ async function getTokenizerInfoFromUrl(tokenizerUrl: string, vocabType: string, 
   const jsonBuffer = await (await fetch(tokenizerUrl)).arrayBuffer();
   const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
   // 2. Get raw vocab
-  const rawVocab: string[] = [];
+  const encodedVocab: string[] = [];
   const vocabSize = tokenizer.getVocabSize();
   for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
-    rawVocab.push(tokenizer.idToToken(tokenId));
+    encodedVocab.push(tokenizer.idToToken(tokenId));
   }
   // 3. Decode
-  const decodedVocab = await TokenizerInfo.createTokenizerInfo(rawVocab, vocabType, prependSpace);
+  const decodedVocab = await TokenizerInfo.createTokenizerInfo(encodedVocab, vocabType, prependSpace);
   return decodedVocab;
 }
 
@@ -121,8 +121,8 @@ describe("Test TokenizerInfo", () => {
     const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
       dummyVocab, dummyVocabType, false
     );
-    expect(tokenizerInfo.getRawVocabHandle().get(0)).toEqual("!");
-    expect(tokenizerInfo.getRawVocabHandle().get(1)).toEqual("锦");
+    expect(tokenizerInfo.getDecodedVocabHandle().get(0)).toEqual("!");
+    expect(tokenizerInfo.getDecodedVocabHandle().get(1)).toEqual("锦");
     tokenizerInfo.dispose();
   });
 
@@ -132,7 +132,7 @@ describe("Test TokenizerInfo", () => {
       "byte_level",
       false,
     );
-    expect(tokenizerInfo.getRawVocabHandle().size()).toEqual(128256);
+    expect(tokenizerInfo.getDecodedVocabHandle().size()).toEqual(128256);
     tokenizerInfo.dispose();
   })
 
@@ -146,7 +146,7 @@ describe("Test TokenizerInfo", () => {
     // table (i.e. tokenizer.getVocabSize()) may be smaller than the `vocab_size` in config.json
     // (length of logits), see https://github.com/QwenLM/Qwen2/issues/147 and
     // https://huggingface.co/microsoft/Phi-3-mini-4k-instruct/discussions/47.
-    expect(tokenizerInfo.getRawVocabHandle().size()).toEqual(32011);
+    expect(tokenizerInfo.getDecodedVocabHandle().size()).toEqual(32011);
     tokenizerInfo.dispose();
   })
 });
@@ -190,7 +190,7 @@ describe("Test GrammarMatcher E2E", () => {
     for (let i = 0; i <= input_ids.length; i++) {
       const input_id = input_ids[i];
       // Find rejected IDs
-      const bitmask = await matcher.findNextTokenBitmask();
+      const bitmask = await matcher.getNextTokenBitmask();
       const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
         bitmask, matcher.getVocabSize()
       );
@@ -245,7 +245,7 @@ describe("Test GrammarMatcher E2E", () => {
     for (let i = 0; i <= input_ids.length; i++) {
       const input_id = input_ids[i];
       // Find rejected IDs
-      const bitmask = await matcher.findNextTokenBitmask();
+      const bitmask = await matcher.getNextTokenBitmask();
       const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
         bitmask, matcher.getVocabSize()
       );
@@ -299,18 +299,18 @@ describe("Test GrammarMatcher E2E", () => {
       const i_2 = input_ids_splitted[i][1];
       const orig_result: Int32Array[] = [];
       // Accept firt round
-      orig_result.push(await matcher.findNextTokenBitmask());
+      orig_result.push(await matcher.getNextTokenBitmask());
       const accept_i1 = matcher.acceptToken(i_1);
-      orig_result.push(await matcher.findNextTokenBitmask());
+      orig_result.push(await matcher.getNextTokenBitmask());
       const accept_i2 = matcher.acceptToken(i_2);
       expect(accept_i1).toEqual(true);
       expect(accept_i2).toEqual(true);
       // Rollback, then accept again
       matcher.rollBack(2);
       const result_after_rollback: Int32Array[] = [];
-      result_after_rollback.push(await matcher.findNextTokenBitmask());
+      result_after_rollback.push(await matcher.getNextTokenBitmask());
       const accept_i1_r = matcher.acceptToken(i_1);
-      result_after_rollback.push(await matcher.findNextTokenBitmask());
+      result_after_rollback.push(await matcher.getNextTokenBitmask());
       const accept_i2_r = matcher.acceptToken(i_2);
       expect(accept_i1_r).toEqual(true);
       expect(accept_i2_r).toEqual(true);
@@ -349,7 +349,7 @@ describe("Test GrammarMatcher E2E", () => {
     // 2. Accept all one time
     const orig_result: Int32Array[] = [];
     for (let i = 0; i < input_ids.length; i++) {
-      orig_result.push(await matcher.findNextTokenBitmask());
+      orig_result.push(await matcher.getNextTokenBitmask());
       const accepted = matcher.acceptToken(input_ids[i]);
       expect(accepted).toEqual(true);
     }
@@ -359,13 +359,13 @@ describe("Test GrammarMatcher E2E", () => {
     const acceptedAfterTerm0 = matcher.acceptToken(0);
     expect(acceptedAfterTerm0).toEqual(false);
     // this will throw error, but cannot be caught by jest
-    // await matcher.findNextTokenBitmask()
+    // await matcher.getNextTokenBitmask()
 
     // 4. Reset, accept again
     matcher.reset();
     const result_after_reset: Int32Array[] = [];
     for (let i = 0; i < input_ids.length; i++) {
-      result_after_reset.push(await matcher.findNextTokenBitmask());
+      result_after_reset.push(await matcher.getNextTokenBitmask());
       const accepted = matcher.acceptToken(input_ids[i]);
       expect(accepted).toEqual(true);
     }
@@ -376,7 +376,7 @@ describe("Test GrammarMatcher E2E", () => {
     const acceptedAfterTerm1 = matcher.acceptToken(0);
     expect(acceptedAfterTerm1).toEqual(false);
     // this will throw error, but cannot be caught by jest
-    // await matcher.findNextTokenBitmask()
+    // await matcher.getNextTokenBitmask()
 
     // 6. Rollback 2, and should not be terminated and should accept "}"
     matcher.rollBack(2);
@@ -449,14 +449,14 @@ describe("Test json schema E2E", () => {
       "https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_0-MLC/raw/main/tokenizer.json"
     )).arrayBuffer();
     const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
-    // 2. Get raw vocab
-    const rawVocab: string[] = [];
+    // 2. Get encoded vocab
+    const encodedVocab: string[] = [];
     const vocabSize = tokenizer.getVocabSize();
     for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
-      rawVocab.push(tokenizer.idToToken(tokenId));
+      encodedVocab.push(tokenizer.idToToken(tokenId));
     }
     // 3. Decode
-    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(rawVocab, "byte_level", false);
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(encodedVocab, "byte_level", false);
 
     // 4. Instantiate matcher
     const grammar = await BuiltinGrammar.jsonSchema(schemaStr, 2);
@@ -467,13 +467,13 @@ describe("Test json schema E2E", () => {
     // 5. Expect to accept all inputIds
     for (let i = 0; i < inputIds.length; i++) {
       const inputId = inputIds[i];
-      await matcher.findNextTokenBitmask();
+      await matcher.getNextTokenBitmask();
       const accepted = matcher.acceptToken(inputId);
       expect(accepted).toEqual(true);
     }
 
     // 6. Check finalization
-    const final_bitmask = await matcher.findNextTokenBitmask();
+    const final_bitmask = await matcher.getNextTokenBitmask();
     expect(final_bitmask.length).toEqual(Math.ceil(128256 / 32));
     const final_rejected_tokens = (await GrammarMatcher.getRejectedTokensFromBitmask(
       final_bitmask, matcher.getVocabSize()
@@ -494,14 +494,14 @@ describe("Test json schema E2E", () => {
       "https://huggingface.co/mlc-ai/Phi-3.5-mini-instruct-q4f16_1-MLC/raw/main/tokenizer.json",
     )).arrayBuffer();
     const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
-    // 2. Get raw vocab
-    const rawVocab: string[] = [];
+    // 2. Get encoded vocab
+    const encodedVocab: string[] = [];
     const vocabSize = tokenizer.getVocabSize();
     for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
-      rawVocab.push(tokenizer.idToToken(tokenId));
+      encodedVocab.push(tokenizer.idToToken(tokenId));
     }
     // 3. Decode
-    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(rawVocab, "byte_fallback", false);
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(encodedVocab, "byte_fallback", false);
 
     // 4. Instantiate matcher; note that phi-3.5 has 32064 as vocab size in `config.json`
     const grammar = await BuiltinGrammar.jsonSchema(schemaStr, 2);
@@ -511,7 +511,7 @@ describe("Test json schema E2E", () => {
     // 5. Expect to accept all inputIds
     for (let i = 0; i < instanceStr.length; i++) {
       const inputStr = instanceStr[i];
-      await matcher.findNextTokenBitmask();
+      await matcher.getNextTokenBitmask();
       // if use acceptToken, the first token of instanceStr will be encoded as 426, `_{`,
       // while the matcher only accepts 29912, `{`, and another token of `<0x??>`
       const accepted = matcher._acceptString(inputStr);
@@ -519,7 +519,7 @@ describe("Test json schema E2E", () => {
     }
 
     // 6. Check finalization
-    const final_bitmask = await matcher.findNextTokenBitmask();
+    const final_bitmask = await matcher.getNextTokenBitmask();
     // Tests how phi3.5 has dummy padded tokens. See https://github.com/mlc-ai/mlc-llm/pull/2651
     expect(final_bitmask.length).toEqual(Math.ceil(32064 / 32));
     const final_rejected_tokens = (await GrammarMatcher.getRejectedTokensFromBitmask(

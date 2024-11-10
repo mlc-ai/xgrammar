@@ -203,26 +203,26 @@ export class TokenizerInfo {
   /**
    * Get the post-processed vocab. Returned as a handle of type binding.VectorString
    */
-  getRawVocabHandle(): any {
-    return this.handle.GetRawVocab();
+  getDecodedVocabHandle(): any {
+    return this.handle.GetDecodedVocab();
   }
 
   /**
    * Instantiate with raw vocab and the vocab type by internally post-processing
    * the raw vocab by decoding each token with the provided vocab type.
-   * @param {string[]} rawVocab: the vocab in the form of a string list of tokens,
+   * @param {string[]} encodedVocab: the vocab in the form of a string list of tokens,
    * ordered by their token id. It should include all the special tokens.
    * @param {string} vocabType: either "byte_fallback", "byte_level", or `raw`. See `tokenizer.cc`
    * for its semantic.
    */
   static async createTokenizerInfo(
-    rawVocab: string[],
+    encodedVocab: string[],
     vocabType: string,
     prependSpaceInTokenization: boolean,
   ): Promise<TokenizerInfo> {
     await asyncInitBinding();
     // Convert string[] to std::vector<std::string>
-    const rawVocabVec = binding.vecStringFromJSArray(rawVocab);
+    const rawVocabVec = binding.vecStringFromJSArray(encodedVocab);
     // Instantiate TokenizerInfo
     return new TokenizerInfo(new binding.TokenizerInfo(
       rawVocabVec,
@@ -338,9 +338,9 @@ export class GrammarMatcher {
    *
    * @returns {Int32Array} An array representing the bitmask that masks the rejected token IDs
    */
-  async findNextTokenBitmask(): Promise<Int32Array> {
+  async getNextTokenBitmask(): Promise<Int32Array> {
     await asyncInitBinding();
-    const maskIntVector = this.handle.FindNextTokenBitmask()  // a handle of std::vector<int32_t>
+    const maskIntVector = this.handle.GetNextTokenBitmask()  // a handle of std::vector<int32_t>
     const maskInt32Array = binding.vecIntToView(maskIntVector).slice();
     maskIntVector.delete();
     return maskInt32Array;
@@ -348,7 +348,7 @@ export class GrammarMatcher {
 
   /**
    *
-   * @param {Int32Array} bitmask Bitmask returned by findNextTokenBitmask().
+   * @param {Int32Array} bitmask Bitmask returned by getNextTokenBitmask().
    * @param {number} vocabSize Vocab size returned by getVocabSize().
    * @returns An array of vocab ID that will be rejected as a result of the bitmask.
    */

@@ -273,7 +273,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
     "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
 )
-def test_find_next_rejected_tokens(
+def test_get_next_rejected_tokens(
     tokenizer_path: str,
     input_str: str,
     expected_rejected_sizes: Optional[List[int]],
@@ -289,13 +289,13 @@ def test_find_next_rejected_tokens(
 
     for i, c in enumerate(input_bytes):
         time_start = time.monotonic_ns()
-        bitmask = matcher.find_next_token_bitmask()
+        bitmask = matcher.get_next_token_bitmask()
         time_mid = time.monotonic_ns()
         rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
             bitmask, matcher.mask_vocab_size
         )
         time_end = time.monotonic_ns()
-        print(f"Time to find_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
+        print(f"Time to get_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
         print(f"Time to get_rejected_tokens_from_bitmask: {(time_end - time_mid) / 1e3} us")
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
@@ -309,7 +309,7 @@ def test_find_next_rejected_tokens(
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
-    bitmask = matcher.find_next_token_bitmask()
+    bitmask = matcher.get_next_token_bitmask()
     rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
         bitmask, matcher.mask_vocab_size
     )

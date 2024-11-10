@@ -71,7 +71,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
     "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
 )
-def test_find_next_rejected_tokens(
+def test_get_next_rejected_tokens(
     tokenizer_path: str,
     input_str: str,
     expected_rejected_sizes: Optional[List[int]],
@@ -86,7 +86,7 @@ def test_find_next_rejected_tokens(
     rejected_sizes = []
 
     for i, c in enumerate(input_bytes):
-        bitmask = matcher.find_next_token_bitmask()
+        bitmask = matcher.get_next_token_bitmask()
         rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
             bitmask, matcher.mask_vocab_size
         )
@@ -98,7 +98,7 @@ def test_find_next_rejected_tokens(
             )
         assert matcher.accept_string(bytes([c]))
 
-    bitmask = matcher.find_next_token_bitmask()
+    bitmask = matcher.get_next_token_bitmask()
     rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
         bitmask, matcher.mask_vocab_size
     )
@@ -136,7 +136,7 @@ def test_token_operations():
     result = []
 
     for id in input_ids:
-        bitmask = matcher.find_next_token_bitmask()
+        bitmask = matcher.get_next_token_bitmask()
         rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
             bitmask, matcher.mask_vocab_size
         )
@@ -146,7 +146,7 @@ def test_token_operations():
         assert id in accepted, vocab[id]
         assert matcher.accept_token(id)
 
-    bitmask = matcher.find_next_token_bitmask()
+    bitmask = matcher.get_next_token_bitmask()
     rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
         bitmask, matcher.mask_vocab_size
     )
@@ -185,15 +185,15 @@ def test_rollback():
 
     for i_1, i_2 in input_ids_splitted:
         orig_result = []
-        orig_result.append(matcher.find_next_token_bitmask())
+        orig_result.append(matcher.get_next_token_bitmask())
         assert matcher.accept_token(i_1)
-        orig_result.append(matcher.find_next_token_bitmask())
+        orig_result.append(matcher.get_next_token_bitmask())
         assert matcher.accept_token(i_2)
         matcher.rollback(2)
         result_after_rollback = []
-        result_after_rollback.append(matcher.find_next_token_bitmask())
+        result_after_rollback.append(matcher.get_next_token_bitmask())
         assert matcher.accept_token(i_1)
-        result_after_rollback.append(matcher.find_next_token_bitmask())
+        result_after_rollback.append(matcher.get_next_token_bitmask())
         assert matcher.accept_token(i_2)
         assert all(torch.all(l == r) for l, r in zip(orig_result, result_after_rollback))
 
@@ -212,7 +212,7 @@ def test_reset():
     orig_result = []
 
     for i in input_ids:
-        orig_result.append(matcher.find_next_token_bitmask())
+        orig_result.append(matcher.get_next_token_bitmask())
         assert matcher.accept_token(i)
 
     matcher.reset()
@@ -220,7 +220,7 @@ def test_reset():
     result_after_reset = []
 
     for i in input_ids:
-        result_after_reset.append(matcher.find_next_token_bitmask())
+        result_after_reset.append(matcher.get_next_token_bitmask())
         assert matcher.accept_token(i)
 
     assert all(torch.all(l == r) for l, r in zip(orig_result, result_after_reset))
@@ -250,7 +250,7 @@ def test_termination():
     matcher = GrammarMatcher(json_grammar, vocab, max_rollback_tokens=5)
 
     for i in input_ids:
-        matcher.find_next_token_bitmask()
+        matcher.get_next_token_bitmask()
         assert matcher.accept_token(i)
 
     assert matcher.is_terminated()
@@ -258,7 +258,7 @@ def test_termination():
     assert matcher.accept_token(0) is False
 
     with pytest.raises(RuntimeError):
-        matcher.find_next_token_bitmask()
+        matcher.get_next_token_bitmask()
 
     matcher.rollback(2)
 
@@ -286,26 +286,30 @@ def test_mask_vocab_size():
     matcher = GrammarMatcher(json_grammar, vocab, mask_vocab_size=64)
     assert matcher.mask_vocab_size == 64
 
-    mask = matcher.find_next_token_bitmask()
+    mask = matcher.get_next_token_bitmask()
     assert mask.shape == (2,)
 
     rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(mask, matcher.mask_vocab_size)
     assert rejected_tokens == [i for i in range(64) if i != 7]
 
 
-tokenizer_path_stop_token_ids = [
+tokenizer_path_override_stop_tokens = [
     ("meta-llama/Llama-2-7b-chat-hf", [2]),
     ("meta-llama/Meta-Llama-3-8B-Instruct", [128001, 128009]),
     ("deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct", [100001]),
 ]
 
 
-@pytest.mark.parametrize("tokenizer_path, stop_token_ids", tokenizer_path_stop_token_ids)
-def test_stop_token_ids(tokenizer_path: str, stop_token_ids: List[int]):
+@pytest.mark.parametrize(
+    "tokenizer_path, override_stop_tokens", tokenizer_path_override_stop_tokens
+)
+def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[int]):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
-    matcher = GrammarMatcher(json_grammar, tokenizer_info)
-    assert matcher.stop_token_ids == stop_token_ids
+    matcher = GrammarMatcher(
+        json_grammar, tokenizer_info, override_stop_tokens=override_stop_tokens
+    )
+    assert matcher.stop_token_ids == override_stop_tokens
 
 
 if __name__ == "__main__":

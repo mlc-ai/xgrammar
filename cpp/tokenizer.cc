@@ -19,21 +19,21 @@ namespace xgrammar {
 class TokenizerInfo::Impl {
  public:
   Impl(
-      const std::vector<std::string>& vocab,
+      const std::vector<std::string>& encoded_vocab,
       VocabType vocab_type,
       bool prepend_space_in_tokenization
   );
 
-  int GetVocabSize() const { return raw_vocab_.size(); }
+  int GetVocabSize() const { return decoded_vocab_.size(); }
   VocabType GetVocabType() const { return vocab_type_; }
   bool GetPrependSpaceInTokenization() const { return prepend_space_in_tokenization_; }
-  const std::vector<std::string>& GetRawVocab() { return raw_vocab_; }
+  const std::vector<std::string>& GetDecodedVocab() { return decoded_vocab_; }
   std::string DumpMetadata() const;
 
  private:
   VocabType vocab_type_;
   bool prepend_space_in_tokenization_;
-  std::vector<std::string> raw_vocab_;
+  std::vector<std::string> decoded_vocab_;
 };
 
 /************* Metadata detection from huggingface tokenizer.json *************/
@@ -242,12 +242,14 @@ inline std::string DecodeToken(const std::string& token, VocabType vocab_type) {
 /************* TokenizerInfo *************/
 
 TokenizerInfo::Impl::Impl(
-    const std::vector<std::string>& vocab, VocabType vocab_type, bool prepend_space_in_tokenization
+    const std::vector<std::string>& encoded_vocab,
+    VocabType vocab_type,
+    bool prepend_space_in_tokenization
 )
     : vocab_type_(vocab_type), prepend_space_in_tokenization_(prepend_space_in_tokenization) {
-  raw_vocab_.reserve(vocab.size());
-  for (const auto& item : vocab) {
-    raw_vocab_.emplace_back(DecodeToken(item, vocab_type_));
+  decoded_vocab_.reserve(encoded_vocab.size());
+  for (const auto& item : encoded_vocab) {
+    decoded_vocab_.emplace_back(DecodeToken(item, vocab_type_));
   }
 }
 
@@ -260,20 +262,24 @@ std::string TokenizerInfo::Impl::DumpMetadata() const {
 }
 
 TokenizerInfo::TokenizerInfo(
-    const std::vector<std::string>& vocab, VocabType vocab_type, bool prepend_space_in_tokenization
+    const std::vector<std::string>& encoded_vocab,
+    VocabType vocab_type,
+    bool prepend_space_in_tokenization
 )
-    : pimpl_(std::make_shared<Impl>(vocab, vocab_type, prepend_space_in_tokenization)) {}
+    : pimpl_(std::make_shared<Impl>(encoded_vocab, vocab_type, prepend_space_in_tokenization)) {}
 
 int TokenizerInfo::GetVocabSize() const { return pimpl_->GetVocabSize(); }
 VocabType TokenizerInfo::GetVocabType() const { return pimpl_->GetVocabType(); }
 bool TokenizerInfo::GetPrependSpaceInTokenization() const {
   return pimpl_->GetPrependSpaceInTokenization();
 }
-const std::vector<std::string>& TokenizerInfo::GetRawVocab() const { return pimpl_->GetRawVocab(); }
+const std::vector<std::string>& TokenizerInfo::GetDecodedVocab() const {
+  return pimpl_->GetDecodedVocab();
+}
 std::string TokenizerInfo::DumpMetadata() const { return pimpl_->DumpMetadata(); }
 
 TokenizerInfo TokenizerInfo::FromVocabAndMetadata(
-    const std::vector<std::string>& vocab, const std::string& metadata
+    const std::vector<std::string>& encoded_vocab, const std::string& metadata
 ) {
   static const std::unordered_map<std::string, VocabType> VOCAB_TYPE_MAP = {
       {"RAW", VocabType::RAW},
@@ -304,23 +310,23 @@ TokenizerInfo TokenizerInfo::FromVocabAndMetadata(
   }
 
   bool prepend_space_in_tokenization = obj["prepend_space_in_tokenization"].get<bool>();
-  return TokenizerInfo(vocab, vocab_type, prepend_space_in_tokenization);
+  return TokenizerInfo(encoded_vocab, vocab_type, prepend_space_in_tokenization);
 }
 
 TokenizerInfo TokenizerInfo::FromHuggingFace(
-    const std::vector<std::string>& vocab, const std::string& backend_str
+    const std::vector<std::string>& encoded_vocab, const std::string& backend_str
 ) {
   picojson::value v;
   std::string err = picojson::parse(v, backend_str);
   if (!err.empty() || !v.is<picojson::object>()) {
     XGRAMMAR_LOG(WARNING) << "Failed to parse JSON object. " << err;
-    return TokenizerInfo(vocab, VocabType::RAW, false);
+    return TokenizerInfo(encoded_vocab, VocabType::RAW, false);
   }
   const picojson::object& obj = v.get<picojson::object>();
 
   VocabType vocab_type = DetectVocabType(obj);
   bool prepend_space_in_tokenization = DetectPrependSpaceInTokenization(obj);
-  return TokenizerInfo(vocab, vocab_type, prepend_space_in_tokenization);
+  return TokenizerInfo(encoded_vocab, vocab_type, prepend_space_in_tokenization);
 }
 
 }  // namespace xgrammar

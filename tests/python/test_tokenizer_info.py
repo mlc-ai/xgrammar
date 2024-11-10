@@ -71,18 +71,18 @@ def test_properties(
 
 
 @pytest.mark.parametrize("tokenizer_path", tokenizer_paths)
-def test_raw_vocab(tokenizer_path: str):
+def test_decoded_vocab(tokenizer_path: str):
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_path,
         use_fast=True,
         trust_remote_code=True,
     )
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
-    raw_vocab = tokenizer_info.raw_vocab
-    assert isinstance(raw_vocab, list)
-    assert all(isinstance(token, bytes) for token in raw_vocab)
-    assert len(raw_vocab) == len(tokenizer.get_vocab())
-    assert len(raw_vocab) == tokenizer_info.vocab_size
+    decoded_vocab = tokenizer_info.decoded_vocab
+    assert isinstance(decoded_vocab, list)
+    assert all(isinstance(token, bytes) for token in decoded_vocab)
+    assert len(decoded_vocab) == len(tokenizer.get_vocab())
+    assert len(decoded_vocab) == tokenizer_info.vocab_size
 
 
 tokenizer_paths_token_ids_raw_tokens = [
@@ -114,7 +114,7 @@ def test_vocab_conversion(tokenizer_path: str, token_ids: List[int], raw_tokens:
         trust_remote_code=True,
     )
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
-    vocab = tokenizer_info.raw_vocab
+    vocab = tokenizer_info.decoded_vocab
     for token_id, raw_token in zip(token_ids, raw_tokens):
         assert vocab[token_id] == raw_token
 
@@ -145,14 +145,14 @@ def test_dump_metadata_load(tokenizer_path: str, metadata_str: str):
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
     assert tokenizer_info.dump_metadata() == metadata_str
 
-    vocab = tokenizer.get_vocab()
-    vocab = [token for token, _ in sorted(vocab.items(), key=lambda x: x[1])]
+    encoded_vocab = tokenizer.get_vocab()
+    encoded_vocab = [token for token, _ in sorted(encoded_vocab.items(), key=lambda x: x[1])]
 
-    loaded = TokenizerInfo.from_vocab_and_metadata(vocab, metadata_str)
-    assert loaded.raw_vocab == tokenizer_info.raw_vocab
+    loaded = TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata_str)
+    assert loaded.decoded_vocab == tokenizer_info.decoded_vocab
 
-    loaded_new = TokenizerInfo(tokenizer_info.raw_vocab)
-    assert loaded_new.raw_vocab == tokenizer_info.raw_vocab
+    loaded_new = TokenizerInfo(tokenizer_info.decoded_vocab)
+    assert loaded_new.decoded_vocab == tokenizer_info.decoded_vocab
 
 
 if __name__ == "__main__":

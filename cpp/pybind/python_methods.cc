@@ -23,7 +23,7 @@ BNFGrammar BNFGrammar_InitNoNormalization(
 }
 
 TokenizerInfo TokenizerInfo_Init(
-    const std::vector<std::string>& vocab,
+    const std::vector<std::string>& encoded_vocab,
     std::string vocab_type,
     bool prepend_space_in_tokenization
 ) {
@@ -32,7 +32,7 @@ TokenizerInfo TokenizerInfo_Init(
       {"BYTE_FALLBACK", VocabType::BYTE_FALLBACK},
       {"BYTE_LEVEL", VocabType::BYTE_LEVEL},
   };
-  return TokenizerInfo(vocab, VOCAB_TYPE_MAP.at(vocab_type), prepend_space_in_tokenization);
+  return TokenizerInfo(encoded_vocab, VOCAB_TYPE_MAP.at(vocab_type), prepend_space_in_tokenization);
 }
 
 std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer) {
@@ -40,8 +40,8 @@ std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer) {
   return VOCAB_TYPE_NAMES[static_cast<int>(tokenizer.GetVocabType())];
 }
 
-std::vector<pybind11::bytes> TokenizerInfo_GetRawVocab(TokenizerInfo& tokenizer) {
-  auto result = tokenizer.GetRawVocab();
+std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(TokenizerInfo& tokenizer) {
+  auto result = tokenizer.GetDecodedVocab();
   std::vector<pybind11::bytes> py_result;
   py_result.reserve(result.size());
   for (const auto& item : result) {
@@ -54,7 +54,7 @@ torch::Tensor GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher) {
   auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetMaskVocabSize());
   auto result = torch::empty({buffer_size}, torch::dtype(torch::kInt32).device(torch::kCPU, 0));
   auto result_dltensor = at::toDLPack(result)->dl_tensor;
-  matcher.FindNextTokenBitmask(&result_dltensor);
+  matcher.GetNextTokenBitmask(&result_dltensor);
   return result;
 }
 

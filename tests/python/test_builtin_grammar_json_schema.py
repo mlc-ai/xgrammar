@@ -39,9 +39,9 @@ def test_json_schema_accept_find_token():
     matcher = GrammarMatcher(grammar, tokenizer)
 
     for c in instance_str:
-        matcher.find_next_token_bitmask()
+        matcher.get_next_token_bitmask()
         assert matcher.accept_string(c)
-    final_bitmask = matcher.find_next_token_bitmask()
+    final_bitmask = matcher.get_next_token_bitmask()
     final_rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(
         final_bitmask, matcher.mask_vocab_size
     )
