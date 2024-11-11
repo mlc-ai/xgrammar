@@ -1043,7 +1043,7 @@ std::string BuiltinGrammar::_JSONSchemaToEBNF(
   picojson::value schema_value;
   std::string err = picojson::parse(schema_value, schema);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
-                              << ". The JSON string is:" << schema.serialize(false);
+                              << ". The JSON string is:" << schema;
   JSONSchemaToEBNFConverter converter(schema_value, indent, separators, strict_mode);
   return converter.Convert();
 }
