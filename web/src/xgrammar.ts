@@ -222,10 +222,10 @@ export class TokenizerInfo {
   ): Promise<TokenizerInfo> {
     await asyncInitBinding();
     // Convert string[] to std::vector<std::string>
-    const rawVocabVec = binding.vecStringFromJSArray(encodedVocab);
+    const encodedVocabVec = binding.vecStringFromJSArray(encodedVocab);
     // Instantiate TokenizerInfo
     return new TokenizerInfo(new binding.TokenizerInfo(
-      rawVocabVec,
+      encodedVocabVec,
       vocabType.toUpperCase(),
       prependSpaceInTokenization,
     ));

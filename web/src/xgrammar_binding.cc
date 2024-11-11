@@ -70,7 +70,7 @@ GrammarMatcher GrammarMatcher_Init(
 /*!
  * \brief Finds the next token bitmask of the matcher.
  */
-std::vector<int32_t> GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher) {
+std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher) {
   // 1. Initialize std::vector result
   auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetMaskVocabSize());
   std::vector<int32_t> result(buffer_size);
@@ -167,7 +167,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("GetMaskVocabSize", &GrammarMatcher::GetMaskVocabSize)
       .function("GetMaxRollbackTokens", &GrammarMatcher::GetMaxRollbackTokens)
       .function("AcceptToken", &GrammarMatcher::AcceptToken)
-      .function("GetNextTokenBitmask", &GrammarMatcher_FindNextTokenBitmask)
+      .function("GetNextTokenBitmask", &GrammarMatcher_GetNextTokenBitmask)
       .class_function("GetRejectedTokensFromBitMask", &GrammarMatcher_GetRejectedTokensFromBitMask)
       .function("IsTerminated", &GrammarMatcher::IsTerminated)
       .function("Reset", &GrammarMatcher::Reset)

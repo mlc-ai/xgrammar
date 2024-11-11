@@ -198,7 +198,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
   bool AcceptStopToken();
 
   // friend IntTuple FindNextRejectedTokens(GrammarMatcher matcher, bool verbose);
-  // friend NDArray FindNextTokenBitmaskAsNDArray(GrammarMatcher matcher);
+  // friend NDArray GetNextTokenBitmaskAsNDArray(GrammarMatcher matcher);
 
   CompiledGrammar compiled_grammar_;
   std::vector<int> stop_token_ids_;

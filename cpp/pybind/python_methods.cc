@@ -50,7 +50,7 @@ std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(TokenizerInfo& tokeni
   return py_result;
 }
 
-torch::Tensor GrammarMatcher_FindNextTokenBitmask(GrammarMatcher& matcher) {
+torch::Tensor GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher) {
   auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetMaskVocabSize());
   auto result = torch::empty({buffer_size}, torch::dtype(torch::kInt32).device(torch::kCPU, 0));
   auto result_dltensor = at::toDLPack(result)->dl_tensor;
