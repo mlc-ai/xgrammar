@@ -435,7 +435,7 @@ void JSONSchemaToEBNFConverter::WarnUnsupportedKeywords(
   for (const auto& keyword : keywords) {
     if (schema.find(keyword) != schema.end()) {
       XGRAMMAR_LOG(WARNING) << "Keyword " << keyword << " is not supported in schema "
-                            << picojson::value(schema);
+                            << picojson::value(schema).serialize(false);
     }
   }
 }
@@ -553,7 +553,8 @@ std::string JSONSchemaToEBNFConverter::VisitSchema(
     } else if (type == "object") {
       return VisitObject(schema_obj, rule_name);
     } else {
-      XGRAMMAR_LOG(FATAL) << "Unsupported type " << type << " in schema " << schema;
+      XGRAMMAR_LOG(FATAL) << "Unsupported type " << type << " in schema "
+                          << schema.serialize(false);
     }
   }
 
@@ -582,7 +583,8 @@ picojson::value JSONSchemaToEBNFConverter::URIToSchema(const picojson::value& ur
   if (uri.get<std::string>().substr(0, 8) == "#/$defs/") {
     return json_schema_.get("$defs").get(uri.get<std::string>().substr(8));
   }
-  XGRAMMAR_LOG(WARNING) << "Now only support URI starting with '#/$defs/' but got " << uri;
+  XGRAMMAR_LOG(WARNING) << "Now only support URI starting with '#/$defs/' but got "
+                        << uri.serialize(false);
   return picojson::value(true);
 }
 
@@ -1041,7 +1043,7 @@ std::string BuiltinGrammar::_JSONSchemaToEBNF(
   picojson::value schema_value;
   std::string err = picojson::parse(schema_value, schema);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
-                              << ". The JSON string is:" << schema;
+                              << ". The JSON string is:" << schema.serialize(false);
   JSONSchemaToEBNFConverter converter(schema_value, indent, separators, strict_mode);
   return converter.Convert();
 }
