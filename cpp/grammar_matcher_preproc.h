@@ -393,8 +393,8 @@ CompiledGrammar::Impl::Impl(
     // Phi-2: <|endoftext|>
     // Gemma: <eos>, <end_of_turn>
     if (token == "</s>" || token == "<|end_of_text|>" || token == "<|eot_id|>" ||
-        token == "<|endoftext|>" || token == "<eos>" || token == "<end_of_turn>" ||
-        token == "<｜end▁of▁sentence｜>") {
+        token == "<|endoftext|>" || token == "<eos>" || token == "<|eos|>" ||
+        token == "<end_of_turn>" || token == "<｜end▁of▁sentence｜>") {
       this->detected_stop_token_ids.push_back(i);
     } else if ((token[0] == '<' && token.back() == '>' && token.size() >= 3) ||
                token == "[@BOS@]") {
