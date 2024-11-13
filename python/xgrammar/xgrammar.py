@@ -486,21 +486,12 @@ class CompiledGrammar(XGObject):
     def __init__(
         self,
         grammar: BNFGrammar,
-        tokenizer_or_vocab: Union[
-            None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]
-        ] = None,
+        tokenizer_info: Optional[TokenizerInfo] = None,
     ) -> None:
-        # convert tokenizer_or_vocab to TokenizerInfo
-        if isinstance(tokenizer_or_vocab, PreTrainedTokenizerBase):
-            tokenizer_or_vocab = TokenizerInfo.from_huggingface(tokenizer_or_vocab)
-        elif isinstance(tokenizer_or_vocab, list):
-            tokenizer_or_vocab = TokenizerInfo(tokenizer_or_vocab)
-        elif tokenizer_or_vocab is None:
-            tokenizer_or_vocab = TokenizerInfo([])
-        if not isinstance(tokenizer_or_vocab, TokenizerInfo):
-            raise ValueError(f"Unsupported tokenizer_or_vocab type: {type(tokenizer_or_vocab)}")
+        if tokenizer_info is None:
+            tokenizer_info = TokenizerInfo([])
 
-        self.init_with_handle(_core.CompiledGrammar(grammar.handle, tokenizer_or_vocab.handle))
+        self.init_with_handle(_core.CompiledGrammar(grammar.handle, tokenizer_info.handle))
 
 
 class CachedGrammarCompiler(XGObject):
