@@ -10,6 +10,7 @@ else()
 endif()
 
 option(XGRAMMAR_BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
+option(BUILD_CXX_TESTS "Build C++ tests" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +26,7 @@ endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Build Python bindings: ${XGRAMMAR_BUILD_PYTHON_BINDINGS}")
+message(STATUS "Build C++ tests: ${BUILD_CXX_TESTS}")
 
 if(MSVC)
   set(CMAKE_CXX_FLAGS "/Wall ${CMAKE_CXX_FLAGS}")
@@ -58,4 +60,18 @@ target_compile_definitions(xgrammar PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)
+endif()
+
+if(BUILD_CXX_TESTS)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/3rdparty/googletest)
+
+  file(GLOB_RECURSE XGRAMMAR_TEST_SOURCES_PATH "${PROJECT_SOURCE_DIR}/tests/cpp/*.cc")
+  enable_testing()
+
+  add_executable(xgrammar_test ${XGRAMMAR_TEST_SOURCES_PATH})
+  target_include_directories(xgrammar_test PUBLIC ${PROJECT_SOURCE_DIR}/cpp)
+  target_link_libraries(xgrammar_test xgrammar gtest gtest_main)
+
+  include(GoogleTest)
+  gtest_discover_tests(xgrammar_test)
 endif()
