@@ -486,6 +486,8 @@ class CompiledGrammar(XGObject):
     def __init__(self, grammar: BNFGrammar, tokenizer_info: Optional[TokenizerInfo] = None) -> None:
         if tokenizer_info is None:
             tokenizer_info = TokenizerInfo([])
+        elif not isinstance(tokenizer_info, TokenizerInfo):
+            raise ValueError("tokenizer_info must be a TokenizerInfo object")
 
         self.init_with_handle(_core.CompiledGrammar(grammar.handle, tokenizer_info.handle))
 
@@ -502,6 +504,9 @@ class CachedGrammarCompiler(XGObject):
     """
 
     def __init__(self, tokenizer_info: TokenizerInfo):
+        if not isinstance(tokenizer_info, TokenizerInfo):
+            raise ValueError("tokenizer_info must be a TokenizerInfo object")
+
         self.init_with_handle(_core.CachedGrammarCompiler(tokenizer_info.handle))
 
     def get_compiled_grammar_for_json(self) -> CompiledGrammar:
