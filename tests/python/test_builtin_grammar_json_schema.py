@@ -5,8 +5,7 @@ import pytest
 from pydantic import BaseModel
 from transformers import AutoTokenizer
 
-from xgrammar import GrammarMatcher
-from xgrammar.xgrammar import BuiltinGrammar
+from xgrammar import BuiltinGrammar, GrammarMatcher, TokenizerInfo
 
 
 def test_json_schema_accept_find_token():
@@ -36,7 +35,8 @@ def test_json_schema_accept_find_token():
 
     tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True)
-    matcher = GrammarMatcher(grammar, tokenizer)
+    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
+    matcher = GrammarMatcher(grammar, tokenizer_info)
 
     for c in instance_str:
         matcher.get_next_token_bitmask()
@@ -77,7 +77,8 @@ def test_json_schema_find_jump_forward_string():
 
     tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True)
-    matcher = GrammarMatcher(grammar, tokenizer)
+    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
+    matcher = GrammarMatcher(grammar, tokenizer_info)
 
     for i, c in enumerate(instance_str):
         jump_forward_str = matcher.find_jump_forward_string()

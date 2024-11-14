@@ -7,7 +7,7 @@ from typing import List, Optional
 import pytest
 from transformers import AutoTokenizer
 
-from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher
+from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo
 
 json_grammar = BuiltinGrammar.json()
 
@@ -283,7 +283,8 @@ def test_get_next_rejected_tokens(
         use_fast=True,
         trust_remote_code=True,
     )
-    matcher = GrammarMatcher(json_grammar, tokenizer)
+    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
+    matcher = GrammarMatcher(json_grammar, tokenizer_info)
     input_bytes = input_str.encode("utf-8")
     rejected_sizes = []
 

@@ -483,11 +483,7 @@ class CompiledGrammar(XGObject):
         object will be constructed from the tokenizer or the vocabulary.
     """
 
-    def __init__(
-        self,
-        grammar: BNFGrammar,
-        tokenizer_info: Optional[TokenizerInfo] = None,
-    ) -> None:
+    def __init__(self, grammar: BNFGrammar, tokenizer_info: Optional[TokenizerInfo] = None) -> None:
         if tokenizer_info is None:
             tokenizer_info = TokenizerInfo([])
 
@@ -505,19 +501,8 @@ class CachedGrammarCompiler(XGObject):
         The tokenizer or the vocabulary. Its meaning is the same as in GrammarMatcher.
     """
 
-    def __init__(
-        self,
-        tokenizer_or_vocab: Union[PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]],
-    ):
-        # convert tokenizer_or_vocab to TokenizerInfo
-        if isinstance(tokenizer_or_vocab, PreTrainedTokenizerBase):
-            tokenizer_or_vocab = TokenizerInfo.from_huggingface(tokenizer_or_vocab)
-        elif isinstance(tokenizer_or_vocab, list):
-            tokenizer_or_vocab = TokenizerInfo(tokenizer_or_vocab)
-        if not isinstance(tokenizer_or_vocab, TokenizerInfo):
-            raise ValueError(f"Unsupported tokenizer_or_vocab type: {type(tokenizer_or_vocab)}")
-
-        self.init_with_handle(_core.CachedGrammarCompiler(tokenizer_or_vocab.handle))
+    def __init__(self, tokenizer_info: TokenizerInfo):
+        self.init_with_handle(_core.CachedGrammarCompiler(tokenizer_info.handle))
 
     def get_compiled_grammar_for_json(self) -> CompiledGrammar:
         """Get CompiledGrammar from the standard JSON.
@@ -598,9 +583,7 @@ class GrammarMatcher(XGObject):
     def __init__(
         self,
         grammar: BNFGrammar,
-        tokenizer_or_vocab: Union[
-            None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]
-        ] = None,
+        tokenizer_info: Optional[TokenizerInfo] = None,
         *,
         override_stop_tokens: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
@@ -667,9 +650,7 @@ class GrammarMatcher(XGObject):
     def __init__(
         self,
         grammar_or_context: Union[BNFGrammar, CompiledGrammar],
-        tokenizer_or_vocab: Union[
-            None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]
-        ] = None,
+        tokenizer_info: Optional[TokenizerInfo] = None,
         *,
         override_stop_tokens: Union[None, int, List[int]] = None,
         terminate_without_stop_token: bool = False,
@@ -677,7 +658,7 @@ class GrammarMatcher(XGObject):
         max_rollback_tokens: int = 0,
     ) -> None:
         if isinstance(grammar_or_context, BNFGrammar):
-            compiled_grammar = CompiledGrammar(grammar_or_context, tokenizer_or_vocab)
+            compiled_grammar = CompiledGrammar(grammar_or_context, tokenizer_info)
         else:
             compiled_grammar = grammar_or_context
 

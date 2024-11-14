@@ -81,7 +81,8 @@ def test_get_next_rejected_tokens(
         use_fast=True,
         trust_remote_code=True,
     )
-    matcher = GrammarMatcher(json_grammar, tokenizer)
+    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
+    matcher = GrammarMatcher(json_grammar, tokenizer_info)
     input_bytes = input_str.encode("utf-8")
     rejected_sizes = []
 
@@ -117,7 +118,8 @@ def test_token_operations():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    matcher = GrammarMatcher(json_grammar, vocab)
+    tokenizer_info = TokenizerInfo(vocab)
+    matcher = GrammarMatcher(json_grammar, tokenizer_info)
 
     expected = [
         ["{"],
@@ -177,7 +179,8 @@ def test_rollback():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    matcher = GrammarMatcher(json_grammar, vocab, max_rollback_tokens=5)
+    tokenizer_info = TokenizerInfo(vocab)
+    matcher = GrammarMatcher(json_grammar, tokenizer_info, max_rollback_tokens=5)
 
     assert matcher.max_rollback_tokens == 5
 
@@ -207,7 +210,8 @@ def test_reset():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    matcher = GrammarMatcher(json_grammar, vocab)
+    tokenizer_info = TokenizerInfo(vocab)
+    matcher = GrammarMatcher(json_grammar, tokenizer_info)
 
     orig_result = []
 
@@ -246,8 +250,9 @@ def test_termination():
         "</s>",
     ]
     input_ids = [vocab.index(t) for t in input_splitted]
+    tokenizer_info = TokenizerInfo(vocab)
 
-    matcher = GrammarMatcher(json_grammar, vocab, max_rollback_tokens=5)
+    matcher = GrammarMatcher(json_grammar, tokenizer_info, max_rollback_tokens=5)
 
     for i in input_ids:
         matcher.get_next_token_bitmask()
@@ -283,7 +288,8 @@ def test_mask_vocab_size():
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
         # fmt: on
     ]
-    matcher = GrammarMatcher(json_grammar, vocab, mask_vocab_size=64)
+    tokenizer_info = TokenizerInfo(vocab)
+    matcher = GrammarMatcher(json_grammar, tokenizer_info, mask_vocab_size=64)
     assert matcher.mask_vocab_size == 64
 
     mask = matcher.get_next_token_bitmask()
