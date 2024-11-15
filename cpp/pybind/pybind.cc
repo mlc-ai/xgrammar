@@ -67,10 +67,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def("accept_token", &GrammarMatcher::AcceptToken)
       .def("accept_string", &GrammarMatcher::AcceptString)
       .def("fill_next_token_bitmask", &GrammarMatcher_FillNextTokenBitmask)
-      .def(
-          "debug_get_rejected_tokens_from_bitmask",
-          &GrammarMatcher_DebugGetRejectedTokensFromBitmask
-      )
+      .def("debug_get_masked_tokens_from_bitmask", &GrammarMatcher_DebugGetMaskedTokensFromBitmask)
       .def("is_terminated", &GrammarMatcher::IsTerminated)
       .def("reset", &GrammarMatcher::Reset)
       .def("find_jump_forward_string", &GrammarMatcher::FindJumpForwardString)

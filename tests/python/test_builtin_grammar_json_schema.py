@@ -104,8 +104,8 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
         time_end = time.monotonic_ns()
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
-        # 2. Test run of debug_get_rejected_tokens_from_bitmask
-        rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
+        # 2. Test run of debug_get_masked_tokens_from_bitmask
+        rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
 
         # 3. apply_token_bitmask_inplace
         torch.cuda.synchronize()
@@ -124,7 +124,7 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
 
     # 5. Final correctness verification
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
+    rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
     assert tokenizer.eos_token_id not in rejected_token_ids
 
 

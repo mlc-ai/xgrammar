@@ -65,7 +65,7 @@ void GrammarMatcher_FillNextTokenBitmask(
   // TODO(yixin): Move the checking and slicing logic to core C++ code
   int bitmask_size = matcher.GetBitmaskSize();
   if (shape.size() == 1) {
-    XGRAMMAR_CHECK(batch_id == 0) << "batch_id must be 0 for 1D token bitmask";
+    batch_id = 0;
     XGRAMMAR_CHECK(shape[0] == bitmask_size)
         << "The last dimension of the token bitmask tensor must be " << bitmask_size << ", but got "
         << shape[0];
@@ -92,7 +92,7 @@ void GrammarMatcher_FillNextTokenBitmask(
   matcher.FillNextTokenBitmask(&bitmask_dltensor);
 }
 
-std::vector<int> GrammarMatcher_DebugGetRejectedTokensFromBitmask(
+std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
     GrammarMatcher& matcher, torch::Tensor token_bitmask, int batch_id
 ) {
   torch::IntArrayRef shape = token_bitmask.sizes();
@@ -100,7 +100,7 @@ std::vector<int> GrammarMatcher_DebugGetRejectedTokensFromBitmask(
   // TODO(yixin): Move the checking and slicing logic to core C++ code
   int bitmask_size = matcher.GetBitmaskSize();
   if (shape.size() == 1) {
-    XGRAMMAR_CHECK(batch_id == 0) << "batch_id must be 0 for 1D token bitmask";
+    batch_id = 0;
     XGRAMMAR_CHECK(shape[0] == bitmask_size)
         << "The last dimension of the token bitmask tensor must be " << bitmask_size << ", but got "
         << shape[0];
@@ -126,7 +126,7 @@ std::vector<int> GrammarMatcher_DebugGetRejectedTokensFromBitmask(
   };
 
   std::vector<int> result;
-  matcher.DebugGetRejectedTokensFromBitmask(&result, bitmask_dltensor);
+  matcher.DebugGetMaskedTokensFromBitmask(&result, bitmask_dltensor);
   return result;
 }
 

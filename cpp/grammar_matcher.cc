@@ -144,7 +144,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
 
   void FillNextTokenBitmask(DLTensor* next_token_bitmask);
 
-  void DebugGetRejectedTokensFromBitmask(
+  void DebugGetMaskedTokensFromBitmask(
       std::vector<int>* rejected_tokens, const DLTensor& token_bitmask
   );
 
@@ -450,7 +450,7 @@ void GrammarMatcher::Impl::FillNextTokenBitmask(DLTensor* next_token_bitmask) {
   SetTokenBitmask(next_token_bitmask, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end);
 }
 
-void GrammarMatcher::Impl::DebugGetRejectedTokensFromBitmask(
+void GrammarMatcher::Impl::DebugGetMaskedTokensFromBitmask(
     std::vector<int>* rejected_tokens, const DLTensor& token_bitmask
 ) {
   CheckTokenBitmaskValidity(token_bitmask, vocab_size_);
@@ -657,10 +657,10 @@ void GrammarMatcher::FillNextTokenBitmask(DLTensor* next_token_bitmask) {
   pimpl_->FillNextTokenBitmask(next_token_bitmask);
 }
 
-void GrammarMatcher::DebugGetRejectedTokensFromBitmask(
+void GrammarMatcher::DebugGetMaskedTokensFromBitmask(
     std::vector<int>* rejected_tokens, const DLTensor& token_bitmask
 ) {
-  pimpl_->DebugGetRejectedTokensFromBitmask(rejected_tokens, token_bitmask);
+  pimpl_->DebugGetMaskedTokensFromBitmask(rejected_tokens, token_bitmask);
 }
 
 std::string GrammarMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }

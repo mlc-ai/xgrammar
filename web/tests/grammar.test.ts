@@ -191,7 +191,7 @@ describe("Test GrammarMatcher E2E", () => {
       const input_id = input_ids[i];
       // Find rejected IDs
       const bitmask = await matcher.getNextTokenBitmask();
-      const rejectedIDs = await GrammarMatcher.debugGetRejectedTokensFromBitmask(
+      const rejectedIDs = await GrammarMatcher.debugGetMaskedTokensFromBitmask(
         bitmask, matcher.getVocabSize()
       );
       // Find accepted tokens
@@ -246,7 +246,7 @@ describe("Test GrammarMatcher E2E", () => {
       const input_id = input_ids[i];
       // Find rejected IDs
       const bitmask = await matcher.getNextTokenBitmask();
-      const rejectedIDs = await GrammarMatcher.debugGetRejectedTokensFromBitmask(
+      const rejectedIDs = await GrammarMatcher.debugGetMaskedTokensFromBitmask(
         bitmask, matcher.getVocabSize()
       );
       // Find accepted tokens
@@ -475,7 +475,7 @@ describe("Test json schema E2E", () => {
     // 6. Check finalization
     const final_bitmask = await matcher.getNextTokenBitmask();
     expect(final_bitmask.length).toEqual(Math.ceil(128256 / 32));
-    const final_rejected_tokens = (await GrammarMatcher.debugGetRejectedTokensFromBitmask(
+    const final_rejected_tokens = (await GrammarMatcher.debugGetMaskedTokensFromBitmask(
       final_bitmask, matcher.getVocabSize()
     ));
     expect(final_rejected_tokens.indexOf(128001)).toEqual(-1);  // stop token not rejected
@@ -522,7 +522,7 @@ describe("Test json schema E2E", () => {
     const final_bitmask = await matcher.getNextTokenBitmask();
     // Tests how phi3.5 has dummy padded tokens. See https://github.com/mlc-ai/mlc-llm/pull/2651
     expect(final_bitmask.length).toEqual(Math.ceil(32064 / 32));
-    const final_rejected_tokens = (await GrammarMatcher.debugGetRejectedTokensFromBitmask(
+    const final_rejected_tokens = (await GrammarMatcher.debugGetMaskedTokensFromBitmask(
       final_bitmask, matcher.getVocabSize()
     ));
     expect(final_rejected_tokens.indexOf(2)).toEqual(-1);  // stop token not rejected

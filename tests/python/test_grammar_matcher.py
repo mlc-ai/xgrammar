@@ -90,7 +90,7 @@ def test_fill_next_token_bitmask(
 
     for i, c in enumerate(input_bytes):
         matcher.fill_next_token_bitmask(token_bitmask)
-        rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
+        rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
             assert rejected_sizes[-1] == expected_rejected_sizes[i], (
@@ -100,7 +100,7 @@ def test_fill_next_token_bitmask(
         assert matcher.accept_string(bytes([c]))
 
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
+    rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:
         assert rejected_sizes[-1] == expected_rejected_sizes[-1]
@@ -138,7 +138,7 @@ def test_token_operations():
 
     for id in input_ids:
         matcher.fill_next_token_bitmask(token_bitmask)
-        rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
+        rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
         accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
         accepted_tokens = [vocab[i] for i in accepted]
         result.append(accepted_tokens)
@@ -146,7 +146,7 @@ def test_token_operations():
         assert matcher.accept_token(id)
 
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
+    rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
     accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
     accepted_tokens = [vocab[i] for i in accepted]
     result.append(accepted_tokens)
@@ -338,7 +338,7 @@ def test_vocab_size():
     matcher.fill_next_token_bitmask(token_bitmask)
     assert token_bitmask.shape == (2,)
 
-    rejected_tokens = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
+    rejected_tokens = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
     assert rejected_tokens == [i for i in range(64) if i != 7]
 
 

@@ -36,7 +36,7 @@ void GrammarMatcher_FillNextTokenBitmask(
     GrammarMatcher& matcher, torch::Tensor token_bitmask, int batch_id
 );
 
-std::vector<int> GrammarMatcher_DebugGetRejectedTokensFromBitmask(
+std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
     GrammarMatcher& matcher, torch::Tensor token_bitmask, int batch_id
 );
 
