@@ -42,7 +42,7 @@ def test_json_schema_accept_find_token():
         matcher.get_next_token_bitmask()
         assert matcher.accept_string(c)
     final_bitmask = matcher.get_next_token_bitmask()
-    final_rejected_tokens = GrammarMatcher.get_rejected_tokens_from_bitmask(
+    final_rejected_tokens = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
         final_bitmask, matcher.vocab_size
     )
     assert 2 not in final_rejected_tokens

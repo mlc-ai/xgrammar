@@ -272,7 +272,7 @@ class GrammarMatcher {
    */
   void GetNextTokenBitmask(DLTensor* next_token_bitmask);
 
-  static void GetRejectedTokensFromBitMask(
+  static void DebugGetRejectedTokensFromBitmask(
       const DLTensor& token_bitmask, size_t vocab_size, std::vector<int>* rejected_tokens
   );
 

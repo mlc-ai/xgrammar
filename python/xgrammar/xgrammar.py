@@ -733,8 +733,8 @@ class GrammarMatcher(XGObject):
         return self.handle.get_next_token_bitmask()
 
     @staticmethod
-    def get_rejected_tokens_from_bitmask(bitmask: torch.Tensor, vocab_size: int) -> List[int]:
-        """Get the ids of the rejected tokens from the bitmask.
+    def debug_get_rejected_tokens_from_bitmask(bitmask: torch.Tensor, vocab_size: int) -> List[int]:
+        """Get the ids of the rejected tokens from the bitmask. Mainly for debug purposes.
 
         Parameters
         ----------
@@ -746,7 +746,7 @@ class GrammarMatcher(XGObject):
         rejected_token_ids : List[int]
             A list of rejected token ids.
         """
-        return _core.GrammarMatcher.get_rejected_tokens_from_bitmask(bitmask, vocab_size)
+        return _core.GrammarMatcher.debug_get_rejected_tokens_from_bitmask(bitmask, vocab_size)
 
     @staticmethod
     def apply_token_bitmask_inplace(logits: torch.Tensor, bitmask: torch.Tensor):

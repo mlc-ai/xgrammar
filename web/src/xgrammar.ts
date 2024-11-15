@@ -352,13 +352,13 @@ export class GrammarMatcher {
    * @param {number} vocabSize Vocab size returned by getVocabSize().
    * @returns An array of vocab ID that will be rejected as a result of the bitmask.
    */
-  static async getRejectedTokensFromBitmask(
+  static async debugGetRejectedTokensFromBitmask(
     bitmask: Int32Array,
     vocabSize: number
   ): Promise<Int32Array> {
     await asyncInitBinding();
     const bitmaskIntVector = binding.vecIntFromJSArray(bitmask);
-    const rejectedIDsIntVector = binding.GrammarMatcher.GetRejectedTokensFromBitMask(
+    const rejectedIDsIntVector = binding.GrammarMatcher.DebugGetRejectedTokensFromBitmask(
       bitmaskIntVector,
       vocabSize
     );

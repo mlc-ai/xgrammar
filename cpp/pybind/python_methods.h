@@ -34,7 +34,7 @@ std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(TokenizerInfo& tokeni
 
 torch::Tensor GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher);
 
-std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(
+std::vector<int> GrammarMatcher_DebugGetRejectedTokensFromBitmask(
     torch::Tensor token_bitmask, size_t vocab_size
 );
 

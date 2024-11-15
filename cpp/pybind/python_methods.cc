@@ -65,12 +65,12 @@ torch::Tensor GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher) {
   return result;
 }
 
-std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(
+std::vector<int> GrammarMatcher_DebugGetRejectedTokensFromBitmask(
     torch::Tensor token_bitmask, size_t vocab_size
 ) {
   std::vector<int> result;
   auto token_bitmask_dltensor = at::toDLPack(token_bitmask)->dl_tensor;
-  GrammarMatcher::GetRejectedTokensFromBitMask(token_bitmask_dltensor, vocab_size, &result);
+  GrammarMatcher::DebugGetRejectedTokensFromBitmask(token_bitmask_dltensor, vocab_size, &result);
   return result;
 }
 

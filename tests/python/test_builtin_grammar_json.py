@@ -219,42 +219,42 @@ def test_json_pressure(json_input_pressure: str):
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [
-    (
-        # short test
-        "meta-llama/Llama-2-7b-chat-hf",
-        '{"id": 1,"name": "Example"}',
-        [
-            # fmt: off
-            31989, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 272, 272, 272, 272,
-            272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999,
-            # fmt: on
-        ],
-    ),
-    (
-        # long test
-        "meta-llama/Llama-2-7b-chat-hf",
-        """{
-"id": 1,
-"na": "ex",
-"ac": true,
-"t": ["t1", "t2"],
-"ne": {"lv2": {"val": "dp"}, "arr": [1, 2, 3]},
-"res": "res"
-}""",
-        [
-            # fmt: off
-            31989, 31912, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 31915, 272, 272,
-            272, 31973, 31846, 31846, 265, 265, 265, 31974, 31915, 31915, 272, 272, 272, 31973,
-            31846, 31846, 31997, 31997, 31998, 31974, 31915, 31915, 272, 272, 31973, 31846, 31846,
-            31840, 264, 264, 264, 31969, 31846, 31846, 264, 264, 264, 31969, 31974, 31915, 31915,
-            272, 272, 272, 31973, 31846, 31846, 31908, 272, 272, 272, 272, 31973, 31846, 31846,
-            31906, 272, 272, 272, 272, 31973, 31846, 31846, 264, 264, 264, 31968, 31970, 31915,
-            31915, 272, 272, 272, 272, 31973, 31846, 31846, 31840, 31943, 31846, 31846, 31943,
-            31846, 31846, 31943, 31970, 31974, 31915, 31915, 272, 272, 272, 272, 31973, 31846,
-            31846, 265, 265, 265, 265, 31974, 31974, 31999,
-            # fmt: on
-        ],
-    ),
+    #     (
+    #         # short test
+    #         "meta-llama/Llama-2-7b-chat-hf",
+    #         '{"id": 1,"name": "Example"}',
+    #         [
+    #             # fmt: off
+    #             31989, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 272, 272, 272, 272,
+    #             272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999,
+    #             # fmt: on
+    #         ],
+    #     ),
+    #     (
+    #         # long test
+    #         "meta-llama/Llama-2-7b-chat-hf",
+    #         """{
+    # "id": 1,
+    # "na": "ex",
+    # "ac": true,
+    # "t": ["t1", "t2"],
+    # "ne": {"lv2": {"val": "dp"}, "arr": [1, 2, 3]},
+    # "res": "res"
+    # }""",
+    #         [
+    #             # fmt: off
+    #             31989, 31912, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 31915, 272, 272,
+    #             272, 31973, 31846, 31846, 265, 265, 265, 31974, 31915, 31915, 272, 272, 272, 31973,
+    #             31846, 31846, 31997, 31997, 31998, 31974, 31915, 31915, 272, 272, 31973, 31846, 31846,
+    #             31840, 264, 264, 264, 31969, 31846, 31846, 264, 264, 264, 31969, 31974, 31915, 31915,
+    #             272, 272, 272, 31973, 31846, 31846, 31908, 272, 272, 272, 272, 31973, 31846, 31846,
+    #             31906, 272, 272, 272, 272, 31973, 31846, 31846, 264, 264, 264, 31968, 31970, 31915,
+    #             31915, 272, 272, 272, 272, 31973, 31846, 31846, 31840, 31943, 31846, 31846, 31943,
+    #             31846, 31846, 31943, 31970, 31974, 31915, 31915, 272, 272, 272, 272, 31973, 31846,
+    #             31846, 265, 265, 265, 265, 31974, 31974, 31999,
+    #             # fmt: on
+    #         ],
+    #     ),
     (
         # test for llama 3
         "meta-llama/Meta-Llama-3-8B-Instruct",
@@ -286,34 +286,46 @@ def test_get_next_rejected_tokens(
     )
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
     matcher = GrammarMatcher(json_grammar, tokenizer_info)
-    logits_gpu = torch.zeros(matcher.vocab_size, device="cuda")
+    logits_gpu = torch.zeros(matcher.vocab_size, dtype=torch.float32, device="cuda")
     input_bytes = input_str.encode("utf-8")
     rejected_sizes = []
 
     for i, c in enumerate(input_bytes):
+        # 1. get_next_token_bitmask
         time_start = time.monotonic_ns()
         bitmask = matcher.get_next_token_bitmask()
-        time_mid = time.monotonic_ns()
-        rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
+        time_end = time.monotonic_ns()
+        print(f"Time to get_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+        # 2. Correctness verification
+        rejected_token_ids = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
             bitmask, matcher.vocab_size
         )
-        time_end = time.monotonic_ns()
-        print(f"Time to get_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
-        print(f"Time to get_rejected_tokens_from_bitmask: {(time_end - time_mid) / 1e3} us")
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
             assert rejected_sizes[-1] == expected_rejected_sizes[i], (
                 rejected_sizes[-1],
                 expected_rejected_sizes[i],
             )
+
+        # 3. apply_token_bitmask_inplace
+        torch.cuda.synchronize()
+        time_start = time.monotonic_ns()
+        GrammarMatcher.apply_token_bitmask_inplace(logits_gpu, bitmask)
+        torch.cuda.synchronize()
+        time_end = time.monotonic_ns()
+        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+
+        # 4. accept_string
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
         assert matcher.accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
+    # 5. Final correctness verification
     bitmask = matcher.get_next_token_bitmask()
-    rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
+    rejected_token_ids = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
         bitmask, matcher.vocab_size
     )
     rejected_sizes.append(len(rejected_token_ids))

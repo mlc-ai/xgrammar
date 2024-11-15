@@ -94,7 +94,7 @@ std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher)
  * \brief Return the list of rejected token IDs based on the bit mask.
  * \note This method is mainly used in testing, so performance is not as important.
  */
-std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(
+std::vector<int> GrammarMatcher_DebugGetRejectedTokensFromBitmask(
     std::vector<int32_t> token_bitmask, size_t vocab_size
 ) {
   // 1. Convert token_bitmask into DLTensor
@@ -110,7 +110,7 @@ std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(
   tensor.byte_offset = 0;
   // 2. Get rejected token IDs
   std::vector<int> result;
-  GrammarMatcher::GetRejectedTokensFromBitMask(tensor, vocab_size, &result);
+  GrammarMatcher::DebugGetRejectedTokensFromBitmask(tensor, vocab_size, &result);
   return result;
 }
 
@@ -168,7 +168,9 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("GetMaxRollbackTokens", &GrammarMatcher::GetMaxRollbackTokens)
       .function("AcceptToken", &GrammarMatcher::AcceptToken)
       .function("GetNextTokenBitmask", &GrammarMatcher_GetNextTokenBitmask)
-      .class_function("GetRejectedTokensFromBitMask", &GrammarMatcher_GetRejectedTokensFromBitMask)
+      .class_function(
+          "DebugGetRejectedTokensFromBitmask", &GrammarMatcher_DebugGetRejectedTokensFromBitmask
+      )
       .function("IsTerminated", &GrammarMatcher::IsTerminated)
       .function("Reset", &GrammarMatcher::Reset)
       .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)

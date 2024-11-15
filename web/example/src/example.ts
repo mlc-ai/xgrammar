@@ -53,7 +53,7 @@ async function jsonExample() {
         if (!grammarMatcher.isTerminated()) {
             const bitmask = await grammarMatcher.getNextTokenBitmask();
             // For debugging, we can check the rejected token IDs from the mask
-            const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
+            const rejectedIDs = await GrammarMatcher.debugGetRejectedTokensFromBitmask(
                 bitmask,
                 grammarMatcher.getVocabSize()
             );
@@ -148,7 +148,7 @@ async function jsonSchemaExample() {
         if (!grammarMatcher.isTerminated()) {
             const bitmask = await grammarMatcher.getNextTokenBitmask();
             // For debugging, we can check the rejected token IDs from the mask
-            const rejectedIDs = await GrammarMatcher.getRejectedTokensFromBitmask(
+            const rejectedIDs = await GrammarMatcher.debugGetRejectedTokensFromBitmask(
                 bitmask,
                 grammarMatcher.getVocabSize()
             );
