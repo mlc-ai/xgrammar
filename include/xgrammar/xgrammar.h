@@ -224,9 +224,9 @@ class CompiledGrammar {
  * GrammarMatcher matcher(compiled_grammar, 10);
  * matcher->AcceptToken(67);
  *
- * // Construct a DLTensor with shape (tokenizer.GetVocabSize() + 31) / 32, and dtype uint32.
+ * // Construct a DLTensor with shape (tokenizer.GetVocabSize() + 31) / 32, and dtype int32.
  * DLTensor next_token_bitmask = ...;
- * matcher->GetNextTokenBitmask(&next_token_bitmask);
+ * matcher->FillNextTokenBitmask(&next_token_bitmask);
  *
  * // Rollback is supported
  * matcher->Rollback(1);
@@ -262,18 +262,16 @@ class GrammarMatcher {
 
   bool AcceptString(const std::string& input_str, bool verbose = false);
 
-  static uint32_t GetBufferSize(size_t vocab_size);
-
   /*!
    * \brief Get the set of tokens that are acceptable for the next step and store them in a
    * bitmask.
    * \param next_token_bitmask The bitmask to store the result. The bitmask must be pre-allocated
-   * and with shape (GetBufferSize(vocab_size),) and dtype uint32.
+   * and with shape (GetBitmaskSize(),) and dtype int32.
    */
-  void GetNextTokenBitmask(DLTensor* next_token_bitmask);
+  void FillNextTokenBitmask(DLTensor* next_token_bitmask);
 
-  static void DebugGetRejectedTokensFromBitmask(
-      const DLTensor& token_bitmask, size_t vocab_size, std::vector<int>* rejected_tokens
+  void DebugGetRejectedTokensFromBitmask(
+      std::vector<int>* rejected_tokens, const DLTensor& token_bitmask
   );
 
   /*!
@@ -295,7 +293,9 @@ class GrammarMatcher {
   /*! \brief Get the maximum number of rollback tokens allowed. */
   int GetMaxRollbackTokens() const;
 
-  size_t GetVocabSize() const;
+  int GetVocabSize() const;
+
+  int GetBitmaskSize() const;
 
   /*!
    * \brief Check if the matcher has accepted the stop token and terminated.
@@ -328,10 +328,10 @@ class CachedGrammarCompiler {
   CachedGrammarCompiler(const TokenizerInfo& tokenizer_info);
 
   /*! \brief Get the compiled grammar for pure JSON. */
-  CompiledGrammar GetCompiledGrammarForJSON();
+  CompiledGrammar CompileJSONGrammar();
 
   /*! \brief Get the compiled grammar for a JSON schema string. */
-  CompiledGrammar GetCompiledGrammarForJSONSchema(
+  CompiledGrammar CompileJSONSchemaGrammar(
       const std::string& schema,
       std::optional<int> indent = std::nullopt,
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,

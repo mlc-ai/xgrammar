@@ -72,7 +72,7 @@ GrammarMatcher GrammarMatcher_Init(
  */
 std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher) {
   // 1. Initialize std::vector result
-  auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetVocabSize());
+  auto buffer_size = matcher.GetBitmaskSize();
   std::vector<int32_t> result(buffer_size);
   // 2. Initialize DLTensor with the data pointer of the std vector.
   DLTensor tensor;
@@ -86,7 +86,7 @@ std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher)
   tensor.strides = &strides[0];
   tensor.byte_offset = 0;
   // 3. Populate tensor, hence result
-  matcher.GetNextTokenBitmask(&tensor);
+  matcher.FillNextTokenBitmask(&tensor);
   return result;
 }
 

@@ -57,14 +57,14 @@ def test_cached_grammar_compiler_json():
         assert matcher.is_terminated()
 
     time_start = time.monotonic_ns()
-    compiled_grammar = cached_grammar_compiler.get_compiled_grammar_for_json()
+    compiled_grammar = cached_grammar_compiler.compile_json_grammar()
     time_end = time.monotonic_ns()
     print(f"Time to get compiled grammar: {(time_end - time_start) / 1e3} us")
     matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
     check_matcher(matcher)
 
     time_start = time.monotonic_ns()
-    compiled_grammar = cached_grammar_compiler.get_compiled_grammar_for_json()
+    compiled_grammar = cached_grammar_compiler.compile_json_grammar()
     time_end = time.monotonic_ns()
     print(f"Time to get compiled grammar again: {(time_end - time_start) / 1e3} us")
     matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
@@ -73,7 +73,7 @@ def test_cached_grammar_compiler_json():
     cached_grammar_compiler.clear()
 
     time_start = time.monotonic_ns()
-    compiled_grammar = cached_grammar_compiler.get_compiled_grammar_for_json()
+    compiled_grammar = cached_grammar_compiler.compile_json_grammar()
     time_end = time.monotonic_ns()
     print(f"Time to get compiled grammar after clear: {(time_end - time_start) / 1e3} us")
     matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
@@ -110,7 +110,7 @@ def test_cached_grammar_compiler_json_schema():
         instance_str = instance.model_dump_json(indent=indent, round_trip=True)
 
         time_start = time.monotonic_ns()
-        compiled_grammar = cached_grammar_compiler.get_compiled_grammar_for_json_schema(
+        compiled_grammar = cached_grammar_compiler.compile_json_schema_grammar(
             MainModel, indent=indent, separators=separators
         )
         time_end = time.monotonic_ns()
@@ -195,7 +195,7 @@ def test_cached_grammar_compiler_json_schema_concurrent():
         schema_id = id % num_schemas
         time_mid = time.monotonic_ns()
         print(f"Thread {id} start compile grammar {schema_id}: {(time_mid - time_start) / 1e3} us")
-        compiled_grammar = cached_grammar_compiler.get_compiled_grammar_for_json_schema(
+        compiled_grammar = cached_grammar_compiler.compile_json_schema_grammar(
             schema, indent=None, separators=(",", ":"), strict_mode=True
         )
         time_end = time.monotonic_ns()

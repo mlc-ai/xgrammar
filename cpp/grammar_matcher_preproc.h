@@ -136,9 +136,9 @@ class CachedGrammarCompiler::Impl {
           return this->ComputeCompiledGrammarForJSONSchema(key);
         }) {}
 
-  CompiledGrammar GetCompiledGrammarForJSON();
+  CompiledGrammar CompileJSONGrammar();
 
-  CompiledGrammar GetCompiledGrammarForJSONSchema(
+  CompiledGrammar CompileJSONSchemaGrammar(
       const std::string& schema,
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
@@ -470,11 +470,11 @@ CompiledGrammar::CompiledGrammar(const BNFGrammar& grammar, const TokenizerInfo&
 
 /******************* CachedGrammarCompiler *******************/
 
-inline CompiledGrammar CachedGrammarCompiler::Impl::GetCompiledGrammarForJSON() {
+inline CompiledGrammar CachedGrammarCompiler::Impl::CompileJSONGrammar() {
   return compiled_grammar_for_json_cache_.Get();
 }
 
-inline CompiledGrammar CachedGrammarCompiler::Impl::GetCompiledGrammarForJSONSchema(
+inline CompiledGrammar CachedGrammarCompiler::Impl::CompileJSONSchemaGrammar(
     const std::string& schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
@@ -498,17 +498,15 @@ CachedGrammarCompiler::CachedGrammarCompiler(const std::vector<std::string>& dec
 CachedGrammarCompiler::CachedGrammarCompiler(const TokenizerInfo& tokenizer_info)
     : pimpl_(std::make_shared<Impl>(tokenizer_info.GetDecodedVocab())) {}
 
-CompiledGrammar CachedGrammarCompiler::GetCompiledGrammarForJSON() {
-  return pimpl_->GetCompiledGrammarForJSON();
-}
+CompiledGrammar CachedGrammarCompiler::CompileJSONGrammar() { return pimpl_->CompileJSONGrammar(); }
 
-CompiledGrammar CachedGrammarCompiler::GetCompiledGrammarForJSONSchema(
+CompiledGrammar CachedGrammarCompiler::CompileJSONSchemaGrammar(
     const std::string& schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode
 ) {
-  return pimpl_->GetCompiledGrammarForJSONSchema(schema, indent, separators, strict_mode);
+  return pimpl_->CompileJSONSchemaGrammar(schema, indent, separators, strict_mode);
 }
 
 void CachedGrammarCompiler::Clear() { pimpl_->Clear(); }

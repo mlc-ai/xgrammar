@@ -17,6 +17,7 @@
 """The main functionality of XGrammar. The functions here are Python bindings of the C++ logic."""
 
 import json
+import math
 from enum import Enum
 from typing import List, Optional, Tuple, Type, Union, overload
 
@@ -515,7 +516,7 @@ class CachedGrammarCompiler(XGObject):
 
         self.init_with_handle(_core.CachedGrammarCompiler(tokenizer_info.handle))
 
-    def get_compiled_grammar_for_json(self) -> CompiledGrammar:
+    def compile_json_grammar(self) -> CompiledGrammar:
         """Get CompiledGrammar from the standard JSON.
 
         Returns
@@ -523,9 +524,9 @@ class CachedGrammarCompiler(XGObject):
         compiled_grammar : CompiledGrammar
             The initialization context for the grammar matcher.
         """
-        return CompiledGrammar.from_handle(self.handle.get_compiled_grammar_for_json())
+        return CompiledGrammar.from_handle(self.handle.compile_json_grammar())
 
-    def get_compiled_grammar_for_json_schema(
+    def compile_json_schema_grammar(
         self,
         schema: Union[str, Type[BaseModel]],
         *,
@@ -563,9 +564,7 @@ class CachedGrammarCompiler(XGObject):
             schema = json.dumps(schema.model_json_schema())
 
         return CompiledGrammar.from_handle(
-            self.handle.get_compiled_grammar_for_json_schema(
-                schema, indent, separators, strict_mode
-            )
+            self.handle.compile_json_schema_grammar(schema, indent, separators, strict_mode)
         )
 
     def clear(self) -> None:
@@ -725,34 +724,43 @@ class GrammarMatcher(XGObject):
         """
         return self.handle.accept_string(input_str, verbose)
 
-    def get_next_token_bitmask(self) -> torch.Tensor:
-        """Get the bitmask for the next token prediction. The mask is packed in 32-bit integers,
-        where each bit corresponds to one token. Allowed tokens are ones, while disallowed tokens
-        are zeros.
+    @staticmethod
+    def allocate_token_bitmask(vocab_size: int, batch_size: Optional[int] = None) -> torch.Tensor:
+        """Allocate the bitmask for the next token prediction. The mask is packed in 32-bit
+        integers, where each bit corresponds to one token. Allowed tokens are ones, while
+        disallowed tokens are zeros.
+
+        Parameters
+        ----------
+        batch_size : Optional[int], default: None
+            The batch size of the bitmask. If None, the bitmask is a 1D tensor.
 
         Returns
         -------
         bitmask : torch.Tensor
             The bitmask for the next token prediction. It is a tensor on CPU with dtype torch.int32
-            and shape (ceil(vocab_size / 32),).
+            and shape (batch_size, ceil(vocab_size / 32)).
         """
-        return self.handle.get_next_token_bitmask()
+        if batch_size is None:
+            return torch.zeros(math.ceil(vocab_size / 32), dtype=torch.int32)
+        else:
+            return torch.zeros(batch_size, math.ceil(vocab_size / 32), dtype=torch.int32)
 
-    @staticmethod
-    def debug_get_rejected_tokens_from_bitmask(bitmask: torch.Tensor, vocab_size: int) -> List[int]:
-        """Get the ids of the rejected tokens from the bitmask. Mainly for debug purposes.
+    def fill_next_token_bitmask(self, bitmask: torch.Tensor, batch_id: int = 0) -> None:
+        """Fill the bitmask for the next token prediction. The mask is packed in 32-bit integers,
+        where each bit corresponds to one token. Allowed tokens are ones, while disallowed tokens
+        are zeros.
 
         Parameters
         ----------
         bitmask : torch.Tensor
-            The rejected token bitmask.
+            The bitmask for the next token prediction. It is a tensor on CPU with dtype torch.int32
+            and shape (ceil(vocab_size / 32),).
 
-        Returns
-        -------
-        rejected_token_ids : List[int]
-            A list of rejected token ids.
+        batch_id : int, default: 0
+            The batch id of the bitmask.
         """
-        return _core.GrammarMatcher.debug_get_rejected_tokens_from_bitmask(bitmask, vocab_size)
+        self.handle.fill_next_token_bitmask(bitmask, batch_id)
 
     @staticmethod
     def apply_token_bitmask_inplace(logits: torch.Tensor, bitmask: torch.Tensor):
@@ -776,6 +784,23 @@ class GrammarMatcher(XGObject):
             bitmask = bitmask.to(logits.device)
 
         _core.GrammarMatcher.apply_token_bitmask_inplace(logits, bitmask)
+
+    def debug_get_rejected_tokens_from_bitmask(
+        self, bitmask: torch.Tensor, batch_id: int = 0
+    ) -> List[int]:
+        """Get the ids of the rejected tokens from the bitmask. Mainly for debug purposes.
+
+        Parameters
+        ----------
+        bitmask : torch.Tensor
+            The rejected token bitmask.
+
+        Returns
+        -------
+        rejected_token_ids : List[int]
+            A list of rejected token ids.
+        """
+        return self.handle.debug_get_rejected_tokens_from_bitmask(bitmask, batch_id)
 
     def find_jump_forward_string(self) -> str:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that

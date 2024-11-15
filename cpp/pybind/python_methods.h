@@ -32,10 +32,12 @@ std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 
 std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(TokenizerInfo& tokenizer);
 
-torch::Tensor GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher);
+void GrammarMatcher_FillNextTokenBitmask(
+    GrammarMatcher& matcher, torch::Tensor token_bitmask, int batch_id
+);
 
 std::vector<int> GrammarMatcher_DebugGetRejectedTokensFromBitmask(
-    torch::Tensor token_bitmask, size_t vocab_size
+    GrammarMatcher& matcher, torch::Tensor token_bitmask, int batch_id
 );
 
 #ifdef XGRAMMAR_BUILD_KERNELS

@@ -57,20 +57,76 @@ std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(TokenizerInfo& tokeni
   return py_result;
 }
 
-torch::Tensor GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher) {
-  auto buffer_size = GrammarMatcher::GetBufferSize(matcher.GetVocabSize());
-  auto result = torch::empty({buffer_size}, torch::dtype(torch::kInt32).device(torch::kCPU, 0));
-  auto result_dltensor = at::toDLPack(result)->dl_tensor;
-  matcher.GetNextTokenBitmask(&result_dltensor);
-  return result;
+void GrammarMatcher_FillNextTokenBitmask(
+    GrammarMatcher& matcher, torch::Tensor token_bitmask, int32_t batch_id
+) {
+  torch::IntArrayRef shape = token_bitmask.sizes();
+
+  // TODO(yixin): Move the checking and slicing logic to core C++ code
+  int bitmask_size = matcher.GetBitmaskSize();
+  if (shape.size() == 1) {
+    XGRAMMAR_CHECK(batch_id == 0) << "batch_id must be 0 for 1D token bitmask";
+    XGRAMMAR_CHECK(shape[0] == bitmask_size)
+        << "The last dimension of the token bitmask tensor must be " << bitmask_size << ", but got "
+        << shape[0];
+  } else if (shape.size() == 2) {
+    XGRAMMAR_CHECK(batch_id >= 0 && batch_id < shape[0])
+        << "batch_id must be in the range [0, " << shape[0] << ")";
+    XGRAMMAR_CHECK(shape[1] == bitmask_size)
+        << "The last dimension of the token bitmask tensor must be " << bitmask_size << ", but got "
+        << shape[1];
+  } else {
+    XGRAMMAR_LOG(FATAL) << "token_bitmask tensor must be 1D or 2D";
+  }
+
+  XGRAMMAR_CHECK(token_bitmask.dtype() == torch::kInt32)
+      << "token_bitmask tensor must be of type int32";
+  XGRAMMAR_CHECK(token_bitmask.device().type() == torch::kCPU)
+      << "token_bitmask tensor must be on CPU";
+
+  int* data = token_bitmask.data_ptr<int>() + batch_id * bitmask_size;
+  int64_t dltensor_shape[] = {bitmask_size};
+  DLTensor bitmask_dltensor{
+      data, DLDevice{kDLCPU, 0}, 1, DLDataType{kDLInt, 32, 1}, dltensor_shape, nullptr, 0
+  };
+  matcher.FillNextTokenBitmask(&bitmask_dltensor);
 }
 
 std::vector<int> GrammarMatcher_DebugGetRejectedTokensFromBitmask(
-    torch::Tensor token_bitmask, size_t vocab_size
+    GrammarMatcher& matcher, torch::Tensor token_bitmask, int batch_id
 ) {
+  torch::IntArrayRef shape = token_bitmask.sizes();
+
+  // TODO(yixin): Move the checking and slicing logic to core C++ code
+  int bitmask_size = matcher.GetBitmaskSize();
+  if (shape.size() == 1) {
+    XGRAMMAR_CHECK(batch_id == 0) << "batch_id must be 0 for 1D token bitmask";
+    XGRAMMAR_CHECK(shape[0] == bitmask_size)
+        << "The last dimension of the token bitmask tensor must be " << bitmask_size << ", but got "
+        << shape[0];
+  } else if (shape.size() == 2) {
+    XGRAMMAR_CHECK(batch_id >= 0 && batch_id < shape[0])
+        << "batch_id must be in the range [0, " << shape[0] << ")";
+    XGRAMMAR_CHECK(shape[1] == bitmask_size)
+        << "The last dimension of the token bitmask tensor must be " << bitmask_size << ", but got "
+        << shape[1];
+  } else {
+    XGRAMMAR_LOG(FATAL) << "token_bitmask tensor must be 1D or 2D";
+  }
+
+  XGRAMMAR_CHECK(token_bitmask.dtype() == torch::kInt32)
+      << "token_bitmask tensor must be of type int32";
+  XGRAMMAR_CHECK(token_bitmask.device().type() == torch::kCPU)
+      << "token_bitmask tensor must be on CPU";
+
+  int* data = token_bitmask.data_ptr<int>() + batch_id * bitmask_size;
+  int64_t dltensor_shape[] = {bitmask_size};
+  DLTensor bitmask_dltensor{
+      data, DLDevice{kDLCPU, 0}, 1, DLDataType{kDLInt, 32, 1}, dltensor_shape, nullptr, 0
+  };
+
   std::vector<int> result;
-  auto token_bitmask_dltensor = at::toDLPack(token_bitmask)->dl_tensor;
-  GrammarMatcher::DebugGetRejectedTokensFromBitmask(token_bitmask_dltensor, vocab_size, &result);
+  matcher.DebugGetRejectedTokensFromBitmask(&result, bitmask_dltensor);
   return result;
 }
 
