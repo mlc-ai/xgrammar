@@ -204,10 +204,6 @@ def test_apply_token_bitmask_inplace_large():
     assert torch.all(logits_gpu == logits_expected.to("cuda"))
 
 
-test_apply_token_bitmask_inplace_large()
-exit()
-
-
 def test_rollback():
     vocab = [
         # fmt: off
