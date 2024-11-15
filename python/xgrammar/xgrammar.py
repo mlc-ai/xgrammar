@@ -755,17 +755,13 @@ class GrammarMatcher(XGObject):
         Parameters
         ----------
         logits : torch.Tensor
-            The tensor to apply the bitmask to. This should be a 1D tensor,
-            with the dimension of the vocabulary.
+            The tensor to apply the bitmask to. This should be a 1D float tensor with shape
+            (vocab_size,) or 2D float tensor with shape (batch_size, vocab_size). This tensor should
+            be on GPU.
 
         bitmask : torch.Tensor
-            The bitmask to apply. This should be a 1D tensor of int32 values,
-            where each bit represents whether a token is allowed (1) or not (0).
-
-        Returns
-        -------
-        masked_tensor : torch.Tensor
-            The masked tensor, where disallowed tokens are set to negative infinity.
+            The bitmask to apply. This should be a 1D or 2D tensor with dtype int32 andshape
+            (bitmask_size,) or (batch_size, bitmask_size).
         """
         if logits.device.type != "cuda":
             raise ValueError("logits must be on CUDA")
