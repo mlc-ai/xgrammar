@@ -7,7 +7,6 @@
 #include "../support/logging.h"
 #include "kernels.h"
 
-// #ifndef NDEBUG
 #define XGRAMMAR_CUDA_CALL(...)                                                                    \
   do {                                                                                             \
     __VA_ARGS__;                                                                                   \
@@ -15,18 +14,6 @@
     XGRAMMAR_CHECK(err == cudaSuccess) << "CUDA Error: " << cudaGetErrorString(err) << " (" << err \
                                        << ") " << __FILE__ << ": line " << __LINE__ << std::endl;  \
   } while (0)
-/*
-      return e;                                                                                \
-#else
-#define XGRAMMAR_CUDA_CALL(func, ...) \
-  {                                   \
-    cudaError_t e = (func);           \
-    if (e != cudaSuccess) {           \
-      return e;                       \
-    }                                 \
-  }
-#endif
-*/
 
 #define XGRAMMAR_DISPATCH_DTYPE(dtype_flag, c_type, ...)                                         \
   do {                                                                                           \
@@ -61,7 +48,17 @@ namespace xgrammar {
   ((data_ptr[bit_idx / BITS_PER_BLOCK] >> (bit_idx % BITS_PER_BLOCK)) & 1)
 
 template <typename T>
-__global__ void __launch_bounds__(512) apply_token_bitmask_inplace_kernel(
+__device__ T GetNegativeInfinity() {
+  return -std::numeric_limits<T>::infinity();
+}
+
+template <>
+__device__ half GetNegativeInfinity<half>() {
+  return __float2half(-INFINITY);
+}
+
+template <typename T>
+__global__ void __launch_bounds__(512) ApplyTokenBitmaskInplaceKernel(
     T* __restrict__ logits,
     const int32_t* __restrict__ bitmask,
     int vocab_size,
@@ -79,7 +76,7 @@ __global__ void __launch_bounds__(512) apply_token_bitmask_inplace_kernel(
   T* logits_ptr = logits + batch_id * vocab_size + bitmask_id * BITS_PER_BLOCK;
   for (int i = 0; i < BITS_PER_BLOCK; ++i) {
     if ((bitmask_val & 1) == 0) {
-      logits_ptr[i] = -cuda::std::numeric_limits<T>::infinity();
+      logits_ptr[i] = GetNegativeInfinity<T>();
     }
     bitmask_val >>= 1;
   }
@@ -87,7 +84,7 @@ __global__ void __launch_bounds__(512) apply_token_bitmask_inplace_kernel(
 
 #define THREADS_PER_BLOCK 512
 
-void apply_token_bitmask_inplace(
+void ApplyTokenBitmaskInplace(
     void* logits, DTypeFlag dtype_flag, int32_t* bitmask, int batch_size, int vocab_size
 ) {
   int bitmask_size = (vocab_size + BITS_PER_BLOCK - 1) / BITS_PER_BLOCK;
@@ -96,7 +93,7 @@ void apply_token_bitmask_inplace(
 
   XGRAMMAR_DISPATCH_DTYPE(dtype_flag, c_type, {
     XGRAMMAR_CUDA_CALL({
-      apply_token_bitmask_inplace_kernel<<<num_blocks, num_threads>>>(
+      ApplyTokenBitmaskInplaceKernel<<<num_blocks, num_threads>>>(
           reinterpret_cast<c_type*>(logits),
           bitmask,
           vocab_size,

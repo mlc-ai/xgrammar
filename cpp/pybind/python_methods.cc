@@ -119,7 +119,7 @@ void GrammarMatcher_ApplyTokenBitmaskInplace(torch::Tensor logits, torch::Tensor
   XGRAMMAR_CHECK(token_bitmask.dtype() == torch::kInt32)
       << "token bitmask tensor must be of type int32";
 
-  apply_token_bitmask_inplace(
+  ApplyTokenBitmaskInplace(
       logits.data_ptr(), dtype_flag, token_bitmask.data_ptr<int32_t>(), batch_size, vocab_size
   );
 }

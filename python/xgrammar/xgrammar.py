@@ -487,7 +487,10 @@ class CompiledGrammar(XGObject):
         if tokenizer_info is None:
             tokenizer_info = TokenizerInfo([])
         elif not isinstance(tokenizer_info, TokenizerInfo):
-            raise ValueError("tokenizer_info must be a TokenizerInfo object")
+            raise ValueError(
+                "Please convert the tokenizer to TokenizerInfo before passing it "
+                "to CompiledGrammar."
+            )
 
         self.init_with_handle(_core.CompiledGrammar(grammar.handle, tokenizer_info.handle))
 
@@ -505,7 +508,10 @@ class CachedGrammarCompiler(XGObject):
 
     def __init__(self, tokenizer_info: TokenizerInfo):
         if not isinstance(tokenizer_info, TokenizerInfo):
-            raise ValueError("tokenizer_info must be a TokenizerInfo object")
+            raise ValueError(
+                "Please convert the tokenizer to TokenizerInfo before passing it "
+                "to CachedGrammarCompiler."
+            )
 
         self.init_with_handle(_core.CachedGrammarCompiler(tokenizer_info.handle))
 

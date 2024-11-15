@@ -11,7 +11,7 @@ namespace xgrammar {
 
 enum class DTypeFlag : int { DTYPE_FLOAT16 = 0, DTYPE_FLOAT32 = 1, DTYPE_FLOAT64 = 2 };
 
-void apply_token_bitmask_inplace(
+void ApplyTokenBitmaskInplace(
     void* logits, DTypeFlag dtype_flag, int32_t* bitmask, int batch_size, int vocab_size
 );
 
