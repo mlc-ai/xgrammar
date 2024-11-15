@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.18)
 project(xgrammar LANGUAGES CXX)
 
 if(EXISTS ${CMAKE_BINARY_DIR}/config.cmake)
@@ -11,6 +11,7 @@ endif()
 
 option(XGRAMMAR_BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 option(XGRAMMAR_BUILD_CXX_TESTS "Build C++ tests" OFF)
+option(XGRAMMAR_BUILD_CUDA_KERNELS "Build CUDA kernels" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -36,7 +37,7 @@ else()
   endif()
 
   set(CMAKE_CXX_FLAGS
-      "-Wall -Wextra -Werror -pedantic -Wno-unused-parameter -flto=auto ${CMAKE_CXX_FLAGS}"
+      "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter -flto=auto ${CMAKE_CXX_FLAGS}"
   )
 endif()
 
@@ -45,18 +46,15 @@ set(XGRAMMAR_INCLUDE_PATH
     ${PROJECT_SOURCE_DIR}/include
 )
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(XGRAMMAR_COMPILE_DEFINITIONS XGRAMMAR_ENABLE_LOG_DEBUG=1)
-else()
-  set(XGRAMMAR_COMPILE_DEFINITIONS XGRAMMAR_ENABLE_LOG_DEBUG=0)
-endif()
-
 file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH "${PROJECT_SOURCE_DIR}/cpp/*.cc")
 list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/pybind/.*\\.cc")
 
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
 target_include_directories(xgrammar PUBLIC ${XGRAMMAR_INCLUDE_PATH})
-target_compile_definitions(xgrammar PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
+
+if(XGRAMMAR_BUILD_KERNELS)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/kernels)
+endif()
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)

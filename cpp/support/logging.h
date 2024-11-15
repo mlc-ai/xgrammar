@@ -225,12 +225,12 @@ class LogMessage {
 #define XGRAMMAR_ICHECK(x) \
   if (!(x)) LogFatal(__FILE__, __LINE__).stream() << "Internal check failed: (" #x << ") is false: "
 
-#if XGRAMMAR_ENABLE_LOG_DEBUG
+#ifndef NDEBUG
 #define XGRAMMAR_DCHECK(x) XGRAMMAR_ICHECK(x)
 #else
 #define XGRAMMAR_DCHECK(x) \
   while (false) XGRAMMAR_ICHECK(x)
-#endif  // XGRAMMAR_ENABLE_LOG_DEBUG
+#endif  // NDEBUG
 
 }  // namespace xgrammar
 

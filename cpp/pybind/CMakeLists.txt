@@ -27,6 +27,7 @@ if(TORCH_CMAKE_DIR_RET MATCHES 0)
 else()
   message(FATAL_ERROR "PyTorch is not installed. Please install PyTorch with pip or conda first")
 endif()
+
 find_package(Torch CONFIG REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")

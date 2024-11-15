@@ -1,11 +1,11 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar.h
+ * \file xgrammar/pybind/python_methods.h
  * \brief The header for the support of grammar-guided generation.
  */
 
-#ifndef XGRAMMAR_DEBUG_METHODS_H_
-#define XGRAMMAR_DEBUG_METHODS_H_
+#ifndef XGRAMMAR_PYBIND_PYTHON_METHODS_H_
+#define XGRAMMAR_PYBIND_PYTHON_METHODS_H_
 
 #include <pybind11/pybind11.h>
 #include <torch/extension.h>
@@ -40,4 +40,4 @@ std::vector<int> GrammarMatcher_GetRejectedTokensFromBitMask(
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_DEBUG_METHODS_H_
+#endif  // XGRAMMAR_PYBIND_PYTHON_METHODS_H_
