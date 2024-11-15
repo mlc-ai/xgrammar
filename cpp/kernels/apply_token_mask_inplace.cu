@@ -70,11 +70,14 @@ __global__ void __launch_bounds__(512) ApplyTokenBitmaskInplaceKernel(
     return;
   }
 
-  int batch_id = gid / bitmask_size;
-  int bitmask_id = gid % bitmask_size;
+  int batch_id = gid / bitmask_row_size;
+  int bitmask_id = gid % bitmask_row_size;
   int bitmask_val = bitmask[gid];
   T* logits_ptr = logits + batch_id * vocab_size + bitmask_id * BITS_PER_BLOCK;
   for (int i = 0; i < BITS_PER_BLOCK; ++i) {
+    if (bitmask_id * BITS_PER_BLOCK + i >= vocab_size) {
+      break;
+    }
     if ((bitmask_val & 1) == 0) {
       logits_ptr[i] = GetNegativeInfinity<T>();
     }
