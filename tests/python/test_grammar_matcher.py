@@ -176,7 +176,7 @@ def test_apply_token_bitmask_inplace():
 def test_apply_token_bitmask_inplace_large():
     batch_size = 64
     vocab_size = 128000
-    masked_cnt = 1024
+    masked_cnt = 64000
     logits = torch.randn(batch_size, vocab_size, dtype=torch.float32)
     masked_positions = torch.randint(0, vocab_size, (batch_size, masked_cnt))
     bool_mask = torch.ones((batch_size, vocab_size), dtype=torch.bool)
