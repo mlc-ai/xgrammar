@@ -317,19 +317,24 @@ def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     time_end = time.monotonic_ns()
     print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
     matcher = GrammarMatcher(matcher_compiled_grammar)
+    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+
     for c in instance.encode("utf-8"):
         time_start = time.monotonic_ns()
-        matcher.get_next_token_bitmask()
+        matcher.fill_next_token_bitmask(token_bitmask)
         time_end = time.monotonic_ns()
-        print(f"Time for get_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+        print(f"Time for fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
         accepted = matcher.accept_string(bytes([c]))
         assert accepted
         print(f"Accepting {c}")
 
     time_start = time.monotonic_ns()
-    matcher.get_next_token_bitmask()
+    matcher.fill_next_token_bitmask(token_bitmask)
     time_end = time.monotonic_ns()
-    print(f"Time for get_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+    print(f"Time for fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+    assert matcher.accept_token(tokenizer.eos_token_id)
+    assert matcher.is_terminated()
 
 
 if __name__ == "__main__":

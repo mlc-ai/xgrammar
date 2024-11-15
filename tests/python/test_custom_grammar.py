@@ -7,6 +7,7 @@ import time
 from typing import List, Optional
 
 import pytest
+import torch
 from transformers import AutoTokenizer
 
 from xgrammar import BNFGrammar, GrammarMatcher, TokenizerInfo
@@ -318,10 +319,10 @@ tokenizer_path__input_str__expected_rejected_sizes = [
     "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
 )
-def test_get_next_rejected_tokens(
+def test_fill_next_token_bitmask(
     tokenizer_path: str,
     input_str: str,
-    expected_rejected_sizes: Optional[List[int]],
+    expected_rejected_sizes: List[int],
 ):
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_path,
@@ -329,40 +330,47 @@ def test_get_next_rejected_tokens(
         trust_remote_code=True,
     )
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
+
+    time_start = time.monotonic_ns()
     matcher = GrammarMatcher(json_grammar, tokenizer_info)
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+    logits_gpu = torch.zeros(matcher.vocab_size, dtype=torch.float32, device="cuda")
+
     input_bytes = input_str.encode("utf-8")
-    rejected_sizes = []
 
     for i, c in enumerate(input_bytes):
+        # 1. fill_next_token_bitmask
         time_start = time.monotonic_ns()
-        bitmask = matcher.get_next_token_bitmask()
-        time_mid = time.monotonic_ns()
-
-        print(f"Time to get_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
-        rejected_token_ids = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
-        )
+        matcher.fill_next_token_bitmask(token_bitmask)
         time_end = time.monotonic_ns()
-        print(f"Time to debug_get_rejected_tokens_from_bitmask: {(time_end - time_mid) / 1e3} us")
-        rejected_sizes.append(len(rejected_token_ids))
-        if expected_rejected_sizes is not None:
-            assert rejected_sizes[-1] == expected_rejected_sizes[i], (
-                rejected_sizes[-1],
-                expected_rejected_sizes[i],
-            )
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+        # 2. Correctness verification
+        rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
+        assert len(rejected_token_ids) == expected_rejected_sizes[i]
+
+        # 3. apply_token_bitmask_inplace
+        torch.cuda.synchronize()
+        time_start = time.monotonic_ns()
+        GrammarMatcher.apply_token_bitmask_inplace(logits_gpu, token_bitmask)
+        torch.cuda.synchronize()
+        time_end = time.monotonic_ns()
+        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+
+        # 4. accept_string
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
         assert matcher.accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
-    bitmask = matcher.get_next_token_bitmask()
-    rejected_token_ids = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
-    )
-    rejected_sizes.append(len(rejected_token_ids))
-    if expected_rejected_sizes is not None:
-        assert rejected_sizes[-1] == expected_rejected_sizes[-1]
+    # 5. Final correctness verification
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
+    assert len(rejected_token_ids) == expected_rejected_sizes[-1]
 
 
 if __name__ == "__main__":

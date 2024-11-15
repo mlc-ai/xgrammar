@@ -72,7 +72,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
     "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
 )
-def test_get_next_rejected_tokens(
+def test_fill_next_token_bitmask(
     tokenizer_path: str,
     input_str: str,
     expected_rejected_sizes: Optional[List[int]],
@@ -84,14 +84,13 @@ def test_get_next_rejected_tokens(
     )
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
     matcher = GrammarMatcher(json_grammar, tokenizer_info)
+    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
     input_bytes = input_str.encode("utf-8")
     rejected_sizes = []
 
     for i, c in enumerate(input_bytes):
-        bitmask = matcher.get_next_token_bitmask()
-        rejected_token_ids = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
-        )
+        matcher.fill_next_token_bitmask(token_bitmask)
+        rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
             assert rejected_sizes[-1] == expected_rejected_sizes[i], (
@@ -100,10 +99,8 @@ def test_get_next_rejected_tokens(
             )
         assert matcher.accept_string(bytes([c]))
 
-    bitmask = matcher.get_next_token_bitmask()
-    rejected_token_ids = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
-    )
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:
         assert rejected_sizes[-1] == expected_rejected_sizes[-1]
@@ -121,6 +118,7 @@ def test_token_operations():
 
     tokenizer_info = TokenizerInfo(vocab)
     matcher = GrammarMatcher(json_grammar, tokenizer_info)
+    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
 
     expected = [
         ["{"],
@@ -139,20 +137,16 @@ def test_token_operations():
     result = []
 
     for id in input_ids:
-        bitmask = matcher.get_next_token_bitmask()
-        rejected_token_ids = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
-            bitmask, matcher.vocab_size
-        )
+        matcher.fill_next_token_bitmask(token_bitmask)
+        rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
         accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
         accepted_tokens = [vocab[i] for i in accepted]
         result.append(accepted_tokens)
         assert id in accepted, vocab[id]
         assert matcher.accept_token(id)
 
-    bitmask = matcher.get_next_token_bitmask()
-    rejected_token_ids = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
-        bitmask, matcher.vocab_size
-    )
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
     accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
     accepted_tokens = [vocab[i] for i in accepted]
     result.append(accepted_tokens)
@@ -222,15 +216,24 @@ def test_rollback():
 
     for i_1, i_2 in input_ids_splitted:
         orig_result = []
-        orig_result.append(matcher.get_next_token_bitmask())
+        token_bitmask1 = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        matcher.fill_next_token_bitmask(token_bitmask1)
+        orig_result.append(token_bitmask1)
         assert matcher.accept_token(i_1)
-        orig_result.append(matcher.get_next_token_bitmask())
+        token_bitmask2 = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        matcher.fill_next_token_bitmask(token_bitmask2)
+        orig_result.append(token_bitmask2)
         assert matcher.accept_token(i_2)
+
         matcher.rollback(2)
         result_after_rollback = []
-        result_after_rollback.append(matcher.get_next_token_bitmask())
+        new_token_bitmask1 = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        matcher.fill_next_token_bitmask(new_token_bitmask1)
+        result_after_rollback.append(new_token_bitmask1)
         assert matcher.accept_token(i_1)
-        result_after_rollback.append(matcher.get_next_token_bitmask())
+        new_token_bitmask2 = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        matcher.fill_next_token_bitmask(new_token_bitmask2)
+        result_after_rollback.append(new_token_bitmask2)
         assert matcher.accept_token(i_2)
         assert all(torch.all(l == r) for l, r in zip(orig_result, result_after_rollback))
 
@@ -250,7 +253,9 @@ def test_reset():
     orig_result = []
 
     for i in input_ids:
-        orig_result.append(matcher.get_next_token_bitmask())
+        token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        matcher.fill_next_token_bitmask(token_bitmask)
+        orig_result.append(token_bitmask)
         assert matcher.accept_token(i)
 
     matcher.reset()
@@ -258,7 +263,9 @@ def test_reset():
     result_after_reset = []
 
     for i in input_ids:
-        result_after_reset.append(matcher.get_next_token_bitmask())
+        token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        matcher.fill_next_token_bitmask(token_bitmask)
+        result_after_reset.append(token_bitmask)
         assert matcher.accept_token(i)
 
     assert all(torch.all(l == r) for l, r in zip(orig_result, result_after_reset))
@@ -287,9 +294,10 @@ def test_termination():
     tokenizer_info = TokenizerInfo(vocab)
 
     matcher = GrammarMatcher(json_grammar, tokenizer_info, max_rollback_tokens=5)
+    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
 
     for i in input_ids:
-        matcher.get_next_token_bitmask()
+        matcher.fill_next_token_bitmask(token_bitmask)
         assert matcher.accept_token(i)
 
     assert matcher.is_terminated()
@@ -297,7 +305,7 @@ def test_termination():
     assert matcher.accept_token(0) is False
 
     with pytest.raises(RuntimeError):
-        matcher.get_next_token_bitmask()
+        matcher.fill_next_token_bitmask(token_bitmask)
 
     matcher.rollback(2)
 
@@ -326,12 +334,11 @@ def test_vocab_size():
     matcher = GrammarMatcher(json_grammar, tokenizer_info, vocab_size=64)
     assert matcher.vocab_size == 64
 
-    mask = matcher.get_next_token_bitmask()
-    assert mask.shape == (2,)
+    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+    matcher.fill_next_token_bitmask(token_bitmask)
+    assert token_bitmask.shape == (2,)
 
-    rejected_tokens = GrammarMatcher.debug_get_rejected_tokens_from_bitmask(
-        mask, matcher.vocab_size
-    )
+    rejected_tokens = matcher.debug_get_rejected_tokens_from_bitmask(token_bitmask)
     assert rejected_tokens == [i for i in range(64) if i != 7]
 
 
