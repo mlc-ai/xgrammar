@@ -171,6 +171,9 @@ class TokenizerInfo {
   VocabType GetVocabType() const;
   bool GetPrependSpaceInTokenization() const;
   const std::vector<std::string>& GetDecodedVocab() const;
+  const std::vector<int32_t>& GetStopTokenIds() const;
+  const std::vector<int32_t>& GetSpecialTokenIds() const;
+  const std::vector<std::pair<int32_t, std::string>>& GetSortedDecodedVocab() const;
 
   static TokenizerInfo FromHuggingFace(
       const std::vector<std::string>& encoded_vocab, const std::string& backend_str
@@ -197,9 +200,13 @@ class CompiledGrammar {
    * \param grammar The grammar that the matcher follows.
    * \param decoded_vocab The tokens that the matcher requires for matching.
    */
-  CompiledGrammar(const BNFGrammar& grammar, const std::vector<std::string>& decoded_vocab);
+  CompiledGrammar(
+      const BNFGrammar& grammar, const std::vector<std::string>& decoded_vocab, int max_threads = 8
+  );
 
-  CompiledGrammar(const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info);
+  CompiledGrammar(
+      const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info, int max_threads = 8
+  );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);
 };
@@ -323,9 +330,9 @@ class CachedGrammarCompiler {
    * create grammar state compiled grammars with this vocabulary.
    * \param decoded_vocab The vocabulary that the grammar will use.
    */
-  CachedGrammarCompiler(const std::vector<std::string>& decoded_vocab);
+  CachedGrammarCompiler(const std::vector<std::string>& decoded_vocab, int max_threads = 8);
 
-  CachedGrammarCompiler(const TokenizerInfo& tokenizer_info);
+  CachedGrammarCompiler(const TokenizerInfo& tokenizer_info, int max_threads = 8);
 
   /*! \brief Get the compiled grammar for pure JSON. */
   CompiledGrammar CompileJSONGrammar();

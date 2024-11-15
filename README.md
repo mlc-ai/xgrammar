@@ -78,6 +78,7 @@ json_schema_str = BuiltinGrammar.json_schema(json.dumps(person_schema))
 ```
 
 #### Step 2: Compiling grammars
+The compilation is multi-threaded and cached for every grammar.
 
 ```python
 from xgrammar import TokenizerInfo, CachedGrammarCompiler, CompiledGrammar, GrammarMatcher
@@ -91,7 +92,7 @@ tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
 Method 1: Use CachedGrammarCompiler to avoid compile grammar multiple times
 ```python
 # 2. Construct CachedGrammarCompiler (once per model)
-compiler = CachedGrammarCompiler(tokenizer_info)
+compiler = CachedGrammarCompiler(tokenizer_info, max_threads=8)
 
 # 3. Fetch CompiledGrammar and construct GrammarMatcher (once per request)
 compiled_grammar = compiler.compile_json_schema(json_schema_str)
@@ -101,7 +102,7 @@ matcher = GrammarMatcher(compiled_grammar)
 Method 2: Compile grammar directly
 ```python
 # 2. Construct CompiledGrammar directly (once per grammar)
-compiled_grammar = CompiledGrammar(grammar, tokenizer_info)
+compiled_grammar = CompiledGrammar(grammar, tokenizer_info, max_threads=8)
 
 # 3. Construct GrammarMatcher (once per request)
 matcher = GrammarMatcher(compiled_grammar)

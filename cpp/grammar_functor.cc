@@ -108,7 +108,7 @@ class NestedRuleUnwrapper : public BNFGrammarMutator {
       builder_.UpdateRuleBody(i, new_body_expr_id);
       builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
     }
-    return builder_.Get(grammar_->GetMainRule().name);
+    return builder_.Get(grammar_->GetRootRule().name);
   }
 
  private:

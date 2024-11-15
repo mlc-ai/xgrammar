@@ -63,7 +63,7 @@ class BNFGrammarFunctor {
         // Handle lookahead assertion
         builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       }
-      return builder_.Get(grammar_->GetMainRule().name);
+      return builder_.Get(grammar_->GetRootRule().name);
     } else {
       return ReturnType();
     }

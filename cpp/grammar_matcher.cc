@@ -7,9 +7,9 @@
 #include <chrono>
 #include <queue>
 
+#include "grammar_cached_compiler.h"
 #include "grammar_data_structure.h"
 #include "grammar_matcher_base.h"
-#include "grammar_matcher_preproc.h"
 #include "grammar_matcher_state.h"
 #include "grammar_serializer.h"
 #include "support/dynamic_bitset.h"
@@ -129,9 +129,10 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
   )
       : GrammarMatcherBase(compiled_grammar->grammar),
         compiled_grammar_(compiled_grammar),
-        stop_token_ids_(override_stop_tokens.value_or(compiled_grammar->detected_stop_token_ids)),
+        tokenizer_info_(compiled_grammar->tokenizer_info),
+        stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
         terminate_without_stop_token_(terminate_without_stop_token),
-        vocab_size_(vocab_size.value_or(compiled_grammar_->vocab_size)),
+        vocab_size_(vocab_size.value_or(tokenizer_info_.GetVocabSize())),
         max_rollback_tokens_(max_rollback_tokens),
         tmp_accepted_bitset_(vocab_size_) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
@@ -200,6 +201,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
   bool AcceptStopToken();
 
   CompiledGrammar compiled_grammar_;
+  TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
   int vocab_size_;
@@ -241,12 +243,12 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
     return false;
   }
 
-  XGRAMMAR_CHECK(token_id >= 0 && token_id < static_cast<int>(compiled_grammar_->vocab_size))
+  XGRAMMAR_CHECK(token_id >= 0 && token_id < vocab_size_)
       << "Invalid token id " << token_id << " for GrammarMatcher";
 
   if (verbose) {
     XGRAMMAR_LOG(INFO) << "Accepting token id " << token_id << ", string: \""
-                       << PrintAsEscapedUTF8(compiled_grammar_->decoded_vocab[token_id])
+                       << PrintAsEscapedUTF8(tokenizer_info_.GetDecodedVocab()[token_id])
                        << "\", state state:\n"
                        << PrintStackState();
   }
@@ -261,14 +263,16 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool verbose) {
     return accepted;
   }
 
-  if (compiled_grammar_->special_token_ids.count(token_id) > 0) {
-    XGRAMMAR_LOG(FATAL
-    ) << "Token id "
-      << token_id << ": " << compiled_grammar_->decoded_vocab[token_id]
-      << " is regarded as a special token, and cannot be accepted by the GrammarMatcher";
+  const auto& special_token_ids = tokenizer_info_.GetSpecialTokenIds();
+  if (std::find(special_token_ids.begin(), special_token_ids.end(), token_id) !=
+      special_token_ids.end()) {
+    XGRAMMAR_LOG(FATAL) << "Token id " << token_id << ": "
+                        << tokenizer_info_.GetDecodedVocab()[token_id]
+                        << " is regarded as a special token, and cannot be accepted by the "
+                           "GrammarMatcher";
   }
 
-  const auto& token = compiled_grammar_->decoded_vocab[token_id];
+  const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
   int pos = 0;
   for (auto char_value : token) {
     if (!AcceptChar(char_value, verbose)) {
@@ -342,7 +346,7 @@ void GrammarMatcher::Impl::FillNextTokenBitmask(DLTensor* next_token_bitmask) {
   ) << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
        "find the next token mask";
   CheckTokenBitmaskValidity(*next_token_bitmask, vocab_size_);
-  const auto& sorted_decoded_vocab = compiled_grammar_->sorted_decoded_vocab;
+  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& catagorized_tokens_for_grammar = compiled_grammar_->catagorized_tokens_for_grammar;
   const auto& latest_stack_tops = stack_tops_history_.GetLatest();
 
@@ -568,7 +572,7 @@ void GrammarMatcher::Impl::SetTokenBitmask(
   DynamicBitset next_token_bitset(
       vocab_size_, reinterpret_cast<uint32_t*>(next_token_bitmask->data)
   );
-  const auto& sorted_decoded_vocab = compiled_grammar_->sorted_decoded_vocab;
+  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
 
   if (rejected_indices.size() == 1 && rejected_indices[0] == -1) {
     // If rejected_indices is the universal set, the final accepted token set is just
@@ -592,7 +596,7 @@ void GrammarMatcher::Impl::SetTokenBitmask(
       }
     }
 
-    for (int id : compiled_grammar_->special_token_ids) {
+    for (int id : tokenizer_info_.GetSpecialTokenIds()) {
       next_token_bitset.Set(id, false);
     }
     if (!can_reach_end) {

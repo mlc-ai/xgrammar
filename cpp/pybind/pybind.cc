@@ -39,11 +39,10 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("from_vocab_and_metadata", &TokenizerInfo::FromVocabAndMetadata);
 
   auto pyCompiledGrammar = py::class_<CompiledGrammar>(m, "CompiledGrammar");
-  pyCompiledGrammar.def(py::init<const BNFGrammar&, const std::vector<std::string>&>())
-      .def(py::init<const BNFGrammar&, const TokenizerInfo&>());
+  pyCompiledGrammar.def(py::init<const BNFGrammar&, const TokenizerInfo&, int>());
 
   auto pyCachedGrammarCompiler = py::class_<CachedGrammarCompiler>(m, "CachedGrammarCompiler");
-  pyCachedGrammarCompiler.def(py::init<const TokenizerInfo&>())
+  pyCachedGrammarCompiler.def(py::init<const TokenizerInfo&, int>())
       .def(
           "compile_json_grammar",
           &CachedGrammarCompiler::CompileJSONGrammar,

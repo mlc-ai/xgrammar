@@ -475,16 +475,19 @@ class CompiledGrammar(XGObject):
     grammar : BNFGrammar
         The BNF grammar to match.
 
-    tokenizer_or_vocab : Union[None, PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]], default: None
-        The tokenizer or the vocabulary. It can be None, a huggingface tokenizer, a tokenizer info,
-        or a list of raw tokens.
+    tokenizer_info : Optional[TokenizerInfo], default: None
+        The tokenizer info. If None, the grammar matcher can only handle string operations.
 
-        None means there is no vocabulary, then the grammar matcher can only handle string
-        operations. If a huggingface tokenizer or a list of raw tokens are provided, a TokenizerInfo
-        object will be constructed from the tokenizer or the vocabulary.
+    max_threads : int, default: 8
+        The maximum number of threads used to compile the grammar.
     """
 
-    def __init__(self, grammar: BNFGrammar, tokenizer_info: Optional[TokenizerInfo] = None) -> None:
+    def __init__(
+        self,
+        grammar: BNFGrammar,
+        tokenizer_info: Optional[TokenizerInfo] = None,
+        max_threads: int = 8,
+    ) -> None:
         if tokenizer_info is None:
             tokenizer_info = TokenizerInfo([])
         elif not isinstance(tokenizer_info, TokenizerInfo):
@@ -493,7 +496,9 @@ class CompiledGrammar(XGObject):
                 "to CompiledGrammar."
             )
 
-        self.init_with_handle(_core.CompiledGrammar(grammar.handle, tokenizer_info.handle))
+        self.init_with_handle(
+            _core.CompiledGrammar(grammar.handle, tokenizer_info.handle, max_threads)
+        )
 
 
 class CachedGrammarCompiler(XGObject):
@@ -503,18 +508,21 @@ class CachedGrammarCompiler(XGObject):
 
     Parameters
     ----------
-    tokenizer_or_vocab : Union[PreTrainedTokenizerBase, TokenizerInfo, List[Union[bytes, str]]]
-        The tokenizer or the vocabulary. Its meaning is the same as in GrammarMatcher.
+    tokenizer_info : TokenizerInfo
+        The tokenizer info.
+
+    max_threads : int, default: 8
+        The maximum number of threads used to compile the grammar.
     """
 
-    def __init__(self, tokenizer_info: TokenizerInfo):
+    def __init__(self, tokenizer_info: TokenizerInfo, max_threads: int = 8):
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(
                 "Please convert the tokenizer to TokenizerInfo before passing it "
                 "to CachedGrammarCompiler."
             )
 
-        self.init_with_handle(_core.CachedGrammarCompiler(tokenizer_info.handle))
+        self.init_with_handle(_core.CachedGrammarCompiler(tokenizer_info.handle, max_threads))
 
     def compile_json_grammar(self) -> CompiledGrammar:
         """Get CompiledGrammar from the standard JSON.

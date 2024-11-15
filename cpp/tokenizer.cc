@@ -10,6 +10,7 @@
 #include <chrono>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "support/encoding.h"
 #include "support/logging.h"
@@ -24,16 +25,36 @@ class TokenizerInfo::Impl {
       bool prepend_space_in_tokenization
   );
 
-  int GetVocabSize() const { return decoded_vocab_.size(); }
+  int GetVocabSize() const { return vocab_size_; }
   VocabType GetVocabType() const { return vocab_type_; }
   bool GetPrependSpaceInTokenization() const { return prepend_space_in_tokenization_; }
   const std::vector<std::string>& GetDecodedVocab() { return decoded_vocab_; }
+  const std::vector<int32_t>& GetStopTokenIds() const { return stop_token_ids_; }
+  const std::vector<int32_t>& GetSpecialTokenIds() const { return special_token_ids_; }
+  const std::vector<std::pair<int32_t, std::string>>& GetSortedDecodedVocab() const {
+    return sorted_decoded_vocab_;
+  }
+
   std::string DumpMetadata() const;
 
  private:
+  /*! \brief The vocabulary type. */
   VocabType vocab_type_;
+  /*! \brief Whether to prepend space in tokenization. */
   bool prepend_space_in_tokenization_;
+  /*! \brief The vocabulary. Special tokens are included. */
   std::vector<std::string> decoded_vocab_;
+  /*! \brief The size of the vocabulary. */
+  int vocab_size_;
+  /*! \brief All (id, token) pairs sorted in lexicographic order. This sorting is done to
+   * maximize prefix reuse during matching. Special tokens and stop tokens are not included. */
+  std::vector<std::pair<int32_t, std::string>> sorted_decoded_vocab_;
+  /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
+   * stop tokens can be accepted. */
+  std::vector<int32_t> stop_token_ids_;
+  /*! \brief The special tokens. These tokens are ignored (masked out) during the grammar-guided
+   * generation. */
+  std::vector<int32_t> special_token_ids_;
 };
 
 /************* Metadata detection from huggingface tokenizer.json *************/
@@ -166,9 +187,9 @@ inline std::string SpaceReplacerDecoder(const std::string& token) {
   // \u2581 is the unicode for "lower one eighth block"
   // UTF8 encoding for \u2581 is 0xE2 0x96 0x81
   std::string result;
-  for (size_t i = 0; i < token.size(); ++i) {
-    if (i + 2 < token.size() && token[i] == char(0xE2) && token[i + 1] == char(0x96) &&
-        token[i + 2] == char(0x81)) {
+  for (int i = 0; i < static_cast<int>(token.size()); ++i) {
+    if (i + 2 < static_cast<int>(token.size()) && token[i] == char(0xE2) &&
+        token[i + 1] == char(0x96) && token[i + 2] == char(0x81)) {
       result += ' ';
       i += 2;
     } else {
@@ -246,11 +267,40 @@ TokenizerInfo::Impl::Impl(
     VocabType vocab_type,
     bool prepend_space_in_tokenization
 )
-    : vocab_type_(vocab_type), prepend_space_in_tokenization_(prepend_space_in_tokenization) {
-  decoded_vocab_.reserve(encoded_vocab.size());
+    : vocab_type_(vocab_type),
+      prepend_space_in_tokenization_(prepend_space_in_tokenization),
+      vocab_size_(encoded_vocab.size()) {
+  decoded_vocab_.reserve(vocab_size_);
   for (const auto& item : encoded_vocab) {
     decoded_vocab_.emplace_back(DecodeToken(item, vocab_type_));
   }
+
+  for (int i = 0; i < static_cast<int>(decoded_vocab_.size()); ++i) {
+    const auto& token = decoded_vocab_[i];
+    // TODO(yixin): Now we detect stop tokens from the token string. We should be able to pass
+    // the stop token set in.
+    // LLaMA2: </s>
+    // LLaMA3: <|end_of_text|>, <|eot_id|>
+    // Phi-2: <|endoftext|>
+    // Gemma: <eos>, <end_of_turn>
+    if (token == "</s>" || token == "<|end_of_text|>" || token == "<|eot_id|>" ||
+        token == "<|endoftext|>" || token == "<eos>" || token == "<|eos|>" ||
+        token == "<end_of_turn>" || token == "") {
+      stop_token_ids_.push_back(i);
+    } else if ((token[0] == '<' && token.back() == '>' && token.size() >= 3) ||
+               token == "[@BOS@]") {
+      // gemma treats [@BOS@] as a special token
+      special_token_ids_.push_back(i);
+    } else {
+      sorted_decoded_vocab_.push_back({i, token});
+    }
+  }
+
+  auto f_compare_token = [](const std::pair<int32_t, std::string>& a,
+                            const std::pair<int32_t, std::string>& b) {
+    return a.second < b.second;
+  };
+  std::sort(sorted_decoded_vocab_.begin(), sorted_decoded_vocab_.end(), f_compare_token);
 }
 
 std::string TokenizerInfo::Impl::DumpMetadata() const {
@@ -276,6 +326,16 @@ bool TokenizerInfo::GetPrependSpaceInTokenization() const {
 const std::vector<std::string>& TokenizerInfo::GetDecodedVocab() const {
   return pimpl_->GetDecodedVocab();
 }
+const std::vector<int32_t>& TokenizerInfo::GetStopTokenIds() const {
+  return pimpl_->GetStopTokenIds();
+}
+const std::vector<int32_t>& TokenizerInfo::GetSpecialTokenIds() const {
+  return pimpl_->GetSpecialTokenIds();
+}
+const std::vector<std::pair<int32_t, std::string>>& TokenizerInfo::GetSortedDecodedVocab() const {
+  return pimpl_->GetSortedDecodedVocab();
+}
+
 std::string TokenizerInfo::DumpMetadata() const { return pimpl_->DumpMetadata(); }
 
 TokenizerInfo TokenizerInfo::FromVocabAndMetadata(

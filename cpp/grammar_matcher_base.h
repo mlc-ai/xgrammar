@@ -280,7 +280,7 @@ inline void GrammarMatcherBase::PushInitialState(
 ) {
   if (init_rule_position == kInvalidRulePosition) {
     // Initialize the stack with the root rule.
-    auto root_rule = grammar_->GetMainRule();
+    auto root_rule = grammar_->GetRootRule();
     auto root_rule_body = grammar_->GetRuleExpr(root_rule.body_expr_id);
     tmp_new_stack_tops_.clear();
     for (auto i : root_rule_body) {

@@ -83,9 +83,9 @@ class BNFGrammar::Impl {
     return rules_[rule_id];
   }
   /*! \brief Get the root rule id of the grammar. */
-  int32_t GetMainRuleId() const { return root_rule_id_; }
+  int32_t GetRootRuleId() const { return root_rule_id_; }
   /*! \brief Get the root rule of the grammar. */
-  const Rule& GetMainRule() const {
+  const Rule& GetRootRule() const {
     XGRAMMAR_DCHECK(root_rule_id_ >= 0 && root_rule_id_ < static_cast<int32_t>(rules_.size()))
         << "root_rule_id " << root_rule_id_ << " is out of bound";
     return rules_[root_rule_id_];
