@@ -1,7 +1,5 @@
 enable_language(CUDA)
 
-set(XGRAMMAR_CUDA_ARCHITECTURES native)
-
 include(CheckLanguage)
 check_language(CUDA)
 
