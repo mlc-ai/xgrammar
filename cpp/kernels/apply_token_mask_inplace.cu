@@ -49,7 +49,7 @@ namespace xgrammar {
 
 template <typename T>
 __device__ T GetNegativeInfinity() {
-  return -std::numeric_limits<T>::infinity();
+  return -cuda::std::numeric_limits<T>::infinity();
 }
 
 template <>
