@@ -277,7 +277,7 @@ export class GrammarMatcher {
     tokenizerInfo: TokenizerInfo,
     stopTokenIds?: number[] | number,
     terminateWithoutStopToken: boolean = false,
-    maskVocabSize?: number,
+    vocabSize?: number,
     maxRollbackTokens: number = 0,
   ): Promise<GrammarMatcher> {
     await asyncInitBinding();
@@ -293,7 +293,7 @@ export class GrammarMatcher {
       tokenizerInfo.handle,
       stopTokenIds,
       terminateWithoutStopToken,
-      maskVocabSize,
+      vocabSize,
       maxRollbackTokens,
     ));
   }
@@ -302,7 +302,7 @@ export class GrammarMatcher {
    * Get the vocab size.
    */
   getVocabSize(): number {
-    return this.handle.GetMaskVocabSize();
+    return this.handle.GetVocabSize();
   }
 
   /**
@@ -333,7 +333,7 @@ export class GrammarMatcher {
   }
 
   /**
-   * Returns a bitmask in the form of an Int32Array of length ceildiv(mask_vocab_size, 32)
+   * Returns a bitmask in the form of an Int32Array of length ceildiv(vocab_size, 32)
    * based on what tokens can/cannot be accepted by the current state of the grammar state matcher.
    *
    * @returns {Int32Array} An array representing the bitmask that masks the rejected token IDs

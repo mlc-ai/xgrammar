@@ -21,7 +21,6 @@ endif()
 
 file(GLOB_RECURSE XGRAMMAR_KERNELS_PATH ${PROJECT_SOURCE_DIR}/cpp/kernels/*.cu)
 add_library(xgrammar_kernels STATIC ${XGRAMMAR_KERNELS_PATH})
-target_include_directories(xgrammar_kernels PRIVATE ${PROJECT_SOURCE_DIR}/cpp)
 
 # Expose CMAKE_CUDA_ARCHITECTURES to parent scope
 set(CMAKE_CUDA_ARCHITECTURES

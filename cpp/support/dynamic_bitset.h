@@ -30,7 +30,7 @@ class DynamicBitset {
    * \param element_size The size of the bitset.
    * \return The minimal buffer size.
    */
-  static int CalculateBufferSize(int element_size) { return (element_size + 31) / 32; }
+  static int GetBufferSize(int element_size) { return (element_size + 31) / 32; }
 
   /*!
    * \brief Construct a empty bitset. This object should be assigned to a valid bitset before using.
@@ -43,7 +43,7 @@ class DynamicBitset {
    * \param data The buffer for the bitset. If nullptr, the bitset will maintain an internal buffer.
    */
   DynamicBitset(int size, uint32_t* data = nullptr)
-      : size_(size), buffer_size_(CalculateBufferSize(size)) {
+      : size_(size), buffer_size_(GetBufferSize(size)) {
     if (data == nullptr) {
       internal_buffer_.resize(buffer_size_, 0);
       data_ = internal_buffer_.data();

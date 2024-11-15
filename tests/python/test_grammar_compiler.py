@@ -23,7 +23,7 @@ def test_compiled_grammar():
     print(f"Time to get compiled grammar: {(time_end - time_start) / 1e3} us")
 
     def check_matcher(matcher: GrammarMatcher):
-        assert matcher.mask_vocab_size == 32000
+        assert matcher.vocab_size == 32000
         assert not matcher.is_terminated()
         assert not matcher.accept_string('{ name: "John" }')
         assert matcher.accept_string('{"name": "John"}')
@@ -50,7 +50,7 @@ def test_cached_grammar_compiler_json():
     print(f"Time to init cached grammar compiler: {(time_end - time_start) / 1e3} us")
 
     def check_matcher(matcher: GrammarMatcher):
-        assert matcher.mask_vocab_size == 32000
+        assert matcher.vocab_size == 32000
         assert not matcher.is_terminated()
         assert not matcher.accept_string('{ name: "John" }')
         assert matcher.accept_string('{"name": "John"}')
@@ -117,7 +117,7 @@ def test_cached_grammar_compiler_json_schema():
         print(f"Time to get compiled grammar {test_id}: {(time_end - time_start) / 1e3} us")
         matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
 
-        assert matcher.mask_vocab_size == 32000
+        assert matcher.vocab_size == 32000
         assert not matcher.is_terminated()
         assert matcher.accept_string(instance_str)
         assert matcher.is_terminated()
@@ -182,7 +182,7 @@ def test_cached_grammar_compiler_json_schema_concurrent():
     cached_grammar_compiler = CachedGrammarCompiler(tokenizer_info)
 
     def check_matcher(matcher: GrammarMatcher, instance_str: str):
-        assert matcher.mask_vocab_size == 32000
+        assert matcher.vocab_size == 32000
         assert not matcher.is_terminated()
         assert matcher.accept_string(instance_str)
         assert matcher.is_terminated()

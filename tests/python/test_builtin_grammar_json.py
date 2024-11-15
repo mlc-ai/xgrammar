@@ -5,6 +5,7 @@ import time
 from typing import List, Optional
 
 import pytest
+import torch
 from transformers import AutoTokenizer
 
 from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo
@@ -285,6 +286,7 @@ def test_get_next_rejected_tokens(
     )
     tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
     matcher = GrammarMatcher(json_grammar, tokenizer_info)
+    logits_gpu = torch.zeros(matcher.vocab_size, device="cuda")
     input_bytes = input_str.encode("utf-8")
     rejected_sizes = []
 
@@ -293,7 +295,7 @@ def test_get_next_rejected_tokens(
         bitmask = matcher.get_next_token_bitmask()
         time_mid = time.monotonic_ns()
         rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-            bitmask, matcher.mask_vocab_size
+            bitmask, matcher.vocab_size
         )
         time_end = time.monotonic_ns()
         print(f"Time to get_next_token_bitmask: {(time_mid - time_start) / 1e3} us")
@@ -312,7 +314,7 @@ def test_get_next_rejected_tokens(
 
     bitmask = matcher.get_next_token_bitmask()
     rejected_token_ids = GrammarMatcher.get_rejected_tokens_from_bitmask(
-        bitmask, matcher.mask_vocab_size
+        bitmask, matcher.vocab_size
     )
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:

@@ -1,4 +1,4 @@
-# Set Pybind11
+# Setup Pybind11
 find_package(
   Python3
   COMPONENTS Interpreter Development
@@ -17,6 +17,7 @@ else()
 endif()
 find_package(pybind11 CONFIG REQUIRED)
 
+# Setup PyTorch
 execute_process(
   COMMAND ${Python3_EXECUTABLE} "-c" "import torch; print(torch.utils.cmake_prefix_path,end='');"
   RESULT_VARIABLE TORCH_CMAKE_DIR_RET
@@ -37,9 +38,19 @@ find_library(TORCH_PYTHON_LIBRARY torch_python PATH "${TORCH_INSTALL_PREFIX}/lib
 # The compilation flags for bindings is different from the main library as torch requires
 # -D_GLIBCXX_USE_CXX11_ABI=0. So we compile bindings separately.
 file(GLOB_RECURSE XGRAMMAR_BINDINGS_PATH ${PROJECT_SOURCE_DIR}/cpp/*.cc)
+
+if(XGRAMMAR_BUILD_KERNELS)
+  file(GLOB_RECURSE XGRAMMAR_KERNELS_PATH ${PROJECT_SOURCE_DIR}/cpp/kernels/*.cu)
+  list(APPEND XGRAMMAR_BINDINGS_PATH ${XGRAMMAR_KERNELS_PATH})
+endif()
+
 pybind11_add_module(xgrammar_bindings ${XGRAMMAR_BINDINGS_PATH})
 target_include_directories(xgrammar_bindings PUBLIC ${XGRAMMAR_INCLUDE_PATH})
-target_compile_definitions(xgrammar_bindings PUBLIC ${XGRAMMAR_COMPILE_DEFINITIONS})
+
+if(XGRAMMAR_BUILD_KERNELS)
+  target_compile_definitions(xgrammar_bindings PUBLIC -DXGRAMMAR_BUILD_KERNELS)
+endif()
+
 target_link_libraries(xgrammar_bindings PUBLIC ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
 set_target_properties(
   xgrammar_bindings PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/python/xgrammar"
