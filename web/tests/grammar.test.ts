@@ -191,9 +191,7 @@ describe("Test GrammarMatcher E2E", () => {
       const input_id = input_ids[i];
       // Find rejected IDs
       const bitmask = await matcher.getNextTokenBitmask();
-      const rejectedIDs = await GrammarMatcher.debugGetMaskedTokensFromBitmask(
-        bitmask, matcher.getVocabSize()
-      );
+      const rejectedIDs = matcher.debugGetMaskedTokensFromBitmask(bitmask);
       // Find accepted tokens
       const vocabIDSet = new Set([...Array(vocab.length).keys()]);
       const rejectedIDSet = new Set(rejectedIDs);
@@ -246,9 +244,7 @@ describe("Test GrammarMatcher E2E", () => {
       const input_id = input_ids[i];
       // Find rejected IDs
       const bitmask = await matcher.getNextTokenBitmask();
-      const rejectedIDs = await GrammarMatcher.debugGetMaskedTokensFromBitmask(
-        bitmask, matcher.getVocabSize()
-      );
+      const rejectedIDs = matcher.debugGetMaskedTokensFromBitmask(bitmask);
       // Find accepted tokens
       const vocabIDSet = new Set([...Array(vocab.length).keys()]);
       const rejectedIDSet = new Set(rejectedIDs);
@@ -475,9 +471,7 @@ describe("Test json schema E2E", () => {
     // 6. Check finalization
     const final_bitmask = await matcher.getNextTokenBitmask();
     expect(final_bitmask.length).toEqual(Math.ceil(128256 / 32));
-    const final_rejected_tokens = (await GrammarMatcher.debugGetMaskedTokensFromBitmask(
-      final_bitmask, matcher.getVocabSize()
-    ));
+    const final_rejected_tokens = matcher.debugGetMaskedTokensFromBitmask(final_bitmask);
     expect(final_rejected_tokens.indexOf(128001)).toEqual(-1);  // stop token not rejected
     const acceptStop = matcher.acceptToken(128001);
     expect(acceptStop).toEqual(true);
@@ -522,9 +516,7 @@ describe("Test json schema E2E", () => {
     const final_bitmask = await matcher.getNextTokenBitmask();
     // Tests how phi3.5 has dummy padded tokens. See https://github.com/mlc-ai/mlc-llm/pull/2651
     expect(final_bitmask.length).toEqual(Math.ceil(32064 / 32));
-    const final_rejected_tokens = (await GrammarMatcher.debugGetMaskedTokensFromBitmask(
-      final_bitmask, matcher.getVocabSize()
-    ));
+    const final_rejected_tokens = matcher.debugGetMaskedTokensFromBitmask(final_bitmask);
     expect(final_rejected_tokens.indexOf(2)).toEqual(-1);  // stop token not rejected
     expect(final_rejected_tokens.indexOf(32000)).toEqual(-1);  // stop token not rejected
     const acceptStop = matcher.acceptToken(2);

@@ -3,7 +3,9 @@
 This folder contains the source code and emcc bindings for compiling XGrammar to Javascript/Typescript via [emscripten](https://emscripten.org/).
 
 ### Build from source
-Run the following
+First modify the content of `cmake/config.cmake` to be `web/config.cmake`.
+
+Then run the following
 ```bash
 source /path/to/emsdk_env.sh
 npm install

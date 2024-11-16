@@ -53,9 +53,8 @@ async function jsonExample() {
         if (!grammarMatcher.isTerminated()) {
             const bitmask = await grammarMatcher.getNextTokenBitmask();
             // For debugging, we can check the rejected token IDs from the mask
-            const rejectedIDs = await GrammarMatcher.debugGetMaskedTokensFromBitmask(
+            const rejectedIDs = grammarMatcher.debugGetMaskedTokensFromBitmask(
                 bitmask,
-                grammarMatcher.getVocabSize()
             );
         }
         // 3.2 Say the LLM generated `curToken`, which is simulated here, we use `acceptToken()`
@@ -148,9 +147,8 @@ async function jsonSchemaExample() {
         if (!grammarMatcher.isTerminated()) {
             const bitmask = await grammarMatcher.getNextTokenBitmask();
             // For debugging, we can check the rejected token IDs from the mask
-            const rejectedIDs = await GrammarMatcher.debugGetMaskedTokensFromBitmask(
+            const rejectedIDs = grammarMatcher.debugGetMaskedTokensFromBitmask(
                 bitmask,
-                grammarMatcher.getVocabSize()
             );
         }
         // 3.2 Say the LLM generated `curToken`, which is simulated here, we use `acceptToken()`

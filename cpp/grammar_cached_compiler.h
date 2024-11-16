@@ -376,8 +376,15 @@ CompiledGrammar::Impl::Impl(
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)
   // 2. All byte strings (with element_in_string=0, 1, 2, ...)
 
-  ThreadPool thread_pool(max_threads);
-  std::mutex catagorized_tokens_mutex;
+  // TODO(Charlie): Figure out how to support ThreadPool and std::mutex in WebAssembly.
+  // Only declare ThreadPool and mutex if max_threads > 1
+  std::unique_ptr<ThreadPool> thread_pool;
+  std::unique_ptr<std::mutex> catagorized_tokens_mutex;
+
+  if (max_threads > 1) {
+    thread_pool = std::make_unique<ThreadPool>(max_threads);
+    catagorized_tokens_mutex = std::make_unique<std::mutex>();
+  }
 
   auto root_rule_id = grammar->GetRootRuleId();
   for (int32_t rule_id = 0; rule_id < static_cast<int>(grammar->NumRules()); ++rule_id) {
@@ -395,7 +402,11 @@ CompiledGrammar::Impl::Impl(
         if (element.type == RuleExprType::kRuleRef) {
           continue;
         }
-        thread_pool.Execute([&, rule_id, sequence_id, element_id, element]() {
+
+        // Define the per-element processing logic for code reuse between
+        // using thread_pool and not using thread_pool
+        auto process_element = [&, rule_id, sequence_id, element_id, element](std::mutex* mutex_ptr
+                               ) {
           auto add_catagorized_tokens = [&](const RulePosition& rule_position) {
             auto grammar_matcher = GrammarMatcherForCompiler(grammar, rule_position);
             auto cur_catagorized_tokens_for_grammar = grammar_matcher.GetCatagorizedTokens(
@@ -403,8 +414,11 @@ CompiledGrammar::Impl::Impl(
                 tokenizer_info.GetSortedDecodedVocab(),
                 rule_id != root_rule_id
             );
-            {
-              std::lock_guard<std::mutex> lock(catagorized_tokens_mutex);
+            if (mutex_ptr) {
+              std::lock_guard<std::mutex> lock(*mutex_ptr);
+              this->catagorized_tokens_for_grammar[rule_position] =
+                  cur_catagorized_tokens_for_grammar;
+            } else {
               this->catagorized_tokens_for_grammar[rule_position] =
                   cur_catagorized_tokens_for_grammar;
             }
@@ -426,7 +440,16 @@ CompiledGrammar::Impl::Impl(
               add_catagorized_tokens(cur_rule_position);
             }
           }
-        });
+        };
+
+        // Execute depending on whether we use thread_pool
+        if (max_threads > 1) {
+          thread_pool->Execute([process_element, mutex_ptr = catagorized_tokens_mutex.get()]() {
+            process_element(mutex_ptr);
+          });
+        } else {
+          process_element(nullptr);
+        }
       }
     }
   }

@@ -349,18 +349,14 @@ export class GrammarMatcher {
   /**
    *
    * @param {Int32Array} bitmask Bitmask returned by getNextTokenBitmask().
-   * @param {number} vocabSize Vocab size returned by getVocabSize().
    * @returns An array of vocab ID that will be rejected as a result of the bitmask.
    */
-  static async debugGetMaskedTokensFromBitmask(
+  debugGetMaskedTokensFromBitmask(
     bitmask: Int32Array,
-    vocabSize: number
-  ): Promise<Int32Array> {
-    await asyncInitBinding();
+  ): Int32Array {
     const bitmaskIntVector = binding.vecIntFromJSArray(bitmask);
-    const rejectedIDsIntVector = binding.GrammarMatcher.DebugGetMaskedTokensFromBitmask(
+    const rejectedIDsIntVector = this.handle.DebugGetMaskedTokensFromBitmask(
       bitmaskIntVector,
-      vocabSize
     );
     bitmaskIntVector.delete();
     const rejectedIDsInt32Array = binding.vecIntToView(rejectedIDsIntVector).slice();

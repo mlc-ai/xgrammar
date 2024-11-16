@@ -58,8 +58,10 @@ GrammarMatcher GrammarMatcher_Init(
     std::optional<int> vocab_size,
     int max_rollback_tokens
 ) {
+  // NOTE(Charlie): Not sure how to support multithreading in
+  // WASM yet, hence max_threads=1.
   return GrammarMatcher(
-      CompiledGrammar(grammar, tokenizer_info),
+      CompiledGrammar(grammar, tokenizer_info, /*max_threads=*/1),
       override_stop_tokens,
       terminate_without_stop_token,
       vocab_size,
@@ -95,7 +97,7 @@ std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher)
  * \note This method is mainly used in testing, so performance is not as important.
  */
 std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
-    std::vector<int32_t> token_bitmask, size_t vocab_size
+    GrammarMatcher& matcher, std::vector<int32_t> token_bitmask
 ) {
   // 1. Convert token_bitmask into DLTensor
   DLTensor tensor;
@@ -110,7 +112,7 @@ std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
   tensor.byte_offset = 0;
   // 2. Get rejected token IDs
   std::vector<int> result;
-  GrammarMatcher::DebugGetMaskedTokensFromBitmask(tensor, vocab_size, &result);
+  matcher.DebugGetMaskedTokensFromBitmask(&result, tensor);
   return result;
 }
 
@@ -168,9 +170,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("GetMaxRollbackTokens", &GrammarMatcher::GetMaxRollbackTokens)
       .function("AcceptToken", &GrammarMatcher::AcceptToken)
       .function("GetNextTokenBitmask", &GrammarMatcher_GetNextTokenBitmask)
-      .class_function(
-          "DebugGetMaskedTokensFromBitmask", &GrammarMatcher_DebugGetMaskedTokensFromBitmask
-      )
+      .function("DebugGetMaskedTokensFromBitmask", &GrammarMatcher_DebugGetMaskedTokensFromBitmask)
       .function("IsTerminated", &GrammarMatcher::IsTerminated)
       .function("Reset", &GrammarMatcher::Reset)
       .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
