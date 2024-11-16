@@ -4,6 +4,8 @@ title: Home
 notitle: true
 ---
 
+{% include hero.html %}
+
 ## Overview
 
 XGrammar is open-source solution for flexible, portable, and fast structured generations,

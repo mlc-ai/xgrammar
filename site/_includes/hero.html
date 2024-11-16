@@ -1,0 +1,36 @@
+<section id="hero">
+  <div class="heading-container">
+    <h1>XGrammar: Efficient, Flexible and Portable Structured Generation</h1>
+    <div class="link-container">
+      <a class="github-link" href="https://github.com/mlc-ai/xgrammar">
+        <span class="github-link-content">
+          <span class="icon">{% include github.svg %}</span>
+          <span>GitHub</span>
+          <span class="arrow-container">{% include arrow.svg %}</span>
+          </span>
+      </a>
+      <a class="get-start-link moving-border" href="https://xgrammar.mlc.ai/docs/">
+        <span class="border"></span>
+        <span class="get-start-link-content">
+          <span>Documentation</span>
+          <span class="arrow-container">{% include arrow.svg %}</span>
+          </span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<script>
+  (function() {
+
+  function handlerIn(e) {
+    $(this).addClass("expanded");
+  }
+  function handlerOut(e) {
+    $(this).removeClass("expanded");
+  }
+
+  $(".chat-link").hover(handlerIn, handlerOut);
+  $(".github-link").hover(handlerIn, handlerOut);
+})()
+</script>
