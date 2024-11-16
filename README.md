@@ -16,12 +16,9 @@
 
 XGrammar is open-source solution for flexible, portable, and fast structured generations,
 aiming at bring flexible zero-overhead structure generation everywhere.
-It supports general context-free grammar to enable a broad range of structures
-while bringing careful system optimizations to enable fast executions at tens of microseconds level.
-XGrammar features a minimal and portable c++ backend that can be easily integrated into multiple environments and frameworks,
-and is co-designed with the LLM inference engine, which enables outperformance over existing structure
-generation solutions and enables zero-overhead structured generation in LLM inference.
-
+It supports general context-free grammar to enable a broad range of structures while bringing careful system optimizations to enable fast executions. 
+XGrammar features a minimal and portable c++ backend that can be easily integrated into multiple environments and frameworks, 
+and is co-designed with the LLM inference engine and enables zero-overhead structured generation in LLM inference.
 <!--
 ## Key Features
 
