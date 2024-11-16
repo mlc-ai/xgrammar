@@ -14,7 +14,7 @@
 
 ## Overview
 
-XGrammar an open-source library for fast, flexible, and portable structured generation.
+XGrammar is an open-source library for fast, flexible, and portable structured generation.
 It supports general context-free grammar to enable a broad range of structures while bringing careful system optimizations to enable fast executions.
 XGrammar features a minimal and portable C++ backend that can be easily integrated into multiple environments and frameworks,
 and is co-designed with the LLM inference engine and enables zero-overhead structured generation in LLM inference.
