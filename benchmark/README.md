@@ -26,6 +26,10 @@ CPU: AMD Ryzen 9 7950X 16-Core Processor
 GPU: NVIDIA GeForce RTX 4090
 ```
 
+Dataset: `NousResearch/json-mode-eval`
+
+Model: `meta-llama/Llama-3.1-8B-Instruct`
+
 Results:
 
 ```
