@@ -48,6 +48,6 @@ jobs:
     - name: Retrieve all wheels
       run: |
         mkdir -p dist
-        mv python/repaired_wheels/* dist/
+        cp python/repaired_wheels/* dist/
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
