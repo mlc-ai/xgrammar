@@ -1,3 +1,5 @@
-# ninja==1.11.1.1
-# setuptools==68.2.2
-# transformers==4.42.3
+torch
+transformers
+pybind11
+pydantic
+pytest
