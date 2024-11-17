@@ -38,7 +38,7 @@ function audit_xgrammar_wheel() {
 		${XGRAMMAR_PYTHON_DIR}/*.egg-info
 }
 
-XGRAMMAR_PYTHON_DIR="/workspace/xgrammar/python"
+XGRAMMAR_PYTHON_DIR="/workspace/python"
 PYTHON_VERSIONS_CPU=("3.9" "3.10" "3.11" "3.12")
 
 while [[ $# -gt 0 ]]; do
@@ -64,7 +64,7 @@ AUDITWHEEL_OPTS="--plat ${AUDITWHEEL_PLAT} -w repaired_wheels/"
 AUDITWHEEL_OPTS="--exclude libtorch --exclude libtorch_cpu --exclude libtorch_python ${AUDITWHEEL_OPTS}"
 
 # config the cmake
-cd /workspace/xgrammar
+cd /workspace
 
 # setup config.cmake
 echo set\(XGRAMMAR_BUILD_PYTHON_BINDINGS ON\) >>config.cmake
