@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://test.pypi.org/p/xgrammar-nightly
+      url: https://pypi.org/p/xgrammar
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
@@ -51,3 +51,7 @@ jobs:
         cp python/repaired_wheels/* dist/
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages_dir: python/repaired_wheels
+        skip_existing: true
+        verbose: true
