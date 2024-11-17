@@ -283,7 +283,7 @@ class BuiltinGrammar:
 
     @staticmethod
     def _regex_to_ebnf(regex: str) -> str:
-        """Convert a regex string to EBNF grammar string. For test purposes. The regex grammar
+        r"""Convert a regex string to EBNF grammar string. For test purposes. The regex grammar
         follows the syntax in JavaScript (ECMA 262). Check
         https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions
         for a tutorial. Currently the following features are not supported:
