@@ -9,11 +9,6 @@ on:
 jobs:
   Build:
     runs-on: windows-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/xgrammar
-    permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
     defaults:
       run:
         shell: 'cmd /C call {0}'
@@ -100,6 +95,30 @@ jobs:
         python -m pip install setuptools Cython wheel
         cd python
         python setup.py bdist_wheel
+    - uses: actions/upload-artifact@v4
+      with:
+        name: xgrammar-wheel-windows
+        path: python/dist/
+        retention-days: 3
+        overwrite: true
+
+  Publish-to-PyPI:
+    needs:
+    - Build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/xgrammar
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+    - name: Download all the wheels
+      uses: actions/download-artifact@v4
+      with:
+        name: xgrammar-wheel-windows
+        path: python/dist/
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
