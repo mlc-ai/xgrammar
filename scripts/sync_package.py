@@ -4,12 +4,6 @@ import os
 import re
 import subprocess
 
-# Modify the following two settings during release
-# -----------------------------------------------------------
-# Tag used for stable build.
-__stable_build__ = "v0.1.0"
-# -----------------------------------------------------------
-
 
 def py_str(cstr):
     return cstr.decode("utf-8")
@@ -101,7 +95,7 @@ def update_conda(args, pkg, package_name):
     )
 
 
-def update_setup(args, pkg, package_name):
+def update_setup(args, package_name):
     pub_ver, _ = get_version_tag(args)
     rewrites = [
         (r'(?<=name=")[^\"]+', package_name),
@@ -142,33 +136,10 @@ def main():
         "Defaults to package",
     )
     parser.add_argument(
-        "--revision",
+        "--version",
         type=str,
-        default="origin/main",
-        help="Specify a revision to build packages from. " "Defaults to 'origin/main'",
-    )
-    parser.add_argument(
-        "--gpu",
-        type=str,
-        default="none",
-        choices=[
-            "none",
-            "cuda-11.7",
-            "cuda-11.8",
-            "cuda-12.1",
-            "cuda-12.2",
-            "cuda-12.3",
-            "rocm-6.1",
-            "rocm-6.2",
-        ],
-        help="GPU (CUDA/ROCm) version to be linked to the resultant binaries,"
-        "or none, to disable CUDA/ROCm. Defaults to none.",
-    )
-    parser.add_argument(
-        "--skip-checkout",
-        action="store_true",
-        help="Run the syncronization process without checking out new source."
-        "For use when running in an existing checkout.",
+        required=True,
+        help="The version string (e.g., v0.1.0)",
     )
     parser.add_argument(
         "--skip-conda",
@@ -181,18 +152,12 @@ def main():
         args.src = args.package
     package_name = args.package_name
 
-    if not args.skip_checkout:
-        if "nightly" not in args.package_name and not args.nightly:
-            if __stable_build__ is None:
-                raise RuntimeError("Only nightly is supported")
-            checkout_source(args.src, __stable_build__)
-        else:
-            checkout_source(args.src, args.revision)
+    checkout_source(args.src, args.version)
 
     if not args.skip_conda:
         update_conda(args, args.package, package_name)
 
-    update_setup(args, args.package, package_name)
+    update_setup(args, package_name)
 
 
 if __name__ == "__main__":
