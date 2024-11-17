@@ -71,30 +71,6 @@ def get_version_tag(args):
     return pub_ver, local_ver
 
 
-def update_conda(args, pkg, package_name):
-    pub_ver, _ = get_version_tag(args)
-
-    # create initial yaml file
-    meta_yaml = os.path.join("conda", pkg, "recipe", "meta.yaml")
-    with open(meta_yaml, "w") as fo:
-        fo.write(open(os.path.join("conda", pkg, "recipe", "meta.in.yaml")).read())
-
-    update(
-        meta_yaml,
-        [
-            (r"(?<=default_pkg_name = ')[^\']+", package_name),
-            (r"(?<=version = ')[.0-9a-z]+", pub_ver),
-        ],
-        args.dry_run,
-    )
-
-    update(
-        os.path.join("conda", pkg, "build_config.yaml"),
-        [("(?<=pkg_name: ')[^']+", package_name)],
-        args.dry_run,
-    )
-
-
 def update_setup(args, package_name):
     pub_ver, _ = get_version_tag(args)
     rewrites = [
@@ -141,11 +117,6 @@ def main():
         required=True,
         help="The version string (e.g., v0.1.0)",
     )
-    parser.add_argument(
-        "--skip-conda",
-        action="store_true",
-        help="Skip version string replacement in conda.",
-    )
     args = parser.parse_args()
 
     if args.src == "":
@@ -153,9 +124,6 @@ def main():
     package_name = args.package_name
 
     checkout_source(args.src, args.version)
-
-    if not args.skip_conda:
-        update_conda(args, args.package, package_name)
 
     update_setup(args, package_name)
 

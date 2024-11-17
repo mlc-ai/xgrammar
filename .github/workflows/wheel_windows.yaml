@@ -1,0 +1,108 @@
+# GH actions.
+name: Wheel-Windows
+
+on:
+  push:
+    tags:
+      - '*'           # Push events to every tag not containing /
+
+jobs:
+  Build:
+    runs-on: windows-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/xgrammar
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+    defaults:
+      run:
+        shell: 'cmd /C call {0}'
+
+    steps:
+    - name: Git config
+      run: >-
+        git config --system core.longpaths true
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+    - name: Checkout source
+      run: |
+        git clone https://github.com/mlc-ai/package package --recursive
+    - name: Setup script env
+      run: |
+        mv scripts/build-environment.yaml package/3rdparty/tlcpack/conda/build-environment.yaml
+        rm -rf conda
+        ln -s package/3rdparty/tlcpack/conda conda
+    - name: Sync XGrammar Package
+      run: |
+        python scripts/sync_package.py --package . --package-name xgrammar --version ${{ github.ref_name }}
+    # Use conda for LLVM dep
+    - uses: conda-incubator/setup-miniconda@v3
+      with:
+        activate-environment: xgrammar-build
+        channel-priority: strict
+        environment-file: conda/build-environment.yaml
+        auto-activate-base: false
+    - name: Conda info
+      run: |
+        conda info
+        conda list
+        python --version
+    - name: Build@Win
+      run: >-
+        scripts/build_xgrammar_lib_win.bat
+    # Build wheel for different python versions
+    - name: Setup@Py39
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: build-Py39
+        python-version: 3.9
+        auto-activate-base: false
+    - name: Wheel-Build@Py39
+      run: |
+        python --version
+        python -m pip install setuptools Cython wheel
+        cd python
+        python setup.py bdist_wheel
+    - name: Setup@Py310
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: build-Py310
+        python-version: '3.10'
+        auto-activate-base: false
+    - name: Wheel-Build@Py310
+      run: |
+        python --version
+        python -m pip install setuptools Cython wheel
+        cd python
+        python setup.py bdist_wheel
+    - name: Setup@Py311
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: build-Py311
+        python-version: '3.11'
+        auto-activate-base: false
+    - name: Wheel-Build@Py311
+      run: |
+        python --version
+        python -m pip install setuptools Cython wheel
+        cd python
+        python setup.py bdist_wheel
+    - name: Setup@Py312
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: build-Py312
+        python-version: '3.12'
+        auto-activate-base: false
+    - name: Wheel-Build@Py312
+      run: |
+        python --version
+        python -m pip install setuptools Cython wheel
+        cd python
+        python setup.py bdist_wheel
+    - name: Publish package distributions to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages_dir: python/dist
+        skip_existing: true
+        verbose: true

@@ -2,11 +2,13 @@
 name: Wheel-Manylinux
 
 
-on: push
+on:
+  push:
+    tags:
+      - '*'           # Push events to every tag not containing /
 
 jobs:
   Build:
-    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
     strategy:
       matrix:
         config:
@@ -39,16 +41,12 @@ jobs:
         ln -s package/3rdparty/tlcpack/conda conda
     - name: Sync XGrammar Package
       run: |
-        python scripts/sync_package.py --package . --package-name xgrammar --version ${{ github.ref_name }} --skip-conda
+        python scripts/sync_package.py --package . --package-name xgrammar --version ${{ github.ref_name }}
     - name: Build XGrammar
       env:
         IMAGE: ${{ matrix.config.image }}
       run: |
         scripts/docker/bash.sh --no-gpu $IMAGE ./scripts/build_xgrammar_wheel_manylinux.sh
-    - name: Retrieve all wheels
-      run: |
-        mkdir -p dist
-        cp python/repaired_wheels/* dist/
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:

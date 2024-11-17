@@ -73,12 +73,12 @@ echo set\(XGRAMMAR_BUILD_CUDA_KERNELS OFF\) >>config.cmake
 echo set\(XGRAMMAR_BUILD_CXX_TESTS OFF\) >>config.cmake
 
 # compile the xgrammar
-python3 -m pip install ninja pybind11
+python3 -m pip install pybind11
 python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 mkdir -p build
 cd build
-cmake .. -G Ninja
-ninja -j 4
+cmake ..
+make -j4
 find . -type d -name 'CMakeFiles' -exec rm -rf {} +
 
 UNICODE_WIDTH=32 # Dummy value, irrelevant for Python 3

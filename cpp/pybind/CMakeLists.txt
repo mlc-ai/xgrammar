@@ -52,9 +52,11 @@ if(XGRAMMAR_BUILD_KERNELS)
 endif()
 
 target_link_libraries(xgrammar_bindings PUBLIC ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
-set_target_properties(
-  xgrammar_bindings PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/python/xgrammar"
-)
+set(LIB_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/python/xgrammar")
+set_target_properties(xgrammar_bindings PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${LIB_OUTPUT_DIRECTORY})
+set_target_properties(xgrammar_bindings PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG ${LIB_OUTPUT_DIRECTORY})
+set_target_properties(xgrammar_bindings PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE ${LIB_OUTPUT_DIRECTORY})
+set_target_properties(xgrammar_bindings PROPERTIES LIBRARY_OUTPUT_DIRECTORY_REL_WITH_DEB_INFO ${LIB_OUTPUT_DIRECTORY})
 
 if(MSVC)
   file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")

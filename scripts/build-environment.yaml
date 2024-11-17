@@ -1,0 +1,20 @@
+name: xgrammar-build
+
+channels:
+  - pytorch
+  - conda-forge
+
+dependencies:
+  - llvmdev>=15
+  - cmake>=3.24
+  - zlib
+  - zstd-static
+  - git
+  - conda-build
+  - numpy
+  - pytest
+  - pip
+  - cython
+  - pybind11
+  - pytorch
+  - cpuonly
