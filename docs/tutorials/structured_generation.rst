@@ -100,7 +100,7 @@ Now we simulate a single-request auto-regressive generation. See later section f
       # generated will enforce the next token to be generated. Assert to make
       # sure the token is indeed valid. Here we accept the simulated response
       # assert matcher.accept_token(next_token_id)
-      assert matcher.accept(sim_token_id)
+      assert matcher.accept_token(sim_token_id)
 
   # Since we accepted a stop token `<|im_end|>`, we have terminated
   assert matcher.is_terminated()
@@ -203,7 +203,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
       # generated will enforce the next token to be generated. Assert to make
       # sure the token is indeed valid. Here we accept the simulated response
       # assert matcher.accept_token(next_token_id)
-      assert matcher.accept(sim_token_id)
+      assert matcher.accept_token(sim_token_id)
 
   # Since we accepted a stop token `<|im_end|>`, we have terminated
   assert matcher.is_terminated()
@@ -286,7 +286,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
       # generated will enforce the next token to be generated. Assert to make
       # sure the token is indeed valid. Here we accept the simulated response
       # assert matcher.accept_token(next_token_id)
-      assert matcher.accept(sim_token_id)
+      assert matcher.accept_token(sim_token_id)
 
   # Since we accepted a stop token `<|im_end|>`, we have terminated
   assert matcher.is_terminated()
