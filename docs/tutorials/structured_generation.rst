@@ -90,7 +90,7 @@ Now we simulate a single-request auto-regressive generation. See later section f
       logits = torch.randn(full_vocab_size).cuda()
 
       # Apply bitmask to logits to mask invalid tokens
-      matcher.fill_next_token_bitmask(logits, token_bitmask)
+      matcher.fill_next_token_bitmask(token_bitmask)
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1)
@@ -194,7 +194,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
       logits = torch.randn(full_vocab_size).cuda()
 
       # Apply bitmask to logits to mask invalid tokens
-      matcher.fill_next_token_bitmask(logits, token_bitmask)
+      matcher.fill_next_token_bitmask(token_bitmask)
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1)
@@ -278,7 +278,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
       logits = torch.randn(full_vocab_size).cuda()
 
       # Apply bitmask to logits to mask invalid tokens
-      matcher.fill_next_token_bitmask(logits, token_bitmask)
+      matcher.fill_next_token_bitmask(token_bitmask)
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1)
