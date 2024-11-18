@@ -40,10 +40,6 @@ std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
     GrammarMatcher& matcher, torch::Tensor token_bitmask, int batch_id
 );
 
-#ifdef XGRAMMAR_BUILD_KERNELS
-void GrammarMatcher_ApplyTokenBitmaskInplace(torch::Tensor logits, torch::Tensor token_bitmask);
-#endif
-
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_PYBIND_PYTHON_METHODS_H_

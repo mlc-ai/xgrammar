@@ -39,17 +39,8 @@ find_library(TORCH_PYTHON_LIBRARY torch_python PATH "${TORCH_INSTALL_PREFIX}/lib
 # -D_GLIBCXX_USE_CXX11_ABI=0. So we compile bindings separately.
 file(GLOB_RECURSE XGRAMMAR_BINDINGS_PATH ${PROJECT_SOURCE_DIR}/cpp/*.cc)
 
-if(XGRAMMAR_BUILD_KERNELS)
-  file(GLOB_RECURSE XGRAMMAR_KERNELS_PATH ${PROJECT_SOURCE_DIR}/cpp/kernels/*.cu)
-  list(APPEND XGRAMMAR_BINDINGS_PATH ${XGRAMMAR_KERNELS_PATH})
-endif()
-
 pybind11_add_module(xgrammar_bindings ${XGRAMMAR_BINDINGS_PATH})
 target_include_directories(xgrammar_bindings PUBLIC ${XGRAMMAR_INCLUDE_PATH})
-
-if(XGRAMMAR_BUILD_KERNELS)
-  target_compile_definitions(xgrammar_bindings PUBLIC -DXGRAMMAR_BUILD_KERNELS)
-endif()
 
 target_link_libraries(xgrammar_bindings PUBLIC ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
 set(LIB_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/python/xgrammar")

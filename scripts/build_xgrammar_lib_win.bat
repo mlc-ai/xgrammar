@@ -2,8 +2,6 @@ echo on
 
 del /f config.cmake
 echo set(XGRAMMAR_BUILD_PYTHON_BINDINGS ON) >> config.cmake
-echo set(XGRAMMAR_BUILD_KERNELS OFF) >> config.cmake
-echo set(XGRAMMAR_BUILD_CUDA_KERNELS OFF) >> config.cmake
 echo set(XGRAMMAR_BUILD_CXX_TESTS OFF) >> config.cmake
 
 rd /s /q build

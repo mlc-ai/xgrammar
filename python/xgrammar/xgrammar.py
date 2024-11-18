@@ -26,6 +26,9 @@ from pydantic import BaseModel
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
 from . import xgrammar_bindings as _core
+from .cuda.apply_token_mask_inplace import (
+    apply_token_bitmask_inplace as apply_token_bitmask_inplace_cuda,
+)
 
 
 class XGObject:
@@ -792,7 +795,7 @@ class GrammarMatcher(XGObject):
         if bitmask.device != logits.device:
             bitmask = bitmask.to(logits.device)
 
-        _core.GrammarMatcher.apply_token_bitmask_inplace(logits, bitmask)
+        apply_token_bitmask_inplace_cuda(logits, bitmask)
 
     def debug_get_masked_tokens_from_bitmask(
         self, bitmask: torch.Tensor, batch_id: int = 0

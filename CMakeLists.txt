@@ -16,7 +16,6 @@ endif()
 
 option(XGRAMMAR_BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 option(XGRAMMAR_BUILD_CXX_TESTS "Build C++ tests" ON)
-option(XGRAMMAR_BUILD_CUDA_KERNELS "Build CUDA kernels" ON)
 set(XGRAMMAR_CUDA_ARCHITECTURES
     native
     CACHE STRING "CUDA architectures"
@@ -37,7 +36,6 @@ endif()
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Build Python bindings: ${XGRAMMAR_BUILD_PYTHON_BINDINGS}")
 message(STATUS "Build C++ tests: ${XGRAMMAR_BUILD_CXX_TESTS}")
-message(STATUS "Build CUDA kernels: ${XGRAMMAR_BUILD_CUDA_KERNELS}")
 message(STATUS "CUDA architectures: ${XGRAMMAR_CUDA_ARCHITECTURES}")
 
 if(MSVC)
@@ -62,10 +60,6 @@ list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/pybin
 
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
 target_include_directories(xgrammar PUBLIC ${XGRAMMAR_INCLUDE_PATH})
-
-if(XGRAMMAR_BUILD_KERNELS)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/kernels)
-endif()
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)

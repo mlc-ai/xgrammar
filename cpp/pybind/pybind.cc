@@ -74,9 +74,4 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_property_readonly("vocab_size", &GrammarMatcher::GetVocabSize)
       .def_property_readonly("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens)
       .def_property_readonly("stop_token_ids", &GrammarMatcher::GetStopTokenIds);
-#ifdef XGRAMMAR_BUILD_KERNELS
-  pyGrammarMatcher.def_static(
-      "apply_token_bitmask_inplace", &GrammarMatcher_ApplyTokenBitmaskInplace
-  );
-#endif
 }
