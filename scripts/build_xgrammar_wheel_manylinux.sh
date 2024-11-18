@@ -63,32 +63,36 @@ PYTHON_VERSIONS=${PYTHON_VERSIONS_CPU[*]}
 AUDITWHEEL_OPTS="--plat ${AUDITWHEEL_PLAT} -w repaired_wheels/"
 AUDITWHEEL_OPTS="--exclude libtorch --exclude libtorch_cpu --exclude libtorch_python ${AUDITWHEEL_OPTS}"
 
-# config the cmake
-cd /workspace
-
-# setup config.cmake
-echo set\(XGRAMMAR_BUILD_PYTHON_BINDINGS ON\) >>config.cmake
-echo set\(XGRAMMAR_BUILD_CXX_TESTS OFF\) >>config.cmake
-
-# compile the xgrammar
-python3 -m pip install pybind11
-python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-mkdir -p build
-cd build
-cmake ..
-make -j4
-find . -type d -name 'CMakeFiles' -exec rm -rf {} +
-
 UNICODE_WIDTH=32 # Dummy value, irrelevant for Python 3
+
+source /opt/conda/etc/profile.d/conda.sh
 
 # Not all manylinux Docker images will have all Python versions,
 # so check the existing python versions before generating packages
 for python_version in ${PYTHON_VERSIONS[*]}; do
 	echo "> Looking for Python ${python_version}."
-
 	# Remove the . in version string, e.g. "3.8" turns into "38"
 	python_version_str="$(echo "${python_version}" | sed -r 's/\.//g')"
 	cpython_dir="/opt/conda/envs/py${python_version_str}/"
+
+	# compile xgrammar on the particular python version
+	conda activate py${python_version_str}
+
+	# setup config.cmake
+	cd /workspace
+	rm -rf ${XGRAMMAR_PYTHON_DIR}/xgrammar/*.so
+	rm -rf config.cmake
+	echo set\(XGRAMMAR_BUILD_PYTHON_BINDINGS ON\) >>config.cmake
+	echo set\(XGRAMMAR_BUILD_CXX_TESTS OFF\) >>config.cmake
+
+	python3 -m pip install pybind11
+	python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+	rm -rf build
+	mkdir -p build
+	cd build
+	cmake ..
+	make -j4
+	find . -type d -name 'CMakeFiles' -exec rm -rf {} +
 
 	# For compatibility in environments where Conda is not installed,
 	# revert back to previous method of locating cpython_dir.

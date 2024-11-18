@@ -31,70 +31,79 @@ jobs:
     - name: Sync XGrammar Package
       run: |
         python scripts/sync_package.py --package . --package-name xgrammar --version ${{ github.ref_name }}
-    # Use conda for LLVM dep
-    - uses: conda-incubator/setup-miniconda@v3
-      with:
-        activate-environment: xgrammar-build
-        channel-priority: strict
-        environment-file: conda/build-environment.yaml
-        auto-activate-base: false
-    - name: Conda info
-      run: |
-        conda info
-        conda list
-        python --version
-    - name: Build@Win
-      run: >-
-        scripts/build_xgrammar_lib_win.bat
     # Build wheel for different python versions
     - name: Setup@Py39
-      uses: conda-incubator/setup-miniconda@v2
+      uses: conda-incubator/setup-miniconda@v3
       with:
         activate-environment: build-Py39
+        channel-priority: strict
+        environment-file: conda/build-environment.yaml
         python-version: 3.9
         auto-activate-base: false
+    - name: XGrammar-Build@Py39
+      run: >-
+        scripts/build_xgrammar_lib_win.bat
     - name: Wheel-Build@Py39
       run: |
         python --version
         python -m pip install setuptools Cython wheel
         cd python
         python setup.py bdist_wheel
+        del /f xgrammar\*.pyd
     - name: Setup@Py310
-      uses: conda-incubator/setup-miniconda@v2
+      uses: conda-incubator/setup-miniconda@v3
       with:
         activate-environment: build-Py310
+        channel-priority: strict
+        environment-file: conda/build-environment.yaml
         python-version: '3.10'
         auto-activate-base: false
+    - name: XGrammar-Build@Py310
+      run: >-
+        scripts/build_xgrammar_lib_win.bat
     - name: Wheel-Build@Py310
       run: |
         python --version
         python -m pip install setuptools Cython wheel
         cd python
         python setup.py bdist_wheel
+        del /f xgrammar\*.pyd
     - name: Setup@Py311
-      uses: conda-incubator/setup-miniconda@v2
+      uses: conda-incubator/setup-miniconda@v3
       with:
         activate-environment: build-Py311
+        channel-priority: strict
+        environment-file: conda/build-environment.yaml
         python-version: '3.11'
         auto-activate-base: false
+    - name: XGrammar-Build@Py311
+      run: >-
+        scripts/build_xgrammar_lib_win.bat
     - name: Wheel-Build@Py311
       run: |
         python --version
         python -m pip install setuptools Cython wheel
         cd python
         python setup.py bdist_wheel
+        del /f xgrammar\*.pyd
     - name: Setup@Py312
-      uses: conda-incubator/setup-miniconda@v2
+      uses: conda-incubator/setup-miniconda@v3
       with:
         activate-environment: build-Py312
+        channel-priority: strict
+        environment-file: conda/build-environment.yaml
         python-version: '3.12'
         auto-activate-base: false
+    - name: XGrammar-Build@Py312
+      run: >-
+        scripts/build_xgrammar_lib_win.bat
     - name: Wheel-Build@Py312
       run: |
         python --version
         python -m pip install setuptools Cython wheel
         cd python
         python setup.py bdist_wheel
+        del /f xgrammar\*.pyd
     - uses: actions/upload-artifact@v4
       with:
         name: xgrammar-wheel-${{ github.ref_name }}-windows
