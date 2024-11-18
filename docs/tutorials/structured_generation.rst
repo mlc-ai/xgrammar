@@ -98,8 +98,7 @@ Now we simulate a single-request auto-regressive generation. See later section f
 
       # Accept token from matcher to update its state, so that the next bitmask
       # generated will enforce the next token to be generated. Assert to make
-      # sure the token is indeed valid.
-      # Here we accept the simulated response
+      # sure the token is indeed valid. Here we accept the simulated response
       # assert matcher.accept_token(next_token_id)
       assert matcher.accept(sim_token_id)
 
@@ -202,8 +201,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
 
       # Accept token from matcher to update its state, so that the next bitmask
       # generated will enforce the next token to be generated. Assert to make
-      # sure the token is indeed valid.
-      # Here we accept the simulated response
+      # sure the token is indeed valid. Here we accept the simulated response
       # assert matcher.accept_token(next_token_id)
       assert matcher.accept(sim_token_id)
 
@@ -286,8 +284,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
 
       # Accept token from matcher to update its state, so that the next bitmask
       # generated will enforce the next token to be generated. Assert to make
-      # sure the token is indeed valid.
-      # Here we accept the simulated response
+      # sure the token is indeed valid. Here we accept the simulated response
       # assert matcher.accept_token(next_token_id)
       assert matcher.accept(sim_token_id)
 
