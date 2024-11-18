@@ -109,7 +109,7 @@ class CompiledGrammar::Impl {
       catagorized_tokens_for_grammar;
 };
 
-class CachedGrammarCompiler::Impl {
+class GrammarCompiler::Impl {
  public:
   Impl(const TokenizerInfo& tokenizer_info, int max_threads)
       : tokenizer_info_(tokenizer_info),
@@ -121,9 +121,9 @@ class CachedGrammarCompiler::Impl {
           return this->ComputeCompiledGrammarForJSONSchema(key);
         }) {}
 
-  CompiledGrammar CompileJSONGrammar();
+  CompiledGrammar CompileBuiltinJSONGrammar();
 
-  CompiledGrammar CompileJSONSchemaGrammar(
+  CompiledGrammar CompileJSONSchema(
       const std::string& schema,
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
@@ -442,13 +442,13 @@ CompiledGrammar::CompiledGrammar(
 )
     : pimpl_(std::make_shared<Impl>(grammar, tokenizer_info, max_threads)) {}
 
-/******************* CachedGrammarCompiler *******************/
+/******************* GrammarCompiler *******************/
 
-inline CompiledGrammar CachedGrammarCompiler::Impl::CompileJSONGrammar() {
+inline CompiledGrammar GrammarCompiler::Impl::CompileBuiltinJSONGrammar() {
   return compiled_grammar_for_json_cache_.Get();
 }
 
-inline CompiledGrammar CachedGrammarCompiler::Impl::CompileJSONSchemaGrammar(
+inline CompiledGrammar GrammarCompiler::Impl::CompileJSONSchema(
     const std::string& schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
@@ -461,31 +461,31 @@ inline CompiledGrammar CachedGrammarCompiler::Impl::CompileJSONSchemaGrammar(
   return compiled_grammar_for_schema_cache_.Get(key);
 }
 
-inline void CachedGrammarCompiler::Impl::Clear() {
+inline void GrammarCompiler::Impl::Clear() {
   compiled_grammar_for_json_cache_.Clear();
   compiled_grammar_for_schema_cache_.Clear();
 }
 
-CachedGrammarCompiler::CachedGrammarCompiler(
-    const std::vector<std::string>& decoded_vocab, int max_threads
-)
+GrammarCompiler::GrammarCompiler(const std::vector<std::string>& decoded_vocab, int max_threads)
     : pimpl_(std::make_shared<Impl>(TokenizerInfo(decoded_vocab), max_threads)) {}
 
-CachedGrammarCompiler::CachedGrammarCompiler(const TokenizerInfo& tokenizer_info, int max_threads)
+GrammarCompiler::GrammarCompiler(const TokenizerInfo& tokenizer_info, int max_threads)
     : pimpl_(std::make_shared<Impl>(tokenizer_info, max_threads)) {}
 
-CompiledGrammar CachedGrammarCompiler::CompileJSONGrammar() { return pimpl_->CompileJSONGrammar(); }
+CompiledGrammar GrammarCompiler::CompileBuiltinJSONGrammar() {
+  return pimpl_->CompileBuiltinJSONGrammar();
+}
 
-CompiledGrammar CachedGrammarCompiler::CompileJSONSchemaGrammar(
+CompiledGrammar GrammarCompiler::CompileJSONSchema(
     const std::string& schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode
 ) {
-  return pimpl_->CompileJSONSchemaGrammar(schema, indent, separators, strict_mode);
+  return pimpl_->CompileJSONSchema(schema, indent, separators, strict_mode);
 }
 
-void CachedGrammarCompiler::Clear() { pimpl_->Clear(); }
+void GrammarCompiler::Clear() { pimpl_->Clear(); }
 
 }  // namespace xgrammar
 

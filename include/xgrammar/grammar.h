@@ -1,0 +1,146 @@
+/*!
+ *  Copyright (c) 2024 by Contributors
+ * \file xgrammar/grammar.h
+ * \brief The header for the definition and construction of BNF grammar.
+ */
+
+#ifndef XGRAMMAR_GRAMMAR_H_
+#define XGRAMMAR_GRAMMAR_H_
+
+#include <xgrammar/object.h>
+
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace xgrammar {
+
+/*!
+ * \brief This class stores the abstract syntax tree (AST) of the Backus-Naur Form (BNF) grammar.
+ * The BNF definition here is standard BNF, and the characters are represented using regex-style
+ * character classes (e.g. [a-z], [^a-z]).
+ *
+ * \details
+ * ### Rules
+ * The BNF grammar AST consists of a set of rules. Each rule contains a name and a definition, and
+ * corresponds to a production in the grammar. The definition of a rule is a RuleExpr. Each rule
+ * has a rule_id for reference.
+ *
+ * ### RuleExprs
+ * RuleExpr is the definition of a rule or part of the definition of a rule. It can contain
+ * elements, empty string, reference to other RuleExprs, or reference to other rules. Each RuleExpr
+ * corresponds to an rule_expr_id for reference.
+ *
+ * For example, in the following rule: rule ::= ("a" "b") | "c"
+ * ("a" "b"), "c", ("a" "b") | "c" are all RuleExprs.
+ *
+ * #### Types of RuleExprs
+ * Every RuleExpr is represented by a type as well as a variable-length array containing its data.
+ * RuleExpr has several types:
+ * - Byte string: a string of bytes (0~255). Supports UTF-8 strings.
+ * - Character class: a range of characters (each character is a unicode codepoint), e.g. [a-z],
+ *   [ac-z]. Can be negated: [^a-z], [^ac-z]. Now only ascii chars is allowed in [], but this
+ *   expression can accept/reject unicode chars.
+ * - Character class star: a star quantifier of a character class. e.g. [a-z]*, [^a-z]*.
+ * - EmptyStr: an empty string, i.e. ""
+ * - Rule reference: a reference to another rule
+ * - Sequence: a sequence of rule_exprs, e.g. ("a" "b"). These rule_exprs are concatenated together.
+ * - Choices: a choice of rule_exprs, e.g. ("a" "b") | "c". Each rule_expr can be matched.
+ *
+ * #### Storage of RuleExprs
+ * Each type of RuleExpr has a different data format. For the format of each type of RuleExpr, see
+ * docs in BNFGrammar::Impl::RuleExprType.
+ *
+ * We store all RuleExprs in csr_matrix style. That is, they are stored consecutively in one vector
+ * (data vector) and the starting position of each RuleExpr is recorded in the indptr vector.
+ *
+ * \remark The character class star RuleExpr is for the special support for elements like [a-z]*
+ * in the grammar. We add it to make the matching more efficient, as we can avoid recursion into
+ * rules when matching a sequence of characters. It should be used like:
+ * rule1 ::= ((element1 element2 rule2 ...) | ...)
+ * rule2 ::= character_class_star_rule_expr(id_of_a_character_class_rule_expr)
+ */
+class BNFGrammar {
+ public:
+  /*!
+   * \brief Construct a BNF grammar with a EBNF-formatted string. The grammar will be normalized
+   * (simplified) by default.
+   * \param ebnf_string The EBNF-formatted string.
+   * \param root_rule The name of the root rule.
+   */
+  static BNFGrammar FromEBNF(const std::string& ebnf_string, const std::string root_rule = "root");
+
+  /*!
+   * \brief Construct a BNF grammar from the json schema string. The schema string should be in the
+   * format of the schema of a JSON file. We will parse the schema and generate a BNF grammar.
+   * \param schema The schema string.
+   * \param indent The number of spaces for indentation. If set to std::nullopt, the output will be
+   * in one line. Default: 2.
+   * \param separators Two separators used in the schema: comma and colon. Examples: {",", ":"},
+   * {", ", ": "}. If std::nullopt, the default separators will be used: {",", ": "} when the
+   * indent is not nullopt, and {", ", ": "} otherwise. This follows the convention in python
+   * json.dumps(). Default: std::nullopt.
+   * \param strict_mode Whether to use strict mode. In strict mode, the generated grammar will not
+   * allow properties and items that is not specified in the schema. This is equivalent to
+   * setting unevaluatedProperties and unevaluatedItems to false.
+   *
+   * This helps LLM to generate accurate output in the grammar-guided generation with JSON
+   * schema. Default: true.
+   */
+  static BNFGrammar FromJSONSchema(
+      const std::string& schema,
+      std::optional<int> indent = std::nullopt,
+      std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
+      bool strict_mode = true
+  );
+
+  /*!
+   * \brief Get the grammar of standard JSON format. We have built-in support for JSON.
+   */
+  static BNFGrammar BuiltinJSONGrammar();
+
+  /*!
+   * \brief Get the EBNF string of the grammar.
+   */
+  std::string ToString() const;
+
+  /*!
+   * \brief Convert JSON schema string to EBNF grammar string.
+   * \param json_schema The JSON schema string.
+   * \param indent The number of spaces for indentation. If set to std::nullopt, the output will be
+   * in one line. Default: 2.
+   * \param separators Two separators used in the schema: comma and colon. Examples: {",", ":"},
+   * {", ", ": "}. If std::nullopt, the default separators will be used: {",", ": "} when the
+   * indent is not -1, and {", ", ": "} otherwise. This follows the convention in python
+   * json.dumps(). Default: std::nullopt. \param strict_mode Whether to use strict mode. In strict
+   * mode, the generated grammar will not allow properties and items that is not specified in the
+   * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
+   *
+   * This helps LLM to generate accurate output in the grammar-guided generation with JSON
+   * schema. Default: true.
+   * \returns The EBNF grammar string.
+   */
+  //   static std::string _JSONSchemaToEBNF(
+  //       const std::string& schema,
+  //       std::optional<int> indent = std::nullopt,
+  //       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
+  //       bool strict_mode = true
+  //   );
+
+  /*!
+   * \brief Convert regex string to EBNF grammar string.
+   * \param regex The regex string.
+   * \returns The EBNF grammar string.
+   */
+  //   static std::string _RegexToEBNF(const std::string& regex);
+
+  /*! \brief Print a BNF grammar. */
+  friend std::ostream& operator<<(std::ostream& os, const BNFGrammar& grammar);
+
+  XGRAMMAR_DEFINE_PIMPL_METHODS(BNFGrammar);
+};
+
+}  // namespace xgrammar
+
+#endif  // XGRAMMAR_GRAMMAR_H_

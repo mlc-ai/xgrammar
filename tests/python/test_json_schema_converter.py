@@ -7,7 +7,7 @@ import pytest
 from pydantic import BaseModel, Field, TypeAdapter
 
 from xgrammar import BuiltinGrammar, GrammarMatcher
-from xgrammar.xgrammar import BNFGrammar
+from xgrammar.matcher import BNFGrammar
 
 
 def check_schema_with_grammar(

@@ -14,12 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from .xgrammar import (
-    BNFGrammar,
-    BuiltinGrammar,
-    CachedGrammarCompiler,
-    CompiledGrammar,
-    GrammarMatcher,
-    TokenizerInfo,
-    VocabType,
-)
+from .compiler import CompiledGrammar, GrammarCompiler
+from .grammar import BNFGrammar
+from .matcher import GrammarMatcher, get_bitmask_dtype, get_bitmask_shape
+from .tokenizer_info import TokenizerInfo, VocabType

@@ -4,7 +4,7 @@
  */
 
 #include <picojson.h>
-#include <xgrammar/xgrammar.h>
+#include <xgrammar/tokenizer_info.h>
 
 #include <array>
 #include <chrono>

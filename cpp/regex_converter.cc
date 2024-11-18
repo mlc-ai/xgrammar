@@ -308,9 +308,9 @@ RegexConverter::RegexConverter(const std::string& regex) : pimpl_(std::make_shar
 
 std::string RegexConverter::Convert() { return pimpl_->Convert(); }
 
-std::string BuiltinGrammar::_RegexToEBNF(const std::string& regex) {
-  RegexConverter converter(regex);
-  return "root ::= " + converter.Convert() + "\n";
-}
+// std::string BuiltinGrammar::_RegexToEBNF(const std::string& regex) {
+//   RegexConverter converter(regex);
+//   return "root ::= " + converter.Convert() + "\n";
+// }
 
 }  // namespace xgrammar

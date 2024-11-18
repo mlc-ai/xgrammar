@@ -108,17 +108,17 @@ As an example, here we use the Llama-3 model tokenizer.
   tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
 
 
-Now we can create a grammar compiler :class:`xgrammar.CachedGrammarCompiler`
+Now we can create a grammar compiler :class:`xgrammar.GrammarCompiler`
 and compile the constructed grammar.
 Notably, we cache all the compiled grammars, so each grammar will be compiled
 at most once.
 
 .. code:: python
 
-  from xgrammar import CachedGrammarCompiler
+  from xgrammar import GrammarCompiler
 
-  # Construct CachedGrammarCompiler.
-  compiler = CachedGrammarCompiler(tokenizer_info, max_threads=8)
+  # Construct GrammarCompiler.
+  compiler = GrammarCompiler(tokenizer_info, max_threads=8)
   # Compiler the grammar.
   compiled_grammar = compiler.compile_json_schema(json_schema_str)
 
@@ -196,4 +196,3 @@ single-request generation and batch-request generation respectively.
           matchers[i].accept_token(next_token_ids[i])
           if matchers[i].is_terminated(): # or your own termination condition
               requests[i].terminate()
-

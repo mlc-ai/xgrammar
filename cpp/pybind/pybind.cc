@@ -41,19 +41,19 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
   auto pyCompiledGrammar = py::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def(py::init<const BNFGrammar&, const TokenizerInfo&, int>());
 
-  auto pyCachedGrammarCompiler = py::class_<CachedGrammarCompiler>(m, "CachedGrammarCompiler");
-  pyCachedGrammarCompiler.def(py::init<const TokenizerInfo&, int>())
+  auto pyGrammarCompiler = py::class_<GrammarCompiler>(m, "GrammarCompiler");
+  pyGrammarCompiler.def(py::init<const TokenizerInfo&, int>())
       .def(
-          "compile_json_grammar",
-          &CachedGrammarCompiler::CompileJSONGrammar,
+          "compile_builtin_json_grammar",
+          &GrammarCompiler::CompileBuiltinJSONGrammar,
           py::call_guard<py::gil_scoped_release>()
       )
       .def(
-          "compile_json_schema_grammar",
-          &CachedGrammarCompiler::CompileJSONSchemaGrammar,
+          "compile_json_schema",
+          &GrammarCompiler::CompileJSONSchema,
           py::call_guard<py::gil_scoped_release>()
       )
-      .def("clear", &CachedGrammarCompiler::Clear);
+      .def("clear", &GrammarCompiler::Clear);
 
   auto pyGrammarMatcher = py::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher
