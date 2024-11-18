@@ -27,6 +27,6 @@ Check out :ref:`quick-start` for quick start examples of using MLC LLM.
    :caption: Tutorials
    :hidden:
 
-   tutorials/json_generation.rst
+   tutorials/structured_generation.rst
    .. tutorials/backend_integration.rst  .. TODO
    .. tutorials/web_sdk.rst              .. TODO

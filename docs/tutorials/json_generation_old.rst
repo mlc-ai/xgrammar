@@ -131,11 +131,8 @@ cache grammars after compilation.
   from xgrammar import CompiledGrammar
 
   # Construct CompiledGrammar (no cache).
-  compiler = CompiledGrammar(tokenizer_info, max_threads=8)
-  # Compiler the grammar.
-  compiled_grammar = compiler.compile_json_schema(json_schema_str)
-
-
+  bnf_grammar = BuiltinGrammar.json_schema(json_schema_str)
+  compiled_grammar = CompiledGrammar(bnf_grammar, tokenizer_info, max_threads=8)
 
 .. _tutorial-json-generation-grammar-guided-generation:
 
