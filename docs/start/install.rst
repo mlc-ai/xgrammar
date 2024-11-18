@@ -17,7 +17,6 @@ Option 1. Prebuilt Package
 --------------------------
 
 We provide nightly built pip wheels for XGrammar via pip.
-Select your operating system/compute platform and run the command in your terminal:
 
 .. note::
     ❗ Whenever using Python, it is highly recommended to use **conda** to manage an isolated Python environment to avoid missing dependencies, incompatible versions, and package conflicts.
@@ -26,11 +25,7 @@ Select your operating system/compute platform and run the command in your termin
 .. code-block:: bash
 
     conda activate your-environment
-    # TODO
-    python -m pip install ...
-
-
-.. python -m pip install --pre -U -f https://mlc.ai/wheels mlc-llm-nightly-cpu mlc-ai-nightly-cpu
+    python -m pip install xgrammar
 
 
 Then you can verify installation in command line:
@@ -39,6 +34,17 @@ Then you can verify installation in command line:
 
     python -c "import xgrammar; print(xgrammar)"
     # Prints out: <module 'xgrammar' from '/path-to-env/lib/python3.11/site-packages/xgrammar/__init__.py'>
+
+
+CUDA Dependency
+~~~~~~~~~~~~~~~
+
+When using NVIDIA GPUs, please also install these extra
+dependencies to enable CUDA support for applying bitmasks:
+
+.. code-block:: bash
+
+    python -m pip install cuda-python nvidia-cuda-nvrtc-cu12
 
 |
 

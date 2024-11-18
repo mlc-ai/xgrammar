@@ -16,10 +16,21 @@
 # under the License.
 """The CUDA kernel source code for in-place applying token mask."""
 import ctypes
+import logging
 import os
+import platform
+import shutil
+from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import torch
+
+from xgrammar.support import logging
+
+logging.enable_logging()
+logger = logging.getLogger(__name__)
+
 
 try:
     from cuda import cuda, cudart, nvrtc
@@ -68,6 +79,10 @@ extern "C" __global__ void __launch_bounds__(512) ApplyTokenBitmaskInplaceKernel
 """.strip()
 
 
+def _find_nvcc_path() -> Optional[str]:
+    return shutil.which("nvcc")
+
+
 # Adapted from https://github.com/NVIDIA/cuda-python/blob/main/cuda_bindings/examples.
 def _cudaGetErrorEnum(error):
     if isinstance(error, cuda.CUresult):
@@ -110,11 +125,36 @@ class KernelStore:
                 str.encode(_apply_token_bitmask_inplace_kernel), b"sourceCode.cu", 0, [], []
             )
         )
+        # Get CUDA home from environment variable.
         CUDA_HOME = os.getenv("CUDA_HOME")
-        if CUDA_HOME == None:
+        if not CUDA_HOME:
             CUDA_HOME = os.getenv("CUDA_PATH")
-        if CUDA_HOME == None:
-            raise RuntimeError("Environment variable CUDA_HOME or CUDA_PATH is not set")
+
+        if not CUDA_HOME:
+            # Check common installation paths
+            candidate_paths = []
+            nvcc_path = _find_nvcc_path()
+            if nvcc_path != None:
+                candidate_paths.append(str(Path(nvcc_path).parent.parent))
+            if platform.system() != "Windows":
+                candidate_paths += [
+                    "/usr/local/cuda",
+                    "/opt/cuda",
+                ]
+            else:
+                candidate_paths += ["C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA"]
+            for path in candidate_paths:
+                if os.path.exists(path):
+                    CUDA_HOME = path
+                    break
+
+        if not CUDA_HOME:
+            raise RuntimeError(
+                f"Cannot find CUDA home from the candidate paths: {candidate_paths}. "
+                'You can specify the CUDA home via environment variable "$CUDA_HOME" after '
+                "installing CUDA."
+            )
+        logger.info("Use CUDA home %s", CUDA_HOME)
         include_dirs = os.path.join(CUDA_HOME, "include")
 
         # Initialize CUDA
@@ -166,7 +206,10 @@ class KernelStore:
 
 def apply_token_bitmask_inplace(logits: torch.Tensor, bitmask: torch.Tensor):
     if cuda is None or cudart is None or nvrtc is None:
-        raise RuntimeError("cuda-python is not installed. Please install cuda-python first.")
+        raise RuntimeError(
+            "CUDA dependencies are not installed. Please follow "
+            "https://xgrammar.mlc.ai/docs/start/install#cuda-dependency to install CUDA dependency."
+        )
 
     # Check input tensor shapes.
     if logits.ndim == 2:
@@ -178,9 +221,21 @@ def apply_token_bitmask_inplace(logits: torch.Tensor, bitmask: torch.Tensor):
         raise ValueError(f"Invalid logits tensor shape {logits.shape}")
     bitmask_size = (vocab_size + BITS_PER_BLOCK - 1) // BITS_PER_BLOCK
 
+    # Check input tensor dtypes.
+    if logits.dtype != torch.float32:
+        raise ValueError(
+            "The logits tensor is expected to have dtype torch.float32. "
+            f"However the input logits has dtype {logits.dtype}"
+        )
+    if bitmask.dtype != torch.int32:
+        raise ValueError(
+            "The bitmask tensor is expected to have dtype torch.int32. "
+            f"However the input bitmask has dtype {logits.dtype}"
+        )
+
     # Ensure that the tensors are contiguous in memory.
-    logits = logits.contiguous()
-    bitmask = bitmask.contiguous()
+    if not logits.is_contiguous() or not bitmask.is_contiguous():
+        raise ValueError("The logits and bitmask tensors are expected to be contiguous in memory.")
 
     # Compile the kernel.
     kernel = KernelStore.compile(logits.device.index)
@@ -188,7 +243,7 @@ def apply_token_bitmask_inplace(logits: torch.Tensor, bitmask: torch.Tensor):
     grid_dims = (batch_size * bitmask_size + THREADS_PER_BLOCK - 1) // THREADS_PER_BLOCK, 1, 1
     block_dims = THREADS_PER_BLOCK, 1, 1
     shared_mem_bytes = 0
-    stream = cuda.CU_STREAM_LEGACY
+    stream = torch.cuda.current_stream().cuda_stream
     extra = 0
     kernelArgs = (
         (

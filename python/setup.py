@@ -105,7 +105,7 @@ def main() -> None:
         name="xgrammar",
         version=get_version(),
         author="MLC Team",
-        description="Cross-platform Near-zero Overhead Grammar-guided Generation for LLMs",
+        description="Efficient, Flexible and Portable Structured Generation",
         long_description=open(os.path.join(PROJECT_DIR, "README.md")).read(),
         licence="Apache 2.0",
         classifiers=[
