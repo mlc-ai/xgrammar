@@ -1054,24 +1054,6 @@ std::string JSONSchemaConverter::VisitObject(
   return result;
 }
 
-// JSONSchemaConverter::JSONSchemaConverter(
-//     const picojson::value& schema,
-//     std::optional<int> indent,
-//     std::optional<std::pair<std::string, std::string>> separators,
-//     bool strict_mode
-// )
-//     : pimpl_(std::make_shared<Impl>(schema, indent, separators, strict_mode)) {}
-
-// JSONSchemaConverter::JSONSchemaConverter(
-//     const std::string& schema,
-//     std::optional<int> indent,
-//     std::optional<std::pair<std::string, std::string>> separators,
-//     bool strict_mode
-// )
-//     : pimpl_(std::make_shared<Impl>(picojson::value(schema), indent, separators, strict_mode)) {}
-
-// std::string JSONSchemaConverter::Convert() { return pimpl_->Convert(); }
-
 // std::string BuiltinGrammar::_JSONSchemaToEBNF(
 //     const std::string& schema,
 //     std::optional<int> indent,
