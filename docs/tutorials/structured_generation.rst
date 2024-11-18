@@ -91,6 +91,7 @@ Now we simulate a single-request auto-regressive generation. See later section f
 
       # Apply bitmask to logits to mask invalid tokens
       matcher.fill_next_token_bitmask(token_bitmask)
+      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmasks)
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1)
@@ -194,6 +195,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
 
       # Apply bitmask to logits to mask invalid tokens
       matcher.fill_next_token_bitmask(token_bitmask)
+      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmasks)
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1)
@@ -277,6 +279,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
 
       # Apply bitmask to logits to mask invalid tokens
       matcher.fill_next_token_bitmask(token_bitmask)
+      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmasks)
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1)
