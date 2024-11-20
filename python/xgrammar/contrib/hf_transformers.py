@@ -7,7 +7,8 @@ class LogitsProcessor(transformers.LogitsProcessor):
     """
     LogitsProcessor for processing logits in transformers' generate() method.
 
-    Example usage:
+    Example usage
+    -------------
         ```python
         model_id = "Qwen/Qwen2.5-1.5B-Instruct"
         tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -25,6 +26,12 @@ class LogitsProcessor(transformers.LogitsProcessor):
         ```
 
         For an end-to-end example, see `examples/transformers_example.py`.
+
+    Notes
+    -----
+    - Note that this LogitsProcessor can only be used once. For each `generate()` call,
+    instantiate a new one.
+    - Note that this implementation may contain extra overhead.
     """
 
     def __init__(
@@ -66,5 +73,9 @@ class LogitsProcessor(transformers.LogitsProcessor):
 
         self.matcher.fill_next_token_bitmask(self.token_bitmask)
         self.matcher.apply_token_bitmask_inplace(scores, self.token_bitmask)
+
+        # NOTE: Cannot reset here because __call__ is not invoked when stop token
+        # is sampled. This is why each `generate()` call needs to instantiate an
+        # LogitsProcessor
 
         return scores

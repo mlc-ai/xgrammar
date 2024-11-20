@@ -1,7 +1,7 @@
 import xgrammar as xgr
 import torch
 
-from xgrammar.contrib.transformers import LogitsProcessor
+from xgrammar.contrib.hf_transformers import LogitsProcessor
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 
 # Instantiate model
@@ -31,9 +31,7 @@ text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_pr
 model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
 # Generate
-logits_processor = xgr.contrib.transformers.LogitsProcessor(
-    compiled_grammar, tokenizer_info, full_vocab_size
-)
+logits_processor = LogitsProcessor(compiled_grammar, tokenizer_info, full_vocab_size)
 generated_ids = model.generate(
     **model_inputs, max_new_tokens=512, logits_processor=[logits_processor]
 )
