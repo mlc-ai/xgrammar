@@ -36,6 +36,8 @@ compiled_grammar = grammar_compiler.compile_json_grammar()
 messages_list = []
 prompts = [
     "Introduce yourself in JSON briefly as a student.",
+    # Uncomment for batch generation
+    # "Introduce yourself in JSON briefly as a professor.",
 ]
 for prompt in prompts:
     messages = [
@@ -51,8 +53,7 @@ texts = [
     for messages in messages_list
 ]
 
-# For batched request of different lengths, either use a model that has a padding token,
-# or specify your own
+# For batched requests, either use a model that has a padding token, or specify your own
 # model_inputs = tokenizer(texts, return_tensors="pt", padding=True).to(model.device)
 model_inputs = tokenizer(texts, return_tensors="pt").to(model.device)
 

@@ -74,7 +74,8 @@ class LogitsProcessor(transformers.LogitsProcessor):
         """
         Accept token sampled in the last iteration, fill in bitmask, and apply bitmask to logits.
 
-        Check what `input_ids` is when one sequence finishes before the other
+        Returns:
+            scores: Logits modified with bitmask.
         """
         if input_ids.shape[0] != self.batch_size:
             raise ValueError(
