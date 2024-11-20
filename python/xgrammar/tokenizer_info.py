@@ -16,11 +16,11 @@
 # under the License.
 """The tokenizer info."""
 from enum import Enum
-from typing import List, Union
+from typing import List, Optional, Union
 
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
-from .base import XGObject, _core
+from .base import XGRObject, _core
 
 
 class VocabType(Enum):
@@ -51,7 +51,7 @@ class VocabType(Enum):
     BYTE_LEVEL = "BYTE_LEVEL"
 
 
-class TokenizerInfo(XGObject):
+class TokenizerInfo(XGRObject):
     """The tokenizer info, which contains the vocabulary, the type of the vocabulary, and necessary
     information for the grammar-guided generation. This class should be the first choice when
     handling tokenizers in XGrammar. It eliminates the overhead of converting the vocabulary between
@@ -78,27 +78,38 @@ class TokenizerInfo(XGObject):
         self,
         encoded_vocab: Union[List[bytes], List[str]],
         vocab_type: VocabType = VocabType.RAW,
+        *,
+        vocab_size: Optional[int] = None,
+        stop_token_ids: Optional[Union[List[int], int]] = None,
         prepend_space_in_tokenization: bool = False,
     ) -> None:
-        self.init_with_handle(
-            _core.TokenizerInfo(encoded_vocab, vocab_type.value, prepend_space_in_tokenization)
+        if isinstance(stop_token_ids, int):
+            stop_token_ids = [stop_token_ids]
+        self._init_handle(
+            _core.TokenizerInfo(
+                encoded_vocab,
+                vocab_type.value,
+                vocab_size,
+                stop_token_ids,
+                prepend_space_in_tokenization,
+            )
         )
 
     @property
     def vocab_type(self) -> VocabType:
         """The type of the vocabulary."""
-        return VocabType(self.handle.vocab_type)
+        return VocabType(self._handle.vocab_type)
 
     @property
     def vocab_size(self) -> int:
         """The size of the vocabulary."""
-        return self.handle.vocab_size
+        return self._handle.vocab_size
 
     @property
     def prepend_space_in_tokenization(self) -> bool:
         """Whether the tokenizer will prepend a space before the text in the tokenization
         process."""
-        return self.handle.prepend_space_in_tokenization
+        return self._handle.prepend_space_in_tokenization
 
     @property
     def decoded_vocab(self) -> List[bytes]:
@@ -106,20 +117,25 @@ class TokenizerInfo(XGObject):
         back to the original format of the input text. E.g. for type ByteFallback, the token
         <0x1B> is converted back to "\u001B" in the raw vocabulary.
         """
-        return self.handle.decoded_vocab
+        return self._handle.decoded_vocab
 
     @property
     def stop_token_ids(self) -> List[int]:
         """The stop token ids."""
-        return self.handle.stop_token_ids
+        return self._handle.stop_token_ids
 
     @property
     def special_token_ids(self) -> List[int]:
         """The special token ids."""
-        return self.handle.special_token_ids
+        return self._handle.special_token_ids
 
     @staticmethod
-    def from_huggingface(tokenizer: PreTrainedTokenizerBase) -> "TokenizerInfo":
+    def from_huggingface(
+        tokenizer: PreTrainedTokenizerBase,
+        *,
+        vocab_size: Optional[int] = None,
+        stop_token_ids: Optional[Union[List[int], int]] = None,
+    ) -> "TokenizerInfo":
         """Construct the tokenizer info from the huggingface tokenizer. This constructor supports
         various tokenizer backends, including the huggingface fast tokenizer and tiktoken tokenizer.
 
@@ -128,11 +144,22 @@ class TokenizerInfo(XGObject):
         tokenizer : PreTrainedTokenizerBase
             The huggingface tokenizer.
 
+        vocab_size : Optional[int], default: None
+            The size of the vocabulary.
+
+        stop_token_ids : Optional[Union[List[int], int]], default: None
+            The stop token ids.
+
         Returns
         -------
         tokenizer_info : TokenizerInfo
             The tokenizer info.
         """
+
+        if isinstance(stop_token_ids, int):
+            stop_token_ids = [stop_token_ids]
+        if isinstance(stop_token_ids, list) and len(stop_token_ids) == 0:
+            raise ValueError("stop_token_ids cannot be empty")
 
         try:
             encoded_vocab = tokenizer.get_vocab()
@@ -148,11 +175,21 @@ class TokenizerInfo(XGObject):
 
         if isinstance(tokenizer, PreTrainedTokenizerFast):
             # huggingface fast tokenizer
-            # Note this backend_str may not contain the full vocab. Some special tokens may
-            # be omitted. So we still need to pass the vocab to the constructor.
+            # - the vocabulary is directly obtained from tokenizer.get_vocab()
+            #   (tokenizer.backend_tokenizer.to_str() may not contain the full vocab, special
+            #   tokens may be omitted)
+            # - the vocab size is obtained from len(tokenizer.get_vocab()) or provided by user
+            # - the vocab type and prepend_space_in_tokenization are obtained from
+            #   tokenizer.backend_tokenizer.to_str()
+            # - stop token id is obtained from tokenizer.eos_token_id or provided by user
             backend_str = tokenizer.backend_tokenizer.to_str()
-            return TokenizerInfo.from_handle(
-                _core.TokenizerInfo.from_huggingface(encoded_vocab, backend_str)
+            if stop_token_ids is None:
+                if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
+                    stop_token_ids = [tokenizer.eos_token_id]
+            return TokenizerInfo._create_from_handle(
+                _core.TokenizerInfo.from_huggingface(
+                    encoded_vocab, backend_str, vocab_size, stop_token_ids
+                )
             )
         elif (
             "vocab_file" in tokenizer.vocab_files_names
@@ -160,7 +197,16 @@ class TokenizerInfo(XGObject):
         ):
             # tiktoken tokenizer
             # e.g. Phi-3-small-8k-instruct, Qwen-7B-Chat, stablelm-2-12b-chat (previously)
-            return TokenizerInfo(encoded_vocab, VocabType.RAW, False)
+            if stop_token_ids is None:
+                if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
+                    stop_token_ids = [tokenizer.eos_token_id]
+            return TokenizerInfo(
+                encoded_vocab,
+                VocabType.RAW,
+                vocab_size=vocab_size,
+                stop_token_ids=stop_token_ids,
+                prepend_space_in_tokenization=False,
+            )
         else:
             # TODO(yixin): sentencepiece tokenizer
             raise ValueError(f"Unsupported tokenizer type: {type(tokenizer)}")
@@ -168,7 +214,7 @@ class TokenizerInfo(XGObject):
     def dump_metadata(self) -> str:
         """Dump the metadata of the tokenizer to a json string. It currently contains vocab_type
         and prepend_space_in_tokenization."""
-        return self.handle.dump_metadata()
+        return self._handle.dump_metadata()
 
     @staticmethod
     def from_vocab_and_metadata(
@@ -184,6 +230,6 @@ class TokenizerInfo(XGObject):
         metadata : str
             The metadata string in json format.
         """
-        return TokenizerInfo.from_handle(
+        return TokenizerInfo._create_from_handle(
             _core.TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata),
         )

@@ -8,14 +8,14 @@ import pytest
 import torch
 from transformers import AutoTokenizer
 
-from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo
+import xgrammar as xgr
 
-json_grammar = BuiltinGrammar.json()
+json_grammar = xgr.BNFGrammar.builtin_json_grammar()
 
 
-def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
-    matcher = GrammarMatcher(grammar, terminate_without_stop_token=True)
-    can_accept = matcher.accept_string(input_str)
+def match_complete_string(grammar: xgr.BNFGrammar, input_str: str) -> bool:
+    matcher = xgr.GrammarMatcher(grammar, terminate_without_stop_token=True)
+    can_accept = matcher._debug_accept_string(input_str)
     can_terminate = matcher.is_terminated()
     return can_accept and can_terminate
 
@@ -284,14 +284,14 @@ def test_fill_next_token_bitmask(
         use_fast=True,
         trust_remote_code=True,
     )
-    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 
     time_start = time.monotonic_ns()
-    matcher = GrammarMatcher(json_grammar, tokenizer_info)
+    matcher = xgr.GrammarMatcher(json_grammar, tokenizer_info)
     time_end = time.monotonic_ns()
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
-    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+    token_bitmask = _allocate_token_bitmask(tokenizer_info.vocab_size)
     logits_gpu = torch.zeros(matcher.vocab_size, dtype=torch.float32, device="cuda")
 
     input_bytes = input_str.encode("utf-8")
@@ -304,13 +304,13 @@ def test_fill_next_token_bitmask(
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
         # 2. Correctness verification
-        rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
+        rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask)
         assert len(rejected_token_ids) == expected_rejected_sizes[i]
 
         # 3. apply_token_bitmask_inplace
         torch.cuda.synchronize()
         time_start = time.monotonic_ns()
-        GrammarMatcher.apply_token_bitmask_inplace(logits_gpu, token_bitmask)
+        xgr.GrammarMatcher.apply_token_bitmask_inplace(logits_gpu, token_bitmask)
         torch.cuda.synchronize()
         time_end = time.monotonic_ns()
         print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
@@ -318,13 +318,13 @@ def test_fill_next_token_bitmask(
         # 4. accept_string
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
-        assert matcher.accept_string(bytes([c]))
+        assert matcher._debug_accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
     # 5. Final correctness verification
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert len(rejected_token_ids) == expected_rejected_sizes[-1]
 
 

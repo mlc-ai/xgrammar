@@ -63,7 +63,8 @@ __global__ void __launch_bounds__(512) ApplyTokenBitmaskInplaceKernel(
     const int32_t* __restrict__ bitmask,
     int vocab_size,
     int bitmask_size,
-    int bitmask_row_size
+    int bitmask_row_size,
+    const int* __restrict__ indices
 ) {
   int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid >= bitmask_size) {
@@ -88,11 +89,20 @@ __global__ void __launch_bounds__(512) ApplyTokenBitmaskInplaceKernel(
 #define THREADS_PER_BLOCK 512
 
 void ApplyTokenBitmaskInplace(
-    void* logits, DTypeFlag dtype_flag, int32_t* bitmask, int batch_size, int vocab_size
+    void* logits,
+    DTypeFlag dtype_flag,
+    int32_t* bitmask,
+    int batch_size,
+    int vocab_size,
+    std::vector<int> indices
 ) {
   int bitmask_size = (vocab_size + BITS_PER_BLOCK - 1) / BITS_PER_BLOCK;
   int num_blocks = (batch_size * bitmask_size + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
   int num_threads = THREADS_PER_BLOCK;
+
+  int* device_indices;
+  cudaMalloc(&device_indices, indices.size() * sizeof(int));
+  cudaMemcpy(device_indices, indices.data(), indices.size() * sizeof(int), cudaMemcpyHostToDevice);
 
   XGRAMMAR_DISPATCH_DTYPE(dtype_flag, c_type, {
     XGRAMMAR_CUDA_CALL({
@@ -101,7 +111,8 @@ void ApplyTokenBitmaskInplace(
           bitmask,
           vocab_size,
           batch_size * bitmask_size,
-          bitmask_size
+          bitmask_size,
+          device_indices
       );
     });
   });

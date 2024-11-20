@@ -1,14 +1,13 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/regex_converter.h
- * \brief Convert a regex string to EBNF grammar string.
+ * \file xgrammar/json_schema_converter.h
+ * \brief Convert a JSON schema string to EBNF grammar string.
  */
 
-#ifndef XGRAMMAR_REGEX_CONVERTER_H_
-#define XGRAMMAR_REGEX_CONVERTER_H_
+#ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_H_
+#define XGRAMMAR_JSON_SCHEMA_CONVERTER_H_
 
 #include <picojson.h>
-#include <xgrammar/xgrammar.h>
 
 #include <optional>
 #include <string>
@@ -35,4 +34,4 @@ std::string JSONSchemaToEBNF(
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_REGEX_CONVERTER_H_
+#endif  // XGRAMMAR_JSON_SCHEMA_CONVERTER_H_

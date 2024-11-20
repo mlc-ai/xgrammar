@@ -2,42 +2,34 @@ import sys
 import time
 
 import pytest
+import torch
 from transformers import AutoTokenizer
 
-from xgrammar import (
-    BNFGrammar,
-    BuiltinGrammar,
-    CompiledGrammar,
-    GrammarMatcher,
-    TokenizerInfo,
+import xgrammar as xgr
+from xgrammar.testing import (
+    _allocate_token_bitmask,
+    _match_grammar_with_string,
+    _regex_to_ebnf,
 )
-
-
-def match_string_to_grammar(grammar_str: str, input_str: str) -> bool:
-    grammar = BNFGrammar(grammar_str)
-    matcher = GrammarMatcher(grammar, terminate_without_stop_token=True)
-    can_accept = matcher.accept_string(input_str, verbose=False)
-    can_terminate = matcher.is_terminated()
-    return can_accept and can_terminate
 
 
 def test_basic():
     regex = "123"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= "1" "2" "3"
 """
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, "123")
-    assert not match_string_to_grammar(grammar_str, "1234")
+    assert _match_grammar_with_string(grammar_str, "123")
+    assert not _match_grammar_with_string(grammar_str, "1234")
 
 
 def test_unicode():
     regex = "ww我😁"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= "w" "w" "\u6211" "\U0001f601"
 """
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, regex)
+    assert _match_grammar_with_string(grammar_str, regex)
 
 
 regex_expected_grammar_instance = [
@@ -70,9 +62,9 @@ regex_expected_grammar_instance = [
 
 @pytest.mark.parametrize("regex, expected_grammar, instance", regex_expected_grammar_instance)
 def test_escape(regex: str, expected_grammar: str, instance: str):
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance)
+    assert _match_grammar_with_string(grammar_str, instance)
 
 
 def test_escaped_char_class():
@@ -80,89 +72,89 @@ def test_escaped_char_class():
     # TODO(yixin): add tests for escaped char class nested in char class
     regex = r"\w\w\W\d\D\s\S"
     instance = "A_ 1b 0"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [\f\n\r\t\v\u0020\u00a0] [^[\f\n\r\t\v\u0020\u00a0]
 """
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance)
+    assert _match_grammar_with_string(grammar_str, instance)
 
 
 def test_char_class():
     regex = r"[-a-zA-Z+--]+"
     instance = "a-+"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= [-a-zA-Z+--]+
 """
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance)
+    assert _match_grammar_with_string(grammar_str, instance)
 
 
 def test_boundary():
     regex = r"^abc$"
     instance = "abc"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= "a" "b" "c"
 """
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance)
+    assert _match_grammar_with_string(grammar_str, instance)
 
 
 def test_disjunction():
     regex = r"abc|de(f|g)"
     instance = "deg"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= "a" "b" "c" | "d" "e" ( "f" | "g" )
 """
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance)
+    assert _match_grammar_with_string(grammar_str, instance)
 
 
 def test_space():
     regex = r" abc | df | g "
     instance = " df "
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= " " "a" "b" "c" " " | " " "d" "f" " " | " " "g" " "
 """
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance)
+    assert _match_grammar_with_string(grammar_str, instance)
 
 
 def test_quantifier():
     regex = r"(a|b)?[a-z]+(abc)*"
     instance = "adddabcabc"
     instance1 = "z"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= ( "a" | "b" )? [a-z]+ ( "a" "b" "c" )*
 """
     # TODO(yixin): add tests for repetition range
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance)
-    assert match_string_to_grammar(grammar_str, instance1)
+    assert _match_grammar_with_string(grammar_str, instance)
+    assert _match_grammar_with_string(grammar_str, instance1)
 
 
 def test_group():
     regex = r"(a|b)(c|d)"
     instance = "ac"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= ( "a" | "b" ) ( "c" | "d" )
 """
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance)
+    assert _match_grammar_with_string(grammar_str, instance)
 
 
 def test_any():
     regex = r".+a.+"
     instance = "bbbabb"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= [\u0000-\U0010FFFF]+ "a" [\u0000-\U0010FFFF]+
 """
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance)
+    assert _match_grammar_with_string(grammar_str, instance)
 
 
 def test_ipv4():
     regex = r"((25[0-5]|2[0-4]\d|[01]?\d\d?).)((25[0-5]|2[0-4]\d|[01]?\d\d?).)((25[0-5]|2[0-4]\d|[01]?\d\d?).)(25[0-5]|2[0-4]\d|[01]?\d\d?)"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = (
         r"""root ::= ( ( "2" "5" [0-5] | "2" [0-4] [0-9] | [01]? [0-9] [0-9]? ) """
         r"""[\u0000-\U0010FFFF] ) ( ( "2" "5" [0-5] | "2" [0-4] [0-9] | [01]? [0-9] """
@@ -171,7 +163,7 @@ def test_ipv4():
 """
     )
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, "123.45.67.89")
+    assert _match_grammar_with_string(grammar_str, "123.45.67.89")
 
 
 date_time_instances_accepted = [
@@ -190,7 +182,7 @@ date_time_instances_accepted = [
 @pytest.mark.parametrize("instance, accepted", date_time_instances_accepted)
 def test_date_time(instance: str, accepted: bool):
     regex = r"^\d\d\d\d-(0[1-9]|1[0-2])-([0-2]\d|3[01])T([01]\d|2[0123]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]([01]\d|2[0123]):[0-5]\d)$"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = (
         r"""root ::= [0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( [0-2] [0-9] """
         r"""| "3" [01] ) "T" ( [01] [0-9] | "2" [0123] ) ":" [0-5] [0-9] ":" [0-5] [0-9] """
@@ -198,7 +190,7 @@ def test_date_time(instance: str, accepted: bool):
 """
     )
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance) == accepted
+    assert _match_grammar_with_string(grammar_str, instance) == accepted
 
 
 date_instances_accepted = [
@@ -213,14 +205,14 @@ date_instances_accepted = [
 @pytest.mark.parametrize("instance, accepted", date_instances_accepted)
 def test_date(instance: str, accepted: bool):
     regex = r"^\d\d\d\d-(0[1-9]|1[0-2])-([0-2]\d|3[01])$"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = (
         r"""root ::= [0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" """
         r"""( [0-2] [0-9] | "3" [01] )
 """
     )
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance) == accepted
+    assert _match_grammar_with_string(grammar_str, instance) == accepted
 
 
 time_instances_accepted = [
@@ -237,14 +229,14 @@ time_instances_accepted = [
 @pytest.mark.parametrize("instance, accepted", time_instances_accepted)
 def test_time(instance: str, accepted: bool):
     regex = r"^([01]\d|2[0123]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]([01]\d|2[0123]):[0-5]\d)$"
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
+    grammar_str = _regex_to_ebnf(regex)
     expected_grammar = (
         r"""root ::= ( [01] [0-9] | "2" [0123] ) ":" [0-5] [0-9] ":" [0-5] [0-9] """
         r"""( "." [0-9]+ )? ( "Z" | [+-] ( [01] [0-9] | "2" [0123] ) ":" [0-5] [0-9] )
 """
     )
     assert grammar_str == expected_grammar
-    assert match_string_to_grammar(grammar_str, instance) == accepted
+    assert _match_grammar_with_string(grammar_str, instance) == accepted
 
 
 email_instances_accepted = [
@@ -272,12 +264,11 @@ def test_email(instance: str, accepted: bool):
         r"""|"([\w!#$%&'*+/=?^_`{|}~\-(),:;<>@[\].]|\\")+")@(([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+"""
         r"""[a-z0-9]([a-z0-9-]*[a-z0-9])?)$"""
     )
-    grammar_str = BuiltinGrammar._regex_to_ebnf(regex)
-    assert match_string_to_grammar(grammar_str, instance) == accepted
+    grammar_str = _regex_to_ebnf(regex)
+    assert _match_grammar_with_string(grammar_str, instance) == accepted
 
 
 tokenizer_paths = ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
-
 regex_instances = [
     (r".+a.+", "bbbabb"),
     (
@@ -302,29 +293,30 @@ regex_instances = [
         "customer/department=shipping@test.example.test-example.com",
     ),
 ]
-
 tokenizer_path_regex_instance = [(t, *ri) for t in tokenizer_paths for ri in regex_instances]
 
 
 @pytest.mark.parametrize("tokenizer_path, regex, instance", tokenizer_path_regex_instance)
 def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     print(f"Tokenizer: {tokenizer_path}, regex: {regex}, instance: {instance}")
+
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-    grammar = BNFGrammar(BuiltinGrammar._regex_to_ebnf(regex))
-    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+
     time_start = time.monotonic_ns()
-    matcher_compiled_grammar = CompiledGrammar(grammar, tokenizer_info)
+    matcher_compiled_grammar = grammar_compiler.compile_bnf_grammar(_regex_to_ebnf(regex))
     time_end = time.monotonic_ns()
     print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
-    matcher = GrammarMatcher(matcher_compiled_grammar)
-    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+    matcher = xgr.GrammarMatcher(matcher_compiled_grammar)
+    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
     for c in instance.encode("utf-8"):
         time_start = time.monotonic_ns()
         matcher.fill_next_token_bitmask(token_bitmask)
         time_end = time.monotonic_ns()
         print(f"Time for fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
-        accepted = matcher.accept_string(bytes([c]))
+        accepted = matcher._debug_accept_string(bytes([c]))
         assert accepted
         print(f"Accepting {c}")
 

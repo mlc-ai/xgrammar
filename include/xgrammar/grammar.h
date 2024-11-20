@@ -64,12 +64,19 @@ namespace xgrammar {
 class BNFGrammar {
  public:
   /*!
+   * \brief Get the EBNF string of the grammar.
+   */
+  std::string ToString() const;
+
+  /*!
    * \brief Construct a BNF grammar with a EBNF-formatted string. The grammar will be normalized
    * (simplified) by default.
    * \param ebnf_string The EBNF-formatted string.
-   * \param root_rule The name of the root rule.
+   * \param root_rule_name The name of the root rule.
    */
-  static BNFGrammar FromEBNF(const std::string& ebnf_string, const std::string root_rule = "root");
+  static BNFGrammar FromEBNF(
+      const std::string& ebnf_string, const std::string& root_rule_name = "root"
+  );
 
   /*!
    * \brief Construct a BNF grammar from the json schema string. The schema string should be in the
@@ -99,34 +106,6 @@ class BNFGrammar {
    * \brief Get the grammar of standard JSON format. We have built-in support for JSON.
    */
   static BNFGrammar BuiltinJSONGrammar();
-
-  /*!
-   * \brief Get the EBNF string of the grammar.
-   */
-  std::string ToString() const;
-
-  /*!
-   * \brief Convert JSON schema string to EBNF grammar string.
-   * \param json_schema The JSON schema string.
-   * \param indent The number of spaces for indentation. If set to std::nullopt, the output will be
-   * in one line. Default: 2.
-   * \param separators Two separators used in the schema: comma and colon. Examples: {",", ":"},
-   * {", ", ": "}. If std::nullopt, the default separators will be used: {",", ": "} when the
-   * indent is not -1, and {", ", ": "} otherwise. This follows the convention in python
-   * json.dumps(). Default: std::nullopt. \param strict_mode Whether to use strict mode. In strict
-   * mode, the generated grammar will not allow properties and items that is not specified in the
-   * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
-   *
-   * This helps LLM to generate accurate output in the grammar-guided generation with JSON
-   * schema. Default: true.
-   * \returns The EBNF grammar string.
-   */
-  //   static std::string _JSONSchemaToEBNF(
-  //       const std::string& schema,
-  //       std::optional<int> indent = std::nullopt,
-  //       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
-  //       bool strict_mode = true
-  //   );
 
   /*!
    * \brief Convert regex string to EBNF grammar string.

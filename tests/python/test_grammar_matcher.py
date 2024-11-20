@@ -8,16 +8,15 @@ import pytest
 import torch
 from transformers import AutoTokenizer
 
-from xgrammar import BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo
+import xgrammar as xgr
+from xgrammar.testing import (
+    _allocate_token_bitmask,
+    _get_masked_tokens_from_bitmask,
+    _get_matcher_from_grammar_and_tokenizer_info,
+    _match_grammar_with_string,
+)
 
-json_grammar = BuiltinGrammar.json()
-
-
-def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
-    matcher = GrammarMatcher(grammar, terminate_without_stop_token=True)
-    can_accept = matcher.accept_string(input_str)
-    can_terminate = matcher.is_terminated()
-    return can_accept and can_terminate
+json_grammar = xgr.BNFGrammar.builtin_json_grammar()
 
 
 input_accepted = [
@@ -28,7 +27,7 @@ input_accepted = [
 
 @pytest.mark.parametrize("input_accepted", input_accepted)
 def test_accept(input_accepted: str):
-    assert match_complete_string(json_grammar, input_accepted)
+    assert _match_grammar_with_string(json_grammar, input_accepted)
 
 
 input_refused = (
@@ -39,7 +38,7 @@ input_refused = (
 
 @pytest.mark.parametrize("input_refused", input_refused)
 def test_refuse(input_refused: str):
-    assert not match_complete_string(json_grammar, input_refused)
+    assert not _match_grammar_with_string(json_grammar, input_refused)
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [
@@ -82,25 +81,29 @@ def test_fill_next_token_bitmask(
         use_fast=True,
         trust_remote_code=True,
     )
-    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
-    matcher = GrammarMatcher(json_grammar, tokenizer_info)
-    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
+
+    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
     input_bytes = input_str.encode("utf-8")
     rejected_sizes = []
 
     for i, c in enumerate(input_bytes):
         matcher.fill_next_token_bitmask(token_bitmask)
-        rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
             assert rejected_sizes[-1] == expected_rejected_sizes[i], (
                 rejected_sizes[-1],
                 expected_rejected_sizes[i],
             )
-        assert matcher.accept_string(bytes([c]))
+        assert matcher._debug_accept_string(bytes([c]))
 
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:
         assert rejected_sizes[-1] == expected_rejected_sizes[-1]
@@ -116,9 +119,9 @@ def test_token_operations():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    tokenizer_info = TokenizerInfo(vocab)
-    matcher = GrammarMatcher(json_grammar, tokenizer_info)
-    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
+    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
     expected = [
         ["{"],
@@ -138,7 +141,9 @@ def test_token_operations():
 
     for id in input_ids:
         matcher.fill_next_token_bitmask(token_bitmask)
-        rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
         accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
         accepted_tokens = [vocab[i] for i in accepted]
         result.append(accepted_tokens)
@@ -146,7 +151,7 @@ def test_token_operations():
         assert matcher.accept_token(id)
 
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
     accepted_tokens = [vocab[i] for i in accepted]
     result.append(accepted_tokens)
@@ -161,8 +166,8 @@ def test_apply_token_bitmask_inplace():
     expected = torch.where(bool_mask, logits, neginf)
 
     logits_gpu = logits.to("cuda")
-    bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
-    GrammarMatcher.apply_token_bitmask_inplace(logits_gpu, bitmask)
+    bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
+    xgr.apply_token_bitmask_inplace(logits_gpu, bitmask)
     torch.cuda.synchronize()
     assert torch.all(logits_gpu == expected.to("cuda"))
 
@@ -191,7 +196,7 @@ def test_apply_token_bitmask_inplace_large():
     logits_gpu = logits.to("cuda")
     torch.cuda.synchronize()
     time_start = time.monotonic_ns()
-    GrammarMatcher.apply_token_bitmask_inplace(logits_gpu, bitmask)
+    xgr.apply_token_bitmask_inplace(logits_gpu, bitmask)
     torch.cuda.synchronize()
     time_end = time.monotonic_ns()
     print(f"Time taken: {(time_end - time_start) / 1e3} us")
@@ -207,8 +212,10 @@ def test_rollback():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    tokenizer_info = TokenizerInfo(vocab)
-    matcher = GrammarMatcher(json_grammar, tokenizer_info, max_rollback_tokens=5)
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, max_rollback_tokens=5
+    )
 
     assert matcher.max_rollback_tokens == 5
 
@@ -216,22 +223,22 @@ def test_rollback():
 
     for i_1, i_2 in input_ids_splitted:
         orig_result = []
-        token_bitmask1 = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        token_bitmask1 = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(token_bitmask1)
         orig_result.append(token_bitmask1)
         assert matcher.accept_token(i_1)
-        token_bitmask2 = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        token_bitmask2 = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(token_bitmask2)
         orig_result.append(token_bitmask2)
         assert matcher.accept_token(i_2)
 
         matcher.rollback(2)
         result_after_rollback = []
-        new_token_bitmask1 = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        new_token_bitmask1 = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(new_token_bitmask1)
         result_after_rollback.append(new_token_bitmask1)
         assert matcher.accept_token(i_1)
-        new_token_bitmask2 = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        new_token_bitmask2 = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(new_token_bitmask2)
         result_after_rollback.append(new_token_bitmask2)
         assert matcher.accept_token(i_2)
@@ -247,13 +254,13 @@ def test_reset():
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
-    tokenizer_info = TokenizerInfo(vocab)
-    matcher = GrammarMatcher(json_grammar, tokenizer_info)
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
     orig_result = []
 
     for i in input_ids:
-        token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(token_bitmask)
         orig_result.append(token_bitmask)
         assert matcher.accept_token(i)
@@ -263,7 +270,7 @@ def test_reset():
     result_after_reset = []
 
     for i in input_ids:
-        token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+        token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(token_bitmask)
         result_after_reset.append(token_bitmask)
         assert matcher.accept_token(i)
@@ -291,10 +298,12 @@ def test_termination():
         "</s>",
     ]
     input_ids = [vocab.index(t) for t in input_splitted]
-    tokenizer_info = TokenizerInfo(vocab)
+    tokenizer_info = xgr.TokenizerInfo(vocab)
 
-    matcher = GrammarMatcher(json_grammar, tokenizer_info, max_rollback_tokens=5)
-    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, max_rollback_tokens=5
+    )
+    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
     for i in input_ids:
         matcher.fill_next_token_bitmask(token_bitmask)
@@ -318,9 +327,9 @@ def test_get_jump_forward_string():
 other_rule ::= "a" sub_rule "b"
 sub_rule ::= "b"
 """
-    grammar = BNFGrammar(grammar_ebnf)
-    matcher = GrammarMatcher(grammar)
-    assert matcher.accept_string("a")
+    grammar = xgr.BNFGrammar.from_ebnf(grammar_ebnf)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar)
+    assert matcher._debug_accept_string("a")
     assert matcher.find_jump_forward_string() == "bb"
 
 
@@ -330,15 +339,14 @@ def test_vocab_size():
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
         # fmt: on
     ]
-    tokenizer_info = TokenizerInfo(vocab)
-    matcher = GrammarMatcher(json_grammar, tokenizer_info, vocab_size=64)
-    assert matcher.vocab_size == 64
+    tokenizer_info = xgr.TokenizerInfo(vocab, vocab_size=64)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
-    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
     matcher.fill_next_token_bitmask(token_bitmask)
     assert token_bitmask.shape == (2,)
 
-    rejected_tokens = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
+    rejected_tokens = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert rejected_tokens == [i for i in range(64) if i != 7]
 
 
@@ -354,11 +362,18 @@ tokenizer_path_override_stop_tokens = [
 )
 def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[int]):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
-    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
-    matcher = GrammarMatcher(
-        json_grammar, tokenizer_info, override_stop_tokens=override_stop_tokens
+    tokenizer_info_1 = xgr.TokenizerInfo.from_huggingface(
+        tokenizer, stop_token_ids=override_stop_tokens
     )
-    assert matcher.stop_token_ids == override_stop_tokens
+    matcher_1 = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info_1)
+    assert tokenizer_info_1.stop_token_ids == override_stop_tokens
+    assert matcher_1.stop_token_ids == override_stop_tokens
+
+    tokenizer_info_2 = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    matcher_2 = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info_2, override_stop_tokens=override_stop_tokens
+    )
+    assert matcher_2.stop_token_ids == override_stop_tokens
 
 
 if __name__ == "__main__":

@@ -156,7 +156,7 @@ single-request generation and batch-request generation respectively.
   # Create a grammar matcher from the compiled grammar.
   matcher = GrammarMatcher(compiled_grammar)
 
-  token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+  token_bitmask = _allocate_token_bitmask(tokenizer_info.vocab_size)
   while True:
       logits = LLM.inference() # logits is a tensor of shape (vocab_size,) on GPU
       matcher.fill_next_token_bitmask(logits, token_bitmask)

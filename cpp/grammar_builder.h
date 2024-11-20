@@ -31,12 +31,12 @@ class BNFGrammarBuilder {
   /*!
    * \brief Get the result grammar. This function will also set the root rule to the rule with the
    * specified name. The rule should be already added to the grammar.
-   * \param root_rule The name of the root rule. Default is "root".
+   * \param root_rule_name The name of the root rule. Default is "root".
    */
-  BNFGrammar Get(const std::string& root_rule = "root") {
-    int32_t root_rule_id = GetRuleId(root_rule);
+  BNFGrammar Get(const std::string& root_rule_name = "root") {
+    int32_t root_rule_id = GetRuleId(root_rule_name);
     XGRAMMAR_CHECK(root_rule_id != -1)
-        << "The root rule with name \"" << root_rule << "\" is not found.";
+        << "The root rule with name \"" << root_rule_name << "\" is not found.";
     grammar_->root_rule_id_ = root_rule_id;
 
     return BNFGrammar(grammar_);

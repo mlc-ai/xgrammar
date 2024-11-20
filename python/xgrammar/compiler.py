@@ -17,28 +17,28 @@
 """The main functionality of XGrammar. The functions here are Python bindings of the C++ logic."""
 
 import json
-from typing import Optional, Tuple, Type, Union
+from typing import Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
 
-from .base import XGObject, _core
+from .base import XGRObject, _core
 from .grammar import BNFGrammar
 from .tokenizer_info import TokenizerInfo
 
 
-class CompiledGrammar(XGObject):
+class CompiledGrammar(XGRObject):
     @property
     def grammar(self) -> BNFGrammar:
         """The BNF grammar."""
-        return BNFGrammar.from_handle(self.handle.grammar)
+        return BNFGrammar._create_from_handle(self._handle.grammar)
 
     @property
     def tokenizer_info(self) -> TokenizerInfo:
         """The tokenizer info."""
-        return TokenizerInfo.from_handle(self.handle.tokenizer_info)
+        return TokenizerInfo._create_from_handle(self._handle.tokenizer_info)
 
 
-class GrammarCompiler(XGObject):
+class GrammarCompiler(XGRObject):
     """The cache for the grammar matcher initialization context. It is for eliminating the overhead
     of constructing the CompiledGrammar of the same grammar for many times. This cache
     is tokenizer-specific, i.e. different tokenizers should have different caches.
@@ -65,23 +65,7 @@ class GrammarCompiler(XGObject):
                 "to GrammarCompiler."
             )
 
-        self.init_with_handle(
-            _core.GrammarCompiler(tokenizer_info.handle, max_threads, cache_enabled)
-        )
-
-    def compile_bnf_grammar(self, grammar: BNFGrammar) -> CompiledGrammar:
-        """Compile a BNF grammar."""
-        return CompiledGrammar.from_handle(self.handle.compile_bnf_grammar(grammar.handle))
-
-    def compile_builtin_json_grammar(self) -> CompiledGrammar:
-        """Get CompiledGrammar from the standard JSON.
-
-        Returns
-        -------
-        compiled_grammar : CompiledGrammar
-            The initialization context for the grammar matcher.
-        """
-        return CompiledGrammar.from_handle(self.handle.compile_builtin_json_grammar())
+        self._init_handle(_core.GrammarCompiler(tokenizer_info._handle, max_threads, cache_enabled))
 
     def compile_json_schema(
         self,
@@ -120,10 +104,38 @@ class GrammarCompiler(XGObject):
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             schema = json.dumps(schema.model_json_schema())
 
-        return CompiledGrammar.from_handle(
-            self.handle.compile_json_schema(schema, indent, separators, strict_mode)
+        return CompiledGrammar._create_from_handle(
+            self._handle.compile_json_schema(schema, indent, separators, strict_mode)
+        )
+
+    def compile_builtin_json_grammar(self) -> CompiledGrammar:
+        """Get CompiledGrammar from the standard JSON.
+
+        Returns
+        -------
+        compiled_grammar : CompiledGrammar
+            The initialization context for the grammar matcher.
+        """
+        return CompiledGrammar._create_from_handle(self._handle.compile_builtin_json_grammar())
+
+    @overload
+    def compile_bnf_grammar(
+        self, grammar: str, *, root_rule_name: str = "root"
+    ) -> CompiledGrammar: ...
+
+    @overload
+    def compile_bnf_grammar(self, grammar: BNFGrammar) -> CompiledGrammar: ...
+
+    def compile_bnf_grammar(
+        self, grammar: Union[str, BNFGrammar], *, root_rule_name: str = "root"
+    ) -> CompiledGrammar:
+        """Compile a BNF grammar."""
+        if isinstance(grammar, str):
+            grammar = BNFGrammar.from_ebnf(grammar, root_rule_name=root_rule_name)
+        return CompiledGrammar._create_from_handle(
+            self._handle.compile_bnf_grammar(grammar._handle)
         )
 
     def clear_cache(self) -> None:
         """Clear all cached compiled grammars."""
-        self.handle.clear_cache()
+        self._handle.clear_cache()

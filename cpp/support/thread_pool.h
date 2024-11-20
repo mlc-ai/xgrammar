@@ -50,8 +50,8 @@ class ThreadPool {
             task = std::move(task_queue_.front());
             task_queue_.pop();
           }
-          // Execute task outside the lock to allow other threads to get new tasks
           task();
+          TaskComplete();
         }
       });
     }
@@ -71,7 +71,7 @@ class ThreadPool {
       -> std::shared_future<typename std::result_of<F(Args...)>::type> {
     using return_type = typename std::result_of<F(Args...)>::type;
 
-    // Package the task with its arguments into a shared pointer to allow safe capture in lambda
+    // Package the task with its arguments into a shared pointer
     auto task = std::make_shared<std::packaged_task<return_type()>>(
         std::bind(std::forward<F>(f), std::forward<Args>(args)...)
     );
@@ -81,8 +81,9 @@ class ThreadPool {
     {
       std::unique_lock<std::mutex> lock(queue_mutex_);
       XGRAMMAR_CHECK(!shutdown_) << "Cannot submit task to stopped ThreadPool";
+      ++unfinished_task_count_;  // Increment task count
 
-      // Wrap task in lambda to allow type erasure via std::function
+      // Directly add the task without wrapping
       task_queue_.emplace([task]() { (*task)(); });
     }
     queue_condition_.notify_one();
@@ -102,30 +103,43 @@ class ThreadPool {
     {
       std::unique_lock<std::mutex> lock(queue_mutex_);
       XGRAMMAR_CHECK(!shutdown_) << "Cannot execute task in stopped ThreadPool";
+      ++unfinished_task_count_;  // Increment task count
 
-      // Wrap the function and its arguments into a std::function<void()>
+      // Directly add the task without wrapping
       task_queue_.emplace(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
     }
     queue_condition_.notify_one();
   }
 
+  void Wait() {
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    tasks_done_condition_.wait(lock, [this] { return unfinished_task_count_ == 0; });
+  }
+
   /*!
-   * \brief Destructor that ensures graceful shutdown of the thread pool.
+   * \brief Join all threads in the pool.
    *
    * Sets shutdown flag and waits for all threads to complete their current tasks
    * before destroying the pool. Any remaining tasks in the queue will be executed
    * before shutdown completes.
    */
-  ~ThreadPool() {
+  void Join() {
     {
       std::unique_lock<std::mutex> lock(queue_mutex_);
+      if (shutdown_) return;  // Already shut down
       shutdown_ = true;
     }
+
     queue_condition_.notify_all();  // Wake up all threads so they can exit
     for (std::thread& worker : workers_) {
       if (worker.joinable()) worker.join();  // Wait for thread to finish
     }
   }
+
+  /*!
+   * \brief Destructor that ensures graceful shutdown of the thread pool.
+   */
+  ~ThreadPool() { Join(); }
 
   // Prevent copying or moving of the thread pool
   ThreadPool(const ThreadPool&) = delete;
@@ -134,6 +148,14 @@ class ThreadPool {
   ThreadPool& operator=(ThreadPool&&) = delete;
 
  private:
+  void TaskComplete() {
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    --unfinished_task_count_;
+    if (unfinished_task_count_ == 0) {
+      tasks_done_condition_.notify_all();  // Notify waiting threads
+    }
+  }
+
   /*! \brief Thread container */
   std::vector<std::thread> workers_;
   /*! \brief Task queue */
@@ -142,8 +164,12 @@ class ThreadPool {
   std::mutex queue_mutex_;
   /*! \brief Condition variable for thread synchronization */
   std::condition_variable queue_condition_;
+  /*! \brief Condition variable for task completion */
+  std::condition_variable tasks_done_condition_;
   /*! \brief Flag to indicate thread pool shutdown */
   bool shutdown_ = false;
+  /*! \brief Number of unfinished tasks */
+  int unfinished_task_count_ = 0;
 };
 
 void ParallelFor(int low, int high, int num_threads, std::function<void(int)> f) {

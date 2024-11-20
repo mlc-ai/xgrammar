@@ -7,8 +7,6 @@
 #ifndef XGRAMMAR_REGEX_CONVERTER_H_
 #define XGRAMMAR_REGEX_CONVERTER_H_
 
-#include <xgrammar/xgrammar.h>
-
 #include <string>
 
 namespace xgrammar {
@@ -16,13 +14,7 @@ namespace xgrammar {
 /*!
  * \brief Convert a regex string to EBNF grammar string.
  */
-class RegexConverter {
- public:
-  explicit RegexConverter(const std::string& regex);
-  std::string Convert();
-
-  XGRAMMAR_DEFINE_PIMPL_METHODS(RegexConverter);
-};
+std::string RegexToEBNF(const std::string& regex, bool with_rule_name = true);
 
 }  // namespace xgrammar
 

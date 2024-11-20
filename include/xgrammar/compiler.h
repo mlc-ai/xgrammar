@@ -43,15 +43,8 @@ class GrammarCompiler {
    * \param decoded_vocab The vocabulary that the grammar will use.
    */
   GrammarCompiler(
-      const std::vector<std::string>& decoded_vocab, int max_threads = 8, bool cache_enabled = true
+      const TokenizerInfo& tokenizer_info, int max_threads = 8, bool cache_enabled = true
   );
-
-  GrammarCompiler(const TokenizerInfo& tokenizer_info, int max_threads = 8);
-
-  CompiledGrammar CompileBNFGrammar(const BNFGrammar& grammar);
-
-  /*! \brief Get the compiled grammar for pure JSON. */
-  CompiledGrammar CompileBuiltinJSONGrammar();
 
   /*! \brief Get the compiled grammar for a JSON schema string. */
   CompiledGrammar CompileJSONSchema(
@@ -60,6 +53,11 @@ class GrammarCompiler {
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
       bool strict_mode = true
   );
+
+  /*! \brief Get the compiled grammar for pure JSON. */
+  CompiledGrammar CompileBuiltinJSONGrammar();
+
+  CompiledGrammar CompileBNFGrammar(const BNFGrammar& grammar);
 
   /*! \brief Clear the internal cache of compiled grammars. */
   void ClearCache();

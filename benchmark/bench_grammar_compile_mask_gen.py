@@ -18,7 +18,7 @@ from outlines.models import TransformerTokenizer
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
-from xgrammar import BuiltinGrammar, GrammarMatcher, TokenizerInfo
+import xgrammar as xgr
 
 wrong_data_indices = [1]
 

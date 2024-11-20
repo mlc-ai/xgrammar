@@ -70,7 +70,7 @@ GrammarMatcher GrammarMatcher_Init(
 /*!
  * \brief Finds the next token bitmask of the matcher.
  */
-std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher) {
+std::vector<int32_t> GrammarMatcher_FillNextTokenBitmask(GrammarMatcher& matcher) {
   // 1. Initialize std::vector result
   auto buffer_size = matcher.GetBitmaskSize();
   std::vector<int32_t> result(buffer_size);
@@ -94,7 +94,7 @@ std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher)
  * \brief Return the list of rejected token IDs based on the bit mask.
  * \note This method is mainly used in testing, so performance is not as important.
  */
-std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
+std::vector<int> GrammarMatcher__DebugGetMaskedTokensFromBitmask(
     std::vector<int32_t> token_bitmask, size_t vocab_size
 ) {
   // 1. Convert token_bitmask into DLTensor
@@ -110,7 +110,7 @@ std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
   tensor.byte_offset = 0;
   // 2. Get rejected token IDs
   std::vector<int> result;
-  GrammarMatcher::DebugGetMaskedTokensFromBitmask(tensor, vocab_size, &result);
+  GrammarMatcher::_DebugGetMaskedTokensFromBitmask(tensor, vocab_size, &result);
   return result;
 }
 
@@ -167,13 +167,13 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("GetVocabSize", &GrammarMatcher::GetVocabSize)
       .function("GetMaxRollbackTokens", &GrammarMatcher::GetMaxRollbackTokens)
       .function("AcceptToken", &GrammarMatcher::AcceptToken)
-      .function("GetNextTokenBitmask", &GrammarMatcher_GetNextTokenBitmask)
+      .function("FillNextTokenBitmask", &GrammarMatcher_FillNextTokenBitmask)
       .class_function(
-          "DebugGetMaskedTokensFromBitmask", &GrammarMatcher_DebugGetMaskedTokensFromBitmask
+          "_DebugGetMaskedTokensFromBitmask", &GrammarMatcher__DebugGetMaskedTokensFromBitmask
       )
       .function("IsTerminated", &GrammarMatcher::IsTerminated)
       .function("Reset", &GrammarMatcher::Reset)
       .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
       .function("Rollback", &GrammarMatcher::Rollback)
-      .function("_AcceptString", &GrammarMatcher::AcceptString);
+      .function("_AcceptString", &GrammarMatcher::_DebugAcceptString);
 }

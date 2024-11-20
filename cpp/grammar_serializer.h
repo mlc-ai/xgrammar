@@ -63,7 +63,8 @@ class BNFGrammarPrinter {
 };
 
 /*!
- * \brief Serialize the raw representation of the BNF AST to a string with JSON format.
+ * \brief Serialize the raw representation of the BNF AST to a string with JSON format. Stale for
+ * now.
  * \sa BNFJSONParser::Parse for parsing the JSON string.
  * \details JSON format:
  *  {
@@ -96,7 +97,8 @@ class BNFGrammarSerializer {
 };
 
 /*!
- * \brief Parse a BNF grammar from the raw representation of the AST in JSON format.
+ * \brief Parse a BNF grammar from the raw representation of the AST in JSON format. Stale for
+ * now.
  */
 class BNFGrammarDeserializer {
  public:

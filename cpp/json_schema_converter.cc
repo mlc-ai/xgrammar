@@ -6,7 +6,6 @@
 
 #include <picojson.h>
 
-#include <chrono>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -352,27 +351,6 @@ JSONSchemaConverter::JSONSchemaConverter(
 
   AddBasicRules();
 }
-//   picojson::value schema_value;
-//   std::string err = picojson::parse(schema_value, schema);
-//   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
-//                               << ". The JSON string is:" << schema;
-//   JSONSchemaConverter converter(schema_value, indent, separators, strict_mode);
-//   return converter.Convert();
-// }
-// JSONSchemaConverter::JSONSchemaConverter(
-//     const std::string& json_schema,
-//     std::optional<int> indent,
-//     std::optional<std::pair<std::string, std::string>> separators,
-//     bool strict_mode
-// )
-//     : {
-//   picojson::value schema_value;
-//   std::string err = picojson::parse(schema_value, json_schema);
-//   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
-//                               << ". The JSON string is:" << json_schema;
-//   JSONSchemaConverter converter(schema_value, indent, separators, strict_mode);
-//   return converter.Convert();
-// }
 
 std::string JSONSchemaConverter::Convert() {
   CreateRuleFromSchema(json_schema_, "root");
@@ -1054,18 +1032,27 @@ std::string JSONSchemaConverter::VisitObject(
   return result;
 }
 
-// std::string BuiltinGrammar::_JSONSchemaToEBNF(
-//     const std::string& schema,
-//     std::optional<int> indent,
-//     std::optional<std::pair<std::string, std::string>> separators,
-//     bool strict_mode
-// ) {
-//   picojson::value schema_value;
-//   std::string err = picojson::parse(schema_value, schema);
-//   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
-//                               << ". The JSON string is:" << schema;
-//   JSONSchemaConverter converter(schema_value, indent, separators, strict_mode);
-//   return converter.Convert();
-// }
+std::string JSONSchemaToEBNF(
+    const std::string& schema,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode
+) {
+  picojson::value schema_value;
+  std::string err = picojson::parse(schema_value, schema);
+  XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
+                              << ". The JSON string is:" << schema;
+  return JSONSchemaToEBNF(schema_value, indent, separators, strict_mode);
+}
+
+std::string JSONSchemaToEBNF(
+    const picojson::value& schema,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode
+) {
+  JSONSchemaConverter converter(schema, indent, separators, strict_mode);
+  return converter.Convert();
+}
 
 }  // namespace xgrammar

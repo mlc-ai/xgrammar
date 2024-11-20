@@ -18,9 +18,13 @@
 
 namespace xgrammar {
 
-int32_t GetBitmaskSize(int batch_size, int vocab_size);
+int32_t GetBitmaskSize(int vocab_size);
 
 DLDataType GetBitmaskDLType();
+
+void _DebugGetMaskedTokensFromBitmask(
+    std::vector<int>* rejected_tokens, const DLTensor& token_bitmask, int vocab_size, int index = 0
+);
 
 /*!
  * \brief A stateful matcher to match tokens to the specified BNF grammar. This class is the core
@@ -62,7 +66,6 @@ class GrammarMatcher {
       const CompiledGrammar& compiled_grammar,
       std::optional<std::vector<int>> override_stop_tokens = std::nullopt,
       bool terminate_without_stop_token = false,
-      std::optional<int> vocab_size = std::nullopt,
       int max_rollback_tokens = 0
   );
 
@@ -76,9 +79,7 @@ class GrammarMatcher {
    * FindNextTokenMask operations can be performed. The termination state can be canceled
    * using Rollback().
    */
-  bool AcceptToken(int32_t token_id, bool verbose = false);
-
-  bool AcceptString(const std::string& input_str, bool verbose = false);
+  bool AcceptToken(int32_t token_id, bool debug_print = false);
 
   /*!
    * \brief Get the set of tokens that are acceptable for the next step and store them in a
@@ -87,10 +88,6 @@ class GrammarMatcher {
    * and with shape (GetBitmaskSize(),) and dtype int32.
    */
   void FillNextTokenBitmask(DLTensor* next_token_bitmask, int index = 0);
-
-  void DebugGetMaskedTokensFromBitmask(
-      std::vector<int>* rejected_tokens, const DLTensor& token_bitmask, int index = 0
-  );
 
   /*!
    * \brief Find the jump-forward string for jump-forward decoding. This is the longest string that
@@ -115,12 +112,12 @@ class GrammarMatcher {
   /*! \brief Reset the matcher to the initial state. */
   void Reset();
 
-  const std::vector<int>& GetStopTokenIds() const;
-
   /*! \brief Get the maximum number of rollback tokens allowed. */
   int GetMaxRollbackTokens() const;
 
-  int GetVocabSize() const;
+  const std::vector<int>& GetStopTokenIds() const;
+
+  bool _DebugAcceptString(const std::string& input_str, bool debug_print = false);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcher);
 };

@@ -16,5 +16,10 @@
 # under the License.
 from .compiler import CompiledGrammar, GrammarCompiler
 from .grammar import BNFGrammar
-from .matcher import GrammarMatcher, get_bitmask_dtype, get_bitmask_shape
+from .matcher import (
+    GrammarMatcher,
+    apply_token_bitmask_inplace,
+    get_bitmask_dtype,
+    get_bitmask_shape,
+)
 from .tokenizer_info import TokenizerInfo, VocabType
