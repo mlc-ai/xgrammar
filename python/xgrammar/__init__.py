@@ -25,3 +25,5 @@ from .matcher import (
 )
 from .tokenizer_info import TokenizerInfo, VocabType
 from . import testing
+
+from .contrib import transformers

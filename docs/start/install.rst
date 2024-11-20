@@ -91,7 +91,7 @@ This step is useful when you want to make modification or obtain a specific vers
     cd ../python
     python3 -m pip install .
     # 4. (optional) add the python directory to PATH
-    echo "export PATH=$(pwd):$PATH" >> ~/.bashrc
+    echo "export PATH=\"$(pwd):\$PATH\"" >> ~/.bashrc
 
 **Step 3. Validate installation.** You may validate if XGrammar is compiled successfully in command line.
 You should see the path you used to build from source with:
