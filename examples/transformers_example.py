@@ -12,17 +12,14 @@ model = AutoModelForCausalLM.from_pretrained(
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 config = AutoConfig.from_pretrained(model_name)
 
-# Instantiate LogitProcessor
+# Compile grammar
 tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 full_vocab_size = config.vocab_size
 grammar_compiler = xgr.CachedGrammarCompiler(tokenizer_info, max_threads=1)
 compiled_grammar = grammar_compiler.compile_json_grammar()
-logits_processor = xgr.contrib.transformers.LogitsProcessor(
-    compiled_grammar, tokenizer_info, full_vocab_size
-)
 
-# Inference
-prompt = "Introduce yourself in JSON."
+# Prepare inputs
+prompt = "Introduce yourself in JSON briefly."
 messages = [
     {
         "role": "system",
@@ -33,9 +30,15 @@ messages = [
 text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
+# Generate
+logits_processor = xgr.contrib.transformers.LogitsProcessor(
+    compiled_grammar, tokenizer_info, full_vocab_size
+)
 generated_ids = model.generate(
     **model_inputs, max_new_tokens=512, logits_processor=[logits_processor]
 )
+
+# Post-processing and print out response
 generated_ids = [
     output_ids[len(input_ids) :]
     for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
