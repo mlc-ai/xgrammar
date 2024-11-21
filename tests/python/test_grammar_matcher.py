@@ -10,7 +10,6 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
-    _allocate_token_bitmask,
     _get_masked_tokens_from_bitmask,
     _get_matcher_from_grammar_and_tokenizer_info,
     _match_grammar_with_string,
@@ -84,7 +83,7 @@ def test_fill_next_token_bitmask(
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
-    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
     input_bytes = input_str.encode("utf-8")
     rejected_sizes = []
@@ -121,7 +120,7 @@ def test_token_operations():
 
     tokenizer_info = xgr.TokenizerInfo(vocab)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
-    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
     expected = [
         ["{"],
@@ -241,22 +240,22 @@ def test_rollback():
 
     for i_1, i_2 in input_ids_splitted:
         orig_result = []
-        token_bitmask1 = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        token_bitmask1 = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(token_bitmask1)
         orig_result.append(token_bitmask1)
         assert matcher.accept_token(i_1)
-        token_bitmask2 = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        token_bitmask2 = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(token_bitmask2)
         orig_result.append(token_bitmask2)
         assert matcher.accept_token(i_2)
 
         matcher.rollback(2)
         result_after_rollback = []
-        new_token_bitmask1 = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        new_token_bitmask1 = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(new_token_bitmask1)
         result_after_rollback.append(new_token_bitmask1)
         assert matcher.accept_token(i_1)
-        new_token_bitmask2 = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        new_token_bitmask2 = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(new_token_bitmask2)
         result_after_rollback.append(new_token_bitmask2)
         assert matcher.accept_token(i_2)
@@ -278,7 +277,7 @@ def test_reset():
     orig_result = []
 
     for i in input_ids:
-        token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(token_bitmask)
         orig_result.append(token_bitmask)
         assert matcher.accept_token(i)
@@ -288,7 +287,7 @@ def test_reset():
     result_after_reset = []
 
     for i in input_ids:
-        token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(token_bitmask)
         result_after_reset.append(token_bitmask)
         assert matcher.accept_token(i)
@@ -321,7 +320,7 @@ def test_termination():
     matcher = _get_matcher_from_grammar_and_tokenizer_info(
         json_grammar, tokenizer_info, max_rollback_tokens=5
     )
-    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
     for i in input_ids:
         matcher.fill_next_token_bitmask(token_bitmask)
@@ -360,7 +359,7 @@ def test_vocab_size():
     tokenizer_info = xgr.TokenizerInfo(vocab, vocab_size=64)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
-    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
     matcher.fill_next_token_bitmask(token_bitmask)
     assert token_bitmask.shape == (1, 2)
 

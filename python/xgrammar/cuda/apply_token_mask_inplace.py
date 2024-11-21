@@ -277,7 +277,7 @@ def apply_token_bitmask_inplace(
         ),
     )
     time_end = time.monotonic_ns()
-    print(f"Time to compile kernel: {(time_end - time_start) / 1e3} us")
+    # print(f"Time to compile kernel: {(time_end - time_start) / 1e3} us")
 
     # Launch the kernel.
     checkCudaErrors(

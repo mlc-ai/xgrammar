@@ -29,29 +29,41 @@ from .cuda.apply_token_mask_inplace import (
 
 
 def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
-    """Allocate the bitmask for the next token prediction. The bitmask is a int32 tensor on CPU
-    with shape (batch_size, ceil(vocab_size / 32)). If the batch size is None, the bitmask is
-    a 1D tensor with shape (ceil(vocab_size / 32),).
-
-    Parameters
-    ----------
-    vocab_size : int
-        The size of the vocabulary.
-
-    batch_size : Optional[int], default: None
-        The batch size of the bitmask. If None, the bitmask is a 1D tensor.
-
-    Returns
-    -------
-    bitmask : torch.Tensor
-        The shape of the bitmask.
-    """
+    """Return the shape of the bitmask (batch_size, ceil(vocab_size / 32))"""
     return (batch_size, math.ceil(vocab_size / 32))
 
 
 def get_bitmask_dtype() -> torch.dtype:
     """Get the dtype of the bitmask."""
     return torch.int32
+
+
+def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
+    """Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on CPU
+    with shape (batch_size, ceil(vocab_size / 32)).
+
+    Parameters
+    ----------
+    batch_size : int
+        The batch size of the bitmask.
+
+    vocab_size : int
+        The size of the vocabulary.
+
+    Returns
+    -------
+    bitmask : torch.Tensor
+        The shape of the bitmask.
+
+    Note
+    ----
+    This is the default way of allocating a bitmask. You can also customize the implementation.
+    """
+    return torch.empty(
+        get_bitmask_shape(batch_size, vocab_size),
+        dtype=get_bitmask_dtype(),
+        pin_memory=True,
+    )
 
 
 def apply_token_bitmask_inplace(

@@ -10,7 +10,6 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
-    _allocate_token_bitmask,
     _get_masked_tokens_from_bitmask,
     _match_grammar_with_string,
 )
@@ -290,7 +289,7 @@ def test_fill_next_token_bitmask(
     time_end = time.monotonic_ns()
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
-    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
     logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device="cuda")
 
     input_bytes = input_str.encode("utf-8")

@@ -110,14 +110,6 @@ def _match_grammar_with_string(
     return matcher.is_terminated()
 
 
-def _allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
-    return torch.empty(
-        get_bitmask_shape(batch_size, vocab_size),
-        dtype=get_bitmask_dtype(),
-        pin_memory=True,
-    )
-
-
 def _get_masked_tokens_from_bitmask(
     bitmask: torch.Tensor, vocab_size: int, index: int = 0
 ) -> List[int]:

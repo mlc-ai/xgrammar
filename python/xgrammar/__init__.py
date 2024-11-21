@@ -21,5 +21,7 @@ from .matcher import (
     apply_token_bitmask_inplace,
     get_bitmask_dtype,
     get_bitmask_shape,
+    allocate_token_bitmask,
 )
 from .tokenizer_info import TokenizerInfo, VocabType
+from . import testing

@@ -7,7 +7,6 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
-    _allocate_token_bitmask,
     _match_grammar_with_string,
     _regex_to_ebnf,
 )
@@ -309,7 +308,7 @@ def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     time_end = time.monotonic_ns()
     print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
     matcher = xgr.GrammarMatcher(matcher_compiled_grammar)
-    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
     for c in instance.encode("utf-8"):
         time_start = time.monotonic_ns()
