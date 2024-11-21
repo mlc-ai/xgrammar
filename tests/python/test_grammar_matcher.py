@@ -158,17 +158,23 @@ def test_token_operations():
     assert result == expected
 
 
-def test_apply_token_bitmask_inplace():
+@pytest.mark.parametrize("is_cuda", (True, False))
+def test_apply_token_bitmask_inplace(is_cuda):
     neginf = float("-inf")
     bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
     logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], dtype=torch.float32)
     expected = torch.where(bool_mask, logits, neginf)
 
-    logits_gpu = logits.to("cuda")
-    bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
-    xgr.apply_token_bitmask_inplace(logits_gpu, bitmask)
-    torch.cuda.synchronize()
-    assert torch.all(logits_gpu == expected.to("cuda"))
+    if is_cuda:
+        logits_gpu = logits.to("cuda")
+        bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
+        xgr.apply_token_bitmask_inplace(logits_gpu, bitmask)
+        torch.cuda.synchronize()
+        assert torch.all(logits_gpu == expected.to("cuda"))
+    else:
+        bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
+        xgr.apply_token_bitmask_inplace_cpu(logits, bitmask)
+        assert torch.all(logits == expected)
 
 
 batch_size_vocab_size_masked_cnt_stride = [
@@ -180,12 +186,19 @@ batch_size_vocab_size_masked_cnt_stride = [
     (64, 128000, 120000, 4),
 ]
 
+batch_size_vocab_size_masked_cnt_stride_cuda = []
+
+for is_cuda in [True, False]:
+    for item in batch_size_vocab_size_masked_cnt_stride:
+        batch_size_vocab_size_masked_cnt_stride_cuda.append(item + (is_cuda,))
+
 
 @pytest.mark.parametrize(
-    "batch_size, vocab_size, masked_cnt, stride", batch_size_vocab_size_masked_cnt_stride
+    "batch_size, vocab_size, masked_cnt, stride, is_cuda",
+    batch_size_vocab_size_masked_cnt_stride_cuda,
 )
 def test_apply_token_bitmask_inplace_large(
-    batch_size: int, vocab_size: int, masked_cnt: int, stride: int
+    batch_size: int, vocab_size: int, masked_cnt: int, stride: int, is_cuda: bool
 ):
 
     masked_batch_ids = list(range(0, batch_size, stride))
@@ -209,15 +222,22 @@ def test_apply_token_bitmask_inplace_large(
         return bitmask.to(torch.int32)
 
     bitmask = bool_mask_to_bitmask(bool_mask)
-    logits_gpu = logits.to("cuda")
-    bitmask_gpu = bitmask.to("cuda")
-    torch.cuda.synchronize()
-    time_start = time.monotonic_ns()
-    xgr.apply_token_bitmask_inplace(logits_gpu, bitmask_gpu, indices=masked_batch_ids)
-    torch.cuda.synchronize()
-    time_end = time.monotonic_ns()
-    print(f"Time taken: {(time_end - time_start) / 1e3} us")
-    assert torch.all(logits_gpu == logits_expected.to("cuda"))
+    if is_cuda:
+        logits_gpu = logits.to("cuda")
+        bitmask_gpu = bitmask.to("cuda")
+        torch.cuda.synchronize()
+        time_start = time.monotonic_ns()
+        xgr.apply_token_bitmask_inplace(logits_gpu, bitmask_gpu, indices=masked_batch_ids)
+        torch.cuda.synchronize()
+        time_end = time.monotonic_ns()
+        print(f"Time taken: {(time_end - time_start) / 1e3} us")
+        assert torch.all(logits_gpu == logits_expected.to("cuda"))
+    else:
+        time_start = time.monotonic_ns()
+        xgr.apply_token_bitmask_inplace(logits, bitmask, indices=masked_batch_ids)
+        time_end = time.monotonic_ns()
+        print(f"Time taken: {(time_end - time_start) / 1e3} us")
+        assert torch.all(logits == logits_expected)
 
 
 def test_rollback():
