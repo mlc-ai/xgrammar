@@ -61,8 +61,8 @@ than per-generation).
 
 .. code:: python
 
-  compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
-  compiled_grammar: xgr.CompiledGrammar = compiler.compile_builtin_json_grammar()
+  compiler = xgr.CachedGrammarCompiler(tokenizer_info, max_threads=8)
+  compiled_grammar: xgr.CompiledGrammar = compiler.compile_json_grammar()
 
 With the compiled grammar, we can instantiate a ``xgr.GrammarMatcher``, the main construct
 we interact with that maintains the state of the structured generation. We also allocate a
@@ -79,7 +79,7 @@ Now we simulate a single-request auto-regressive generation. See later section f
 .. code:: python
 
   # Here we simulate a valid sampled response
-  sim_sampled_response = '{ "library": "xgrammar" }<|im_end|>'
+  sim_sampled_response = '{ "library": "xgrammar" }<|endoftext|>'
   sim_sampled_token_ids = tokenizer.encode(sim_sampled_response)
 
   # Each loop iteration is a simulated auto-regressive step
@@ -91,10 +91,10 @@ Now we simulate a single-request auto-regressive generation. See later section f
 
       # Apply bitmask to logits to mask invalid tokens
       matcher.fill_next_token_bitmask(token_bitmask)
-      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmasks)
+      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmask)
 
       # Sample next token
-      probs = torch.softmax(logits, dim=-1)
+      probs = torch.softmax(logits, dim=-1).cpu().numpy()
       next_token_id = np.random.choice(list(range(full_vocab_size)), p=probs)
 
       # Accept token from matcher to update its state, so that the next bitmask
@@ -103,7 +103,7 @@ Now we simulate a single-request auto-regressive generation. See later section f
       # assert matcher.accept_token(next_token_id)
       assert matcher.accept_token(sim_token_id)
 
-  # Since we accepted a stop token `<|im_end|>`, we have terminated
+  # Since we accepted a stop token `<|endoftext|>`, we have terminated
   assert matcher.is_terminated()
 
   # Reset to be ready for the next auto-regressive generation
@@ -138,7 +138,7 @@ First, set up the tokenizer info and the grammar compiler as above.
   # This can be larger than tokenizer.vocab_size due to paddings
   full_vocab_size = config.vocab_size
 
-  compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
+  compiler = xgr.CachedGrammarCompiler(tokenizer_info, max_threads=8)
 
 Now, to compile a grammar from a JSON schema, there are generically two methods: from a Pydantic model,
 or from a JSON schema string. The two code snippets below are functionally identical, pick one to run.
@@ -183,7 +183,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
   token_bitmask = xgr.GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
 
   # Here we simulate a valid sampled response
-  sim_sampled_response = '{ "name": "xgrammar", "age": 0 }<|im_end|>'
+  sim_sampled_response = '{ "name": "xgrammar", "age": 0 }<|endoftext|>'
   sim_sampled_token_ids = tokenizer.encode(sim_sampled_response)
 
   # Each loop iteration is a simulated auto-regressive step
@@ -195,10 +195,10 @@ Then, the remaining steps are identical to before, except that we now use a diff
 
       # Apply bitmask to logits to mask invalid tokens
       matcher.fill_next_token_bitmask(token_bitmask)
-      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmasks)
+      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmask)
 
       # Sample next token
-      probs = torch.softmax(logits, dim=-1)
+      probs = torch.softmax(logits, dim=-1).cpu().numpy()
       next_token_id = np.random.choice(list(range(full_vocab_size)), p=probs)
 
       # Accept token from matcher to update its state, so that the next bitmask
@@ -207,7 +207,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
       # assert matcher.accept_token(next_token_id)
       assert matcher.accept_token(sim_token_id)
 
-  # Since we accepted a stop token `<|im_end|>`, we have terminated
+  # Since we accepted a stop token `<|endoftext|>`, we have terminated
   assert matcher.is_terminated()
 
   # Reset to be ready for the next auto-regressive generation
@@ -242,7 +242,7 @@ First, set up the tokenizer info and the grammar compiler as above.
   # This can be larger than tokenizer.vocab_size due to paddings
   full_vocab_size = config.vocab_size
 
-  compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
+  compiler = xgr.CachedGrammarCompiler(tokenizer_info, max_threads=8)
 
 Now, compile ``CompiledGrammar`` with your GBNF grammar string.
 
@@ -279,10 +279,10 @@ Then, the remaining steps are identical to before, except that we now use a diff
 
       # Apply bitmask to logits to mask invalid tokens
       matcher.fill_next_token_bitmask(token_bitmask)
-      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmasks)
+      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmask)
 
       # Sample next token
-      probs = torch.softmax(logits, dim=-1)
+      probs = torch.softmax(logits, dim=-1).cpu().numpy()
       next_token_id = np.random.choice(list(range(full_vocab_size)), p=probs)
 
       # Accept token from matcher to update its state, so that the next bitmask
@@ -291,7 +291,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
       # assert matcher.accept_token(next_token_id)
       assert matcher.accept_token(sim_token_id)
 
-  # Since we accepted a stop token `<|im_end|>`, we have terminated
+  # Since we accepted a stop token `<|endoftext|>`, we have terminated
   assert matcher.is_terminated()
 
   # Reset to be ready for the next auto-regressive generation
@@ -326,8 +326,8 @@ to generate a valid JSON.
   full_vocab_size = config.vocab_size
 
   # Compile a JSON grammar
-  compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
-  compiled_grammar: xgr.CompiledGrammar = compiler.compile_builtin_json_grammar()
+  compiler = xgr.CachedGrammarCompiler(tokenizer_info, max_threads=8)
+  compiled_grammar: xgr.CompiledGrammar = compiler.compile_json_grammar()
 
 Now, we need to maintain an ``xgr.GrammarMatcher`` for each request in the batch, since
 each has a different generation state. Note that each request in the batch can follow a different
@@ -351,7 +351,7 @@ each request has its own ``xgr.GrammarMatcher`` to maintain.
 
 .. code:: python
 
-  sim_sampled_responses = ['{ "name": "a" }<|im_end|>', '{ "name": "b" }<|im_end|>']
+  sim_sampled_responses = ['{ "name": "a" }<|endoftext|>', '{ "name": "b" }<|endoftext|>']
   sim_sampled_token_ids = [tokenizer.encode(response) for response in sim_sampled_responses]
 
   # Each loop iteration is a simulated auto-regressive step
@@ -365,10 +365,10 @@ each request has its own ``xgr.GrammarMatcher`` to maintain.
       # the overhead in your engine.
       for i in range(batch_size):
           matchers[i].fill_next_token_bitmask(token_bitmasks, i)
-      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmasks)
+      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmask)
 
       # Sample next token
-      probs = torch.softmax(logits, dim=-1)
+      probs = torch.softmax(logits, dim=-1).cpu().numpy()
       next_token_ids = [
           np.random.choice(list(range(full_vocab_size)), p=probs[i])
           for i in range(batch_size)
@@ -381,7 +381,7 @@ each request has its own ``xgr.GrammarMatcher`` to maintain.
           matchers[i].accept_token(sim_sampled_token_ids[i][loop_iter])
 
   # In our simulated case, all requests should have terminated since we accepted
-  # a stop token `<|im_end|>`
+  # a stop token `<|endoftext|>`
   for i in range(batch_size):
       assert matchers[i].is_terminated()
       # Reset to be ready for the next generation
