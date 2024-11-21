@@ -78,7 +78,7 @@ void GrammarMatcher_FillNextTokenBitmask(
       nullptr,
       0
   };
-  matcher.FillNextTokenBitmask(&bitmask_dltensor);
+  matcher.FillNextTokenBitmask(&bitmask_dltensor, index);
 }
 
 std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(

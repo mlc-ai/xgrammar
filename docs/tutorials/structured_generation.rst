@@ -5,11 +5,11 @@ Structured Generation
 
 XGrammar enables efficient structured generation. In this tutorial, we go over how to
 use XGrammar to ensure that an LLM's output adheres to the structure of a valid JSON, a
-customized JSON schema, and a customized GBNF grammar string.
+customized JSON schema, and a customized EBNF grammar string.
 
 We first lay out the concepts by going over :ref:`JSON generation <tutorial-json-generation>`
 in detail. Then we go over how to generate with :ref:`customized JSON schemas <tutorial-json-schema-generation>`
-and :ref:`customized GBNF grammar strings <tutorial-gbnf-generation>`. Finally, we demonstrate
+and :ref:`customized EBNF grammar strings <tutorial-ebnf-generation>`. Finally, we demonstrate
 how xgrammar works with :ref:`batched inference <tutorial-batched-inference>`.
 
 Therefore, we encourage you to start with :ref:`JSON Generation <tutorial-json-generation>`.
@@ -49,9 +49,9 @@ Then, we extract tokenizer info from the LLM we are using with ``xgr.TokenizerIn
   model_id = "Qwen/Qwen2.5-1.5B-Instruct"
   tokenizer = AutoTokenizer.from_pretrained(model_id)
   config = AutoConfig.from_pretrained(model_id)
-  tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
   # This can be larger than tokenizer.vocab_size due to paddings
   full_vocab_size = config.vocab_size
+  tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=full_vocab_size)
 
 With the ``tokenizer_info``, instantiate ``xgr.GrammarCompiler`` that compiles a
 grammar of your choice. Here we use a JSON grammar. Note that the ``compiler`` behavior
@@ -61,8 +61,8 @@ than per-generation).
 
 .. code:: python
 
-  compiler = xgr.CachedGrammarCompiler(tokenizer_info, max_threads=8)
-  compiled_grammar: xgr.CompiledGrammar = compiler.compile_json_grammar()
+  compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
+  compiled_grammar: xgr.CompiledGrammar = compiler.compile_builtin_json_grammar()
 
 With the compiled grammar, we can instantiate a ``xgr.GrammarMatcher``, the main construct
 we interact with that maintains the state of the structured generation. We also allocate a
@@ -71,8 +71,8 @@ bitmask that will be used to mask logits.
 .. code:: python
 
   # Instantiate grammar matcher and allocate the bitmask
-  matcher = xgr.GrammarMatcher(compiled_grammar, tokenizer_info, vocab_size=full_vocab_size)
-  token_bitmask = xgr.GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+  matcher = xgr.GrammarMatcher(compiled_grammar)
+  token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
 Now we simulate a single-request auto-regressive generation. See later section for :ref:`batched generation <tutorial-batched-inference>`.
 
@@ -84,14 +84,14 @@ Now we simulate a single-request auto-regressive generation. See later section f
 
   # Each loop iteration is a simulated auto-regressive step
   for i, sim_token_id in enumerate(sim_sampled_token_ids):
-      # LLM inference to get logits, here we use randn to simulate
+      # LLM inference to get logits, here we use randn to simulate.
       # logits is a tensor of shape (full_vocab_size,) on GPU
       # logits = LLM.inference()
       logits = torch.randn(full_vocab_size).cuda()
 
       # Apply bitmask to logits to mask invalid tokens
       matcher.fill_next_token_bitmask(token_bitmask)
-      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmask)
+      xgr.apply_token_bitmask_inplace(logits, token_bitmask.to(logits.device))
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1).cpu().numpy()
@@ -134,11 +134,11 @@ First, set up the tokenizer info and the grammar compiler as above.
   model_id = "Qwen/Qwen2.5-1.5B-Instruct"
   tokenizer = AutoTokenizer.from_pretrained(model_id)
   config = AutoConfig.from_pretrained(model_id)
-  tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
   # This can be larger than tokenizer.vocab_size due to paddings
   full_vocab_size = config.vocab_size
+  tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=full_vocab_size)
 
-  compiler = xgr.CachedGrammarCompiler(tokenizer_info, max_threads=8)
+  compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
 
 Now, to compile a grammar from a JSON schema, there are generically two methods: from a Pydantic model,
 or from a JSON schema string. The two code snippets below are functionally identical, pick one to run.
@@ -157,6 +157,8 @@ or from a JSON schema string. The two code snippets below are functionally ident
 .. code:: python
 
   # Method 2. Compile with a JSON schema string
+  import json
+
   person_schema = {
     "title": "Person",
     "type": "object",
@@ -179,23 +181,23 @@ Then, the remaining steps are identical to before, except that we now use a diff
 .. code:: python
 
   # Instantiate grammar matcher and allocate the bitmask
-  matcher = xgr.GrammarMatcher(compiled_grammar, tokenizer_info, vocab_size=full_vocab_size)
-  token_bitmask = xgr.GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+  matcher = xgr.GrammarMatcher(compiled_grammar)
+  token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
   # Here we simulate a valid sampled response
-  sim_sampled_response = '{ "name": "xgrammar", "age": 0 }<|endoftext|>'
+  sim_sampled_response = '{"name": "xgrammar", "age": 0}<|endoftext|>'
   sim_sampled_token_ids = tokenizer.encode(sim_sampled_response)
 
   # Each loop iteration is a simulated auto-regressive step
   for i, sim_token_id in enumerate(sim_sampled_token_ids):
-      # LLM inference to get logits, here we use randn to simulate
-      # logits is a tensor of shape (vocab_size,) on GPU
+      # LLM inference to get logits, here we use randn to simulate.
+      # logits is a tensor of shape (full_vocab_size,) on GPU
       # logits = LLM.inference()
       logits = torch.randn(full_vocab_size).cuda()
 
       # Apply bitmask to logits to mask invalid tokens
       matcher.fill_next_token_bitmask(token_bitmask)
-      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmask)
+      xgr.apply_token_bitmask_inplace(logits, token_bitmask.to(logits.device))
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1).cpu().numpy()
@@ -214,16 +216,16 @@ Then, the remaining steps are identical to before, except that we now use a diff
   matcher.reset()
 
 
-.. _tutorial-gbnf-generation:
+.. _tutorial-ebnf-generation:
 
-GBNF Guided Generation
+EBNF Guided Generation
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-XGrammar also enables generation that adheres to a customized GBNF (GGML BNF) grammar string, with
-the specification `here <https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md>`__.
+XGrammar also enables generation that adheres to a customized EBNF grammar string. We currently use
+the GBNF format (GGML BNF), with the specification `here <https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md>`__.
 
 The code is largely identical to above, except that the ``CompiledGrammar`` is now compiled with
-the provided GBNF grammar string.
+the provided EBNF grammar string.
 
 First, set up the tokenizer info and the grammar compiler as above.
 
@@ -238,24 +240,22 @@ First, set up the tokenizer info and the grammar compiler as above.
   model_id = "Qwen/Qwen2.5-1.5B-Instruct"
   tokenizer = AutoTokenizer.from_pretrained(model_id)
   config = AutoConfig.from_pretrained(model_id)
-  tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
   # This can be larger than tokenizer.vocab_size due to paddings
   full_vocab_size = config.vocab_size
+  tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=full_vocab_size)
 
-  compiler = xgr.CachedGrammarCompiler(tokenizer_info, max_threads=8)
+  compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
 
-Now, compile ``CompiledGrammar`` with your GBNF grammar string.
+Now, compile ``CompiledGrammar`` with your EBNF grammar string.
 
 .. code:: python
 
-  gbnf_grammar = """
-  root  ::= (expr "=" term "\n")+
+  ebnf_grammar_str = """root ::= (expr "=" term)+
   expr  ::= term ([-+*/] term)*
   term  ::= num | "(" expr ")"
-  num   ::= [0-9]+
-  """
+  num   ::= [0-9]+"""
 
-  compiled_grammar = compiler.compile_json_schema(Person)
+  compiled_grammar = compiler.compile_grammar(ebnf_grammar_str)
 
 Then, the remaining steps are identical to before, except that we now use a different
 ``xgr.CompiledGrammar`` and have a different simulated valid generation.
@@ -263,23 +263,23 @@ Then, the remaining steps are identical to before, except that we now use a diff
 .. code:: python
 
   # Instantiate grammar matcher and allocate the bitmask
-  matcher = xgr.GrammarMatcher(compiled_grammar, tokenizer_info, vocab_size=full_vocab_size)
-  token_bitmask = xgr.GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+  matcher = xgr.GrammarMatcher(compiled_grammar)
+  token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
   # Here we simulate a valid sampled response
-  sim_sampled_response = '(5+3)*2=16'
+  sim_sampled_response = '(5+3)*2=16<|endoftext|>'
   sim_sampled_token_ids = tokenizer.encode(sim_sampled_response)
 
   # Each loop iteration is a simulated auto-regressive step
   for i, sim_token_id in enumerate(sim_sampled_token_ids):
-      # LLM inference to get logits, here we use randn to simulate
+      # LLM inference to get logits, here we use randn to simulate.
       # logits is a tensor of shape (full_vocab_size,) on GPU
       # logits = LLM.inference()
       logits = torch.randn(full_vocab_size).cuda()
 
       # Apply bitmask to logits to mask invalid tokens
       matcher.fill_next_token_bitmask(token_bitmask)
-      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmask)
+      xgr.apply_token_bitmask_inplace(logits, token_bitmask.to(logits.device))
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1).cpu().numpy()
@@ -303,7 +303,7 @@ Then, the remaining steps are identical to before, except that we now use a diff
 Structured Generation for Batched Inference
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-All the above code snippets above assume a single request generation.
+All the code snippets above assume a single request generation.
 This section demonstrates how the same concept works with batched generation.
 
 First, follow the exact same steps above for the per-model constructs
@@ -321,13 +321,13 @@ to generate a valid JSON.
   model_id = "Qwen/Qwen2.5-1.5B-Instruct"
   tokenizer = AutoTokenizer.from_pretrained(model_id)
   config = AutoConfig.from_pretrained(model_id)
-  tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
   # This can be larger than tokenizer.vocab_size due to paddings
   full_vocab_size = config.vocab_size
+  tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=full_vocab_size)
 
   # Compile a JSON grammar
-  compiler = xgr.CachedGrammarCompiler(tokenizer_info, max_threads=8)
-  compiled_grammar: xgr.CompiledGrammar = compiler.compile_json_grammar()
+  compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
+  compiled_grammar: xgr.CompiledGrammar = compiler.compile_builtin_json_grammar()
 
 Now, we need to maintain an ``xgr.GrammarMatcher`` for each request in the batch, since
 each has a different generation state. Note that each request in the batch can follow a different
@@ -338,10 +338,10 @@ JSON grammar.
 
   batch_size = 2
   matchers = [
-      xgr.GrammarMatcher(compiled_grammar, tokenizer_info, vocab_size=full_vocab_size)
+      xgr.GrammarMatcher(compiled_grammar)
       for i in range(batch_size)
   ]
-  token_bitmasks = xgr.GrammarMatcher.allocate_token_bitmask(matchers[0].vocab_size, batch_size)
+  token_bitmask = xgr.allocate_token_bitmask(batch_size, tokenizer_info.vocab_size)
 
 We simulate an auto-regressive generation of batched inference. Note that here we
 assume the generation lengths of the two requests are the same for simplicity. But
@@ -351,7 +351,7 @@ each request has its own ``xgr.GrammarMatcher`` to maintain.
 
 .. code:: python
 
-  sim_sampled_responses = ['{ "name": "a" }<|endoftext|>', '{ "name": "b" }<|endoftext|>']
+  sim_sampled_responses = ['{"name": "a"}<|endoftext|>', '{"name": "b"}<|endoftext|>']
   sim_sampled_token_ids = [tokenizer.encode(response) for response in sim_sampled_responses]
 
   # Each loop iteration is a simulated auto-regressive step
@@ -364,8 +364,8 @@ each request has its own ``xgr.GrammarMatcher`` to maintain.
       # This for loop is parallelizable using threading.Thread. But estimate
       # the overhead in your engine.
       for i in range(batch_size):
-          matchers[i].fill_next_token_bitmask(token_bitmasks, i)
-      xgr.GrammarMatcher.apply_token_bitmask_inplace(logits, token_bitmask)
+          matchers[i].fill_next_token_bitmask(token_bitmask, i)
+      xgr.apply_token_bitmask_inplace(logits, token_bitmask.to(logits.device))
 
       # Sample next token
       probs = torch.softmax(logits, dim=-1).cpu().numpy()
@@ -385,4 +385,4 @@ each request has its own ``xgr.GrammarMatcher`` to maintain.
   for i in range(batch_size):
       assert matchers[i].is_terminated()
       # Reset to be ready for the next generation
-      matcher.reset()
+      matchers[i].reset()
