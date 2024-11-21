@@ -24,12 +24,13 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 config = AutoConfig.from_pretrained(model_name)
-
-# 1. Compile grammar (NOTE: you can substitute this with other grammars like GBNF, JSON Schema)
-tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+# This can be larger than tokenizer.vocab_size due to paddings
 full_vocab_size = config.vocab_size
-grammar_compiler = xgr.CachedGrammarCompiler(tokenizer_info)
-compiled_grammar = grammar_compiler.compile_json_grammar()
+
+# 1. Compile grammar (NOTE: you can substitute this with other grammars like EBNF, JSON Schema)
+tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=full_vocab_size)
+grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+compiled_grammar: xgr.CompiledGrammar = grammar_compiler.compile_builtin_json_grammar()
 
 # 2. Prepare inputs
 messages_list = []
@@ -57,9 +58,9 @@ texts = [
 model_inputs = tokenizer(texts, return_tensors="pt").to(model.device)
 
 # 3. Instantiate logits_processor per each generate, and call generate()
-logits_processor = xgr.contrib.hf.LogitsProcessor(compiled_grammar, tokenizer_info, full_vocab_size)
+xgr_logits_processor = xgr.contrib.hf.LogitsProcessor(compiled_grammar)
 generated_ids = model.generate(
-    **model_inputs, max_new_tokens=512, logits_processor=[logits_processor]
+    **model_inputs, max_new_tokens=512, logits_processor=[xgr_logits_processor]
 )
 
 # 4. Post-process outputs and print out response
