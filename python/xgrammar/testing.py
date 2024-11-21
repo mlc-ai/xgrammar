@@ -23,7 +23,7 @@ import torch
 from .base import _core
 from .compiler import GrammarCompiler
 from .grammar import Grammar
-from .matcher import GrammarMatcher, get_bitmask_dtype, get_bitmask_shape
+from .matcher import GrammarMatcher, get_bitmask_shape
 from .tokenizer_info import TokenizerInfo
 
 

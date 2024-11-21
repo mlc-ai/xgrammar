@@ -19,9 +19,9 @@ from .grammar import Grammar
 from .matcher import (
     GrammarMatcher,
     apply_token_bitmask_inplace,
-    get_bitmask_dtype,
     get_bitmask_shape,
     allocate_token_bitmask,
+    bitmask_dtype,
 )
 from .tokenizer_info import TokenizerInfo, VocabType
 from . import testing

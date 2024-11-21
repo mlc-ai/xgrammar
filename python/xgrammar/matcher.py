@@ -27,20 +27,25 @@ from .cuda.apply_token_mask_inplace import (
     apply_token_bitmask_inplace as apply_token_bitmask_inplace_cuda,
 )
 
+bitmask_dtype = torch.int32
+
 
 def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
     """Return the shape of the bitmask (batch_size, ceil(vocab_size / 32))"""
     return (batch_size, math.ceil(vocab_size / 32))
 
 
-def get_bitmask_dtype() -> torch.dtype:
-    """Get the dtype of the bitmask."""
-    return torch.int32
-
-
 def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
     """Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on CPU
-    with shape (batch_size, ceil(vocab_size / 32)).
+    with shape (batch_size, ceil(vocab_size / 32)). This function defaults to
+
+    .. code:: python
+
+        return torch.empty(
+            xgr.get_bitmask_shape(batch_size, vocab_size),
+            dtype=xgr.bitmask_dtype,
+            pin_memory=True,
+        )
 
     Parameters
     ----------
@@ -61,7 +66,7 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
     """
     return torch.empty(
         get_bitmask_shape(batch_size, vocab_size),
-        dtype=get_bitmask_dtype(),
+        dtype=bitmask_dtype,
         pin_memory=True,
     )
 
