@@ -119,22 +119,18 @@ class GrammarCompiler(XGRObject):
         return CompiledGrammar._create_from_handle(self._handle.compile_builtin_json_grammar())
 
     @overload
-    def compile_bnf_grammar(
-        self, grammar: str, *, root_rule_name: str = "root"
-    ) -> CompiledGrammar: ...
+    def compile_grammar(self, grammar: str, *, root_rule_name: str = "root") -> CompiledGrammar: ...
 
     @overload
-    def compile_bnf_grammar(self, grammar: Grammar) -> CompiledGrammar: ...
+    def compile_grammar(self, grammar: Grammar) -> CompiledGrammar: ...
 
-    def compile_bnf_grammar(
+    def compile_grammar(
         self, grammar: Union[str, Grammar], *, root_rule_name: str = "root"
     ) -> CompiledGrammar:
         """Compile a BNF grammar."""
         if isinstance(grammar, str):
             grammar = Grammar.from_ebnf(grammar, root_rule_name=root_rule_name)
-        return CompiledGrammar._create_from_handle(
-            self._handle.compile_bnf_grammar(grammar._handle)
-        )
+        return CompiledGrammar._create_from_handle(self._handle.compile_grammar(grammar._handle))
 
     def clear_cache(self) -> None:
         """Clear all cached compiled grammars."""

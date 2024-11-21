@@ -303,7 +303,7 @@ class GrammarCompiler::Impl {
         cache_enabled_(cache_enabled),
         compile_json_schema_cache_(GetCompileJSONSchemaCacheFunc(cache_enabled_)),
         compile_builtin_json_grammar_cache_(GetCompileBuiltinJSONGrammarCacheFunc(cache_enabled_)),
-        compile_bnf_grammar_cache_(GetCompileGrammarCacheFunc(cache_enabled_)) {}
+        compile_grammar_cache_(GetCompileGrammarCacheFunc(cache_enabled_)) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -371,7 +371,7 @@ class GrammarCompiler::Impl {
   /*! \brief The cache for the compiled grammar for JSON. */
   ThreadSafeCache<CompiledGrammar> compile_builtin_json_grammar_cache_;
   /*! \brief The cache for the compiled grammar for bnf grammar. */
-  ThreadSafeCache<GrammarKey, CompiledGrammar> compile_bnf_grammar_cache_;
+  ThreadSafeCache<GrammarKey, CompiledGrammar> compile_grammar_cache_;
 };
 
 CompiledGrammar GrammarCompiler::Impl::CompileBuiltinJSONGrammar() {
@@ -406,7 +406,7 @@ CompiledGrammar GrammarCompiler::Impl::CompileGrammar(const Grammar& grammar) {
     return MultiThreadCompileGrammar(grammar, tokenizer_info_, max_threads_);
   }
   auto key = std::make_pair(grammar.ToString(), grammar->GetRootRule().name);
-  return compile_bnf_grammar_cache_.Get(key);
+  return compile_grammar_cache_.Get(key);
 }
 
 void GrammarCompiler::Impl::ClearCache() {

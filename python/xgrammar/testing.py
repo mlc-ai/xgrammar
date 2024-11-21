@@ -103,7 +103,7 @@ def _match_grammar_with_string(
     if isinstance(grammar, str):
         grammar = Grammar.from_ebnf(grammar)
     grammar_compiler = GrammarCompiler(TokenizerInfo([]), cache_enabled=False)
-    compiled_grammar = grammar_compiler.compile_bnf_grammar(grammar)
+    compiled_grammar = grammar_compiler.compile_grammar(grammar)
     matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
     if not matcher._debug_accept_string(input_str, debug_print=debug_print):
         return False
@@ -147,5 +147,5 @@ def _get_matcher_from_grammar_and_tokenizer_info(
     if tokenizer_info is None:
         tokenizer_info = TokenizerInfo([])
     grammar_compiler = GrammarCompiler(tokenizer_info, cache_enabled=False)
-    compiled_grammar = grammar_compiler.compile_bnf_grammar(grammar)
+    compiled_grammar = grammar_compiler.compile_grammar(grammar)
     return GrammarMatcher(compiled_grammar, **kwargs)

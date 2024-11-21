@@ -305,7 +305,7 @@ def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
 
     time_start = time.monotonic_ns()
-    matcher_compiled_grammar = grammar_compiler.compile_bnf_grammar(_regex_to_ebnf(regex))
+    matcher_compiled_grammar = grammar_compiler.compile_grammar(_regex_to_ebnf(regex))
     time_end = time.monotonic_ns()
     print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
     matcher = xgr.GrammarMatcher(matcher_compiled_grammar)

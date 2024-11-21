@@ -51,7 +51,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
           py::call_guard<py::gil_scoped_release>()
       )
       .def(
-          "compile_bnf_grammar",
+          "compile_grammar",
           &GrammarCompiler::CompileGrammar,
           py::call_guard<py::gil_scoped_release>()
       )

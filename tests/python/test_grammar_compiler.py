@@ -18,7 +18,7 @@ def test_compiled_grammar():
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
     time_start = time.monotonic_ns()
-    context = compiler.compile_bnf_grammar(grammar)
+    context = compiler.compile_grammar(grammar)
     time_end = time.monotonic_ns()
     print(f"Time to get compiled grammar: {(time_end - time_start) / 1e3} us")
 

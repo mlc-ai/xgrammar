@@ -331,7 +331,7 @@ def test_fill_next_token_bitmask(
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
     time_start = time.monotonic_ns()
-    matcher = xgr.GrammarMatcher(compiler.compile_bnf_grammar(json_grammar_ebnf))
+    matcher = xgr.GrammarMatcher(compiler.compile_grammar(json_grammar_ebnf))
     time_end = time.monotonic_ns()
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
