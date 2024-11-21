@@ -50,7 +50,7 @@ namespace xgrammar {
  *
  * #### Storage of RuleExprs
  * Each type of RuleExpr has a different data format. For the format of each type of RuleExpr, see
- * docs in BNFGrammar::Impl::RuleExprType.
+ * docs in Grammar::Impl::RuleExprType.
  *
  * We store all RuleExprs in csr_matrix style. That is, they are stored consecutively in one vector
  * (data vector) and the starting position of each RuleExpr is recorded in the indptr vector.
@@ -61,7 +61,7 @@ namespace xgrammar {
  * rule1 ::= ((element1 element2 rule2 ...) | ...)
  * rule2 ::= character_class_star_rule_expr(id_of_a_character_class_rule_expr)
  */
-class BNFGrammar::Impl {
+class Grammar::Impl {
  public:
   /*! \brief A rule with name. */
   struct Rule {
@@ -155,9 +155,9 @@ class BNFGrammar::Impl {
   /*! \brief The id of the root rule. */
   int32_t root_rule_id_ = -1;
 
-  friend class BNFGrammarBuilder;
-  friend class BNFGrammarSerializer;
-  friend class BNFGrammarDeserializer;
+  friend class GrammarBuilder;
+  friend class GrammarSerializer;
+  friend class GrammarDeserializer;
 };
 
 }  // namespace xgrammar

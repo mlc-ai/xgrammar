@@ -23,8 +23,8 @@ namespace xgrammar {
  */
 class GrammarMatcherBase {
  protected:
-  using RuleExpr = BNFGrammar::Impl::RuleExpr;
-  using RuleExprType = BNFGrammar::Impl::RuleExprType;
+  using RuleExpr = Grammar::Impl::RuleExpr;
+  using RuleExprType = Grammar::Impl::RuleExprType;
 
  public:
   /*!
@@ -36,7 +36,7 @@ class GrammarMatcherBase {
    * locations. See ExpandRulePosition.
    */
   GrammarMatcherBase(
-      const BNFGrammar& grammar,
+      const Grammar& grammar,
       RulePosition init_rule_position = kInvalidRulePosition,
       bool expand_init_rule_position = true
   )
@@ -110,7 +110,7 @@ class GrammarMatcherBase {
   );
 
   // The matched grammar.
-  BNFGrammar grammar_;
+  Grammar grammar_;
   // The tree storing all states
   PersistentStack persistent_stack_;
   // The tracked history of stack tops (each stack top refers to a node in the tree).

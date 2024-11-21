@@ -76,11 +76,11 @@ struct AdaptiveTokenMask {
 class CompiledGrammar::Impl {
  public:
   /*! \brief The grammar for the GrammarMatcher. */
-  BNFGrammar grammar;
+  Grammar grammar;
   /*! \brief The tokenizer information. */
   TokenizerInfo tokenizer_info;
 
-  BNFGrammar GetGrammar() const { return grammar; }
+  Grammar GetGrammar() const { return grammar; }
 
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
 

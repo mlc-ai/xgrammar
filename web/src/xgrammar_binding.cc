@@ -51,7 +51,7 @@ TokenizerInfo TokenizerInfo_Init(
 }
 
 GrammarMatcher GrammarMatcher_Init(
-    const BNFGrammar& grammar,
+    const Grammar& grammar,
     const TokenizerInfo& tokenizer_info,
     std::optional<std::vector<int>> override_stop_tokens,
     bool terminate_without_stop_token,
@@ -144,12 +144,12 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   // Register view so we can read std::vector<int32_t> as Int32Array in JS without copying
   function("vecIntToView", &vecIntToView);
 
-  class_<BNFGrammar>("BNFGrammar")
+  class_<Grammar>("Grammar")
       .constructor<std::string, std::string>()
-      .smart_ptr<std::shared_ptr<BNFGrammar>>("BNFGrammar")
-      .class_function("Deserialize", &BNFGrammar::Deserialize)
-      .function("ToString", &BNFGrammar::ToString)
-      .function("Serialize", &BNFGrammar::Serialize);
+      .smart_ptr<std::shared_ptr<Grammar>>("Grammar")
+      .class_function("Deserialize", &Grammar::Deserialize)
+      .function("ToString", &Grammar::ToString)
+      .function("Serialize", &Grammar::Serialize);
 
   class_<BuiltinGrammar>("BuiltinGrammar")
       .class_function("JSON", &BuiltinGrammar::JSON)

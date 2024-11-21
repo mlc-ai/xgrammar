@@ -22,7 +22,7 @@ namespace xgrammar {
  */
 class CompiledGrammar {
  public:
-  BNFGrammar GetGrammar() const;
+  Grammar GetGrammar() const;
   TokenizerInfo GetTokenizerInfo() const;
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);
@@ -57,7 +57,7 @@ class GrammarCompiler {
   /*! \brief Get the compiled grammar for pure JSON. */
   CompiledGrammar CompileBuiltinJSONGrammar();
 
-  CompiledGrammar CompileBNFGrammar(const BNFGrammar& grammar);
+  CompiledGrammar CompileGrammar(const Grammar& grammar);
 
   /*! \brief Clear the internal cache of compiled grammars. */
   void ClearCache();

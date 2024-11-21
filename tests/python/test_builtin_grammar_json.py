@@ -9,15 +9,13 @@ import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
+from xgrammar.testing import (
+    _allocate_token_bitmask,
+    _get_masked_tokens_from_bitmask,
+    _match_grammar_with_string,
+)
 
-json_grammar = xgr.BNFGrammar.builtin_json_grammar()
-
-
-def match_complete_string(grammar: xgr.BNFGrammar, input_str: str) -> bool:
-    matcher = xgr.GrammarMatcher(grammar, terminate_without_stop_token=True)
-    can_accept = matcher._debug_accept_string(input_str)
-    can_terminate = matcher.is_terminated()
-    return can_accept and can_terminate
+json_grammar = xgr.Grammar.builtin_json_grammar()
 
 
 json_input_accepted = [
@@ -57,7 +55,7 @@ json_input_accepted = [
 
 @pytest.mark.parametrize("json_input_accepted", json_input_accepted)
 def test_json_accept(json_input_accepted: str):
-    assert match_complete_string(json_grammar, json_input_accepted)
+    assert _match_grammar_with_string(json_grammar, json_input_accepted)
 
 
 json_input_refused = (
@@ -83,7 +81,7 @@ json_input_refused = (
 
 @pytest.mark.parametrize("json_input_refused", json_input_refused)
 def test_json_refuse(json_input_refused: str):
-    assert not match_complete_string(json_grammar, json_input_refused)
+    assert not _match_grammar_with_string(json_grammar, json_input_refused)
 
 
 json_input_pressure = (
@@ -215,7 +213,7 @@ json_input_pressure = (
 
 @pytest.mark.parametrize("json_input_pressure", json_input_pressure)
 def test_json_pressure(json_input_pressure: str):
-    assert match_complete_string(json_grammar, json_input_pressure)
+    assert _match_grammar_with_string(json_grammar, json_input_pressure)
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [
@@ -285,14 +283,15 @@ def test_fill_next_token_bitmask(
         trust_remote_code=True,
     )
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
 
     time_start = time.monotonic_ns()
-    matcher = xgr.GrammarMatcher(json_grammar, tokenizer_info)
+    matcher = xgr.GrammarMatcher(compiler.compile_builtin_json_grammar())
     time_end = time.monotonic_ns()
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
-    token_bitmask = _allocate_token_bitmask(tokenizer_info.vocab_size)
-    logits_gpu = torch.zeros(matcher.vocab_size, dtype=torch.float32, device="cuda")
+    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device="cuda")
 
     input_bytes = input_str.encode("utf-8")
 
@@ -304,13 +303,15 @@ def test_fill_next_token_bitmask(
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
         # 2. Correctness verification
-        rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask)
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
         assert len(rejected_token_ids) == expected_rejected_sizes[i]
 
         # 3. apply_token_bitmask_inplace
         torch.cuda.synchronize()
         time_start = time.monotonic_ns()
-        xgr.GrammarMatcher.apply_token_bitmask_inplace(logits_gpu, token_bitmask)
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask)
         torch.cuda.synchronize()
         time_end = time.monotonic_ns()
         print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")

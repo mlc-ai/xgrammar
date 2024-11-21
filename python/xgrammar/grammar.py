@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from .base import XGRObject, _core
 
 
-class BNFGrammar(XGRObject):
+class Grammar(XGRObject):
     """This class represents a grammar object in the Backus-Naur Form (BNF). User should provide a
     BNF/EBNF (Extended Backus-Naur Form) grammar. The provided grammar is optimized for LLM
     generation. This class is printable and serializable.
@@ -55,10 +55,8 @@ class BNFGrammar(XGRObject):
         return self._handle.to_string()
 
     @staticmethod
-    def from_ebnf(ebnf_string: str, *, root_rule_name: str = "root") -> "BNFGrammar":
-        return BNFGrammar._create_from_handle(
-            _core.BNFGrammar.from_ebnf(ebnf_string, root_rule_name)
-        )
+    def from_ebnf(ebnf_string: str, *, root_rule_name: str = "root") -> "Grammar":
+        return Grammar._create_from_handle(_core.Grammar.from_ebnf(ebnf_string, root_rule_name))
 
     @staticmethod
     def from_json_schema(
@@ -67,7 +65,7 @@ class BNFGrammar(XGRObject):
         indent: Optional[int] = None,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
-    ) -> "BNFGrammar":
+    ) -> "Grammar":
         """Construct a BNF grammar from JSON schema. Pydantic model can be used to specify the
         schema.
 
@@ -98,24 +96,24 @@ class BNFGrammar(XGRObject):
 
         Returns
         -------
-        grammar : BNFGrammar
+        grammar : Grammar
             The generated BNF grammar.
         """
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             schema = json.dumps(schema.model_json_schema())
 
-        return BNFGrammar._create_from_handle(
-            _core.BNFGrammar.from_json_schema(schema, indent, separators, strict_mode),
+        return Grammar._create_from_handle(
+            _core.Grammar.from_json_schema(schema, indent, separators, strict_mode),
         )
 
     @staticmethod
-    def builtin_json_grammar() -> "BNFGrammar":
+    def builtin_json_grammar() -> "Grammar":
         """Get the grammar of standard JSON. This is compatible with the official JSON grammar
         in https://www.json.org/json-en.html.
 
         Returns
         -------
-        grammar : BNFGrammar
+        grammar : Grammar
             The JSON grammar.
         """
-        return BNFGrammar._create_from_handle(_core.BNFGrammar.builtin_json_grammar())
+        return Grammar._create_from_handle(_core.Grammar.builtin_json_grammar())

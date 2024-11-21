@@ -132,7 +132,7 @@ class RulePositionBuffer {
 class PersistentStack {
  public:
   /*! \brief Construct a PersistentStack associated with the given grammar. */
-  PersistentStack(const BNFGrammar& grammar) : grammar_(grammar) {}
+  PersistentStack(const Grammar& grammar) : grammar_(grammar) {}
 
   /*!
    * \brief Create a new node with the given RulePosition. The reference count of the new node
@@ -214,7 +214,7 @@ class PersistentStack {
 
  private:
   /*! \brief The grammar associated with this PersistentStack. */
-  BNFGrammar grammar_;
+  Grammar grammar_;
   /*! \brief The buffer to store all RulePositions. */
   RulePositionBuffer node_buffer_;
 };
@@ -339,16 +339,16 @@ inline std::string PersistentStack::PrintNode(const RulePosition& rule_position)
     ss << ": " << grammar_->GetRule(rule_position.rule_id).name;
   }
   ss << ", sequence " << rule_position.sequence_id << ": "
-     << BNFGrammarPrinter(grammar_).PrintRuleExpr(rule_position.sequence_id);
+     << GrammarPrinter(grammar_).PrintRuleExpr(rule_position.sequence_id);
   ss << ", element id: " << rule_position.element_id;
 
   auto sequence = grammar_->GetRuleExpr(rule_position.sequence_id);
   if (rule_position.element_id < static_cast<int32_t>(sequence.size())) {
     auto element = grammar_->GetRuleExpr(sequence[rule_position.element_id]);
-    if (element.type == BNFGrammar::Impl::RuleExprType::kByteString) {
+    if (element.type == Grammar::Impl::RuleExprType::kByteString) {
       ss << ", element in string: " << rule_position.element_in_string;
-    } else if (element.type == BNFGrammar::Impl::RuleExprType::kCharacterClass ||
-               element.type == BNFGrammar::Impl::RuleExprType::kCharacterClassStar) {
+    } else if (element.type == Grammar::Impl::RuleExprType::kCharacterClass ||
+               element.type == Grammar::Impl::RuleExprType::kCharacterClassStar) {
       ss << ", left utf8 bytes: " << rule_position.left_utf8_bytes;
     }
   }

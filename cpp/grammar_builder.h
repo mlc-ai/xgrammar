@@ -19,27 +19,27 @@ namespace xgrammar {
 /*!
  * \brief Helper class to build a BNF grammar.
  */
-class BNFGrammarBuilder {
+class GrammarBuilder {
  public:
-  using Rule = BNFGrammar::Impl::Rule;
-  using RuleExprType = BNFGrammar::Impl::RuleExprType;
-  using RuleExpr = BNFGrammar::Impl::RuleExpr;
+  using Rule = Grammar::Impl::Rule;
+  using RuleExprType = Grammar::Impl::RuleExprType;
+  using RuleExpr = Grammar::Impl::RuleExpr;
 
   /*! \brief Default constructor. Creates a new grammar object. */
-  BNFGrammarBuilder() : grammar_(std::make_shared<BNFGrammar::Impl>()) {}
+  GrammarBuilder() : grammar_(std::make_shared<Grammar::Impl>()) {}
 
   /*!
    * \brief Get the result grammar. This function will also set the root rule to the rule with the
    * specified name. The rule should be already added to the grammar.
    * \param root_rule_name The name of the root rule. Default is "root".
    */
-  BNFGrammar Get(const std::string& root_rule_name = "root") {
+  Grammar Get(const std::string& root_rule_name = "root") {
     int32_t root_rule_id = GetRuleId(root_rule_name);
     XGRAMMAR_CHECK(root_rule_id != -1)
         << "The root rule with name \"" << root_rule_name << "\" is not found.";
     grammar_->root_rule_id_ = root_rule_id;
 
-    return BNFGrammar(grammar_);
+    return Grammar(grammar_);
   }
 
   /****************** RuleExpr handling ******************/
@@ -169,15 +169,15 @@ class BNFGrammarBuilder {
 
   /*!
    * \brief Add an rule without body, and return the rule id. The rule body should be set later
-   * with BNFGrammarBuilder::UpdateRuleBody. This method is useful for cases where the rule id is
+   * with GrammarBuilder::UpdateRuleBody. This method is useful for cases where the rule id is
    * required to build the rule body.
-   * \sa BNFGrammarBuilder::UpdateRuleBody
+   * \sa GrammarBuilder::UpdateRuleBody
    */
   int32_t AddEmptyRule(const std::string& name) { return AddRule({name, -1}); }
 
   /*!
    * \brief Update the rule body of the given rule, specified by rule id. Can be used to set the
-   * rule body of a rule inserted by BNFGrammarBuilder::AddEmptyRule.
+   * rule body of a rule inserted by GrammarBuilder::AddEmptyRule.
    */
   void UpdateRuleBody(int32_t rule_id, int32_t body_expr_id) {
     XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
@@ -187,7 +187,7 @@ class BNFGrammarBuilder {
 
   /*!
    * \brief Update the rule body of the given rule, specified by rule name. Can be used to set the
-   * rule body of a rule inserted by BNFGrammarBuilder::AddEmptyRule.
+   * rule body of a rule inserted by GrammarBuilder::AddEmptyRule.
    */
   void UpdateRuleBody(std::string rule_name, int32_t body_expr_id) {
     int32_t rule_id = GetRuleId(rule_name);
@@ -247,7 +247,7 @@ class BNFGrammarBuilder {
 
  private:
   // Mutable pointer to the grammar object.
-  std::shared_ptr<BNFGrammar::Impl> grammar_;
+  std::shared_ptr<Grammar::Impl> grammar_;
   // Map from rule name to rule id.
   std::unordered_map<std::string, int32_t> rule_name_to_id_;
 };

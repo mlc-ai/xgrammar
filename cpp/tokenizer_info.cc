@@ -351,7 +351,7 @@ TokenizerInfo::Impl::Impl(
   for (int i = 0; i < static_cast<int>(encoded_vocab.size()); ++i) {
     const std::string& token = TokenDecoder::DecodeToken(encoded_vocab[i], vocab_type_);
     decoded_vocab_.push_back(token);
-    if (!stop_token_ids && IsSpecialToken(token)) {
+    if (!stop_token_ids && DETECTION_STOP_TOKENS.count(token)) {
       stop_token_ids_.push_back(i);
     } else if (IsSpecialToken(token)) {
       special_token_ids_.push_back(i);

@@ -2,7 +2,10 @@
 #include <cuda_runtime.h>
 
 #include <cuda/std/limits>
+#include <numeric>
+#include <optional>
 #include <sstream>
+#include <vector>
 
 #include "../support/logging.h"
 #include "kernels.h"
@@ -44,8 +47,11 @@
 namespace xgrammar {
 
 #define BITS_PER_BLOCK 32
+#define THREADS_PER_BLOCK 1024
+#define ELEMENTS_PER_THREAD 4
+#define CEIL_DIV(a, b) (((a) + (b) - 1) / (b))
 #define GET_BIT(data_ptr, bit_idx) \
-  ((data_ptr[bit_idx / BITS_PER_BLOCK] >> (bit_idx % BITS_PER_BLOCK)) & 1)
+  ((data_ptr[(bit_idx) / BITS_PER_BLOCK] >> ((bit_idx) % BITS_PER_BLOCK)) & 1)
 
 template <typename T>
 __device__ T GetNegativeInfinity() {
@@ -57,65 +63,57 @@ __device__ half GetNegativeInfinity<half>() {
   return __float2half(-INFINITY);
 }
 
-template <typename T>
-__global__ void __launch_bounds__(512) ApplyTokenBitmaskInplaceKernel(
-    T* __restrict__ logits,
+__global__ void __launch_bounds__(1024) ApplyTokenBitmaskInplaceKernel(
+    float* __restrict__ logits,
     const int32_t* __restrict__ bitmask,
+    const int32_t* __restrict__ indices,
     int vocab_size,
-    int bitmask_size,
-    int bitmask_row_size,
-    const int* __restrict__ indices
+    int bitmask_size
 ) {
-  int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (gid >= bitmask_size) {
-    return;
-  }
+  int bid = indices[blockIdx.y];
+  // printf("accessing by: %d, bid: %d\n", blockIdx.y, bid);
+  int tid = (blockIdx.x * blockDim.x + threadIdx.x) * ELEMENTS_PER_THREAD;
 
-  int batch_id = gid / bitmask_row_size;
-  int bitmask_id = gid % bitmask_row_size;
-  int bitmask_val = bitmask[gid];
-  T* logits_ptr = logits + batch_id * vocab_size + bitmask_id * BITS_PER_BLOCK;
-  for (int i = 0; i < BITS_PER_BLOCK; ++i) {
-    if (bitmask_id * BITS_PER_BLOCK + i >= vocab_size) {
-      break;
+  float* logits_ptr = logits + bid * vocab_size + tid;
+
+  for (int i = 0; i < ELEMENTS_PER_THREAD && tid + i < vocab_size; ++i) {
+    // logits[bid, tid + i] = mask(..., bitmask[by, tid + i])
+    if (GET_BIT(reinterpret_cast<const int32_t*>(bitmask + blockIdx.y * bitmask_size), tid + i) ==
+        0) {
+      logits_ptr[i] = GetNegativeInfinity<float>();
     }
-    if ((bitmask_val & 1) == 0) {
-      logits_ptr[i] = GetNegativeInfinity<T>();
-    }
-    bitmask_val >>= 1;
   }
 }
 
-#define THREADS_PER_BLOCK 512
-
 void ApplyTokenBitmaskInplace(
-    void* logits,
-    DTypeFlag dtype_flag,
+    float* logits,
     int32_t* bitmask,
     int batch_size,
     int vocab_size,
-    std::vector<int> indices
+    std::optional<std::vector<int>> indices
 ) {
-  int bitmask_size = (vocab_size + BITS_PER_BLOCK - 1) / BITS_PER_BLOCK;
-  int num_blocks = (batch_size * bitmask_size + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+  if (indices) {
+    for (int i = 0; i < indices->size(); ++i) {
+      XGRAMMAR_CHECK(indices->at(i) < batch_size)
+          << "index " << indices->at(i) << " is out of bounds";
+    }
+  } else {
+    indices = std::vector<int>(batch_size);
+    std::iota(indices->begin(), indices->end(), 0);
+  }
+
+  dim3 num_blocks(CEIL_DIV(vocab_size, THREADS_PER_BLOCK * ELEMENTS_PER_THREAD), indices->size());
   int num_threads = THREADS_PER_BLOCK;
 
   int* device_indices;
-  cudaMalloc(&device_indices, indices.size() * sizeof(int));
-  cudaMemcpy(device_indices, indices.data(), indices.size() * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMalloc(&device_indices, indices->size() * sizeof(int));
+  cudaMemcpy(
+      device_indices, indices->data(), indices->size() * sizeof(int), cudaMemcpyHostToDevice
+  );
 
-  XGRAMMAR_DISPATCH_DTYPE(dtype_flag, c_type, {
-    XGRAMMAR_CUDA_CALL({
-      ApplyTokenBitmaskInplaceKernel<<<num_blocks, num_threads>>>(
-          reinterpret_cast<c_type*>(logits),
-          bitmask,
-          vocab_size,
-          batch_size * bitmask_size,
-          bitmask_size,
-          device_indices
-      );
-    });
-  });
+  XGRAMMAR_CUDA_CALL(ApplyTokenBitmaskInplaceKernel<<<num_blocks, num_threads>>>(
+      logits, bitmask, device_indices, vocab_size, CEIL_DIV(vocab_size, BITS_PER_BLOCK)
+  ));
 }
 
 }  // namespace xgrammar

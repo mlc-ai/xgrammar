@@ -22,7 +22,7 @@ import torch
 
 from .base import _core
 from .compiler import GrammarCompiler
-from .grammar import BNFGrammar
+from .grammar import Grammar
 from .matcher import GrammarMatcher, get_bitmask_dtype, get_bitmask_shape
 from .tokenizer_info import TokenizerInfo
 
@@ -98,12 +98,12 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
 
 
 def _match_grammar_with_string(
-    bnf_grammar: Union[BNFGrammar, str], input_str: str, debug_print: bool = False
+    grammar: Union[Grammar, str], input_str: str, debug_print: bool = False
 ) -> bool:
-    if isinstance(bnf_grammar, str):
-        bnf_grammar = BNFGrammar.from_ebnf(bnf_grammar)
+    if isinstance(grammar, str):
+        grammar = Grammar.from_ebnf(grammar)
     grammar_compiler = GrammarCompiler(TokenizerInfo([]), cache_enabled=False)
-    compiled_grammar = grammar_compiler.compile_bnf_grammar(bnf_grammar)
+    compiled_grammar = grammar_compiler.compile_bnf_grammar(grammar)
     matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
     if not matcher._debug_accept_string(input_str, debug_print=debug_print):
         return False
@@ -142,10 +142,10 @@ def _get_masked_tokens_from_bitmask(
 
 
 def _get_matcher_from_grammar_and_tokenizer_info(
-    bnf_grammar: Union[BNFGrammar, str], tokenizer_info: Optional[TokenizerInfo] = None, **kwargs
+    grammar: Union[Grammar, str], tokenizer_info: Optional[TokenizerInfo] = None, **kwargs
 ) -> GrammarMatcher:
     if tokenizer_info is None:
         tokenizer_info = TokenizerInfo([])
     grammar_compiler = GrammarCompiler(tokenizer_info, cache_enabled=False)
-    compiled_grammar = grammar_compiler.compile_bnf_grammar(bnf_grammar)
+    compiled_grammar = grammar_compiler.compile_bnf_grammar(grammar)
     return GrammarMatcher(compiled_grammar, **kwargs)

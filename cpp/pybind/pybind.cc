@@ -28,11 +28,11 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("from_huggingface", &TokenizerInfo::FromHuggingFace)
       .def_static("from_vocab_and_metadata", &TokenizerInfo::FromVocabAndMetadata);
 
-  auto pyBNFGrammar = py::class_<BNFGrammar>(m, "BNFGrammar");
-  pyBNFGrammar.def("to_string", &BNFGrammar::ToString)
-      .def_static("from_ebnf", &BNFGrammar::FromEBNF)
-      .def_static("from_json_schema", &BNFGrammar::FromJSONSchema)
-      .def_static("builtin_json_grammar", &BNFGrammar::BuiltinJSONGrammar);
+  auto pyGrammar = py::class_<Grammar>(m, "Grammar");
+  pyGrammar.def("to_string", &Grammar::ToString)
+      .def_static("from_ebnf", &Grammar::FromEBNF)
+      .def_static("from_json_schema", &Grammar::FromJSONSchema)
+      .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar);
 
   auto pyCompiledGrammar = py::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_property_readonly("grammar", &CompiledGrammar::GetGrammar)
@@ -52,7 +52,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       )
       .def(
           "compile_bnf_grammar",
-          &GrammarCompiler::CompileBNFGrammar,
+          &GrammarCompiler::CompileGrammar,
           py::call_guard<py::gil_scoped_release>()
       )
       .def("clear_cache", &GrammarCompiler::ClearCache);

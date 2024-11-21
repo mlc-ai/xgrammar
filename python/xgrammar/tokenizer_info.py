@@ -181,11 +181,8 @@ class TokenizerInfo(XGRObject):
             # - the vocab size is obtained from len(tokenizer.get_vocab()) or provided by user
             # - the vocab type and prepend_space_in_tokenization are obtained from
             #   tokenizer.backend_tokenizer.to_str()
-            # - stop token id is obtained from tokenizer.eos_token_id or provided by user
+            # - stop token id is provided by user, or auto detected.
             backend_str = tokenizer.backend_tokenizer.to_str()
-            if stop_token_ids is None:
-                if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
-                    stop_token_ids = [tokenizer.eos_token_id]
             return TokenizerInfo._create_from_handle(
                 _core.TokenizerInfo.from_huggingface(
                     encoded_vocab, backend_str, vocab_size, stop_token_ids

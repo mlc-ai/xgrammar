@@ -35,7 +35,7 @@ def check_schema_with_json(
     separators: Optional[Tuple[str, str]] = None,
     strict_mode: bool = True,
 ):
-    json_schema_grammar = xgr.BNFGrammar.from_json_schema(
+    json_schema_grammar = xgr.Grammar.from_json_schema(
         json.dumps(schema),
         indent=indent,
         separators=separators,

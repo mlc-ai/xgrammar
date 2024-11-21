@@ -44,7 +44,7 @@ AdaptiveTokenMask::AdaptiveTokenMask(
   this->uncertain_indices = uncertain_indices;
 }
 
-BNFGrammar CompiledGrammar::GetGrammar() const { return pimpl_->GetGrammar(); }
+Grammar CompiledGrammar::GetGrammar() const { return pimpl_->GetGrammar(); }
 
 TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetTokenizerInfo(); }
 
@@ -55,7 +55,7 @@ class GrammarMatcherForCompiler : public GrammarMatcherBase {
  public:
   // Do not expand the initial rule position: we want to find the accepted/rejected tokens
   // that exactly start from the initial rule position.
-  GrammarMatcherForCompiler(const BNFGrammar& grammar, RulePosition init_rule_position)
+  GrammarMatcherForCompiler(const Grammar& grammar, RulePosition init_rule_position)
       : GrammarMatcherBase(grammar, init_rule_position, false),
         init_rule_id(init_rule_position.rule_id) {}
 
@@ -217,10 +217,10 @@ AdaptiveTokenMask GrammarMatcherForCompiler::GetAdaptiveTokenMask(
   );
 }
 
-CompiledGrammar MultiThreadCompileBNFGrammar(
-    const BNFGrammar& grammar, const TokenizerInfo& tokenizer_info, int max_threads
+CompiledGrammar MultiThreadCompileGrammar(
+    const Grammar& grammar, const TokenizerInfo& tokenizer_info, int max_threads
 ) {
-  using RuleExprType = BNFGrammar::Impl::RuleExprType;
+  using RuleExprType = Grammar::Impl::RuleExprType;
 
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
 
@@ -303,7 +303,7 @@ class GrammarCompiler::Impl {
         cache_enabled_(cache_enabled),
         compile_json_schema_cache_(GetCompileJSONSchemaCacheFunc(cache_enabled_)),
         compile_builtin_json_grammar_cache_(GetCompileBuiltinJSONGrammarCacheFunc(cache_enabled_)),
-        compile_bnf_grammar_cache_(GetCompileBNFGrammarCacheFunc(cache_enabled_)) {}
+        compile_bnf_grammar_cache_(GetCompileGrammarCacheFunc(cache_enabled_)) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -314,7 +314,7 @@ class GrammarCompiler::Impl {
       bool strict_mode = true
   );
 
-  CompiledGrammar CompileBNFGrammar(const BNFGrammar& grammar);
+  CompiledGrammar CompileGrammar(const Grammar& grammar);
 
   void ClearCache();
 
@@ -330,8 +330,8 @@ class GrammarCompiler::Impl {
     }
     return [&](const SchemaKey& key) {
       auto [schema, indent, separators, strict_mode] = key;
-      auto grammar = BNFGrammar::FromJSONSchema(schema, indent, separators, strict_mode);
-      return MultiThreadCompileBNFGrammar(grammar, tokenizer_info_, max_threads_);
+      auto grammar = Grammar::FromJSONSchema(schema, indent, separators, strict_mode);
+      return MultiThreadCompileGrammar(grammar, tokenizer_info_, max_threads_);
     };
   }
 
@@ -340,24 +340,22 @@ class GrammarCompiler::Impl {
       return nullptr;
     }
     return [&]() {
-      return MultiThreadCompileBNFGrammar(
-          BNFGrammar::BuiltinJSONGrammar(), tokenizer_info_, max_threads_
+      return MultiThreadCompileGrammar(
+          Grammar::BuiltinJSONGrammar(), tokenizer_info_, max_threads_
       );
     };
   }
 
-  using BNFGrammarKey = std::pair<std::string, std::string>;
+  using GrammarKey = std::pair<std::string, std::string>;
 
-  std::function<CompiledGrammar(const BNFGrammarKey&)> GetCompileBNFGrammarCacheFunc(
-      bool cache_enabled
-  ) {
+  std::function<CompiledGrammar(const GrammarKey&)> GetCompileGrammarCacheFunc(bool cache_enabled) {
     if (!cache_enabled) {
       return nullptr;
     }
-    return [&](const BNFGrammarKey& key) {
+    return [&](const GrammarKey& key) {
       auto [grammar_str, root_rule_name] = key;
-      return MultiThreadCompileBNFGrammar(
-          BNFGrammar::FromEBNF(grammar_str, root_rule_name), tokenizer_info_, max_threads_
+      return MultiThreadCompileGrammar(
+          Grammar::FromEBNF(grammar_str, root_rule_name), tokenizer_info_, max_threads_
       );
     };
   }
@@ -373,14 +371,12 @@ class GrammarCompiler::Impl {
   /*! \brief The cache for the compiled grammar for JSON. */
   ThreadSafeCache<CompiledGrammar> compile_builtin_json_grammar_cache_;
   /*! \brief The cache for the compiled grammar for bnf grammar. */
-  ThreadSafeCache<BNFGrammarKey, CompiledGrammar> compile_bnf_grammar_cache_;
+  ThreadSafeCache<GrammarKey, CompiledGrammar> compile_bnf_grammar_cache_;
 };
 
 CompiledGrammar GrammarCompiler::Impl::CompileBuiltinJSONGrammar() {
   if (!cache_enabled_) {
-    return MultiThreadCompileBNFGrammar(
-        BNFGrammar::BuiltinJSONGrammar(), tokenizer_info_, max_threads_
-    );
+    return MultiThreadCompileGrammar(Grammar::BuiltinJSONGrammar(), tokenizer_info_, max_threads_);
   }
   return compile_builtin_json_grammar_cache_.Get();
 }
@@ -392,8 +388,8 @@ CompiledGrammar GrammarCompiler::Impl::CompileJSONSchema(
     bool strict_mode
 ) {
   if (!cache_enabled_) {
-    return MultiThreadCompileBNFGrammar(
-        BNFGrammar::FromJSONSchema(schema, indent, separators, strict_mode),
+    return MultiThreadCompileGrammar(
+        Grammar::FromJSONSchema(schema, indent, separators, strict_mode),
         tokenizer_info_,
         max_threads_
     );
@@ -405,9 +401,9 @@ CompiledGrammar GrammarCompiler::Impl::CompileJSONSchema(
   return compile_json_schema_cache_.Get(key);
 }
 
-CompiledGrammar GrammarCompiler::Impl::CompileBNFGrammar(const BNFGrammar& grammar) {
+CompiledGrammar GrammarCompiler::Impl::CompileGrammar(const Grammar& grammar) {
   if (!cache_enabled_) {
-    return MultiThreadCompileBNFGrammar(grammar, tokenizer_info_, max_threads_);
+    return MultiThreadCompileGrammar(grammar, tokenizer_info_, max_threads_);
   }
   auto key = std::make_pair(grammar.ToString(), grammar->GetRootRule().name);
   return compile_bnf_grammar_cache_.Get(key);
@@ -438,8 +434,8 @@ CompiledGrammar GrammarCompiler::CompileBuiltinJSONGrammar() {
   return pimpl_->CompileBuiltinJSONGrammar();
 }
 
-CompiledGrammar GrammarCompiler::CompileBNFGrammar(const BNFGrammar& grammar) {
-  return pimpl_->CompileBNFGrammar(grammar);
+CompiledGrammar GrammarCompiler::CompileGrammar(const Grammar& grammar) {
+  return pimpl_->CompileGrammar(grammar);
 }
 
 void GrammarCompiler::ClearCache() { pimpl_->ClearCache(); }

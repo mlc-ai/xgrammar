@@ -26,7 +26,7 @@ The GBNF (GGML BNF) specification is available
 
 .. code:: python
 
-  from xgrammar import BNFGrammar
+  from xgrammar import Grammar
 
   # Method 1: Construct with a GBNF string.
   gbnf_grammar = """
@@ -35,7 +35,7 @@ The GBNF (GGML BNF) specification is available
   term  ::= num | "(" expr ")"
   num   ::= [0-9]+
   """
-  gbnf_grammar = BNFGrammar(gbnf_grammar)
+  gbnf_grammar = Grammar(gbnf_grammar)
 
 
 **Method 2: Use the builtin JSON grammar.**

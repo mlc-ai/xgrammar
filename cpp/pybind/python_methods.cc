@@ -137,45 +137,25 @@ void Matcher_ApplyTokenBitmaskInplace(
   int expected_bitmask_size = DynamicBitset::GetBufferSize(vocab_size);
   if (bitmask_shape.size() == 1) {
     XGRAMMAR_CHECK(bitmask_shape[0] == expected_bitmask_size)
-        << "The last dimension of the token bitmask tensor must be " << expected_bitmask_size
-        << ", but got " << bitmask_shape[0];
+        << "Expected bitmask shape: (" << expected_bitmask_size << ",), but got ("
+        << bitmask_shape[0] << ",)";
   } else if (bitmask_shape.size() == 2) {
-    XGRAMMAR_CHECK(bitmask_shape[0] == batch_size)
-        << "The first dimension of the token bitmask tensor must be " << batch_size << ", but got "
-        << bitmask_shape[0];
-    XGRAMMAR_CHECK(bitmask_shape[1] == expected_bitmask_size)
-        << "The last dimension of the token bitmask tensor must be " << expected_bitmask_size
-        << ", but got " << bitmask_shape[1];
+    int expected_batch_size = indices ? indices->size() : batch_size;
+    XGRAMMAR_CHECK(
+        bitmask_shape[0] == expected_batch_size && bitmask_shape[1] == expected_bitmask_size
+    ) << "Expected bitmask shape: ("
+      << expected_batch_size << ", " << expected_bitmask_size << "), but got (" << bitmask_shape[0]
+      << ", " << bitmask_shape[1] << ")";
   } else {
     XGRAMMAR_LOG(FATAL) << "token_bitmask tensor must be 1D or 2D";
   }
 
-  DTypeFlag dtype_flag;
-  if (logits.dtype() == torch::kFloat16) {
-    dtype_flag = DTypeFlag::DTYPE_FLOAT16;
-  } else if (logits.dtype() == torch::kFloat32) {
-    dtype_flag = DTypeFlag::DTYPE_FLOAT32;
-  } else if (logits.dtype() == torch::kFloat64) {
-    dtype_flag = DTypeFlag::DTYPE_FLOAT64;
-  } else {
-    XGRAMMAR_LOG(FATAL) << "logits tensor must be of type float16, float32, or float64";
-  }
-
+  XGRAMMAR_CHECK(logits.dtype() == torch::kFloat32) << "logits tensor must be of type float32";
   XGRAMMAR_CHECK(token_bitmask.dtype() == torch::kInt32)
       << "token bitmask tensor must be of type int32";
 
-  if (!indices) {
-    indices = std::vector<int>(batch_size);
-    std::iota(indices->begin(), indices->end(), 0);
-  }
-
   ApplyTokenBitmaskInplace(
-      logits.data_ptr(),
-      dtype_flag,
-      token_bitmask.data_ptr<int32_t>(),
-      batch_size,
-      vocab_size,
-      indices
+      logits.data_ptr<float>(), token_bitmask.data_ptr<int32_t>(), batch_size, vocab_size, indices
   );
 }
 #endif

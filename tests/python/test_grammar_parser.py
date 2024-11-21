@@ -14,8 +14,8 @@ c ::= "c"
 b ::= (("b"))
 c ::= (("c"))
 """
-    bnf_grammar = xgr.BNFGrammar.from_ebnf(before)
-    after = str(bnf_grammar)
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
     assert after == expected
 
 
@@ -33,8 +33,8 @@ b_1 ::= ("" | ("ab" b_1))
 c_1 ::= (([acep-z] c_1) | ([acep-z]))
 d_1 ::= ("" | ("d"))
 """
-    bnf_grammar = xgr.BNFGrammar.from_ebnf(before)
-    after = str(bnf_grammar)
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
     assert after == expected
 
 
@@ -54,8 +54,8 @@ c_1 ::= ("" | ("b" c_1))
 d_1 ::= ("" | (d_1_choice d_1))
 d_1_choice ::= (("bcd") | ("pq"))
 """
-    bnf_grammar = xgr.BNFGrammar.from_ebnf(before)
-    after = str(bnf_grammar)
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
     assert after == expected
 
 
@@ -72,8 +72,8 @@ c ::= (("a") | ("b")) (=([a-z] "b"))
 d ::= (("ac") | ("b" d_choice)) (=("abc"))
 d_choice ::= (("e") | ("d"))
 """
-    bnf_grammar = xgr.BNFGrammar.from_ebnf(before)
-    after = str(bnf_grammar)
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
     assert after == expected
 
 
@@ -87,8 +87,8 @@ rest ::= (([a-zA-Z0-9\-] [\u0234-\u0345] [\u6d4b-\u8bd5] [\--\]] rest1))
 rest1 ::= (("\?\"\'\u6d4b\u8bd5\u3042c\U0001f440ab"))
 """
     # Disable unwrap_nesting_rules to expose the result before unwrapping.
-    bnf_grammar = xgr.BNFGrammar.from_ebnf(before)
-    after = str(bnf_grammar)
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
     assert after == expected
 
 
@@ -102,8 +102,8 @@ root::="a"  "b" ("c""d"
 """
     expected = """root ::= (("abcde") | ("f") | ("g"))
 """
-    bnf_grammar = xgr.BNFGrammar.from_ebnf(before)
-    after = str(bnf_grammar)
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
     assert after == expected
 
 
@@ -113,8 +113,8 @@ def test_nest():
     expected = """root ::= (("a" root_choice) | ("ef"))
 root_choice ::= (("b") | ("cd"))
 """
-    bnf_grammar = xgr.BNFGrammar.from_ebnf(before)
-    after = str(bnf_grammar)
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
     assert after == expected
 
 
@@ -134,8 +134,8 @@ nested_rest ::= (("a") | ("bc") | ("d") | ("ef") | ("g"))
 empty_test ::= ("" | ("d") | ("a"))
 sequence_test_choice ::= (("c") | ("d"))
 """
-    bnf_grammar = xgr.BNFGrammar.from_ebnf(before)
-    after = str(bnf_grammar)
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
     assert after == expected
 
 
@@ -189,8 +189,8 @@ exponent_choice ::= (("e") | ("E"))
 exponent_choice_1 ::= ("" | ("+") | ("-"))
 """
 
-    bnf_grammar = xgr.BNFGrammar.from_ebnf(before)
-    after = str(bnf_grammar)
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
     assert after == expected
 
 
@@ -205,10 +205,10 @@ c_1 ::= ((c_2 c_1) | (c_2)) (=("abc" [a-z]))
 c_2 ::= (([acep-z]))
 d_1 ::= ("" | ("d"))
 """
-    bnf_grammar_1 = xgr.BNFGrammar.from_ebnf(before)
-    output_string_1 = str(bnf_grammar_1)
-    bnf_grammar_2 = xgr.BNFGrammar.from_ebnf(output_string_1)
-    output_string_2 = str(bnf_grammar_2)
+    grammar_1 = xgr.Grammar.from_ebnf(before)
+    output_string_1 = str(grammar_1)
+    grammar_2 = xgr.Grammar.from_ebnf(output_string_1)
+    output_string_2 = str(grammar_2)
     assert before == output_string_1
     assert output_string_1 == output_string_2
 
@@ -218,66 +218,66 @@ def test_error():
         RuntimeError,
         match='EBNF parse error at line 1, column 11: Rule "a" is not defined',
     ):
-        xgr.BNFGrammar.from_ebnf("root ::= a b")
+        xgr.Grammar.from_ebnf("root ::= a b")
 
     with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 15: Expect element"):
-        xgr.BNFGrammar.from_ebnf('root ::= "a" |')
+        xgr.Grammar.from_ebnf('root ::= "a" |')
 
     with pytest.raises(RuntimeError, match='EBNF parse error at line 1, column 15: Expect "'):
-        xgr.BNFGrammar.from_ebnf('root ::= "a" "')
+        xgr.Grammar.from_ebnf('root ::= "a" "')
 
     with pytest.raises(
         RuntimeError, match="EBNF parse error at line 1, column 1: Expect rule name"
     ):
-        xgr.BNFGrammar.from_ebnf('::= "a"')
+        xgr.Grammar.from_ebnf('::= "a"')
 
     with pytest.raises(
         RuntimeError,
         match="EBNF parse error at line 1, column 12: Character class should not contain "
         "newline",
     ):
-        xgr.BNFGrammar.from_ebnf("root ::= [a\n]")
+        xgr.Grammar.from_ebnf("root ::= [a\n]")
 
     with pytest.raises(
         RuntimeError,
         match="EBNF parse error at line 1, column 11: Invalid escape sequence",
     ):
-        xgr.BNFGrammar.from_ebnf(r'root ::= "\@"')
+        xgr.Grammar.from_ebnf(r'root ::= "\@"')
 
     with pytest.raises(
         RuntimeError,
         match="EBNF parse error at line 1, column 11: Invalid escape sequence",
     ):
-        xgr.BNFGrammar.from_ebnf(r'root ::= "\uFF"')
+        xgr.Grammar.from_ebnf(r'root ::= "\uFF"')
 
     with pytest.raises(
         RuntimeError,
         match="EBNF parse error at line 1, column 14: Invalid character class: "
         "lower bound is larger than upper bound",
     ):
-        xgr.BNFGrammar.from_ebnf(r"root ::= [Z-A]")
+        xgr.Grammar.from_ebnf(r"root ::= [Z-A]")
 
     with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 6: Expect ::="):
-        xgr.BNFGrammar.from_ebnf(r'root := "a"')
+        xgr.Grammar.from_ebnf(r'root := "a"')
 
     with pytest.raises(
         RuntimeError,
         match='EBNF parse error at line 2, column 9: Rule "root" is defined multiple times',
     ):
-        xgr.BNFGrammar.from_ebnf('root ::= "a"\nroot ::= "b"')
+        xgr.Grammar.from_ebnf('root ::= "a"\nroot ::= "b"')
 
     with pytest.raises(
         RuntimeError,
         match="EBNF parse error at line 1, column 10: "
         'The root rule with name "root" is not found.',
     ):
-        xgr.BNFGrammar.from_ebnf('a ::= "a"')
+        xgr.Grammar.from_ebnf('a ::= "a"')
 
     with pytest.raises(
         RuntimeError,
         match="EBNF parse error at line 1, column 21: Unexpected lookahead assertion",
     ):
-        xgr.BNFGrammar.from_ebnf('root ::= "a" (="a") (="b")')
+        xgr.Grammar.from_ebnf('root ::= "a" (="a") (="b")')
 
 
 if __name__ == "__main__":

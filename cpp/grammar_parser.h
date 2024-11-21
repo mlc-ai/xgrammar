@@ -27,7 +27,7 @@ namespace xgrammar {
  * \param root_rule_name The name of the root rule. Default is "root".
  * \return The parsed grammar.
  */
-BNFGrammar ParseEBNF(std::string ebnf_string, std::string root_rule_name = "root");
+Grammar ParseEBNF(std::string ebnf_string, std::string root_rule_name = "root");
 
 }  // namespace xgrammar
 

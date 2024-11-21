@@ -13,15 +13,15 @@
 
 namespace xgrammar {
 
-std::string BNFGrammar::ToString() const { return BNFGrammarPrinter(*this).ToString(); }
+std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString(); }
 
-BNFGrammar BNFGrammar::FromEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
+Grammar Grammar::FromEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
   auto grammar = ParseEBNF(ebnf_string, root_rule_name);
-  grammar = BNFGrammarNormalizer().Apply(grammar);
+  grammar = GrammarNormalizer().Apply(grammar);
   return grammar;
 }
 
-BNFGrammar BNFGrammar::FromJSONSchema(
+Grammar Grammar::FromJSONSchema(
     const std::string& schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
@@ -113,12 +113,12 @@ exponent ::= "" |  "e" sign [0-9] [0-9]* | "E" sign [0-9] [0-9]*
 sign ::= "" | "+" | "-"
 )";
 
-BNFGrammar BNFGrammar::BuiltinJSONGrammar() {
-  static const BNFGrammar grammar = FromEBNF(kJSONGrammarString);
+Grammar Grammar::BuiltinJSONGrammar() {
+  static const Grammar grammar = FromEBNF(kJSONGrammarString);
   return grammar;
 }
 
-std::ostream& operator<<(std::ostream& os, const BNFGrammar& grammar) {
+std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
   os << grammar.ToString();
   return os;
 }

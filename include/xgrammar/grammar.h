@@ -50,7 +50,7 @@ namespace xgrammar {
  *
  * #### Storage of RuleExprs
  * Each type of RuleExpr has a different data format. For the format of each type of RuleExpr, see
- * docs in BNFGrammar::Impl::RuleExprType.
+ * docs in Grammar::Impl::RuleExprType.
  *
  * We store all RuleExprs in csr_matrix style. That is, they are stored consecutively in one vector
  * (data vector) and the starting position of each RuleExpr is recorded in the indptr vector.
@@ -61,7 +61,7 @@ namespace xgrammar {
  * rule1 ::= ((element1 element2 rule2 ...) | ...)
  * rule2 ::= character_class_star_rule_expr(id_of_a_character_class_rule_expr)
  */
-class BNFGrammar {
+class Grammar {
  public:
   /*!
    * \brief Get the EBNF string of the grammar.
@@ -74,7 +74,7 @@ class BNFGrammar {
    * \param ebnf_string The EBNF-formatted string.
    * \param root_rule_name The name of the root rule.
    */
-  static BNFGrammar FromEBNF(
+  static Grammar FromEBNF(
       const std::string& ebnf_string, const std::string& root_rule_name = "root"
   );
 
@@ -95,7 +95,7 @@ class BNFGrammar {
    * This helps LLM to generate accurate output in the grammar-guided generation with JSON
    * schema. Default: true.
    */
-  static BNFGrammar FromJSONSchema(
+  static Grammar FromJSONSchema(
       const std::string& schema,
       std::optional<int> indent = std::nullopt,
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
@@ -105,7 +105,7 @@ class BNFGrammar {
   /*!
    * \brief Get the grammar of standard JSON format. We have built-in support for JSON.
    */
-  static BNFGrammar BuiltinJSONGrammar();
+  static Grammar BuiltinJSONGrammar();
 
   /*!
    * \brief Convert regex string to EBNF grammar string.
@@ -115,9 +115,9 @@ class BNFGrammar {
   //   static std::string _RegexToEBNF(const std::string& regex);
 
   /*! \brief Print a BNF grammar. */
-  friend std::ostream& operator<<(std::ostream& os, const BNFGrammar& grammar);
+  friend std::ostream& operator<<(std::ostream& os, const Grammar& grammar);
 
-  XGRAMMAR_DEFINE_PIMPL_METHODS(BNFGrammar);
+  XGRAMMAR_DEFINE_PIMPL_METHODS(Grammar);
 };
 
 }  // namespace xgrammar

@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 from .compiler import CompiledGrammar, GrammarCompiler
-from .grammar import BNFGrammar
+from .grammar import Grammar
 from .matcher import (
     GrammarMatcher,
     apply_token_bitmask_inplace,

@@ -18,10 +18,10 @@ namespace xgrammar {
 class EBNFParser {
  public:
   /*! \brief The logic of parsing the grammar string. */
-  BNFGrammar Parse(std::string ebnf_string, std::string root_rule_name);
+  Grammar Parse(std::string ebnf_string, std::string root_rule_name);
 
  private:
-  using Rule = BNFGrammar::Impl::Rule;
+  using Rule = Grammar::Impl::Rule;
 
   // Parsing different parts of the grammar
   std::string ParseName(bool accept_empty = false);
@@ -74,7 +74,7 @@ class EBNFParser {
   }
 
   // The grammar builder
-  BNFGrammarBuilder builder_;
+  GrammarBuilder builder_;
   // A pointer to the current parse position in the string
   const char* cur_ = nullptr;
   // The current line and column number
@@ -137,7 +137,7 @@ int32_t EBNFParser::ParseCharacterClass() {
   static constexpr TCodepoint kUnknownUpperBound = -4;
   static const std::unordered_map<char, TCodepoint> CUSTOM_ESCAPE_MAP = {{'-', '-'}, {']', ']'}};
 
-  std::vector<BNFGrammarBuilder::CharacterClassElement> elements;
+  std::vector<GrammarBuilder::CharacterClassElement> elements;
 
   bool is_negated = false;
   if (Peek() == '^') {
@@ -276,10 +276,10 @@ int32_t EBNFParser::ParseElement() {
 }
 
 int32_t EBNFParser::HandleStarQuantifier(int32_t rule_expr_id) {
-  BNFGrammar::Impl::RuleExpr rule_expr = builder_.GetRuleExpr(rule_expr_id);
-  if (rule_expr.type == BNFGrammarBuilder::RuleExprType::kCharacterClass) {
+  Grammar::Impl::RuleExpr rule_expr = builder_.GetRuleExpr(rule_expr_id);
+  if (rule_expr.type == GrammarBuilder::RuleExprType::kCharacterClass) {
     // We have special handling for character class star, e.g. [a-z]*
-    rule_expr.type = BNFGrammarBuilder::RuleExprType::kCharacterClassStar;
+    rule_expr.type = GrammarBuilder::RuleExprType::kCharacterClassStar;
     return builder_.AddRuleExpr(rule_expr);
   } else {
     // For other star quantifiers, we transform it into a rule:
@@ -427,7 +427,7 @@ void EBNFParser::ResetStringIterator(const char* cur) {
   in_parentheses_ = false;
 }
 
-BNFGrammar EBNFParser::Parse(std::string ebnf_string, std::string root_rule_name) {
+Grammar EBNFParser::Parse(std::string ebnf_string, std::string root_rule_name) {
   ResetStringIterator(ebnf_string.c_str());
   BuildRuleNameToId();
 
@@ -454,7 +454,7 @@ BNFGrammar EBNFParser::Parse(std::string ebnf_string, std::string root_rule_name
   return builder_.Get(root_rule_name);
 }
 
-BNFGrammar ParseEBNF(std::string ebnf_string, std::string root_rule_name) {
+Grammar ParseEBNF(std::string ebnf_string, std::string root_rule_name) {
   EBNFParser parser;
   return parser.Parse(ebnf_string, root_rule_name);
 }

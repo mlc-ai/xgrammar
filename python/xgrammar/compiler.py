@@ -22,15 +22,15 @@ from typing import Optional, Tuple, Type, Union, overload
 from pydantic import BaseModel
 
 from .base import XGRObject, _core
-from .grammar import BNFGrammar
+from .grammar import Grammar
 from .tokenizer_info import TokenizerInfo
 
 
 class CompiledGrammar(XGRObject):
     @property
-    def grammar(self) -> BNFGrammar:
+    def grammar(self) -> Grammar:
         """The BNF grammar."""
-        return BNFGrammar._create_from_handle(self._handle.grammar)
+        return Grammar._create_from_handle(self._handle.grammar)
 
     @property
     def tokenizer_info(self) -> TokenizerInfo:
@@ -124,14 +124,14 @@ class GrammarCompiler(XGRObject):
     ) -> CompiledGrammar: ...
 
     @overload
-    def compile_bnf_grammar(self, grammar: BNFGrammar) -> CompiledGrammar: ...
+    def compile_bnf_grammar(self, grammar: Grammar) -> CompiledGrammar: ...
 
     def compile_bnf_grammar(
-        self, grammar: Union[str, BNFGrammar], *, root_rule_name: str = "root"
+        self, grammar: Union[str, Grammar], *, root_rule_name: str = "root"
     ) -> CompiledGrammar:
         """Compile a BNF grammar."""
         if isinstance(grammar, str):
-            grammar = BNFGrammar.from_ebnf(grammar, root_rule_name=root_rule_name)
+            grammar = Grammar.from_ebnf(grammar, root_rule_name=root_rule_name)
         return CompiledGrammar._create_from_handle(
             self._handle.compile_bnf_grammar(grammar._handle)
         )

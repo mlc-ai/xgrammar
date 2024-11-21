@@ -12,7 +12,11 @@ namespace xgrammar {
 enum class DTypeFlag : int { DTYPE_FLOAT16 = 0, DTYPE_FLOAT32 = 1, DTYPE_FLOAT64 = 2 };
 
 void ApplyTokenBitmaskInplace(
-    void* logits, DTypeFlag dtype_flag, int32_t* bitmask, int batch_size, int vocab_size
+    float* logits,
+    int32_t* bitmask,
+    int batch_size,
+    int vocab_size,
+    std::optional<std::vector<int>> indices
 );
 
 }  // namespace xgrammar

@@ -13,7 +13,7 @@ import xgrammar as xgr
 
 
 def test_compiled_grammar():
-    grammar = xgr.BNFGrammar.builtin_json_grammar()
+    grammar = xgr.Grammar.builtin_json_grammar()
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)

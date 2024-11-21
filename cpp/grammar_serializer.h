@@ -18,18 +18,18 @@ namespace xgrammar {
 /*!
  * \brief Prints the BNF AST with standard BNF format.
  */
-class BNFGrammarPrinter {
+class GrammarPrinter {
  private:
-  using Rule = BNFGrammar::Impl::Rule;
-  using RuleExprType = BNFGrammar::Impl::RuleExprType;
-  using RuleExpr = BNFGrammar::Impl::RuleExpr;
+  using Rule = Grammar::Impl::Rule;
+  using RuleExprType = Grammar::Impl::RuleExprType;
+  using RuleExpr = Grammar::Impl::RuleExpr;
 
  public:
   /*!
    * \brief Constructor.
    * \param grammar The grammar to print.
    */
-  explicit BNFGrammarPrinter(const BNFGrammar& grammar) : grammar_(grammar) {}
+  explicit GrammarPrinter(const Grammar& grammar) : grammar_(grammar) {}
 
   /*! \brief Print the complete grammar. */
   std::string ToString();
@@ -59,7 +59,7 @@ class BNFGrammarPrinter {
   /*! \brief Print a RuleExpr for rule_expr choices. */
   std::string PrintChoices(const RuleExpr& rule_expr);
 
-  BNFGrammar grammar_;
+  Grammar grammar_;
 };
 
 /*!
@@ -76,13 +76,13 @@ class BNFGrammarPrinter {
  *    "rule_expr_indptr": [integers...],
  *  }
  */
-class BNFGrammarSerializer {
+class GrammarSerializer {
  public:
   /*!
    * \brief Constructor.
    * \param grammar The grammar to print.
    */
-  explicit BNFGrammarSerializer(const BNFGrammar& grammar, bool prettify = true)
+  explicit GrammarSerializer(const Grammar& grammar, bool prettify = true)
       : grammar_(grammar), prettify_(prettify) {}
 
   /*!
@@ -92,7 +92,7 @@ class BNFGrammarSerializer {
   std::string Serialize();
 
  private:
-  BNFGrammar grammar_;
+  Grammar grammar_;
   bool prettify_;
 };
 
@@ -100,14 +100,14 @@ class BNFGrammarSerializer {
  * \brief Parse a BNF grammar from the raw representation of the AST in JSON format. Stale for
  * now.
  */
-class BNFGrammarDeserializer {
+class GrammarDeserializer {
  public:
   /*!
    * \brief Parse the JSON string
    * \param json_string The JSON string.
    * \return The parsed BNF grammar.
    */
-  static BNFGrammar Deserialize(std::string json_string);
+  static Grammar Deserialize(std::string json_string);
 };
 
 }  // namespace xgrammar

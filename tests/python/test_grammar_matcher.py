@@ -16,7 +16,7 @@ from xgrammar.testing import (
     _match_grammar_with_string,
 )
 
-json_grammar = xgr.BNFGrammar.builtin_json_grammar()
+json_grammar = xgr.Grammar.builtin_json_grammar()
 
 
 input_accepted = [
@@ -172,21 +172,38 @@ def test_apply_token_bitmask_inplace():
     assert torch.all(logits_gpu == expected.to("cuda"))
 
 
-def test_apply_token_bitmask_inplace_large():
-    batch_size = 64
-    vocab_size = 128000
-    masked_cnt = 64000
-    logits = torch.randn(batch_size, vocab_size, dtype=torch.float32)
-    masked_positions = torch.randint(0, vocab_size, (batch_size, masked_cnt))
-    bool_mask = torch.ones((batch_size, vocab_size), dtype=torch.bool)
+batch_size_vocab_size_masked_cnt_stride = [
+    (1, 128000, 1024, 1),
+    (1, 128000, 120000, 1),
+    (64, 128000, 1024, 4),
+    (64, 128000, 120000, 4),
+    (64, 128000, 1024, 4),
+    (64, 128000, 120000, 4),
+]
+
+
+@pytest.mark.parametrize(
+    "batch_size, vocab_size, masked_cnt, stride", batch_size_vocab_size_masked_cnt_stride
+)
+def test_apply_token_bitmask_inplace_large(
+    batch_size: int, vocab_size: int, masked_cnt: int, stride: int
+):
+
+    masked_batch_ids = list(range(0, batch_size, stride))
+    mask_batch_size = len(masked_batch_ids)
+    masked_positions = torch.randint(0, vocab_size, (mask_batch_size, masked_cnt))
+    bool_mask = torch.ones((mask_batch_size, vocab_size), dtype=torch.bool)
     bool_mask.scatter_(1, masked_positions, False)
 
-    neginf = float("-inf")
-    logits_expected = torch.where(bool_mask, logits, neginf)
+    logits = torch.randn(batch_size, vocab_size, dtype=torch.float32)
+    logits_expected = logits.clone()
+    logits_expected[masked_batch_ids] = torch.masked_fill(
+        logits_expected[masked_batch_ids], ~bool_mask, float("-inf")
+    )
 
     def bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
         bool_mask_int32 = bool_mask.to(torch.int32)
-        bool_mask_view = bool_mask_int32.view(batch_size, -1, 32)
+        bool_mask_view = bool_mask_int32.view(mask_batch_size, -1, 32)
         weights = torch.tensor([1 << i for i in range(32)], dtype=torch.int64)
         weights = weights.to(torch.int32)
         bitmask = (bool_mask_view * weights).sum(dim=2)
@@ -194,9 +211,10 @@ def test_apply_token_bitmask_inplace_large():
 
     bitmask = bool_mask_to_bitmask(bool_mask)
     logits_gpu = logits.to("cuda")
+    bitmask_gpu = bitmask.to("cuda")
     torch.cuda.synchronize()
     time_start = time.monotonic_ns()
-    xgr.apply_token_bitmask_inplace(logits_gpu, bitmask)
+    xgr.apply_token_bitmask_inplace(logits_gpu, bitmask_gpu, indices=masked_batch_ids)
     torch.cuda.synchronize()
     time_end = time.monotonic_ns()
     print(f"Time taken: {(time_end - time_start) / 1e3} us")
@@ -327,7 +345,7 @@ def test_get_jump_forward_string():
 other_rule ::= "a" sub_rule "b"
 sub_rule ::= "b"
 """
-    grammar = xgr.BNFGrammar.from_ebnf(grammar_ebnf)
+    grammar = xgr.Grammar.from_ebnf(grammar_ebnf)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar)
     assert matcher._debug_accept_string("a")
     assert matcher.find_jump_forward_string() == "bb"
@@ -344,7 +362,7 @@ def test_vocab_size():
 
     token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
     matcher.fill_next_token_bitmask(token_bitmask)
-    assert token_bitmask.shape == (2,)
+    assert token_bitmask.shape == (1, 2)
 
     rejected_tokens = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert rejected_tokens == [i for i in range(64) if i != 7]

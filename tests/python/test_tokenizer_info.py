@@ -165,7 +165,7 @@ tokenizer_path_metadata_str = [
     ),
     (
         "meta-llama/Meta-Llama-3-8B-Instruct",
-        '{"vocab_type":"BYTE_LEVEL","vocab_size":128256,"prepend_space_in_tokenization":false,"stop_token_ids":[128009]}',
+        '{"vocab_type":"BYTE_LEVEL","vocab_size":128256,"prepend_space_in_tokenization":false,"stop_token_ids":[128001,128009]}',
     ),
 ]
 
