@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 import pytest
 from pydantic import BaseModel, Field, TypeAdapter
 
-from xgrammar import BuiltinGrammar, GrammarMatcher
-from xgrammar.xgrammar import BNFGrammar
+import xgrammar as xgr
+from xgrammar.testing import _json_schema_to_ebnf, _match_grammar_with_string
 
 
 def check_schema_with_grammar(
@@ -18,20 +18,13 @@ def check_schema_with_grammar(
     strict_mode: bool = True,
 ):
     schema_str = json.dumps(schema)
-    json_schema_ebnf = BuiltinGrammar._json_schema_to_ebnf(
+    json_schema_ebnf = _json_schema_to_ebnf(
         schema_str,
         indent=indent,
         separators=separators,
         strict_mode=strict_mode,
     )
     assert json_schema_ebnf == expected_grammar_ebnf
-
-
-def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
-    matcher = GrammarMatcher(grammar, terminate_without_stop_token=True)
-    can_accept = matcher.accept_string(input_str)
-    can_terminate = matcher.is_terminated()
-    return can_accept and can_terminate
 
 
 def check_schema_with_json(
@@ -42,7 +35,7 @@ def check_schema_with_json(
     separators: Optional[Tuple[str, str]] = None,
     strict_mode: bool = True,
 ):
-    json_schema_grammar = BuiltinGrammar.json_schema(
+    json_schema_grammar = xgr.Grammar.from_json_schema(
         json.dumps(schema),
         indent=indent,
         separators=separators,
@@ -50,9 +43,9 @@ def check_schema_with_json(
     )
 
     if check_accepted:
-        assert match_complete_string(json_schema_grammar, json_str)
+        assert _match_grammar_with_string(json_schema_grammar, json_str)
     else:
-        assert not match_complete_string(json_schema_grammar, json_str)
+        assert not _match_grammar_with_string(json_schema_grammar, json_str)
 
 
 def check_schema_with_instance(

@@ -18,10 +18,10 @@ namespace xgrammar {
  * \example `A ::= sequence("a")` --> `A ::= "a"` (the body is a string)
  * \example `A ::= [a-a]` --> `A ::= "a"` (the body is a string)
  */
-class SingleElementExprEliminator : public BNFGrammarMutator {
+class SingleElementExprEliminator : public GrammarMutator {
  public:
-  using BNFGrammarMutator::Apply;
-  using BNFGrammarMutator::BNFGrammarMutator;
+  using GrammarMutator::Apply;
+  using GrammarMutator::GrammarMutator;
 
  private:
   // Keep the sequence expr in lookahead assertion
@@ -91,11 +91,11 @@ class SingleElementExprEliminator : public BNFGrammarMutator {
  * `A ::= ((a) | (b B)), B ::= ((c) | (d))`. A new rule B is created to represent the nested
  * choices.
  */
-class NestedRuleUnwrapper : public BNFGrammarMutator {
+class NestedRuleUnwrapper : public GrammarMutator {
  public:
-  using BNFGrammarMutator::BNFGrammarMutator;
+  using GrammarMutator::GrammarMutator;
 
-  BNFGrammar Apply(const BNFGrammar& grammar) final {
+  Grammar Apply(const Grammar& grammar) final {
     Init(grammar);
     for (int i = 0; i < static_cast<int>(grammar_->NumRules()); ++i) {
       builder_.AddEmptyRule(grammar_->GetRule(i).name);
@@ -271,10 +271,10 @@ class NestedRuleUnwrapper : public BNFGrammarMutator {
   }
 };
 
-class ByteStringFuser : public BNFGrammarMutator {
+class ByteStringFuser : public GrammarMutator {
  public:
-  using BNFGrammarMutator::Apply;
-  using BNFGrammarMutator::BNFGrammarMutator;
+  using GrammarMutator::Apply;
+  using GrammarMutator::GrammarMutator;
 
  private:
   /*!
@@ -305,16 +305,16 @@ class ByteStringFuser : public BNFGrammarMutator {
 };
 
 // Return the list of all normalizers in the class. The normalizers are applied one by one.
-std::vector<std::unique_ptr<BNFGrammarMutator>> BNFGrammarNormalizer::GetNormalizerList() {
-  std::vector<std::unique_ptr<BNFGrammarMutator>> normalizer_mutators;
+std::vector<std::unique_ptr<GrammarMutator>> GrammarNormalizer::GetNormalizerList() {
+  std::vector<std::unique_ptr<GrammarMutator>> normalizer_mutators;
   normalizer_mutators.emplace_back(std::make_unique<SingleElementExprEliminator>());
   normalizer_mutators.emplace_back(std::make_unique<NestedRuleUnwrapper>());
   normalizer_mutators.emplace_back(std::make_unique<ByteStringFuser>());
   return normalizer_mutators;
 }
 
-BNFGrammar BNFGrammarNormalizer::Apply(const BNFGrammar& grammar) {
-  std::vector<std::unique_ptr<BNFGrammarMutator>> normalizer_mutators = GetNormalizerList();
+Grammar GrammarNormalizer::Apply(const Grammar& grammar) {
+  std::vector<std::unique_ptr<GrammarMutator>> normalizer_mutators = GetNormalizerList();
   grammar_ = grammar;
   for (auto& mutator : normalizer_mutators) {
     grammar_ = mutator->Apply(grammar_);

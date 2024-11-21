@@ -11,7 +11,7 @@
 
 namespace xgrammar {
 
-std::string BNFGrammarPrinter::PrintRule(const Rule& rule) {
+std::string GrammarPrinter::PrintRule(const Rule& rule) {
   std::string res = rule.name + " ::= " + PrintRuleExpr(rule.body_expr_id);
   if (rule.lookahead_assertion_id != -1) {
     res += " (=" + PrintRuleExpr(rule.lookahead_assertion_id) + ")";
@@ -19,11 +19,11 @@ std::string BNFGrammarPrinter::PrintRule(const Rule& rule) {
   return res;
 }
 
-std::string BNFGrammarPrinter::PrintRule(int32_t rule_id) {
+std::string GrammarPrinter::PrintRule(int32_t rule_id) {
   return PrintRule(grammar_->GetRule(rule_id));
 }
 
-std::string BNFGrammarPrinter::PrintRuleExpr(const RuleExpr& rule_expr) {
+std::string GrammarPrinter::PrintRuleExpr(const RuleExpr& rule_expr) {
   std::string result;
   switch (rule_expr.type) {
     case RuleExprType::kByteString:
@@ -45,11 +45,11 @@ std::string BNFGrammarPrinter::PrintRuleExpr(const RuleExpr& rule_expr) {
   }
 }
 
-std::string BNFGrammarPrinter::PrintRuleExpr(int32_t rule_expr_id) {
+std::string GrammarPrinter::PrintRuleExpr(int32_t rule_expr_id) {
   return PrintRuleExpr(grammar_->GetRuleExpr(rule_expr_id));
 }
 
-std::string BNFGrammarPrinter::PrintByteString(const RuleExpr& rule_expr) {
+std::string GrammarPrinter::PrintByteString(const RuleExpr& rule_expr) {
   std::string internal_str;
   internal_str.reserve(rule_expr.data_len);
   for (int i = 0; i < rule_expr.data_len; ++i) {
@@ -63,7 +63,7 @@ std::string BNFGrammarPrinter::PrintByteString(const RuleExpr& rule_expr) {
   return "\"" + result + "\"";
 }
 
-std::string BNFGrammarPrinter::PrintCharacterClass(const RuleExpr& rule_expr) {
+std::string GrammarPrinter::PrintCharacterClass(const RuleExpr& rule_expr) {
   static const std::unordered_map<TCodepoint, std::string> kCustomEscapeMap = {
       {'-', "\\-"}, {']', "\\]"}
   };
@@ -84,17 +84,17 @@ std::string BNFGrammarPrinter::PrintCharacterClass(const RuleExpr& rule_expr) {
   return result;
 }
 
-std::string BNFGrammarPrinter::PrintCharacterClassStar(const RuleExpr& rule_expr) {
+std::string GrammarPrinter::PrintCharacterClassStar(const RuleExpr& rule_expr) {
   return PrintCharacterClass(rule_expr) + "*";
 }
 
-std::string BNFGrammarPrinter::PrintEmptyStr(const RuleExpr& rule_expr) { return "\"\""; }
+std::string GrammarPrinter::PrintEmptyStr(const RuleExpr& rule_expr) { return "\"\""; }
 
-std::string BNFGrammarPrinter::PrintRuleRef(const RuleExpr& rule_expr) {
+std::string GrammarPrinter::PrintRuleRef(const RuleExpr& rule_expr) {
   return grammar_->GetRule(rule_expr[0]).name;
 }
 
-std::string BNFGrammarPrinter::PrintSequence(const RuleExpr& rule_expr) {
+std::string GrammarPrinter::PrintSequence(const RuleExpr& rule_expr) {
   std::string result;
   result += "(";
   for (int i = 0; i < rule_expr.data_len; ++i) {
@@ -107,7 +107,7 @@ std::string BNFGrammarPrinter::PrintSequence(const RuleExpr& rule_expr) {
   return result;
 }
 
-std::string BNFGrammarPrinter::PrintChoices(const RuleExpr& rule_expr) {
+std::string GrammarPrinter::PrintChoices(const RuleExpr& rule_expr) {
   std::string result;
 
   result += "(";
@@ -121,7 +121,7 @@ std::string BNFGrammarPrinter::PrintChoices(const RuleExpr& rule_expr) {
   return result;
 }
 
-std::string BNFGrammarPrinter::ToString() {
+std::string GrammarPrinter::ToString() {
   std::string result;
   int num_rules = grammar_->NumRules();
   for (auto i = 0; i < num_rules; ++i) {
@@ -130,7 +130,7 @@ std::string BNFGrammarPrinter::ToString() {
   return result;
 }
 
-std::string BNFGrammarSerializer::Serialize() {
+std::string GrammarSerializer::Serialize() {
   picojson::object grammar_json_obj;
 
   picojson::array rules_json;
@@ -157,8 +157,8 @@ std::string BNFGrammarSerializer::Serialize() {
   return grammar_json.serialize(prettify_);
 }
 
-BNFGrammar BNFGrammarDeserializer::Deserialize(std::string json_string) {
-  auto node = std::make_shared<BNFGrammar::Impl>();
+Grammar GrammarDeserializer::Deserialize(std::string json_string) {
+  auto node = std::make_shared<Grammar::Impl>();
 
   auto checker = [&](bool condition) {
     XGRAMMAR_CHECK(condition) << "Failed to deserialize XGrammar object: " << json_string;
@@ -182,7 +182,7 @@ BNFGrammar BNFGrammarDeserializer::Deserialize(std::string json_string) {
     auto name = rule_obj["name"].get<std::string>();
     checker(rule_obj.count("body_expr_id") && rule_obj["body_expr_id"].is<int64_t>());
     auto rule_expr = static_cast<int32_t>(rule_obj["body_expr_id"].get<int64_t>());
-    node->rules_.push_back(BNFGrammar::Impl::Rule({name, rule_expr}));
+    node->rules_.push_back(Grammar::Impl::Rule({name, rule_expr}));
   }
 
   // rule_expr_data
@@ -205,7 +205,7 @@ BNFGrammar BNFGrammarDeserializer::Deserialize(std::string json_string) {
     node->rule_expr_indptr_.push_back(static_cast<int32_t>(index_ptr_json.get<int64_t>()));
   }
 
-  return BNFGrammar(node);
+  return Grammar(node);
 }
 
 }  // namespace xgrammar

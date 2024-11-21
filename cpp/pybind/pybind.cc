@@ -7,71 +7,71 @@
 #include <pybind11/stl.h>
 #include <xgrammar/xgrammar.h>
 
+#include "../testing.h"
 #include "python_methods.h"
 
 namespace py = pybind11;
 using namespace xgrammar;
 
 PYBIND11_MODULE(xgrammar_bindings, m) {
-  auto pyBNFGrammar = py::class_<BNFGrammar>(m, "BNFGrammar");
-  pyBNFGrammar.def(py::init<const std::string&, const std::string&>())
-      .def("to_string", &BNFGrammar::ToString)
-      .def("serialize", &BNFGrammar::Serialize)
-      .def_static("deserialize", &BNFGrammar::Deserialize)
-      .def_static("_init_no_normalization", &BNFGrammar_InitNoNormalization);
-
-  auto pyBuiltinGrammar = py::class_<BuiltinGrammar>(m, "BuiltinGrammar");
-  pyBuiltinGrammar.def_static("json", &BuiltinGrammar::JSON)
-      .def_static("json_schema", &BuiltinGrammar::JSONSchema)
-      .def_static("_json_schema_to_ebnf", &BuiltinGrammar::_JSONSchemaToEBNF)
-      .def_static("_regex_to_ebnf", &BuiltinGrammar::_RegexToEBNF);
-
   auto pyTokenizerInfo = py::class_<TokenizerInfo>(m, "TokenizerInfo");
   pyTokenizerInfo.def(py::init(&TokenizerInfo_Init))
-      .def_property_readonly("vocab_size", &TokenizerInfo::GetVocabSize)
       .def_property_readonly("vocab_type", &TokenizerInfo_GetVocabType)
+      .def_property_readonly("vocab_size", &TokenizerInfo::GetVocabSize)
       .def_property_readonly(
           "prepend_space_in_tokenization", &TokenizerInfo::GetPrependSpaceInTokenization
       )
       .def_property_readonly("decoded_vocab", &TokenizerInfo_GetDecodedVocab)
+      .def_property_readonly("stop_token_ids", &TokenizerInfo::GetStopTokenIds)
+      .def_property_readonly("special_token_ids", &TokenizerInfo::GetSpecialTokenIds)
       .def("dump_metadata", &TokenizerInfo::DumpMetadata)
       .def_static("from_huggingface", &TokenizerInfo::FromHuggingFace)
       .def_static("from_vocab_and_metadata", &TokenizerInfo::FromVocabAndMetadata);
 
-  auto pyCompiledGrammar = py::class_<CompiledGrammar>(m, "CompiledGrammar");
-  pyCompiledGrammar.def(py::init<const BNFGrammar&, const TokenizerInfo&, int>());
+  auto pyGrammar = py::class_<Grammar>(m, "Grammar");
+  pyGrammar.def("to_string", &Grammar::ToString)
+      .def_static("from_ebnf", &Grammar::FromEBNF)
+      .def_static("from_json_schema", &Grammar::FromJSONSchema)
+      .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar);
 
-  auto pyCachedGrammarCompiler = py::class_<CachedGrammarCompiler>(m, "CachedGrammarCompiler");
-  pyCachedGrammarCompiler.def(py::init<const TokenizerInfo&, int>())
+  auto pyCompiledGrammar = py::class_<CompiledGrammar>(m, "CompiledGrammar");
+  pyCompiledGrammar.def_property_readonly("grammar", &CompiledGrammar::GetGrammar)
+      .def_property_readonly("tokenizer_info", &CompiledGrammar::GetTokenizerInfo);
+
+  auto pyGrammarCompiler = py::class_<GrammarCompiler>(m, "GrammarCompiler");
+  pyGrammarCompiler.def(py::init<const TokenizerInfo&, int, bool>())
       .def(
-          "compile_json_grammar",
-          &CachedGrammarCompiler::CompileJSONGrammar,
+          "compile_json_schema",
+          &GrammarCompiler::CompileJSONSchema,
           py::call_guard<py::gil_scoped_release>()
       )
       .def(
-          "compile_json_schema_grammar",
-          &CachedGrammarCompiler::CompileJSONSchemaGrammar,
+          "compile_builtin_json_grammar",
+          &GrammarCompiler::CompileBuiltinJSONGrammar,
           py::call_guard<py::gil_scoped_release>()
       )
-      .def("clear", &CachedGrammarCompiler::Clear);
+      .def(
+          "compile_bnf_grammar",
+          &GrammarCompiler::CompileGrammar,
+          py::call_guard<py::gil_scoped_release>()
+      )
+      .def("clear_cache", &GrammarCompiler::ClearCache);
 
   auto pyGrammarMatcher = py::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher
-      .def(py::init<
-           const CompiledGrammar&,
-           std::optional<std::vector<int>>,
-           bool,
-           std::optional<int>,
-           int>())
+      .def(py::init<const CompiledGrammar&, std::optional<std::vector<int>>, bool, int>())
       .def("accept_token", &GrammarMatcher::AcceptToken)
-      .def("accept_string", &GrammarMatcher::AcceptString)
       .def("fill_next_token_bitmask", &GrammarMatcher_FillNextTokenBitmask)
-      .def("debug_get_masked_tokens_from_bitmask", &GrammarMatcher_DebugGetMaskedTokensFromBitmask)
-      .def("is_terminated", &GrammarMatcher::IsTerminated)
-      .def("reset", &GrammarMatcher::Reset)
       .def("find_jump_forward_string", &GrammarMatcher::FindJumpForwardString)
       .def("rollback", &GrammarMatcher::Rollback)
-      .def_property_readonly("vocab_size", &GrammarMatcher::GetVocabSize)
+      .def("is_terminated", &GrammarMatcher::IsTerminated)
+      .def("reset", &GrammarMatcher::Reset)
       .def_property_readonly("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens)
-      .def_property_readonly("stop_token_ids", &GrammarMatcher::GetStopTokenIds);
+      .def_property_readonly("stop_token_ids", &GrammarMatcher::GetStopTokenIds)
+      .def("_debug_accept_string", &GrammarMatcher::_DebugAcceptString);
+
+  auto pyTestingModule = m.def_submodule("testing");
+  pyTestingModule.def("_json_schema_to_ebnf", &_JSONSchemaToEBNF)
+      .def("_regex_to_ebnf", &_RegexToEBNF)
+      .def("_get_masked_tokens_from_bitmask", &Matcher_DebugGetMaskedTokensFromBitmask);
 }

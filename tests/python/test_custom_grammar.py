@@ -4,20 +4,18 @@ a unoptimized, non-simplified EBNF string. This is to test the robustness of the
 
 import sys
 import time
-from typing import List, Optional
+from typing import List
 
 import pytest
 import torch
 from transformers import AutoTokenizer
 
-from xgrammar import BNFGrammar, GrammarMatcher, TokenizerInfo
-
-
-def match_complete_string(grammar: BNFGrammar, input_str: str) -> bool:
-    matcher = GrammarMatcher(grammar, terminate_without_stop_token=True)
-    can_accept = matcher.accept_string(input_str)
-    can_terminate = matcher.is_terminated()
-    return can_accept and can_terminate
+import xgrammar as xgr
+from xgrammar.testing import (
+    _allocate_token_bitmask,
+    _get_masked_tokens_from_bitmask,
+    _match_grammar_with_string,
+)
 
 
 def test_simple():
@@ -27,10 +25,10 @@ rule2 ::= "b"
 rule3 ::= "c"
 """
 
-    grammar = BNFGrammar(grammar_str)
-    assert match_complete_string(grammar, "bab")
-    assert not match_complete_string(grammar, "abb")
-    assert match_complete_string(grammar, "cab")
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    assert _match_grammar_with_string(grammar, "bab")
+    assert not _match_grammar_with_string(grammar, "abb")
+    assert _match_grammar_with_string(grammar, "cab")
 
 
 def test_custom_root_rule():
@@ -43,9 +41,9 @@ escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
 ws ::= [ \n\t]*
 """
-    grammar = BNFGrammar(json_grammar_simple_ebnf, root_rule="basic_string")
-    assert match_complete_string(grammar, r'"abc\r\n"')
-    assert not match_complete_string(grammar, r'{"name": "John" }')
+    grammar = xgr.Grammar.from_ebnf(json_grammar_simple_ebnf, root_rule_name="basic_string")
+    assert _match_grammar_with_string(grammar, r'"abc\r\n"')
+    assert not _match_grammar_with_string(grammar, r'{"name": "John" }')
 
 
 json_grammar_ebnf = r"""
@@ -62,7 +60,7 @@ basic_array ::= "[" ("" | ws basic_any (ws "," ws basic_any)*) ws "]"
 basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
 ws ::= [ \n\t]*
 """
-json_grammar = BNFGrammar(json_grammar_ebnf)
+json_grammar = xgr.Grammar.from_ebnf(json_grammar_ebnf)
 
 
 json_input_accepted = [
@@ -102,7 +100,7 @@ json_input_accepted = [
 
 @pytest.mark.parametrize("json_input_accepted", json_input_accepted)
 def test_json_accept(json_input_accepted: str):
-    assert match_complete_string(json_grammar, json_input_accepted)
+    assert _match_grammar_with_string(json_grammar, json_input_accepted)
 
 
 json_input_refused = (
@@ -128,7 +126,7 @@ json_input_refused = (
 
 @pytest.mark.parametrize("json_input_refused", json_input_refused)
 def test_json_refuse(json_input_refused: str):
-    assert not match_complete_string(json_grammar, json_input_refused)
+    assert not _match_grammar_with_string(json_grammar, json_input_refused)
 
 
 json_input_pressure = (
@@ -260,7 +258,7 @@ json_input_pressure = (
 
 @pytest.mark.parametrize("json_input_pressure", json_input_pressure)
 def test_json_pressure(json_input_pressure: str):
-    assert match_complete_string(json_grammar, json_input_pressure)
+    assert _match_grammar_with_string(json_grammar, json_input_pressure)
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [
@@ -329,15 +327,16 @@ def test_fill_next_token_bitmask(
         use_fast=True,
         trust_remote_code=True,
     )
-    tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
 
     time_start = time.monotonic_ns()
-    matcher = GrammarMatcher(json_grammar, tokenizer_info)
+    matcher = xgr.GrammarMatcher(compiler.compile_bnf_grammar(json_grammar_ebnf))
     time_end = time.monotonic_ns()
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
-    token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
-    logits_gpu = torch.zeros(matcher.vocab_size, dtype=torch.float32, device="cuda")
+    token_bitmask = _allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device="cuda")
 
     input_bytes = input_str.encode("utf-8")
 
@@ -349,13 +348,15 @@ def test_fill_next_token_bitmask(
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
         # 2. Correctness verification
-        rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
         assert len(rejected_token_ids) == expected_rejected_sizes[i]
 
         # 3. apply_token_bitmask_inplace
         torch.cuda.synchronize()
         time_start = time.monotonic_ns()
-        GrammarMatcher.apply_token_bitmask_inplace(logits_gpu, token_bitmask)
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask)
         torch.cuda.synchronize()
         time_end = time.monotonic_ns()
         print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
@@ -363,13 +364,13 @@ def test_fill_next_token_bitmask(
         # 4. accept_string
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
-        assert matcher.accept_string(bytes([c]))
+        assert matcher._debug_accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
     # 5. Final correctness verification
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = matcher.debug_get_masked_tokens_from_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert len(rejected_token_ids) == expected_rejected_sizes[-1]
 
 

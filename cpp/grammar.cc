@@ -3,37 +3,32 @@
  * \file xgrammar/grammar.cc
  */
 
-#include <xgrammar/xgrammar.h>
+#include <xgrammar/grammar.h>
 
 #include "grammar_data_structure.h"
 #include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_serializer.h"
+#include "json_schema_converter.h"
 
 namespace xgrammar {
 
-inline BNFGrammar BNFGrammarCtor(const std::string& ebnf_string, const std::string& root_rule) {
-  auto grammar = EBNFParser::Parse(ebnf_string, root_rule);
-  grammar = BNFGrammarNormalizer().Apply(grammar);
+std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString(); }
+
+Grammar Grammar::FromEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
+  auto grammar = ParseEBNF(ebnf_string, root_rule_name);
+  grammar = GrammarNormalizer().Apply(grammar);
   return grammar;
 }
 
-BNFGrammar::BNFGrammar(const std::string& ebnf_string, const std::string& root_rule)
-    : BNFGrammar(BNFGrammarCtor(ebnf_string, root_rule)) {}
-
-std::string BNFGrammar::ToString() const { return BNFGrammarPrinter(*this).ToString(); }
-
-std::ostream& operator<<(std::ostream& os, const BNFGrammar& grammar) {
-  os << grammar.ToString();
-  return os;
-}
-
-std::string BNFGrammar::Serialize(bool prettify) const {
-  return BNFGrammarSerializer(*this, prettify).Serialize();
-}
-
-BNFGrammar BNFGrammar::Deserialize(const std::string& json_string) {
-  return BNFGrammarDeserializer::Deserialize(json_string);
+Grammar Grammar::FromJSONSchema(
+    const std::string& schema,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode
+) {
+  auto ebnf_string = JSONSchemaToEBNF(schema, indent, separators, strict_mode);
+  return FromEBNF(ebnf_string);
 }
 
 // Optimized json grammar for the speed of the grammar matcher
@@ -118,18 +113,14 @@ exponent ::= "" |  "e" sign [0-9] [0-9]* | "E" sign [0-9] [0-9]*
 sign ::= "" | "+" | "-"
 )";
 
-BNFGrammar BuiltinGrammar::JSON() {
-  static const BNFGrammar grammar(kJSONGrammarString);
+Grammar Grammar::BuiltinJSONGrammar() {
+  static const Grammar grammar = FromEBNF(kJSONGrammarString);
   return grammar;
 }
 
-BNFGrammar BuiltinGrammar::JSONSchema(
-    const std::string& schema,
-    std::optional<int> indent,
-    std::optional<std::pair<std::string, std::string>> separators,
-    bool strict_mode
-) {
-  return BNFGrammar(_JSONSchemaToEBNF(schema, indent, separators, strict_mode));
+std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
+  os << grammar.ToString();
+  return os;
 }
 
 }  // namespace xgrammar

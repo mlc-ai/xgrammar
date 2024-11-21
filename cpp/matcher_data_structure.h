@@ -1,10 +1,10 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_matcher_state.h
- * \brief The header for the definition of the state used in the grammar matcher.
+ * \file xgrammar/matcher_data_structure.h
+ * \brief The header for the definition of the data structures used in the grammar matcher.
  */
-#ifndef XGRAMMAR_GRAMMAR_MATCHER_STATE_H_
-#define XGRAMMAR_GRAMMAR_MATCHER_STATE_H_
+#ifndef XGRAMMAR_MATCHER_DATA_STRUCTURE_H_
+#define XGRAMMAR_MATCHER_DATA_STRUCTURE_H_
 
 #include <xgrammar/xgrammar.h>
 
@@ -33,7 +33,7 @@ struct RulePosition {
    * a byte string. */
   int32_t element_in_string = 0;
 
-  /*! \brief The id of the parent node in the RulePositionTree. */
+  /*! \brief The id of the parent node in the PersistentStack. */
   int32_t parent_id = -1;
   /*! \brief The reference count of this RulePosition. If reduces to zero, the node will be
    * removed from the RulePositionBuffer. */
@@ -116,7 +116,7 @@ class RulePositionBuffer {
     free_nodes_.clear();
   }
 
-  friend class RulePositionTree;
+  friend class PersistentStack;
 
  private:
   /*! \brief The buffer to store all RulePositions. */
@@ -129,10 +129,10 @@ class RulePositionBuffer {
  * \brief A tree structure to store all stacks. Every stack contains several RulePositions, and
  * is represented as a path from the root to a leaf node.
  */
-class RulePositionTree {
+class PersistentStack {
  public:
-  /*! \brief Construct a RulePositionTree associated with the given grammar. */
-  RulePositionTree(const BNFGrammar& grammar) : grammar_(grammar) {}
+  /*! \brief Construct a PersistentStack associated with the given grammar. */
+  PersistentStack(const Grammar& grammar) : grammar_(grammar) {}
 
   /*!
    * \brief Create a new node with the given RulePosition. The reference count of the new node
@@ -213,8 +213,8 @@ class RulePositionTree {
   void Reset() { node_buffer_.Reset(); }
 
  private:
-  /*! \brief The grammar associated with this RulePositionTree. */
-  BNFGrammar grammar_;
+  /*! \brief The grammar associated with this PersistentStack. */
+  Grammar grammar_;
   /*! \brief The buffer to store all RulePositions. */
   RulePositionBuffer node_buffer_;
 };
@@ -230,11 +230,11 @@ class RulePositionTree {
 class StackTopsHistory {
  public:
   /*!
-   * \param tree The RulePositionTree to be associated with. Possibly modify the tree by attaching
-   * and removing references to the stack top nodes.
+   * \param tree The PersistentStack to be associated with. Possibly modify the tree by
+   * attaching and removing references to the stack top nodes.
    * \param max_rollback_tokens The maximum number of rollback tokens to be supported.
    */
-  StackTopsHistory(RulePositionTree* tree) : tree_(tree) {}
+  StackTopsHistory(PersistentStack* tree) : persistent_stack_(tree) {}
 
   /*!
    * \brief Push a new history record consisting a list of stack tops. These nodes will be recorded
@@ -246,7 +246,7 @@ class StackTopsHistory {
   void PushHistory(const std::vector<int32_t>& stack_tops) {
     stack_tops_history_.push_back(stack_tops);
     for (auto id : stack_tops) {
-      tree_->AttachRefTo(id);
+      persistent_stack_->AttachRefTo(id);
     }
   }
 
@@ -293,7 +293,7 @@ class StackTopsHistory {
   /*! \brief Reset the history and the associated node tree. */
   void Reset() {
     stack_tops_history_.clear();
-    tree_->Reset();
+    persistent_stack_->Reset();
   }
 
  private:
@@ -302,7 +302,7 @@ class StackTopsHistory {
   void PopEarliest() {
     const auto& old_stack_tops = stack_tops_history_.front();
     for (auto id : old_stack_tops) {
-      tree_->RemoveRefTo(id);
+      persistent_stack_->RemoveRefTo(id);
     }
     stack_tops_history_.pop_front();
   }
@@ -312,43 +312,43 @@ class StackTopsHistory {
   void PopLatest() {
     const auto& new_stack_tops = stack_tops_history_.back();
     for (auto id : new_stack_tops) {
-      tree_->RemoveRefTo(id);
+      persistent_stack_->RemoveRefTo(id);
     }
     stack_tops_history_.pop_back();
   }
 
-  /*! \brief Modifiable pointer to the RulePositionTree. */
-  RulePositionTree* tree_;
+  /*! \brief Modifiable pointer to the PersistentStack. */
+  PersistentStack* persistent_stack_;
   /*! \brief The history of stack tops. */
   std::deque<std::vector<int32_t>> stack_tops_history_;
 };
 
-inline bool RulePositionTree::IsEndPosition(const RulePosition& rule_position) const {
+inline bool PersistentStack::IsEndPosition(const RulePosition& rule_position) const {
   return rule_position.parent_id == RulePosition::kNoParent &&
          grammar_->GetRuleExpr(rule_position.sequence_id).size() == rule_position.element_id;
 }
 
-inline std::string RulePositionTree::PrintNode(int32_t id) const {
+inline std::string PersistentStack::PrintNode(int32_t id) const {
   return "id: " + std::to_string(id) + ", " + PrintNode(node_buffer_[id]);
 }
 
-inline std::string RulePositionTree::PrintNode(const RulePosition& rule_position) const {
+inline std::string PersistentStack::PrintNode(const RulePosition& rule_position) const {
   std::stringstream ss;
   ss << "RulePosition: rule " << rule_position.rule_id;
   if (rule_position.rule_id != -1) {
     ss << ": " << grammar_->GetRule(rule_position.rule_id).name;
   }
   ss << ", sequence " << rule_position.sequence_id << ": "
-     << BNFGrammarPrinter(grammar_).PrintRuleExpr(rule_position.sequence_id);
+     << GrammarPrinter(grammar_).PrintRuleExpr(rule_position.sequence_id);
   ss << ", element id: " << rule_position.element_id;
 
   auto sequence = grammar_->GetRuleExpr(rule_position.sequence_id);
   if (rule_position.element_id < static_cast<int32_t>(sequence.size())) {
     auto element = grammar_->GetRuleExpr(sequence[rule_position.element_id]);
-    if (element.type == BNFGrammar::Impl::RuleExprType::kByteString) {
+    if (element.type == Grammar::Impl::RuleExprType::kByteString) {
       ss << ", element in string: " << rule_position.element_in_string;
-    } else if (element.type == BNFGrammar::Impl::RuleExprType::kCharacterClass ||
-               element.type == BNFGrammar::Impl::RuleExprType::kCharacterClassStar) {
+    } else if (element.type == Grammar::Impl::RuleExprType::kCharacterClass ||
+               element.type == Grammar::Impl::RuleExprType::kCharacterClassStar) {
       ss << ", left utf8 bytes: " << rule_position.left_utf8_bytes;
     }
   }
@@ -358,7 +358,7 @@ inline std::string RulePositionTree::PrintNode(const RulePosition& rule_position
   return ss.str();
 }
 
-inline std::string RulePositionTree::PrintStackByTopId(int32_t top_id) const {
+inline std::string PersistentStack::PrintStackByTopId(int32_t top_id) const {
   std::stringstream ss;
   std::vector<int32_t> stack;
   for (auto cur_id = top_id; cur_id != RulePosition::kNoParent;
@@ -373,7 +373,7 @@ inline std::string RulePositionTree::PrintStackByTopId(int32_t top_id) const {
   return ss.str();
 }
 
-inline void RulePositionTree::CheckWellFormed(const std::vector<int32_t>& outside_pointers) const {
+inline void PersistentStack::CheckWellFormed(const std::vector<int32_t>& outside_pointers) const {
   const auto& buffer = node_buffer_.buffer_;
   std::unordered_set<int32_t> free_nodes_set(
       node_buffer_.free_nodes_.begin(), node_buffer_.free_nodes_.end()
@@ -427,7 +427,7 @@ inline std::string StackTopsHistory::PrintHistory(int history_position_to_latest
   ss << "Stacks tops size: " << latest_tops.size() << std::endl;
   int cnt = 0;
   for (auto id : latest_tops) {
-    ss << "Stack #" << cnt << ": " << tree_->PrintStackByTopId(id) << "\n";
+    ss << "Stack #" << cnt << ": " << persistent_stack_->PrintStackByTopId(id) << "\n";
     ++cnt;
   }
   return ss.str();
@@ -438,9 +438,9 @@ inline void StackTopsHistory::CheckWellFormed() const {
   for (const auto& stack_tops : stack_tops_history_) {
     outside_pointers.insert(outside_pointers.end(), stack_tops.begin(), stack_tops.end());
   }
-  tree_->CheckWellFormed(outside_pointers);
+  persistent_stack_->CheckWellFormed(outside_pointers);
 }
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_MATCHER_STATE_H_
+#endif  // XGRAMMAR_MATCHER_DATA_STRUCTURE_H_

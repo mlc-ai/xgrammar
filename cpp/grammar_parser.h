@@ -23,25 +23,11 @@ namespace xgrammar {
  * - Rule A-B (match A and not match B) is not supported yet
  *
  * See tests/python/serve/json.ebnf for an example.
+ * \param ebnf_string The grammar string.
+ * \param root_rule_name The name of the root rule. Default is "root".
+ * \return The parsed grammar.
  */
-class EBNFParser {
- public:
-  /*!
-   * \brief Parse the grammar string. If fails, throw ParseError with the error message.
-   * \param ebnf_string The grammar string.
-   * \param root_rule The name of the root rule. Default is "root".
-   * \return The parsed grammar.
-   */
-  static BNFGrammar Parse(std::string ebnf_string, std::string root_rule = "root");
-
-  /*!
-   * \brief The exception thrown when parsing fails.
-   */
-  class ParseError : public Error {
-   public:
-    ParseError(const std::string& msg) : Error(msg) {}
-  };
-};
+Grammar ParseEBNF(std::string ebnf_string, std::string root_rule_name = "root");
 
 }  // namespace xgrammar
 

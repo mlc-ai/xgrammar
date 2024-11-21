@@ -26,7 +26,7 @@ The GBNF (GGML BNF) specification is available
 
 .. code:: python
 
-  from xgrammar import BNFGrammar
+  from xgrammar import Grammar
 
   # Method 1: Construct with a GBNF string.
   gbnf_grammar = """
@@ -35,7 +35,7 @@ The GBNF (GGML BNF) specification is available
   term  ::= num | "(" expr ")"
   num   ::= [0-9]+
   """
-  gbnf_grammar = BNFGrammar(gbnf_grammar)
+  gbnf_grammar = Grammar(gbnf_grammar)
 
 
 **Method 2: Use the builtin JSON grammar.**
@@ -108,17 +108,17 @@ As an example, here we use the Llama-3 model tokenizer.
   tokenizer_info = TokenizerInfo.from_huggingface(tokenizer)
 
 
-Now we can create a grammar compiler :class:`xgrammar.CachedGrammarCompiler`
+Now we can create a grammar compiler :class:`xgrammar.GrammarCompiler`
 and compile the constructed grammar.
 Notably, we cache all the compiled grammars, so each grammar will be compiled
 at most once.
 
 .. code:: python
 
-  from xgrammar import CachedGrammarCompiler
+  from xgrammar import GrammarCompiler
 
-  # Construct CachedGrammarCompiler.
-  compiler = CachedGrammarCompiler(tokenizer_info, max_threads=8)
+  # Construct GrammarCompiler.
+  compiler = GrammarCompiler(tokenizer_info, max_threads=8)
   # Compiler the grammar.
   compiled_grammar = compiler.compile_json_schema(json_schema_str)
 
@@ -156,7 +156,7 @@ single-request generation and batch-request generation respectively.
   # Create a grammar matcher from the compiled grammar.
   matcher = GrammarMatcher(compiled_grammar)
 
-  token_bitmask = GrammarMatcher.allocate_token_bitmask(matcher.vocab_size)
+  token_bitmask = _allocate_token_bitmask(tokenizer_info.vocab_size)
   while True:
       logits = LLM.inference() # logits is a tensor of shape (vocab_size,) on GPU
       matcher.fill_next_token_bitmask(logits, token_bitmask)
@@ -196,4 +196,3 @@ single-request generation and batch-request generation respectively.
           matchers[i].accept_token(next_token_ids[i])
           if matchers[i].is_terminated(): # or your own termination condition
               requests[i].terminate()
-

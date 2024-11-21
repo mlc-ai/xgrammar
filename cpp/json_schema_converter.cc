@@ -2,10 +2,10 @@
  *  Copyright (c) 2024 by Contributors
  * \file xgrammar/json_schema_converter.cc
  */
-#include <picojson.h>
-#include <xgrammar/xgrammar.h>
+#include "json_schema_converter.h"
 
-#include <chrono>
+#include <picojson.h>
+
 #include <iostream>
 #include <map>
 #include <memory>
@@ -73,7 +73,7 @@ class IndentManager {
   std::string separator_;
   int total_indent_;
   std::vector<bool> is_first_;
-  friend class JSONSchemaToEBNFConverter;
+  friend class JSONSchemaConverter;
 };
 
 std::string IndentManager::NextSeparator(bool is_end) {
@@ -104,9 +104,9 @@ std::string IndentManager::NextSeparator(bool is_end) {
  * bool (true or false) or dict (a json dict) containing attributes. We use picojson::value to
  * represent the json schema.
  */
-class JSONSchemaToEBNFConverter {
+class JSONSchemaConverter {
  public:
-  JSONSchemaToEBNFConverter(
+  JSONSchemaConverter(
       const picojson::value& json_schema,
       std::optional<int> indent = std::nullopt,
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
@@ -336,7 +336,7 @@ class JSONSchemaToEBNFConverter {
   std::map<std::string, std::string> basic_rules_cache_;
 };
 
-JSONSchemaToEBNFConverter::JSONSchemaToEBNFConverter(
+JSONSchemaConverter::JSONSchemaConverter(
     const picojson::value& json_schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
@@ -352,7 +352,7 @@ JSONSchemaToEBNFConverter::JSONSchemaToEBNFConverter(
   AddBasicRules();
 }
 
-std::string JSONSchemaToEBNFConverter::Convert() {
+std::string JSONSchemaConverter::Convert() {
   CreateRuleFromSchema(json_schema_, "root");
   std::string res;
   for (auto& rule : rules_) {
@@ -361,7 +361,7 @@ std::string JSONSchemaToEBNFConverter::Convert() {
   return res;
 }
 
-void JSONSchemaToEBNFConverter::AddBasicRules() {
+void JSONSchemaConverter::AddBasicRules() {
   bool past_strict_mode = strict_mode_;
   strict_mode_ = false;
 
@@ -396,7 +396,7 @@ void JSONSchemaToEBNFConverter::AddBasicRules() {
   indentManager_ = std::move(past_indent_manager);
 }
 
-void JSONSchemaToEBNFConverter::AddHelperRules() {
+void JSONSchemaConverter::AddHelperRules() {
   rules_.push_back(std::make_pair(
       kBasicEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
   ));
@@ -407,18 +407,16 @@ void JSONSchemaToEBNFConverter::AddHelperRules() {
   ));
 }
 
-void JSONSchemaToEBNFConverter::CreateBasicRule(
-    const picojson::value& schema, const std::string& name
-) {
+void JSONSchemaConverter::CreateBasicRule(const picojson::value& schema, const std::string& name) {
   std::string rule_name = CreateRuleFromSchema(schema, name);
   basic_rules_cache_[GetSchemaCacheIndex(schema)] = rule_name;
 }
 
-std::string JSONSchemaToEBNFConverter::NextSeparator(bool is_end) {
+std::string JSONSchemaConverter::NextSeparator(bool is_end) {
   return indentManager_->NextSeparator(is_end);
 }
 
-void JSONSchemaToEBNFConverter::WarnUnsupportedKeywords(
+void JSONSchemaConverter::WarnUnsupportedKeywords(
     const picojson::value& schema, const std::vector<std::string>& keywords
 ) {
   if (schema.is<bool>()) {
@@ -429,7 +427,7 @@ void JSONSchemaToEBNFConverter::WarnUnsupportedKeywords(
   WarnUnsupportedKeywords(schema.get<picojson::object>(), keywords);
 }
 
-void JSONSchemaToEBNFConverter::WarnUnsupportedKeywords(
+void JSONSchemaConverter::WarnUnsupportedKeywords(
     const picojson::object& schema, const std::vector<std::string>& keywords
 ) {
   for (const auto& keyword : keywords) {
@@ -440,7 +438,7 @@ void JSONSchemaToEBNFConverter::WarnUnsupportedKeywords(
   }
 }
 
-std::string JSONSchemaToEBNFConverter::CreateRuleFromSchema(
+std::string JSONSchemaConverter::CreateRuleFromSchema(
     const picojson::value& schema, const std::string& rule_name_hint
 ) {
   std::string idx = GetSchemaCacheIndex(schema);
@@ -452,7 +450,7 @@ std::string JSONSchemaToEBNFConverter::CreateRuleFromSchema(
   return rule_name_hint;
 }
 
-std::string JSONSchemaToEBNFConverter::GetSchemaCacheIndex(const picojson::value& schema) {
+std::string JSONSchemaConverter::GetSchemaCacheIndex(const picojson::value& schema) {
   // Keys that do not effect the validation
   static const std::unordered_set<std::string> kSkippedKeys = {
       "title",
@@ -502,7 +500,7 @@ std::string JSONSchemaToEBNFConverter::GetSchemaCacheIndex(const picojson::value
   return schema.serialize(false);
 }
 
-std::string JSONSchemaToEBNFConverter::VisitSchema(
+std::string JSONSchemaConverter::VisitSchema(
     const picojson::value& schema, const std::string& rule_name
 ) {
   if (schema.is<bool>()) {
@@ -562,7 +560,7 @@ std::string JSONSchemaToEBNFConverter::VisitSchema(
   return VisitAny(schema, rule_name);
 }
 
-std::string JSONSchemaToEBNFConverter::VisitRef(
+std::string JSONSchemaConverter::VisitRef(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("$ref"));
@@ -579,7 +577,7 @@ std::string JSONSchemaToEBNFConverter::VisitRef(
   return VisitSchema(new_schema, rule_name);
 }
 
-picojson::value JSONSchemaToEBNFConverter::URIToSchema(const picojson::value& uri) {
+picojson::value JSONSchemaConverter::URIToSchema(const picojson::value& uri) {
   if (uri.get<std::string>().substr(0, 8) == "#/$defs/") {
     return json_schema_.get("$defs").get(uri.get<std::string>().substr(8));
   }
@@ -588,7 +586,7 @@ picojson::value JSONSchemaToEBNFConverter::URIToSchema(const picojson::value& ur
   return picojson::value(true);
 }
 
-std::string JSONSchemaToEBNFConverter::VisitConst(
+std::string JSONSchemaConverter::VisitConst(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("const"));
@@ -596,7 +594,7 @@ std::string JSONSchemaToEBNFConverter::VisitConst(
   return "\"" + JSONStrToPrintableStr(schema.at("const").serialize()) + "\"";
 }
 
-std::string JSONSchemaToEBNFConverter::VisitEnum(
+std::string JSONSchemaConverter::VisitEnum(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("enum"));
@@ -612,7 +610,7 @@ std::string JSONSchemaToEBNFConverter::VisitEnum(
   return result;
 }
 
-std::string JSONSchemaToEBNFConverter::JSONStrToPrintableStr(const std::string& json_str) {
+std::string JSONSchemaConverter::JSONStrToPrintableStr(const std::string& json_str) {
   static const std::vector<std::pair<std::string, std::string>> kReplaceMapping = {
       {"\\", "\\\\"}, {"\"", "\\\""}
   };
@@ -627,7 +625,7 @@ std::string JSONSchemaToEBNFConverter::JSONStrToPrintableStr(const std::string& 
   return result;
 }
 
-std::string JSONSchemaToEBNFConverter::VisitAnyOf(
+std::string JSONSchemaConverter::VisitAnyOf(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("anyOf"));
@@ -643,7 +641,7 @@ std::string JSONSchemaToEBNFConverter::VisitAnyOf(
   return result;
 }
 
-std::string JSONSchemaToEBNFConverter::VisitAny(
+std::string JSONSchemaConverter::VisitAny(
     const picojson::value& schema, const std::string& rule_name
 ) {
   // Note integer is a subset of number, so we don't need to add integer here
@@ -651,7 +649,7 @@ std::string JSONSchemaToEBNFConverter::VisitAny(
          kBasicArray + " | " + kBasicObject;
 }
 
-std::string JSONSchemaToEBNFConverter::VisitInteger(
+std::string JSONSchemaConverter::VisitInteger(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("type"));
@@ -669,7 +667,7 @@ std::string JSONSchemaToEBNFConverter::VisitInteger(
   return "(\"0\" | \"-\"? [1-9] [0-9]*) \".0\"?";
 }
 
-std::string JSONSchemaToEBNFConverter::VisitNumber(
+std::string JSONSchemaConverter::VisitNumber(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("type"));
@@ -687,7 +685,7 @@ std::string JSONSchemaToEBNFConverter::VisitNumber(
   return "(\"0\" | \"-\"? [1-9] [0-9]*) (\".\" [0-9]+)? ([eE] [+-]? [0-9]+)?";
 }
 
-std::string JSONSchemaToEBNFConverter::VisitString(
+std::string JSONSchemaConverter::VisitString(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("type"));
@@ -704,7 +702,7 @@ std::string JSONSchemaToEBNFConverter::VisitString(
   return "[\"] " + kBasicStringSub;
 }
 
-std::string JSONSchemaToEBNFConverter::VisitBoolean(
+std::string JSONSchemaConverter::VisitBoolean(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("type"));
@@ -712,7 +710,7 @@ std::string JSONSchemaToEBNFConverter::VisitBoolean(
   return "\"true\" | \"false\"";
 }
 
-std::string JSONSchemaToEBNFConverter::VisitNull(
+std::string JSONSchemaConverter::VisitNull(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("type"));
@@ -720,7 +718,7 @@ std::string JSONSchemaToEBNFConverter::VisitNull(
   return "\"null\"";
 }
 
-std::string JSONSchemaToEBNFConverter::VisitArray(
+std::string JSONSchemaConverter::VisitArray(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("type"));
@@ -799,7 +797,7 @@ std::string JSONSchemaToEBNFConverter::VisitArray(
   return result;
 }
 
-std::string JSONSchemaToEBNFConverter::GetPropertyPattern(
+std::string JSONSchemaConverter::GetPropertyPattern(
     const std::string& prop_name,
     const picojson::value& prop_schema,
     const std::string& rule_name,
@@ -813,7 +811,7 @@ std::string JSONSchemaToEBNFConverter::GetPropertyPattern(
   return key + " " + colon + " " + value;
 }
 
-std::string JSONSchemaToEBNFConverter::GetOtherPropertyPattern(
+std::string JSONSchemaConverter::GetOtherPropertyPattern(
     const std::string& key_pattern,
     const picojson::value& prop_schema,
     const std::string& rule_name,
@@ -824,7 +822,7 @@ std::string JSONSchemaToEBNFConverter::GetOtherPropertyPattern(
   return key_pattern + " " + colon + " " + value;
 }
 
-std::string JSONSchemaToEBNFConverter::GetPartialRuleForPropertiesAllOptional(
+std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
     const std::vector<std::pair<std::string, picojson::value>>& properties,
     const picojson::value& additional,
     const std::string& rule_name,
@@ -889,7 +887,7 @@ std::string JSONSchemaToEBNFConverter::GetPartialRuleForPropertiesAllOptional(
   return res;
 }
 
-std::string JSONSchemaToEBNFConverter::GetPartialRuleForPropertiesContainRequired(
+std::string JSONSchemaConverter::GetPartialRuleForPropertiesContainRequired(
     const std::vector<std::pair<std::string, picojson::value>>& properties,
     const std::unordered_set<std::string>& required,
     const std::string& rule_name
@@ -935,7 +933,7 @@ std::string JSONSchemaToEBNFConverter::GetPartialRuleForPropertiesContainRequire
   return res;
 }
 
-std::string JSONSchemaToEBNFConverter::VisitObject(
+std::string JSONSchemaConverter::VisitObject(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("type"));
@@ -1034,7 +1032,7 @@ std::string JSONSchemaToEBNFConverter::VisitObject(
   return result;
 }
 
-std::string BuiltinGrammar::_JSONSchemaToEBNF(
+std::string JSONSchemaToEBNF(
     const std::string& schema,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
@@ -1044,7 +1042,16 @@ std::string BuiltinGrammar::_JSONSchemaToEBNF(
   std::string err = picojson::parse(schema_value, schema);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
                               << ". The JSON string is:" << schema;
-  JSONSchemaToEBNFConverter converter(schema_value, indent, separators, strict_mode);
+  return JSONSchemaToEBNF(schema_value, indent, separators, strict_mode);
+}
+
+std::string JSONSchemaToEBNF(
+    const picojson::value& schema,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode
+) {
+  JSONSchemaConverter converter(schema, indent, separators, strict_mode);
   return converter.Convert();
 }
 

@@ -4,8 +4,6 @@
  */
 #include "regex_converter.h"
 
-#include <xgrammar/xgrammar.h>
-
 #include <iostream>
 #include <optional>
 #include <string>
@@ -24,9 +22,9 @@ namespace xgrammar {
  * \details The implementation refers to the regex described in
  * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions
  */
-class RegexConverter::Impl {
+class RegexConverter {
  public:
-  explicit Impl(const std::string& regex) : regex_(regex) {
+  explicit RegexConverter(const std::string& regex) : regex_(regex) {
     regex_codepoints_ = ParseUTF8(regex_.c_str(), false);
     if (regex_codepoints_[0] == kInvalidUTF8) {
       XGRAMMAR_LOG(FATAL) << "The regex is not a valid UTF-8 string.";
@@ -55,25 +53,25 @@ class RegexConverter::Impl {
   int parenthesis_level_ = 0;
 };
 
-void RegexConverter::Impl::AddEBNFSegment(const std::string& element, bool add_space) {
+void RegexConverter::AddEBNFSegment(const std::string& element, bool add_space) {
   if (!result_ebnf_.empty() && add_space) {
     result_ebnf_ += ' ';
   }
   result_ebnf_ += element;
 }
 
-void RegexConverter::Impl::RaiseError(const std::string& message) {
+void RegexConverter::RaiseError(const std::string& message) {
   XGRAMMAR_LOG(FATAL) << "Regex parsing error at position " << current_ - start_ + 1 << ": "
                       << message;
   XGRAMMAR_UNREACHABLE();
 }
 
-void RegexConverter::Impl::RaiseWarning(const std::string& message) {
+void RegexConverter::RaiseWarning(const std::string& message) {
   XGRAMMAR_LOG(WARNING) << "Regex parsing warning at position " << current_ - start_ + 1 << ": "
                         << message;
 }
 
-std::string RegexConverter::Impl::HandleCharacterClass() {
+std::string RegexConverter::HandleCharacterClass() {
   std::string char_class = "[";
   ++current_;
   while (*current_ != ']' && current_ != end_) {
@@ -91,10 +89,11 @@ std::string RegexConverter::Impl::HandleCharacterClass() {
   ++current_;
   return char_class;
 }
+
 // {x}: Match exactly x occurrences of the preceding regular expression.
 // {x,}
 // {x,y}
-std::string RegexConverter::Impl::HandleRepetitionRange() {
+std::string RegexConverter::HandleRepetitionRange() {
   std::string result = "{";
   if (!isdigit(*current_)) {
     RaiseError("Invalid repetition count.");
@@ -127,7 +126,7 @@ std::string RegexConverter::Impl::HandleRepetitionRange() {
   return result;
 }
 
-std::string RegexConverter::Impl::HandleCharEscape() {
+std::string RegexConverter::HandleCharEscape() {
   // clang-format off
   static const std::unordered_map<char, TCodepoint> CUSTOM_ESCAPE_MAP = {
       {'^', '^'}, {'$', '$'}, {'.', '.'}, {'*', '*'}, {'+', '+'}, {'?', '?'}, {'\\', '\\'},
@@ -173,7 +172,7 @@ std::string RegexConverter::Impl::HandleCharEscape() {
   }
 }
 
-std::string RegexConverter::Impl::HandleEscapeInCharClass() {
+std::string RegexConverter::HandleEscapeInCharClass() {
   if (end_ - current_ < 2) {
     RaiseError("Escape sequence is not finished.");
   }
@@ -205,7 +204,7 @@ std::string RegexConverter::Impl::HandleEscapeInCharClass() {
   }
 }
 
-std::string RegexConverter::Impl::HandleEscape() {
+std::string RegexConverter::HandleEscape() {
   // clang-format off
   static const std::unordered_map<char, TCodepoint> CUSTOM_ESCAPE_MAP = {
       {'^', '^'}, {'$', '$'}, {'.', '.'}, {'*', '*'}, {'+', '+'}, {'?', '?'}, {'\\', '\\'},
@@ -245,7 +244,7 @@ std::string RegexConverter::Impl::HandleEscape() {
   }
 }
 
-std::string RegexConverter::Impl::Convert() {
+std::string RegexConverter::Convert() {
   start_ = regex_codepoints_.data();
   current_ = start_;
   end_ = start_ + regex_codepoints_.size() - 1;
@@ -304,13 +303,13 @@ std::string RegexConverter::Impl::Convert() {
   return result_ebnf_;
 }
 
-RegexConverter::RegexConverter(const std::string& regex) : pimpl_(std::make_shared<Impl>(regex)) {}
-
-std::string RegexConverter::Convert() { return pimpl_->Convert(); }
-
-std::string BuiltinGrammar::_RegexToEBNF(const std::string& regex) {
+std::string RegexToEBNF(const std::string& regex, bool with_rule_name) {
   RegexConverter converter(regex);
-  return "root ::= " + converter.Convert() + "\n";
+  if (with_rule_name) {
+    return "root ::= " + converter.Convert() + "\n";
+  } else {
+    return converter.Convert();
+  }
 }
 
 }  // namespace xgrammar

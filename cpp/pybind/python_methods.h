@@ -18,26 +18,24 @@
 
 namespace xgrammar {
 
-BNFGrammar BNFGrammar_InitNoNormalization(
-    const std::string& ebnf_string, const std::string& root_rule
-);
-
 TokenizerInfo TokenizerInfo_Init(
     const std::vector<std::string>& encoded_vocab,
     std::string vocab_type,
+    std::optional<int> vocab_size,
+    std::optional<std::vector<int32_t>> stop_token_ids,
     bool prepend_space_in_tokenization
 );
 
 std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(TokenizerInfo& tokenizer);
+std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer);
 
 void GrammarMatcher_FillNextTokenBitmask(
-    GrammarMatcher& matcher, torch::Tensor token_bitmask, int batch_id
+    GrammarMatcher& matcher, torch::Tensor token_bitmask, int index
 );
 
-std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
-    GrammarMatcher& matcher, torch::Tensor token_bitmask, int batch_id
+std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(
+    torch::Tensor token_bitmask, int32_t vocab_size, int32_t index
 );
 
 }  // namespace xgrammar
