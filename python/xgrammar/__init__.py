@@ -26,4 +26,4 @@ from .matcher import (
 from .tokenizer_info import TokenizerInfo, VocabType
 from . import testing
 
-from .contrib import hf_transformers
+from .contrib import hf

@@ -44,7 +44,6 @@ class LogitsProcessor(transformers.LogitsProcessor):
         compiled_grammar: xgr.CompiledGrammar,
         tokenizer_info: xgr.TokenizerInfo,
         full_vocab_size: int,
-        batch_size: int = 1,
     ):
         """Initialize the LogitsProcessor.
 
@@ -56,19 +55,14 @@ class LogitsProcessor(transformers.LogitsProcessor):
             The tokenizer information of the model to be used.
         full_vocab_size : int
             The full vocab size of the model (AutoConfig.vocab_size).
-        batch_size : int
-            The batch size to be fed into the `generate()` call that this LogitProcessor will
-            be used in.
         """
-        self.matchers = [
-            xgr.GrammarMatcher(compiled_grammar, tokenizer_info, vocab_size=full_vocab_size)
-            for _ in range(batch_size)
-        ]
-        self.token_bitmask = xgr.GrammarMatcher.allocate_token_bitmask(
-            self.matchers[0].vocab_size, batch_size=batch_size
-        )
+        self.matchers = []
+        self.compiled_grammar = compiled_grammar
+        self.tokenizer_info = tokenizer_info
+        self.full_vocab_size = full_vocab_size
+        self.token_bitmask = None
         self.prefilled = False
-        self.batch_size = batch_size
+        self.batch_size = None
 
     def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         """
@@ -77,14 +71,26 @@ class LogitsProcessor(transformers.LogitsProcessor):
         Returns:
             scores: Logits modified with bitmask.
         """
+        # Lazily initialize GrammarMatchers and bitmask
+        if len(self.matchers) == 0:
+            self.batch_size = input_ids.shape[0]
+            self.matchers = [
+                xgr.GrammarMatcher(
+                    self.compiled_grammar, self.tokenizer_info, vocab_size=self.full_vocab_size
+                )
+                for _ in range(self.batch_size)
+            ]
+            self.token_bitmask = xgr.GrammarMatcher.allocate_token_bitmask(
+                self.full_vocab_size, batch_size=self.batch_size
+            )
+
         if input_ids.shape[0] != self.batch_size:
-            raise ValueError(
+            raise RuntimeError(
                 "Expect input_ids.shape[0] to be LogitsProcessor.batch_size."
                 + f"Got {input_ids.shape[0]} for the former, and {self.batch_size} for the latter."
-                + "\nCheck your input to xgrammar.contrib.hf_transformers.LogitsProcessor()."
             )
         if scores.device.type != "cuda":
-            raise ValueError("logits must be on CUDA")
+            raise RuntimeError("logits must be on CUDA")
 
         if not self.prefilled:
             # Have not sampled a token yet

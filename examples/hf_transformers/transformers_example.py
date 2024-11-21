@@ -6,7 +6,6 @@ a minimal LogitsProcessor.
 import xgrammar as xgr
 import torch
 
-from xgrammar.contrib.hf_transformers import LogitsProcessor
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 
 if torch.cuda.is_available():
@@ -58,9 +57,7 @@ texts = [
 model_inputs = tokenizer(texts, return_tensors="pt").to(model.device)
 
 # 3. Instantiate logits_processor per each generate, and call generate()
-logits_processor = LogitsProcessor(
-    compiled_grammar, tokenizer_info, full_vocab_size, batch_size=len(prompts)
-)
+logits_processor = xgr.contrib.hf.LogitsProcessor(compiled_grammar, tokenizer_info, full_vocab_size)
 generated_ids = model.generate(
     **model_inputs, max_new_tokens=512, logits_processor=[logits_processor]
 )
