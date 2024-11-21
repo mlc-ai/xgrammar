@@ -17,9 +17,11 @@
 """The CUDA kernel source code for in-place applying token mask."""
 import ctypes
 import logging
+import math
 import os
 import platform
 import shutil
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -41,7 +43,8 @@ except ImportError:
 
 
 BITS_PER_BLOCK = 32
-THREADS_PER_BLOCK = 512
+THREADS_PER_BLOCK = 1024
+ELEMENTS_PER_THREAD = 4
 
 _apply_token_bitmask_inplace_kernel = """
 #include <cuda_fp16.h>
@@ -49,31 +52,30 @@ _apply_token_bitmask_inplace_kernel = """
 #include <cuda/std/limits>
 
 #define BITS_PER_BLOCK 32
+#define THREADS_PER_BLOCK 1024
+#define ELEMENTS_PER_THREAD 4
+#define CEIL_DIV(a, b) (((a) + (b) - 1) / (b))
+#define GET_BIT(data_ptr, bit_idx) \
+  ((data_ptr[(bit_idx) / BITS_PER_BLOCK] >> ((bit_idx) % BITS_PER_BLOCK)) & 1)
 
-extern "C" __global__ void __launch_bounds__(512) ApplyTokenBitmaskInplaceKernel(
+extern "C" __global__ void __launch_bounds__(1024) ApplyTokenBitmaskInplaceKernel(
     float* __restrict__ logits,
     const int32_t* __restrict__ bitmask,
-    int32_t vocab_size,
-    int64_t bitmask_size,
-    int32_t bitmask_row_size
+    const int32_t* __restrict__ indices,
+    int vocab_size,
+    int bitmask_size
 ) {
-  int64_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (gid >= bitmask_size) {
-    return;
-  }
+  int bid = indices[blockIdx.y];
+  int tid = (blockIdx.x * blockDim.x + threadIdx.x) * ELEMENTS_PER_THREAD;
 
-  int32_t batch_id = gid / bitmask_row_size;
-  int32_t bitmask_id = gid % bitmask_row_size;
-  int32_t bitmask_val = bitmask[gid];
-  float* logits_ptr = logits + batch_id * vocab_size + bitmask_id * BITS_PER_BLOCK;
-  for (int i = 0; i < BITS_PER_BLOCK; ++i) {
-    if (bitmask_id * BITS_PER_BLOCK + i >= vocab_size) {
-      break;
-    }
-    if ((bitmask_val & 1) == 0) {
+  float* logits_ptr = logits + bid * vocab_size + tid;
+
+  for (int i = 0; i < ELEMENTS_PER_THREAD && tid + i < vocab_size; ++i) {
+    // logits[bid, tid + i] = mask(..., bitmask[by, tid + i])
+    if (GET_BIT(reinterpret_cast<const int32_t*>(bitmask + blockIdx.y * bitmask_size), tid + i) ==
+        0) {
       logits_ptr[i] = -cuda::std::numeric_limits<float>::infinity();
     }
-    bitmask_val >>= 1;
   }
 }
 """.strip()
@@ -204,7 +206,10 @@ class KernelStore:
         return func
 
 
-def apply_token_bitmask_inplace(logits: torch.Tensor, bitmask: torch.Tensor):
+def apply_token_bitmask_inplace(
+    logits: torch.Tensor, bitmask: torch.Tensor, indices: Optional[torch.Tensor] = None
+):
+    time_start = time.monotonic_ns()
     if cuda is None or cudart is None or nvrtc is None:
         raise RuntimeError(
             "CUDA dependencies are not installed. Please follow "
@@ -219,7 +224,6 @@ def apply_token_bitmask_inplace(logits: torch.Tensor, bitmask: torch.Tensor):
         (vocab_size,) = logits.shape
     else:
         raise ValueError(f"Invalid logits tensor shape {logits.shape}")
-    bitmask_size = (vocab_size + BITS_PER_BLOCK - 1) // BITS_PER_BLOCK
 
     # Check input tensor dtypes.
     if logits.dtype != torch.float32:
@@ -237,10 +241,21 @@ def apply_token_bitmask_inplace(logits: torch.Tensor, bitmask: torch.Tensor):
     if not logits.is_contiguous() or not bitmask.is_contiguous():
         raise ValueError("The logits and bitmask tensors are expected to be contiguous in memory.")
 
+    if indices is None:
+        indices = torch.arange(batch_size, dtype=torch.int32, device=logits.device)
+    elif isinstance(indices, list):
+        indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
+
     # Compile the kernel.
     kernel = KernelStore.compile(logits.device.index)
+
     # Setup kernel launching arguments.
-    grid_dims = (batch_size * bitmask_size + THREADS_PER_BLOCK - 1) // THREADS_PER_BLOCK, 1, 1
+    bitmask_size = math.ceil(vocab_size / BITS_PER_BLOCK)
+    grid_dims = (
+        math.ceil(vocab_size / (THREADS_PER_BLOCK * ELEMENTS_PER_THREAD)),
+        indices.shape[0],
+        1,
+    )
     block_dims = THREADS_PER_BLOCK, 1, 1
     shared_mem_bytes = 0
     stream = torch.cuda.current_stream().cuda_stream
@@ -249,18 +264,21 @@ def apply_token_bitmask_inplace(logits: torch.Tensor, bitmask: torch.Tensor):
         (
             logits.data_ptr(),
             bitmask.data_ptr(),
+            indices.data_ptr(),
             vocab_size,
-            batch_size * bitmask_size,
             bitmask_size,
         ),
         (
             ctypes.c_void_p,
             ctypes.c_void_p,
+            ctypes.c_void_p,
             ctypes.c_int32,
-            ctypes.c_int64,
             ctypes.c_int32,
         ),
     )
+    time_end = time.monotonic_ns()
+    print(f"Time to compile kernel: {(time_end - time_start) / 1e3} us")
+
     # Launch the kernel.
     checkCudaErrors(
         cuda.cuLaunchKernel(

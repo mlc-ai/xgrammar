@@ -195,7 +195,7 @@ void ParallelFor(int low, int high, int num_threads, std::function<void(int)> f)
       }
     });
   }
-  // ThreadPool destructor will wait for all tasks to complete
+  pool.Join();
 }
 
 }  // namespace xgrammar

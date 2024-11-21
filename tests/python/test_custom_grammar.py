@@ -356,7 +356,7 @@ def test_fill_next_token_bitmask(
         # 3. apply_token_bitmask_inplace
         torch.cuda.synchronize()
         time_start = time.monotonic_ns()
-        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask)
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to("cuda"))
         torch.cuda.synchronize()
         time_end = time.monotonic_ns()
         print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
