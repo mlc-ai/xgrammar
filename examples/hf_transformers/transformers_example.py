@@ -8,10 +8,6 @@ import torch
 
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 
-if torch.cuda.is_available():
-    print("CUDA is available!")
-else:
-    raise RuntimeError("Cannot run this example because you need CUDA access.")
 
 # 0. Instantiate model
 # Or any HF model you want
@@ -37,7 +33,7 @@ messages_list = []
 prompts = [
     "Introduce yourself in JSON briefly as a student.",
     # Uncomment for batch generation
-    # "Introduce yourself in JSON briefly as a professor.",
+    # "Introduce yourself in JSON as a professor.",
 ]
 for prompt in prompts:
     messages = [

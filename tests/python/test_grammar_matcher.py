@@ -173,7 +173,7 @@ def test_apply_token_bitmask_inplace(is_cuda):
         assert torch.all(logits_gpu == expected.to("cuda"))
     else:
         bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
-        xgr.apply_token_bitmask_inplace_cpu(logits, bitmask)
+        xgr.apply_token_bitmask_inplace(logits, bitmask)
         assert torch.all(logits == expected)
 
 
