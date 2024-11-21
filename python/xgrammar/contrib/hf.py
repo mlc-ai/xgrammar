@@ -93,8 +93,7 @@ class LogitsProcessor(transformers.LogitsProcessor):
         # We only support masking logits on CUDA or CPU
         device_type = scores.device.type
         if device_type != "cuda":
-            if device_type != "cpu":
-                scores = scores.to("cpu")
+            scores = scores.to("cpu")
         xgr.apply_token_bitmask_inplace(scores, self.token_bitmask.to(scores.device))
         if device_type != "cuda":
             scores = scores.to(device_type)
