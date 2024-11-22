@@ -43,7 +43,7 @@ TokenizerInfo TokenizerInfo_Init(
     const std::vector<std::string>& encoded_vocab,
     std::string vocab_type,
     std::optional<int> vocab_size,
-    std::optional<std::vector<int32_t>> stop_token_ids,
+    std::optional<std::vector<int>> stop_token_ids,
     bool prepend_space_in_tokenization
 ) {
   static const std::unordered_map<std::string, VocabType> VOCAB_TYPE_MAP = {
@@ -60,69 +60,63 @@ TokenizerInfo TokenizerInfo_Init(
   );
 }
 
-// GrammarMatcher GrammarMatcher_Init(
-//     const Grammar& grammar,
-//     const TokenizerInfo& tokenizer_info,
-//     std::optional<std::vector<int>> override_stop_tokens,
-//     bool terminate_without_stop_token,
-//     std::optional<int> vocab_size,
-//     int max_rollback_tokens
-// ) {
-//   return GrammarMatcher(
-//       CompiledGrammar(grammar, tokenizer_info),
-//       override_stop_tokens,
-//       terminate_without_stop_token,
-//       vocab_size,
-//       max_rollback_tokens
-//   );
-// }
+GrammarMatcher GrammarMatcher_Init(
+    const CompiledGrammar& grammar,
+    std::optional<std::vector<int>> override_stop_tokens,
+    bool terminate_without_stop_token,
+    int max_rollback_tokens
+) {
+  return GrammarMatcher(
+      grammar, override_stop_tokens, terminate_without_stop_token, max_rollback_tokens
+  );
+}
 
-// /*!
-//  * \brief Finds the next token bitmask of the matcher.
-//  */
-// std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher) {
-//   // 1. Initialize std::vector result
-//   auto buffer_size = matcher.GetBitmaskSize();
-//   std::vector<int32_t> result(buffer_size);
-//   // 2. Initialize DLTensor with the data pointer of the std vector.
-//   DLTensor tensor;
-//   tensor.data = result.data();
-//   tensor.device = DLDevice{kDLCPU, 0};
-//   tensor.ndim = 1;
-//   tensor.dtype = DLDataType{kDLInt, 32, 1};  // int32
-//   std::vector<int64_t> shape = {buffer_size};
-//   tensor.shape = &shape[0];
-//   std::vector<int64_t> strides = {1};
-//   tensor.strides = &strides[0];
-//   tensor.byte_offset = 0;
-//   // 3. Populate tensor, hence result
-//   matcher.FillNextTokenBitmask(&tensor);
-//   return result;
-// }
+/*!
+ * \brief Finds the next token bitmask of the matcher.
+ */
+std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher, int vocab_size) {
+  // 1. Initialize std::vector result
+  auto buffer_size = GetBitmaskSize(vocab_size);
+  std::vector<int32_t> result(buffer_size);
+  // 2. Initialize DLTensor with the data pointer of the std vector.
+  DLTensor tensor;
+  tensor.data = result.data();
+  tensor.device = DLDevice{kDLCPU, 0};
+  tensor.ndim = 1;
+  tensor.dtype = DLDataType{kDLInt, 32, 1};  // int32
+  std::vector<int64_t> shape = {buffer_size};
+  tensor.shape = &shape[0];
+  std::vector<int64_t> strides = {1};
+  tensor.strides = &strides[0];
+  tensor.byte_offset = 0;
+  // 3. Populate tensor, hence result
+  matcher.FillNextTokenBitmask(&tensor);
+  return result;
+}
 
-// /*!
-//  * \brief Return the list of rejected token IDs based on the bit mask.
-//  * \note This method is mainly used in testing, so performance is not as important.
-//  */
-// std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
-//     std::vector<int32_t> token_bitmask, size_t vocab_size
-// ) {
-//   // 1. Convert token_bitmask into DLTensor
-//   DLTensor tensor;
-//   tensor.data = token_bitmask.data();
-//   tensor.device = DLDevice{kDLCPU, 0};
-//   tensor.ndim = 1;
-//   tensor.dtype = DLDataType{kDLInt, 32, 1};  // int32
-//   std::vector<int64_t> shape = {token_bitmask.size()};
-//   tensor.shape = &shape[0];
-//   std::vector<int64_t> strides = {1};
-//   tensor.strides = &strides[0];
-//   tensor.byte_offset = 0;
-//   // 2. Get rejected token IDs
-//   std::vector<int> result;
-//   GrammarMatcher::DebugGetMaskedTokensFromBitmask(tensor, vocab_size, &result);
-//   return result;
-// }
+/*!
+ * \brief Return the list of rejected token IDs based on the bit mask.
+ * \note This method is mainly used in testing, so performance is not as important.
+ */
+std::vector<int> Testing_DebugGetMaskedTokensFromBitmask(
+    std::vector<int32_t> token_bitmask, size_t vocab_size, int index
+) {
+  // 1. Convert token_bitmask into DLTensor
+  DLTensor tensor;
+  tensor.data = token_bitmask.data();
+  tensor.device = DLDevice{kDLCPU, 0};
+  tensor.ndim = 1;
+  tensor.dtype = DLDataType{kDLInt, 32, 1};  // int32
+  std::vector<int64_t> shape = {token_bitmask.size()};
+  tensor.shape = &shape[0];
+  std::vector<int64_t> strides = {1};
+  tensor.strides = &strides[0];
+  tensor.byte_offset = 0;
+  // 2. Get rejected token IDs
+  std::vector<int> result;
+  _DebugGetMaskedTokensFromBitmask(&result, tensor, vocab_size, index);
+  return result;
+}
 
 /*!
  * \brief Helps view an std::vector handle as Int32Array in JS without copying.
@@ -132,7 +126,7 @@ emscripten::val vecIntToView(const std::vector<int>& vec) {
 }
 
 EMSCRIPTEN_BINDINGS(xgrammar) {
-  // Register std::optional used in BuiltinGrammar::JSONSchema
+  // Register std::optional used in Grammar::FromJSONSchema
   register_optional<int>();
   register_optional<std::pair<std::string, std::string>>();
 
@@ -156,6 +150,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
 
   // Testing methods
   function("_JSONSchemaToEBNF", &_JSONSchemaToEBNF);
+  function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);
 
   class_<Grammar>("Grammar")
       .function("ToString", &Grammar::ToString)
@@ -179,19 +174,15 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("CompileGrammar", &GrammarCompiler::CompileGrammar)
       .function("ClearCache", &GrammarCompiler::ClearCache);
 
-  // class_<GrammarMatcher>("GrammarMatcher")
-  //     .constructor(&GrammarMatcher_Init)
-  //     .smart_ptr<std::shared_ptr<GrammarMatcher>>("GrammarMatcher")
-  //     .function("GetVocabSize", &GrammarMatcher::GetVocabSize)
-  //     .function("GetMaxRollbackTokens", &GrammarMatcher::GetMaxRollbackTokens)
-  //     .function("AcceptToken", &GrammarMatcher::AcceptToken)
-  //     .function("GetNextTokenBitmask", &GrammarMatcher_GetNextTokenBitmask)
-  //     .class_function(
-  //         "DebugGetMaskedTokensFromBitmask", &GrammarMatcher_DebugGetMaskedTokensFromBitmask
-  //     )
-  //     .function("IsTerminated", &GrammarMatcher::IsTerminated)
-  //     .function("Reset", &GrammarMatcher::Reset)
-  //     .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
-  //     .function("Rollback", &GrammarMatcher::Rollback)
-  //     .function("_AcceptString", &GrammarMatcher::AcceptString);
+  class_<GrammarMatcher>("GrammarMatcher")
+      .constructor(&GrammarMatcher_Init)
+      .smart_ptr<std::shared_ptr<GrammarMatcher>>("GrammarMatcher")
+      .function("GetMaxRollbackTokens", &GrammarMatcher::GetMaxRollbackTokens)
+      .function("AcceptToken", &GrammarMatcher::AcceptToken)
+      .function("GetNextTokenBitmask", &GrammarMatcher_GetNextTokenBitmask)
+      .function("IsTerminated", &GrammarMatcher::IsTerminated)
+      .function("Reset", &GrammarMatcher::Reset)
+      .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
+      .function("Rollback", &GrammarMatcher::Rollback)
+      .function("_DebugAcceptString", &GrammarMatcher::_DebugAcceptString);
 }

@@ -1,4 +1,4 @@
-import { BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo } from "@mlc-ai/web-xgrammar"
+import { Grammar, GrammarMatcher, TokenizerInfo, GrammarCompiler, CompiledGrammar, Testings } from "@mlc-ai/web-xgrammar"
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 import { Type, Static } from "@sinclair/typebox";
 
@@ -34,13 +34,11 @@ async function jsonExample() {
   );
   const tokenizerInfo = result[0];
   const tokenizer = result[1];
+  const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
 
   // 1. Initialize grammar state matcher with JSON grammar
-  const bnfGrammar: BNFGrammar = await BuiltinGrammar.json();
-  const grammarMatcher = await GrammarMatcher.createGrammarMatcher(
-    bnfGrammar,
-    tokenizerInfo,
-  );
+  const grammar: CompiledGrammar = await compiler.compileBuiltinJSONGrammar();
+  const grammarMatcher = await GrammarMatcher.createGrammarMatcher(grammar);
   console.log(grammarMatcher);
 
   // 2. Simulated generation of an LLM
@@ -53,9 +51,9 @@ async function jsonExample() {
     if (!grammarMatcher.isTerminated()) {
       const bitmask = await grammarMatcher.getNextTokenBitmask();
       // For debugging, we can check the rejected token IDs from the mask
-      const rejectedIDs = await GrammarMatcher.debugGetMaskedTokensFromBitmask(
+      const rejectedIDs = await Testings.debugGetMaskedTokensFromBitmask(
         bitmask,
-        grammarMatcher.getVocabSize()
+        tokenizerInfo.getVocabSize()
       );
     }
     // 3.2 Say the LLM generated `curToken`, which is simulated here, we use `acceptToken()`
@@ -117,12 +115,10 @@ async function jsonSchemaExample() {
   const tokenizer = result[1];
 
   // 1. Instantiate matcher with a grammar defined by the above schema
+  const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
   const tstartInitMatcher = performance.now();
-  const bnfGrammar: BNFGrammar = await BuiltinGrammar.jsonSchema(schema);
-  const grammarMatcher = await GrammarMatcher.createGrammarMatcher(
-    bnfGrammar,
-    tokenizerInfo,
-  );
+  const grammar: CompiledGrammar = await compiler.compileJSONSchema(schema);
+  const grammarMatcher = await GrammarMatcher.createGrammarMatcher(grammar);
   console.log("createGrammarMatcher (ms): ", (performance.now() - tstartInitMatcher));
   console.log(grammarMatcher);
 
@@ -148,9 +144,9 @@ async function jsonSchemaExample() {
     if (!grammarMatcher.isTerminated()) {
       const bitmask = await grammarMatcher.getNextTokenBitmask();
       // For debugging, we can check the rejected token IDs from the mask
-      const rejectedIDs = await GrammarMatcher.debugGetMaskedTokensFromBitmask(
+      const rejectedIDs = await Testings.debugGetMaskedTokensFromBitmask(
         bitmask,
-        grammarMatcher.getVocabSize()
+        tokenizerInfo.getVocabSize()
       );
     }
     // 3.2 Say the LLM generated `curToken`, which is simulated here, we use `acceptToken()`
@@ -168,30 +164,10 @@ async function jsonSchemaExample() {
   grammarMatcher.dispose();
 }
 
-async function testEBNFGrammar() {
-  const jsonGrammarStr = String.raw`
-root ::= basic_array | basic_object
-basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
-basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= (([\"] basic_string_1 [\"]))
-basic_string_1 ::= "" | [^"\\\x00-\x1F] basic_string_1 | "\\" escape basic_string_1
-escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_boolean ::= "true" | "false"
-basic_null ::= "null"
-basic_array ::= "[" ("" | ws basic_any (ws "," ws basic_any)*) ws "]"
-basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
-ws ::= [ \n\t]*
-`;
-
-  const grammar = await BNFGrammar.createBNFGrammar(jsonGrammarStr);
-  console.log(grammar);
-}
 
 async function testAll() {
-  // await jsonExample();
+  await jsonExample();
   await jsonSchemaExample();
-  // await testEBNFGrammar();
 }
 
 testAll();

@@ -49,6 +49,31 @@ export class Testings {
     return binding._JSONSchemaToEBNF(schema, optionalIndent, separators, strictMode);
   }
 
+  /**
+   *
+   * @param {Int32Array} bitmask Bitmask returned by getNextTokenBitmask().
+   * @param {number} vocabSize Vocab size returned by getVocabSize().
+   * @param {number} index The batch index of the bitmask. For batch inference, bitmask[index] will
+   *  be used. Defaults to 0.
+   * @returns An array of vocab ID that will be rejected as a result of the bitmask.
+   */
+  static async debugGetMaskedTokensFromBitmask(
+    bitmask: Int32Array,
+    vocabSize: number,
+    index: number = 0,
+  ): Promise<Int32Array> {
+    await asyncInitBinding();
+    const bitmaskIntVector = binding.vecIntFromJSArray(bitmask);
+    const rejectedIDsIntVector = binding.DebugGetMaskedTokensFromBitmask(
+      bitmaskIntVector,
+      vocabSize,
+      index
+    );
+    bitmaskIntVector.delete();
+    const rejectedIDsInt32Array = binding.vecIntToView(rejectedIDsIntVector).slice();
+    rejectedIDsIntVector.delete();
+    return rejectedIDsInt32Array;
+  }
 }
 
 /**
@@ -395,14 +420,16 @@ export class GrammarCompiler {
  */
 export class GrammarMatcher {
   private handle: any;
+  private vocab_size: number;
 
   /**
    * @internal
    * Private constructor. Factory methods are used since binding initialization is asynchronous.
    * @param {any} handle handle of GrammarMatcher created by binding.
    */
-  private constructor(handle: any) {
+  private constructor(handle: any, vocab_size: number) {
     this.handle = handle;
+    this.vocab_size = vocab_size;
   }
 
   /**
@@ -414,44 +441,32 @@ export class GrammarMatcher {
 
   /**
    * Construct a GrammarMatcher.
-   * @param {Grammar} bnfGrammar The BNF grammar to match.
-   * @param {TokenizerInfo} tokenizerInfo The tokenizer info that contains preprocessed vocab.
-   * @param {number[] | number} [stopTokenIds=undefined] Stop tokens to override the default ones.
+   * @param {CompiledGrammar} compiledGrammar A compiled grammar from GrammarCompiler.
+   * @param {number[] | number} [overrideStopTokens=undefined] Stop tokens to override the default ones.
    * @param {boolean} [terminateWithoutStopToken=false] Whether to terminate without stop token.
    * @param {number} [maxRollbackTokens=0] Max rollback tokens.
    * @returns {GrammarMatcher} The constructed GrammarMatcher.
    */
   static async createGrammarMatcher(
-    bnfGrammar: Grammar,
-    tokenizerInfo: TokenizerInfo,
-    stopTokenIds?: number[] | number,
+    compiledGrammar: CompiledGrammar,
+    overrideStopTokens?: number[] | number,
     terminateWithoutStopToken: boolean = false,
-    vocabSize?: number,
     maxRollbackTokens: number = 0,
   ): Promise<GrammarMatcher> {
     await asyncInitBinding();
-    // Convert stopTokenIds to std::vector<int> if not undefined
-    if (stopTokenIds !== undefined) {
-      if (!Array.isArray(stopTokenIds)) {
-        stopTokenIds = [stopTokenIds];
+    // Convert overrideStopTokens to std::vector<int> if not undefined
+    if (overrideStopTokens !== undefined) {
+      if (!Array.isArray(overrideStopTokens)) {
+        overrideStopTokens = [overrideStopTokens];
       }
-      stopTokenIds = binding.vecIntFromJSArray(stopTokenIds);
+      overrideStopTokens = binding.vecIntFromJSArray(overrideStopTokens);
     }
     return new GrammarMatcher(new binding.GrammarMatcher(
-      bnfGrammar.handle,
-      tokenizerInfo.handle,
-      stopTokenIds,
+      compiledGrammar.handle,
+      overrideStopTokens,
       terminateWithoutStopToken,
-      vocabSize,
       maxRollbackTokens,
-    ));
-  }
-
-  /**
-   * Get the vocab size.
-   */
-  getVocabSize(): number {
-    return this.handle.GetVocabSize();
+    ), compiledGrammar.tokenizerInfo().getVocabSize());
   }
 
   /**
@@ -477,8 +492,8 @@ export class GrammarMatcher {
    * @param {boolean} [verbose=false] To print debugging info
    * @returns {boolean} Whether the input string is accepted.
    */
-  _acceptString(inputStr: string, verbose: boolean = false): boolean {
-    return this.handle._AcceptString(inputStr, verbose);
+  _debugAcceptString(inputStr: string, verbose: boolean = false): boolean {
+    return this.handle._DebugAcceptString(inputStr, verbose);
   }
 
   /**
@@ -489,32 +504,11 @@ export class GrammarMatcher {
    */
   async getNextTokenBitmask(): Promise<Int32Array> {
     await asyncInitBinding();
-    const maskIntVector = this.handle.GetNextTokenBitmask()  // a handle of std::vector<int32_t>
+    // a handle of std::vector<int32_t>
+    const maskIntVector = this.handle.GetNextTokenBitmask(this.vocab_size)
     const maskInt32Array = binding.vecIntToView(maskIntVector).slice();
     maskIntVector.delete();
     return maskInt32Array;
-  }
-
-  /**
-   *
-   * @param {Int32Array} bitmask Bitmask returned by getNextTokenBitmask().
-   * @param {number} vocabSize Vocab size returned by getVocabSize().
-   * @returns An array of vocab ID that will be rejected as a result of the bitmask.
-   */
-  static async debugGetMaskedTokensFromBitmask(
-    bitmask: Int32Array,
-    vocabSize: number
-  ): Promise<Int32Array> {
-    await asyncInitBinding();
-    const bitmaskIntVector = binding.vecIntFromJSArray(bitmask);
-    const rejectedIDsIntVector = binding.GrammarMatcher.DebugGetMaskedTokensFromBitmask(
-      bitmaskIntVector,
-      vocabSize
-    );
-    bitmaskIntVector.delete();
-    const rejectedIDsInt32Array = binding.vecIntToView(rejectedIDsIntVector).slice();
-    rejectedIDsIntVector.delete();
-    return rejectedIDsInt32Array;
   }
 
   /**
