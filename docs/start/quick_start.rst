@@ -44,11 +44,11 @@ Construct a ``GrammarCompiler`` and compile the grammar.
 
 The grammar can be a built-in JSON grammar, a JSON schema string, or an EBNF string. EBNF provides
 more flexibility for customization. See
-`llama.cpp grammars <https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md>`_.
+`GBNF documentation <https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md>`_ for
+specification.
 
 .. code:: python
 
-    # 1. Compile grammar (NOTE: you can substitute this with other grammars like EBNF, JSON Schema)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
     compiled_grammar = grammar_compiler.compile_builtin_json_grammar()
@@ -57,9 +57,13 @@ more flexibility for customization. See
     # Or provide an EBNF string
     # compiled_grammar = grammar_compiler.compile_grammar(ebnf_string)
 
-    # 2. Prepare inputs
+Generate with grammar
+^^^^^^^^^^^^^^^^^^^^^
 
-    # 3. Instantiate logits_processor per each generate, generate, and print response
+Use logits_processor to generate with grammar.
+
+.. code:: python
+
     xgr_logits_processor = xgr.contrib.hf.LogitsProcessor(compiled_grammar)
     generated_ids = model.generate(
         **model_inputs, max_new_tokens=512, logits_processor=[xgr_logits_processor]
