@@ -80,10 +80,12 @@ def apply_token_bitmask_inplace(
     (batch_size, vocab_size) and (batch_size, bitmask_size) respectively. bitmask_size =
     ceil(vocab_size / 32). The operation is
 
-    for i in range(batch_size):
-        for j in range(vocab_size):
-            if (get_bitmask_value(bitmask[i], j)):
-                logits[indices[i], j] = -inf
+    .. code:: python
+
+        for i in range(batch_size):
+            for j in range(vocab_size):
+                if get_bitmask_value(bitmask, i, j) == 0:
+                    logits[indices[i], j] = -inf
 
     get_bitmask_value(bitmask, j) gets the j-th bit of the bitmask.
 
@@ -92,10 +94,12 @@ def apply_token_bitmask_inplace(
     of logits and bitmask should be (batch_size, vocab_size) and (len(indices), bitmask_size)
     respectively. The operation will be
 
-    for i in range(len(indices)):
-        for j in range(vocab_size):
-            if (get_bitmask_value(bitmask[i], j)):
-                logits[indices[i], j] = -inf
+    .. code:: python
+
+        for i in range(len(indices)):
+            for j in range(vocab_size):
+                if get_bitmask_value(bitmask, i, j) == 0:
+                    logits[indices[i], j] = -inf
 
     The logits and bitmask should be on the same device. If both them are on CUDA, we launch a CUDA
     kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The CUDA kernel
@@ -216,11 +220,7 @@ class GrammarMatcher(XGRObject):
         index : int, default: 0
             The batch id of the bitmask.
         """
-        if bitmask.device.type != "cpu":
-            raise ValueError("bitmask should be on CPU.")
-        if bitmask.dtype != bitmask_dtype:
-            raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
-        self._handle.fill_next_token_bitmask(bitmask.data_ptr(), list(bitmask.shape), index)
+        self._handle.fill_next_token_bitmask(bitmask, index)
 
     def find_jump_forward_string(self) -> str:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that
