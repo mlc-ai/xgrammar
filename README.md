@@ -8,7 +8,7 @@
 **Efficient, Flexible and Portable Structured Generation**
 
 
-[Get Started](#get-started) | [Documentation](https://xgrammar.mlc.ai/docs/) | [Blogpost](https://blog.mlc.ai/2024/11/22/achieving-efficient-flexible-portable-structured-generation-with-xgrammar)
+[Get Started](#get-started) | [Documentation](https://xgrammar.mlc.ai/docs/) | [Blogpost](https://blog.mlc.ai/2024/11/22/achieving-efficient-flexible-portable-structured-generation-with-xgrammar) | [Technical Report](https://github.com/mlc-ai/blog/blob/main/pdf/xgrammar-paper.pdf)
 
 </div>
 
