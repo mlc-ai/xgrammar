@@ -159,7 +159,7 @@ def test_token_operations():
 
 
 @pytest.mark.parametrize("is_cuda", (True, False))
-def test_apply_token_bitmask_inplace(is_cuda):
+def test_apply_token_bitmask_inplace(is_cuda: bool):
     neginf = float("-inf")
     bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
     logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], dtype=torch.float32)
@@ -186,17 +186,12 @@ batch_size_vocab_size_masked_cnt_stride = [
     (64, 128000, 120000, 4),
 ]
 
-batch_size_vocab_size_masked_cnt_stride_cuda = []
-
-for is_cuda in [True, False]:
-    for item in batch_size_vocab_size_masked_cnt_stride:
-        batch_size_vocab_size_masked_cnt_stride_cuda.append(item + (is_cuda,))
-
 
 @pytest.mark.parametrize(
-    "batch_size, vocab_size, masked_cnt, stride, is_cuda",
-    batch_size_vocab_size_masked_cnt_stride_cuda,
+    "batch_size, vocab_size, masked_cnt, stride",
+    batch_size_vocab_size_masked_cnt_stride,
 )
+@pytest.mark.parametrize("is_cuda", (True, False))
 def test_apply_token_bitmask_inplace_large(
     batch_size: int, vocab_size: int, masked_cnt: int, stride: int, is_cuda: bool
 ):
