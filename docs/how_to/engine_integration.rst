@@ -49,7 +49,7 @@ logits. To be safe, always pass in the former when instantiating ``xgr.Tokenizer
 .. code:: python
 
   # Get tokenizer info
-  model_id = "meta-llama/Llama-3.2-1B-Instruct"
+  model_id = "Qwen/Qwen2.5-0.5B-Instruct"
   tokenizer = AutoTokenizer.from_pretrained(model_id)
   config = AutoConfig.from_pretrained(model_id)
   # This can be larger than tokenizer.vocab_size due to paddings
@@ -174,7 +174,7 @@ to generate a valid JSON.
   from transformers import AutoTokenizer, AutoConfig
 
   # Get tokenizer info
-  model_id = "meta-llama/Llama-3.2-1B-Instruct"
+  model_id = "Qwen/Qwen2.5-0.5B-Instruct"
   tokenizer = AutoTokenizer.from_pretrained(model_id)
   config = AutoConfig.from_pretrained(model_id)
   # This can be larger than tokenizer.vocab_size due to paddings
