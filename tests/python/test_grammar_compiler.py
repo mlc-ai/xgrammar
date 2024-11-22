@@ -40,11 +40,13 @@ def test_compiled_grammar():
     check_matcher(matcher_2)
 
 
-def test_grammar_compiler_json():
+# Test max_threads=1 since we have a special logic to avoid using ThreadPool and mutex
+@pytest.mark.parametrize("max_threads", (8, 1))
+def test_grammar_compiler_json(max_threads):
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     time_start = time.monotonic_ns()
-    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=max_threads)
     time_end = time.monotonic_ns()
     print(f"Time to init cached grammar compiler: {(time_end - time_start) / 1e3} us")
 

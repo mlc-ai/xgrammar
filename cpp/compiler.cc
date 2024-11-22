@@ -238,12 +238,12 @@ CompiledGrammar MultiThreadCompileGrammar(
   // TODO(Charlie): Figure out how to support ThreadPool and std::mutex in WebAssembly.
   // Only declare ThreadPool and mutex if max_threads > 1, so when max_threads = 1, we do
   // not need ThreadPool or std::mutex, which throws error in runtime in WebAssembly.
-  std::unique_ptr<ThreadPool> thread_pool;
-  std::unique_ptr<std::mutex> adaptive_token_mask_cache_mutex;
+  std::optional<ThreadPool> thread_pool;
+  std::optional<std::mutex> adaptive_token_mask_cache_mutex;
 
   if (max_threads > 1) {
-    thread_pool = std::make_unique<ThreadPool>(max_threads);
-    adaptive_token_mask_cache_mutex = std::make_unique<std::mutex>();
+    thread_pool.emplace(max_threads);
+    adaptive_token_mask_cache_mutex.emplace();
   }
 
   auto root_rule_id = grammar->GetRootRuleId();
@@ -302,8 +302,10 @@ CompiledGrammar MultiThreadCompileGrammar(
         };
         // Execute depending on whether we use thread_pool
         if (max_threads > 1) {
-          thread_pool->Execute([process_element, mutex_ptr = adaptive_token_mask_cache_mutex.get()](
-                               ) { process_element(mutex_ptr); });
+          thread_pool->Execute([process_element,
+                                mutex_ptr = &adaptive_token_mask_cache_mutex.value()]() {
+            process_element(mutex_ptr);
+          });
         } else {
           process_element(nullptr);
         }
