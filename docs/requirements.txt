@@ -7,3 +7,6 @@ sphinxcontrib_httpdomain==1.8.1
 sphinxcontrib-napoleon==0.7
 sphinx-reredirects==0.1.2
 autodocsumm
+pydantic
+torch
+transformers
