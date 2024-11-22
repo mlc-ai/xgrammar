@@ -97,8 +97,8 @@ as we will see in :ref:`how-to-engine-integration-batched`.
   # Instantiate grammar matcher with the compiled grammar
   matcher = xgr.GrammarMatcher(compiled_grammar)
 
-Auto-regressive Generation with xgr.GrammarMatcher
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Bitmasking Logits in Auto-regressive Generation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Now we simulate a single-request auto-regressive generation. See later section for
 :ref:`how-to-engine-integration-batched`.

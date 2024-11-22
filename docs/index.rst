@@ -30,6 +30,7 @@ Check out :ref:`quick-start` for quick start examples of using XGrammar.
    how_to/json_generation.rst
    how_to/ebnf_guided_generation.rst
    how_to/engine_integration.rst
+   how_to/portable_api.rst
    .. tutorials/web_sdk.rst              .. TODO
 
 
