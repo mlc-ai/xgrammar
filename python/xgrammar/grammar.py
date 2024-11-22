@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""The main functionality of XGrammar. The functions here are Python bindings of the C++ logic."""
+"""This module provides classes representing grammars."""
 
 import json
 from typing import Optional, Tuple, Type, Union
@@ -25,23 +25,15 @@ from .base import XGRObject, _core
 
 
 class Grammar(XGRObject):
-    """This class represents a grammar object in the Backus-Naur Form (BNF). User should provide a
-    BNF/EBNF (Extended Backus-Naur Form) grammar. The provided grammar is optimized for LLM
-    generation. This class is printable and serializable.
+    """This class represents a grammar object in XGrammar, and can be used later in the
+    grammar-guided generation.
 
-    Parameters
-    ----------
-    ebnf_string : str
-        The grammar string in EBNF format. It should follow the format in
-        https://www.w3.org/TR/xml/#sec-notation.
+    The Grammar object supports context-free grammar (CFG). EBNF (extended Backus-Naur Form) is
+    used as the format of the grammar. There are many specifications for EBNF in the literature,
+    and we follow the specification of GBNF (GGML BNF) in
+    https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.
 
-        Note:
-        1. Use # as the comment mark
-        2. Use C-style unicode escape sequence \u01AB, \U000001AB, \xAB
-        3. A-B (match A and not match B) is not supported
-
-    root_rule_name : str, default: "root"
-        The name of the root rule in the grammar.
+    When printed, the grammar will be converted to GBNF format.
     """
 
     def __str__(self) -> str:
@@ -56,6 +48,17 @@ class Grammar(XGRObject):
 
     @staticmethod
     def from_ebnf(ebnf_string: str, *, root_rule_name: str = "root") -> "Grammar":
+        """Construct a grammar from EBNF string. The EBNF string should follow the format
+        in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.
+
+        Parameters
+        ----------
+        ebnf_string : str
+            The grammar string in EBNF format.
+
+        root_rule_name : str, default: "root"
+            The name of the root rule in the grammar.
+        """
         return Grammar._create_from_handle(_core.Grammar.from_ebnf(ebnf_string, root_rule_name))
 
     @staticmethod
@@ -66,12 +69,14 @@ class Grammar(XGRObject):
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
     ) -> "Grammar":
-        """Construct a BNF grammar from JSON schema. Pydantic model can be used to specify the
-        schema.
+        """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
+        used to specify the schema.
 
         The format of the JSON schema can be specified with the `indent` and `separators`
         parameters. The meaning and the default values of the parameters follows the convention in
         json.dumps().
+
+        It internally converts the JSON schema to a EBNF grammar.
 
         Parameters
         ----------
@@ -97,7 +102,7 @@ class Grammar(XGRObject):
         Returns
         -------
         grammar : Grammar
-            The generated BNF grammar.
+            The constructed grammar.
         """
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             schema = json.dumps(schema.model_json_schema())
@@ -109,7 +114,7 @@ class Grammar(XGRObject):
     @staticmethod
     def builtin_json_grammar() -> "Grammar":
         """Get the grammar of standard JSON. This is compatible with the official JSON grammar
-        in https://www.json.org/json-en.html.
+        specification in https://www.json.org/json-en.html.
 
         Returns
         -------

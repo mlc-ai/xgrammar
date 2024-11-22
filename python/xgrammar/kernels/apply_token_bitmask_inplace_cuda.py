@@ -23,7 +23,7 @@ import platform
 import shutil
 import time
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import torch
@@ -206,7 +206,7 @@ class KernelStore:
         return func
 
 
-def apply_token_bitmask_inplace(
+def apply_token_bitmask_inplace_cuda(
     logits: torch.Tensor,
     bitmask: torch.Tensor,
     indices: Optional[Union[List[int], torch.Tensor]] = None,

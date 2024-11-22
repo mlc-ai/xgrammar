@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""The main functionality of XGrammar. The functions here are Python bindings of the C++ logic."""
+"""Compiling grammar for efficient token mask generation."""
 
 import json
 from typing import Optional, Tuple, Type, Union, overload
@@ -27,21 +27,26 @@ from .tokenizer_info import TokenizerInfo
 
 
 class CompiledGrammar(XGRObject):
+    """This is the compiled result of a grammar with a certain tokenizer info. The compiled
+    result can be used to construct GrammarMatcher to generate token masks efficiently.
+    """
+
     @property
     def grammar(self) -> Grammar:
-        """The BNF grammar."""
+        """The original grammar."""
         return Grammar._create_from_handle(self._handle.grammar)
 
     @property
     def tokenizer_info(self) -> TokenizerInfo:
-        """The tokenizer info."""
+        """The tokenizer info associated with the compiled grammar."""
         return TokenizerInfo._create_from_handle(self._handle.tokenizer_info)
 
 
 class GrammarCompiler(XGRObject):
-    """The cache for the grammar matcher initialization context. It is for eliminating the overhead
-    of constructing the CompiledGrammar of the same grammar for many times. This cache
-    is tokenizer-specific, i.e. different tokenizers should have different caches.
+    """The compiler for grammars. It is associated with a certain tokenizer info, and compiles
+    grammars into CompiledGrammar with the tokenizer info. It allows parallel compilation with
+    multiple threads, and has a cache to store the compilation result, avoiding compiling the
+    same grammar multiple times.
 
     Parameters
     ----------
@@ -50,6 +55,9 @@ class GrammarCompiler(XGRObject):
 
     max_threads : int, default: 8
         The maximum number of threads used to compile the grammar.
+
+    cache_enabled : bool, default: True
+        Whether to enable the cache.
     """
 
     def __init__(
@@ -99,7 +107,7 @@ class GrammarCompiler(XGRObject):
         Returns
         -------
         compiled_grammar : CompiledGrammar
-            The initialization context for the grammar matcher.
+            The compiled grammar.
         """
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             schema = json.dumps(schema.model_json_schema())
@@ -114,20 +122,44 @@ class GrammarCompiler(XGRObject):
         Returns
         -------
         compiled_grammar : CompiledGrammar
-            The initialization context for the grammar matcher.
+            The compiled grammar.
         """
         return CompiledGrammar._create_from_handle(self._handle.compile_builtin_json_grammar())
 
     @overload
-    def compile_grammar(self, grammar: str, *, root_rule_name: str = "root") -> CompiledGrammar: ...
+    def compile_grammar(self, ebnf_string: str, *, root_rule_name: str = "root") -> CompiledGrammar:
+        """Compile a grammar from EBNF string. The EBNF string should follow the format
+        in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.
+
+        Parameters
+        ----------
+        ebnf_string : str
+            The grammar string in EBNF format.
+
+        root_rule_name : str, default: "root"
+            The name of the root rule in the grammar.
+
+        Returns
+        -------
+        compiled_grammar : CompiledGrammar
+            The compiled grammar.
+        """
+        ...
 
     @overload
-    def compile_grammar(self, grammar: Grammar) -> CompiledGrammar: ...
+    def compile_grammar(self, grammar: Grammar) -> CompiledGrammar:
+        """Compile a grammar object.
+
+        Returns
+        -------
+        compiled_grammar : CompiledGrammar
+            The compiled grammar.
+        """
+        ...
 
     def compile_grammar(
         self, grammar: Union[str, Grammar], *, root_rule_name: str = "root"
     ) -> CompiledGrammar:
-        """Compile a BNF grammar."""
         if isinstance(grammar, str):
             grammar = Grammar.from_ebnf(grammar, root_rule_name=root_rule_name)
         return CompiledGrammar._create_from_handle(self._handle.compile_grammar(grammar._handle))

@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""The main functionality of XGrammar. The functions here are Python bindings of the C++ logic."""
+"""This module provides classes to handle C++ objects from pybind11."""
 
 from . import xgrammar_bindings as _core
 
@@ -23,15 +23,13 @@ class XGRObject:
     """The base class for all objects in XGrammar. This class provides methods to handle the
     C++ handle from pybind11.
 
-    The handle should be initialized in the __init__ method of the subclasses via the
-    _init_handle method or the _create_from_handle method, and should not be modified
-    afterwards. Subclasses should use the _handle property to access the handle, instead
-    of accessing the __handle attribute directly. When comparing two objects, the equality
-    is checked by comparing the C++ handles.
+    In subclasses, the handle should be initialized via the the _create_from_handle, or via
+    the _init_handle method called within the __init__ method, and should not be modified
+    afterwards. Subclasses should use the _handle property to access the handle. When comparing
+    two objects, the equality is checked by comparing the C++ handles.
 
-    For performance considerations, objects in XGrammar should be lightweight and only
-    maintain a handle to the C++ objects. Heavy operations should be performed on the C++
-    side.
+    For performance considerations, objects in XGrammar should be lightweight and only maintain
+    a handle to the C++ objects. Heavy operations should be performed on the C++ side.
     """
 
     @classmethod
@@ -56,8 +54,8 @@ class XGRObject:
         return obj
 
     def _init_handle(self, handle):
-        """Initialize an object with a handle. This method should be called to init the C++ handle
-        in the __init__ method of the subclasses of XGRObject.
+        """Initialize an object with a handle. This method should be called in the __init__
+        method of the subclasses of XGRObject to initialize the C++ handle.
 
         Parameters
         ----------

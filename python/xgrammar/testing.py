@@ -34,7 +34,7 @@ def _json_schema_to_ebnf(
     separators: Optional[Tuple[str, str]] = None,
     strict_mode: bool = True,
 ) -> str:
-    """Convert JSON schema string to EBNF grammar string. For test purposes.
+    """Convert JSON schema string to BNF grammar string. For test purposes.
 
     Parameters
     ----------
@@ -59,8 +59,8 @@ def _json_schema_to_ebnf(
 
     Returns
     -------
-    ebnf_string : str
-        The EBNF grammar string.
+    bnf_string : str
+        The BNF grammar string.
     """
     return _core.testing._json_schema_to_ebnf(
         schema,
@@ -71,7 +71,7 @@ def _json_schema_to_ebnf(
 
 
 def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
-    r"""Convert a regex string to EBNF grammar string. For test purposes. The regex grammar
+    r"""Convert a regex string to BNF grammar string. For test purposes. The regex grammar
     follows the syntax in JavaScript (ECMA 262). Check
     https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions
     for a tutorial. Currently the following features are not supported:
@@ -91,8 +91,8 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
 
     Returns
     -------
-    ebnf_string : str
-        The EBNF grammar string converted from the input regex.
+    bnf_string : str
+        The BNF grammar string converted from the input regex.
     """
     return _core.testing._regex_to_ebnf(regex, with_rule_name)
 

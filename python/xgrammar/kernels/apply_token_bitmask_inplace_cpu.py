@@ -1,7 +1,8 @@
 """CPU implementation for in-place applying token mask."""
 
+from typing import List, Optional, Union
+
 import torch
-from typing import Optional, Union, List
 
 
 def _bitmask_to_bool_mask(bitmask: torch.Tensor, vocab_size: int) -> torch.Tensor:
