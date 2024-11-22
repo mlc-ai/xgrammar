@@ -1,4 +1,4 @@
-import { BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo } from "./xgrammar"
+import { Grammar, GrammarCompiler, CompiledGrammar, GrammarMatcher, TokenizerInfo, Testings } from "./xgrammar"
 
-export { BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo }
-export default { BNFGrammar, BuiltinGrammar, GrammarMatcher, TokenizerInfo }
+export { Grammar, GrammarCompiler, CompiledGrammar, GrammarMatcher, TokenizerInfo, Testings }
+export default { Grammar, GrammarCompiler, CompiledGrammar, GrammarMatcher, TokenizerInfo, Testings }
