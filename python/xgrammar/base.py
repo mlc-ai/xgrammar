@@ -16,6 +16,8 @@
 # under the License.
 """This module provides classes to handle C++ objects from pybind11."""
 
+import os
+
 if os.environ.get("XGRAMMAR_BUILD_DOCS") != "1":
     from . import xgrammar_bindings as _core
 else:
