@@ -24,11 +24,12 @@ Check out :ref:`quick-start` for quick start examples of using XGrammar.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Tutorials
+   :caption: How To
    :hidden:
 
-   tutorials/structured_generation.rst
-   .. tutorials/backend_integration.rst  .. TODO
+   how_to/json_generation.rst
+   how_to/ebnf_guided_generation.rst
+   how_to/engine_integration.rst
    .. tutorials/web_sdk.rst              .. TODO
 
 

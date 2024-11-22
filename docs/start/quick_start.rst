@@ -23,7 +23,7 @@ Instantiate a model, a tokenizer, and inputs.
     from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 
     device = "cuda"  # Or "cpu", etc.
-    model_name = "meta-llama/Llama-3.1-8B-Instruct"
+    model_name = "meta-llama/Llama-3.2-1B-Instruct"
     model = AutoModelForCausalLM.from_pretrained(
         model_name, torch_dtype=torch.float32, device_map=device
     )
@@ -75,5 +75,5 @@ Use logits_processor to generate with grammar.
 What to Do Next
 ---------------
 
-- Check out :ref:`tutorial-structured-generation` for the detailed usage guide of XGrammar.
+- Check out :ref:`how-to-json-generation` and other How-To guides for the detailed usage guide of XGrammar.
 - Report any problem or ask any question: open new issues in our `GitHub repo <https://github.com/mlc-ai/xgrammar/issues>`_.
