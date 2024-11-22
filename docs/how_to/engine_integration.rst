@@ -49,7 +49,7 @@ logits. To be safe, always pass in the former when instantiating ``xgr.Tokenizer
 .. code:: python
 
   # Get tokenizer info
-  model_id = "Qwen/Qwen2.5-0.5B-Instruct"
+  model_id = "meta-llama/Llama-3.2-1B-Instruct"
   tokenizer = AutoTokenizer.from_pretrained(model_id)
   config = AutoConfig.from_pretrained(model_id)
   # This can be larger than tokenizer.vocab_size due to paddings
@@ -120,8 +120,8 @@ for the next generation.
 .. code:: python
 
   # Here we simulate a valid sampled response
-  sim_sampled_response = '{ "library": "xgrammar" }<|endoftext|>'
-  sim_sampled_token_ids = tokenizer.encode(sim_sampled_response)
+  sim_sampled_response = '{ "library": "xgrammar" }<|end_of_text|>'
+  sim_sampled_token_ids = tokenizer.encode(sim_sampled_response, add_special_tokens=False)
 
   # Allocate a token bitmask
   token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
@@ -147,7 +147,7 @@ for the next generation.
       # assert matcher.accept_token(next_token_id)
       assert matcher.accept_token(sim_token_id)
 
-  # Since we accepted a stop token `<|endoftext|>`, we have terminated
+  # Since we accepted a stop token `<|end_of_text|>`, we have terminated
   assert matcher.is_terminated()
 
   # Reset to be ready for the next auto-regressive generation
@@ -174,7 +174,7 @@ to generate a valid JSON.
   from transformers import AutoTokenizer, AutoConfig
 
   # Get tokenizer info
-  model_id = "Qwen/Qwen2.5-0.5B-Instruct"
+  model_id = "meta-llama/Llama-3.2-1B-Instruct"
   tokenizer = AutoTokenizer.from_pretrained(model_id)
   config = AutoConfig.from_pretrained(model_id)
   # This can be larger than tokenizer.vocab_size due to paddings
@@ -207,8 +207,11 @@ each request has its own ``xgr.GrammarMatcher`` to maintain.
 
 .. code:: python
 
-  sim_sampled_responses = ['{"name": "a"}<|endoftext|>', '{"name": "b"}<|endoftext|>']
-  sim_sampled_token_ids = [tokenizer.encode(response) for response in sim_sampled_responses]
+  sim_sampled_responses = ['{"name": "a"}<|end_of_text|>', '{"name": "b"}<|end_of_text|>']
+  sim_sampled_token_ids = [
+    tokenizer.encode(response, add_special_tokens=False)
+    for response in sim_sampled_responses
+  ]
 
   # Each loop iteration is a simulated auto-regressive step
   for loop_iter in range(len(sim_sampled_token_ids[0])):
@@ -237,7 +240,7 @@ each request has its own ``xgr.GrammarMatcher`` to maintain.
           matchers[i].accept_token(sim_sampled_token_ids[i][loop_iter])
 
   # In our simulated case, all requests should have terminated since we accepted
-  # a stop token `<|endoftext|>`
+  # a stop token `<|end_of_text|>`
   for i in range(batch_size):
       assert matchers[i].is_terminated()
       # Reset to be ready for the next generation

@@ -44,7 +44,7 @@ your choice.
 .. code:: python
 
   # Get tokenizer info
-  model_id = "Qwen/Qwen2.5-0.5B-Instruct"
+  model_id = "meta-llama/Llama-3.2-1B-Instruct"
   tokenizer = AutoTokenizer.from_pretrained(model_id)
   config = AutoConfig.from_pretrained(model_id)
   # This can be larger than tokenizer.vocab_size due to paddings
@@ -83,8 +83,8 @@ for batched inference.
 .. code:: python
 
   # Here we simulate a valid sampled response
-  sim_sampled_response = '(5+3)*2=16<|endoftext|>'
-  sim_sampled_token_ids = tokenizer.encode(sim_sampled_response)
+  sim_sampled_response = '(5+3)*2=16<|end_of_text|>'
+  sim_sampled_token_ids = tokenizer.encode(sim_sampled_response, add_special_tokens=False)
 
   # Each loop iteration is a simulated auto-regressive step
   for i, sim_token_id in enumerate(sim_sampled_token_ids):
@@ -107,7 +107,7 @@ for batched inference.
       # assert matcher.accept_token(next_token_id)
       assert matcher.accept_token(sim_token_id)
 
-  # Since we accepted a stop token `<|endoftext|>`, we have terminated
+  # Since we accepted a stop token `<|end_of_text|>`, we have terminated
   assert matcher.is_terminated()
 
   # Reset to be ready for the next auto-regressive generation
