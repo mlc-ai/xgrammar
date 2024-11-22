@@ -44,7 +44,7 @@ Construct a ``GrammarCompiler`` and compile the grammar.
 
 The grammar can be a built-in JSON grammar, a JSON schema string, or an EBNF string. EBNF provides
 more flexibility for customization. See
-`llama.cpp grammars <https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md>`.
+`llama.cpp grammars <https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md>`_.
 
 .. code:: python
 
