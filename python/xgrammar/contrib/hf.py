@@ -74,8 +74,6 @@ class LogitsProcessor(transformers.LogitsProcessor):
                 "Expect input_ids.shape[0] to be LogitsProcessor.batch_size."
                 + f"Got {input_ids.shape[0]} for the former, and {self.batch_size} for the latter."
             )
-        if scores.device.type != "cuda":
-            raise RuntimeError("logits must be on CUDA")
 
         if not self.prefilled:
             # Have not sampled a token yet

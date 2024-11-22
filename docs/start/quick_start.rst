@@ -6,44 +6,47 @@ Quick Start
 Example
 -------
 
+The easiest way of trying out XGrammar is to use the ``transformers`` library in Python. 
 After :ref:`installing XGrammar <installation>`, run the following example to see how XGrammar enables
 structured generation -- a JSON in this case.
 
 .. code:: python
 
-    import xgrammar as xgr
+    from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
     import torch
-    from transformers import AutoTokenizer, AutoConfig
+    import xgrammar as xgr
 
-    # Get tokenizer info
-    model_id = "Qwen/Qwen2.5-1.5B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    config = AutoConfig.from_pretrained(model_id)
-    # This can be larger than tokenizer.vocab_size due to paddings
-    full_vocab_size = config.vocab_size
-    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=full_vocab_size)
+    device = "cuda"  # Or "cpu", etc.
+    # 0. Instantiate with any HF model you want
+    model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+    # model_name = "microsoft/Phi-3.5-mini-instruct"
+    # model_name = "meta-llama/Llama-3.2-1B-Instruct"
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name, torch_dtype=torch.float32, device_map=device
+    )
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    config = AutoConfig.from_pretrained(model_name)
 
-    # Compile a JSON grammar
-    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
-    compiled_grammar: xgr.CompiledGrammar = compiler.compile_builtin_json_grammar()
+    # 1. Compile grammar (NOTE: you can substitute this with other grammars like EBNF, JSON Schema)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+    compiled_grammar = grammar_compiler.compile_builtin_json_grammar()
 
-    # Instantiate grammar matcher and allocate the bitmask
-    matcher = xgr.GrammarMatcher(compiled_grammar)
-    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    # 2. Prepare inputs
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Introduce yourself in JSON briefly."},
+    ]
+    texts = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    model_inputs = tokenizer(texts, return_tensors="pt").to(model.device)
 
-    # Each loop iteration is a simulated auto-regressive step. Here we use
-    # simulated logits and sampled tokens. In real application, use XGrammar
-    # in a LLM generation loop and sample with the masked logits.
-    sim_sampled_response = '{ "library": "xgrammar" }<|endoftext|>'
-    sim_sampled_token_ids = tokenizer.encode(sim_sampled_response)
-    for i, sim_token_id in enumerate(sim_sampled_token_ids):
-        logits = torch.randn(full_vocab_size).cuda()
-        matcher.fill_next_token_bitmask(token_bitmask)
-        xgr.apply_token_bitmask_inplace(logits, token_bitmask.to(logits.device))
-        assert matcher.accept_token(sim_token_id)
-
-    assert matcher.is_terminated()
-    matcher.reset()
+    # 3. Instantiate logits_processor per each generate, generate, and print response
+    xgr_logits_processor = xgr.contrib.hf.LogitsProcessor(compiled_grammar)
+    generated_ids = model.generate(
+        **model_inputs, max_new_tokens=512, logits_processor=[xgr_logits_processor]
+    )
+    generated_ids = generated_ids[0][len(model_inputs.input_ids[0]) :]
+    print(tokenizer.decode(generated_ids, skip_special_tokens=True))
 
 
 What to Do Next

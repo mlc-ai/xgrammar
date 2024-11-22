@@ -3,20 +3,20 @@ This example demonstrates how to use XGrammar in Huggingface's transformers, int
 a minimal LogitsProcessor.
 """
 
-import xgrammar as xgr
-import torch
-
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
+import torch
+import xgrammar as xgr
 
+device = "cuda"
+# device = "cpu"
 
-# 0. Instantiate model
-# Or any HF model you want
+# 0. Instantiate with any HF model you want
 model_name = "Qwen/Qwen2.5-0.5B-Instruct"
 # model_name = "microsoft/Phi-3.5-mini-instruct"
 # model_name = "meta-llama/Llama-3.2-1B-Instruct"
 
 model = AutoModelForCausalLM.from_pretrained(
-    model_name, torch_dtype=torch.float32, device_map="auto"
+    model_name, torch_dtype=torch.float32, device_map=device
 )
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 config = AutoConfig.from_pretrained(model_name)

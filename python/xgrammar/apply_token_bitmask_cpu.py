@@ -50,7 +50,7 @@ def apply_token_bitmask_inplace_cpu(
             logits.masked_fill_(~bool_mask, -float("inf"))
         else:
             if not isinstance(indices, torch.Tensor):
-                indices = torch.tensor(indices, dtype=torch.long, device=logits.device)
+                indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
             len_indices = len(indices)
             if len_indices != bitmask.size(0):
                 raise ValueError("The length of indices and bitmask's batch size must match.")

@@ -30,6 +30,8 @@ from .apply_token_bitmask_cpu import apply_token_bitmask_inplace_cpu
 
 bitmask_dtype = torch.int32
 
+is_cuda_available = torch.cuda.is_available()
+
 
 def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
     """Return the shape of the bitmask (batch_size, ceil(vocab_size / 32))"""
@@ -45,7 +47,7 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
         return torch.empty(
             xgr.get_bitmask_shape(batch_size, vocab_size),
             dtype=xgr.bitmask_dtype,
-            pin_memory=True,
+            pin_memory=torch.cuda.is_available(),
         )
 
     Parameters
@@ -63,12 +65,13 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
 
     Note
     ----
-    This is the default way of allocating a bitmask. You can also customize the implementation.
+    - This is the default way of allocating a bitmask. You can also customize the implementation.
+    - For CUDA, use `pin_memory` in `torch.empty()` to speed up data transfer from CPU to GPU.
     """
     return torch.empty(
         get_bitmask_shape(batch_size, vocab_size),
         dtype=bitmask_dtype,
-        pin_memory=True,
+        pin_memory=is_cuda_available,
     )
 
 
