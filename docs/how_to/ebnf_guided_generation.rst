@@ -169,7 +169,7 @@ Then construct a ``GrammarCompiler`` and compile the grammar.
   basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
   ws ::= [ \n\t]*
   """
-  compiled_grammar = compiler.compile_json_schema(json_grammar_ebnf)
+  compiled_grammar = grammar_compiler.compile_grammar(json_grammar_ebnf_str)
 
 
 Finally, use ``LogitsProcessor`` to generate with grammar.

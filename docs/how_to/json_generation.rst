@@ -110,7 +110,7 @@ for batched inference.
 .. code:: python
 
   # Here we simulate a valid sampled response
-  sim_sampled_response = '{ "library": "xgrammar" }<|end_of_text|>'
+  sim_sampled_response = '{"name": "xgrammar", "age": 0}<|end_of_text|>'
   sim_sampled_token_ids = tokenizer.encode(sim_sampled_response, add_special_tokens=False)
 
   # Each loop iteration is a simulated auto-regressive step
@@ -190,7 +190,7 @@ Then construct a ``GrammarCompiler`` and compile the grammar.
       name: str
       age: int
 
-  compiled_grammar = compiler.compile_json_schema(Person)
+  compiled_grammar = grammar_compiler.compile_json_schema(Person)
 
 
 Finally, use ``LogitsProcessor`` to generate with grammar.
