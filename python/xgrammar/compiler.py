@@ -27,8 +27,15 @@ from .tokenizer_info import TokenizerInfo
 
 
 class CompiledGrammar(XGRObject):
-    """This is the compiled result of a grammar with a certain tokenizer info. The compiled
-    result can be used to construct GrammarMatcher to generate token masks efficiently.
+    """This is the primary object to store compiled grammar.
+
+    A CompiledGrammar can be used to construct GrammarMatcher
+    to generate token masks efficiently.
+
+    Note
+    ----
+    Do not construct this class directly, instead
+    use :class:`GrammarCompiler` to construct the object.
     """
 
     @property

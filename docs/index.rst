@@ -30,3 +30,11 @@ Check out :ref:`quick-start` for quick start examples of using MLC LLM.
    tutorials/structured_generation.rst
    .. tutorials/backend_integration.rst  .. TODO
    .. tutorials/web_sdk.rst              .. TODO
+
+
+.. toctree::
+   :maxdepth: 1
+   :caption: API Reference
+   :hidden:
+
+   api/python/index

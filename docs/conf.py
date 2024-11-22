@@ -6,6 +6,7 @@ import tlcpack_sphinx_addon
 
 # -- General configuration ------------------------------------------------
 
+os.environ["XGRAMMAR_BUILD_DOCS"] = "1"
 sys.path.insert(0, os.path.abspath("../python"))
 sys.path.insert(0, os.path.abspath("../"))
 autodoc_mock_imports = ["torch"]
@@ -25,8 +26,10 @@ extensions = [
     "sphinx_toolbox.collapse",
     "sphinxcontrib.httpdomain",
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx_reredirects",
+    "autodocsumm",
 ]
 
 redirects = {}
@@ -73,11 +76,7 @@ header_links = [
 header_dropdown = {
     "name": "Other Resources",
     "items": [
-        ("MLC Course", "https://mlc.ai/"),
         ("MLC Blog", "https://blog.mlc.ai/"),
-        ("MLC LLM", "https://llm.mlc.ai/"),
-        ("Web LLM", "https://webllm.mlc.ai/"),
-        ("SGLang", "https://github.com/sgl-project/sglang"),
     ],
 }
 
@@ -96,6 +95,7 @@ html_context = {
     # "version_selecter": "",
 }
 
+import xgrammar
 
 # add additional overrides
 templates_path += [tlcpack_sphinx_addon.get_templates_path()]
