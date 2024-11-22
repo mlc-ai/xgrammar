@@ -23,7 +23,7 @@ import platform
 import shutil
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Union
 
 import numpy as np
 import torch
@@ -207,7 +207,9 @@ class KernelStore:
 
 
 def apply_token_bitmask_inplace(
-    logits: torch.Tensor, bitmask: torch.Tensor, indices: Optional[torch.Tensor] = None
+    logits: torch.Tensor,
+    bitmask: torch.Tensor,
+    indices: Optional[Union[List[int], torch.Tensor]] = None,
 ):
     time_start = time.monotonic_ns()
     if cuda is None or cudart is None or nvrtc is None:
