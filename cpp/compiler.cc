@@ -264,8 +264,7 @@ CompiledGrammar MultiThreadCompileGrammar(
         }
         // Define the per-element processing logic for code reuse between
         // using thread_pool and not using thread_pool
-        auto process_element = [&, rule_id, sequence_id, element_id, element](std::mutex* mutex_ptr
-                               ) {
+        auto process_element = [&, rule_id, sequence_id, element_id, element]() {
           auto add_adaptive_token_mask = [&](const RulePosition& rule_position) {
             auto grammar_matcher = GrammarMatcherForCompiler(grammar, rule_position);
             auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
@@ -273,8 +272,8 @@ CompiledGrammar MultiThreadCompileGrammar(
                 tokenizer_info.GetSortedDecodedVocab(),
                 rule_id != root_rule_id
             );
-            if (mutex_ptr) {
-              std::lock_guard<std::mutex> lock(*mutex_ptr);
+            if (max_threads > 1) {
+              std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
               compiled_grammar_impl->adaptive_token_mask_cache[rule_position] =
                   cur_adaptive_token_mask_cache;
             } else {
@@ -302,12 +301,9 @@ CompiledGrammar MultiThreadCompileGrammar(
         };
         // Execute depending on whether we use thread_pool
         if (max_threads > 1) {
-          thread_pool->Execute([process_element,
-                                mutex_ptr = &adaptive_token_mask_cache_mutex.value()]() {
-            process_element(mutex_ptr);
-          });
+          thread_pool->Execute([process_element]() { process_element(); });
         } else {
-          process_element(nullptr);
+          process_element();
         }
       }
     }
