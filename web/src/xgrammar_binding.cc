@@ -51,7 +51,7 @@ TokenizerInfo TokenizerInfo_Init(
 }
 
 GrammarMatcher GrammarMatcher_Init(
-    const Grammar& grammar,
+    const BNFGrammar& grammar,
     const TokenizerInfo& tokenizer_info,
     std::optional<std::vector<int>> override_stop_tokens,
     bool terminate_without_stop_token,
@@ -70,7 +70,7 @@ GrammarMatcher GrammarMatcher_Init(
 /*!
  * \brief Finds the next token bitmask of the matcher.
  */
-std::vector<int32_t> GrammarMatcher_FillNextTokenBitmask(GrammarMatcher& matcher) {
+std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher) {
   // 1. Initialize std::vector result
   auto buffer_size = matcher.GetBitmaskSize();
   std::vector<int32_t> result(buffer_size);
@@ -94,7 +94,7 @@ std::vector<int32_t> GrammarMatcher_FillNextTokenBitmask(GrammarMatcher& matcher
  * \brief Return the list of rejected token IDs based on the bit mask.
  * \note This method is mainly used in testing, so performance is not as important.
  */
-std::vector<int> GrammarMatcher__DebugGetMaskedTokensFromBitmask(
+std::vector<int> GrammarMatcher_DebugGetMaskedTokensFromBitmask(
     std::vector<int32_t> token_bitmask, size_t vocab_size
 ) {
   // 1. Convert token_bitmask into DLTensor
@@ -110,7 +110,7 @@ std::vector<int> GrammarMatcher__DebugGetMaskedTokensFromBitmask(
   tensor.byte_offset = 0;
   // 2. Get rejected token IDs
   std::vector<int> result;
-  GrammarMatcher::_DebugGetMaskedTokensFromBitmask(tensor, vocab_size, &result);
+  GrammarMatcher::DebugGetMaskedTokensFromBitmask(tensor, vocab_size, &result);
   return result;
 }
 
@@ -144,12 +144,12 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   // Register view so we can read std::vector<int32_t> as Int32Array in JS without copying
   function("vecIntToView", &vecIntToView);
 
-  class_<Grammar>("Grammar")
+  class_<BNFGrammar>("BNFGrammar")
       .constructor<std::string, std::string>()
-      .smart_ptr<std::shared_ptr<Grammar>>("Grammar")
-      .class_function("Deserialize", &Grammar::Deserialize)
-      .function("ToString", &Grammar::ToString)
-      .function("Serialize", &Grammar::Serialize);
+      .smart_ptr<std::shared_ptr<BNFGrammar>>("BNFGrammar")
+      .class_function("Deserialize", &BNFGrammar::Deserialize)
+      .function("ToString", &BNFGrammar::ToString)
+      .function("Serialize", &BNFGrammar::Serialize);
 
   class_<BuiltinGrammar>("BuiltinGrammar")
       .class_function("JSON", &BuiltinGrammar::JSON)
@@ -167,13 +167,13 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("GetVocabSize", &GrammarMatcher::GetVocabSize)
       .function("GetMaxRollbackTokens", &GrammarMatcher::GetMaxRollbackTokens)
       .function("AcceptToken", &GrammarMatcher::AcceptToken)
-      .function("FillNextTokenBitmask", &GrammarMatcher_FillNextTokenBitmask)
+      .function("GetNextTokenBitmask", &GrammarMatcher_GetNextTokenBitmask)
       .class_function(
-          "_DebugGetMaskedTokensFromBitmask", &GrammarMatcher__DebugGetMaskedTokensFromBitmask
+          "DebugGetMaskedTokensFromBitmask", &GrammarMatcher_DebugGetMaskedTokensFromBitmask
       )
       .function("IsTerminated", &GrammarMatcher::IsTerminated)
       .function("Reset", &GrammarMatcher::Reset)
       .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
       .function("Rollback", &GrammarMatcher::Rollback)
-      .function("_AcceptString", &GrammarMatcher::_DebugAcceptString);
+      .function("_AcceptString", &GrammarMatcher::AcceptString);
 }

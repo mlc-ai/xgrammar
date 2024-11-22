@@ -1,4 +1,4 @@
-import Module from './xgrammar_binding';
+import Module from "./xgrammar_binding";
 
 let binding: any = null;
 
@@ -14,20 +14,20 @@ async function asyncInitBinding() {
  * Backus-Naur Form) grammar, and use from_ebnf_string to parse and simplify the grammar into an
  * AST of BNF grammar.
  */
-export class Grammar {
+export class BNFGrammar {
   handle: any;
 
   /**
    * @internal
    * Private constructor. Factory methods are used since binding initialization is asynchronous.
-   * @param {any} handle handle of Grammar created by binding.
+   * @param {any} handle handle of BNFGrammar created by binding.
    */
   constructor(handle: any) {
     this.handle = handle;
   }
 
   /**
-   * Dispose this Grammar.
+   * Dispose this BNFGrammar.
    */
   dispose() {
     this.handle.delete();
@@ -48,21 +48,21 @@ export class Grammar {
    * The assertion (=[a-z]) means a must be followed by [a-z].
    * @param {string} ebnfString The grammar string
    * @param {string} [rootRule="root"] The name of the root rule. Default: "root".
-   * @returns {Grammar} The parsed BNF grammar.
+   * @returns {BNFGrammar} The parsed BNF grammar.
    */
-  static async createGrammar(ebnfString: string, rootRule = 'root'): Promise<Grammar> {
+  static async createBNFGrammar(ebnfString: string, rootRule = "root"): Promise<BNFGrammar> {
     await asyncInitBinding();
-    return new Grammar(new binding.Grammar(ebnfString, rootRule));
+    return new BNFGrammar(new binding.BNFGrammar(ebnfString, rootRule));
   }
 
   /**
    * Load a BNF grammar from the raw representation of the AST in JSON format.
    * @param {string} json_string The JSON string.
-   * @returns {Grammar} The loaded BNF grammar.
+   * @returns {BNFGrammar} The loaded BNF grammar.
    */
-  static async deserialize(json_string: string): Promise<Grammar> {
+  static async deserialize(json_string: string): Promise<BNFGrammar> {
     await asyncInitBinding();
-    return new Grammar(binding.Grammar.Deserialize(json_string));
+    return new BNFGrammar(binding.BNFGrammar.Deserialize(json_string));
   }
 
   /**
@@ -87,11 +87,11 @@ export class Grammar {
 export class BuiltinGrammar {
   /**
    * Get the grammar of standard JSON.
-   * @returns {Grammar} The JSON grammar.
+   * @returns {BNFGrammar} The JSON grammar.
    */
-  static async json(): Promise<Grammar> {
+  static async json(): Promise<BNFGrammar> {
     await asyncInitBinding();
-    return new Grammar(new binding.BuiltinGrammar.JSON());
+    return new BNFGrammar(new binding.BuiltinGrammar.JSON());
   }
 
   /**
@@ -108,27 +108,29 @@ export class BuiltinGrammar {
    * @param {boolean} [strictMode=true] Whether to use strict mode. In strict mode, the generated
    * grammar will not allow properties and items that is not specified in the schema. This is
    * equivalent to setting unevaluatedProperties and unevaluatedItems to false.
-   * @returns {Grammar} The generated BNF grammar.
+   * @returns {BNFGrammar} The generated BNF grammar.
    */
   static async jsonSchema(
-      schema: string, indent = 2, separators?: [string, string], strictMode = true
-  ): Promise<Grammar> {
+    schema: string,
+    indent = 2,
+    separators?: [string, string],
+    strictMode = true
+  ): Promise<BNFGrammar> {
     // TODO(Charlie): Add support for separators, which requires binding std::pair
     // in emscripten
     if (separators !== undefined) {
       throw new Error(
-          `Argument separators is not supported yet, please leave it as undefined, and the ` +
-          `default value (",", ": ") will be used.`
+        `Argument separators is not supported yet, please leave it as undefined, and the ` +
+        `default value (",", ": ") will be used.`
       );
     }
     await asyncInitBinding();
     // indent being -1 is equivalent to not having a value for the std::optional arg in C++.
     // This is a workaround to Typescript not being able to express Optional value like Python; if
     // user specifies indent to be undefined, it still becomes 2.
-    let optionalIndent: number|undefined = indent == -1 ? undefined : indent;
-    return new Grammar(
-        new binding.BuiltinGrammar.JSONSchema(schema, optionalIndent, separators, strictMode)
-    );
+    let optionalIndent: number | undefined = indent == -1 ? undefined : indent;
+    return new BNFGrammar(
+      new binding.BuiltinGrammar.JSONSchema(schema, optionalIndent, separators, strictMode));
   }
 
   /**
@@ -147,21 +149,24 @@ export class BuiltinGrammar {
    * @returns {string} The EBNF grammar string.
    */
   static async _jsonSchemaToEBNF(
-      schema: string, indent = 2, separators?: [string, string], strictMode = true
+    schema: string,
+    indent = 2,
+    separators?: [string, string],
+    strictMode = true
   ): Promise<string> {
     // TODO(Charlie): Add support for separators, which requires binding std::pair
     // in emscripten
     if (separators !== undefined) {
       throw new Error(
-          `Argument separators is not supported yet, please leave it as undefined, and the ` +
-          `default value (",", ": ") will be used.`
+        `Argument separators is not supported yet, please leave it as undefined, and the ` +
+        `default value (",", ": ") will be used.`
       );
     }
     await asyncInitBinding();
     // indent being -1 is equivalent to not having a value for the std::optional arg in C++.
     // This is a workaround to Typescript not being able to express Optional value like Python; if
     // user specifies indent to be undefined, it still becomes 2.
-    let optionalIndent: number|undefined = indent == -1 ? undefined : indent;
+    let optionalIndent: number | undefined = indent == -1 ? undefined : indent;
     return binding.BuiltinGrammar._JSONSchemaToEBNF(schema, optionalIndent, separators, strictMode);
   }
 }
@@ -211,18 +216,18 @@ export class TokenizerInfo {
    * for its semantic.
    */
   static async createTokenizerInfo(
-      encodedVocab: string[],
-      vocabType: string,
-      prependSpaceInTokenization: boolean,
+    encodedVocab: string[],
+    vocabType: string,
+    prependSpaceInTokenization: boolean,
   ): Promise<TokenizerInfo> {
     await asyncInitBinding();
     // Convert string[] to std::vector<std::string>
     const encodedVocabVec = binding.vecStringFromJSArray(encodedVocab);
     // Instantiate TokenizerInfo
     return new TokenizerInfo(new binding.TokenizerInfo(
-        encodedVocabVec,
-        vocabType.toUpperCase(),
-        prependSpaceInTokenization,
+      encodedVocabVec,
+      vocabType.toUpperCase(),
+      prependSpaceInTokenization,
     ));
   }
 }
@@ -260,7 +265,7 @@ export class GrammarMatcher {
 
   /**
    * Construct a GrammarMatcher.
-   * @param {Grammar} Grammar The BNF grammar to match.
+   * @param {BNFGrammar} bnfGrammar The BNF grammar to match.
    * @param {TokenizerInfo} tokenizerInfo The tokenizer info that contains preprocessed vocab.
    * @param {number[] | number} [stopTokenIds=undefined] Stop tokens to override the default ones.
    * @param {boolean} [terminateWithoutStopToken=false] Whether to terminate without stop token.
@@ -268,12 +273,12 @@ export class GrammarMatcher {
    * @returns {GrammarMatcher} The constructed GrammarMatcher.
    */
   static async createGrammarMatcher(
-      Grammar: Grammar,
-      tokenizerInfo: TokenizerInfo,
-      stopTokenIds?: number[]|number,
-      terminateWithoutStopToken: boolean = false,
-      vocabSize?: number,
-      maxRollbackTokens: number = 0,
+    bnfGrammar: BNFGrammar,
+    tokenizerInfo: TokenizerInfo,
+    stopTokenIds?: number[] | number,
+    terminateWithoutStopToken: boolean = false,
+    vocabSize?: number,
+    maxRollbackTokens: number = 0,
   ): Promise<GrammarMatcher> {
     await asyncInitBinding();
     // Convert stopTokenIds to std::vector<int> if not undefined
@@ -284,12 +289,12 @@ export class GrammarMatcher {
       stopTokenIds = binding.vecIntFromJSArray(stopTokenIds);
     }
     return new GrammarMatcher(new binding.GrammarMatcher(
-        Grammar.handle,
-        tokenizerInfo.handle,
-        stopTokenIds,
-        terminateWithoutStopToken,
-        vocabSize,
-        maxRollbackTokens,
+      bnfGrammar.handle,
+      tokenizerInfo.handle,
+      stopTokenIds,
+      terminateWithoutStopToken,
+      vocabSize,
+      maxRollbackTokens,
     ));
   }
 
@@ -347,12 +352,16 @@ export class GrammarMatcher {
    * @param {number} vocabSize Vocab size returned by getVocabSize().
    * @returns An array of vocab ID that will be rejected as a result of the bitmask.
    */
-  static async debugGetMaskedTokensFromBitmask(bitmask: Int32Array, vocabSize: number):
-      Promise<Int32Array> {
+  static async debugGetMaskedTokensFromBitmask(
+    bitmask: Int32Array,
+    vocabSize: number
+  ): Promise<Int32Array> {
     await asyncInitBinding();
     const bitmaskIntVector = binding.vecIntFromJSArray(bitmask);
-    const rejectedIDsIntVector =
-        binding.GrammarMatcher.DebugGetMaskedTokensFromBitmask(bitmaskIntVector, vocabSize);
+    const rejectedIDsIntVector = binding.GrammarMatcher.DebugGetMaskedTokensFromBitmask(
+      bitmaskIntVector,
+      vocabSize
+    );
     bitmaskIntVector.delete();
     const rejectedIDsInt32Array = binding.vecIntToView(rejectedIDsIntVector).slice();
     rejectedIDsIntVector.delete();
