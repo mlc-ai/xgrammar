@@ -14,6 +14,7 @@ structured generation -- a JSON in this case.
 Perparation
 ^^^^^^^^^^^
 Instantiate a model, a tokenizer, and inputs.
+
 .. code:: python
 
     import xgrammar as xgr
