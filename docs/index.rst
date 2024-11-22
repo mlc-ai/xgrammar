@@ -11,7 +11,7 @@ The mission of this project is to bring flexible zero-overhead structure generat
 Quick Start
 -----------
 
-Check out :ref:`quick-start` for quick start examples of using MLC LLM.
+Check out :ref:`quick-start` for quick start examples of using XGrammar.
 
 
 .. toctree::
