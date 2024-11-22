@@ -23,7 +23,7 @@ import torch
 from .base import _core
 from .compiler import GrammarCompiler
 from .grammar import Grammar
-from .matcher import GrammarMatcher, get_bitmask_shape
+from .matcher import GrammarMatcher, bitmask_dtype, get_bitmask_shape
 from .tokenizer_info import TokenizerInfo
 
 
@@ -130,7 +130,13 @@ def _get_masked_tokens_from_bitmask(
     rejected_token_ids : List[int]
         A list of rejected token ids.
     """
-    return _core.testing._get_masked_tokens_from_bitmask(bitmask, vocab_size, index)
+    if bitmask.device.type != "cpu":
+        raise ValueError("bitmask should be on CPU.")
+    if bitmask.dtype != bitmask_dtype:
+        raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
+    return _core.testing._get_masked_tokens_from_bitmask(
+        bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
+    )
 
 
 def _get_matcher_from_grammar_and_tokenizer_info(

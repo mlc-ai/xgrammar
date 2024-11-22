@@ -216,7 +216,11 @@ class GrammarMatcher(XGRObject):
         index : int, default: 0
             The batch id of the bitmask.
         """
-        self._handle.fill_next_token_bitmask(bitmask, index)
+        if bitmask.device.type != "cpu":
+            raise ValueError("bitmask should be on CPU.")
+        if bitmask.dtype != bitmask_dtype:
+            raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
+        self._handle.fill_next_token_bitmask(bitmask.data_ptr(), list(bitmask.shape), index)
 
     def find_jump_forward_string(self) -> str:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that

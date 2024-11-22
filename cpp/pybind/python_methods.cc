@@ -9,7 +9,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <iostream>
+#include <vector>
 
 #include "../support/dynamic_bitset.h"
 #include "../support/logging.h"
@@ -54,27 +56,16 @@ std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& 
 }
 
 void GrammarMatcher_FillNextTokenBitmask(
-    GrammarMatcher& matcher, torch::Tensor token_bitmask, int32_t index
+    GrammarMatcher& matcher, intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t index
 ) {
-  torch::IntArrayRef shape = token_bitmask.sizes();
-
   XGRAMMAR_CHECK(shape.size() == 1 || shape.size() == 2) << "token_bitmask tensor must be 1D or 2D";
-  XGRAMMAR_CHECK(token_bitmask.dtype() == torch::kInt32)
-      << "token_bitmask tensor must be of type int32";
-  XGRAMMAR_CHECK(token_bitmask.device().type() == torch::kCPU)
-      << "token_bitmask tensor must be on CPU";
-
-  int64_t dltensor_shape[2] = {shape[0]};
-  if (shape.size() == 2) {
-    dltensor_shape[1] = shape[1];
-  }
 
   DLTensor bitmask_dltensor{
-      token_bitmask.data_ptr<int32_t>(),
+      reinterpret_cast<void*>(token_bitmask_ptr),
       DLDevice{kDLCPU, 0},
       static_cast<int32_t>(shape.size()),
       GetBitmaskDLType(),
-      dltensor_shape,
+      shape.data(),
       nullptr,
       0
   };
@@ -82,27 +73,16 @@ void GrammarMatcher_FillNextTokenBitmask(
 }
 
 std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(
-    torch::Tensor token_bitmask, int32_t vocab_size, int32_t index
+    intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
 ) {
-  torch::IntArrayRef shape = token_bitmask.sizes();
-
   XGRAMMAR_CHECK(shape.size() == 1 || shape.size() == 2) << "token_bitmask tensor must be 1D or 2D";
-  XGRAMMAR_CHECK(token_bitmask.dtype() == torch::kInt32)
-      << "token_bitmask tensor must be of type int32";
-  XGRAMMAR_CHECK(token_bitmask.device().type() == torch::kCPU)
-      << "token_bitmask tensor must be on CPU";
-
-  int64_t dltensor_shape[2] = {shape[0]};
-  if (shape.size() == 2) {
-    dltensor_shape[1] = shape[1];
-  }
 
   DLTensor bitmask_dltensor{
-      token_bitmask.data_ptr<int32_t>(),
+      reinterpret_cast<void*>(token_bitmask_ptr),
       DLDevice{kDLCPU, 0},
       static_cast<int32_t>(shape.size()),
       GetBitmaskDLType(),
-      dltensor_shape,
+      shape.data(),
       nullptr,
       0
   };

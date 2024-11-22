@@ -8,7 +8,6 @@
 #define XGRAMMAR_PYBIND_PYTHON_METHODS_H_
 
 #include <pybind11/pybind11.h>
-#include <torch/extension.h>
 #include <xgrammar/xgrammar.h>
 
 #include <optional>
@@ -31,11 +30,11 @@ std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer);
 
 void GrammarMatcher_FillNextTokenBitmask(
-    GrammarMatcher& matcher, torch::Tensor token_bitmask, int index
+    GrammarMatcher& matcher, intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t index
 );
 
 std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(
-    torch::Tensor token_bitmask, int32_t vocab_size, int32_t index
+    intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
 );
 
 }  // namespace xgrammar
