@@ -158,12 +158,12 @@ class JSONSchemaConverter {
 
   /*! \brief Warn if any keyword is existing in the schema but not supported. */
   static void WarnUnsupportedKeywords(
-      const picojson::value& schema, const std::vector<std::string>& keywords
+      const picojson::value& schema, const std::vector<std::string>& keywords, bool verbose = false
   );
 
   /*! \brief Warn if any keyword is existing in the object but not supported. */
   static void WarnUnsupportedKeywords(
-      const picojson::object& schema, const std::vector<std::string>& keywords
+      const picojson::object& schema, const std::vector<std::string>& keywords, bool verbose = false
   );
 
   /*! \brief Visit the schema and return the rule body for later constructing the rule. */
@@ -417,19 +417,22 @@ std::string JSONSchemaConverter::NextSeparator(bool is_end) {
 }
 
 void JSONSchemaConverter::WarnUnsupportedKeywords(
-    const picojson::value& schema, const std::vector<std::string>& keywords
+    const picojson::value& schema, const std::vector<std::string>& keywords, bool verbose
 ) {
   if (schema.is<bool>()) {
     return;
   }
 
   XGRAMMAR_DCHECK(schema.is<picojson::object>());
-  WarnUnsupportedKeywords(schema.get<picojson::object>(), keywords);
+  WarnUnsupportedKeywords(schema.get<picojson::object>(), keywords, verbose);
 }
 
 void JSONSchemaConverter::WarnUnsupportedKeywords(
-    const picojson::object& schema, const std::vector<std::string>& keywords
+    const picojson::object& schema, const std::vector<std::string>& keywords, bool verbose
 ) {
+  if (!verbose) {
+    return;
+  }
   for (const auto& keyword : keywords) {
     if (schema.find(keyword) != schema.end()) {
       XGRAMMAR_LOG(WARNING) << "Keyword " << keyword << " is not supported in schema "
