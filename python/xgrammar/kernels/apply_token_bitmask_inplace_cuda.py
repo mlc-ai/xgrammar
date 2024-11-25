@@ -6,7 +6,6 @@ import math
 import os
 import platform
 import shutil
-import time
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -196,7 +195,6 @@ def apply_token_bitmask_inplace_cuda(
     bitmask: torch.Tensor,
     indices: Optional[Union[List[int], torch.Tensor]] = None,
 ):
-    time_start = time.monotonic_ns()
     if cuda is None or cudart is None or nvrtc is None:
         raise RuntimeError(
             "CUDA dependencies are not installed. Please follow "
@@ -263,8 +261,6 @@ def apply_token_bitmask_inplace_cuda(
             ctypes.c_int32,
         ),
     )
-    time_end = time.monotonic_ns()
-    print(f"Time to compile kernel: {(time_end - time_start) / 1e3} us")
 
     # Launch the kernel.
     checkCudaErrors(

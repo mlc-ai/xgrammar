@@ -1,3 +1,4 @@
+import logging
 import sys
 from typing import Dict, List, Tuple
 
@@ -90,6 +91,18 @@ def test_decoded_vocab(
 
 
 @pytest.mark.parametrize("tokenizer_path", tokenizer_paths)
+def test_stop_token_ids(
+    tokenizer_path: str,
+    tokenizer_info_storage: Dict[str, Tuple[PreTrainedTokenizerBase, xgr.TokenizerInfo]],
+):
+    tokenizer, tokenizer_info = tokenizer_info_storage[tokenizer_path]
+    if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
+        assert tokenizer_info.stop_token_ids == [tokenizer.eos_token_id]
+    else:
+        logging.warning(f"EOS token id is not defined for tokenizer {tokenizer_path}")
+
+
+@pytest.mark.parametrize("tokenizer_path", tokenizer_paths)
 def test_decode_text(
     tokenizer_path: str,
     tokenizer_info_storage: Dict[str, Tuple[PreTrainedTokenizerBase, xgr.TokenizerInfo]],
@@ -165,7 +178,7 @@ tokenizer_path_metadata_str = [
     ),
     (
         "meta-llama/Meta-Llama-3-8B-Instruct",
-        '{"vocab_type":"BYTE_LEVEL","vocab_size":128256,"prepend_space_in_tokenization":false,"stop_token_ids":[128001,128009]}',
+        '{"vocab_type":"BYTE_LEVEL","vocab_size":128256,"prepend_space_in_tokenization":false,"stop_token_ids":[128009]}',
     ),
 ]
 

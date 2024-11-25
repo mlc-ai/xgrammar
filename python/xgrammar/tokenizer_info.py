@@ -6,6 +6,10 @@ from typing import List, Optional, Union
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
 from .base import XGRObject, _core
+from .support import logging
+
+logging.enable_logging()
+logger = logging.getLogger(__name__)
 
 
 class VocabType(Enum):
@@ -156,6 +160,15 @@ class TokenizerInfo(XGRObject):
             #   tokenizer.backend_tokenizer.to_str()
             # - stop token id is provided by user, or auto detected.
             backend_str = tokenizer.backend_tokenizer.to_str()
+            if stop_token_ids is None:
+                if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
+                    stop_token_ids = [tokenizer.eos_token_id]
+                else:
+                    logger.warning(
+                        "When constructing TokenizerInfo from a huggingface tokenizer, "
+                        "stop_token_ids is neither provided by user nor found from the tokenizer. "
+                        "It will be automatically detected."
+                    )
             return TokenizerInfo._create_from_handle(
                 _core.TokenizerInfo.from_huggingface(
                     encoded_vocab, backend_str, vocab_size, stop_token_ids
@@ -170,6 +183,12 @@ class TokenizerInfo(XGRObject):
             if stop_token_ids is None:
                 if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
                     stop_token_ids = [tokenizer.eos_token_id]
+                else:
+                    logger.warning(
+                        "When constructing TokenizerInfo from a huggingface tokenizer, "
+                        "stop_token_ids is neither provided by user nor found from the tokenizer. "
+                        "It will be automatically detected."
+                    )
             return TokenizerInfo(
                 encoded_vocab,
                 VocabType.RAW,
