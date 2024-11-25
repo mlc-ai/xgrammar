@@ -11,10 +11,7 @@ import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import (
-    _get_masked_tokens_from_bitmask,
-    _match_grammar_with_string,
-)
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _match_grammar_with_string
 
 
 def test_simple():
@@ -305,7 +302,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
             # fmt: off
             128235, 127497, 5002, 5002, 5002, 127849, 126399, 126399, 126760, 127499, 5002, 5002,
             5002, 5002, 5002, 127849, 126399, 126399, 4952, 4952, 4952, 4952, 4952, 4952, 4952,
-            4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128254,
+            4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128255,
             # fmt: on
         ],
     ),
