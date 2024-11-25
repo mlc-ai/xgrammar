@@ -667,7 +667,7 @@ std::string JSONSchemaConverter::VisitInteger(
           "exclusiveMaximum",
       }
   );
-  return "(\"0\" | \"-\"? [1-9] [0-9]*) \".0\"?";
+  return "(\"0\" | \"-\"? [1-9] [0-9]*)";
 }
 
 std::string JSONSchemaConverter::VisitNumber(

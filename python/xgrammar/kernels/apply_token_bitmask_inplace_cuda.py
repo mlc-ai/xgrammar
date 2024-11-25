@@ -32,7 +32,7 @@ ELEMENTS_PER_THREAD = 4
 
 _apply_token_bitmask_inplace_kernel = """
 #include <cuda_fp16.h>
-
+#include <cuda/std/cstdint>
 #include <cuda/std/limits>
 
 #define BITS_PER_BLOCK 32
