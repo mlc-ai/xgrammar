@@ -56,7 +56,7 @@ def apply_token_bitmask_inplace_triton(
     elif isinstance(indices, list):
         indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
 
-    grid = lambda meta: (indices.size(0),)  # ceil_div(vocab_size, 32))
+    grid = lambda meta: (indices.size(0),)
 
     apply_token_bitmask_inplace_kernel[grid](
         logits,
