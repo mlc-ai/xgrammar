@@ -23,7 +23,9 @@ def apply_token_bitmask_inplace_kernel(
         vocab_mask = offsets < vocab_size
         packed_bitmask_mask = bitmask_offsets < bitmask_size
         logits = tl.load(logits_ptr + batch_id * vocab_size + offsets, vocab_mask)
-        packed_bitmask = tl.load(bitmask_ptr + pid * bitmask_size + bitmask_offsets, packed_bitmask_mask)
+        packed_bitmask = tl.load(
+            bitmask_ptr + pid * bitmask_size + bitmask_offsets, packed_bitmask_mask
+        )
         bitmask = ((packed_bitmask[:, None] >> (tl.arange(0, 32)[None, :])) & 1) == 0
         bitmask = bitmask.reshape(BLOCK_SIZE)
 
@@ -53,8 +55,8 @@ def apply_token_bitmask_inplace_triton(
         indices = torch.arange(batch_size, dtype=torch.int32, device=logits.device)
     elif isinstance(indices, list):
         indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
-    
-    grid = lambda meta: (indices.size(0),)# ceil_div(vocab_size, 32))
+
+    grid = lambda meta: (indices.size(0),)  # ceil_div(vocab_size, 32))
 
     apply_token_bitmask_inplace_kernel[grid](
         logits,
@@ -65,4 +67,3 @@ def apply_token_bitmask_inplace_triton(
         BLOCK_SIZE,
         num_warps=BLOCK_SIZE // 32 // (16 // logits.element_size()),
     )
- 
