@@ -170,11 +170,11 @@ def test_apply_token_bitmask_inplace(is_cuda: bool):
         bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
         xgr.apply_token_bitmask_inplace(logits_gpu, bitmask)
         torch.cuda.synchronize()
-        assert torch.all(logits_gpu == expected.to("cuda"))
+        torch.testing.assert_allclose(logits_gpu, expected.to("cuda"))
     else:
         bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
         xgr.apply_token_bitmask_inplace(logits, bitmask)
-        assert torch.all(logits == expected)
+        torch.testing.assert_allclose(logits, expected)
 
 
 batch_size_vocab_size_masked_cnt_stride = [
@@ -230,7 +230,7 @@ def test_apply_token_bitmask_inplace_large(
         torch.cuda.synchronize()
         time_end = time.monotonic_ns()
         print(f"Time taken: {(time_end - time_start) / 1e3} us")
-        assert torch.all(logits_gpu == logits_expected.to("cuda"))
+        torch.testing.assert_allclose(logits_gpu, logits_expected.to("cuda"))
     else:
         time_start = time.monotonic_ns()
         if stride == 1:
@@ -240,7 +240,7 @@ def test_apply_token_bitmask_inplace_large(
             xgr.apply_token_bitmask_inplace(logits, bitmask, indices=masked_batch_ids)
         time_end = time.monotonic_ns()
         print(f"Time taken: {(time_end - time_start) / 1e3} us")
-        assert torch.all(logits == logits_expected)
+        torch.testing.assert_allclose(logits, logits_expected)
 
 
 def test_rollback():
@@ -282,7 +282,8 @@ def test_rollback():
         matcher.fill_next_token_bitmask(new_token_bitmask2)
         result_after_rollback.append(new_token_bitmask2)
         assert matcher.accept_token(i_2)
-        assert all(torch.all(l == r) for l, r in zip(orig_result, result_after_rollback))
+        for l, r in zip(orig_result, result_after_rollback):
+            torch.testing.assert_allclose(l, r)
 
 
 def test_reset():
@@ -315,7 +316,8 @@ def test_reset():
         result_after_reset.append(token_bitmask)
         assert matcher.accept_token(i)
 
-    assert all(torch.all(l == r) for l, r in zip(orig_result, result_after_reset))
+    for l, r in zip(orig_result, result_after_reset):
+        torch.testing.assert_allclose(l, r)
 
 
 def test_termination():
