@@ -8,7 +8,7 @@ import torch
 
 from .base import XGRObject, _core
 from .compiler import CompiledGrammar
-from .kernels import apply_token_bitmask_inplace_cpu, apply_token_bitmask_inplace_triton
+from .kernels import apply_token_bitmask_inplace_cpu, apply_token_bitmask_inplace_triton, apply_token_bitmask_inplace_cuda
 
 """The dtype of the bitmask: int32."""
 bitmask_dtype = torch.int32

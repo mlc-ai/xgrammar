@@ -6,6 +6,7 @@ from typing import List, Optional
 
 import pytest
 import torch
+from triton.testing import do_bench
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
@@ -221,21 +222,24 @@ def test_apply_token_bitmask_inplace_large(
         logits_gpu = logits.to("cuda")
         bitmask_gpu = bitmask.to("cuda")
         torch.cuda.synchronize()
-        time_start = time.monotonic_ns()
         if stride == 1:
             # Test logic without indices
-            xgr.apply_token_bitmask_inplace(logits_gpu, bitmask_gpu)
+            f = lambda: xgr.apply_token_bitmask_inplace(logits_gpu, bitmask_gpu)
         else:
-            xgr.apply_token_bitmask_inplace(logits_gpu, bitmask_gpu, indices=masked_batch_ids)
-        torch.cuda.synchronize()
-        time_end = time.monotonic_ns()
-        print(f"Time taken: {(time_end - time_start) / 1e3} us")
+            f = lambda: xgr.apply_token_bitmask_inplace(
+                logits_gpu, bitmask_gpu, indices=masked_batch_ids
+            )
+        f()
         torch.testing.assert_allclose(logits_gpu, logits_expected.to("cuda"))
+
+        dur = do_bench(f, warmup=100, rep=1000)
+        print(f"Time taken: {(dur) * 1e3} us")
     else:
         time_start = time.monotonic_ns()
         if stride == 1:
             # Test logic without indices
             xgr.apply_token_bitmask_inplace(logits, bitmask)
+
         else:
             xgr.apply_token_bitmask_inplace(logits, bitmask, indices=masked_batch_ids)
         time_end = time.monotonic_ns()
