@@ -75,7 +75,7 @@ def test_basic() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -131,7 +131,7 @@ def test_indent() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -168,7 +168,7 @@ def test_non_strict() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -217,7 +217,7 @@ def test_enum_const() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -248,7 +248,7 @@ def test_optional() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -283,7 +283,7 @@ def test_all_optional() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -307,7 +307,7 @@ root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": 
     ebnf_grammar_non_strict = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -333,7 +333,7 @@ def test_empty() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -373,7 +373,7 @@ def test_reference() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -409,7 +409,7 @@ def test_union() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -435,7 +435,7 @@ def test_alias() -> None:
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
@@ -461,7 +461,7 @@ root ::= "{" "" "\"name\"" ": " basic_string "" "}"
     ebnf_grammar_space = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
