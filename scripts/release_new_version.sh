@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Usage: ./scripts/release_new_version.sh <version>
 set -ex
 
 git fetch origin main
