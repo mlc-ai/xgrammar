@@ -1,10 +1,10 @@
 import json
 import sys
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
 
 import pytest
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, WithJsonSchema, create_model
 
 import xgrammar as xgr
 from xgrammar.testing import _json_schema_to_ebnf, _match_grammar_with_string
@@ -479,6 +479,55 @@ root ::= "{" "" "\"name 1\"" ": " root_prop_0 "" "}"
         instance_space.model_dump(mode="json", round_trip=True, by_alias=True),
     )
     check_schema_with_json(MainModelSpace.model_json_schema(by_alias=True), instance_space_str)
+
+
+def test_restricted_string() -> None:
+    class MainModel(BaseModel):
+        restricted_string: str = Field(..., pattern=r"[a-f]")
+
+    instance = MainModel(restricted_string="a")
+    instance_str = json.dumps(instance.model_dump(mode="json"))
+    check_schema_with_json(MainModel.model_json_schema(), instance_str)
+
+    check_schema_with_json(
+        MainModel.model_json_schema(), '{"restricted_string": "j"}', check_accepted=False
+    )
+
+
+def test_complex_restrictions() -> None:
+
+    string_without_quotes = Annotated[str, WithJsonSchema({"type": "string", "pattern": r"[^\"]*"})]
+
+    class RestrictedModel(BaseModel):
+        restricted_string: string_without_quotes
+        restricted_value: Annotated[int, Field(strict=True, ge=0, lt=44)]
+
+    # working instance
+    instance = RestrictedModel(restricted_string="a", restricted_value=42)
+    instance_str = json.dumps(instance.model_dump(mode="json"))
+    check_schema_with_json(RestrictedModel.model_json_schema(), instance_str)
+
+    check_schema_with_json(
+        RestrictedModel.model_json_schema(),
+        '{"restricted_string": "j", "restricted_value": 45}',
+        check_accepted=False,
+    )
+
+
+def test_dynamic_model() -> None:
+    class MainModel(BaseModel):
+        restricted_string: Annotated[str, WithJsonSchema({"type": "string", "pattern": r"[a-f]"})]
+
+    additional_fields = {}
+    additional_fields["restricted_string_dynamic"] = (
+        Annotated[str, WithJsonSchema({"type": "string", "pattern": r"[a-x]"})],
+        ...,
+    )
+
+    CompleteModel = create_model("CompleteModel", **additional_fields)
+    instance = CompleteModel(restricted_string="a", restricted_string_dynamic="j")
+    instance_str = json.dumps(instance.model_dump(mode="json"))
+    check_schema_with_json(CompleteModel.model_json_schema(), instance_str)
 
 
 if __name__ == "__main__":
