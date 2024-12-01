@@ -11,11 +11,13 @@
 #include <memory>
 #include <optional>
 #include <queue>
+#include <sstream>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include "regex_converter.h"
 #include "support/logging.h"
 
 namespace xgrammar {
@@ -652,6 +654,122 @@ std::string JSONSchemaConverter::VisitAny(
          kBasicArray + " | " + kBasicObject;
 }
 
+std::string generateRangeRegex(std::optional<int> start, std::optional<int> end) {
+  if (!start && !end) {
+    return "^\\d+$";  // Match any positive number if no start or end is specified
+  }
+
+  std::vector<std::string> positiveParts;
+  std::vector<std::string> negativeParts;
+
+  auto generateGroup = [](int s, int e) -> std::string {
+    std::ostringstream oss;
+
+    if (s == e) {
+      return std::to_string(s);
+    }
+
+    std::string startStr = std::to_string(s);
+    std::string endStr = std::to_string(e);
+
+    size_t commonPrefix = 0;
+    while (commonPrefix < startStr.size() && startStr[commonPrefix] == endStr[commonPrefix]) {
+      ++commonPrefix;
+    }
+
+    if (commonPrefix > 0) {
+      oss << startStr.substr(0, commonPrefix);
+    }
+
+    if (commonPrefix < startStr.size()) {
+      oss << "[";
+      oss << startStr[commonPrefix];
+      if (startStr[commonPrefix] != endStr[commonPrefix]) {
+        oss << "-" << endStr[commonPrefix];
+      }
+      oss << "]";
+
+      // Add trailing zero ranges
+      if (commonPrefix + 1 < startStr.size()) {
+        oss << "\\d{" << startStr.size() - commonPrefix - 1 << "}";
+      }
+    }
+
+    return oss.str();
+  };
+
+  if (start && end) {
+    int rangeStart = start.value();
+    int rangeEnd = end.value();
+
+    // Handle negative part of the range
+    if (rangeStart < 0) {
+      int negativeEnd = std::min(rangeEnd, -1);
+      while (rangeStart <= negativeEnd) {
+        int nextRangeEnd = (rangeStart / 10 - 1) * 10 + 9;  // Handle negative tens group
+        if (nextRangeEnd < negativeEnd) {
+          nextRangeEnd = negativeEnd;
+        }
+        negativeParts.push_back("-" + generateGroup(-nextRangeEnd, -rangeStart));
+        rangeStart = nextRangeEnd + 1;
+      }
+    }
+
+    // Handle positive part of the range
+    if (rangeEnd >= 0) {
+      rangeStart = std::max(rangeStart, 0);
+      while (rangeStart <= rangeEnd) {
+        int nextRangeEnd = (rangeStart / 10 + 1) * 10 - 1;  // Handle positive tens group
+        if (nextRangeEnd > rangeEnd) {
+          nextRangeEnd = rangeEnd;
+        }
+        positiveParts.push_back(generateGroup(rangeStart, nextRangeEnd));
+        rangeStart = nextRangeEnd + 1;
+      }
+    }
+  } else if (start) {
+    if (start.value() < 0) {
+      negativeParts.push_back("-" + std::to_string(-start.value()) + "\\d*");
+    } else {
+      positiveParts.push_back(std::to_string(start.value()) + "\\d*");
+    }
+  } else if (end) {
+    if (end.value() < 0) {
+      negativeParts.push_back("-" + std::to_string(-end.value()));
+    } else {
+      positiveParts.push_back(std::to_string(end.value()));
+    }
+  }
+
+  std::ostringstream result;
+  result << "^(";
+  if (!negativeParts.empty()) {
+    result << "(";
+    for (size_t i = 0; i < negativeParts.size(); ++i) {
+      if (i > 0) {
+        result << "|";
+      }
+      result << negativeParts[i];
+    }
+    result << ")";
+    if (!positiveParts.empty()) {
+      result << "|";
+    }
+  }
+  if (!positiveParts.empty()) {
+    result << "(";
+    for (size_t i = 0; i < positiveParts.size(); ++i) {
+      if (i > 0) {
+        result << "|";
+      }
+      result << positiveParts[i];
+    }
+    result << ")";
+  }
+  result << ")$";
+  return result.str();
+}
+
 std::string JSONSchemaConverter::VisitInteger(
     const picojson::object& schema, const std::string& rule_name
 ) {
@@ -661,12 +779,38 @@ std::string JSONSchemaConverter::VisitInteger(
       schema,
       {
           "multipleOf",
-          "minimum",
-          "maximum",
-          "exclusiveMinimum",
-          "exclusiveMaximum",
       }
   );
+  std::string range_regex = "";
+  try {
+    if (schema.count("minimum") || schema.count("maximum") || schema.count("exclusiveMinimum") ||
+        schema.count("exclusiveMaximum")) {
+      std::optional<int> start, end;
+      if (schema.count("minimum")) {
+        double start_double = schema.at("minimum").get<double>();
+        start = static_cast<int>(start_double);
+      }
+      if (schema.count("exclusiveMinimum")) {
+        double start_double = schema.at("exclusiveMinimum").get<double>();
+        start = static_cast<int>(start_double);
+      }
+      if (schema.count("maximum")) {
+        double end_double = schema.at("maximum").get<double>();
+        end = static_cast<int>(end_double);
+      }
+      if (schema.count("exclusiveMaximum")) {
+        double end_double = schema.at("exclusiveMaximum").get<double>();
+        end = static_cast<int>(end_double);
+      }
+      range_regex = generateRangeRegex(start, end);
+    }
+    if (!range_regex.empty()) {
+      std::string converted_regex = RegexToEBNF(range_regex, false);
+      return converted_regex;  // not " " for numbers
+    }
+  } catch (const std::exception& e) {
+    XGRAMMAR_LOG(WARNING) << "Failed to convert range for integer schema";
+  }
   return "(\"0\" | \"-\"? [1-9] [0-9]*)";
 }
 
