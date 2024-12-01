@@ -842,10 +842,19 @@ std::string JSONSchemaConverter::VisitString(
       {
           "minLength",
           "maxLength",
-          "pattern",
           "format",
       }
   );
+  if (schema.count("pattern")) {
+    try {
+      std::string regex_pattern = schema.at("pattern").get<std::string>();
+      std::string converted_regex = RegexToEBNF(regex_pattern, false);
+      return "\"\\\"\" " + converted_regex + " \"\\\"\"";
+    } catch (const std::exception& e) {
+      XGRAMMAR_LOG(WARNING) << "Failed to convert regex pattern "
+                            << schema.at("pattern").get<std::string>();
+    }
+  }
   return "[\"] " + kBasicStringSub;
 }
 
