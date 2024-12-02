@@ -17,7 +17,7 @@ def get_version() -> str:
         raise RuntimeError(msg)
     with open(version_path) as f:
         code = compile(f.read(), version_path, "exec")
-    loc = {}
+    loc = {'__file__': version_path}
     exec(code, loc)
     if "__version__" not in loc:
         msg = "Version info is not found in xgrammar/version.py"
