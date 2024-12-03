@@ -83,14 +83,16 @@ This step is useful when you want to make modification or obtain a specific vers
 
     # 1. clone from GitHub
     git clone --recursive https://github.com/mlc-ai/xgrammar.git && cd xgrammar
-    # 2. build XGrammar core and Python bindings
+    # 2. Install pre-commit hooks
+    pre-commit install
+    # 3. build XGrammar core and Python bindings
     mkdir build && cd build
     cmake .. -G Ninja
     ninja
-    # 3. install the Python package
+    # 4. install the Python package
     cd ../python
     python3 -m pip install .
-    # 4. (optional) add the python directory to PATH
+    # 5. (optional) add the python directory to PATH
     echo "export PATH=\"$(pwd):\$PATH\"" >> ~/.bashrc
 
 **Step 3. Validate installation.** You may validate if XGrammar is compiled successfully in command line.
