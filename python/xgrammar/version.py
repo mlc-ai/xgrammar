@@ -20,7 +20,7 @@ import subprocess
 
 # ---------------------------------------------------
 
-__version__ = "0.1.0"
+__version__ = "0.1.5"
 PROJ_ROOT = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
 
 
@@ -128,7 +128,6 @@ def main():
         help="Use git describe to generate development version.",
     )
     parser.add_argument("--dry-run", action="store_true")
-    pub_ver, local_ver = git_describe_version()
     opt = parser.parse_args()
     pub_ver, local_ver = None, None
     if opt.git_describe:

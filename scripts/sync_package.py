@@ -1,4 +1,5 @@
-""" Synchronize name and the tvm version """
+""" Synchronize name and version """
+
 import argparse
 import os
 import re
@@ -11,9 +12,7 @@ def py_str(cstr):
 
 def checkout_source(src, tag):
     def run_cmd(cmd):
-        proc = subprocess.Popen(
-            cmd, cwd=src, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
-        )
+        proc = subprocess.Popen(cmd, cwd=src, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         (out, _) = proc.communicate()
         if proc.returncode != 0:
             msg = "git error: %s" % cmd
@@ -55,7 +54,7 @@ def get_version_tag(args):
     - local_ver: includes major, minor, dev and last git hash
                  e.g. "0.8.dev1473+gb7488ef47".
     """
-    version_py = os.path.join(args.src, "version.py")
+    version_py = os.path.join(args.src, "python", args.package_name, "version.py")
     libversion = {"__file__": version_py}
     exec(
         compile(open(version_py, "rb").read(), version_py, "exec"),
@@ -81,20 +80,14 @@ def update_setup(args, package_name):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Synchronize the package name and version."
-    )
+    parser = argparse.ArgumentParser(description="Synchronize the package name and version.")
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Run the syncronization process without modifying any files.",
     )
-    parser.add_argument(
-        "--package", type=str, required=True, help="The package to sync for."
-    )
-    parser.add_argument(
-        "--package-name", type=str, required=True, help="The output package name"
-    )
+    parser.add_argument("--package", type=str, required=True, help="The package to sync for.")
+    parser.add_argument("--package-name", type=str, required=True, help="The output package name")
     parser.add_argument(
         "--nightly",
         action="store_true",
@@ -108,8 +101,7 @@ def main():
         type=str,
         metavar="DIR_NAME",
         default="",
-        help="Set the directory in which sources will be checked out. "
-        "Defaults to package",
+        help="Set the directory in which sources will be checked out. " "Defaults to package",
     )
     parser.add_argument(
         "--version",

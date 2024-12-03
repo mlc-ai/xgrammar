@@ -17,7 +17,7 @@ def get_version() -> str:
         raise RuntimeError(msg)
     with open(version_path) as f:
         code = compile(f.read(), version_path, "exec")
-    loc = {}
+    loc = {"__file__": version_path}
     exec(code, loc)
     if "__version__" not in loc:
         msg = "Version info is not found in xgrammar/version.py"
@@ -104,7 +104,7 @@ def main() -> None:
         package_data={"xgrammar": [xgrammar_lib_path]},
         zip_safe=False,
         install_requires=parse_requirements("requirements.txt")[0],
-        python_requires=">=3.7, <4",
+        python_requires=">=3.8, <4",
         url="https://github.com/mlc-ai/xgrammar",
         distclass=BinaryDistribution,
     )
