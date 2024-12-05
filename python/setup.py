@@ -91,6 +91,7 @@ def main() -> None:
         author="MLC Team",
         description="Efficient, Flexible and Portable Structured Generation",
         long_description=open(os.path.join(PROJECT_DIR, "README.md")).read(),
+        long_description_content_type="text/markdown",
         licence="Apache 2.0",
         classifiers=[
             "License :: OSI Approved :: Apache Software License",
