@@ -41,7 +41,7 @@ tokenizer_paths_metadata = [
     ("Qwen/Qwen2.5-1.5B", xgr.VocabType.BYTE_LEVEL, False),
     ("internlm/internlm2_5-7b-chat", xgr.VocabType.BYTE_FALLBACK, False),
     ("mistralai/Mixtral-8x22B-Instruct-v0.1", xgr.VocabType.BYTE_FALLBACK, True),
-    ("THUDM/LongWriter-glm4-9b", xgr.VocabType.RAW, False),
+    ("THUDM/glm-4-9b-chat", xgr.VocabType.RAW, False),
     ("THUDM/chatglm3-6b", xgr.VocabType.BYTE_FALLBACK, True),
 ]
 
