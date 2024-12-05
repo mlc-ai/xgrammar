@@ -6,8 +6,8 @@ from typing import List, Optional
 
 import pytest
 import torch
-from triton.testing import do_bench
 from transformers import AutoTokenizer
+from triton.testing import do_bench
 
 import xgrammar as xgr
 from xgrammar.testing import (

@@ -3,8 +3,9 @@ This example demonstrates how to use XGrammar in Huggingface's transformers, int
 a minimal LogitsProcessor.
 """
 
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 import torch
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+
 import xgrammar as xgr
 
 device = "cuda"
