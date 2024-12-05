@@ -146,6 +146,9 @@ class JSONSchemaConverter {
    * will be ignored when finding the corresponding cache rule. */
   std::string GetSchemaCacheIndex(const picojson::value& schema);
 
+  /*! \brief Generate the regex for the range. */
+  static std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end);
+
   /*!
    * \brief Create a rule with the given schema and rule name hint.
    * \returns The name of the rule will be returned. That is not necessarily the same as the
@@ -654,7 +657,9 @@ std::string JSONSchemaConverter::VisitAny(
          kBasicArray + " | " + kBasicObject;
 }
 
-std::string generateRangeRegex(std::optional<int> start, std::optional<int> end) {
+std::string JSONSchemaConverter::GenerateRangeRegex(
+    std::optional<int> start, std::optional<int> end
+) {
   if (!start && !end) {
     return "^\\d+$";  // Match any positive number if no start or end is specified
   }
@@ -782,34 +787,30 @@ std::string JSONSchemaConverter::VisitInteger(
       }
   );
   std::string range_regex = "";
-  try {
-    if (schema.count("minimum") || schema.count("maximum") || schema.count("exclusiveMinimum") ||
-        schema.count("exclusiveMaximum")) {
-      std::optional<int> start, end;
-      if (schema.count("minimum")) {
-        double start_double = schema.at("minimum").get<double>();
-        start = static_cast<int>(start_double);
-      }
-      if (schema.count("exclusiveMinimum")) {
-        double start_double = schema.at("exclusiveMinimum").get<double>();
-        start = static_cast<int>(start_double);
-      }
-      if (schema.count("maximum")) {
-        double end_double = schema.at("maximum").get<double>();
-        end = static_cast<int>(end_double);
-      }
-      if (schema.count("exclusiveMaximum")) {
-        double end_double = schema.at("exclusiveMaximum").get<double>();
-        end = static_cast<int>(end_double);
-      }
-      range_regex = generateRangeRegex(start, end);
+  if (schema.count("minimum") || schema.count("maximum") || schema.count("exclusiveMinimum") ||
+      schema.count("exclusiveMaximum")) {
+    std::optional<int> start, end;
+    if (schema.count("minimum")) {
+      double start_double = schema.at("minimum").get<double>();
+      start = static_cast<int>(start_double);
     }
-    if (!range_regex.empty()) {
-      std::string converted_regex = RegexToEBNF(range_regex, false);
-      return converted_regex;  // not " " for numbers
+    if (schema.count("exclusiveMinimum")) {
+      double start_double = schema.at("exclusiveMinimum").get<double>();
+      start = static_cast<int>(start_double);
     }
-  } catch (const std::exception& e) {
-    XGRAMMAR_LOG(WARNING) << "Failed to convert range for integer schema";
+    if (schema.count("maximum")) {
+      double end_double = schema.at("maximum").get<double>();
+      end = static_cast<int>(end_double);
+    }
+    if (schema.count("exclusiveMaximum")) {
+      double end_double = schema.at("exclusiveMaximum").get<double>();
+      end = static_cast<int>(end_double);
+    }
+    range_regex = GenerateRangeRegex(start, end);
+  }
+  if (!range_regex.empty()) {
+    std::string converted_regex = RegexToEBNF(range_regex, false);
+    return converted_regex;  // not " " for numbers
   }
   return "(\"0\" | \"-\"? [1-9] [0-9]*)";
 }
@@ -846,14 +847,9 @@ std::string JSONSchemaConverter::VisitString(
       }
   );
   if (schema.count("pattern")) {
-    try {
-      std::string regex_pattern = schema.at("pattern").get<std::string>();
-      std::string converted_regex = RegexToEBNF(regex_pattern, false);
-      return "\"\\\"\" " + converted_regex + " \"\\\"\"";
-    } catch (const std::exception& e) {
-      XGRAMMAR_LOG(WARNING) << "Failed to convert regex pattern "
-                            << schema.at("pattern").get<std::string>();
-    }
+    std::string regex_pattern = schema.at("pattern").get<std::string>();
+    std::string converted_regex = RegexToEBNF(regex_pattern, false);
+    return "\"\\\"\" " + converted_regex + " \"\\\"\"";
   }
   return "[\"] " + kBasicStringSub;
 }

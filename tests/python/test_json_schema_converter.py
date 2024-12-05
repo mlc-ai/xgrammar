@@ -495,7 +495,6 @@ def test_restricted_string() -> None:
 
 
 def test_complex_restrictions() -> None:
-
     string_without_quotes = Annotated[str, WithJsonSchema({"type": "string", "pattern": r"[^\"]*"})]
 
     class RestrictedModel(BaseModel):
@@ -503,9 +502,13 @@ def test_complex_restrictions() -> None:
         restricted_value: Annotated[int, Field(strict=True, ge=0, lt=44)]
 
     # working instance
-    instance = RestrictedModel(restricted_string="a", restricted_value=42)
+    instance = RestrictedModel(restricted_string="abd", restricted_value=42)
     instance_str = json.dumps(instance.model_dump(mode="json"))
     check_schema_with_json(RestrictedModel.model_json_schema(), instance_str)
+
+    instance_err = RestrictedModel(restricted_string='"', restricted_value=42)
+    instance_str = json.dumps(instance_err.model_dump(mode="json"))
+    check_schema_with_json(RestrictedModel.model_json_schema(), instance_str, check_accepted=False)
 
     check_schema_with_json(
         RestrictedModel.model_json_schema(),
