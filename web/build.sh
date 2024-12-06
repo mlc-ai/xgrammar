@@ -4,7 +4,7 @@ set -euxo pipefail
 mkdir -p build
 cd build
 emcmake cmake ../.. -DBUILD_PYTHON_BINDINGS=OFF\
- -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3 -DCOMPILE_WASM_RUNTIME -DXGRAMMAR_LOG_CUSTOMIZE=1" 
+ -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3 -DCOMPILE_WASM_RUNTIME -DXGRAMMAR_LOG_CUSTOMIZE=1"
 emmake make xgrammar -j8
 cd ..
 

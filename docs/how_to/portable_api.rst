@@ -15,11 +15,9 @@ Javascript SDK for Web-based LLMs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The JS SDK is designed to be used for LLMs that run in the browser, including
-`WebLLM <https://github.com/mlc-ai/web-llm>`__. WebLLM integrated with XGrammar's 
+`WebLLM <https://github.com/mlc-ai/web-llm>`__. WebLLM integrated with XGrammar's
 JS SDK, ``web-xgrammar``. It uses `emscripten <https://emscripten.org/>`__ to compile
 the C++ code into WebAssembly.
 
 To use this SDK, simply run ``npm install @mlc-ai/web-xgrammar``. For more, see
 `here <https://github.com/mlc-ai/xgrammar/tree/main/web>`__.
-
-

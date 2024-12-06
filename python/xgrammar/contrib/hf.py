@@ -5,9 +5,10 @@ transformers.LogitsProcessor, which is to be fed to `model.generate()`.
 
 from typing import List
 
-import transformers
-import xgrammar as xgr
 import torch
+import transformers
+
+import xgrammar as xgr
 
 
 class LogitsProcessor(transformers.LogitsProcessor):

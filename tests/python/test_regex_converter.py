@@ -6,10 +6,7 @@ import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import (
-    _match_grammar_with_string,
-    _regex_to_ebnf,
-)
+from xgrammar.testing import _match_grammar_with_string, _regex_to_ebnf
 
 
 def test_basic():

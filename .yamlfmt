@@ -1,0 +1,4 @@
+formatter:
+  indent: 2
+  retain_line_breaks_single: true
+  max_line_length: 100

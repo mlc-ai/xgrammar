@@ -110,7 +110,7 @@ use your own implementation for allocating a bitmask.
 In each auto-regressive step, we fill the token bitmask according to the current state
 of the matcher with ``xgr.GrammarMatcher.fill_next_token_bitmask()``. Then, we apply the bitmask
 into the model's logits with ``xgr.apply_token_bitmask_inplace()``, which calls a CUDA kernel
-if ``logits`` is on CUDA (recommended), otherwise a CPU implementation. 
+if ``logits`` is on CUDA (recommended), otherwise a CPU implementation.
 
 After masking, the logits for illegal tokens are set to negative infinity, so that
 we will never sample them. After sampling the token, update the ``xgr.GrammarMatcher``'s state with

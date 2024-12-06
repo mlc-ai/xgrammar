@@ -312,7 +312,7 @@ export class GrammarCompiler {
   };
 
   /**
-   * 
+   *
    * @param tokenizerInfo {TokenizerInfo} The tokenizer info that contains preprocessed vocab.
    * @param cacheEnabled {boolean} Whether to enable caching. Default is true.
    */

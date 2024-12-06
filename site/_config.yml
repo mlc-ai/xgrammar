@@ -10,7 +10,6 @@ plugins:
 
 remote_theme: mlc-ai/jekyll-theme-mlc
 
-
 # Colorize code snippets with the rogue module if we want to deploy on GH.
 highlighter: rouge
 

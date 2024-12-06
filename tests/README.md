@@ -8,4 +8,4 @@ huggingface-cli login --token YOUR_HF_TOKEN
 ```
 
 Make sure you also have access to the gated models, which should only require you to agree
-some terms on the models' website on huggingface. 
+some terms on the models' website on huggingface.
