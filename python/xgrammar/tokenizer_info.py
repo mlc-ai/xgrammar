@@ -246,31 +246,17 @@ class TokenizerInfo(XGRObject):
                             "It will be automatically detected."
                         )
 
-            if vocab_size is None:
-                vocab_size = len(tokenizer.get_vocab())
-
-            encoded_vocab = [''] * vocab_size
-        
-            # fill in base vocabulary from sp_model
-            for i in range(sp_model.get_piece_size()):
-                piece = sp_model.id_to_piece(i)
-                if i < vocab_size:
-                    encoded_vocab[i] = piece
-        
             vocab_dict = tokenizer.get_vocab()
-        
+            vocab_size = len(vocab_dict) if vocab_size is None else vocab_size
+
             # fill in any special tokens from vocab_dict
             for token, idx in vocab_dict.items():
                 if idx < vocab_size:
                     encoded_vocab[idx] = token
 
             # detect vocab_type of tokenizer
-            byte_level_tokens = ["Ġ", "Ċ", "ĉ", "Ā"]
-            if any("<0x" in token for token in vocab_dict):
+            if "<0x0A>" in vocab_dict:
                 vocab_type = VocabType.BYTE_FALLBACK
-            elif any(stoken in token for stoken in byte_level_tokens 
-                     for token in vocab_dict):
-                vocab_type = VocabType.BYTE_LEVEL
             else:
                 vocab_type = VocabType.RAW
 
