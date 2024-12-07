@@ -342,6 +342,8 @@ class JSONSchemaConverter {
   picojson::value json_schema_;
   // Whether to use strict mode in conversion. See JSONSchemaToEBNF().
   bool strict_mode_;
+  // Whether to allow empty object/array
+  bool allow_empty_;
   // The colon separator
   std::string colon_pattern_;
   // The rules constructed
@@ -377,6 +379,7 @@ JSONSchemaConverter::JSONSchemaConverter(
   } else {
     colon_pattern_ = "\"" + separators->second + "\"";
   }
+  allow_empty_ = !strict_mode_;
 
   AddBasicRules();
 }
@@ -392,12 +395,15 @@ std::string JSONSchemaConverter::Convert() {
 
 void JSONSchemaConverter::AddBasicRules() {
   bool past_strict_mode = strict_mode_;
+  // Allow any field for basic array/obj rules
   strict_mode_ = false;
 
   auto past_indent_manager = indentManager_;
-  indentManager_ = IndentManager(
-      std::nullopt, past_indent_manager->separator_, past_indent_manager->any_whitespace_
-  );
+  if (any_whitespace_) {
+    indentManager_ = IndentManager(std::nullopt, ",", true);
+  } else {
+    indentManager_ = IndentManager(std::nullopt, ", ", false);
+  }
 
   AddHelperRules();
   CreateBasicRule(picojson::value(true), kBasicAny);
@@ -967,7 +973,7 @@ std::string JSONSchemaConverter::VisitArray(
 
   result += " \"]\"";
 
-  if (!strict_mode_ && could_be_empty) {
+  if (allow_empty_ && could_be_empty) {
     // result = (result) | []
     auto rest = "\"[\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"]\"";
     result = "(" + result + ") | " + rest;
@@ -1202,7 +1208,7 @@ std::string JSONSchemaConverter::VisitObject(
   indentManager_->EndIndent();
 
   result += " \"}\"";
-  if (!strict_mode_ && could_be_empty) {
+  if (allow_empty_ && could_be_empty) {
     // result = (result) | {}
     auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"}\"";
     result = "(" + result + ") | " + rest;

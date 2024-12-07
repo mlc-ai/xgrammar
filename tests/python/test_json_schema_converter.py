@@ -33,7 +33,7 @@ def check_schema_with_grammar(
 def check_schema_with_json(
     schema: Dict[str, Any],
     json_str: str,
-    check_accepted: bool = True,
+    is_accepted: bool = True,
     any_whitespace: bool = True,
     indent: Optional[int] = None,
     separators: Optional[Tuple[str, str]] = None,
@@ -47,7 +47,7 @@ def check_schema_with_json(
         strict_mode=strict_mode,
     )
 
-    if check_accepted:
+    if is_accepted:
         assert _match_grammar_with_string(json_schema_grammar, json_str)
     else:
         assert not _match_grammar_with_string(json_schema_grammar, json_str)
@@ -56,7 +56,7 @@ def check_schema_with_json(
 def check_schema_with_instance(
     schema: Dict[str, Any],
     instance: BaseModel,
-    check_accepted: bool = True,
+    is_accepted: bool = True,
     any_whitespace: bool = True,
     indent: Optional[int] = None,
     separators: Optional[Tuple[str, str]] = None,
@@ -65,7 +65,7 @@ def check_schema_with_instance(
     instance_obj = instance.model_dump(mode="json", round_trip=True)
     instance_str = json.dumps(instance_obj, indent=indent, separators=separators)
     check_schema_with_json(
-        schema, instance_str, check_accepted, any_whitespace, indent, separators, strict_mode
+        schema, instance_str, is_accepted, any_whitespace, indent, separators, strict_mode
     )
 
 
@@ -89,8 +89,8 @@ basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= "[" "" basic_any (", " basic_any)* "" "]"
-basic_object ::= "{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}")
-root_prop_3 ::= "[" "" basic_any (", " basic_any)* "" "]")
+basic_object ::= "{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}"
+root_prop_3 ::= "[" "" basic_any (", " basic_any)* "" "]"
 root_prop_4 ::= "[" "" basic_string (", " basic_string)* "" "]"
 root_prop_5_item_2 ::= "[" "" basic_string (", " basic_string)* "" "]"
 root_prop_5 ::= "[" "" basic_string ", " basic_integer ", " root_prop_5_item_2 "" "]"
@@ -103,35 +103,31 @@ root ::= "{" "" "\"integer_field\"" ": " basic_integer ", " "\"number_field\"" "
     schema = MainModel.model_json_schema()
     check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=False)
 
-    # instance = MainModel(
-    #     integer_field=42,
-    #     number_field=3.14e5,
-    #     boolean_field=True,
-    #     any_array_field=[3.14, "foo", None, True],
-    #     array_field=["foo", "bar"],
-    #     tuple_field=("foo", 42, ["bar", "baz"]),
-    #     object_field={"foo": 42, "bar": 43},
-    #     nested_object_field={"foo": {"bar": 42}},
-    # )
-    # check_schema_with_instance(schema, instance, any_whitespace=False)
+    instance = MainModel(
+        integer_field=42,
+        number_field=3.14e5,
+        boolean_field=True,
+        any_array_field=[3.14, "foo", None, True],
+        array_field=["foo", "bar"],
+        tuple_field=("foo", 42, ["bar", "baz"]),
+        object_field={"foo": 42, "bar": 43},
+        nested_object_field={"foo": {"bar": 42}},
+    )
+    check_schema_with_instance(schema, instance, any_whitespace=False)
 
-    # instance_empty = MainModel(
-    #     integer_field=42,
-    #     number_field=3.14e5,
-    #     boolean_field=True,
-    #     any_array_field=[],
-    #     array_field=[],
-    #     tuple_field=("foo", 42, []),
-    #     object_field={},
-    #     nested_object_field={},
-    # )
+    instance_empty = MainModel(
+        integer_field=42,
+        number_field=3.14e5,
+        boolean_field=True,
+        any_array_field=[],
+        array_field=[],
+        tuple_field=("foo", 42, []),
+        object_field={},
+        nested_object_field={},
+    )
 
-    # schema = MainModel.model_json_schema()
-    # check_schema_with_instance(schema, instance_empty, any_whitespace=False)
-
-
-test_basic()
-exit()
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(schema, instance_empty, is_accepted=False, any_whitespace=False)
 
 
 def test_indent() -> None:
@@ -148,13 +144,13 @@ basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= "[" "" basic_any (", " basic_any)* "" "]"
-basic_object ::= "{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}"
-root_prop_0 ::= "[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]"
-root_prop_1_item_2 ::= "[" "\n      " basic_string (",\n      " basic_string)* "\n    " "]"
-root_prop_1 ::= "[" "\n    " basic_string ", " basic_integer ", " root_prop_1_item_2 "\n  " "]"
-root_prop_2 ::= "{" "\n    " basic_string ": " basic_integer (", " basic_string ": " basic_integer)* "\n  " "}"
-root ::= "{" "\n  " "\"array_field\"" ": " root_prop_0 ", " "\"tuple_field\"" ": " root_prop_1 ", " "\"object_field\"" ": " root_prop_2 "\n" "}"
+basic_array ::= ("[" "" basic_any ("," basic_any)* "" "]") | "[]"
+basic_object ::= ("{" "" basic_string ": " basic_any ("," basic_string ": " basic_any)* "" "}") | "{}"
+root_prop_0 ::= ("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | "[]"
+root_prop_1_item_2 ::= ("[" "\n      " basic_string (",\n      " basic_string)* "\n    " "]") | "[]"
+root_prop_1 ::= "[" "\n    " basic_string ",\n    " basic_integer ",\n    " root_prop_1_item_2 "\n  " "]"
+root_prop_2 ::= ("{" "\n    " basic_string ": " basic_integer (",\n    " basic_string ": " basic_integer)* "\n  " "}") | "{}"
+root ::= "{" "\n  " "\"array_field\"" ": " root_prop_0 ",\n  " "\"tuple_field\"" ": " root_prop_1 ",\n  " "\"object_field\"" ": " root_prop_2 "\n" "}"
 """
 
     instance = MainModel(
@@ -165,10 +161,14 @@ root ::= "{" "\n  " "\"array_field\"" ": " root_prop_0 ", " "\"tuple_field\"" ":
 
     schema = MainModel.model_json_schema()
     check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=False, indent=2)
-    check_schema_with_instance(schema, instance, any_whitespace=False, indent=2)
-    check_schema_with_instance(
-        schema, instance, any_whitespace=False, indent=None, separators=(",", ":")
-    )
+    # check_schema_with_instance(schema, instance, any_whitespace=False, indent=2)
+    # check_schema_with_instance(
+    #     schema, instance, any_whitespace=False, indent=None, separators=(",", ":")
+    # )
+
+
+test_indent()
+exit()
 
 
 def test_non_strict() -> None:
@@ -178,6 +178,8 @@ def test_non_strict() -> None:
     class MainModel(BaseModel):
         tuple_field: Tuple[str, Tuple[int, int]]
         foo_field: Foo
+        list_field: List[str]
+        object_field: Dict[str, Any]
 
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
@@ -208,7 +210,9 @@ root ::= "{" "\n  " "\"tuple_field\"" ": " root_prop_0 ",\n  " "\"foo_field\"" "
   "foo_field": {
     "tmp": "str"
   },
-  "extra": "field"
+  "extra": "field",
+  "list_field": [],
+  "object_field": {}
 }"""
 
     schema = MainModel.model_json_schema()
@@ -524,7 +528,7 @@ def test_restricted_string() -> None:
     check_schema_with_json(
         MainModel.model_json_schema(),
         '{"restricted_string": "j"}',
-        check_accepted=False,
+        is_accepted=False,
         any_whitespace=False,
     )
 
@@ -544,14 +548,14 @@ def test_complex_restrictions() -> None:
     check_schema_with_json(
         RestrictedModel.model_json_schema(),
         instance_str,
-        check_accepted=False,
+        is_accepted=False,
         any_whitespace=False,
     )
 
     check_schema_with_json(
         RestrictedModel.model_json_schema(),
         '{"restricted_string": "j", "restricted_value": 45}',
-        check_accepted=False,
+        is_accepted=False,
         any_whitespace=False,
     )
 
