@@ -27,11 +27,13 @@ namespace xgrammar {
  * \param indent The number of spaces for each indent. If it is std::nullopt, there will be no
  * indent or newline.
  * \param separator The separator between different elements in json. Examples include "," and ", ".
+ * \param any_whitespace Whether to ignore the indentation restrictions, and allow any whitespace.
  */
 class IndentManager {
  public:
-  IndentManager(std::optional<int> indent, const std::string& separator)
-      : enable_newline_(indent.has_value()),
+  IndentManager(std::optional<int> indent, const std::string& separator, bool any_whitespace)
+      : any_whitespace_(any_whitespace),
+        enable_newline_(indent.has_value()),
         indent_(indent.value_or(0)),
         separator_(separator),
         total_indent_(0),
@@ -66,10 +68,8 @@ class IndentManager {
    */
   std::string NextSeparator(bool is_end = false);
 
-  /*! \brief Get the separator itself. */
-  std::string GetBareSeparator() { return separator_; }
-
  private:
+  bool any_whitespace_;
   bool enable_newline_;
   int indent_;
   std::string separator_;
@@ -79,6 +79,15 @@ class IndentManager {
 };
 
 std::string IndentManager::NextSeparator(bool is_end) {
+  if (any_whitespace_) {
+    if (is_first_.back() || is_end) {
+      is_first_.back() = false;
+      return "[ \\n\\t]*";
+    } else {
+      return "[ \\n\\t]* \"" + separator_ + "\" [ \\n\\t]*";
+    }
+  }
+
   std::string res = "";
   if (!is_first_.back() && !is_end) {
     res += separator_;
@@ -110,9 +119,10 @@ class JSONSchemaConverter {
  public:
   JSONSchemaConverter(
       const picojson::value& json_schema,
-      std::optional<int> indent = std::nullopt,
-      std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
-      bool strict_mode = false
+      bool any_whitespace,
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool strict_mode
   );
 
   /*! \brief The root method. Convert the JSON schema to EBNF grammar string. */
@@ -327,32 +337,46 @@ class JSONSchemaConverter {
   );
 
   // The indent manager to get separators
-  std::unique_ptr<IndentManager> indentManager_;
+  std::optional<IndentManager> indentManager_;
   // The root JSON schema
   picojson::value json_schema_;
   // Whether to use strict mode in conversion. See JSONSchemaToEBNF().
   bool strict_mode_;
   // The colon separator
-  std::string colon_;
+  std::string colon_pattern_;
   // The rules constructed
   std::vector<std::pair<std::string, std::string>> rules_;
   // The cache for basic rules. Mapping from the key of schema returned by GetSchemaCacheIndex()
   // to the basic rule name.
   std::map<std::string, std::string> basic_rules_cache_;
+  // Whether to use any whitespace in the conversion
+  bool any_whitespace_;
 };
 
 JSONSchemaConverter::JSONSchemaConverter(
     const picojson::value& json_schema,
+    bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode
 )
-    : json_schema_(json_schema), strict_mode_(strict_mode) {
+    : json_schema_(json_schema), strict_mode_(strict_mode), any_whitespace_(any_whitespace) {
   if (!separators.has_value()) {
-    separators = (indent == std::nullopt) ? std::make_pair(", ", ": ") : std::make_pair(",", ": ");
+    if (indent == std::nullopt) {
+      separators = std::make_pair(", ", ": ");
+    } else {
+      separators = std::make_pair(",", ": ");
+    }
   }
-  indentManager_ = std::make_unique<IndentManager>(indent, separators->first);
-  colon_ = separators->second;
+  if (any_whitespace) {
+    separators = std::make_pair(",", ":");
+  }
+  indentManager_ = IndentManager(indent, separators->first, any_whitespace);
+  if (any_whitespace) {
+    colon_pattern_ = "[ \\n\\t]* \"" + separators->second + "\" [ \\n\\t]*";
+  } else {
+    colon_pattern_ = "\"" + separators->second + "\"";
+  }
 
   AddBasicRules();
 }
@@ -370,9 +394,10 @@ void JSONSchemaConverter::AddBasicRules() {
   bool past_strict_mode = strict_mode_;
   strict_mode_ = false;
 
-  auto past_indent_manager = std::move(indentManager_);
-  indentManager_ =
-      std::make_unique<IndentManager>(std::nullopt, past_indent_manager->GetBareSeparator());
+  auto past_indent_manager = indentManager_;
+  indentManager_ = IndentManager(
+      std::nullopt, past_indent_manager->separator_, past_indent_manager->any_whitespace_
+  );
 
   AddHelperRules();
   CreateBasicRule(picojson::value(true), kBasicAny);
@@ -398,7 +423,7 @@ void JSONSchemaConverter::AddBasicRules() {
   );
 
   strict_mode_ = past_strict_mode;
-  indentManager_ = std::move(past_indent_manager);
+  indentManager_ = past_indent_manager;
 }
 
 void JSONSchemaConverter::AddHelperRules() {
@@ -664,39 +689,39 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
     return "^\\d+$";  // Match any positive number if no start or end is specified
   }
 
-  std::vector<std::string> positiveParts;
-  std::vector<std::string> negativeParts;
+  std::vector<std::string> positive_parts;
+  std::vector<std::string> negative_parts;
 
-  auto generateGroup = [](int s, int e) -> std::string {
+  auto generate_group = [](int s, int e) -> std::string {
     std::ostringstream oss;
 
     if (s == e) {
       return std::to_string(s);
     }
 
-    std::string startStr = std::to_string(s);
-    std::string endStr = std::to_string(e);
+    std::string start_str = std::to_string(s);
+    std::string end_str = std::to_string(e);
 
-    size_t commonPrefix = 0;
-    while (commonPrefix < startStr.size() && startStr[commonPrefix] == endStr[commonPrefix]) {
-      ++commonPrefix;
+    size_t common_prefix = 0;
+    while (common_prefix < start_str.size() && start_str[common_prefix] == end_str[common_prefix]) {
+      ++common_prefix;
     }
 
-    if (commonPrefix > 0) {
-      oss << startStr.substr(0, commonPrefix);
+    if (common_prefix > 0) {
+      oss << start_str.substr(0, common_prefix);
     }
 
-    if (commonPrefix < startStr.size()) {
+    if (common_prefix < start_str.size()) {
       oss << "[";
-      oss << startStr[commonPrefix];
-      if (startStr[commonPrefix] != endStr[commonPrefix]) {
-        oss << "-" << endStr[commonPrefix];
+      oss << start_str[common_prefix];
+      if (start_str[common_prefix] != end_str[common_prefix]) {
+        oss << "-" << end_str[common_prefix];
       }
       oss << "]";
 
       // Add trailing zero ranges
-      if (commonPrefix + 1 < startStr.size()) {
-        oss << "\\d{" << startStr.size() - commonPrefix - 1 << "}";
+      if (common_prefix + 1 < start_str.size()) {
+        oss << "\\d{" << start_str.size() - common_prefix - 1 << "}";
       }
     }
 
@@ -704,70 +729,70 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
   };
 
   if (start && end) {
-    int rangeStart = start.value();
-    int rangeEnd = end.value();
+    int range_start = start.value();
+    int range_end = end.value();
 
     // Handle negative part of the range
-    if (rangeStart < 0) {
-      int negativeEnd = std::min(rangeEnd, -1);
-      while (rangeStart <= negativeEnd) {
-        int nextRangeEnd = (rangeStart / 10 - 1) * 10 + 9;  // Handle negative tens group
-        if (nextRangeEnd < negativeEnd) {
-          nextRangeEnd = negativeEnd;
+    if (range_start < 0) {
+      int negative_end = std::min(range_end, -1);
+      while (range_start <= negative_end) {
+        int next_range_end = (range_start / 10 - 1) * 10 + 9;  // Handle negative tens group
+        if (next_range_end < negative_end) {
+          next_range_end = negative_end;
         }
-        negativeParts.push_back("-" + generateGroup(-nextRangeEnd, -rangeStart));
-        rangeStart = nextRangeEnd + 1;
+        negative_parts.push_back("-" + generate_group(-next_range_end, -range_start));
+        range_start = next_range_end + 1;
       }
     }
 
     // Handle positive part of the range
-    if (rangeEnd >= 0) {
-      rangeStart = std::max(rangeStart, 0);
-      while (rangeStart <= rangeEnd) {
-        int nextRangeEnd = (rangeStart / 10 + 1) * 10 - 1;  // Handle positive tens group
-        if (nextRangeEnd > rangeEnd) {
-          nextRangeEnd = rangeEnd;
+    if (range_end >= 0) {
+      range_start = std::max(range_start, 0);
+      while (range_start <= range_end) {
+        int next_range_end = (range_start / 10 + 1) * 10 - 1;  // Handle positive tens group
+        if (next_range_end > range_end) {
+          next_range_end = range_end;
         }
-        positiveParts.push_back(generateGroup(rangeStart, nextRangeEnd));
-        rangeStart = nextRangeEnd + 1;
+        positive_parts.push_back(generate_group(range_start, next_range_end));
+        range_start = next_range_end + 1;
       }
     }
   } else if (start) {
     if (start.value() < 0) {
-      negativeParts.push_back("-" + std::to_string(-start.value()) + "\\d*");
+      negative_parts.push_back("-" + std::to_string(-start.value()) + "\\d*");
     } else {
-      positiveParts.push_back(std::to_string(start.value()) + "\\d*");
+      positive_parts.push_back(std::to_string(start.value()) + "\\d*");
     }
   } else if (end) {
     if (end.value() < 0) {
-      negativeParts.push_back("-" + std::to_string(-end.value()));
+      negative_parts.push_back("-" + std::to_string(-end.value()));
     } else {
-      positiveParts.push_back(std::to_string(end.value()));
+      positive_parts.push_back(std::to_string(end.value()));
     }
   }
 
   std::ostringstream result;
   result << "^(";
-  if (!negativeParts.empty()) {
+  if (!negative_parts.empty()) {
     result << "(";
-    for (size_t i = 0; i < negativeParts.size(); ++i) {
+    for (size_t i = 0; i < negative_parts.size(); ++i) {
       if (i > 0) {
         result << "|";
       }
-      result << negativeParts[i];
+      result << negative_parts[i];
     }
     result << ")";
-    if (!positiveParts.empty()) {
+    if (!positive_parts.empty()) {
       result << "|";
     }
   }
-  if (!positiveParts.empty()) {
+  if (!positive_parts.empty()) {
     result << "(";
-    for (size_t i = 0; i < positiveParts.size(); ++i) {
+    for (size_t i = 0; i < positive_parts.size(); ++i) {
       if (i > 0) {
         result << "|";
       }
-      result << positiveParts[i];
+      result << positive_parts[i];
     }
     result << ")";
   }
@@ -942,8 +967,10 @@ std::string JSONSchemaConverter::VisitArray(
 
   result += " \"]\"";
 
-  if (could_be_empty) {
-    result = "(" + result + ") | \"[]\"";
+  if (!strict_mode_ && could_be_empty) {
+    // result = (result) | []
+    auto rest = "\"[\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"]\"";
+    result = "(" + result + ") | " + rest;
   }
 
   return result;
@@ -958,9 +985,8 @@ std::string JSONSchemaConverter::GetPropertyPattern(
   // the outer quote is for the string in EBNF grammar, and the inner quote is for
   // the string in JSON
   std::string key = "\"\\\"" + prop_name + "\\\"\"";
-  std::string colon = "\"" + colon_ + "\"";
   std::string value = CreateRuleFromSchema(prop_schema, rule_name + "_prop_" + std::to_string(idx));
-  return key + " " + colon + " " + value;
+  return key + " " + colon_pattern_ + " " + value;
 }
 
 std::string JSONSchemaConverter::GetOtherPropertyPattern(
@@ -969,9 +995,8 @@ std::string JSONSchemaConverter::GetOtherPropertyPattern(
     const std::string& rule_name,
     const std::string& rule_name_suffix
 ) {
-  std::string colon = "\"" + colon_ + "\"";
   std::string value = CreateRuleFromSchema(prop_schema, rule_name + "_" + rule_name_suffix);
-  return key_pattern + " " + colon + " " + value;
+  return key_pattern + " " + colon_pattern_ + " " + value;
 }
 
 std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
@@ -1177,8 +1202,10 @@ std::string JSONSchemaConverter::VisitObject(
   indentManager_->EndIndent();
 
   result += " \"}\"";
-  if (could_be_empty) {
-    result = "(" + result + ") | \"{}\"";
+  if (!strict_mode_ && could_be_empty) {
+    // result = (result) | {}
+    auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"}\"";
+    result = "(" + result + ") | " + rest;
   }
 
   return result;
@@ -1186,6 +1213,7 @@ std::string JSONSchemaConverter::VisitObject(
 
 std::string JSONSchemaToEBNF(
     const std::string& schema,
+    bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode
@@ -1194,16 +1222,17 @@ std::string JSONSchemaToEBNF(
   std::string err = picojson::parse(schema_value, schema);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
                               << ". The JSON string is:" << schema;
-  return JSONSchemaToEBNF(schema_value, indent, separators, strict_mode);
+  return JSONSchemaToEBNF(schema_value, any_whitespace, indent, separators, strict_mode);
 }
 
 std::string JSONSchemaToEBNF(
     const picojson::value& schema,
+    bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode
 ) {
-  JSONSchemaConverter converter(schema, indent, separators, strict_mode);
+  JSONSchemaConverter converter(schema, any_whitespace, indent, separators, strict_mode);
   return converter.Convert();
 }
 

@@ -23,11 +23,12 @@ Grammar Grammar::FromEBNF(const std::string& ebnf_string, const std::string& roo
 
 Grammar Grammar::FromJSONSchema(
     const std::string& schema,
+    bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode
 ) {
-  auto ebnf_string = JSONSchemaToEBNF(schema, indent, separators, strict_mode);
+  auto ebnf_string = JSONSchemaToEBNF(schema, any_whitespace, indent, separators, strict_mode);
   return FromEBNF(ebnf_string);
 }
 

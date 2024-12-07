@@ -49,6 +49,7 @@ class Grammar(XGRObject):
     def from_json_schema(
         schema: Union[str, Type[BaseModel]],
         *,
+        any_whitespace: bool = True,
         indent: Optional[int] = None,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
@@ -56,9 +57,9 @@ class Grammar(XGRObject):
         """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
         used to specify the schema.
 
-        The format of the JSON schema can be specified with the `indent` and `separators`
-        parameters. The meaning and the default values of the parameters follows the convention in
-        json.dumps().
+        It allows any whitespace by default. If user want to specify the format of the JSON,
+        set `any_whitespace` to False and use the `indent` and `separators` parameters. The
+        meaning and the default values of the parameters follows the convention in json.dumps().
 
         It internally converts the JSON schema to a EBNF grammar.
 
@@ -67,8 +68,19 @@ class Grammar(XGRObject):
         schema : Union[str, Type[BaseModel]]
             The schema string or Pydantic model.
 
+        any_whitespace : bool, default: True
+            Whether to use any whitespace. If True, the generated grammar will ignore the
+            indent and separators parameters, and allow any whitespace.
+
         indent : Optional[int], default: None
             The number of spaces for indentation. If None, the output will be in one line.
+
+            Note that specifying the indentation means forcing the LLM to generate JSON strings
+            strictly formatted. However, some models may tend to generate JSON strings that
+            are not strictly formatted. In this case, forcing the LLM to generate strictly
+            formatted JSON strings may degrade the generation quality. See
+            <https://github.com/sgl-project/sglang/issues/2216#issuecomment-2516192009> for more
+            details.
 
         separators : Optional[Tuple[str, str]], default: None
             Two separators used in the schema: comma and colon. Examples: (",", ":"), (", ", ": ").
@@ -78,7 +90,8 @@ class Grammar(XGRObject):
         strict_mode : bool, default: True
             Whether to use strict mode. In strict mode, the generated grammar will not allow
             properties and items that is not specified in the schema. This is equivalent to
-            setting unevaluatedProperties and unevaluatedItems to false.
+            setting unevaluatedProperties and unevaluatedItems to false. It also disallows empty
+            JSON objects and arrays.
 
             This helps LLM to generate accurate output in the grammar-guided generation with JSON
             schema.
@@ -89,10 +102,19 @@ class Grammar(XGRObject):
             The constructed grammar.
         """
         if isinstance(schema, type) and issubclass(schema, BaseModel):
-            schema = json.dumps(schema.model_json_schema())
+            if hasattr(schema, "model_json_schema"):
+                # pydantic 2.x
+                schema = json.dumps(schema.model_json_schema())
+            elif hasattr(schema, "schema_json"):
+                # pydantic 1.x
+                schema = json.dumps(schema.schema_json())
+            else:
+                raise ValueError(
+                    "The schema should have a model_json_schema or json_schema method."
+                )
 
         return Grammar._create_from_handle(
-            _core.Grammar.from_json_schema(schema, indent, separators, strict_mode),
+            _core.Grammar.from_json_schema(schema, any_whitespace, indent, separators, strict_mode),
         )
 
     @staticmethod

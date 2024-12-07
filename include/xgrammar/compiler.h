@@ -49,6 +49,7 @@ class GrammarCompiler {
   /*! \brief Get the compiled grammar for a JSON schema string. */
   CompiledGrammar CompileJSONSchema(
       const std::string& schema,
+      bool any_whitespace = true,
       std::optional<int> indent = std::nullopt,
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
       bool strict_mode = true

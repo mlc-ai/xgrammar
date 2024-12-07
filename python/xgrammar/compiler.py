@@ -70,6 +70,7 @@ class GrammarCompiler(XGRObject):
         self,
         schema: Union[str, Type[BaseModel]],
         *,
+        any_whitespace: bool = True,
         indent: Optional[int] = None,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
@@ -104,7 +105,9 @@ class GrammarCompiler(XGRObject):
             schema = json.dumps(schema.model_json_schema())
 
         return CompiledGrammar._create_from_handle(
-            self._handle.compile_json_schema(schema, indent, separators, strict_mode)
+            self._handle.compile_json_schema(
+                schema, any_whitespace, indent, separators, strict_mode
+            )
         )
 
     def compile_builtin_json_grammar(self) -> CompiledGrammar:

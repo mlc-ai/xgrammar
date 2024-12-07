@@ -97,6 +97,7 @@ class Grammar {
    */
   static Grammar FromJSONSchema(
       const std::string& schema,
+      bool any_whitespace = true,
       std::optional<int> indent = std::nullopt,
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
       bool strict_mode = true
