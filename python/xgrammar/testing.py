@@ -14,6 +14,7 @@ from .tokenizer_info import TokenizerInfo
 def _json_schema_to_ebnf(
     schema: str,
     *,
+    any_whitespace: bool = True,
     indent: Optional[int] = None,
     separators: Optional[Tuple[str, str]] = None,
     strict_mode: bool = True,
@@ -48,6 +49,7 @@ def _json_schema_to_ebnf(
     """
     return _core.testing._json_schema_to_ebnf(
         schema,
+        any_whitespace,
         indent,
         separators,
         strict_mode,

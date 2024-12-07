@@ -106,12 +106,12 @@ def test_grammar_compiler_json_schema():
         nested_object_field={"foo": {"bar": 42}},
     )
 
-    def check_with_fmt(indent, separators, test_id):
+    def check_with_fmt(any_whitespace, indent, separators, test_id):
         instance_str = instance.model_dump_json(indent=indent, round_trip=True)
 
         time_start = time.monotonic_ns()
         compiled_grammar = grammar_compiler.compile_json_schema(
-            MainModel, indent=indent, separators=separators
+            MainModel, any_whitespace=any_whitespace, indent=indent, separators=separators
         )
         time_end = time.monotonic_ns()
         print(f"Time to get compiled grammar {test_id}: {(time_end - time_start) / 1e3} us")
@@ -121,14 +121,19 @@ def test_grammar_compiler_json_schema():
         assert matcher._debug_accept_string(instance_str)
         assert matcher.is_terminated()
 
-    check_with_fmt(None, (",", ":"), "1")
-    check_with_fmt(None, (",", ":"), "2")
-    check_with_fmt(2, None, "3")
-    check_with_fmt(2, (",", ": "), "4")
+    check_with_fmt(False, None, (",", ":"), "1")
+    check_with_fmt(False, None, (",", ":"), "2")
+    check_with_fmt(False, 2, None, "3")
+    check_with_fmt(False, 2, (",", ": "), "4")
+
+    check_with_fmt(True, None, (",", ":"), "5")
+    check_with_fmt(True, None, (",", ":"), "6")
+    check_with_fmt(True, 2, None, "7")
+    check_with_fmt(True, 2, (",", ": "), "8")
 
     grammar_compiler.clear_cache()
 
-    check_with_fmt(None, (",", ":"), "5")
+    check_with_fmt(False, None, (",", ":"), "9")
 
 
 schema_instances = [

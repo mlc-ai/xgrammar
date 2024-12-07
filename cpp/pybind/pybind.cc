@@ -7,7 +7,8 @@
 #include <pybind11/stl.h>
 #include <xgrammar/xgrammar.h>
 
-#include "../testing.h"
+#include "../json_schema_converter.h"
+#include "../regex_converter.h"
 #include "python_methods.h"
 
 namespace py = pybind11;
@@ -71,7 +72,16 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def("_debug_accept_string", &GrammarMatcher::_DebugAcceptString);
 
   auto pyTestingModule = m.def_submodule("testing");
-  pyTestingModule.def("_json_schema_to_ebnf", &_JSONSchemaToEBNF)
-      .def("_regex_to_ebnf", &_RegexToEBNF)
+  pyTestingModule
+      .def(
+          "_json_schema_to_ebnf",
+          py::overload_cast<
+              const std::string&,
+              bool,
+              std::optional<int>,
+              std::optional<std::pair<std::string, std::string>>,
+              bool>(&JSONSchemaToEBNF)
+      )
+      .def("_regex_to_ebnf", &RegexToEBNF)
       .def("_get_masked_tokens_from_bitmask", &Matcher_DebugGetMaskedTokensFromBitmask);
 }

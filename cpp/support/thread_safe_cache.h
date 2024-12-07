@@ -7,7 +7,6 @@
 #define XGRAMMAR_SUPPORT_THREAD_SAFE_CACHE_H_
 
 #include <functional>
-#include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
@@ -112,41 +111,41 @@ class ThreadSafeCache<Key, Value> {
    * \return The cached or newly computed value of the key
    */
   Value Get(const Key& key) {
-    // Get or create the per-key mutex
-    std::shared_ptr<std::shared_mutex> key_mutex = GetOrCreateMutex(key);
+    // Why we need this:
+    // - When adding new elements to a unordered_map, the map may be rehashed,
+    // - which means all the iterators may be invalidated.
+    // - However, cppreference says:
+    // - "References and pointers to either key or data stored in the container are only invalidated
+    // - by erasing that element, even when the corresponding iterator is invalidated."
+    // - (See https://en.cppreference.com/w/cpp/container/unordered_map)
+    // - Therefore, we should maintain 2 locks.
+    // - When we add something to the cache, we should hold the cache_mutex_.
+    // - When we erase something from the cache, we should hold the clear_mutex_.
+
+    auto erase_lock = std::shared_lock(erase_mutex_);
 
     // First attempt to read from cache_
     {
-      std::shared_lock<std::shared_mutex> cache_lock(cache_mutex_);
+      auto cache_lock = std::shared_lock(cache_mutex_);
       auto it = cache_.find(key);
-      if (it != cache_.end()) {
-        return it->second;  // Cache hit
+      if (it != cache_.end()) {    // Cache hit
+        auto& entry = it->second;  // The iterator is invalidated after releasing the lock
+        cache_lock.unlock();       // Therefore, we should hold the entry by reference first
+
+        // We should not hold lock here, since this function may be blocking.
+        return entry.get(compute_, key);
       }
     }
 
-    // Acquire unique lock on the per-key mutex to compute the value
-    std::unique_lock<std::shared_mutex> key_lock(*key_mutex);
-
-    // Double-checked locking
+    // Acquire exclusive lock to compute value
     {
-      std::shared_lock<std::shared_mutex> cache_lock(cache_mutex_);
-      auto it = cache_.find(key);
-      if (it != cache_.end()) {
-        return it->second;
-      }
+      auto cache_lock = std::unique_lock(cache_mutex_);
+      auto& entry = cache_[key];  // Create a new entry
+      cache_lock.unlock();        // Release the lock before blocking
+
+      // We should not hold lock here, since this function may be blocking.
+      return entry.get(compute_, key);
     }
-
-    // Compute the value without holding the cache lock
-    Value value = compute_(key);
-
-    // Insert the value into cache_
-    {
-      std::unique_lock<std::shared_mutex> cache_lock(cache_mutex_);
-      XGRAMMAR_DCHECK(cache_.find(key) == cache_.end());
-      cache_[key] = value;
-    }
-
-    return value;
   }
 
   /*!
@@ -155,41 +154,29 @@ class ThreadSafeCache<Key, Value> {
    * them.
    */
   void Clear() {
-    // Acquire locks in the order: global_key_mutex_ -> cache_mutex_
-    std::unique_lock<std::mutex> global_key_lock(global_key_mutex_);
-    std::unique_lock<std::shared_mutex> cache_lock(cache_mutex_);
+    auto erase_lock = std::unique_lock(erase_mutex_);
     cache_.clear();
-    key_mutexes_.clear();
   }
 
  private:
-  /*!
-   * \brief Gets or creates a mutex for the given key
-   * \param key The key to get/create a mutex for
-   * \return A shared pointer to the mutex for this key
-   */
-  std::shared_ptr<std::shared_mutex> GetOrCreateMutex(const Key& key) {
-    std::unique_lock<std::mutex> lock(global_key_mutex_);
-    auto it = key_mutexes_.find(key);
-    if (it == key_mutexes_.end()) {
-      auto new_mutex = std::make_shared<std::shared_mutex>();
-      XGRAMMAR_DCHECK(key_mutexes_.find(key) == key_mutexes_.end());
-      key_mutexes_[key] = new_mutex;
-      return new_mutex;
+  struct Entry {
+    Value value;
+    std::once_flag flag;
+    auto get(const std::function<Value(const Key&)>& f, const Key& key) -> const Value& {
+      // block in this lambda until the value is computed
+      std::call_once(flag, [&] { value = f(key); });
+      return value;
     }
-    return it->second;
-  }
+  };
 
   /*! \brief The cache mapping keys to computed values */
-  std::unordered_map<Key, Value> cache_;
+  std::unordered_map<Key, Entry> cache_;
   /*! \brief The function used to compute values for uncached keys */
   std::function<Value(const Key&)> compute_;
-  /*! \brief Per-key mutexes to allow parallel computation of different keys */
-  std::unordered_map<Key, std::shared_ptr<std::shared_mutex>> key_mutexes_;
-  /*! \brief Mutex protecting access to key_mutexes_ */
-  std::mutex global_key_mutex_;
   /*! \brief Reader-writer lock protecting access to cache_ */
   std::shared_mutex cache_mutex_;
+  /*! \brief Mutex protecting removing elements */
+  std::shared_mutex erase_mutex_;
 };
 
 }  // namespace xgrammar
