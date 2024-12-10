@@ -92,10 +92,11 @@ void EBNFParser::ConsumeSpace(bool allow_newline) {
                     (allow_newline && (Peek() == '\n' || Peek() == '\r')))) {
     Consume();
     if (Peek(-1) == '#') {
+      auto start = cur_column_ - 1;
       while (Peek() && Peek() != '\n' && Peek() != '\r') {
         Consume();
       }
-      if (!Peek()) {
+      if (!Peek() || start != 1 /* Reserve \n for inline comment */) {
         return;
       }
       Consume();

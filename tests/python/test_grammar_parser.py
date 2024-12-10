@@ -18,6 +18,20 @@ c ::= (("c"))
     after = str(grammar)
     assert after == expected
 
+def test_bnf_comment():
+    before = """# top comment
+root ::= a b # inline comment
+a ::= "a"
+b ::= "b"
+# bottom comment
+"""
+    expected = """root ::= ((a b))
+a ::= (("a"))
+b ::= (("b"))
+"""
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
+    assert after == expected
 
 def test_ebnf():
     before = """root ::= b c | b root
