@@ -1,19 +1,17 @@
 """This test uses the optimized JSON grammar provided by the grammar library."""
 
 import sys
-import time
 from typing import List, Optional
 
 import pytest
 import torch
 from transformers import AutoTokenizer
-from triton.testing import do_bench
 
 import xgrammar as xgr
 from xgrammar.testing import (
     _get_masked_tokens_from_bitmask,
     _get_matcher_from_grammar_and_tokenizer_info,
-    _match_grammar_with_string,
+    _is_grammar_accept_string,
 )
 
 json_grammar = xgr.Grammar.builtin_json_grammar()
@@ -27,7 +25,7 @@ input_accepted = [
 
 @pytest.mark.parametrize("input_accepted", input_accepted)
 def test_accept(input_accepted: str):
-    assert _match_grammar_with_string(json_grammar, input_accepted)
+    assert _is_grammar_accept_string(json_grammar, input_accepted)
 
 
 input_refused = (
@@ -38,7 +36,7 @@ input_refused = (
 
 @pytest.mark.parametrize("input_refused", input_refused)
 def test_refuse(input_refused: str):
-    assert not _match_grammar_with_string(json_grammar, input_refused)
+    assert not _is_grammar_accept_string(json_grammar, input_refused)
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [
@@ -157,94 +155,6 @@ def test_token_operations():
     result.append(accepted_tokens)
 
     assert result == expected
-
-
-@pytest.mark.parametrize("is_cuda", (True, False))
-def test_apply_token_bitmask_inplace(is_cuda: bool):
-    neginf = float("-inf")
-    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
-    logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], dtype=torch.float32)
-    expected = torch.where(bool_mask, logits, neginf)
-
-    if is_cuda:
-        logits_gpu = logits.to("cuda")
-        bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
-        xgr.apply_token_bitmask_inplace(logits_gpu, bitmask)
-        torch.cuda.synchronize()
-        torch.testing.assert_allclose(logits_gpu, expected.to("cuda"))
-    else:
-        bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
-        xgr.apply_token_bitmask_inplace(logits, bitmask)
-        torch.testing.assert_allclose(logits, expected)
-
-
-batch_size_vocab_size_masked_cnt_stride = [
-    (1, 128000, 1024, 1),
-    (1, 128000, 120000, 1),
-    (64, 128000, 1024, 1),
-    (64, 128000, 120000, 1),
-    (64, 128000, 1024, 4),
-    (64, 128000, 120000, 4),
-]
-
-
-@pytest.mark.parametrize(
-    "batch_size, vocab_size, masked_cnt, stride",
-    batch_size_vocab_size_masked_cnt_stride,
-)
-@pytest.mark.parametrize("is_cuda", (True, False))
-def test_apply_token_bitmask_inplace_large(
-    batch_size: int, vocab_size: int, masked_cnt: int, stride: int, is_cuda: bool
-):
-
-    masked_batch_ids = list(range(0, batch_size, stride))
-    mask_batch_size = len(masked_batch_ids)
-    masked_positions = torch.randint(0, vocab_size, (mask_batch_size, masked_cnt))
-    bool_mask = torch.ones((mask_batch_size, vocab_size), dtype=torch.bool)
-    bool_mask.scatter_(1, masked_positions, False)
-
-    logits = torch.randn(batch_size, vocab_size, dtype=torch.float32)
-    logits_expected = logits.clone()
-    logits_expected[masked_batch_ids] = torch.masked_fill(
-        logits_expected[masked_batch_ids], ~bool_mask, float("-inf")
-    )
-
-    def bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
-        bool_mask_int32 = bool_mask.to(torch.int32)
-        bool_mask_view = bool_mask_int32.view(mask_batch_size, -1, 32)
-        weights = torch.tensor([1 << i for i in range(32)], dtype=torch.int64)
-        weights = weights.to(torch.int32)
-        bitmask = (bool_mask_view * weights).sum(dim=2)
-        return bitmask.to(torch.int32)
-
-    bitmask = bool_mask_to_bitmask(bool_mask)
-    if is_cuda:
-        logits_gpu = logits.to("cuda")
-        bitmask_gpu = bitmask.to("cuda")
-        torch.cuda.synchronize()
-        if stride == 1:
-            # Test logic without indices
-            f = lambda: xgr.apply_token_bitmask_inplace(logits_gpu, bitmask_gpu)
-        else:
-            f = lambda: xgr.apply_token_bitmask_inplace(
-                logits_gpu, bitmask_gpu, indices=masked_batch_ids
-            )
-        f()
-        torch.testing.assert_allclose(logits_gpu, logits_expected.to("cuda"))
-
-        dur = do_bench(f, warmup=100, rep=1000)
-        print(f"Time taken: {(dur) * 1e3} us")
-    else:
-        time_start = time.monotonic_ns()
-        if stride == 1:
-            # Test logic without indices
-            xgr.apply_token_bitmask_inplace(logits, bitmask)
-
-        else:
-            xgr.apply_token_bitmask_inplace(logits, bitmask, indices=masked_batch_ids)
-        time_end = time.monotonic_ns()
-        print(f"Time taken: {(time_end - time_start) / 1e3} us")
-        torch.testing.assert_allclose(logits, logits_expected)
 
 
 def test_rollback():

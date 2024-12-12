@@ -6,7 +6,7 @@ import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _match_grammar_with_string, _regex_to_ebnf
+from xgrammar.testing import _is_grammar_accept_string, _regex_to_ebnf
 
 
 def test_basic():
@@ -15,8 +15,8 @@ def test_basic():
     expected_grammar = r"""root ::= "1" "2" "3"
 """
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, "123")
-    assert not _match_grammar_with_string(grammar_str, "1234")
+    assert _is_grammar_accept_string(grammar_str, "123")
+    assert not _is_grammar_accept_string(grammar_str, "1234")
 
 
 def test_unicode():
@@ -25,7 +25,7 @@ def test_unicode():
     expected_grammar = r"""root ::= "w" "w" "\u6211" "\U0001f601"
 """
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, regex)
+    assert _is_grammar_accept_string(grammar_str, regex)
 
 
 regex_expected_grammar_instance = [
@@ -60,7 +60,7 @@ regex_expected_grammar_instance = [
 def test_escape(regex: str, expected_grammar: str, instance: str):
     grammar_str = _regex_to_ebnf(regex)
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance)
+    assert _is_grammar_accept_string(grammar_str, instance)
 
 
 def test_escaped_char_class():
@@ -72,7 +72,7 @@ def test_escaped_char_class():
     expected_grammar = r"""root ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [\f\n\r\t\v\u0020\u00a0] [^[\f\n\r\t\v\u0020\u00a0]
 """
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance)
+    assert _is_grammar_accept_string(grammar_str, instance)
 
 
 def test_char_class():
@@ -82,7 +82,7 @@ def test_char_class():
     expected_grammar = r"""root ::= [-a-zA-Z+--]+
 """
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance)
+    assert _is_grammar_accept_string(grammar_str, instance)
 
 
 def test_boundary():
@@ -92,7 +92,7 @@ def test_boundary():
     expected_grammar = r"""root ::= "a" "b" "c"
 """
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance)
+    assert _is_grammar_accept_string(grammar_str, instance)
 
 
 def test_disjunction():
@@ -102,7 +102,7 @@ def test_disjunction():
     expected_grammar = r"""root ::= "a" "b" "c" | "d" "e" ( "f" | "g" )
 """
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance)
+    assert _is_grammar_accept_string(grammar_str, instance)
 
 
 def test_space():
@@ -112,7 +112,7 @@ def test_space():
     expected_grammar = r"""root ::= " " "a" "b" "c" " " | " " "d" "f" " " | " " "g" " "
 """
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance)
+    assert _is_grammar_accept_string(grammar_str, instance)
 
 
 def test_quantifier():
@@ -124,8 +124,8 @@ def test_quantifier():
 """
     # TODO(yixin): add tests for repetition range
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance)
-    assert _match_grammar_with_string(grammar_str, instance1)
+    assert _is_grammar_accept_string(grammar_str, instance)
+    assert _is_grammar_accept_string(grammar_str, instance1)
 
 
 def test_group():
@@ -135,7 +135,7 @@ def test_group():
     expected_grammar = r"""root ::= ( "a" | "b" ) ( "c" | "d" )
 """
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance)
+    assert _is_grammar_accept_string(grammar_str, instance)
 
 
 def test_any():
@@ -145,7 +145,7 @@ def test_any():
     expected_grammar = r"""root ::= [\u0000-\U0010FFFF]+ "a" [\u0000-\U0010FFFF]+
 """
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance)
+    assert _is_grammar_accept_string(grammar_str, instance)
 
 
 def test_ipv4():
@@ -159,7 +159,7 @@ def test_ipv4():
 """
     )
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, "123.45.67.89")
+    assert _is_grammar_accept_string(grammar_str, "123.45.67.89")
 
 
 date_time_instances_accepted = [
@@ -186,7 +186,7 @@ def test_date_time(instance: str, accepted: bool):
 """
     )
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance) == accepted
+    assert _is_grammar_accept_string(grammar_str, instance) == accepted
 
 
 date_instances_accepted = [
@@ -208,7 +208,7 @@ def test_date(instance: str, accepted: bool):
 """
     )
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance) == accepted
+    assert _is_grammar_accept_string(grammar_str, instance) == accepted
 
 
 time_instances_accepted = [
@@ -232,7 +232,7 @@ def test_time(instance: str, accepted: bool):
 """
     )
     assert grammar_str == expected_grammar
-    assert _match_grammar_with_string(grammar_str, instance) == accepted
+    assert _is_grammar_accept_string(grammar_str, instance) == accepted
 
 
 email_instances_accepted = [
@@ -261,7 +261,7 @@ def test_email(instance: str, accepted: bool):
         r"""[a-z0-9]([a-z0-9-]*[a-z0-9])?)$"""
     )
     grammar_str = _regex_to_ebnf(regex)
-    assert _match_grammar_with_string(grammar_str, instance) == accepted
+    assert _is_grammar_accept_string(grammar_str, instance) == accepted
 
 
 tokenizer_paths = ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]

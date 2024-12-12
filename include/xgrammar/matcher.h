@@ -26,6 +26,12 @@ void _DebugGetMaskedTokensFromBitmask(
     std::vector<int>* rejected_tokens, const DLTensor& token_bitmask, int vocab_size, int index = 0
 );
 
+void ApplyTokenBitmaskInplaceCPU(
+    DLTensor* logits,
+    const DLTensor& bitmask,
+    std::optional<std::vector<int>> indices = std::nullopt
+);
+
 /*!
  * \brief A stateful matcher to match tokens to the specified BNF grammar. This class is the core
  * logic of the grammar-guided generation.

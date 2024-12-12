@@ -1,19 +1,11 @@
 """CPU implementation for in-place applying token mask."""
 
+import time
 from typing import List, Optional, Union
 
 import torch
 
-
-def _bitmask_to_bool_mask(bitmask: torch.Tensor, vocab_size: int) -> torch.Tensor:
-    bits_per_block = 32
-    bitmask_size = bitmask.size(-1)
-    # Expand bitmask to bits
-    shifts = torch.arange(bits_per_block, device=bitmask.device, dtype=torch.int32)
-    bits = (bitmask.unsqueeze(-1) >> shifts) & 1  # Shape (*, bits_per_block)
-    bits = bits.view(bitmask.size(0), -1)  # Shape (batch_size, bitmask_size * bits_per_block)
-    bool_mask = bits[:, :vocab_size].to(torch.bool)  # Truncate to vocab_size
-    return bool_mask
+from ..base import _core
 
 
 def apply_token_bitmask_inplace_cpu(
@@ -21,37 +13,48 @@ def apply_token_bitmask_inplace_cpu(
     bitmask: torch.Tensor,
     indices: Optional[Union[List[int], torch.Tensor]] = None,
 ) -> None:
-    """Exactly the same as `apply_token_bitmask_inplace()`, but `logits` is on the CPU.
-    So we use CPU implementation rather than launching a CUDA kernel.
-    """
+    """Apply token bitmask in-place on CPU."""
+    start = time.monotonic_ns()
     if logits.device.type != "cpu":
         raise ValueError("logits must be on CPU")
-    if bitmask.device != logits.device:
-        raise ValueError("bitmask must be on the same device as logits")
-    if bitmask.dim() != logits.dim():
-        raise ValueError(
-            f"bitmask and logits must have the same number of dimensions, but "
-            + f"got {bitmask.dim()} and {logits.dim()}"
-        )
+    if bitmask.device.type != "cpu":
+        raise ValueError("bitmask must be on CPU")
+    if logits.dtype != torch.float32:
+        raise ValueError("logits must be of type float32")
+    if bitmask.dtype != torch.int32:
+        raise ValueError("bitmask must be of type int32")
+    if logits.dim() != 1 and logits.dim() != 2:
+        raise ValueError("logits should be 1D or 2D, but got {}D".format(logits.dim()))
     if bitmask.dim() != 1 and bitmask.dim() != 2:
-        raise ValueError("Unsupported logits and bitmask dimensions: {}".format(bitmask.dim()))
+        raise ValueError("bitmask should be 1D or 2D, but got {}D".format(bitmask.dim()))
 
-    # Expand both to (batch_size, xxx_size), where batch_size is 1
-    if logits.dim() == 1:
-        logits = logits.unsqueeze(0)
-        bitmask = bitmask.unsqueeze(0)
+    # logits_shape = list(logits.shape)
+    # bitmask_shape = list(bitmask.shape)
+    # end = time.monotonic_ns()
+    # print(f"Python prepare: {(end - start) / 1e3} us")
 
-    batch_size, vocab_size = logits.size()
-    if indices is None:
-        if batch_size != bitmask.size(0):
-            raise ValueError("Batch size of logits and bitmask must match")
-        bool_mask = _bitmask_to_bool_mask(bitmask, vocab_size)  # Shape (batch_size, vocab_size)
-        logits.masked_fill_(~bool_mask, -float("inf"))
-    else:
-        if not isinstance(indices, torch.Tensor):
-            indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
-        len_indices = len(indices)
-        if len_indices != bitmask.size(0):
-            raise ValueError("The length of indices and bitmask's batch size must match.")
-        bool_mask = _bitmask_to_bool_mask(bitmask, vocab_size)  # Shape (len_indices, vocab_size)
-        logits[indices] = logits[indices].masked_fill_(~bool_mask, -float("inf"))
+    # _core.kernels.apply_token_bitmask_inplace_cpu(
+    #     logits.data_ptr(),
+    #     logits_shape,
+    #     bitmask.data_ptr(),
+    #     bitmask_shape,
+    #     indices,
+    # )
+
+    logits_shape = (logits.shape[0],) if logits.dim() == 1 else (logits.shape[0], logits.shape[1])
+    bitmask_shape = (
+        (bitmask.shape[0],) if bitmask.dim() == 1 else (bitmask.shape[0], bitmask.shape[1])
+    )
+    end = time.monotonic_ns()
+    print(f"Python prepare: {(end - start) / 1e3} us")
+
+    # start = time.monotonic_ns()
+    _core.kernels.apply_token_bitmask_inplace_cpu(
+        logits.data_ptr(),
+        logits_shape,
+        bitmask.data_ptr(),
+        bitmask_shape,
+        indices,
+    )
+    end = time.monotonic_ns()
+    print(f"Python inner: {(end - start) / 1e3} us")

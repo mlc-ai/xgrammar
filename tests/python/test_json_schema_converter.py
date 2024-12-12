@@ -7,7 +7,7 @@ import pytest
 from pydantic import BaseModel, Field, TypeAdapter, WithJsonSchema, create_model
 
 import xgrammar as xgr
-from xgrammar.testing import _json_schema_to_ebnf, _match_grammar_with_string
+from xgrammar.testing import _is_grammar_accept_string, _json_schema_to_ebnf
 
 
 def check_schema_with_grammar(
@@ -47,9 +47,9 @@ def check_schema_with_json(
     )
 
     if is_accepted:
-        assert _match_grammar_with_string(json_schema_grammar, json_str)
+        assert _is_grammar_accept_string(json_schema_grammar, json_str)
     else:
-        assert not _match_grammar_with_string(json_schema_grammar, json_str)
+        assert not _is_grammar_accept_string(json_schema_grammar, json_str)
 
 
 def check_schema_with_instance(

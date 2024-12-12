@@ -11,7 +11,7 @@ import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _get_masked_tokens_from_bitmask, _match_grammar_with_string
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 
 def test_simple():
@@ -22,9 +22,9 @@ rule3 ::= "c"
 """
 
     grammar = xgr.Grammar.from_ebnf(grammar_str)
-    assert _match_grammar_with_string(grammar, "bab")
-    assert not _match_grammar_with_string(grammar, "abb")
-    assert _match_grammar_with_string(grammar, "cab")
+    assert _is_grammar_accept_string(grammar, "bab")
+    assert not _is_grammar_accept_string(grammar, "abb")
+    assert _is_grammar_accept_string(grammar, "cab")
 
 
 def test_custom_root_rule():
@@ -38,8 +38,8 @@ basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic
 ws ::= [ \n\t]*
 """
     grammar = xgr.Grammar.from_ebnf(json_grammar_simple_ebnf, root_rule_name="basic_string")
-    assert _match_grammar_with_string(grammar, r'"abc\r\n"')
-    assert not _match_grammar_with_string(grammar, r'{"name": "John" }')
+    assert _is_grammar_accept_string(grammar, r'"abc\r\n"')
+    assert not _is_grammar_accept_string(grammar, r'{"name": "John" }')
 
 
 json_grammar_ebnf = r"""
@@ -96,7 +96,7 @@ json_input_accepted = [
 
 @pytest.mark.parametrize("json_input_accepted", json_input_accepted)
 def test_json_accept(json_input_accepted: str):
-    assert _match_grammar_with_string(json_grammar, json_input_accepted)
+    assert _is_grammar_accept_string(json_grammar, json_input_accepted)
 
 
 json_input_refused = (
@@ -122,7 +122,7 @@ json_input_refused = (
 
 @pytest.mark.parametrize("json_input_refused", json_input_refused)
 def test_json_refuse(json_input_refused: str):
-    assert not _match_grammar_with_string(json_grammar, json_input_refused)
+    assert not _is_grammar_accept_string(json_grammar, json_input_refused)
 
 
 json_input_pressure = (
@@ -254,7 +254,7 @@ json_input_pressure = (
 
 @pytest.mark.parametrize("json_input_pressure", json_input_pressure)
 def test_json_pressure(json_input_pressure: str):
-    assert _match_grammar_with_string(json_grammar, json_input_pressure)
+    assert _is_grammar_accept_string(json_grammar, json_input_pressure)
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [

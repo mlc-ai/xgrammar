@@ -22,6 +22,9 @@ def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
     return (batch_size, math.ceil(vocab_size / 32))
 
 
+_FULL_MASK = 0xFFFFFFFF
+
+
 def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
     """Allocate the bitmask for the next token prediction. For The bitmask is an int32 tensor on
     CPU with shape (batch_size, ceil(vocab_size / 32)). Users who have their own needs to
@@ -41,12 +44,18 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
     bitmask : torch.Tensor
         The shape of the bitmask.
     """
-    # For CUDA, use `pin_memory` in `torch.empty()` to speed up data transfer from CPU to GPU.
-    return torch.empty(
+    # In CUDA, use pinned memory to speed up data transfer from CPU to GPU
+    return torch.full(
         get_bitmask_shape(batch_size, vocab_size),
+        _FULL_MASK,
         dtype=bitmask_dtype,
         pin_memory=_is_cuda_available,
     )
+
+
+def reset_token_bitmask(bitmask: torch.Tensor) -> None:
+    """Reset the bitmask to the full mask."""
+    bitmask.fill_(_FULL_MASK)
 
 
 def apply_token_bitmask_inplace(

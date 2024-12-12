@@ -9,7 +9,7 @@ import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _get_masked_tokens_from_bitmask, _match_grammar_with_string
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 json_grammar = xgr.Grammar.builtin_json_grammar()
 
@@ -51,7 +51,7 @@ json_input_accepted = [
 
 @pytest.mark.parametrize("json_input_accepted", json_input_accepted)
 def test_json_accept(json_input_accepted: str):
-    assert _match_grammar_with_string(json_grammar, json_input_accepted)
+    assert _is_grammar_accept_string(json_grammar, json_input_accepted)
 
 
 json_input_refused = (
@@ -77,7 +77,7 @@ json_input_refused = (
 
 @pytest.mark.parametrize("json_input_refused", json_input_refused)
 def test_json_refuse(json_input_refused: str):
-    assert not _match_grammar_with_string(json_grammar, json_input_refused)
+    assert not _is_grammar_accept_string(json_grammar, json_input_refused)
 
 
 json_input_pressure = (
@@ -209,7 +209,7 @@ json_input_pressure = (
 
 @pytest.mark.parametrize("json_input_pressure", json_input_pressure)
 def test_json_pressure(json_input_pressure: str):
-    assert _match_grammar_with_string(json_grammar, json_input_pressure)
+    assert _is_grammar_accept_string(json_grammar, json_input_pressure)
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [
