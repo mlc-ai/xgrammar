@@ -67,5 +67,4 @@ generated_ids = [
 ]
 responses = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 for response in responses:
-    print(response)
-    print()
+    print(response, end="\n\n")
