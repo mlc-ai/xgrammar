@@ -24,6 +24,18 @@ def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
     return bitmask.to(torch.int32)
 
 
+def test_allocate_reset_token_bitmask():
+    batch_size = 10
+    vocab_size = 128005
+    bitmask = xgr.allocate_token_bitmask(batch_size, vocab_size)
+    assert bitmask.shape == (batch_size, (vocab_size + 31) // 32)
+    assert bitmask.device.type == "cpu"
+    assert (bitmask == 0xFFFFFFFF).all()
+    bitmask.fill_(0)
+    xgr.reset_token_bitmask(bitmask)
+    assert (bitmask == 0xFFFFFFFF).all()
+
+
 token_mask_sizes = (1024, 32000, 32001, 32011)
 
 

@@ -22,14 +22,17 @@ def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
     return (batch_size, math.ceil(vocab_size / 32))
 
 
-_FULL_MASK = 0xFFFFFFFF
+_FULL_MASK = torch.tensor(-1, dtype=bitmask_dtype)
 
 
 def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
-    """Allocate the bitmask for the next token prediction. For The bitmask is an int32 tensor on
+    """Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on
     CPU with shape (batch_size, ceil(vocab_size / 32)). Users who have their own needs to
     manage CUDA memory can construct the tensor with get_bitmask_shape and bitmask_dtype
     themselves.
+
+    The reason why we use int32 instead of uint32 is that old versions of PyTorch do not support
+    uint32.
 
     Parameters
     ----------
