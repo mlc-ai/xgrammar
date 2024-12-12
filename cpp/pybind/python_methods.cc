@@ -100,8 +100,6 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
     std::pair<int64_t, int64_t> bitmask_shape,
     std::optional<std::vector<int>> indices
 ) {
-  auto start = std::chrono::high_resolution_clock::now();
-
   std::array<int64_t, 2> logits_shape_arr = {logits_shape.first, logits_shape.second};
   std::array<int64_t, 2> bitmask_shape_arr = {bitmask_shape.first, bitmask_shape.second};
 
@@ -124,15 +122,8 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
       nullptr,
       0
   };
-  auto end = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-  XGRAMMAR_LOG(INFO) << "pybind convert: " << duration.count() << " us";
 
   ApplyTokenBitmaskInplaceCPU(&logits_dltensor, bitmask_dltensor, indices);
-
-  end = std::chrono::high_resolution_clock::now();
-  duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-  XGRAMMAR_LOG(INFO) << "pybind inner total: " << duration.count() << " us";
 }
 
 }  // namespace xgrammar

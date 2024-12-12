@@ -64,7 +64,6 @@ void _DebugGetMaskedTokensFromBitmask(
 void ApplyTokenBitmaskInplaceCPU(
     DLTensor* logits, const DLTensor& bitmask, std::optional<std::vector<int>> indices
 ) {
-  auto start = std::chrono::high_resolution_clock::now();
   XGRAMMAR_CHECK(logits->device.device_type == kDLCPU)
       << "The provided logits's device is not valid: should be CPU";
   XGRAMMAR_CHECK(bitmask.device.device_type == kDLCPU)
@@ -113,11 +112,7 @@ void ApplyTokenBitmaskInplaceCPU(
       indices_value[i] = i;
     }
   }
-  auto end = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-  XGRAMMAR_LOG(INFO) << "C++ check indices: " << duration.count() << " us";
 
-  start = std::chrono::high_resolution_clock::now();
   for (auto idx : indices_value) {
     uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_size;
     DynamicBitset bitset(vocab_size, data_ptr);
@@ -126,9 +121,6 @@ void ApplyTokenBitmaskInplaceCPU(
       logits_ptr[i] = -std::numeric_limits<float>::infinity();
     }
   }
-  end = std::chrono::high_resolution_clock::now();
-  duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-  XGRAMMAR_LOG(INFO) << "Time taken: " << duration.count() << " us";
 }
 
 /*

@@ -14,7 +14,6 @@ def apply_token_bitmask_inplace_cpu(
     indices: Optional[Union[List[int], torch.Tensor]] = None,
 ) -> None:
     """Apply token bitmask in-place on CPU."""
-    start = time.monotonic_ns()
     if logits.device.type != "cpu":
         raise ValueError("logits must be on CPU")
     if bitmask.device.type != "cpu":
@@ -28,27 +27,11 @@ def apply_token_bitmask_inplace_cpu(
     if bitmask.dim() != 1 and bitmask.dim() != 2:
         raise ValueError("bitmask should be 1D or 2D, but got {}D".format(bitmask.dim()))
 
-    # logits_shape = list(logits.shape)
-    # bitmask_shape = list(bitmask.shape)
-    # end = time.monotonic_ns()
-    # print(f"Python prepare: {(end - start) / 1e3} us")
-
-    # _core.kernels.apply_token_bitmask_inplace_cpu(
-    #     logits.data_ptr(),
-    #     logits_shape,
-    #     bitmask.data_ptr(),
-    #     bitmask_shape,
-    #     indices,
-    # )
-
-    logits_shape = (logits.shape[0],) if logits.dim() == 1 else (logits.shape[0], logits.shape[1])
+    logits_shape = (1, logits.shape[0]) if logits.dim() == 1 else (logits.shape[0], logits.shape[1])
     bitmask_shape = (
-        (bitmask.shape[0],) if bitmask.dim() == 1 else (bitmask.shape[0], bitmask.shape[1])
+        (1, bitmask.shape[0]) if bitmask.dim() == 1 else (bitmask.shape[0], bitmask.shape[1])
     )
-    end = time.monotonic_ns()
-    print(f"Python prepare: {(end - start) / 1e3} us")
 
-    # start = time.monotonic_ns()
     _core.kernels.apply_token_bitmask_inplace_cpu(
         logits.data_ptr(),
         logits_shape,
@@ -56,5 +39,3 @@ def apply_token_bitmask_inplace_cpu(
         bitmask_shape,
         indices,
     )
-    end = time.monotonic_ns()
-    print(f"Python inner: {(end - start) / 1e3} us")

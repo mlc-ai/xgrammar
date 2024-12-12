@@ -24,35 +24,35 @@ def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
     return bitmask.to(torch.int32)
 
 
-# token_mask_sizes = (1024, 32000, 32001, 32011)
+token_mask_sizes = (1024, 32000, 32001, 32011)
 
 
-# @pytest.mark.parametrize("token_mask_size", token_mask_sizes)
-# @pytest.mark.parametrize("index", (0, 1))
-# def test_get_masked_tokens_from_bitmask(token_mask_size: int, index: int):
-#     bool_mask = torch.randint(0, 2, (2, token_mask_size), dtype=torch.bool)
-#     bitmask = _bool_mask_to_bitmask(bool_mask)
-#     expected = torch.where(~bool_mask[index])[0].tolist()
-#     assert _get_masked_tokens_from_bitmask(bitmask, token_mask_size, index) == expected
+@pytest.mark.parametrize("token_mask_size", token_mask_sizes)
+@pytest.mark.parametrize("index", (0, 1))
+def test_get_masked_tokens_from_bitmask(token_mask_size: int, index: int):
+    bool_mask = torch.randint(0, 2, (2, token_mask_size), dtype=torch.bool)
+    bitmask = _bool_mask_to_bitmask(bool_mask)
+    expected = torch.where(~bool_mask[index])[0].tolist()
+    assert _get_masked_tokens_from_bitmask(bitmask, token_mask_size, index) == expected
 
 
-# @pytest.mark.parametrize("is_cuda", (True, False))
-# def test_apply_token_bitmask_inplace(is_cuda: bool):
-#     neginf = float("-inf")
-#     bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
-#     logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], dtype=torch.float32)
-#     expected = torch.where(bool_mask, logits, neginf)
+@pytest.mark.parametrize("is_cuda", (True, False))
+def test_apply_token_bitmask_inplace(is_cuda: bool):
+    neginf = float("-inf")
+    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
+    logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], dtype=torch.float32)
+    expected = torch.where(bool_mask, logits, neginf)
 
-#     if is_cuda:
-#         logits_gpu = logits.to("cuda")
-#         bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
-#         xgr.apply_token_bitmask_inplace(logits_gpu, bitmask)
-#         torch.cuda.synchronize()
-#         torch.testing.assert_close(logits_gpu, expected.to("cuda"))
-#     else:
-#         bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
-#         xgr.apply_token_bitmask_inplace(logits, bitmask)
-#         torch.testing.assert_close(logits, expected)
+    if is_cuda:
+        logits_gpu = logits.to("cuda")
+        bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
+        xgr.apply_token_bitmask_inplace(logits_gpu, bitmask)
+        torch.cuda.synchronize()
+        torch.testing.assert_close(logits_gpu, expected.to("cuda"))
+    else:
+        bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
+        xgr.apply_token_bitmask_inplace(logits, bitmask)
+        torch.testing.assert_close(logits, expected)
 
 
 batch_size_vocab_size_masked_cnt_stride = [
@@ -71,7 +71,7 @@ batch_size_vocab_size_masked_cnt_stride = [
     "batch_size, vocab_size, masked_cnt, stride",
     batch_size_vocab_size_masked_cnt_stride,
 )
-@pytest.mark.parametrize("is_cuda", (False,))
+@pytest.mark.parametrize("is_cuda", (False, True))
 def test_apply_token_bitmask_inplace_large(
     batch_size: int, vocab_size: int, masked_cnt: int, stride: int, is_cuda: bool
 ):
@@ -103,7 +103,7 @@ def test_apply_token_bitmask_inplace_large(
         torch.testing.assert_close(logits_gpu, logits_expected.to("cuda"))
 
         dur = do_bench(f, warmup=100, rep=1000)
-        print(f"Time taken: {(dur) * 1e3} us")
+        print(f"apply_token_bitmask_inplace_cuda time: {(dur) * 1e3} us")
     else:
         time_start = time.monotonic_ns()
         if stride == 1:
@@ -113,7 +113,7 @@ def test_apply_token_bitmask_inplace_large(
         else:
             xgr.apply_token_bitmask_inplace(logits, bitmask, indices=masked_batch_ids)
         time_end = time.monotonic_ns()
-        print(f"Time taken: {(time_end - time_start) / 1e3} us")
+        print(f"apply_token_bitmask_inplace_cpu time: {(time_end - time_start) / 1e3} us")
         torch.testing.assert_close(logits, logits_expected)
 
 

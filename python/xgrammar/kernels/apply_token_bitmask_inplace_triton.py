@@ -26,15 +26,13 @@ def apply_token_bitmask_inplace_kernel(
         bitmask_offsets = block_offset // 32 + tl.arange(0, BLOCK_SIZE // 32)
         vocab_mask = offsets < vocab_size
         packed_bitmask_mask = bitmask_offsets < bitmask_size
-        logits = tl.load(logits_ptr + batch_id * vocab_size + offsets, vocab_mask)
         packed_bitmask = tl.load(
-            bitmask_ptr + row_id * bitmask_size + bitmask_offsets, packed_bitmask_mask
+            bitmask_ptr + batch_id * bitmask_size + bitmask_offsets, packed_bitmask_mask
         )
         bitmask = ((packed_bitmask[:, None] >> (tl.arange(0, 32)[None, :])) & 1) == 0
         bitmask = bitmask.reshape(BLOCK_SIZE)
 
-        logits = tl.where(bitmask, -float("inf"), logits)
-        tl.store(logits_ptr + batch_id * vocab_size + offsets, logits, vocab_mask)
+        tl.store(logits_ptr + batch_id * vocab_size + offsets, -float("inf"), vocab_mask & bitmask)
 
 
 def apply_token_bitmask_inplace_triton(
