@@ -69,34 +69,36 @@ def apply_token_bitmask_inplace(
     allocate_token_bitmask and filled by fill_next_token_bitmask. After applying the bitmask, the
     masked logits will be set to -inf.
 
-    When indices is not specified, the shape of logits and bitmask should be
-    (batch_size, vocab_size) and (batch_size, bitmask_size) respectively. bitmask_size =
-    ceil(vocab_size / 32). The operation is
+    The shape of logits and bitmask should be (batch_size, vocab_size) and
+    (batch_size, bitmask_size) respectively. bitmask_size = ceil(vocab_size / 32). The operation is:
 
     .. code:: python
 
         for i in range(batch_size):
             for j in range(vocab_size):
                 if get_bitmask_value(bitmask, i, j) == 0:
-                    logits[indices[i], j] = -inf
+                    logits[i, j] = -inf
 
-    get_bitmask_value(bitmask, j) gets the j-th bit of the bitmask.
+    get_bitmask_value(bitmask, i, j) gets the j-th bit of the i-th row of the bitmask.
 
-
-    Indices can be used to specify which batch id to apply the bitmask to. When specified, the shape
-    of logits and bitmask should be (batch_size, vocab_size) and (len(indices), bitmask_size)
-    respectively. The operation will be
+    Indices can be used to specify which logits in the batch to apply the bitmask to. It is
+    especially useful when there are structured requests and unstructured requests mixed in the
+    same batch by skipping masking the logits in the unstructured requests. When specified, the
+    operation will be
 
     .. code:: python
 
-        for i in range(len(indices)):
+        for batch_id in indices:
             for j in range(vocab_size):
-                if get_bitmask_value(bitmask, i, j) == 0:
-                    logits[indices[i], j] = -inf
+                if get_bitmask_value(bitmask, batch_id, j) == 0:
+                    logits[batch_id, j] = -inf
 
     The logits and bitmask should be on the same device. If both them are on CUDA, we launch a CUDA
     kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The CUDA kernel
     is optimized and should be preferred.
+
+    In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
+    manually copy the bitmask to GPU before calling this function.
 
     Parameters
     ----------
@@ -107,7 +109,8 @@ def apply_token_bitmask_inplace(
         The bitmask to apply.
 
     indices : Optional[List[int]], default: None
-        The indices of the tokens to apply the bitmask to. If None, all tokens will be applied.
+        A list of indices to specify which logits in the batch to apply the bitmask to. If None,
+        apply the bitmask to all logits in the batch.
     """
     if bitmask.device != logits.device:
         raise ValueError(
