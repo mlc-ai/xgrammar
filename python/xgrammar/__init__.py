@@ -8,5 +8,6 @@ from .matcher import (
     apply_token_bitmask_inplace,
     bitmask_dtype,
     get_bitmask_shape,
+    reset_token_bitmask,
 )
 from .tokenizer_info import TokenizerInfo, VocabType

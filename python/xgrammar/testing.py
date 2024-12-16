@@ -83,7 +83,7 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
     return _core.testing._regex_to_ebnf(regex, with_rule_name)
 
 
-def _match_grammar_with_string(
+def _is_grammar_accept_string(
     grammar: Union[Grammar, str], input_str: str, debug_print: bool = False
 ) -> bool:
     if isinstance(grammar, str):

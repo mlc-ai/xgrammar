@@ -37,6 +37,14 @@ std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(
     intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
 );
 
+void Kernels_ApplyTokenBitmaskInplaceCPU(
+    intptr_t logits_ptr,
+    std::pair<int64_t, int64_t> logits_shape,
+    intptr_t bitmask_ptr,
+    std::pair<int64_t, int64_t> bitmask_shape,
+    std::optional<std::vector<int>> indices
+);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_PYBIND_PYTHON_METHODS_H_

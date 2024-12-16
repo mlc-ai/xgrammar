@@ -84,4 +84,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       )
       .def("_regex_to_ebnf", &RegexToEBNF)
       .def("_get_masked_tokens_from_bitmask", &Matcher_DebugGetMaskedTokensFromBitmask);
+
+  auto pyKernelsModule = m.def_submodule("kernels");
+  pyKernelsModule.def("apply_token_bitmask_inplace_cpu", &Kernels_ApplyTokenBitmaskInplaceCPU);
 }

@@ -12,8 +12,9 @@ from lmformatenforcer.integrations.transformers import (
     build_token_enforcer_tokenizer_data,
 )
 from outlines.fsm.guide import Guide, RegexGuide
-from outlines.fsm.json_schema import build_regex_from_schema, convert_json_schema_to_str
+from outlines.fsm.json_schema import convert_json_schema_to_str
 from outlines.generate.generator import bias_logits
+from outlines.generate.json import build_regex_from_schema
 from outlines.models import TransformerTokenizer
 from tqdm import tqdm
 from transformers import AutoTokenizer
@@ -23,18 +24,18 @@ import xgrammar as xgr
 wrong_data_indices = [1]
 
 
-def xgrammar_build(schema: str, tokenizer_info: TokenizerInfo):
-    grammar = BuiltinGrammar.json_schema(schema, strict_mode=False)
-    matcher = GrammarMatcher(grammar, tokenizer_info)
+def xgrammar_build(schema: str, grammar_compiler: xgr.GrammarCompiler):
+    grammar = grammar_compiler.compile_json_schema(schema)
+    matcher = xgr.GrammarMatcher(grammar)
     return matcher
 
 
 def xgrammar_exec(
-    matcher: GrammarMatcher, logits: torch.Tensor, bitmask: torch.Tensor, token_id: int
+    matcher: xgr.GrammarMatcher, logits: torch.Tensor, bitmask: torch.Tensor, token_id: int
 ):
     # Logits processing
     matcher.fill_next_token_bitmask(bitmask)
-    matcher.apply_token_bitmask_inplace(logits, bitmask)
+    xgr.apply_token_bitmask_inplace(logits, bitmask)
     # Update state
     assert matcher.accept_token(token_id)
     return
@@ -93,7 +94,8 @@ if __name__ == "__main__":
     hf_model_path = "meta-llama/Llama-3.1-8B-Instruct"
 
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_model_path)
-    xgrammar_tokenizer_info = TokenizerInfo.from_huggingface(hf_tokenizer)
+    xgrammar_tokenizer_info = xgr.TokenizerInfo.from_huggingface(hf_tokenizer)
+    xgrammar_grammar_compiler = xgr.GrammarCompiler(xgrammar_tokenizer_info)
     outlines_tokenizer = TransformerTokenizer(hf_tokenizer)
     lmformatenforcer_tokenizer = build_token_enforcer_tokenizer_data(hf_tokenizer)
 
@@ -137,8 +139,8 @@ if __name__ == "__main__":
             start = time.perf_counter()
             try:
                 if backend == "xgrammar":
-                    worker = xgrammar_build(schema, xgrammar_tokenizer_info)
-                    bitmask = GrammarMatcher.allocate_token_bitmask(worker.vocab_size)
+                    worker = xgrammar_build(schema, xgrammar_grammar_compiler)
+                    bitmask = xgr.allocate_token_bitmask(worker.vocab_size)
                 elif backend == "outlines":
                     worker = outlines_build(schema, outlines_tokenizer)
                 elif backend == "lmformatenforcer":

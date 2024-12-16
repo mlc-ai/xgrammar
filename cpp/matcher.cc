@@ -61,6 +61,68 @@ void _DebugGetMaskedTokensFromBitmask(
   }
 }
 
+void ApplyTokenBitmaskInplaceCPU(
+    DLTensor* logits, const DLTensor& bitmask, std::optional<std::vector<int>> indices
+) {
+  XGRAMMAR_CHECK(logits->device.device_type == kDLCPU)
+      << "The provided logits's device is not valid: should be CPU";
+  XGRAMMAR_CHECK(bitmask.device.device_type == kDLCPU)
+      << "The provided bitmask's device is not valid: should be CPU";
+  int batch_size;
+  int vocab_size;
+  if (logits->ndim == 2) {
+    batch_size = logits->shape[0];
+    vocab_size = logits->shape[1];
+  } else {
+    batch_size = 1;
+    vocab_size = logits->shape[0];
+  }
+  int bitmask_size = GetBitmaskSize(vocab_size);
+  if (bitmask.ndim == 2) {
+    XGRAMMAR_CHECK(bitmask.shape[0] == batch_size)
+        << "The provided bitmask's batch size is not consistent with logits";
+    XGRAMMAR_CHECK(bitmask.shape[1] == bitmask_size)
+        << "The provided bitmask's bitmask size is not consistent with logits";
+  } else {
+    XGRAMMAR_CHECK(bitmask.ndim == 1)
+        << "The provided bitmask's shape is not valid: should be (batch_size, vocab_size)";
+    XGRAMMAR_CHECK(bitmask.shape[0] == bitmask_size)
+        << "The provided bitmask's bitmask size is not consistent with logits";
+  }
+  XGRAMMAR_CHECK(
+      logits->dtype.code == kDLFloat && logits->dtype.bits == 32 && logits->dtype.lanes == 1
+  ) << "The provided logits's dtype is not valid: should be float32";
+  XGRAMMAR_CHECK(
+      bitmask.dtype.code == kDLInt && bitmask.dtype.bits == 32 && bitmask.dtype.lanes == 1
+  ) << "The provided bitmask's dtype is not valid: should be int32";
+
+  std::vector<int> indices_value;
+  if (indices.has_value()) {
+    indices_value = indices.value();
+    std::sort(indices_value.begin(), indices_value.end());
+    indices_value.erase(
+        std::unique(indices_value.begin(), indices_value.end()), indices_value.end()
+    );
+    XGRAMMAR_CHECK(indices_value.back() < batch_size)
+        << "The provided indices is out of bounds: " << indices_value.back()
+        << " >= " << batch_size;
+  } else {
+    indices_value.resize(batch_size);
+    for (int i = 0; i < batch_size; ++i) {
+      indices_value[i] = i;
+    }
+  }
+
+  for (auto idx : indices_value) {
+    uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_size;
+    DynamicBitset bitset(vocab_size, data_ptr);
+    auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * vocab_size;
+    for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+      logits_ptr[i] = -std::numeric_limits<float>::infinity();
+    }
+  }
+}
+
 /*
  * Note on the matching algorithm
  *

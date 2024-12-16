@@ -22,11 +22,17 @@ def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
     return (batch_size, math.ceil(vocab_size / 32))
 
 
+_FULL_MASK = torch.tensor(-1, dtype=bitmask_dtype)
+
+
 def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
-    """Allocate the bitmask for the next token prediction. For The bitmask is an int32 tensor on
+    """Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on
     CPU with shape (batch_size, ceil(vocab_size / 32)). Users who have their own needs to
     manage CUDA memory can construct the tensor with get_bitmask_shape and bitmask_dtype
     themselves.
+
+    The reason why we use int32 instead of uint32 is that old versions of PyTorch do not support
+    uint32.
 
     Parameters
     ----------
@@ -41,12 +47,18 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
     bitmask : torch.Tensor
         The shape of the bitmask.
     """
-    # For CUDA, use `pin_memory` in `torch.empty()` to speed up data transfer from CPU to GPU.
-    return torch.empty(
+    # In CUDA, use pinned memory to speed up data transfer from CPU to GPU
+    return torch.full(
         get_bitmask_shape(batch_size, vocab_size),
+        _FULL_MASK,
         dtype=bitmask_dtype,
         pin_memory=_is_cuda_available,
     )
+
+
+def reset_token_bitmask(bitmask: torch.Tensor) -> None:
+    """Reset the bitmask to the full mask."""
+    bitmask.fill_(_FULL_MASK)
 
 
 def apply_token_bitmask_inplace(
@@ -60,34 +72,36 @@ def apply_token_bitmask_inplace(
     allocate_token_bitmask and filled by fill_next_token_bitmask. After applying the bitmask, the
     masked logits will be set to -inf.
 
-    When indices is not specified, the shape of logits and bitmask should be
-    (batch_size, vocab_size) and (batch_size, bitmask_size) respectively. bitmask_size =
-    ceil(vocab_size / 32). The operation is
+    The shape of logits and bitmask should be (batch_size, vocab_size) and
+    (batch_size, bitmask_size) respectively. bitmask_size = ceil(vocab_size / 32). The operation is:
 
     .. code:: python
 
         for i in range(batch_size):
             for j in range(vocab_size):
                 if get_bitmask_value(bitmask, i, j) == 0:
-                    logits[indices[i], j] = -inf
+                    logits[i, j] = -inf
 
-    get_bitmask_value(bitmask, j) gets the j-th bit of the bitmask.
+    get_bitmask_value(bitmask, i, j) gets the j-th bit of the i-th row of the bitmask.
 
-
-    Indices can be used to specify which batch id to apply the bitmask to. When specified, the shape
-    of logits and bitmask should be (batch_size, vocab_size) and (len(indices), bitmask_size)
-    respectively. The operation will be
+    Indices can be used to specify which logits in the batch to apply the bitmask to. It is
+    especially useful when there are structured requests and unstructured requests mixed in the
+    same batch by skipping masking the logits in the unstructured requests. When specified, the
+    operation will be
 
     .. code:: python
 
-        for i in range(len(indices)):
+        for batch_id in indices:
             for j in range(vocab_size):
-                if get_bitmask_value(bitmask, i, j) == 0:
-                    logits[indices[i], j] = -inf
+                if get_bitmask_value(bitmask, batch_id, j) == 0:
+                    logits[batch_id, j] = -inf
 
     The logits and bitmask should be on the same device. If both them are on CUDA, we launch a CUDA
     kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The CUDA kernel
     is optimized and should be preferred.
+
+    In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
+    manually copy the bitmask to GPU before calling this function.
 
     Parameters
     ----------
@@ -98,7 +112,8 @@ def apply_token_bitmask_inplace(
         The bitmask to apply.
 
     indices : Optional[List[int]], default: None
-        The indices of the tokens to apply the bitmask to. If None, all tokens will be applied.
+        A list of indices to specify which logits in the batch to apply the bitmask to. If None,
+        apply the bitmask to all logits in the batch.
     """
     if bitmask.device != logits.device:
         raise ValueError(

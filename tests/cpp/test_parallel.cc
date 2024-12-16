@@ -23,7 +23,7 @@ static_assert(
 );
 
 // simulate a CompiledGrammar object
-struct Grammar {
+struct MockGrammar {
   std::size_t uuid;
   std::byte padding[sizeof(CompiledGrammar) - sizeof(std::size_t)];
 };
@@ -31,9 +31,9 @@ struct Grammar {
 using namespace std::chrono_literals;
 
 TEST(XGrammarParallelTest, CacheEfficiency) {
-  auto cache = ThreadSafeCache<std::string, Grammar>{[](const std::string&) {
+  auto cache = ThreadSafeCache<std::string, MockGrammar>{[](const std::string&) {
     std::this_thread::sleep_for(1s);  // simulate a slow operation
-    return Grammar{.uuid = counter++, .padding = {}};
+    return MockGrammar{.uuid = counter++, .padding = {}};
   }};
   auto futures = std::vector<std::future<std::size_t>>{};
 
