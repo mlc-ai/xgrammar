@@ -332,7 +332,8 @@ class HFTokenizerAnalyzer {
 
 bool TokenizerInfo::Impl::IsSpecialToken(const std::string& token) {
   // gemma treats [@BOS@] as a special token
-  return (token[0] == '<' && token.back() == '>' && token.size() >= 3) || token == "[@BOS@]";
+  return (token[0] == '<' && token.back() == '>' && token.size() >= 3) || token == "[@BOS@]" ||
+         token == "";
 }
 
 TokenizerInfo::Impl::Impl(

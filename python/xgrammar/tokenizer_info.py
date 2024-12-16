@@ -3,9 +3,9 @@
 from enum import Enum
 from typing import List, Optional, Union
 
-from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
-import tiktoken
 import sentencepiece
+import tiktoken
+from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
 from .base import XGRObject, _core
 from .support import logging
@@ -95,38 +95,36 @@ class TokenizerInfo(XGRObject):
                 prepend_space_in_tokenization,
             )
         )
-    
+
     @staticmethod
     def _is_tiktoken_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
         # helper to check if tokenizer is a tiktoken tokenizer
-        has_tiktoken_encoding = (
-            hasattr(tokenizer, 'tokenizer') and 
-            isinstance(tokenizer.tokenizer, tiktoken.Encoding)
+        has_tiktoken_encoding = hasattr(tokenizer, "tokenizer") and isinstance(
+            tokenizer.tokenizer, tiktoken.Encoding
         )
-    
+
         filename_pattern = (
-            "vocab_file" in tokenizer.vocab_files_names and 
-            "tiktoken" in tokenizer.vocab_files_names["vocab_file"]
+            "vocab_file" in tokenizer.vocab_files_names
+            and "tiktoken" in tokenizer.vocab_files_names["vocab_file"]
         )
-    
+
         return has_tiktoken_encoding or filename_pattern
 
     @staticmethod
     def _is_sentencepiece_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
         # helper to check if tokenizer is a sentence piece tokenizer
-        has_sp_model_attr = (
-            hasattr(tokenizer, 'sp_model') and 
-            isinstance(tokenizer.sp_model, sentencepiece.SentencePieceProcessor)
+        has_sp_model_attr = hasattr(tokenizer, "sp_model") and isinstance(
+            tokenizer.sp_model, sentencepiece.SentencePieceProcessor
         )
-    
-        has_nested_sp_model_attr =  (
-            hasattr(tokenizer, 'tokenizer') and 
-            hasattr(tokenizer.tokenizer, 'sp_model') and 
-            isinstance(tokenizer.tokenizer.sp_model, sentencepiece.SentencePieceProcessor)
+
+        has_nested_sp_model_attr = (
+            hasattr(tokenizer, "tokenizer")
+            and hasattr(tokenizer.tokenizer, "sp_model")
+            and isinstance(tokenizer.tokenizer.sp_model, sentencepiece.SentencePieceProcessor)
         )
 
         return has_sp_model_attr or has_nested_sp_model_attr
-    
+
     @staticmethod
     def from_huggingface(
         tokenizer: PreTrainedTokenizerBase,
@@ -170,7 +168,7 @@ class TokenizerInfo(XGRObject):
             stop_token_ids = [stop_token_ids]
         if isinstance(stop_token_ids, list) and len(stop_token_ids) == 0:
             raise ValueError("stop_token_ids cannot be empty")
-        
+
         try:
             vocab_dict = tokenizer.get_vocab()
         except AttributeError as e:
@@ -179,21 +177,20 @@ class TokenizerInfo(XGRObject):
                 "should have a get_vocab method."
             )
             raise ValueError(msg) from e
-        
-        if vocab_size is None:
-            vocab_size = len(vocab_dict)
-        
-        # maintain tokenizer's indexing
-        encoded_vocab=["" for _ in range(vocab_size)]
-        for token, idx in vocab_dict.items():
-            if idx < vocab_size:
-                encoded_vocab[idx] = token
-        
-        # fill padded positions beyond the original vocabulary with special token markers
-        # for models (e.g. meta-llama/Llama-2-7b-chat-hf) that reserve extra positions for special tokens
+
         max_id = max(vocab_dict.values()) if vocab_dict else -1
-        for i in range(max_id + 1, vocab_size):
-            encoded_vocab[i] = f"<special_id_{i}>"
+        min_vocab_size = max(len(vocab_dict), max_id + 1)
+        if vocab_size is None:
+            vocab_size = min_vocab_size
+        else:
+            if vocab_size < min_vocab_size:
+                msg = f"Input vocab_size less than minimum viable vocab size for tokenizer {type(tokenizer)}."
+                raise ValueError(msg)
+
+        # maintain tokenizer's indexing
+        encoded_vocab = ["" for _ in range(vocab_size)]
+        for token, idx in vocab_dict.items():
+            encoded_vocab[idx] = token
 
         if isinstance(tokenizer, PreTrainedTokenizerFast):
             # huggingface fast tokenizer
@@ -241,9 +238,9 @@ class TokenizerInfo(XGRObject):
         elif TokenizerInfo._is_sentencepiece_tokenizer(tokenizer):
             # sentencepiece tokenizer
             # e.g. Chatglm3-6b
-            if hasattr(tokenizer, 'sp_model'):
+            if hasattr(tokenizer, "sp_model"):
                 sp_model = tokenizer.sp_model
-            elif hasattr(tokenizer, 'tokenizer') and hasattr(tokenizer.tokenizer, 'sp_model'):
+            elif hasattr(tokenizer, "tokenizer") and hasattr(tokenizer.tokenizer, "sp_model"):
                 sp_model = tokenizer.tokenizer.sp_model
 
             if stop_token_ids is None:
