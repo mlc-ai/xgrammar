@@ -179,11 +179,11 @@ class TokenizerInfo(XGRObject):
             raise ValueError(msg) from e
 
         max_id = max(vocab_dict.values()) if vocab_dict else -1
-        min_vocab_size = max(len(vocab_dict), max_id + 1)
+        detected_vocab_size = max(len(vocab_dict), max_id + 1)
         if vocab_size is None:
-            vocab_size = min_vocab_size
+            vocab_size = detected_vocab_size
         else:
-            if vocab_size < min_vocab_size:
+            if vocab_size < detected_vocab_size:
                 msg = f"Input vocab_size less than minimum viable vocab size for tokenizer {type(tokenizer)}."
                 raise ValueError(msg)
 
