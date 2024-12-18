@@ -3,6 +3,8 @@
 from enum import Enum
 from typing import List, Optional, Union
 
+import sentencepiece
+import tiktoken
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
 from .base import XGRObject, _core
@@ -95,6 +97,35 @@ class TokenizerInfo(XGRObject):
         )
 
     @staticmethod
+    def _is_tiktoken_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
+        # helper to check if tokenizer is a tiktoken tokenizer
+        has_tiktoken_encoding = hasattr(tokenizer, "tokenizer") and isinstance(
+            tokenizer.tokenizer, tiktoken.Encoding
+        )
+
+        filename_pattern = (
+            "vocab_file" in tokenizer.vocab_files_names
+            and "tiktoken" in tokenizer.vocab_files_names["vocab_file"]
+        )
+
+        return has_tiktoken_encoding or filename_pattern
+
+    @staticmethod
+    def _is_sentencepiece_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
+        # helper to check if tokenizer is a sentence piece tokenizer
+        has_sp_model_attr = hasattr(tokenizer, "sp_model") and isinstance(
+            tokenizer.sp_model, sentencepiece.SentencePieceProcessor
+        )
+
+        has_nested_sp_model_attr = (
+            hasattr(tokenizer, "tokenizer")
+            and hasattr(tokenizer.tokenizer, "sp_model")
+            and isinstance(tokenizer.tokenizer.sp_model, sentencepiece.SentencePieceProcessor)
+        )
+
+        return has_sp_model_attr or has_nested_sp_model_attr
+
+    @staticmethod
     def from_huggingface(
         tokenizer: PreTrainedTokenizerBase,
         *,
@@ -139,16 +170,27 @@ class TokenizerInfo(XGRObject):
             raise ValueError("stop_token_ids cannot be empty")
 
         try:
-            encoded_vocab = tokenizer.get_vocab()
-            encoded_vocab = [
-                token for token, _ in sorted(encoded_vocab.items(), key=lambda x: x[1])
-            ]
+            vocab_dict = tokenizer.get_vocab()
         except AttributeError as e:
             msg = (
                 f"Cannot get the vocabulary of the tokenizer {type(tokenizer)}. The tokenizer "
                 "should have a get_vocab method."
             )
             raise ValueError(msg) from e
+
+        max_id = max(vocab_dict.values()) if vocab_dict else -1
+        detected_vocab_size = max(len(vocab_dict), max_id + 1)
+        if vocab_size is None:
+            vocab_size = detected_vocab_size
+        else:
+            if vocab_size < detected_vocab_size:
+                msg = f"Input vocab_size less than minimum viable vocab size for tokenizer {type(tokenizer)}."
+                raise ValueError(msg)
+
+        # maintain tokenizer's indexing
+        encoded_vocab = ["" for _ in range(vocab_size)]
+        for token, idx in vocab_dict.items():
+            encoded_vocab[idx] = token
 
         if isinstance(tokenizer, PreTrainedTokenizerFast):
             # huggingface fast tokenizer
@@ -174,10 +216,7 @@ class TokenizerInfo(XGRObject):
                     encoded_vocab, backend_str, vocab_size, stop_token_ids
                 )
             )
-        elif (
-            "vocab_file" in tokenizer.vocab_files_names
-            and "tiktoken" in tokenizer.vocab_files_names["vocab_file"]
-        ):
+        elif TokenizerInfo._is_tiktoken_tokenizer(tokenizer):
             # tiktoken tokenizer
             # e.g. Phi-3-small-8k-instruct, Qwen-7B-Chat, stablelm-2-12b-chat (previously)
             if stop_token_ids is None:
@@ -196,8 +235,42 @@ class TokenizerInfo(XGRObject):
                 stop_token_ids=stop_token_ids,
                 prepend_space_in_tokenization=False,
             )
+        elif TokenizerInfo._is_sentencepiece_tokenizer(tokenizer):
+            # sentencepiece tokenizer
+            # e.g. Chatglm3-6b
+            if hasattr(tokenizer, "sp_model"):
+                sp_model = tokenizer.sp_model
+            elif hasattr(tokenizer, "tokenizer") and hasattr(tokenizer.tokenizer, "sp_model"):
+                sp_model = tokenizer.tokenizer.sp_model
+
+            if stop_token_ids is None:
+                if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
+                    stop_token_ids = [tokenizer.eos_token_id]
+                else:
+                    eos_id = sp_model.eos_id()
+                    if eos_id != -1:
+                        stop_token_ids = [eos_id]
+                    else:
+                        logger.warning(
+                            "When constructing TokenizerInfo from a huggingface tokenizer, "
+                            "stop_token_ids is neither provided by user nor found from the tokenizer. "
+                            "It will be automatically detected."
+                        )
+            # detect vocab_type of tokenizer
+            if "<0x0A>" in vocab_dict:
+                vocab_type = VocabType.BYTE_FALLBACK
+            else:
+                vocab_type = VocabType.RAW
+
+            return TokenizerInfo(
+                encoded_vocab,
+                vocab_type=vocab_type,
+                vocab_size=vocab_size,
+                stop_token_ids=stop_token_ids,
+                prepend_space_in_tokenization=True,
+            )
         else:
-            # TODO(yixin): sentencepiece tokenizer
+            # TODO(yixin): unsupported tokenizer
             raise ValueError(f"Unsupported tokenizer type: {type(tokenizer)}")
 
     @property

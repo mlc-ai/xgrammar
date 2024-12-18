@@ -41,6 +41,8 @@ tokenizer_paths_metadata = [
     ("Qwen/Qwen2.5-1.5B", xgr.VocabType.BYTE_LEVEL, False),
     ("internlm/internlm2_5-7b-chat", xgr.VocabType.BYTE_FALLBACK, False),
     ("mistralai/Mixtral-8x22B-Instruct-v0.1", xgr.VocabType.BYTE_FALLBACK, True),
+    ("THUDM/glm-4-9b-chat", xgr.VocabType.RAW, False),
+    ("THUDM/chatglm3-6b", xgr.VocabType.BYTE_FALLBACK, True),
 ]
 
 tokenizer_paths = [path for path, *_ in tokenizer_paths_metadata]
@@ -72,7 +74,9 @@ def test_properties(
     tokenizer_info_storage: Dict[str, Tuple[PreTrainedTokenizerBase, xgr.TokenizerInfo]],
 ):
     tokenizer, tokenizer_info = tokenizer_info_storage[tokenizer_path]
-    assert tokenizer_info.vocab_size == len(tokenizer.get_vocab())
+    vocab_dict = tokenizer.get_vocab()
+    max_id = max(vocab_dict.values()) if vocab_dict else -1
+    assert tokenizer_info.vocab_size == max(len(vocab_dict), max_id + 1)
     assert tokenizer_info.vocab_type == vocab_type
     assert tokenizer_info.prepend_space_in_tokenization == prepend_space_in_tokenization
 
@@ -84,9 +88,11 @@ def test_decoded_vocab(
 ):
     tokenizer, tokenizer_info = tokenizer_info_storage[tokenizer_path]
     decoded_vocab = tokenizer_info.decoded_vocab
+    vocab_dict = tokenizer.get_vocab()
+    max_id = max(vocab_dict.values()) if vocab_dict else -1
     assert isinstance(decoded_vocab, list)
     assert all(isinstance(token, bytes) for token in decoded_vocab)
-    assert len(decoded_vocab) == len(tokenizer.get_vocab())
+    assert len(decoded_vocab) == max(len(vocab_dict), max_id + 1)
     assert len(decoded_vocab) == tokenizer_info.vocab_size
 
 
@@ -215,6 +221,34 @@ def test_customized_tokenizer_info(tokenizer_path: str):
     assert tokenizer_info.vocab_size == original_vocab_size + 5
     assert tokenizer_info.stop_token_ids == [1, 2, 3]
     assert tokenizer_info.special_token_ids[-5:] == [original_vocab_size + i for i in range(5)]
+
+
+@pytest.mark.parametrize("tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf"])
+def test_special_token_detection(
+    tokenizer_path: str,
+    tokenizer_info_storage: Dict[str, Tuple[PreTrainedTokenizerBase, xgr.TokenizerInfo]],
+):
+    tokenizer = AutoTokenizer.from_pretrained(
+        tokenizer_path,
+        use_fast=True,
+        trust_remote_code=True,
+    )
+    vocab_dict = {
+        "": 0,
+        "<s>": 1,
+        "</s>": 2,
+        "[@BOS@]": 3,
+        "regular": 4,
+        "<test_token>": 5,
+        "not<special>": 6,
+        "<>": 7,
+    }
+    tokenizer_info = xgr.TokenizerInfo.from_vocab_and_metadata(
+        list(vocab_dict.keys()),
+        '{"vocab_type":"BYTE_FALLBACK","vocab_size":8,"prepend_space_in_tokenization":true,"stop_token_ids":[2]}',
+    )
+    expected_special_tokens = {0, 1, 2, 3, 5}
+    assert set(tokenizer_info.special_token_ids) == expected_special_tokens
 
 
 if __name__ == "__main__":
