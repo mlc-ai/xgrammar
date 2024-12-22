@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "ebnf_script_creator.h"
 #include "regex_converter.h"
 #include "support/logging.h"
 
@@ -336,6 +337,8 @@ class JSONSchemaConverter {
       const std::string& rule_name
   );
 
+  // The EBNF script creator
+  EBNFScriptCreator ebnf_script_creator_{EmptyConstructorTag{}};
   // The indent manager to get separators
   std::optional<IndentManager> indentManager_;
   // The root JSON schema
@@ -346,8 +349,6 @@ class JSONSchemaConverter {
   bool allow_empty_;
   // The colon separator
   std::string colon_pattern_;
-  // The rules constructed
-  std::vector<std::pair<std::string, std::string>> rules_;
   // The cache for basic rules. Mapping from the key of schema returned by GetSchemaCacheIndex()
   // to the basic rule name.
   std::map<std::string, std::string> basic_rules_cache_;
@@ -386,11 +387,7 @@ JSONSchemaConverter::JSONSchemaConverter(
 
 std::string JSONSchemaConverter::Convert() {
   CreateRuleFromSchema(json_schema_, "root");
-  std::string res;
-  for (auto& rule : rules_) {
-    res += rule.first + " ::= " + rule.second + "\n";
-  }
-  return res;
+  return ebnf_script_creator_.GetScript();
 }
 
 void JSONSchemaConverter::AddBasicRules() {
@@ -433,14 +430,14 @@ void JSONSchemaConverter::AddBasicRules() {
 }
 
 void JSONSchemaConverter::AddHelperRules() {
-  rules_.push_back(std::make_pair(
+  ebnf_script_creator_.AddRule(
       kBasicEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
-  ));
-  rules_.push_back(std::make_pair(
+  );
+  ebnf_script_creator_.AddRule(
       kBasicStringSub,
       "(\"\\\"\" | [^\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " + kBasicEscape + " " +
           kBasicStringSub + ") (= [ \\n\\t]* [,}\\]:])"
-  ));
+  );
 }
 
 void JSONSchemaConverter::CreateBasicRule(const picojson::value& schema, const std::string& name) {
@@ -485,8 +482,9 @@ std::string JSONSchemaConverter::CreateRuleFromSchema(
     return basic_rules_cache_[idx];
   }
 
-  rules_.push_back(std::make_pair(rule_name_hint, VisitSchema(schema, rule_name_hint)));
-  return rule_name_hint;
+  std::string rule_name =
+      ebnf_script_creator_.AddRule(rule_name_hint, VisitSchema(schema, rule_name_hint));
+  return rule_name;
 }
 
 std::string JSONSchemaConverter::GetSchemaCacheIndex(const picojson::value& schema) {
@@ -1036,7 +1034,7 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
     std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
     std::string last_rule_name =
         rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1);
-    rules_.push_back(std::make_pair(last_rule_name, last_rule_body));
+    last_rule_name = ebnf_script_creator_.AddRule(last_rule_name, last_rule_body);
     rule_names.back() = last_rule_name;
   } else {
     rule_names.back() = "\"\"";
@@ -1049,7 +1047,7 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
     std::string cur_rule_body =
         last_rule_name + " | " + mid_sep + " " + prop_pattern + " " + last_rule_name;
     std::string cur_rule_name = rule_name + "_part_" + std::to_string(i);
-    rules_.push_back(std::make_pair(cur_rule_name, cur_rule_body));
+    cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
     rule_names[i] = cur_rule_name;
   }
 

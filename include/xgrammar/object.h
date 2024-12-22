@@ -12,6 +12,8 @@
 
 namespace xgrammar {
 
+struct EmptyConstructorTag {};
+
 #define XGRAMMAR_DEFINE_PIMPL_METHODS(TypeName)                                \
  public:                                                                       \
   class Impl;                                                                  \
@@ -30,7 +32,7 @@ namespace xgrammar {
   const Impl* operator->() const { return pimpl_.get(); }                      \
                                                                                \
  private:                                                                      \
-  std::shared_ptr<Impl> pimpl_
+  std::shared_ptr<Impl> pimpl_;
 
 }  // namespace xgrammar
 

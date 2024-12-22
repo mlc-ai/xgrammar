@@ -29,17 +29,17 @@ class CompiledGrammar {
 };
 
 /*!
- * \brief A cache to get the grammar state compiled grammar for grammar or schema. This class avoids
+ * \brief A cache to get the compiled grammar for grammar or schema. This class avoids
  * redundant preprocessing of the grammar or schema when constructing a CompiledGrammar.
  * \note This class is associated with a vocabulary when constructed. The vocabulary is used to
- * create every grammar state compiled grammar. If multiple toke tables are used to create init
+ * create every compiled grammar. If multiple toke tables are used to create init
  * contexts, an instance of this class for each vocabulary should be created.
  */
 class GrammarCompiler {
  public:
   /*!
    * \brief Construct a GrammarCompiler with a vocabulary. This class will always
-   * create grammar state compiled grammars with this vocabulary.
+   * create compiled grammars with this vocabulary.
    * \param decoded_vocab The vocabulary that the grammar will use.
    */
   GrammarCompiler(
