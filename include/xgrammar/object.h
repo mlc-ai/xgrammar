@@ -12,6 +12,13 @@
 
 namespace xgrammar {
 
+/*!
+ * \brief A tag type for empty constructor.
+ *
+ * Since XGRAMMAR_DEFINE_PIMPL_METHODS already occupies the default constructor to
+ * construct a null object, this tag is used to define an empty constructor for
+ * the object.
+ */
 struct EmptyConstructorTag {};
 
 #define XGRAMMAR_DEFINE_PIMPL_METHODS(TypeName)                                \
