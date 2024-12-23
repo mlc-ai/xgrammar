@@ -455,6 +455,45 @@ root ::= root_case_0 | root_case_1
     )
 
 
+def test_anyof_oneof() -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "name": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "integer"},
+                ],
+            },
+        },
+    }
+    schema_accepted_1 = '{"name": "John"}'
+    schema_accepted_2 = '{"name": 123}'
+    schema_rejected = '{"name": {"a": 1}}'
+    check_schema_with_json(schema, schema_accepted_1, any_whitespace=False)
+    check_schema_with_json(schema, schema_accepted_2, any_whitespace=False)
+    check_schema_with_json(schema, schema_rejected, is_accepted=False, any_whitespace=False)
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "name": {
+                "oneOf": [
+                    {"type": "string"},
+                    {"type": "integer"},
+                ],
+            },
+        },
+    }
+
+    schema_accepted_1 = '{"name": "John"}'
+    schema_accepted_2 = '{"name": 123}'
+    schema_rejected = '{"name": {"a": 1}}'
+    check_schema_with_json(schema, schema_accepted_1, any_whitespace=False)
+    check_schema_with_json(schema, schema_accepted_2, any_whitespace=False)
+    check_schema_with_json(schema, schema_rejected, is_accepted=False, any_whitespace=False)
+
+
 def test_alias() -> None:
     class MainModel(BaseModel):
         test: str = Field(..., alias="name")

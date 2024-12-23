@@ -676,10 +676,12 @@ std::string JSONSchemaConverter::JSONStrToPrintableStr(const std::string& json_s
 std::string JSONSchemaConverter::VisitAnyOf(
     const picojson::object& schema, const std::string& rule_name
 ) {
-  XGRAMMAR_CHECK(schema.count("anyOf"));
+  XGRAMMAR_CHECK(schema.count("anyOf") || schema.count("oneOf"));
   std::string result = "";
   int idx = 0;
-  for (auto anyof_schema : schema.at("anyOf").get<picojson::array>()) {
+  auto anyof_schema = schema.count("anyOf") ? schema.at("anyOf") : schema.at("oneOf");
+  XGRAMMAR_CHECK(anyof_schema.is<picojson::array>()) << "anyOf or oneOf must be an array";
+  for (auto anyof_schema : anyof_schema.get<picojson::array>()) {
     if (idx != 0) {
       result += " | ";
     }
