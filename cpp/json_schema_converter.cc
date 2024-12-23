@@ -188,7 +188,7 @@ class JSONSchemaConverter {
   std::string VisitRef(const picojson::object& schema, const std::string& rule_name);
 
   /*! \brief Get the schema from the URI. */
-  picojson::value URIToSchema(const picojson::value& uri);
+  picojson::value URIToSchema(const std::string& uri);
 
   /*! \brief Visit a const schema. */
   std::string VisitConst(const picojson::object& schema, const std::string& rule_name);
@@ -201,6 +201,8 @@ class JSONSchemaConverter {
 
   /*! \brief Visit an anyOf schema. */
   std::string VisitAnyOf(const picojson::object& schema, const std::string& rule_name);
+
+  picojson::value FuseAllOfSchema(const picojson::array& all_of_schema);
 
   /*! \brief Visit an allOf schema. */
   std::string VisitAllOf(const picojson::object& schema, const std::string& rule_name);
@@ -546,7 +548,7 @@ std::string JSONSchemaConverter::VisitSchema(
     const picojson::value& schema, const std::string& rule_name
 ) {
   if (schema.is<bool>()) {
-    XGRAMMAR_CHECK(schema.get<bool>());
+    XGRAMMAR_CHECK(schema.get<bool>()) << "Schema should not be false: it cannot accept any value";
     return VisitAny(schema, rule_name);
   }
 
@@ -611,8 +613,9 @@ std::string JSONSchemaConverter::VisitSchema(
 std::string JSONSchemaConverter::VisitRef(
     const picojson::object& schema, const std::string& rule_name
 ) {
-  XGRAMMAR_CHECK(schema.count("$ref"));
-  picojson::value new_schema = URIToSchema(schema.at("$ref"));
+  XGRAMMAR_CHECK(schema.count("$ref") && schema.at("$ref").is<std::string>())
+      << "Schema $ref should be a string";
+  picojson::value new_schema = URIToSchema(schema.at("$ref").get<std::string>());
   if (!new_schema.is<bool>()) {
     picojson::object new_schema_obj = new_schema.get<picojson::object>();
     for (const auto& [k, v] : schema) {
@@ -625,13 +628,32 @@ std::string JSONSchemaConverter::VisitRef(
   return VisitSchema(new_schema, rule_name);
 }
 
-picojson::value JSONSchemaConverter::URIToSchema(const picojson::value& uri) {
-  if (uri.get<std::string>().substr(0, 8) == "#/$defs/") {
-    return json_schema_.get("$defs").get(uri.get<std::string>().substr(8));
+picojson::value JSONSchemaConverter::URIToSchema(const std::string& uri) {
+  if (uri.size() < 2 || uri[0] != '#' || uri[1] != '/') {
+    XGRAMMAR_LOG(WARNING) << "Now only support URI starting with '#/' but got " << uri;
+    return picojson::value(true);
   }
-  XGRAMMAR_LOG(WARNING) << "Now only support URI starting with '#/$defs/' but got "
-                        << uri.serialize(false);
-  return picojson::value(true);
+  std::vector<std::string> parts;
+  std::stringstream ss(uri.substr(2));
+  std::string part;
+  while (std::getline(ss, part, '/')) {
+    if (!part.empty()) {
+      parts.push_back(part);
+    }
+  }
+
+  picojson::value current = json_schema_;
+  for (const auto& part : parts) {
+    XGRAMMAR_CHECK(current.is<picojson::object>() && current.contains(part))
+        << "Cannot find field " << part << " in " << current.serialize(false);
+    current = current.get(part);
+  }
+
+  // Handle recursive reference
+  if (current.is<picojson::object>() && current.get<picojson::object>().count("$ref")) {
+    return URIToSchema(current.get<picojson::object>().at("$ref").get<std::string>());
+  }
+  return current;
 }
 
 std::string JSONSchemaConverter::VisitConst(
@@ -691,26 +713,103 @@ std::string JSONSchemaConverter::VisitAnyOf(
   return result;
 }
 
+picojson::value JSONSchemaConverter::FuseAllOfSchema(const picojson::array& all_of_schema) {
+  picojson::object fused_schema;
+  // std::vector<picojson::value> all_schema_copy = all_of_schema;
+  // for (int i = 0; i < all_schema_copy.size(); ++i) {
+  //   auto schema = all_schema_copy[i];
+  //   // Handle $ref
+  //   if (schema.is<picojson::object>() && schema.get<picojson::object>().count("$ref")) {
+  //     XGRAMMAR_CHECK(schema.get<picojson::object>().at("$ref").is<std::string>())
+  //         << "Schema $ref should be a string";
+  //     schema = URIToSchema(schema.get<picojson::object>().at("$ref").get<std::string>());
+  //   }
+  //   // Handle bool schema
+  //   if (schema.is<bool>()) {
+  //     XGRAMMAR_CHECK(schema.get<bool>())
+  //         << "Schema should not be false: it cannot accept any value";
+  //     continue;
+  //   }
+  //   // Object Schema
+  //   XGRAMMAR_CHECK(schema.is<picojson::object>()) << "Schema should be an object or bool";
+  //   auto schema_obj = schema.get<picojson::object>();
+  //   for (const auto& [k, v] : schema_obj) {
+  //     if (k == "") auto it_k = fused_schema.find(k);
+  //     if (it_k == fused_schema.end()) {
+  //       fused_schema[k] = v;
+  //     }
+  //     // "$ref": _keywords.ref,
+  //     // "additionalItems": _legacy_keywords.additionalItems,
+  //     // "additionalProperties": _keywords.additionalProperties,
+  //     // "allOf": _keywords.allOf,
+  //     // "anyOf": _keywords.anyOf,
+  //     // "const": _keywords.const,
+  //     // "contains": _legacy_keywords.contains_draft6_draft7,
+  //     // "dependencies": _legacy_keywords.dependencies_draft4_draft6_draft7,
+  //     // "enum": _keywords.enum,
+  //     // "exclusiveMaximum": _keywords.exclusiveMaximum,
+  //     // "exclusiveMinimum": _keywords.exclusiveMinimum,
+  //     // "format": _keywords.format,
+  //     // "if": _keywords.if_,
+  //     // "items": _legacy_keywords.items_draft6_draft7_draft201909,
+  //     // "maxItems": _keywords.maxItems,
+  //     // "maxLength": _keywords.maxLength,
+  //     // "maxProperties": _keywords.maxProperties,
+  //     // "maximum": _keywords.maximum,
+  //     // "minItems": _keywords.minItems,
+  //     // "minLength": _keywords.minLength,
+  //     // "minProperties": _keywords.minProperties,
+  //     // "minimum": _keywords.minimum,
+  //     // "multipleOf": _keywords.multipleOf,
+  //     // "not": _keywords.not_,
+  //     // "oneOf": _keywords.oneOf,
+  //     // "pattern": _keywords.pattern,
+  //     // "patternProperties": _keywords.patternProperties,
+  //     // "properties": _keywords.properties,
+  //     // "propertyNames": _keywords.propertyNames,
+  //     // "required": _keywords.required,
+  //     // "type": _keywords.type,
+  //     // "uniqueItems": _keywords.uniqueItems,
+
+  //     // if (v.is<int64_t>()) {
+  //     //   XGRAMMAR_CHECK(
+  //     //       it_k->second.is<int64_t>() && it_k->second.get<int64_t>() == v.get<int64_t>()
+  //     //   ) << "Value mismatch for keyword "
+  //     //     << k << ": " << v << " and " << it_k->first;
+  //     // } else if (v.is<bool>()) {
+  //     //   XGRAMMAR_CHECK(it_k->second.is<bool>() && it_k->second.get<bool>() == v.get<bool>())
+  //     //       << "Value mismatch for keyword " << k << ": " << v << " and " << it_k->first;
+  //     // } else if (v.is<double>()) {
+  //     //   XGRAMMAR_CHECK(it_k->second.is<double>() && it_k->second.get<double>() ==
+  //     //   v.get<double>())
+  //     //       << "Value mismatch for keyword " << k << ": " << v << " and " << it_k->first;
+  //     // } else if (v.is<std::string>()) {
+  //     //   XGRAMMAR_CHECK(
+  //     //       it_k->second.is<std::string>() &&
+  //     //       it_k->second.get<std::string>() == v.get<std::string>()
+  //     //   ) << "Value mismatch for keyword "
+  //     //     << k << ": " << v << " and " << it_k->first;
+  //     // }
+  //   }
+  // }
+  return picojson::value(fused_schema);
+}
+
 std::string JSONSchemaConverter::VisitAllOf(
     const picojson::object& schema, const std::string& rule_name
 ) {
   // We support common usecases of AllOf, but not all, because it's impossible to support all
   // cases with CFG
   XGRAMMAR_CHECK(schema.count("allOf"));
+  XGRAMMAR_CHECK(schema.at("allOf").is<picojson::array>()) << "allOf must be an array";
   auto all_array = schema.at("allOf").get<picojson::array>();
+  // Case 1: allOf is a single schema
   if (all_array.size() == 1) {
     return VisitSchema(all_array[0], rule_name + "_case_0");
   }
-  std::string result = "";
-  int idx = 0;
-  for (auto anyof_schema : schema.at("anyOf").get<picojson::array>()) {
-    if (idx != 0) {
-      result += " | ";
-    }
-    result += CreateRuleFromSchema(anyof_schema, rule_name + "_case_" + std::to_string(idx));
-    ++idx;
-  }
-  return result;
+  // Case 2: allOf is a list of schemas, we fuse them into a single schema
+  auto fused_schema = FuseAllOfSchema(all_array);
+  return VisitSchema(fused_schema, rule_name);
 }
 
 std::string JSONSchemaConverter::VisitAny(
@@ -855,19 +954,36 @@ std::string JSONSchemaConverter::VisitInteger(
       schema.count("exclusiveMaximum")) {
     std::optional<int> start, end;
     if (schema.count("minimum")) {
+      XGRAMMAR_CHECK(schema.at("minimum").is<double>() || schema.at("minimum").is<int64_t>())
+          << "minimum must be a number";
       double start_double = schema.at("minimum").get<double>();
+      XGRAMMAR_CHECK(start_double == static_cast<int>(start_double))
+          << "minimum must be an integer";
       start = static_cast<int>(start_double);
     }
     if (schema.count("exclusiveMinimum")) {
+      XGRAMMAR_CHECK(
+          schema.at("exclusiveMinimum").is<double>() || schema.at("exclusiveMinimum").is<int64_t>()
+      ) << "exclusiveMinimum must be a number";
       double start_double = schema.at("exclusiveMinimum").get<double>();
+      XGRAMMAR_CHECK(start_double == static_cast<int>(start_double))
+          << "exclusiveMinimum must be an integer";
       start = static_cast<int>(start_double);
     }
     if (schema.count("maximum")) {
+      XGRAMMAR_CHECK(schema.at("maximum").is<double>() || schema.at("maximum").is<int64_t>())
+          << "maximum must be a number";
       double end_double = schema.at("maximum").get<double>();
+      XGRAMMAR_CHECK(end_double == static_cast<int>(end_double)) << "maximum must be an integer";
       end = static_cast<int>(end_double);
     }
     if (schema.count("exclusiveMaximum")) {
+      XGRAMMAR_CHECK(
+          schema.at("exclusiveMaximum").is<double>() || schema.at("exclusiveMaximum").is<int64_t>()
+      ) << "exclusiveMaximum must be a number";
       double end_double = schema.at("exclusiveMaximum").get<double>();
+      XGRAMMAR_CHECK(end_double == static_cast<int>(end_double))
+          << "exclusiveMaximum must be an integer";
       end = static_cast<int>(end_double);
     }
     range_regex = GenerateRangeRegex(start, end);

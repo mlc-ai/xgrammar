@@ -29,9 +29,9 @@ def check_schema_with_grammar(
     assert json_schema_ebnf == expected_grammar_ebnf
 
 
-def check_schema_with_json(
+def check_schema_with_instance(
     schema: Dict[str, Any],
-    json_str: Union[str, Any],
+    instance: Union[str, BaseModel, Any],
     is_accepted: bool = True,
     any_whitespace: bool = True,
     indent: Optional[int] = None,
@@ -46,32 +46,21 @@ def check_schema_with_json(
         strict_mode=strict_mode,
     )
 
-    if not isinstance(json_str, str):
-        json_str = json.dumps(json_str, indent=indent, separators=separators)
+    # instance: pydantic model, json string, or any other object (dumped to json string)
+    if isinstance(instance, BaseModel):
+        instance = json.dumps(
+            instance.model_dump(mode="json", round_trip=True), indent=indent, separators=separators
+        )
+    elif not isinstance(instance, str):
+        instance = json.dumps(instance, indent=indent, separators=separators)
 
     if is_accepted:
-        assert _is_grammar_accept_string(json_schema_grammar, json_str)
+        assert _is_grammar_accept_string(json_schema_grammar, instance)
     else:
-        assert not _is_grammar_accept_string(json_schema_grammar, json_str)
+        assert not _is_grammar_accept_string(json_schema_grammar, instance)
 
 
-def check_schema_with_instance(
-    schema: Dict[str, Any],
-    instance: BaseModel,
-    is_accepted: bool = True,
-    any_whitespace: bool = True,
-    indent: Optional[int] = None,
-    separators: Optional[Tuple[str, str]] = None,
-    strict_mode: bool = True,
-):
-    instance_obj = instance.model_dump(mode="json", round_trip=True)
-    instance_str = json.dumps(instance_obj, indent=indent, separators=separators)
-    check_schema_with_json(
-        schema, instance_str, is_accepted, any_whitespace, indent, separators, strict_mode
-    )
-
-
-def test_basic() -> None:
+def test_basic():
     class MainModel(BaseModel):
         integer_field: int
         number_field: float
@@ -132,7 +121,7 @@ root ::= "{" "" "\"integer_field\"" ": " basic_integer ", " "\"number_field\"" "
     check_schema_with_instance(schema, instance_empty, is_accepted=False, any_whitespace=False)
 
 
-def test_indent() -> None:
+def test_indent():
     class MainModel(BaseModel):
         array_field: List[str]
         tuple_field: Tuple[str, int, List[str]]
@@ -169,7 +158,7 @@ root ::= "{" "\n  " "\"array_field\"" ": " root_prop_0 ",\n  " "\"tuple_field\""
     )
 
 
-def test_non_strict() -> None:
+def test_non_strict():
     class Foo(BaseModel):
         pass
 
@@ -218,10 +207,12 @@ root ::= "{" "\n  " "\"tuple_field\"" ": " root_prop_0 ",\n  " "\"foo_field\"" "
     check_schema_with_grammar(
         schema, ebnf_grammar, any_whitespace=False, indent=2, strict_mode=False
     )
-    check_schema_with_json(schema, instance_json, any_whitespace=False, indent=2, strict_mode=False)
+    check_schema_with_instance(
+        schema, instance_json, any_whitespace=False, indent=2, strict_mode=False
+    )
 
 
-def test_enum_const() -> None:
+def test_enum_const():
     class Field(Enum):
         FOO = "foo"
         BAR = "bar"
@@ -257,7 +248,7 @@ root ::= "{" "" "\"bars\"" ": " root_prop_0 ", " "\"str_values\"" ": " root_prop
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
 
-def test_optional() -> None:
+def test_optional():
     class MainModel(BaseModel):
         num: int = 0
         opt_bool: Optional[bool] = None
@@ -288,12 +279,14 @@ root ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " root_p
     instance = MainModel(size=None)
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
-    check_schema_with_json(schema, '{"size": null}', any_whitespace=False)
-    check_schema_with_json(schema, '{"size": null, "name": "foo"}', any_whitespace=False)
-    check_schema_with_json(schema, '{"num": 1, "size": null, "name": "foo"}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"size": null}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"size": null, "name": "foo"}', any_whitespace=False)
+    check_schema_with_instance(
+        schema, '{"num": 1, "size": null, "name": "foo"}', any_whitespace=False
+    )
 
 
-def test_all_optional() -> None:
+def test_all_optional():
     class MainModel(BaseModel):
         size: int = 0
         state: bool = False
@@ -320,8 +313,8 @@ root ::= "{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": "
     instance = MainModel(size=42, state=True, num=3.14)
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
-    check_schema_with_json(schema, '{"state": false}', any_whitespace=False)
-    check_schema_with_json(schema, '{"size": 1, "num": 1.5}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"state": false}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"size": 1, "num": 1.5}', any_whitespace=False)
 
     ebnf_grammar_non_strict = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
@@ -343,13 +336,13 @@ root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": 
         schema, ebnf_grammar_non_strict, any_whitespace=False, strict_mode=False
     )
 
-    check_schema_with_json(
+    check_schema_with_instance(
         schema, '{"size": 1, "num": 1.5, "other": false}', any_whitespace=False, strict_mode=False
     )
-    check_schema_with_json(schema, '{"other": false}', any_whitespace=False, strict_mode=False)
+    check_schema_with_instance(schema, '{"other": false}', any_whitespace=False, strict_mode=False)
 
 
-def test_empty() -> None:
+def test_empty():
     class MainModel(BaseModel):
         pass
 
@@ -372,10 +365,10 @@ root ::= "{" "}"
     instance = MainModel()
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
-    check_schema_with_json(schema, '{"tmp": 123}', any_whitespace=False, strict_mode=False)
+    check_schema_with_instance(schema, '{"tmp": 123}', any_whitespace=False, strict_mode=False)
 
 
-def test_reference() -> None:
+def test_reference():
     class Foo(BaseModel):
         count: int
         size: Optional[float] = None
@@ -416,7 +409,103 @@ root ::= "{" "" "\"foo\"" ": " root_prop_0 ", " "\"bars\"" ": " root_prop_1 "" "
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
 
-def test_union() -> None:
+def test_reference_schema():
+    # Test simple reference with $defs
+    schema = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/$defs/nested"}},
+        "required": ["value"],
+        "$defs": {
+            "nested": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                "required": ["name", "age"],
+            }
+        },
+    }
+
+    instance = {"value": {"name": "John", "age": 30}}
+    instance_rejected = {"value": {"name": "John"}}
+
+    check_schema_with_instance(schema, instance, any_whitespace=False)
+    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=False)
+
+    # Test simple reference with definitions
+    schema_def = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/definitions/nested"}},
+        "required": ["value"],
+        "definitions": {
+            "nested": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                "required": ["name", "age"],
+            }
+        },
+    }
+
+    check_schema_with_instance(schema_def, instance, any_whitespace=False)
+    check_schema_with_instance(
+        schema_def, instance_rejected, is_accepted=False, any_whitespace=False
+    )
+
+    # Test multi-level reference path
+    schema_multi = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/$defs/level1/level2/nested"}},
+        "required": ["value"],
+        "$defs": {
+            "level1": {
+                "level2": {
+                    "nested": {
+                        "type": "object",
+                        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                        "required": ["name", "age"],
+                    }
+                }
+            }
+        },
+    }
+
+    check_schema_with_instance(schema_multi, instance, any_whitespace=False)
+    check_schema_with_instance(
+        schema_multi, instance_rejected, is_accepted=False, any_whitespace=False
+    )
+
+    # Test nested reference
+    schema_nested = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/definitions/node_a"}},
+        "required": ["value"],
+        "definitions": {
+            "node_a": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "child": {"$ref": "#/definitions/node_b"},
+                },
+                "required": ["name"],
+            },
+            "node_b": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                },
+                "required": ["id"],
+            },
+        },
+    }
+
+    instance_nested = {"value": {"name": "first", "child": {"id": 1}}}
+    instance_nested_rejected = {"value": {"name": "first", "child": {}}}
+
+    check_schema_with_instance(schema_nested, instance_nested, any_whitespace=False)
+    check_schema_with_instance(
+        schema_nested, instance_nested_rejected, is_accepted=False, any_whitespace=False
+    )
+
+
+def test_union():
     class Cat(BaseModel):
         name: str
         color: str
@@ -450,12 +539,12 @@ root ::= root_case_0 | root_case_1
     check_schema_with_instance(
         model_schema, Dog(name="doggy", breed="bulldog"), any_whitespace=False
     )
-    check_schema_with_json(
+    check_schema_with_instance(
         model_schema, '{"name": "kitty", "test": "black"}', False, any_whitespace=False
     )
 
 
-def test_anyof_oneof() -> None:
+def test_anyof_oneof():
     schema = {
         "type": "object",
         "properties": {
@@ -470,9 +559,9 @@ def test_anyof_oneof() -> None:
     schema_accepted_1 = '{"name": "John"}'
     schema_accepted_2 = '{"name": 123}'
     schema_rejected = '{"name": {"a": 1}}'
-    check_schema_with_json(schema, schema_accepted_1, any_whitespace=False)
-    check_schema_with_json(schema, schema_accepted_2, any_whitespace=False)
-    check_schema_with_json(schema, schema_rejected, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema, schema_accepted_1, any_whitespace=False)
+    check_schema_with_instance(schema, schema_accepted_2, any_whitespace=False)
+    check_schema_with_instance(schema, schema_rejected, is_accepted=False, any_whitespace=False)
 
     schema = {
         "type": "object",
@@ -489,12 +578,12 @@ def test_anyof_oneof() -> None:
     schema_accepted_1 = '{"name": "John"}'
     schema_accepted_2 = '{"name": 123}'
     schema_rejected = '{"name": {"a": 1}}'
-    check_schema_with_json(schema, schema_accepted_1, any_whitespace=False)
-    check_schema_with_json(schema, schema_accepted_2, any_whitespace=False)
-    check_schema_with_json(schema, schema_rejected, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema, schema_accepted_1, any_whitespace=False)
+    check_schema_with_instance(schema, schema_accepted_2, any_whitespace=False)
+    check_schema_with_instance(schema, schema_rejected, is_accepted=False, any_whitespace=False)
 
 
-def test_alias() -> None:
+def test_alias():
     class MainModel(BaseModel):
         test: str = Field(..., alias="name")
 
@@ -515,12 +604,12 @@ root ::= "{" "" "\"name\"" ": " basic_string "" "}"
 
     instance = MainModel(name="kitty")
     instance_str = json.dumps(instance.model_dump(mode="json", round_trip=True, by_alias=False))
-    check_schema_with_json(
+    check_schema_with_instance(
         MainModel.model_json_schema(by_alias=False), instance_str, any_whitespace=False
     )
 
     instance_str = json.dumps(instance.model_dump(mode="json", round_trip=True, by_alias=True))
-    check_schema_with_json(
+    check_schema_with_instance(
         MainModel.model_json_schema(by_alias=True), instance_str, any_whitespace=False
     )
 
@@ -550,20 +639,20 @@ root ::= "{" "" "\"name 1\"" ": " root_prop_0 "" "}"
     instance_space_str = json.dumps(
         instance_space.model_dump(mode="json", round_trip=True, by_alias=True),
     )
-    check_schema_with_json(
+    check_schema_with_instance(
         MainModelSpace.model_json_schema(by_alias=True), instance_space_str, any_whitespace=False
     )
 
 
-def test_restricted_string() -> None:
+def test_restricted_string():
     class MainModel(BaseModel):
         restricted_string: str = Field(..., pattern=r"[a-f]")
 
     instance = MainModel(restricted_string="a")
     instance_str = json.dumps(instance.model_dump(mode="json"))
-    check_schema_with_json(MainModel.model_json_schema(), instance_str, any_whitespace=False)
+    check_schema_with_instance(MainModel.model_json_schema(), instance_str, any_whitespace=False)
 
-    check_schema_with_json(
+    check_schema_with_instance(
         MainModel.model_json_schema(),
         '{"restricted_string": "j"}',
         is_accepted=False,
@@ -571,7 +660,7 @@ def test_restricted_string() -> None:
     )
 
 
-def test_complex_restrictions() -> None:
+def test_complex_restrictions():
     class RestrictedModel(BaseModel):
         restricted_string: Annotated[str, WithJsonSchema({"type": "string", "pattern": r"[^\"]*"})]
         restricted_value: Annotated[int, Field(strict=True, ge=0, lt=44)]
@@ -579,18 +668,20 @@ def test_complex_restrictions() -> None:
     # working instance
     instance = RestrictedModel(restricted_string="abd", restricted_value=42)
     instance_str = json.dumps(instance.model_dump(mode="json"))
-    check_schema_with_json(RestrictedModel.model_json_schema(), instance_str, any_whitespace=False)
+    check_schema_with_instance(
+        RestrictedModel.model_json_schema(), instance_str, any_whitespace=False
+    )
 
     instance_err = RestrictedModel(restricted_string='"', restricted_value=42)
     instance_str = json.dumps(instance_err.model_dump(mode="json"))
-    check_schema_with_json(
+    check_schema_with_instance(
         RestrictedModel.model_json_schema(),
         instance_str,
         is_accepted=False,
         any_whitespace=False,
     )
 
-    check_schema_with_json(
+    check_schema_with_instance(
         RestrictedModel.model_json_schema(),
         '{"restricted_string": "j", "restricted_value": 45}',
         is_accepted=False,
@@ -598,7 +689,7 @@ def test_complex_restrictions() -> None:
     )
 
 
-def test_dynamic_model() -> None:
+def test_dynamic_model():
     class MainModel(BaseModel):
         restricted_string: Annotated[str, WithJsonSchema({"type": "string", "pattern": r"[a-f]"})]
 
@@ -614,10 +705,12 @@ def test_dynamic_model() -> None:
     )
     instance = CompleteModel(restricted_string="a", restricted_string_dynamic="j")
     instance_str = json.dumps(instance.model_dump(mode="json"))
-    check_schema_with_json(CompleteModel.model_json_schema(), instance_str, any_whitespace=False)
+    check_schema_with_instance(
+        CompleteModel.model_json_schema(), instance_str, any_whitespace=False
+    )
 
 
-def test_any_whitespace() -> None:
+def test_any_whitespace():
     class SimpleModel(BaseModel):
         value: str
         arr: List[int]
@@ -667,10 +760,10 @@ root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* ",
         '{\t"value"\t:\t"test",\t"arr":\t[1,\t2],\t"obj":\t{"a":\t1}\t}',
     ]
     for instance in instances:
-        check_schema_with_json(schema, instance, any_whitespace=True)
+        check_schema_with_instance(schema, instance, any_whitespace=True)
 
 
-def test_array_with_only_items_keyword() -> None:
+def test_array_with_only_items_keyword():
     schema = {
         "items": {
             "type": "object",
@@ -683,8 +776,8 @@ def test_array_with_only_items_keyword() -> None:
     }
     instance_accepted = [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}]
     instance_rejected = [{"name": "John"}]
-    check_schema_with_json(schema, instance_accepted, any_whitespace=False)
-    check_schema_with_json(schema, instance_rejected, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema, instance_accepted, any_whitespace=False)
+    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=False)
 
     schema_prefix_items = {
         "prefixItems": [
@@ -707,8 +800,8 @@ def test_array_with_only_items_keyword() -> None:
         ],
     }
 
-    check_schema_with_json(schema_prefix_items, instance_accepted, any_whitespace=False)
-    check_schema_with_json(
+    check_schema_with_instance(schema_prefix_items, instance_accepted, any_whitespace=False)
+    check_schema_with_instance(
         schema_prefix_items, instance_rejected, is_accepted=False, any_whitespace=False
     )
 
@@ -723,13 +816,13 @@ def test_array_with_only_items_keyword() -> None:
         },
     }
 
-    check_schema_with_json(schema_unevaluated_items, instance_accepted, any_whitespace=False)
-    check_schema_with_json(
+    check_schema_with_instance(schema_unevaluated_items, instance_accepted, any_whitespace=False)
+    check_schema_with_instance(
         schema_unevaluated_items, instance_rejected, is_accepted=False, any_whitespace=False
     )
 
 
-def test_object_with_only_properties_keyword() -> None:
+def test_object_with_only_properties_keyword():
     schema = {
         "properties": {
             "name": {"type": "string"},
@@ -739,8 +832,8 @@ def test_object_with_only_properties_keyword() -> None:
     }
     instance_accepted = {"name": "John", "age": 30}
     instance_rejected = {"name": "John"}
-    check_schema_with_json(schema, instance_accepted, any_whitespace=False)
-    check_schema_with_json(schema, instance_rejected, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema, instance_accepted, any_whitespace=False)
+    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=False)
 
     schema_additional_properties = {
         "additionalProperties": {
@@ -750,8 +843,10 @@ def test_object_with_only_properties_keyword() -> None:
     instance_accepted = {"name": "John"}
     instance_rejected = {"name": "John", "age": 30}
 
-    check_schema_with_json(schema_additional_properties, instance_accepted, any_whitespace=False)
-    check_schema_with_json(
+    check_schema_with_instance(
+        schema_additional_properties, instance_accepted, any_whitespace=False
+    )
+    check_schema_with_instance(
         schema_additional_properties, instance_rejected, is_accepted=False, any_whitespace=False
     )
 
@@ -761,8 +856,10 @@ def test_object_with_only_properties_keyword() -> None:
         },
     }
 
-    check_schema_with_json(schema_unevaluated_properties, instance_accepted, any_whitespace=False)
-    check_schema_with_json(
+    check_schema_with_instance(
+        schema_unevaluated_properties, instance_accepted, any_whitespace=False
+    )
+    check_schema_with_instance(
         schema_unevaluated_properties, instance_rejected, is_accepted=False, any_whitespace=False
     )
 
