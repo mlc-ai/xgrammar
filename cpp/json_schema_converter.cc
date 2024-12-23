@@ -202,6 +202,9 @@ class JSONSchemaConverter {
   /*! \brief Visit an anyOf schema. */
   std::string VisitAnyOf(const picojson::object& schema, const std::string& rule_name);
 
+  /*! \brief Visit an allOf schema. */
+  std::string VisitAllOf(const picojson::object& schema, const std::string& rule_name);
+
   /*! \brief Visit a true schema that can match anything. */
   std::string VisitAny(const picojson::value& schema, const std::string& rule_name);
 
@@ -550,8 +553,6 @@ std::string JSONSchemaConverter::VisitSchema(
   WarnUnsupportedKeywords(
       schema,
       {
-          "allof",
-          "oneof",
           "not",
           "if",
           "then",
@@ -571,8 +572,10 @@ std::string JSONSchemaConverter::VisitSchema(
     return VisitConst(schema_obj, rule_name);
   } else if (schema_obj.count("enum")) {
     return VisitEnum(schema_obj, rule_name);
-  } else if (schema_obj.count("anyOf")) {
+  } else if (schema_obj.count("anyOf") || schema_obj.count("oneOf")) {
     return VisitAnyOf(schema_obj, rule_name);
+  } else if (schema_obj.count("allOf")) {
+    return VisitAllOf(schema_obj, rule_name);
   } else if (schema_obj.count("type")) {
     const std::string& type = schema_obj.at("type").get<std::string>();
     if (type == "integer") {
@@ -593,6 +596,12 @@ std::string JSONSchemaConverter::VisitSchema(
       XGRAMMAR_LOG(FATAL) << "Unsupported type " << type << " in schema "
                           << schema.serialize(false);
     }
+  } else if (schema_obj.count("properties") || schema_obj.count("additionalProperties") ||
+             schema_obj.count("unevaluatedProperties")) {
+    return VisitObject(schema_obj, rule_name);
+  } else if (schema_obj.count("items") || schema_obj.count("prefixItems") ||
+             schema_obj.count("unevaluatedItems")) {
+    return VisitArray(schema_obj, rule_name);
   }
 
   // If no above keyword is detected, we treat it as any
@@ -668,6 +677,28 @@ std::string JSONSchemaConverter::VisitAnyOf(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.count("anyOf"));
+  std::string result = "";
+  int idx = 0;
+  for (auto anyof_schema : schema.at("anyOf").get<picojson::array>()) {
+    if (idx != 0) {
+      result += " | ";
+    }
+    result += CreateRuleFromSchema(anyof_schema, rule_name + "_case_" + std::to_string(idx));
+    ++idx;
+  }
+  return result;
+}
+
+std::string JSONSchemaConverter::VisitAllOf(
+    const picojson::object& schema, const std::string& rule_name
+) {
+  // We support common usecases of AllOf, but not all, because it's impossible to support all
+  // cases with CFG
+  XGRAMMAR_CHECK(schema.count("allOf"));
+  auto all_array = schema.at("allOf").get<picojson::array>();
+  if (all_array.size() == 1) {
+    return VisitSchema(all_array[0], rule_name + "_case_0");
+  }
   std::string result = "";
   int idx = 0;
   for (auto anyof_schema : schema.at("anyOf").get<picojson::array>()) {
@@ -904,8 +935,10 @@ std::string JSONSchemaConverter::VisitNull(
 std::string JSONSchemaConverter::VisitArray(
     const picojson::object& schema, const std::string& rule_name
 ) {
-  XGRAMMAR_CHECK(schema.count("type"));
-  XGRAMMAR_CHECK(schema.at("type").get<std::string>() == "array");
+  XGRAMMAR_CHECK(
+      (schema.count("type") && schema.at("type").get<std::string>() == "array") ||
+      schema.count("items") || schema.count("prefixItems") || schema.count("unevaluatedItems")
+  );
   WarnUnsupportedKeywords(
       schema,
       {
@@ -924,6 +957,8 @@ std::string JSONSchemaConverter::VisitArray(
 
   // 1. Handle prefix items
   if (schema.count("prefixItems")) {
+    XGRAMMAR_CHECK(schema.at("prefixItems").is<picojson::array>())
+        << "prefixItems must be an array";
     const auto& prefix_items = schema.at("prefixItems").get<picojson::array>();
     for (int i = 0; i < static_cast<int>(prefix_items.size()); ++i) {
       XGRAMMAR_CHECK(prefix_items[i].is<picojson::object>());
@@ -1119,8 +1154,11 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesContainRequired(
 std::string JSONSchemaConverter::VisitObject(
     const picojson::object& schema, const std::string& rule_name
 ) {
-  XGRAMMAR_CHECK(schema.count("type"));
-  XGRAMMAR_CHECK(schema.at("type").get<std::string>() == "object");
+  XGRAMMAR_CHECK(
+      (schema.count("type") && schema.at("type").get<std::string>() == "object") ||
+      schema.count("properties") || schema.count("additionalProperties") ||
+      schema.count("unevaluatedProperties")
+  );
   WarnUnsupportedKeywords(
       schema,
       {

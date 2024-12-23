@@ -31,7 +31,7 @@ def check_schema_with_grammar(
 
 def check_schema_with_json(
     schema: Dict[str, Any],
-    json_str: str,
+    json_str: Union[str, Any],
     is_accepted: bool = True,
     any_whitespace: bool = True,
     indent: Optional[int] = None,
@@ -45,6 +45,9 @@ def check_schema_with_json(
         separators=separators,
         strict_mode=strict_mode,
     )
+
+    if not isinstance(json_str, str):
+        json_str = json.dumps(json_str, indent=indent, separators=separators)
 
     if is_accepted:
         assert _is_grammar_accept_string(json_schema_grammar, json_str)
@@ -626,6 +629,103 @@ root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* ",
     ]
     for instance in instances:
         check_schema_with_json(schema, instance, any_whitespace=True)
+
+
+def test_array_with_only_items_keyword() -> None:
+    schema = {
+        "items": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer"},
+            },
+            "required": ["name", "age"],
+        },
+    }
+    instance_accepted = [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}]
+    instance_rejected = [{"name": "John"}]
+    check_schema_with_json(schema, instance_accepted, any_whitespace=False)
+    check_schema_with_json(schema, instance_rejected, is_accepted=False, any_whitespace=False)
+
+    schema_prefix_items = {
+        "prefixItems": [
+            {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "age": {"type": "integer"},
+                },
+                "required": ["name", "age"],
+            },
+            {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "age": {"type": "integer"},
+                },
+                "required": ["name", "age"],
+            },
+        ],
+    }
+
+    check_schema_with_json(schema_prefix_items, instance_accepted, any_whitespace=False)
+    check_schema_with_json(
+        schema_prefix_items, instance_rejected, is_accepted=False, any_whitespace=False
+    )
+
+    schema_unevaluated_items = {
+        "unevaluatedItems": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer"},
+            },
+            "required": ["name", "age"],
+        },
+    }
+
+    check_schema_with_json(schema_unevaluated_items, instance_accepted, any_whitespace=False)
+    check_schema_with_json(
+        schema_unevaluated_items, instance_rejected, is_accepted=False, any_whitespace=False
+    )
+
+
+def test_object_with_only_properties_keyword() -> None:
+    schema = {
+        "properties": {
+            "name": {"type": "string"},
+            "age": {"type": "integer"},
+        },
+        "required": ["name", "age"],
+    }
+    instance_accepted = {"name": "John", "age": 30}
+    instance_rejected = {"name": "John"}
+    check_schema_with_json(schema, instance_accepted, any_whitespace=False)
+    check_schema_with_json(schema, instance_rejected, is_accepted=False, any_whitespace=False)
+
+    schema_additional_properties = {
+        "additionalProperties": {
+            "type": "string",
+        },
+    }
+    instance_accepted = {"name": "John"}
+    instance_rejected = {"name": "John", "age": 30}
+
+    check_schema_with_json(schema_additional_properties, instance_accepted, any_whitespace=False)
+    check_schema_with_json(
+        schema_additional_properties, instance_rejected, is_accepted=False, any_whitespace=False
+    )
+
+    schema_unevaluated_properties = {
+        "unevaluatedProperties": {
+            "type": "string",
+        },
+    }
+
+    check_schema_with_json(schema_unevaluated_properties, instance_accepted, any_whitespace=False)
+    check_schema_with_json(
+        schema_unevaluated_properties, instance_rejected, is_accepted=False, any_whitespace=False
+    )
 
 
 if __name__ == "__main__":
