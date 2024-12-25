@@ -202,7 +202,7 @@ class JSONSchemaConverter {
   /*! \brief Visit an anyOf schema. */
   std::string VisitAnyOf(const picojson::object& schema, const std::string& rule_name);
 
-  picojson::value FuseAllOfSchema(const picojson::array& all_of_schema);
+  picojson::value FuseAllOfSchema(const std::vector<picojson::value>& schemas);
 
   /*! \brief Visit an allOf schema. */
   std::string VisitAllOf(const picojson::object& schema, const std::string& rule_name);
@@ -713,85 +713,9 @@ std::string JSONSchemaConverter::VisitAnyOf(
   return result;
 }
 
-picojson::value JSONSchemaConverter::FuseAllOfSchema(const picojson::array& all_of_schema) {
+picojson::value JSONSchemaConverter::FuseAllOfSchema(const std::vector<picojson::value>& schemas) {
   picojson::object fused_schema;
-  // std::vector<picojson::value> all_schema_copy = all_of_schema;
-  // for (int i = 0; i < all_schema_copy.size(); ++i) {
-  //   auto schema = all_schema_copy[i];
-  //   // Handle $ref
-  //   if (schema.is<picojson::object>() && schema.get<picojson::object>().count("$ref")) {
-  //     XGRAMMAR_CHECK(schema.get<picojson::object>().at("$ref").is<std::string>())
-  //         << "Schema $ref should be a string";
-  //     schema = URIToSchema(schema.get<picojson::object>().at("$ref").get<std::string>());
-  //   }
-  //   // Handle bool schema
-  //   if (schema.is<bool>()) {
-  //     XGRAMMAR_CHECK(schema.get<bool>())
-  //         << "Schema should not be false: it cannot accept any value";
-  //     continue;
-  //   }
-  //   // Object Schema
-  //   XGRAMMAR_CHECK(schema.is<picojson::object>()) << "Schema should be an object or bool";
-  //   auto schema_obj = schema.get<picojson::object>();
-  //   for (const auto& [k, v] : schema_obj) {
-  //     if (k == "") auto it_k = fused_schema.find(k);
-  //     if (it_k == fused_schema.end()) {
-  //       fused_schema[k] = v;
-  //     }
-  //     // "$ref": _keywords.ref,
-  //     // "additionalItems": _legacy_keywords.additionalItems,
-  //     // "additionalProperties": _keywords.additionalProperties,
-  //     // "allOf": _keywords.allOf,
-  //     // "anyOf": _keywords.anyOf,
-  //     // "const": _keywords.const,
-  //     // "contains": _legacy_keywords.contains_draft6_draft7,
-  //     // "dependencies": _legacy_keywords.dependencies_draft4_draft6_draft7,
-  //     // "enum": _keywords.enum,
-  //     // "exclusiveMaximum": _keywords.exclusiveMaximum,
-  //     // "exclusiveMinimum": _keywords.exclusiveMinimum,
-  //     // "format": _keywords.format,
-  //     // "if": _keywords.if_,
-  //     // "items": _legacy_keywords.items_draft6_draft7_draft201909,
-  //     // "maxItems": _keywords.maxItems,
-  //     // "maxLength": _keywords.maxLength,
-  //     // "maxProperties": _keywords.maxProperties,
-  //     // "maximum": _keywords.maximum,
-  //     // "minItems": _keywords.minItems,
-  //     // "minLength": _keywords.minLength,
-  //     // "minProperties": _keywords.minProperties,
-  //     // "minimum": _keywords.minimum,
-  //     // "multipleOf": _keywords.multipleOf,
-  //     // "not": _keywords.not_,
-  //     // "oneOf": _keywords.oneOf,
-  //     // "pattern": _keywords.pattern,
-  //     // "patternProperties": _keywords.patternProperties,
-  //     // "properties": _keywords.properties,
-  //     // "propertyNames": _keywords.propertyNames,
-  //     // "required": _keywords.required,
-  //     // "type": _keywords.type,
-  //     // "uniqueItems": _keywords.uniqueItems,
-
-  //     // if (v.is<int64_t>()) {
-  //     //   XGRAMMAR_CHECK(
-  //     //       it_k->second.is<int64_t>() && it_k->second.get<int64_t>() == v.get<int64_t>()
-  //     //   ) << "Value mismatch for keyword "
-  //     //     << k << ": " << v << " and " << it_k->first;
-  //     // } else if (v.is<bool>()) {
-  //     //   XGRAMMAR_CHECK(it_k->second.is<bool>() && it_k->second.get<bool>() == v.get<bool>())
-  //     //       << "Value mismatch for keyword " << k << ": " << v << " and " << it_k->first;
-  //     // } else if (v.is<double>()) {
-  //     //   XGRAMMAR_CHECK(it_k->second.is<double>() && it_k->second.get<double>() ==
-  //     //   v.get<double>())
-  //     //       << "Value mismatch for keyword " << k << ": " << v << " and " << it_k->first;
-  //     // } else if (v.is<std::string>()) {
-  //     //   XGRAMMAR_CHECK(
-  //     //       it_k->second.is<std::string>() &&
-  //     //       it_k->second.get<std::string>() == v.get<std::string>()
-  //     //   ) << "Value mismatch for keyword "
-  //     //     << k << ": " << v << " and " << it_k->first;
-  //     // }
-  //   }
-  // }
+  XGRAMMAR_LOG(WARNING) << "Support for allOf with multiple options is still ongoing";
   return picojson::value(fused_schema);
 }
 
