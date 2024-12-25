@@ -464,7 +464,7 @@ void JSONSchemaConverter::WarnUnsupportedKeywords(
     return;
   }
 
-  XGRAMMAR_DCHECK(schema.is<picojson::object>());
+  XGRAMMAR_DCHECK(schema.is<picojson::object>()) << "Schema should be an object or bool";
   WarnUnsupportedKeywords(schema.get<picojson::object>(), keywords, verbose);
 }
 
@@ -551,6 +551,7 @@ std::string JSONSchemaConverter::VisitSchema(
     XGRAMMAR_CHECK(schema.get<bool>()) << "Schema should not be false: it cannot accept any value";
     return VisitAny(schema, rule_name);
   }
+  XGRAMMAR_CHECK(schema.is<picojson::object>()) << "Schema should be an object or bool";
 
   WarnUnsupportedKeywords(
       schema,
@@ -563,8 +564,6 @@ std::string JSONSchemaConverter::VisitSchema(
           "dependentSchemas",
       }
   );
-
-  XGRAMMAR_CHECK(schema.is<picojson::object>());
 
   const auto& schema_obj = schema.get<picojson::object>();
 
@@ -617,6 +616,7 @@ std::string JSONSchemaConverter::VisitRef(
       << "Schema $ref should be a string";
   picojson::value new_schema = URIToSchema(schema.at("$ref").get<std::string>());
   if (!new_schema.is<bool>()) {
+    XGRAMMAR_CHECK(new_schema.is<picojson::object>()) << "Schema should be an object or bool";
     picojson::object new_schema_obj = new_schema.get<picojson::object>();
     for (const auto& [k, v] : schema) {
       if (k != "$ref") {
@@ -1298,6 +1298,8 @@ std::string JSONSchemaConverter::VisitObject(
   // 1. Handle properties
   std::vector<std::pair<std::string, picojson::value>> properties;
   if (schema.count("properties")) {
+    XGRAMMAR_CHECK(schema.at("properties").is<picojson::object>())
+        << "properties must be an object";
     auto properties_obj = schema.at("properties").get<picojson::object>();
     for (const auto& key : properties_obj.ordered_keys()) {
       properties.push_back({key, properties_obj.at(key)});
@@ -1306,6 +1308,7 @@ std::string JSONSchemaConverter::VisitObject(
 
   std::unordered_set<std::string> required;
   if (schema.count("required")) {
+    XGRAMMAR_CHECK(schema.at("required").is<picojson::array>()) << "required must be an array";
     for (const auto& required_prop : schema.at("required").get<picojson::array>()) {
       required.insert(required_prop.get<std::string>());
     }
