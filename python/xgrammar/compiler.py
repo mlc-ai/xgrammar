@@ -102,7 +102,16 @@ class GrammarCompiler(XGRObject):
             The compiled grammar.
         """
         if isinstance(schema, type) and issubclass(schema, BaseModel):
-            schema = json.dumps(schema.model_json_schema())
+            if hasattr(schema, "model_json_schema"):
+                # pydantic 2.x
+                schema = json.dumps(schema.model_json_schema())
+            elif hasattr(schema, "schema_json"):
+                # pydantic 1.x
+                schema = json.dumps(schema.schema_json())
+            else:
+                raise ValueError(
+                    "The schema should have a model_json_schema or json_schema method."
+                )
 
         return CompiledGrammar._create_from_handle(
             self._handle.compile_json_schema(
