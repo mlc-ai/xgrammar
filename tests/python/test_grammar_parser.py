@@ -86,7 +86,7 @@ f ::= "f" {3}
 g ::= "g" {0}
 """
 
-    expected = """root ::= ((a b c d e f))
+    expected = """root ::= ((a b c d e f g))
 a ::= (("a" a_1))
 b ::= ((b_choice b_1))
 c ::= ((c_1))
