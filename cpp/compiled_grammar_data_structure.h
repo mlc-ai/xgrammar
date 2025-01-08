@@ -80,10 +80,6 @@ class CompiledGrammar::Impl {
   /*! \brief The tokenizer information. */
   TokenizerInfo tokenizer_info;
 
-  Grammar GetGrammar() const { return grammar; }
-
-  TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
-
   /******************* The adaptive token mask cache *******************/
 
   struct StackElementEqual {
@@ -105,9 +101,13 @@ class CompiledGrammar::Impl {
     }
   };
 
-  /*! \brief Mapping from StackElements to the adaptive token mask. */
+  /*! \brief Mapping from the stack top element to the adaptive token mask. */
   std::unordered_map<StackElement, AdaptiveTokenMask, StackElementHash, StackElementEqual>
       adaptive_token_mask_cache;
+
+  Grammar GetGrammar() const { return grammar; }
+
+  TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
 };
 
 }  // namespace xgrammar
