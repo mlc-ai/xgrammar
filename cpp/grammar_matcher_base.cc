@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/matcher_base.cc
+ * \file xgrammar/grammar_matcher_base.cc
  * \brief This source file implements the basic matching algorithm from strings to grammar.
  * matcher.cc will handle the logic related to LLM tokens, like accepting tokens, leveraging the
  * token mask cache to generate the mask, etc.
@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "grammar_data_structure.h"
-#include "grammar_matcher_data_structure.h"
+#include "persistent_stack.h"
 #include "support/encoding.h"
 
 namespace xgrammar {

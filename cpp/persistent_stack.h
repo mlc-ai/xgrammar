@@ -1,10 +1,10 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/matcher_data_structure.h
- * \brief The header for the definition of the data structures used in the grammar matcher.
+ * \file xgrammar/persistent_stack.h
+ * \brief The header for the definition of the persistent stack and stack elements.
  */
-#ifndef XGRAMMAR_MATCHER_DATA_STRUCTURE_H_
-#define XGRAMMAR_MATCHER_DATA_STRUCTURE_H_
+#ifndef XGRAMMAR_PERSISTENT_STACK_H_
+#define XGRAMMAR_PERSISTENT_STACK_H_
 
 #include <xgrammar/xgrammar.h>
 
@@ -444,4 +444,4 @@ inline void StackTopsHistory::CheckWellFormed() const {
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_MATCHER_DATA_STRUCTURE_H_
+#endif  // XGRAMMAR_PERSISTENT_STACK_H_

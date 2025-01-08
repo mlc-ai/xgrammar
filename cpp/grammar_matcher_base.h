@@ -3,8 +3,8 @@
  * \file xgrammar/grammar_matcher_base.h
  * \brief The base class of GrammarMatcher. It implements a character-based matching automata.
  */
-#ifndef XGRAMMAR_MATCHER_BASE_H_
-#define XGRAMMAR_MATCHER_BASE_H_
+#ifndef XGRAMMAR_GRAMMAR_MATCHER_BASE_H_
+#define XGRAMMAR_GRAMMAR_MATCHER_BASE_H_
 
 #include <xgrammar/grammar.h>
 
@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "grammar_data_structure.h"
-#include "grammar_matcher_data_structure.h"
+#include "persistent_stack.h"
 
 namespace xgrammar {
 
@@ -125,4 +125,4 @@ class GrammarMatcherBase {
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_MATCHER_BASE_H_
+#endif  // XGRAMMAR_GRAMMAR_MATCHER_BASE_H_

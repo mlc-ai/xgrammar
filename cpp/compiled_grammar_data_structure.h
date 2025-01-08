@@ -15,7 +15,7 @@
 #include <vector>
 
 // matcher_data_structure.h is included to use StackElement
-#include "grammar_matcher_data_structure.h"
+#include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
 #include "support/utils.h"
 
