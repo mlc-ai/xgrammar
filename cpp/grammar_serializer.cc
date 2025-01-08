@@ -40,6 +40,8 @@ std::string GrammarPrinter::PrintRuleExpr(const RuleExpr& rule_expr) {
       return PrintSequence(rule_expr);
     case RuleExprType::kChoices:
       return PrintChoices(rule_expr);
+    case RuleExprType::kTagDispatch:
+      return PrintTagDispatch(rule_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected RuleExpr type: " << static_cast<int>(rule_expr.type);
   }
@@ -115,6 +117,19 @@ std::string GrammarPrinter::PrintChoices(const RuleExpr& rule_expr) {
     result += PrintRuleExpr(rule_expr[i]);
     if (i + 1 != rule_expr.data_len) {
       result += " | ";
+    }
+  }
+  result += ")";
+  return result;
+}
+
+std::string GrammarPrinter::PrintTagDispatch(const RuleExpr& rule_expr) {
+  std::string result = "TagDispatch(";
+  for (int i = 0; i < rule_expr.data_len; i += 2) {
+    result +=
+        "(" + PrintRuleExpr(rule_expr[i]) + ", " + grammar_->GetRule(rule_expr[i + 1]).name + ")";
+    if (i + 2 != rule_expr.data_len) {
+      result += ", ";
     }
   }
   result += ")";

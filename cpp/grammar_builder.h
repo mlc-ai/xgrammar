@@ -138,6 +138,21 @@ class GrammarBuilder {
     );
   }
 
+  /*!
+   * \brief Add a RuleExpr for tag dispatch.
+   * \param tag_dispatch_list A list of pairs of tag_expr_id and rule_id.
+   */
+  int32_t AddTagDispatch(const std::vector<std::pair<int32_t, int32_t>>& tag_dispatch_list) {
+    std::vector<int32_t> data;
+    data.reserve(tag_dispatch_list.size() * 2);
+    for (const auto& [tag_expr_id, rule_id] : tag_dispatch_list) {
+      data.push_back(tag_expr_id);
+      data.push_back(rule_id);
+    }
+    return AddRuleExpr({RuleExprType::kTagDispatch, data.data(), static_cast<int32_t>(data.size())}
+    );
+  }
+
   size_t NumRuleExprs() const { return grammar_->NumRuleExprs(); }
   /*! \brief Get the rule_expr with the given id. */
   RuleExpr GetRuleExpr(int32_t rule_expr_id) { return grammar_->GetRuleExpr(rule_expr_id); }

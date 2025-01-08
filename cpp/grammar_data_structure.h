@@ -106,6 +106,9 @@ class Grammar::Impl {
     kSequence,
     // data format: [rule_expr_id0, rule_expr_id1, ...]
     kChoices,
+    // data format: [tag_expr0, rule_id0, tag_expr1, rule_id1, ...]
+    // tag_expr should be a byte string, and rule_id should be a rule id
+    kTagDispatch,
   };
 
   /*! \brief The object representing a rule expr. */

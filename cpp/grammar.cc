@@ -18,7 +18,7 @@ std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString();
 
 Grammar Grammar::FromEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
   auto grammar = ParseEBNF(ebnf_string, root_rule_name);
-  grammar = GrammarNormalizer().Apply(grammar);
+  //   grammar = GrammarNormalizer().Apply(grammar);
   return grammar;
 }
 

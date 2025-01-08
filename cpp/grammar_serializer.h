@@ -58,6 +58,8 @@ class GrammarPrinter {
   std::string PrintSequence(const RuleExpr& rule_expr);
   /*! \brief Print a RuleExpr for rule_expr choices. */
   std::string PrintChoices(const RuleExpr& rule_expr);
+  /*! \brief Print a RuleExpr for tag dispatch. */
+  std::string PrintTagDispatch(const RuleExpr& rule_expr);
 
   Grammar grammar_;
 };
