@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-// matcher_data_structure.h is included to use RulePosition
+// matcher_data_structure.h is included to use StackElement
 #include "grammar_matcher_data_structure.h"
 #include "support/dynamic_bitset.h"
 #include "support/utils.h"
@@ -24,11 +24,11 @@ namespace xgrammar {
 /******************* CompiledGrammar Datastructures *******************/
 
 /*!
- * \brief Preprocessed information, for a given specific RulePosition, divides the token set
+ * \brief Preprocessed information, for a given specific StackElement, divides the token set
  * into three categories: accepted, rejected, and uncertain.
- * Accepted: tokens that can be determined by the current RulePosition to be acceptable
- * Rejected: tokens that can be determined by the current RulePosition to be unacceptable
- * Uncertain: tokens that need the state of the parent RulePositions to determine if acceptable
+ * Accepted: tokens that can be determined by the current StackElement to be acceptable
+ * Rejected: tokens that can be determined by the current StackElement to be unacceptable
+ * Uncertain: tokens that need the state of the parent StackElements to determine if acceptable
  *
  * \note uncertain indices are stored directly. Accepted / rejected indices have three ways to
  * store to reduce memory and computation usage. See StoreType.
@@ -86,27 +86,27 @@ class CompiledGrammar::Impl {
 
   /******************* The adaptive token mask cache *******************/
 
-  struct RulePositionEqual {
-    std::size_t operator()(const RulePosition& lhs, const RulePosition& rhs) const noexcept {
+  struct StackElementEqual {
+    std::size_t operator()(const StackElement& lhs, const StackElement& rhs) const noexcept {
       return lhs.sequence_id == rhs.sequence_id && lhs.element_id == rhs.element_id &&
              lhs.left_utf8_bytes == rhs.left_utf8_bytes &&
              lhs.element_in_string == rhs.element_in_string;
     }
   };
 
-  struct RulePositionHash {
-    std::size_t operator()(const RulePosition& rule_position) const noexcept {
+  struct StackElementHash {
+    std::size_t operator()(const StackElement& stack_element) const noexcept {
       return HashCombine(
-          rule_position.sequence_id,
-          rule_position.element_id,
-          rule_position.left_utf8_bytes,
-          rule_position.element_in_string
+          stack_element.sequence_id,
+          stack_element.element_id,
+          stack_element.left_utf8_bytes,
+          stack_element.element_in_string
       );
     }
   };
 
-  /*! \brief Mapping from RulePositions to the adaptive token mask. */
-  std::unordered_map<RulePosition, AdaptiveTokenMask, RulePositionHash, RulePositionEqual>
+  /*! \brief Mapping from StackElements to the adaptive token mask. */
+  std::unordered_map<StackElement, AdaptiveTokenMask, StackElementHash, StackElementEqual>
       adaptive_token_mask_cache;
 };
 

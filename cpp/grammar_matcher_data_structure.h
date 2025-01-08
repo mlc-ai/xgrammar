@@ -17,8 +17,8 @@
 
 namespace xgrammar {
 
-/*! \brief Specifies a position in a rule. */
-struct RulePosition {
+/*! \brief Specifies a stack element. It is mainly a position in a rule. */
+struct StackElement {
   /*! \brief The rule's id. Used for debug purposes. */
   int32_t rule_id = -1;
   /*! \brief Which choice in this rule is selected. */
@@ -35,40 +35,41 @@ struct RulePosition {
 
   /*! \brief The id of the parent node in the PersistentStack. */
   int32_t parent_id = -1;
-  /*! \brief The reference count of this RulePosition. If reduces to zero, the node will be
-   * removed from the RulePositionBuffer. */
+
+  /*! \brief The reference count of this StackElement. If reduces to zero, the node will be
+   * removed from the StackElementBuffer. */
   int reference_count = 0;
 
-  /*! \brief A parent_id value of kNoParent means this RulePosition is the root of the tree. */
+  /*! \brief A parent_id value of kNoParent means this StackElement is the root of the tree. */
   static constexpr int32_t kNoParent = -1;
 
-  constexpr RulePosition() = default;
-  constexpr RulePosition(
+  constexpr StackElement() = default;
+  constexpr StackElement(
       int32_t rule_id, int32_t sequence_id, int32_t element_id, int32_t parent_id = kNoParent
   )
       : rule_id(rule_id), sequence_id(sequence_id), element_id(element_id), parent_id(parent_id) {}
 
-  // The position is invalid when sequence_id is -1.
+  // The element is invalid when sequence_id is -1.
   bool IsInvalid() const { return sequence_id == -1; }
 
-  bool operator==(const RulePosition& other) const {
+  bool operator==(const StackElement& other) const {
     return rule_id == other.rule_id && sequence_id == other.sequence_id &&
            element_id == other.element_id && parent_id == other.parent_id &&
            left_utf8_bytes == other.left_utf8_bytes && element_in_string == other.element_in_string;
   }
 };
 
-/*! \brief A special value for invalid RulePosition. */
-inline constexpr RulePosition kInvalidRulePosition(-1, -1, -1, -1);
+/*! \brief A special value for invalid StackElement. */
+inline constexpr StackElement kInvalidStackElement(-1, -1, -1, -1);
 
-/*! \brief A buffer to manage all RulePositions. */
-class RulePositionBuffer {
+/*! \brief A buffer to manage all StackElements. */
+class StackElementBuffer {
  public:
   /*!
-   * \brief Allocate a new RulePosition. with given initial value.
+   * \brief Allocate a new StackElement. with given initial value.
    * \returns The id of the allocated node.
    */
-  int32_t Allocate(RulePosition rule_position) {
+  int32_t Allocate(StackElement stack_element) {
     int32_t id;
     if (free_nodes_.empty()) {
       buffer_.emplace_back();
@@ -78,15 +79,15 @@ class RulePositionBuffer {
       XGRAMMAR_DCHECK(buffer_[id].IsInvalid());
       free_nodes_.pop_back();
     }
-    rule_position.reference_count = 0;
-    buffer_[id] = rule_position;
+    stack_element.reference_count = 0;
+    buffer_[id] = stack_element;
     return id;
   }
 
-  /*! \brief Free the RulePosition with the given id. */
+  /*! \brief Free the StackElement with the given id. */
   void Free(int32_t id) {
     XGRAMMAR_DCHECK(!buffer_[id].IsInvalid());
-    buffer_[id] = kInvalidRulePosition;
+    buffer_[id] = kInvalidStackElement;
     free_nodes_.push_back(id);
   }
 
@@ -99,13 +100,13 @@ class RulePositionBuffer {
     return buffer_.size() - free_nodes_.size();
   }
 
-  /*! \brief Get the RulePosition with the given id. */
-  RulePosition& operator[](int32_t id) {
+  /*! \brief Get the StackElement with the given id. */
+  StackElement& operator[](int32_t id) {
     XGRAMMAR_DCHECK(id >= 0 && id < static_cast<int32_t>(buffer_.size()));
     XGRAMMAR_DCHECK(!buffer_[id].IsInvalid());
     return buffer_[id];
   }
-  const RulePosition& operator[](int32_t id) const {
+  const StackElement& operator[](int32_t id) const {
     XGRAMMAR_DCHECK(id >= 0 && id < static_cast<int32_t>(buffer_.size()));
     XGRAMMAR_DCHECK(!buffer_[id].IsInvalid());
     return buffer_[id];
@@ -119,14 +120,14 @@ class RulePositionBuffer {
   friend class PersistentStack;
 
  private:
-  /*! \brief The buffer to store all RulePositions. */
-  std::vector<RulePosition> buffer_;
+  /*! \brief The buffer to store all StackElements. */
+  std::vector<StackElement> buffer_;
   /*! \brief A stack to store all free node ids. */
   std::vector<int32_t> free_nodes_;
 };
 
 /*!
- * \brief A tree structure to store all stacks. Every stack contains several RulePositions, and
+ * \brief A tree structure to store all stacks. Every stack contains several StackElements, and
  * is represented as a path from the root to a leaf node.
  */
 class PersistentStack {
@@ -135,44 +136,44 @@ class PersistentStack {
   PersistentStack(const Grammar& grammar) : grammar_(grammar) {}
 
   /*!
-   * \brief Create a new node with the given RulePosition. The reference count of the new node
+   * \brief Create a new node with the given StackElement. The reference count of the new node
    * is zero.
    *
    * \note Later, this node should either be pointed by some child rule, or become a stack top
    * node (so it will be pointed to by an attached pointer) to be maintained in the
    * reference-counting based memory management.
    */
-  int32_t NewNode(const RulePosition& rule_position) {
-    auto id = node_buffer_.Allocate(rule_position);
-    if (rule_position.parent_id != RulePosition::kNoParent) {
+  int32_t NewNode(const StackElement& stack_element) {
+    auto id = node_buffer_.Allocate(stack_element);
+    if (stack_element.parent_id != StackElement::kNoParent) {
       XGRAMMAR_DCHECK(
-          rule_position.parent_id < static_cast<int32_t>(node_buffer_.Capacity()) &&
-          !node_buffer_[rule_position.parent_id].IsInvalid()
+          stack_element.parent_id < static_cast<int32_t>(node_buffer_.Capacity()) &&
+          !node_buffer_[stack_element.parent_id].IsInvalid()
       );
-      node_buffer_[rule_position.parent_id].reference_count++;
+      node_buffer_[stack_element.parent_id].reference_count++;
     }
     return id;
   }
 
   /*!
-   * \brief Check if the given RulePosition points to the end of the grammar. For a position, if its
-   * rule id is the root rule id, and the element id equals to the length of the sequence it refers
-   * to, it would be the end position.
+   * \brief Check if the given StackElement points to the end of the grammar. For a stack element,
+   * if its rule id is the root rule id, and the element id equals to the length of the sequence it
+   * refers to, it would be the end of the grammar.
    */
-  bool IsEndPosition(const RulePosition& rule_position) const;
+  bool IsEndOfGrammar(const StackElement& stack_element) const;
 
   /*! \brief Attach an additional reference to the node with the given id. */
   void AttachRefTo(int32_t id) {
-    XGRAMMAR_DCHECK(id != RulePosition::kNoParent);
+    XGRAMMAR_DCHECK(id != StackElement::kNoParent);
     node_buffer_[id].reference_count++;
   }
 
   /*! \brief Remove a reference to the node with the given id. If the reference count becomes zero,
    * free the node and recursively all its ancestors with zero reference count. */
   void RemoveRefTo(int32_t id) {
-    XGRAMMAR_DCHECK(id != RulePosition::kNoParent);
+    XGRAMMAR_DCHECK(id != StackElement::kNoParent);
     auto cur_node = id;
-    while (cur_node != RulePosition::kNoParent) {
+    while (cur_node != StackElement::kNoParent) {
       node_buffer_[cur_node].reference_count--;
       if (node_buffer_[cur_node].reference_count != 0) {
         break;
@@ -183,17 +184,17 @@ class PersistentStack {
     }
   }
 
-  /*! \brief Get the RulePosition with the given id. */
-  const RulePosition& operator[](int32_t id) const {
-    XGRAMMAR_DCHECK(id != RulePosition::kNoParent);
+  /*! \brief Get the StackElement with the given id. */
+  const StackElement& operator[](int32_t id) const {
+    XGRAMMAR_DCHECK(id != StackElement::kNoParent);
     XGRAMMAR_DCHECK(!node_buffer_[id].IsInvalid());
     return node_buffer_[id];
   }
 
-  /*! \brief Print the given rule_position to a string. */
-  std::string PrintNode(const RulePosition& rule_position) const;
+  /*! \brief Print the given stack_element to a string. */
+  std::string PrintNode(const StackElement& stack_element) const;
 
-  /*! \brief Print the rule_position associated with the given id to a string. */
+  /*! \brief Print the stack_element associated with the given id to a string. */
   std::string PrintNode(int32_t id) const;
 
   /*! \brief Print the stack with the given top id to a string. */
@@ -204,8 +205,8 @@ class PersistentStack {
    * \details This function checks the following properties:
    * 1. Every node is pointed directly or indirectly by a outside pointer.
    * 2. Every node's reference count is consistent with the actual reference count.
-   * 3. All ids and positions are valid.
-   * 4. If a node in the buffer is free, it should be equal to kInvalidRulePosition.
+   * 3. All ids and stack elements are valid.
+   * 4. If a node in the buffer is free, it should be equal to kInvalidStackElement.
    */
   void CheckWellFormed(const std::vector<int32_t>& outside_pointers) const;
 
@@ -215,8 +216,8 @@ class PersistentStack {
  private:
   /*! \brief The grammar associated with this PersistentStack. */
   Grammar grammar_;
-  /*! \brief The buffer to store all RulePositions. */
-  RulePositionBuffer node_buffer_;
+  /*! \brief The buffer to store all StackElements. */
+  StackElementBuffer node_buffer_;
 };
 
 /*!
@@ -279,10 +280,10 @@ class StackTopsHistory {
 
   /*!
    * \brief Print one history record.
-   * \param history_position_to_latest The number of steps behind the latest record. 0 means the
+   * \param steps_ago The number of steps behind the latest record. 0 means the
    * latest record.
    */
-  std::string PrintHistory(int history_position_to_latest = 0) const;
+  std::string PrintHistory(int steps_ago = 0) const;
 
   /*! \brief Get the number of history records. */
   int Size() const { return stack_tops_history_.size(); }
@@ -323,45 +324,45 @@ class StackTopsHistory {
   std::deque<std::vector<int32_t>> stack_tops_history_;
 };
 
-inline bool PersistentStack::IsEndPosition(const RulePosition& rule_position) const {
-  return rule_position.parent_id == RulePosition::kNoParent &&
-         grammar_->GetRuleExpr(rule_position.sequence_id).size() == rule_position.element_id;
+inline bool PersistentStack::IsEndOfGrammar(const StackElement& stack_element) const {
+  return stack_element.parent_id == StackElement::kNoParent &&
+         grammar_->GetRuleExpr(stack_element.sequence_id).size() == stack_element.element_id;
 }
 
 inline std::string PersistentStack::PrintNode(int32_t id) const {
   return "id: " + std::to_string(id) + ", " + PrintNode(node_buffer_[id]);
 }
 
-inline std::string PersistentStack::PrintNode(const RulePosition& rule_position) const {
+inline std::string PersistentStack::PrintNode(const StackElement& stack_element) const {
   std::stringstream ss;
-  ss << "RulePosition: rule " << rule_position.rule_id;
-  if (rule_position.rule_id != -1) {
-    ss << ": " << grammar_->GetRule(rule_position.rule_id).name;
+  ss << "StackElement: rule " << stack_element.rule_id;
+  if (stack_element.rule_id != -1) {
+    ss << ": " << grammar_->GetRule(stack_element.rule_id).name;
   }
-  ss << ", sequence " << rule_position.sequence_id << ": "
-     << GrammarPrinter(grammar_).PrintRuleExpr(rule_position.sequence_id);
-  ss << ", element id: " << rule_position.element_id;
+  ss << ", sequence " << stack_element.sequence_id << ": "
+     << GrammarPrinter(grammar_).PrintRuleExpr(stack_element.sequence_id);
+  ss << ", element id: " << stack_element.element_id;
 
-  auto sequence = grammar_->GetRuleExpr(rule_position.sequence_id);
-  if (rule_position.element_id < static_cast<int32_t>(sequence.size())) {
-    auto element = grammar_->GetRuleExpr(sequence[rule_position.element_id]);
+  auto sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
+  if (stack_element.element_id < static_cast<int32_t>(sequence.size())) {
+    auto element = grammar_->GetRuleExpr(sequence[stack_element.element_id]);
     if (element.type == Grammar::Impl::RuleExprType::kByteString) {
-      ss << ", element in string: " << rule_position.element_in_string;
+      ss << ", element in string: " << stack_element.element_in_string;
     } else if (element.type == Grammar::Impl::RuleExprType::kCharacterClass ||
                element.type == Grammar::Impl::RuleExprType::kCharacterClassStar) {
-      ss << ", left utf8 bytes: " << rule_position.left_utf8_bytes;
+      ss << ", left utf8 bytes: " << stack_element.left_utf8_bytes;
     }
   }
 
-  ss << ", parent id: " << rule_position.parent_id
-     << ", ref count: " << rule_position.reference_count;
+  ss << ", parent id: " << stack_element.parent_id
+     << ", ref count: " << stack_element.reference_count;
   return ss.str();
 }
 
 inline std::string PersistentStack::PrintStackByTopId(int32_t top_id) const {
   std::stringstream ss;
   std::vector<int32_t> stack;
-  for (auto cur_id = top_id; cur_id != RulePosition::kNoParent;
+  for (auto cur_id = top_id; cur_id != StackElement::kNoParent;
        cur_id = node_buffer_[cur_id].parent_id) {
     stack.push_back(cur_id);
   }
@@ -394,14 +395,14 @@ inline void PersistentStack::CheckWellFormed(const std::vector<int32_t>& outside
   while (!visit_queue.empty()) {
     auto cur_id = visit_queue.front();
     visit_queue.pop();
-    const auto& rule_position = buffer[cur_id];
-    if (rule_position.parent_id != RulePosition::kNoParent) {
-      XGRAMMAR_CHECK(rule_position.parent_id >= 0 && rule_position.parent_id < buffer_size);
-      XGRAMMAR_CHECK(!buffer[rule_position.parent_id].IsInvalid());
-      new_reference_counter[rule_position.parent_id]++;
-      if (visited[rule_position.parent_id] == false) {
-        visited[rule_position.parent_id] = true;
-        visit_queue.push(rule_position.parent_id);
+    const auto& stack_element = buffer[cur_id];
+    if (stack_element.parent_id != StackElement::kNoParent) {
+      XGRAMMAR_CHECK(stack_element.parent_id >= 0 && stack_element.parent_id < buffer_size);
+      XGRAMMAR_CHECK(!buffer[stack_element.parent_id].IsInvalid());
+      new_reference_counter[stack_element.parent_id]++;
+      if (visited[stack_element.parent_id] == false) {
+        visited[stack_element.parent_id] = true;
+        visit_queue.push(stack_element.parent_id);
       }
     }
   }
@@ -420,9 +421,9 @@ inline void PersistentStack::CheckWellFormed(const std::vector<int32_t>& outside
   }
 }
 
-inline std::string StackTopsHistory::PrintHistory(int history_position_to_latest) const {
-  const auto& latest_tops = stack_tops_history_
-      [static_cast<int64_t>(stack_tops_history_.size()) - 1 - history_position_to_latest];
+inline std::string StackTopsHistory::PrintHistory(int steps_ago) const {
+  const auto& latest_tops =
+      stack_tops_history_[static_cast<int64_t>(stack_tops_history_.size()) - 1 - steps_ago];
   std::stringstream ss;
   ss << "Stacks tops size: " << latest_tops.size() << std::endl;
   int cnt = 0;

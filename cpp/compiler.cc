@@ -51,16 +51,16 @@ TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetToke
 /******************* Use GrammarMatcher to generate the AdaptiveTokenMaskCache *******************/
 
 /*! \brief The concrete implementation of GrammarMatcherNode. */
-class GrammarMatcherForCompiler : public GrammarMatcherBase {
+class GrammarMatcherForTokenMaskCache : public GrammarMatcherBase {
  public:
-  // Do not expand the initial rule position: we want to find the accepted/rejected tokens
-  // that exactly start from the initial rule position.
-  GrammarMatcherForCompiler(const Grammar& grammar, RulePosition init_rule_position)
-      : GrammarMatcherBase(grammar, init_rule_position, false),
-        init_rule_id(init_rule_position.rule_id) {}
+  // Do not expand the initial stack element: we want to find the accepted/rejected tokens
+  // that exactly start from the initial stack element.
+  GrammarMatcherForTokenMaskCache(const Grammar& grammar, StackElement init_stack_element)
+      : GrammarMatcherBase(grammar, init_stack_element, false),
+        init_rule_id(init_stack_element.rule_id) {}
 
   /*!
-   * \brief Get the adaptive token mask for the given RulePosition.
+   * \brief Get the adaptive token mask for the given StackElement.
    * \param consider_parent_rule Whether to consider the parent rule. If false, there will be
    * no uncertain tokens. Useful for the root rule.
    */
@@ -87,15 +87,15 @@ class GrammarMatcherForCompiler : public GrammarMatcherBase {
   std::vector<bool> tmp_can_reach_end_prefix_or_stack_;
 };
 
-bool GrammarMatcherForCompiler::IsTokenPassLookaheadAssertion(
+bool GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAssertion(
     const std::string& token, const std::vector<bool>& can_reach_end_stack
 ) {
   auto lookahead_assertion_id = grammar_->GetRule(init_rule_id).lookahead_assertion_id;
   if (lookahead_assertion_id == -1) {
     return true;
   }
-  auto lookahead_rule_position = RulePosition(-1, lookahead_assertion_id, 0);
-  PushInitialState(lookahead_rule_position, true);
+  auto lookahead_stack_element = StackElement(-1, lookahead_assertion_id, 0);
+  PushInitialState(lookahead_stack_element, true);
   int token_len = token.size();
 
   // Find all positions that can come to and end. Then check if the suffix from that position
@@ -131,7 +131,7 @@ bool GrammarMatcherForCompiler::IsTokenPassLookaheadAssertion(
   return false;
 }
 
-AdaptiveTokenMask GrammarMatcherForCompiler::GetAdaptiveTokenMask(
+AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
     size_t vocab_size,
     const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
     bool consider_parent_rule
@@ -265,8 +265,8 @@ CompiledGrammar MultiThreadCompileGrammar(
         // Define the per-element processing logic for code reuse between
         // using thread_pool and not using thread_pool
         auto process_element = [&, rule_id, sequence_id, element_id, element]() {
-          auto add_adaptive_token_mask = [&](const RulePosition& rule_position) {
-            auto grammar_matcher = GrammarMatcherForCompiler(grammar, rule_position);
+          auto add_adaptive_token_mask = [&](const StackElement& stack_element) {
+            auto grammar_matcher = GrammarMatcherForTokenMaskCache(grammar, stack_element);
             auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
                 tokenizer_info.GetVocabSize(),
                 tokenizer_info.GetSortedDecodedVocab(),
@@ -274,19 +274,19 @@ CompiledGrammar MultiThreadCompileGrammar(
             );
             if (max_threads > 1) {
               std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
-              compiled_grammar_impl->adaptive_token_mask_cache[rule_position] =
+              compiled_grammar_impl->adaptive_token_mask_cache[stack_element] =
                   cur_adaptive_token_mask_cache;
             } else {
-              compiled_grammar_impl->adaptive_token_mask_cache[rule_position] =
+              compiled_grammar_impl->adaptive_token_mask_cache[stack_element] =
                   cur_adaptive_token_mask_cache;
             }
           };
 
-          auto cur_rule_position = RulePosition(rule_id, sequence_id, element_id);
+          auto cur_stack_element = StackElement(rule_id, sequence_id, element_id);
           if (element.type == RuleExprType::kByteString) {
             for (int idx = 0; idx < element.size(); ++idx) {
-              cur_rule_position.element_in_string = idx;
-              add_adaptive_token_mask(cur_rule_position);
+              cur_stack_element.element_in_string = idx;
+              add_adaptive_token_mask(cur_stack_element);
             }
           } else {
             XGRAMMAR_DCHECK(
@@ -294,8 +294,8 @@ CompiledGrammar MultiThreadCompileGrammar(
                 element.type == RuleExprType::kCharacterClass
             );
             for (int left_utf8_bytes = 0; left_utf8_bytes <= 3; ++left_utf8_bytes) {
-              cur_rule_position.left_utf8_bytes = left_utf8_bytes;
-              add_adaptive_token_mask(cur_rule_position);
+              cur_stack_element.left_utf8_bytes = left_utf8_bytes;
+              add_adaptive_token_mask(cur_stack_element);
             }
           }
         };

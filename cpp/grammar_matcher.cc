@@ -136,10 +136,10 @@ void ApplyTokenBitmaskInplaceCPU(
  * during matching.
  *
  * ## Stack Structure (see grammar_matcher_state.h)
- * The element of every stack is a RulePosition object, referring a position in the grammar. If a
- * RulePosition is a RuleRef element (referring to another rule), the next element of the stack will
- * be a position in this rule. If a RulePosition is a CharacterClass element, it will be the last
- * in the stack, meaning *the next* character to match.
+ * The element of every stack is a StackElement object, referring a position in the grammar. If a
+ * StackElement points to a RuleRef element (referring to another rule), the next element of the
+ * stack will be a position in this rule. If a StackElement is a CharacterClass element, it will be
+ * the last in the stack, meaning *the next* character to match.
  *
  * ## Matching Process (see grammar_matcher_base.h)
  * When accepting a new character and it is accepted by a stack, the last element of the stack will
@@ -152,7 +152,7 @@ void ApplyTokenBitmaskInplaceCPU(
  *
  * ## Storage of Stacks (see grammar_matcher_state.h)
  * Note these stacks form a tree structure as when splitting, the new stacks share the same prefix.
- * We store all RulePositions as a tree, where every path from tree root to a node represents a
+ * We store all StackElements as a tree, where every path from tree root to a node represents a
  * stack. To represent stack tops, we attach additional pointers pointing the stack top nodes.
  * Also, We maintain a history of the stack top pointers, so we can rollback to the previous state.
  *
@@ -254,7 +254,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
   void Reset() {
     stack_tops_history_.Reset();
     token_length_history.clear();
-    PushInitialState(kInvalidRulePosition, true);
+    PushInitialState(kInvalidStackElement, true);
   }
 
   int GetMaxRollbackTokens() const { return max_rollback_tokens_; }
@@ -442,12 +442,12 @@ void GrammarMatcher::Impl::FillNextTokenBitmask(DLTensor* next_token_bitmask, in
   tmp_rejected_indices_.assign({-1});
 
   for (auto top : latest_stack_tops) {
-    auto cur_rule_position = persistent_stack_[top];
-    if (persistent_stack_.IsEndPosition(cur_rule_position)) {
+    auto cur_stack_element = persistent_stack_[top];
+    if (persistent_stack_.IsEndOfGrammar(cur_stack_element)) {
       continue;
     }
 
-    const auto& adaptive_token_mask = adaptive_token_mask_cache.at(cur_rule_position);
+    const auto& adaptive_token_mask = adaptive_token_mask_cache.at(cur_stack_element);
 
     // For each stack, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -461,7 +461,7 @@ void GrammarMatcher::Impl::FillNextTokenBitmask(DLTensor* next_token_bitmask, in
     tmp_rejected_indices_delta_.clear();
 
     // Examine only the current one stack
-    stack_tops_history_.PushHistory({persistent_stack_.NewNode(cur_rule_position)});
+    stack_tops_history_.PushHistory({persistent_stack_.NewNode(cur_stack_element)});
 
     const std::string* prev_token = nullptr;
     int prev_matched_size = 0;
@@ -551,21 +551,21 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
     // -1 means not found yet; 0~255 means the next char
     int next_char = -1;
     for (auto stack_top : stack_tops) {
-      auto rule_position = persistent_stack_[stack_top];
-      auto cur_sequence = grammar_->GetRuleExpr(rule_position.sequence_id);
-      if (rule_position.parent_id == RulePosition::kNoParent &&
-          rule_position.element_id == cur_sequence.size()) {
+      auto stack_element = persistent_stack_[stack_top];
+      auto cur_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
+      if (stack_element.parent_id == StackElement::kNoParent &&
+          stack_element.element_id == cur_sequence.size()) {
         can_find_next_char = false;
         break;
       }
 
-      auto cur_element = grammar_->GetRuleExpr(cur_sequence[rule_position.element_id]);
+      auto cur_element = grammar_->GetRuleExpr(cur_sequence[stack_element.element_id]);
 
       if (cur_element.type == RuleExprType::kByteString) {
-        XGRAMMAR_DCHECK(rule_position.element_in_string < cur_element.size());
+        XGRAMMAR_DCHECK(stack_element.element_in_string < cur_element.size());
         if (next_char == -1) {
-          next_char = cur_element[rule_position.element_in_string];
-        } else if (next_char != cur_element[rule_position.element_in_string]) {
+          next_char = cur_element[stack_element.element_in_string];
+        } else if (next_char != cur_element[stack_element.element_in_string]) {
           can_find_next_char = false;
           break;
         }
@@ -574,7 +574,7 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
             cur_element.type == RuleExprType::kCharacterClass ||
             cur_element.type == RuleExprType::kCharacterClassStar
         );
-        if (rule_position.left_utf8_bytes > 0 || cur_element.size() != 3 || cur_element[0] != 0 ||
+        if (stack_element.left_utf8_bytes > 0 || cur_element.size() != 3 || cur_element[0] != 0 ||
             cur_element[1] != cur_element[2]) {
           can_find_next_char = false;
           break;
@@ -597,13 +597,13 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
 
       tmp_new_stack_tops_.clear();
       for (auto stack_top : stack_tops) {
-        auto cur_rule_position = persistent_stack_[stack_top];
-        auto new_rule_position = UpdatePositionWithChar(cur_rule_position, next_char);
+        auto cur_stack_element = persistent_stack_[stack_top];
+        auto new_stack_element = UpdateStackElementWithChar(cur_stack_element, next_char);
 
-        if (new_rule_position == cur_rule_position) {
-          ExpandRulePosition(new_rule_position, &tmp_new_stack_tops_, true, stack_top);
+        if (new_stack_element == cur_stack_element) {
+          ExpandStackElement(new_stack_element, &tmp_new_stack_tops_, true, stack_top);
         } else {
-          ExpandRulePosition(new_rule_position, &tmp_new_stack_tops_, true);
+          ExpandStackElement(new_stack_element, &tmp_new_stack_tops_, true);
         }
       }
       stack_tops_history_.PushHistory(tmp_new_stack_tops_);

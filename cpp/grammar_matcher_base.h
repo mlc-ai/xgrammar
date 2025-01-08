@@ -28,20 +28,20 @@ class GrammarMatcherBase {
 
  public:
   /*!
-   * \brief Construct a GrammarMatcherBase with the given grammar and initial rule position.
+   * \brief Construct a GrammarMatcherBase with the given grammar and initial stack element.
    * \param grammar The grammar to match.
-   * \param init_rule_position The initial rule position. If not specified, the root rule will be
+   * \param init_stack_element The initial stack element. If not specified, the root rule will be
    * used.
-   * \param expand_init_rule_position Whether to expand the initial rule position to all possible
-   * locations. See ExpandRulePosition.
+   * \param expand_init_stack_element Whether to expand the initial stack element to all possible
+   * locations. See ExpandStackElement.
    */
   GrammarMatcherBase(
       const Grammar& grammar,
-      RulePosition init_rule_position = kInvalidRulePosition,
-      bool expand_init_rule_position = true
+      StackElement init_stack_element = kInvalidStackElement,
+      bool expand_init_stack_element = true
   )
       : grammar_(grammar), persistent_stack_(grammar), stack_tops_history_(&persistent_stack_) {
-    PushInitialState(init_rule_position, expand_init_rule_position);
+    PushInitialState(init_stack_element, expand_init_stack_element);
   }
 
   /*! \brief Accept one character. */
@@ -60,31 +60,32 @@ class GrammarMatcherBase {
   std::string PrintStackState(int steps_behind_latest = 0) const;
 
  protected:
-  // Push an initial stack state according to the given rule position.
-  // If init_rule_position is kInvalidRulePosition, init the stack with the root rule.
-  void PushInitialState(RulePosition init_rule_position, bool expand_init_rule_position);
+  // Push an initial stack state according to the given stack element.
+  // If init_stack_element is kInvalidStackElement, init the stack with the root rule.
+  void PushInitialState(StackElement init_stack_element, bool expand_init_stack_element);
 
-  // Check if the character is accepted by the current rule position.
-  bool CheckIfAccepted(const RulePosition& rule_position, uint8_t char_value) const;
+  // Check if the character is accepted by the current stack element.
+  bool CheckIfAccepted(const StackElement& stack_element, uint8_t char_value) const;
 
   /*!
    * \brief Find the next position in the rule. If the next position is at the end of the rule,
    * and consider_parent is true, will iteratively find the next position in the parent rule.
-   * \param rule_position The current position.
+   * \param stack_element The current position.
    * \param consider_parent Whether to consider the parent position if the current position is
    * at the end of the rule.
-   * \returns (success, next_rule_position), indicating if the iteration is successful and the
-   * next rule position.
+   * \returns (success, next_stack_element), indicating if the iteration is successful and the
+   * next stack element.
    */
-  std::pair<bool, RulePosition> GetNextPositionInSequence(
-      const RulePosition& rule_position, bool consider_parent
+  std::pair<bool, StackElement> GetNextPositionInSequence(
+      const StackElement& stack_element, bool consider_parent
   ) const;
 
-  // Return the updated rule position after accepting the char
-  RulePosition UpdatePositionWithChar(const RulePosition& rule_position, uint8_t char_value) const;
+  // Return the updated stack element after accepting the char
+  StackElement UpdateStackElementWithChar(const StackElement& stack_element, uint8_t char_value)
+      const;
 
   /*!
-   * \brief Expand the given rule position to all possible positions approachable in the grammar.
+   * \brief Expand the given stack element to all possible positions approachable in the grammar.
    * The expanded positions must refers to an element (CharacterClass or CharacterClassStar or
    * ByteString) in a rule. Push all new positions into new_stack_tops.
    * \example
@@ -94,16 +95,16 @@ class GrammarMatcherBase {
    * Input position: (rule=A, position=B)
    * Approachable positions: (rule=B, position="b"), (rule=A, position=[a-z]*),
    * (rule=A, position="c"), since B and [a-z]* can be empty.
-   * \param cur_rule_position The current rule position.
+   * \param cur_stack_element The current stack element.
    * \param new_stack_tops The vector to store the new stack tops.
    * \param consider_parent Whether consider expanding the elements in the parent rule. Useful for
    * inner recursion.
-   * \param first_id_if_inserted An optimization. When cur_rule_position is already inserted to
+   * \param first_id_if_inserted An optimization. When cur_stack_element is already inserted to
    * the state tree, pass its id to avoid inserting it again. -1 (ignore it) by default.
    * \return Whether the end of the rule can be reached. Useful for inner recursion.
    */
-  bool ExpandRulePosition(
-      RulePosition cur_rule_position,
+  bool ExpandStackElement(
+      StackElement cur_stack_element,
       std::vector<int32_t>* new_stack_tops,
       bool consider_parent = true,
       int32_t first_id_if_inserted = -1
