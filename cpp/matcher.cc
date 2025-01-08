@@ -1,6 +1,9 @@
 /*!
  *  Copyright (c) 2024 by Contributors
  * \file xgrammar/matcher.cc
+ * \brief This source file implement the matcher class, especially the logic related to LLM tokens,
+ * like accepting tokens, leveraging the token mask cache to generate the mask, etc. matcher_base.cc
+ * implements the basic matching algorithm from strings to grammar.
  */
 
 #include <xgrammar/matcher.h>

@@ -1,6 +1,9 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/regex_converter.cc
+ * \file xgrammar/matcher_base.cc
+ * \brief This source file implements the basic matching algorithm from strings to grammar.
+ * matcher.cc will handle the logic related to LLM tokens, like accepting tokens, leveraging the
+ * token mask cache to generate the mask, etc.
  */
 
 #include "matcher_base.h"

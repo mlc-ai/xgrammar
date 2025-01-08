@@ -18,6 +18,7 @@ c ::= (("c"))
     after = str(grammar)
     assert after == expected
 
+
 def test_bnf_comment():
     before = """# top comment
 root ::= a b # inline comment
@@ -32,6 +33,7 @@ b ::= (("b"))
     grammar = xgr.Grammar.from_ebnf(before)
     after = str(grammar)
     assert after == expected
+
 
 def test_ebnf():
     before = """root ::= b c | b root
@@ -68,6 +70,45 @@ c_1 ::= ("" | ("b" c_1))
 d_1 ::= ("" | (d_1_choice d_1))
 d_1_choice ::= (("bcd") | ("pq"))
 """
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_repetition_range():
+    before = """root ::= a b c d e f g
+a ::= [a]{1,2}
+b ::= (a | "b"){1, 5}
+c ::= "c" {0 , 2}
+d ::= "d" {0,}
+e ::= "e" {2, }
+f ::= "f" {3}
+g ::= "g" {0}
+"""
+
+    expected = """root ::= ((a b c d e f))
+a ::= (("a" a_1))
+b ::= ((b_choice b_1))
+c ::= ((c_1))
+d ::= ((d_1))
+e ::= (("ee" e_1))
+f ::= (("fff"))
+g ::= (())
+a_1 ::= ("" | ("a"))
+b_1 ::= ("" | (b_1_choice b_2))
+b_2 ::= ("" | (b_2_choice b_3))
+b_3 ::= ("" | (b_3_choice b_4))
+b_4 ::= ("" | (a) | ("b"))
+c_1 ::= ("" | ("c" c_2))
+c_2 ::= ("" | ("c"))
+d_1 ::= ("" | ("d" d_1))
+e_1 ::= ("" | ("e" e_1))
+b_choice ::= ((a) | ("b"))
+b_1_choice ::= ((a) | ("b"))
+b_2_choice ::= ((a) | ("b"))
+b_3_choice ::= ((a) | ("b"))
+"""
+
     grammar = xgr.Grammar.from_ebnf(before)
     after = str(grammar)
     assert after == expected
