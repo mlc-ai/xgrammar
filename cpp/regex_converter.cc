@@ -95,6 +95,7 @@ std::string RegexConverter::HandleCharacterClass() {
 // {x,y}
 std::string RegexConverter::HandleRepetitionRange() {
   std::string result = "{";
+  ++current_;
   if (!isdigit(*current_)) {
     RaiseError("Invalid repetition count.");
   }

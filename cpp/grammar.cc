@@ -10,6 +10,7 @@
 #include "grammar_parser.h"
 #include "grammar_serializer.h"
 #include "json_schema_converter.h"
+#include "regex_converter.h"
 
 namespace xgrammar {
 
@@ -31,6 +32,8 @@ Grammar Grammar::FromJSONSchema(
   auto ebnf_string = JSONSchemaToEBNF(schema, any_whitespace, indent, separators, strict_mode);
   return FromEBNF(ebnf_string);
 }
+
+Grammar Grammar::FromRegex(const std::string& regex) { return FromEBNF(RegexToEBNF(regex)); }
 
 // Optimized json grammar for the speed of the grammar matcher
 const std::string kJSONGrammarString = R"(

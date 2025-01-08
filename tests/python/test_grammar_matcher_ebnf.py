@@ -27,6 +27,26 @@ rule3 ::= "c"
     assert _is_grammar_accept_string(grammar, "cab")
 
 
+input_accepted_test_repetition = (
+    ("aaa", True),
+    ("abcbc", True),
+    ("bcbcbcbcbc", True),
+    ("bcbcbcbcbcbcbcb", True),
+    ("d", False),
+    ("aaaa", False),
+)
+
+
+@pytest.mark.parametrize("input, accepted", input_accepted_test_repetition)
+def test_repetition(input: str, accepted: bool):
+    grammar_str = """
+        root ::= rule {2, 3}
+        rule ::= ("a" | [bc] {4,})
+    """
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    assert _is_grammar_accept_string(grammar, input) == accepted
+
+
 def test_custom_root_rule():
     json_grammar_simple_ebnf = r"""
 root ::= basic_object

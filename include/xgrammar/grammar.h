@@ -104,6 +104,12 @@ class Grammar {
   );
 
   /*!
+   * \brief Construct a grammar from a regular expression string.
+   * \param regex The regular expression string.
+   */
+  static Grammar FromRegex(const std::string& regex);
+
+  /*!
    * \brief Get the grammar of standard JSON format. We have built-in support for JSON.
    */
   static Grammar BuiltinJSONGrammar();

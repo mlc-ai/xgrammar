@@ -1,5 +1,6 @@
 """Testing utilities."""
 
+import time
 from typing import List, Optional, Tuple, Union
 
 import torch
@@ -84,14 +85,46 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
 
 
 def _is_grammar_accept_string(
-    grammar: Union[Grammar, str], input_str: str, debug_print: bool = False
+    grammar: Union[Grammar, str],
+    input_str: str,
+    *,
+    debug_print: bool = False,
+    print_time: bool = False,
 ) -> bool:
+    """Check if a grammar accepts a string. For test purposes.
+
+    Parameters
+    ----------
+    grammar : Union[Grammar, str]
+        The grammar to check. Can be either a Grammar object or a BNF grammar string.
+    input_str : str
+        The input string to check.
+    debug_print : bool, default: False
+        Whether to print debug information during matching.
+    print_time : bool, default: False
+        Whether to print timing information.
+
+    Returns
+    -------
+    bool
+        True if the grammar accepts the string, False otherwise.
+    """
+
     if isinstance(grammar, str):
         grammar = Grammar.from_ebnf(grammar)
     grammar_compiler = GrammarCompiler(TokenizerInfo([]), cache_enabled=False)
     compiled_grammar = grammar_compiler.compile_grammar(grammar)
     matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
-    if not matcher._debug_accept_string(input_str, debug_print=debug_print):
+
+    if print_time:
+        start = time.monotonic_ns()
+    accepted = matcher._debug_accept_string(input_str, debug_print=debug_print)
+
+    if print_time:
+        end = time.monotonic_ns()
+        print(f"Accepting {input_str}, result: {accepted}, time: {(end - start) / 1e3} us")
+
+    if not accepted:
         return False
     return matcher.is_terminated()
 

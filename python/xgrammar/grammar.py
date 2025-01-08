@@ -42,6 +42,11 @@ class Grammar(XGRObject):
 
         root_rule_name : str, default: "root"
             The name of the root rule in the grammar.
+
+        Raises
+        ------
+        RuntimeError
+            When converting the regex pattern fails, with details about the parsing error.
         """
         return Grammar._create_from_handle(_core.Grammar.from_ebnf(ebnf_string, root_rule_name))
 
@@ -100,6 +105,11 @@ class Grammar(XGRObject):
         -------
         grammar : Grammar
             The constructed grammar.
+
+        Raises
+        ------
+        RuntimeError
+            When converting the json schema fails, with details about the parsing error.
         """
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             if hasattr(schema, "model_json_schema"):
@@ -116,6 +126,27 @@ class Grammar(XGRObject):
         return Grammar._create_from_handle(
             _core.Grammar.from_json_schema(schema, any_whitespace, indent, separators, strict_mode),
         )
+
+    @staticmethod
+    def from_regex(regex_string: str) -> "Grammar":
+        """Create a grammar from a regular expression string.
+
+        Parameters
+        ----------
+        regex_string : str
+            The regular expression pattern to create the grammar from.
+
+        Returns
+        -------
+        grammar : Grammar
+            The constructed grammar from the regex pattern.
+
+        Raises
+        ------
+        RuntimeError
+            When parsing the regex pattern fails, with details about the parsing error.
+        """
+        return Grammar._create_from_handle(_core.Grammar.from_regex(regex_string))
 
     @staticmethod
     def builtin_json_grammar() -> "Grammar":

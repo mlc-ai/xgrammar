@@ -11,9 +11,32 @@ import xgrammar as xgr
 from xgrammar.testing import (
     _get_masked_tokens_from_bitmask,
     _get_matcher_from_grammar_and_tokenizer_info,
+    _is_grammar_accept_string,
 )
 
 json_grammar = xgr.Grammar.builtin_json_grammar()
+
+
+input_accepted = [
+    '{"name": "John"}',
+    '{ "name" : "John" }',
+]
+
+
+@pytest.mark.parametrize("input_accepted", input_accepted)
+def test_json_accept(input_accepted: str):
+    assert _is_grammar_accept_string(json_grammar, input_accepted)
+
+
+input_refused = (
+    '{ name: "John" }',
+    '{ "name": "John" } ',
+)
+
+
+@pytest.mark.parametrize("input_refused", input_refused)
+def test_json_refuse(input_refused: str):
+    assert not _is_grammar_accept_string(json_grammar, input_refused)
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [

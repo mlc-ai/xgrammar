@@ -33,6 +33,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
   pyGrammar.def("to_string", &Grammar::ToString)
       .def_static("from_ebnf", &Grammar::FromEBNF)
       .def_static("from_json_schema", &Grammar::FromJSONSchema)
+      .def_static("from_regex", &Grammar::FromRegex)
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar);
 
   auto pyCompiledGrammar = py::class_<CompiledGrammar>(m, "CompiledGrammar");
