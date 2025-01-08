@@ -13,9 +13,9 @@
 
 #include "compiled_grammar_data_structure.h"
 #include "grammar_data_structure.h"
+#include "grammar_matcher_base.h"
+#include "grammar_matcher_data_structure.h"
 #include "grammar_serializer.h"
-#include "matcher_base.h"
-#include "matcher_data_structure.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
 #include "support/int_set.h"

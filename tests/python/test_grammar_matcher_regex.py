@@ -3,15 +3,11 @@ a unoptimized, non-simplified EBNF string. This is to test the robustness of the
 """
 
 import sys
-import time
-from typing import List
 
 import pytest
-import torch
-from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
+from xgrammar.testing import _is_grammar_accept_string
 
 
 def test_simple():
@@ -22,7 +18,7 @@ def test_simple():
     assert not _is_grammar_accept_string(grammar, "abcd")
 
 
-input_accepted_test_repetition = (
+test_repetition_input_accepted_test_repetition = (
     ("aaa", True),
     ("abcbc", True),
     ("bcbcbcbcbc", True),
@@ -32,14 +28,14 @@ input_accepted_test_repetition = (
 )
 
 
-@pytest.mark.parametrize("input, accepted", input_accepted_test_repetition)
+@pytest.mark.parametrize("input, accepted", test_repetition_input_accepted_test_repetition)
 def test_repetition(input: str, accepted: bool):
     regex_str = "(a|[bc]{4,}){2,3}"
     grammar = xgr.Grammar.from_regex(regex_str)
-    assert _is_grammar_accept_string(grammar, input, print_time=True) == accepted
+    assert _is_grammar_accept_string(grammar, input) == accepted
 
 
-regex_input_accepted = [
+test_regex_accept_regex_input_accepted = [
     r"abc",
     r"[abc]+",
     r"[a-z0-9]+",
@@ -55,13 +51,13 @@ regex_input_accepted = [
 ]
 
 
-@pytest.mark.parametrize("regex_input_accepted", regex_input_accepted)
+@pytest.mark.parametrize("regex_input_accepted", test_regex_accept_regex_input_accepted)
 def test_regex_accept(regex_input_accepted: str):
     grammar = xgr.Grammar.from_regex(regex_input_accepted)
     assert grammar is not None
 
 
-regex_input_refused = (
+test_regex_refuse_regex_input_refused = (
     r"a{,3}",  # Invalid range
     r"a{3,2}",  # Invalid range (max < min)
     r"[z-a]",  # Invalid range (max < min)
@@ -73,13 +69,13 @@ regex_input_refused = (
 )
 
 
-@pytest.mark.parametrize("regex_input_refused", regex_input_refused)
+@pytest.mark.parametrize("regex_input_refused", test_regex_refuse_regex_input_refused)
 def test_regex_refuse(regex_input_refused: str):
     with pytest.raises(RuntimeError):
         xgr.Grammar.from_regex(regex_input_refused)
 
 
-regex_input_instance_pairs = [
+test_advanced_regex_string_instance_is_accepted = [
     # Basic patterns
     (r"abc", "abc", True),
     (r"abc", "def", False),
@@ -118,7 +114,9 @@ regex_input_instance_pairs = [
 ]
 
 
-@pytest.mark.parametrize("regex_string, instance, is_accepted", regex_input_instance_pairs)
+@pytest.mark.parametrize(
+    "regex_string, instance, is_accepted", test_advanced_regex_string_instance_is_accepted
+)
 def test_advanced(regex_string: str, instance: str, is_accepted: bool):
     grammar = xgr.Grammar.from_regex(regex_string)
     assert _is_grammar_accept_string(grammar, instance) == is_accepted

@@ -6,13 +6,13 @@
  * token mask cache to generate the mask, etc.
  */
 
-#include "matcher_base.h"
+#include "grammar_matcher_base.h"
 
 #include <algorithm>
 #include <vector>
 
 #include "grammar_data_structure.h"
-#include "matcher_data_structure.h"
+#include "grammar_matcher_data_structure.h"
 #include "support/encoding.h"
 
 namespace xgrammar {

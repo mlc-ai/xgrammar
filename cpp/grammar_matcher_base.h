@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "grammar_data_structure.h"
-#include "matcher_data_structure.h"
+#include "grammar_matcher_data_structure.h"
 
 namespace xgrammar {
 

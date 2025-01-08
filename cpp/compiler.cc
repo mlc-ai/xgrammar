@@ -7,7 +7,7 @@
 
 #include "compiled_grammar_data_structure.h"
 #include "grammar_data_structure.h"
-#include "matcher_base.h"
+#include "grammar_matcher_base.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
 

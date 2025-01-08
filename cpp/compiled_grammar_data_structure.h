@@ -15,7 +15,7 @@
 #include <vector>
 
 // matcher_data_structure.h is included to use RulePosition
-#include "matcher_data_structure.h"
+#include "grammar_matcher_data_structure.h"
 #include "support/dynamic_bitset.h"
 #include "support/utils.h"
 
