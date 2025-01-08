@@ -24,7 +24,7 @@ input_accepted = [
 
 
 @pytest.mark.parametrize("input_accepted", input_accepted)
-def test_json_accept(input_accepted: str):
+def test_accept(input_accepted: str):
     assert _is_grammar_accept_string(json_grammar, input_accepted)
 
 
@@ -35,7 +35,7 @@ input_refused = (
 
 
 @pytest.mark.parametrize("input_refused", input_refused)
-def test_json_refuse(input_refused: str):
+def test_refuse(input_refused: str):
     assert not _is_grammar_accept_string(json_grammar, input_refused)
 
 
