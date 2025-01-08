@@ -10,8 +10,8 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
+# Fetch and checkout main branch
 git fetch origin main
-git checkout FETCH_HEAD
-git commit -m "Tag $1" --allow-empty
+git checkout main
 git tag $1 HEAD
 git push origin $1
