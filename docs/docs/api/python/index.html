@@ -169,6 +169,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.builtin_json_grammar"><code class="docutils literal notranslate"><span class="pre">Grammar.builtin_json_grammar()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_ebnf"><code class="docutils literal notranslate"><span class="pre">Grammar.from_ebnf()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_json_schema"><code class="docutils literal notranslate"><span class="pre">Grammar.from_json_schema()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_regex"><code class="docutils literal notranslate"><span class="pre">Grammar.from_regex()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.GrammarCompiler"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a><ul>
@@ -308,7 +309,7 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a>(encoded_vocab[, vocab_type, ...])</p></td>
 <td><p>The tokenizer info contains the vocabulary, the type of the vocabulary, and necessary information for the grammar-guided generation.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.VocabType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">VocabType</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.VocabType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">VocabType</span></code></a>(value[, names, module, qualname, ...])</p></td>
 <td><p>The type of the vocabulary.</p></td>
 </tr>
 </tbody>
@@ -388,6 +389,9 @@ and we follow the specification of GBNF (GGML BNF) in
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_json_schema" title="xgrammar.Grammar.from_json_schema"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_json_schema</span></code></a>(schema, *[, ...])</p></td>
 <td><p>Construct a grammar from JSON schema.</p></td>
 </tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_regex" title="xgrammar.Grammar.from_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_regex</span></code></a>(regex_string)</p></td>
+<td><p>Create a grammar from a regular expression string.</p></td>
+</tr>
 </tbody>
 </table>
 <dl class="py method">
@@ -416,6 +420,9 @@ in <a class="reference external" href="https://github.com/ggerganov/llama.cpp/bl
 <li><p><strong>ebnf_string</strong> (<em>str</em>) – The grammar string in EBNF format.</p></li>
 <li><p><strong>root_rule_name</strong> (<em>str</em><em>, </em><em>default: &quot;root&quot;</em>) – The name of the root rule in the grammar.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>RuntimeError</strong> – When converting the regex pattern fails, with details about the parsing error.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -460,6 +467,29 @@ schema.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>RuntimeError</strong> – When converting the json schema fails, with details about the parsing error.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.from_regex">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_regex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">regex_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="headerlink" href="#xgrammar.Grammar.from_regex" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a grammar from a regular expression string.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>regex_string</strong> (<em>str</em>) – The regular expression pattern to create the grammar from.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>grammar</strong> – The constructed grammar from the regex pattern.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>RuntimeError</strong> – When parsing the regex pattern fails, with details about the parsing error.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -885,7 +915,7 @@ padded tokens, etc. Now it is automatically detected from the vocabulary.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.VocabType">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">VocabType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.VocabType" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">VocabType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">names=&lt;not</span> <span class="pre">given&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qualname=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.VocabType" title="Permalink to this definition">¶</a></dt>
 <dd><p>The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of
 vocabularies:</p>
 <dl>
