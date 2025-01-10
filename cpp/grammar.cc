@@ -122,6 +122,14 @@ Grammar Grammar::BuiltinJSONGrammar() {
   return grammar;
 }
 
+Grammar Grammar::Union(const std::vector<Grammar>& grammars) {
+  return GrammarUnionFunctor::Apply(grammars);
+}
+
+Grammar Grammar::Concat(const std::vector<Grammar>& grammars) {
+  return GrammarConcatFunctor::Apply(grammars);
+}
+
 std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
   os << grammar.ToString();
   return os;

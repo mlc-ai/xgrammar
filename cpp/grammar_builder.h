@@ -37,6 +37,19 @@ class GrammarBuilder {
     int32_t root_rule_id = GetRuleId(root_rule_name);
     XGRAMMAR_CHECK(root_rule_id != -1)
         << "The root rule with name \"" << root_rule_name << "\" is not found.";
+    return Get(root_rule_id);
+  }
+
+  /*!
+   * \brief Get the result grammar. This function will also set the root rule to the rule with
+   * the specified id. The rule should be already added to the grammar.
+   * \param root_rule_id The id of the root rule.
+   */
+  Grammar Get(int32_t root_rule_id) {
+    XGRAMMAR_CHECK(
+        root_rule_id >= 0 && root_rule_id < static_cast<int32_t>(grammar_->rules_.size())
+    ) << "The root rule id "
+      << root_rule_id << " is out of bound.";
     grammar_->root_rule_id_ = root_rule_id;
 
     return Grammar(grammar_);

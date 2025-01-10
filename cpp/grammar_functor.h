@@ -219,18 +219,32 @@ using GrammarVisitor = GrammarFunctor<void, ReturnType>;
  */
 using GrammarMutator = GrammarFunctor<int32_t, Grammar>;
 
+/*************************** Grammar manipulation methods ***************************/
+/****** All below methods are implemented as functor to hide the implementation ******/
+
 /*!
  * \brief Normalize a Grammar: expand the nested rules, combine consequent sequences and strings,
  * etc.
  */
-class GrammarNormalizer : public GrammarMutator {
+class GrammarNormalizer {
  public:
-  using GrammarMutator::GrammarMutator;
+  static Grammar Apply(const Grammar& grammar);
+};
 
-  Grammar Apply(const Grammar& grammar) final;
+/*!
+ * \brief Find the union of multiple grammars as a new grammar.
+ */
+class GrammarUnionFunctor {
+ public:
+  static Grammar Apply(const std::vector<Grammar>& grammars);
+};
 
- private:
-  std::vector<std::unique_ptr<GrammarMutator>> GetNormalizerList();
+/*!
+ * \brief Find the concatenation of multiple grammars as a new grammar.
+ */
+class GrammarConcatFunctor {
+ public:
+  static Grammar Apply(const std::vector<Grammar>& grammars);
 };
 
 }  // namespace xgrammar

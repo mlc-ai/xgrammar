@@ -12,6 +12,8 @@
 
 namespace xgrammar {
 
+/*************************** Impl of grammar functors ***************************/
+
 /*!
  * \brief Eliminates single-element sequence or choice or character class in the grammar.
  * \example `A ::= choices("a")` --> `A ::= "a"` (the body is a string)
@@ -310,22 +312,122 @@ class ByteStringFuser : public GrammarMutator {
   }
 };
 
-// Return the list of all normalizers in the class. The normalizers are applied one by one.
-std::vector<std::unique_ptr<GrammarMutator>> GrammarNormalizer::GetNormalizerList() {
-  std::vector<std::unique_ptr<GrammarMutator>> normalizer_mutators;
-  normalizer_mutators.emplace_back(std::make_unique<SingleElementExprEliminator>());
-  normalizer_mutators.emplace_back(std::make_unique<NestedRuleUnwrapper>());
-  normalizer_mutators.emplace_back(std::make_unique<ByteStringFuser>());
-  return normalizer_mutators;
-}
+class GrammarNormalizerImpl : public GrammarMutator {
+ public:
+  GrammarNormalizerImpl() = default;
+
+  Grammar Apply(const Grammar& grammar) final {
+    std::vector<std::unique_ptr<GrammarMutator>> normalizer_mutators = GetNormalizerList();
+    old_grammar_ = grammar;
+    for (auto& mutator : normalizer_mutators) {
+      old_grammar_ = mutator->Apply(old_grammar_);
+    }
+    return old_grammar_;
+  }
+
+ private:
+  // Return the list of all normalizers in the class. The normalizers are applied one by one.
+  std::vector<std::unique_ptr<GrammarMutator>> GetNormalizerList() {
+    std::vector<std::unique_ptr<GrammarMutator>> normalizer_mutators;
+    normalizer_mutators.emplace_back(std::make_unique<SingleElementExprEliminator>());
+    normalizer_mutators.emplace_back(std::make_unique<NestedRuleUnwrapper>());
+    normalizer_mutators.emplace_back(std::make_unique<ByteStringFuser>());
+    return normalizer_mutators;
+  }
+};
+
+class SubGrammarAdder : public GrammarMutator {
+ public:
+  SubGrammarAdder() = default;
+
+ protected:
+  /*!
+   * \brief Visit a subgrammar and add the rules to the builder.
+   * \param grammar The subgrammar to visit.
+   * \return The new id of the root rule of this subgrammar.
+   */
+  int32_t VisitSubGrammar(const Grammar& grammar) {
+    old_grammar_ = grammar;
+    new_rule_ids_names.reserve(grammar->NumRules());
+    new_rule_ids_names.clear();
+    for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
+      auto new_name = builder_.GetNewRuleName(grammar->GetRule(i).name);
+      auto new_id = builder_.AddEmptyRule(new_name);
+      new_rule_ids_names.emplace_back(new_id, new_name);
+    }
+    for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
+      auto rule = grammar->GetRule(i);
+      cur_rule_name_ = new_rule_ids_names[i].second;
+      auto new_body_expr_id = VisitExpr(rule.body_expr_id);
+      builder_.UpdateRuleBody(new_rule_ids_names[i].first, new_body_expr_id);
+      auto new_lookahead_assertion_id = VisitLookaheadAssertion(rule.lookahead_assertion_id);
+      builder_.AddLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
+    }
+    return new_rule_ids_names[grammar->GetRootRuleId()].first;
+  }
+
+  std::vector<std::pair<int32_t, std::string>> new_rule_ids_names;
+};
+
+class GrammarUnionFunctorImpl : public SubGrammarAdder {
+ public:
+  GrammarUnionFunctorImpl() = default;
+
+  Grammar Apply(const std::vector<Grammar>& grammars) {
+    builder_ = GrammarBuilder();
+    auto root_rule_id = builder_.AddEmptyRule("root");
+
+    std::vector<int32_t> new_root_choices;
+    new_root_choices.reserve(grammars.size());
+
+    for (const auto& grammar : grammars) {
+      auto new_root_id_for_grammar = VisitSubGrammar(grammar);
+      auto new_rule_ref = builder_.AddRuleRef(new_root_id_for_grammar);
+      auto new_rule_ref_seq = builder_.AddSequence({new_rule_ref});
+      new_root_choices.push_back(new_rule_ref_seq);
+    }
+
+    builder_.UpdateRuleBody(root_rule_id, builder_.AddChoices(new_root_choices));
+    return builder_.Get(root_rule_id);
+  }
+};
+
+class GrammarConcatFunctorImpl : public SubGrammarAdder {
+ public:
+  GrammarConcatFunctorImpl() = default;
+
+  Grammar Apply(const std::vector<Grammar>& grammars) {
+    builder_ = GrammarBuilder();
+    auto root_rule_id = builder_.AddEmptyRule("root");
+
+    std::vector<int32_t> new_root_sequence;
+    new_root_sequence.reserve(grammars.size());
+
+    for (const auto& grammar : grammars) {
+      auto new_root_id_for_grammar = VisitSubGrammar(grammar);
+      auto new_rule_ref = builder_.AddRuleRef(new_root_id_for_grammar);
+      new_root_sequence.push_back(new_rule_ref);
+    }
+
+    auto new_root_seq = builder_.AddSequence(new_root_sequence);
+    builder_.UpdateRuleBody(root_rule_id, builder_.AddChoices({new_root_seq}));
+
+    return builder_.Get(root_rule_id);
+  }
+};
+
+/*************************** Forward grammar functors to their impl ***************************/
 
 Grammar GrammarNormalizer::Apply(const Grammar& grammar) {
-  std::vector<std::unique_ptr<GrammarMutator>> normalizer_mutators = GetNormalizerList();
-  old_grammar_ = grammar;
-  for (auto& mutator : normalizer_mutators) {
-    old_grammar_ = mutator->Apply(old_grammar_);
-  }
-  return old_grammar_;
+  return GrammarNormalizerImpl().Apply(grammar);
+}
+
+Grammar GrammarUnionFunctor::Apply(const std::vector<Grammar>& grammars) {
+  return GrammarUnionFunctorImpl().Apply(grammars);
+}
+
+Grammar GrammarConcatFunctor::Apply(const std::vector<Grammar>& grammars) {
+  return GrammarConcatFunctorImpl().Apply(grammars);
 }
 
 }  // namespace xgrammar
