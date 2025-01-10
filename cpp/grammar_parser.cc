@@ -528,13 +528,18 @@ std::pair<int32_t, int32_t> EBNFParser::ParseTagDispatchElement() {
 }
 
 // TagDispatch:
-// rule ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ...)
+// root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ...)
 int32_t EBNFParser::ParseTagDispatchOrChoices() {
   auto prev_cursor = std::make_tuple(cur_, cur_line_, cur_column_, in_parentheses_);
   auto first_identifier = ParseIdentifier(true);
   if (first_identifier.empty() || first_identifier != "TagDispatch") {
     std::tie(cur_, cur_line_, cur_column_, in_parentheses_) = prev_cursor;
     return ParseChoices();
+  }
+
+  // TODO(yixin): Make tagdispatch general
+  if (cur_rule_name_ != root_rule_name_) {
+    ReportParseError("TagDispatch should only be used in the root rule");
   }
 
   ConsumeSpace();

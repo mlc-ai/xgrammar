@@ -29,7 +29,7 @@ class SingleElementExprEliminator : public GrammarMutator {
     if (lookahead_assertion_id == -1) {
       return -1;
     }
-    auto rule_expr = grammar_->GetRuleExpr(lookahead_assertion_id);
+    auto rule_expr = old_grammar_->GetRuleExpr(lookahead_assertion_id);
     XGRAMMAR_CHECK(rule_expr.type == RuleExprType::kSequence);
 
     std::vector<int32_t> sequence_ids;
@@ -97,18 +97,18 @@ class NestedRuleUnwrapper : public GrammarMutator {
 
   Grammar Apply(const Grammar& grammar) final {
     Init(grammar);
-    for (int i = 0; i < static_cast<int>(grammar_->NumRules()); ++i) {
-      builder_.AddEmptyRule(grammar_->GetRule(i).name);
+    for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
+      builder_.AddEmptyRule(old_grammar_->GetRule(i).name);
     }
-    for (int i = 0; i < static_cast<int>(grammar_->NumRules()); ++i) {
-      auto rule = grammar_->GetRule(i);
-      auto rule_expr = grammar_->GetRuleExpr(rule.body_expr_id);
+    for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
+      auto rule = old_grammar_->GetRule(i);
+      auto rule_expr = old_grammar_->GetRuleExpr(rule.body_expr_id);
       cur_rule_name_ = rule.name;
       auto new_body_expr_id = VisitRuleBody(rule_expr);
       builder_.UpdateRuleBody(i, new_body_expr_id);
       builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
     }
-    return builder_.Get(grammar_->GetRootRule().name);
+    return builder_.Get(old_grammar_->GetRootRule().name);
   }
 
  private:
@@ -116,7 +116,7 @@ class NestedRuleUnwrapper : public GrammarMutator {
     if (lookahead_assertion_id == -1) {
       return -1;
     }
-    auto assertion_expr = grammar_->GetRuleExpr(lookahead_assertion_id);
+    auto assertion_expr = old_grammar_->GetRuleExpr(lookahead_assertion_id);
     return builder_.AddSequence(VisitSequence_(assertion_expr));
   }
 
@@ -134,6 +134,8 @@ class NestedRuleUnwrapper : public GrammarMutator {
       case RuleExprType::kCharacterClassStar:
       case RuleExprType::kRuleRef:
         return builder_.AddChoices({builder_.AddSequence({builder_.AddRuleExpr(rule_expr)})});
+      case RuleExprType::kTagDispatch:
+        return VisitTagDispatch(rule_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(rule_expr.type);
     }
@@ -147,7 +149,7 @@ class NestedRuleUnwrapper : public GrammarMutator {
     std::vector<int32_t> new_choice_ids;
     bool found_empty = false;
     for (auto i : rule_expr) {
-      auto choice_expr = grammar_->GetRuleExpr(i);
+      auto choice_expr = old_grammar_->GetRuleExpr(i);
       switch (choice_expr.type) {
         case RuleExprType::kSequence:
           VisitSequenceInChoices(choice_expr, &new_choice_ids, &found_empty);
@@ -164,6 +166,8 @@ class NestedRuleUnwrapper : public GrammarMutator {
         case RuleExprType::kRuleRef:
           VisitElementInChoices(choice_expr, &new_choice_ids);
           break;
+        case RuleExprType::kTagDispatch:
+          XGRAMMAR_LOG(FATAL) << "TagDispatch should not be in choices";
         default:
           XGRAMMAR_LOG(FATAL) << "Unexpected choice type: " << static_cast<int>(choice_expr.type);
       }
@@ -216,7 +220,7 @@ class NestedRuleUnwrapper : public GrammarMutator {
   std::vector<int32_t> VisitSequence_(const RuleExpr& rule_expr) {
     std::vector<int32_t> new_sequence_ids;
     for (auto i : rule_expr) {
-      auto element_expr = grammar_->GetRuleExpr(i);
+      auto element_expr = old_grammar_->GetRuleExpr(i);
       switch (element_expr.type) {
         case RuleExprType::kSequence:
           VisitSequenceInSequence(element_expr, &new_sequence_ids);
@@ -232,6 +236,8 @@ class NestedRuleUnwrapper : public GrammarMutator {
         case RuleExprType::kRuleRef:
           VisitElementInSequence(element_expr, &new_sequence_ids);
           break;
+        case RuleExprType::kTagDispatch:
+          XGRAMMAR_LOG(FATAL) << "TagDispatch should not be in sequence";
         default:
           XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: "
                               << static_cast<int>(element_expr.type);
@@ -285,7 +291,7 @@ class ByteStringFuser : public GrammarMutator {
     std::vector<int32_t> new_sequence_ids;
     std::vector<int32_t> cur_byte_string;
     for (auto i : rule_expr) {
-      auto element_expr = grammar_->GetRuleExpr(i);
+      auto element_expr = old_grammar_->GetRuleExpr(i);
       if (element_expr.type == RuleExprType::kByteString) {
         cur_byte_string.insert(cur_byte_string.end(), element_expr.begin(), element_expr.end());
         continue;
@@ -315,11 +321,11 @@ std::vector<std::unique_ptr<GrammarMutator>> GrammarNormalizer::GetNormalizerLis
 
 Grammar GrammarNormalizer::Apply(const Grammar& grammar) {
   std::vector<std::unique_ptr<GrammarMutator>> normalizer_mutators = GetNormalizerList();
-  grammar_ = grammar;
+  old_grammar_ = grammar;
   for (auto& mutator : normalizer_mutators) {
-    grammar_ = mutator->Apply(grammar_);
+    old_grammar_ = mutator->Apply(old_grammar_);
   }
-  return grammar_;
+  return old_grammar_;
 }
 
 }  // namespace xgrammar

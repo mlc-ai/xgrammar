@@ -42,8 +42,8 @@ class GrammarFunctor {
   virtual ReturnType Apply(const Grammar& grammar) {
     Init(grammar);
     if constexpr (std::is_same<T, void>::value) {
-      for (int i = 0; i < static_cast<int>(grammar_->NumRules()); ++i) {
-        auto rule = grammar_->GetRule(i);
+      for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
+        auto rule = old_grammar_->GetRule(i);
         cur_rule_name_ = rule.name;
         VisitExpr(rule.body_expr_id);
         VisitLookaheadAssertion(rule.lookahead_assertion_id);
@@ -52,18 +52,18 @@ class GrammarFunctor {
                          std::is_same<ReturnType, Grammar>::value) {
       // First add empty rules to ensure the new rule ids the same as the old ones, then update
       // the rule bodies
-      for (int i = 0; i < static_cast<int>(grammar_->NumRules()); ++i) {
-        builder_.AddEmptyRule(grammar_->GetRule(i).name);
+      for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
+        builder_.AddEmptyRule(old_grammar_->GetRule(i).name);
       }
-      for (int i = 0; i < static_cast<int>(grammar_->NumRules()); ++i) {
-        auto rule = grammar_->GetRule(i);
+      for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
+        auto rule = old_grammar_->GetRule(i);
         cur_rule_name_ = rule.name;
         auto new_body_expr_id = VisitExpr(rule.body_expr_id);
         builder_.UpdateRuleBody(i, new_body_expr_id);
         // Handle lookahead assertion
         builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       }
-      return builder_.Get(grammar_->GetRootRule().name);
+      return builder_.Get(old_grammar_->GetRootRule().name);
     } else {
       return ReturnType();
     }
@@ -79,7 +79,7 @@ class GrammarFunctor {
 
   /*! \brief Initialize the functor. Should be called at the beginning of Apply(). */
   virtual void Init(const Grammar& grammar) {
-    grammar_ = grammar;
+    old_grammar_ = grammar;
     builder_ = GrammarBuilder();
   }
 
@@ -93,7 +93,7 @@ class GrammarFunctor {
 
   /*! \brief Visit a RuleExpr by id. */
   virtual T VisitExpr(int32_t old_rule_expr_id) {
-    return VisitExpr(grammar_->GetRuleExpr(old_rule_expr_id));
+    return VisitExpr(old_grammar_->GetRuleExpr(old_rule_expr_id));
   }
 
   /*! \brief Visit a RuleExpr. Dispatch to the corresponding Visit function. */
@@ -113,6 +113,8 @@ class GrammarFunctor {
         return VisitCharacterClassStar(rule_expr);
       case RuleExprType::kRuleRef:
         return VisitRuleRef(rule_expr);
+      case RuleExprType::kTagDispatch:
+        return VisitTagDispatch(rule_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(rule_expr.type);
     }
@@ -152,6 +154,22 @@ class GrammarFunctor {
     }
   }
 
+  virtual T VisitTagDispatch(const RuleExpr& rule_expr) {
+    if constexpr (std::is_same<T, void>::value) {
+      for (int i = 0; i < rule_expr.size(); i += 2) {
+        VisitExpr(rule_expr[i]);
+      }
+    } else if constexpr (std::is_same<T, int32_t>::value) {
+      std::vector<std::pair<int32_t, int32_t>> tag_dispatch_list;
+      for (int i = 0; i < rule_expr.size(); i += 2) {
+        tag_dispatch_list.push_back({VisitExpr(rule_expr[i]), rule_expr[i + 1]});
+      }
+      return builder_.AddTagDispatch(tag_dispatch_list);
+    } else {
+      return T();
+    }
+  }
+
   /*! \brief Visit an element RuleExpr, including empty string, character class, and rule ref. */
   virtual T VisitElement(const RuleExpr& rule_expr) {
     if constexpr (std::is_same<T, void>::value) {
@@ -179,7 +197,7 @@ class GrammarFunctor {
   virtual T VisitRuleRef(const RuleExpr& rule_expr) { return VisitElement(rule_expr); }
 
   /*! \brief The grammar to visit or mutate. */
-  Grammar grammar_;
+  Grammar old_grammar_;
   /*!
    * \brief The builder to build the new grammar. It is empty when the mutator is constructed, and
    * can be used to build a new grammar in subclasses.
