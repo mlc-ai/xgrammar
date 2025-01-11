@@ -161,8 +161,44 @@ def _get_masked_tokens_from_bitmask(
 def _get_matcher_from_grammar_and_tokenizer_info(
     grammar: Union[Grammar, str], tokenizer_info: Optional[TokenizerInfo] = None, **kwargs
 ) -> GrammarMatcher:
+    """Create a GrammarMatcher from a grammar and tokenizer info.
+
+    Parameters
+    ----------
+    grammar : Union[Grammar, str]
+        The grammar to create the matcher from. Can be either a Grammar object or a string
+        containing EBNF grammar.
+    tokenizer_info : Optional[TokenizerInfo], default: None
+        Information about the tokenizer to use with this grammar. If None, an empty
+        TokenizerInfo will be created.
+    **kwargs
+        Additional keyword arguments to pass to the GrammarMatcher constructor.
+
+    Returns
+    -------
+    matcher : GrammarMatcher
+        The created grammar matcher.
+    """
     if tokenizer_info is None:
         tokenizer_info = TokenizerInfo([])
     grammar_compiler = GrammarCompiler(tokenizer_info, cache_enabled=False)
     compiled_grammar = grammar_compiler.compile_grammar(grammar)
     return GrammarMatcher(compiled_grammar, **kwargs)
+
+
+def _get_grammar_union(*grammars: "Grammar") -> "Grammar":
+    """Create a grammar that matches any of the grammars in the list. That is equivalent to
+    using the `|` operator to concatenate the grammars in the list.
+
+    Parameters
+    ----------
+    grammars : List[Grammar]
+        The grammars to create the union of.
+
+    Returns
+    -------
+    grammar : Grammar
+        The union of the grammars.
+    """
+    grammar_handles = [grammar._handle for grammar in grammars]
+    return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))

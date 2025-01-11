@@ -161,24 +161,7 @@ class Grammar(XGRObject):
         return Grammar._create_from_handle(_core.Grammar.builtin_json_grammar())
 
     @staticmethod
-    def union(grammars: List["Grammar"]) -> "Grammar":
-        """Create a grammar that matches any of the grammars in the list. That is equivalent to
-        using the `|` operator to concatenate the grammars in the list.
-
-        Parameters
-        ----------
-        grammars : List[Grammar]
-            The grammars to create the union of.
-
-        Returns
-        -------
-        grammar : Grammar
-            The union of the grammars.
-        """
-        return Grammar._create_from_handle(_core.Grammar.union(grammars))
-
-    @staticmethod
-    def concat(grammars: List["Grammar"]) -> "Grammar":
+    def concat(*grammars: "Grammar") -> "Grammar":
         """Create a grammar that matches the concatenation of the grammars in the list. That is
         equivalent to using the `+` operator to concatenate the grammars in the list.
 
@@ -192,4 +175,5 @@ class Grammar(XGRObject):
         grammar : Grammar
             The concatenation of the grammars.
         """
-        return Grammar._create_from_handle(_core.Grammar.concat(grammars))
+        grammar_handles = [grammar._handle for grammar in grammars]
+        return Grammar._create_from_handle(_core.Grammar.concat(grammar_handles))

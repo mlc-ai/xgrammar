@@ -366,6 +366,10 @@ class SubGrammarAdder : public GrammarMutator {
     return new_rule_ids_names[grammar->GetRootRuleId()].first;
   }
 
+  int32_t VisitRuleRef(const RuleExpr& rule_expr) final {
+    return builder_.AddRuleRef(new_rule_ids_names[rule_expr[0]].first);
+  }
+
   std::vector<std::pair<int32_t, std::string>> new_rule_ids_names;
 };
 
