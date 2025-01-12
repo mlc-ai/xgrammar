@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "fsm.h"
 #include "support/logging.h"
 
 namespace xgrammar {
@@ -161,12 +162,20 @@ class Grammar::Impl {
  public:
   /******************* Aux information for matching *******************/
 
+  /*! \brief The fsm for the root tag dispatch rule. If the grammar does not have a root tag
+   * dispatch rule, it is not built. */
+  std::optional<CompactFSM> root_tag_dispatch_fsm = std::nullopt;
+
+  /*! \brief The map from the end nodes of the root tag dispatch fsm to the rule ids. */
+  std::unordered_map<int32_t, int32_t> tag_dispatch_end_node_to_rule_id;
+
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
 
   friend class GrammarBuilder;
   friend class GrammarSerializer;
   friend class GrammarDeserializer;
+  friend class GrammarCompiler;
 };
 
 }  // namespace xgrammar

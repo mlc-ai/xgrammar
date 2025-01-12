@@ -522,6 +522,9 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
     for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
       auto rule = base_grammar_->GetRule(i);
       auto rule_expr = base_grammar_->GetRuleExpr(rule.body_expr_id);
+      if (rule_expr.type == RuleExprType::kTagDispatch) {
+        empty_rule_id_set->insert(i);
+      }
       XGRAMMAR_DCHECK(rule_expr.type == RuleExprType::kChoices);
       if (base_grammar_->GetRuleExpr(rule_expr[0]).type == RuleExprType::kEmptyStr) {
         empty_rule_id_set->insert(i);

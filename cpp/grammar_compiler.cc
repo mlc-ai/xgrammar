@@ -6,6 +6,7 @@
 #include <xgrammar/compiler.h>
 
 #include "compiled_grammar_data_structure.h"
+#include "fsm.h"
 #include "grammar_data_structure.h"
 #include "grammar_functor.h"
 #include "grammar_matcher_base.h"
@@ -245,6 +246,11 @@ class GrammarCompiler::Impl {
   void ClearCache();
 
  private:
+  /*!
+   * \brief Build the tag dispatch fsm for the root rule and store in the compiled grammar.
+   */
+  void BuildTagDispatchFSM(Grammar grammar, const Grammar::Impl::RuleExpr& root_rule_expr);
+
   /*! \brief Multi-thread compile the grammar. */
   CompiledGrammar MultiThreadCompileGrammar(Grammar grammar, int max_threads);
 
@@ -277,6 +283,28 @@ class GrammarCompiler::Impl {
   ThreadSafeCache<GrammarKey, CompiledGrammar> compile_grammar_cache_;
 };
 
+void GrammarCompiler::Impl::BuildTagDispatchFSM(
+    Grammar grammar, const Grammar::Impl::RuleExpr& root_rule_expr
+) {
+  std::vector<std::string> tags;
+  std::vector<int32_t> rule_ids;
+  for (int i = 0; i < root_rule_expr.size(); i += 2) {
+    auto byte_string_expr = grammar->GetRuleExpr(root_rule_expr[i]);
+    std::string tag;
+    for (int j = 0; j < byte_string_expr.size(); ++j) {
+      tag += static_cast<char>(byte_string_expr[j]);
+    }
+    tags.push_back(tag);
+    rule_ids.push_back(root_rule_expr[i + 1]);
+  }
+
+  std::vector<int32_t> end_nodes;
+  grammar->root_tag_dispatch_fsm = BuildTrie(tags, &end_nodes).ToCompact();
+  for (int i = 0; i < static_cast<int>(end_nodes.size()); ++i) {
+    grammar->tag_dispatch_end_node_to_rule_id[end_nodes[i]] = rule_ids[i];
+  }
+}
+
 CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar, int max_threads) {
   using RuleExprType = Grammar::Impl::RuleExprType;
 
@@ -288,13 +316,18 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
   // Step 1. Compute the ids of rules that can be empty
   compiled_grammar_impl->grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(grammar);
 
+  // Step 2. Compute the root tag dispatch fsm
   auto root_rule_id = grammar->GetRootRuleId();
+  auto root_rule_expr = grammar->GetRuleExpr(grammar->GetRule(root_rule_id).body_expr_id);
+  if (root_rule_expr.type == RuleExprType::kTagDispatch) {
+    BuildTagDispatchFSM(compiled_grammar_impl->grammar, root_rule_expr);
+  }
 
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
 
-  // Step 2. Compute the adaptive token mask cache
+  // Step 3. Compute the adaptive token mask cache
   // The token mask cache is computed for these positions in the grammar:
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)
   // 2. All byte strings (with element_in_string=0, 1, 2, ...)

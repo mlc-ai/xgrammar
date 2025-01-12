@@ -21,6 +21,10 @@ namespace xgrammar {
 bool GrammarMatcherBase::CheckIfAccepted(const StackElement& stack_element, uint8_t char_value)
     const {
   auto current_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
+  if (current_sequence.type == Grammar::Impl::RuleExprType::kTagDispatch) {
+    XGRAMMAR_DCHECK(stack_element.element_id != -1);
+    return true;
+  }
   auto current_element = grammar_->GetRuleExpr(current_sequence[stack_element.element_id]);
   if (current_element.type == RuleExprType::kCharacterClass ||
       current_element.type == RuleExprType::kCharacterClassStar) {

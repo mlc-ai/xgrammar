@@ -330,7 +330,11 @@ inline bool PersistentStack::IsEndOfGrammar(const StackElement& stack_element) c
     return false;
   }
   auto seq_expr = grammar_->GetRuleExpr(stack_element.sequence_id);
-  return seq_expr.size() == stack_element.element_id;
+  if (seq_expr.type == Grammar::Impl::RuleExprType::kTagDispatch) {
+    return stack_element.element_id != -1;
+  } else {
+    return seq_expr.size() == stack_element.element_id;
+  }
 }
 
 inline std::string PersistentStack::PrintNode(int32_t id) const {
