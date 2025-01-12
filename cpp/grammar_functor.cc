@@ -394,6 +394,9 @@ class GrammarUnionFunctorImpl : public SubGrammarAdder {
     builder_.UpdateRuleBody(root_rule_id, builder_.AddChoices(new_root_choices));
     return builder_.Get(root_rule_id);
   }
+
+  // Avoid hiding the original Apply(const Grammar&)
+  Grammar Apply(const Grammar& grammar) override { XGRAMMAR_LOG(FATAL) << "Not implemented"; }
 };
 
 class GrammarConcatFunctorImpl : public SubGrammarAdder {
@@ -418,6 +421,9 @@ class GrammarConcatFunctorImpl : public SubGrammarAdder {
 
     return builder_.Get(root_rule_id);
   }
+
+  // Avoid hiding the original Apply(const Grammar&)
+  Grammar Apply(const Grammar& grammar) override { XGRAMMAR_LOG(FATAL) << "Not implemented"; }
 };
 
 /*************************** Forward grammar functors to their impl ***************************/

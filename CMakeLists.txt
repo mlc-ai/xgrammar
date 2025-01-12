@@ -45,8 +45,8 @@ else()
     set(CMAKE_CXX_FLAGS "-Ofast ${CMAKE_CXX_FLAGS}")
   endif()
 
-  set(CMAKE_CXX_FLAGS
-      "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter -flto=auto ${CMAKE_CXX_FLAGS}"
+  set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter \
+-Woverloaded-virtual -flto=auto ${CMAKE_CXX_FLAGS}"
   )
 endif()
 
