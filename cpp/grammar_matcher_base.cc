@@ -128,7 +128,7 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
 
   auto cur_sequence = grammar_->GetRuleExpr(cur_stack_element.sequence_id);
 
-  // Case 1. The stack element points to the end of a rule.
+  // Step 1. The stack element points to the end of a rule.
   if (cur_sequence.size() == cur_stack_element.element_id) {
     if (cur_stack_element.parent_id == StackElement::kNoParent) {
       // Case 1.1. The stack element points to the end of the grammar (meaning the matching
@@ -149,6 +149,7 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
   auto current_element = grammar_->GetRuleExpr(cur_sequence[cur_stack_element.element_id]);
   auto stack_element_id = f_add_stack_element(cur_stack_element);
 
+  // Step 2. Iterate into sub rules
   if (current_element.type == RuleExprType::kCharacterClass ||
       current_element.type == RuleExprType::kByteString ||
       current_element.type == RuleExprType::kCharacterClassStar) {
@@ -167,97 +168,18 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
     }
   }
 
+  // Step 3. Check the next element in the same rule
+  auto exist_in_vector = [](const std::vector<int32_t>& vec, int32_t value) {
+    return std::find(vec.begin(), vec.end(), value) != vec.end();
+  };
   if ((current_element.type == RuleExprType::kCharacterClassStar &&
        cur_stack_element.left_utf8_bytes == 0) ||
-      (current_element.type == RuleExprType::kRuleRef && std::find(
-                                                             grammar_->allow_empty_rule_ids.begin(),
-                                                             grammar_->allow_empty_rule_ids.end(),
-                                                             current_element[0]
-                                                         ) != grammar_->allow_empty_rule_ids.end()
-      )) {
+      (current_element.type == RuleExprType::kRuleRef &&
+       exist_in_vector(grammar_->allow_empty_rule_ids, current_element[0]))) {
     auto next_stack_element = MoveToNextPosition(cur_stack_element);
     ExpandEquivalentStackElements(next_stack_element, new_stack_tops, -1, consider_parent);
   }
 }
-
-// while (next_position.parent_id != StackElement::kNoParent) {
-//   next_position = persistent_stack_[next_position.parent_id];
-//   next_position.element_id += 1;
-//   XGRAMMAR_DCHECK(next_position.element_in_string == 0);
-//   XGRAMMAR_DCHECK(next_position.left_utf8_bytes == 0);
-
-//   sequence = grammar_->GetRuleExpr(next_position.sequence_id);
-//   XGRAMMAR_DCHECK(next_position.element_id <= sequence.size());
-
-//   if (next_position.element_id < sequence.size()) {
-//     break;
-//   }
-// }
-
-//   bool is_first = false;
-//   bool is_iteration_successful = true;
-
-//   for (; is_iteration_successful;
-//        std::tie(is_iteration_successful, cur_stack_element) =
-//            MoveToNextPosition(cur_stack_element, !is_inner_recursion)) {
-//     // Insert the node to the tree, if not inserted before.
-//     int32_t new_node_id;
-//     if (is_first && first_id_if_inserted != -1) {
-//       new_node_id = first_id_if_inserted;
-//     } else {
-//       new_node_id = persistent_stack_.NewNode(cur_stack_element);
-//     }
-//     is_first = false;
-
-//     // Case 1. The current position points to the end of the grammar.
-//     if (!is_inner_recursion) {
-//       if (persistent_stack_.IsEndOfGrammar(cur_stack_element)) {
-//         new_stack_tops->push_back(new_node_id);
-//         return true;
-//       }
-//     } else {
-//       XGRAMMAR_DCHECK(!persistent_stack_.IsEndOfGrammar(cur_stack_element));
-//     }
-
-//     auto sequence = grammar_->GetRuleExpr(cur_stack_element.sequence_id);
-//     auto element = grammar_->GetRuleExpr(sequence[cur_stack_element.element_id]);
-//     bool can_be_empty = false;
-
-//     if (element.type == RuleExprType::kRuleRef) {
-//       // Case 2. The current position refers to another rule.
-//       auto ref_rule = grammar_->GetRule(element[0]);
-//       auto ref_rule_body = grammar_->GetRuleExpr(ref_rule.body_expr_id);
-//       XGRAMMAR_DCHECK(ref_rule_body.type == RuleExprType::kChoices);
-
-//       for (auto sequence_id : ref_rule_body) {
-//         auto ref_rule_sequence = grammar_->GetRuleExpr(sequence_id);
-//         if (ref_rule_sequence.type == RuleExprType::kEmptyStr) {
-//           can_be_empty = true;
-//           continue;
-//         }
-//         auto ref_stack_element = StackElement(element[0], sequence_id, 0, new_node_id);
-//         // Find the positions in every choice of the referred rule
-//         can_be_empty |=
-//             ExpandEquivalentStackElements(ref_stack_element, new_stack_tops, -1, false);
-//       }
-//     } else if (element.type == RuleExprType::kCharacterClass ||
-//                element.type == RuleExprType::kByteString) {
-//       // Case 3. Character class or byte string. cannot be empty.
-//       new_stack_tops->push_back(new_node_id);
-//       can_be_empty = false;
-//     } else {
-//       XGRAMMAR_DCHECK(element.type == RuleExprType::kCharacterClassStar);
-//       // Case 4. Character class star. Might be empty.
-//       new_stack_tops->push_back(new_node_id);
-//       can_be_empty = cur_stack_element.left_utf8_bytes == 0;
-//     }
-
-//     if (!can_be_empty) {
-//       return false;
-//     }
-//   }
-//   return true;
-// }
 
 bool GrammarMatcherBase::AcceptChar(uint8_t char_value, bool debug_print) {
   if (debug_print) {
