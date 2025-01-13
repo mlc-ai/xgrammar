@@ -7,6 +7,10 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <algorithm>
+#include <unordered_set>
+#include <vector>
+
 #include "grammar_data_structure.h"
 #include "support/encoding.h"
 
@@ -31,7 +35,7 @@ class SingleElementExprEliminator : public GrammarMutator {
     if (lookahead_assertion_id == -1) {
       return -1;
     }
-    auto rule_expr = old_grammar_->GetRuleExpr(lookahead_assertion_id);
+    auto rule_expr = base_grammar_->GetRuleExpr(lookahead_assertion_id);
     XGRAMMAR_CHECK(rule_expr.type == RuleExprType::kSequence);
 
     std::vector<int32_t> sequence_ids;
@@ -99,18 +103,18 @@ class NestedRuleUnwrapper : public GrammarMutator {
 
   Grammar Apply(const Grammar& grammar) final {
     Init(grammar);
-    for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
-      builder_.AddEmptyRule(old_grammar_->GetRule(i).name);
+    for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+      builder_.AddEmptyRule(base_grammar_->GetRule(i).name);
     }
-    for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
-      auto rule = old_grammar_->GetRule(i);
-      auto rule_expr = old_grammar_->GetRuleExpr(rule.body_expr_id);
+    for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+      auto rule = base_grammar_->GetRule(i);
+      auto rule_expr = base_grammar_->GetRuleExpr(rule.body_expr_id);
       cur_rule_name_ = rule.name;
       auto new_body_expr_id = VisitRuleBody(rule_expr);
       builder_.UpdateRuleBody(i, new_body_expr_id);
       builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
     }
-    return builder_.Get(old_grammar_->GetRootRule().name);
+    return builder_.Get(base_grammar_->GetRootRule().name);
   }
 
  private:
@@ -118,7 +122,7 @@ class NestedRuleUnwrapper : public GrammarMutator {
     if (lookahead_assertion_id == -1) {
       return -1;
     }
-    auto assertion_expr = old_grammar_->GetRuleExpr(lookahead_assertion_id);
+    auto assertion_expr = base_grammar_->GetRuleExpr(lookahead_assertion_id);
     return builder_.AddSequence(VisitSequence_(assertion_expr));
   }
 
@@ -151,7 +155,7 @@ class NestedRuleUnwrapper : public GrammarMutator {
     std::vector<int32_t> new_choice_ids;
     bool found_empty = false;
     for (auto i : rule_expr) {
-      auto choice_expr = old_grammar_->GetRuleExpr(i);
+      auto choice_expr = base_grammar_->GetRuleExpr(i);
       switch (choice_expr.type) {
         case RuleExprType::kSequence:
           VisitSequenceInChoices(choice_expr, &new_choice_ids, &found_empty);
@@ -222,7 +226,7 @@ class NestedRuleUnwrapper : public GrammarMutator {
   std::vector<int32_t> VisitSequence_(const RuleExpr& rule_expr) {
     std::vector<int32_t> new_sequence_ids;
     for (auto i : rule_expr) {
-      auto element_expr = old_grammar_->GetRuleExpr(i);
+      auto element_expr = base_grammar_->GetRuleExpr(i);
       switch (element_expr.type) {
         case RuleExprType::kSequence:
           VisitSequenceInSequence(element_expr, &new_sequence_ids);
@@ -293,7 +297,7 @@ class ByteStringFuser : public GrammarMutator {
     std::vector<int32_t> new_sequence_ids;
     std::vector<int32_t> cur_byte_string;
     for (auto i : rule_expr) {
-      auto element_expr = old_grammar_->GetRuleExpr(i);
+      auto element_expr = base_grammar_->GetRuleExpr(i);
       if (element_expr.type == RuleExprType::kByteString) {
         cur_byte_string.insert(cur_byte_string.end(), element_expr.begin(), element_expr.end());
         continue;
@@ -311,18 +315,25 @@ class ByteStringFuser : public GrammarMutator {
     return builder_.AddSequence(new_sequence_ids);
   }
 };
-
+/*!
+ * \brief A class that normalizes a grammar by applying a series of transformations.
+ *
+ * The normalizer applies the following transformations in order:
+ * 1. SingleElementExprEliminator - Eliminates single element expressions
+ * 2. NestedRuleUnwrapper - Unwraps nested rules
+ * 3. ByteStringFuser - Fuses consecutive byte strings
+ */
 class GrammarNormalizerImpl : public GrammarMutator {
  public:
   GrammarNormalizerImpl() = default;
 
   Grammar Apply(const Grammar& grammar) final {
     std::vector<std::unique_ptr<GrammarMutator>> normalizer_mutators = GetNormalizerList();
-    old_grammar_ = grammar;
+    base_grammar_ = grammar;
     for (auto& mutator : normalizer_mutators) {
-      old_grammar_ = mutator->Apply(old_grammar_);
+      base_grammar_ = mutator->Apply(base_grammar_);
     }
-    return old_grammar_;
+    return base_grammar_;
   }
 
  private:
@@ -336,6 +347,12 @@ class GrammarNormalizerImpl : public GrammarMutator {
   }
 };
 
+/*!
+ * \brief Base class for grammar mutators that add subgrammars.
+ *
+ * Provides functionality to visit a subgrammar and add its rules to the builder
+ * while maintaining proper rule references and names.
+ */
 class SubGrammarAdder : public GrammarMutator {
  public:
   SubGrammarAdder() = default;
@@ -347,7 +364,7 @@ class SubGrammarAdder : public GrammarMutator {
    * \return The new id of the root rule of this subgrammar.
    */
   int32_t VisitSubGrammar(const Grammar& grammar) {
-    old_grammar_ = grammar;
+    base_grammar_ = grammar;
     new_rule_ids_names.reserve(grammar->NumRules());
     new_rule_ids_names.clear();
     for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
@@ -373,6 +390,13 @@ class SubGrammarAdder : public GrammarMutator {
   std::vector<std::pair<int32_t, std::string>> new_rule_ids_names;
 };
 
+/*!
+ * \brief Implementation of grammar union operation.
+ *
+ * Creates a new grammar that accepts strings from any of the input grammars.
+ * The resulting grammar has a new root rule that chooses between the root rules
+ * of all input grammars.
+ */
 class GrammarUnionFunctorImpl : public SubGrammarAdder {
  public:
   GrammarUnionFunctorImpl() = default;
@@ -396,9 +420,16 @@ class GrammarUnionFunctorImpl : public SubGrammarAdder {
   }
 
   // Avoid hiding the original Apply(const Grammar&)
-  Grammar Apply(const Grammar& grammar) override { XGRAMMAR_LOG(FATAL) << "Not implemented"; }
+  Grammar Apply(const Grammar& grammar) override { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
 };
 
+/*!
+ * \brief Implementation of grammar concatenation operation.
+ *
+ * Creates a new grammar that accepts strings that are concatenations of strings
+ * from the input grammars in order. The resulting grammar has a new root rule
+ * that concatenates the root rules of all input grammars.
+ */
 class GrammarConcatFunctorImpl : public SubGrammarAdder {
  public:
   GrammarConcatFunctorImpl() = default;
@@ -423,7 +454,142 @@ class GrammarConcatFunctorImpl : public SubGrammarAdder {
   }
 
   // Avoid hiding the original Apply(const Grammar&)
-  Grammar Apply(const Grammar& grammar) override { XGRAMMAR_LOG(FATAL) << "Not implemented"; }
+  Grammar Apply(const Grammar& grammar) override { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
+};
+
+/*!
+ * \brief Finds the rule reference graph of a grammar.
+ *
+ * The rule reference graph shows which rules reference which other rules.
+ * The returned graph is inverted: it points from referee to referer.
+ */
+class RuleRefGraphFinder : public GrammarVisitor<std::vector<std::vector<int32_t>>> {
+ public:
+  RuleRefGraphFinder() = default;
+
+  std::vector<std::vector<int32_t>> Apply(const Grammar& grammar) {
+    base_grammar_ = grammar;
+    rule_visit_graph_ = std::vector<std::vector<int32_t>>(base_grammar_->NumRules());
+    for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+      auto rule = base_grammar_->GetRule(i);
+      auto rule_expr = base_grammar_->GetRuleExpr(rule.body_expr_id);
+      cur_rule_id_ = i;
+      VisitExpr(rule_expr);
+    }
+    for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+      std::sort(rule_visit_graph_[i].begin(), rule_visit_graph_[i].end());
+      auto end_it = std::unique(rule_visit_graph_[i].begin(), rule_visit_graph_[i].end());
+      rule_visit_graph_[i].erase(end_it, rule_visit_graph_[i].end());
+    }
+    return std::move(rule_visit_graph_);
+  }
+
+ private:
+  void VisitRuleRef(const RuleExpr& rule_expr) {
+    rule_visit_graph_[rule_expr[0]].push_back(cur_rule_id_);
+  }
+
+  // Inversed reference graph: pointing from referee to referer
+  std::vector<std::vector<int32_t>> rule_visit_graph_;
+  int32_t cur_rule_id_;
+};
+
+/*!
+ * \brief Analyzes which rules in a grammar can match the empty string.
+ */
+class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
+ public:
+  AllowEmptyRuleAnalyzerImpl() = default;
+
+  std::vector<int32_t> Apply(const Grammar& grammar) final {
+    base_grammar_ = grammar;
+
+    // Step 1: Find rules that explicitly allow empty string
+    std::unordered_set<int32_t> empty_rule_id_set;
+    FindExplicitEmptyRules(&empty_rule_id_set);
+
+    // Step 2: Find rules that indirectly allow empty string. Using the Bellman-Ford algorithm on
+    // the rule reference graph.
+    std::vector<std::vector<int32_t>> rule_ref_graph = RuleRefGraphFinder().Apply(grammar);
+    FindIndirectEmptyRules(&empty_rule_id_set, rule_ref_graph);
+
+    auto result = std::vector<int32_t>(empty_rule_id_set.begin(), empty_rule_id_set.end());
+    std::sort(result.begin(), result.end());
+    return result;
+  }
+
+  void FindExplicitEmptyRules(std::unordered_set<int32_t>* empty_rule_id_set) {
+    for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+      auto rule = base_grammar_->GetRule(i);
+      auto rule_expr = base_grammar_->GetRuleExpr(rule.body_expr_id);
+      XGRAMMAR_DCHECK(rule_expr.type == RuleExprType::kChoices);
+      if (base_grammar_->GetRuleExpr(rule_expr[0]).type == RuleExprType::kEmptyStr) {
+        empty_rule_id_set->insert(i);
+        continue;
+      }
+
+      for (auto seq_id : rule_expr) {
+        auto seq_expr = base_grammar_->GetRuleExpr(seq_id);
+        if (std::all_of(seq_expr.begin(), seq_expr.end(), [&](int32_t i) {
+              return base_grammar_->GetRuleExpr(i).type == RuleExprType::kCharacterClassStar;
+            })) {
+          empty_rule_id_set->insert(i);
+          break;
+        }
+      }
+    }
+  }
+
+  bool SeqExprIsEpsilon(
+      const RuleExpr& seq_expr, const std::unordered_set<int32_t>& empty_rule_id_set
+  ) {
+    if (seq_expr.type == RuleExprType::kEmptyStr) {
+      return true;
+    }
+    XGRAMMAR_DCHECK(seq_expr.type == RuleExprType::kSequence);
+
+    return std::all_of(seq_expr.begin(), seq_expr.end(), [&](int32_t i) {
+      auto element_expr = base_grammar_->GetRuleExpr(i);
+      return (element_expr.type == RuleExprType::kRuleRef &&
+              empty_rule_id_set.count(element_expr[0])) ||
+             element_expr.type == RuleExprType::kCharacterClassStar;
+    });
+  }
+
+  void FindIndirectEmptyRules(
+      std::unordered_set<int32_t>* empty_rule_id_set,
+      const std::vector<std::vector<int32_t>>& rule_ref_graph
+  ) {
+    std::queue<int32_t> queue;
+    for (auto i : *empty_rule_id_set) {
+      queue.push(i);
+    }
+
+    while (!queue.empty()) {
+      auto rule_id = queue.front();
+      queue.pop();
+      XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < static_cast<int>(rule_ref_graph.size()));
+      for (auto referer_rule_id : rule_ref_graph[rule_id]) {
+        if (empty_rule_id_set->count(referer_rule_id)) {
+          continue;
+        }
+        auto rule = base_grammar_->GetRule(referer_rule_id);
+        auto rule_expr = base_grammar_->GetRuleExpr(rule.body_expr_id);
+
+        XGRAMMAR_DCHECK(rule_expr.type == RuleExprType::kChoices);
+
+        bool is_epsilon = std::any_of(rule_expr.begin(), rule_expr.end(), [&](int32_t i) {
+          auto seq_expr = base_grammar_->GetRuleExpr(i);
+          return SeqExprIsEpsilon(seq_expr, *empty_rule_id_set);
+        });
+
+        if (is_epsilon) {
+          empty_rule_id_set->insert(referer_rule_id);
+          queue.push(referer_rule_id);
+        }
+      }
+    }
+  }
 };
 
 /*************************** Forward grammar functors to their impl ***************************/
@@ -438,6 +604,10 @@ Grammar GrammarUnionFunctor::Apply(const std::vector<Grammar>& grammars) {
 
 Grammar GrammarConcatFunctor::Apply(const std::vector<Grammar>& grammars) {
   return GrammarConcatFunctorImpl().Apply(grammars);
+}
+
+std::vector<int32_t> AllowEmptyRuleAnalyzer::Apply(const Grammar& grammar) {
+  return AllowEmptyRuleAnalyzerImpl().Apply(grammar);
 }
 
 }  // namespace xgrammar

@@ -42,28 +42,29 @@ class GrammarFunctor {
   virtual ReturnType Apply(const Grammar& grammar) {
     Init(grammar);
     if constexpr (std::is_same<T, void>::value) {
-      for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
-        auto rule = old_grammar_->GetRule(i);
+      for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+        auto rule = base_grammar_->GetRule(i);
         cur_rule_name_ = rule.name;
         VisitExpr(rule.body_expr_id);
         VisitLookaheadAssertion(rule.lookahead_assertion_id);
       }
+      return ReturnType();
     } else if constexpr (std::is_same<T, int32_t>::value &&
                          std::is_same<ReturnType, Grammar>::value) {
       // First add empty rules to ensure the new rule ids the same as the old ones, then update
       // the rule bodies
-      for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
-        builder_.AddEmptyRule(old_grammar_->GetRule(i).name);
+      for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+        builder_.AddEmptyRule(base_grammar_->GetRule(i).name);
       }
-      for (int i = 0; i < static_cast<int>(old_grammar_->NumRules()); ++i) {
-        auto rule = old_grammar_->GetRule(i);
+      for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+        auto rule = base_grammar_->GetRule(i);
         cur_rule_name_ = rule.name;
         auto new_body_expr_id = VisitExpr(rule.body_expr_id);
         builder_.UpdateRuleBody(i, new_body_expr_id);
         // Handle lookahead assertion
         builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       }
-      return builder_.Get(old_grammar_->GetRootRule().name);
+      return builder_.Get(base_grammar_->GetRootRule().name);
     } else {
       return ReturnType();
     }
@@ -79,21 +80,25 @@ class GrammarFunctor {
 
   /*! \brief Initialize the functor. Should be called at the beginning of Apply(). */
   virtual void Init(const Grammar& grammar) {
-    old_grammar_ = grammar;
+    base_grammar_ = grammar;
     builder_ = GrammarBuilder();
   }
 
   /*! \brief Visit a lookahead assertion expr referred by id. */
   virtual T VisitLookaheadAssertion(int32_t lookahead_assertion_id) {
     if (lookahead_assertion_id == -1) {
-      return -1;
+      if constexpr (std::is_same<T, int32_t>::value) {
+        return -1;
+      } else {
+        return T();
+      }
     }
     return VisitExpr(lookahead_assertion_id);
   }
 
   /*! \brief Visit a RuleExpr by id. */
   virtual T VisitExpr(int32_t old_rule_expr_id) {
-    return VisitExpr(old_grammar_->GetRuleExpr(old_rule_expr_id));
+    return VisitExpr(base_grammar_->GetRuleExpr(old_rule_expr_id));
   }
 
   /*! \brief Visit a RuleExpr. Dispatch to the corresponding Visit function. */
@@ -197,12 +202,14 @@ class GrammarFunctor {
   virtual T VisitRuleRef(const RuleExpr& rule_expr) { return VisitElement(rule_expr); }
 
   /*! \brief The grammar to visit or mutate. */
-  Grammar old_grammar_;
+  Grammar base_grammar_;
+
   /*!
    * \brief The builder to build the new grammar. It is empty when the mutator is constructed, and
    * can be used to build a new grammar in subclasses.
    */
   GrammarBuilder builder_;
+
   /*! \brief The name of the current rule being visited. */
   std::string cur_rule_name_;
 };
@@ -245,6 +252,14 @@ class GrammarUnionFunctor {
 class GrammarConcatFunctor {
  public:
   static Grammar Apply(const std::vector<Grammar>& grammars);
+};
+
+/*!
+ * \brief Analyze the grammar to find the rules that are allowed to be empty.
+ */
+class AllowEmptyRuleAnalyzer {
+ public:
+  static std::vector<int32_t> Apply(const Grammar& grammar);
 };
 
 }  // namespace xgrammar

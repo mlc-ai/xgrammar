@@ -158,6 +158,12 @@ class Grammar::Impl {
   /*! \brief The id of the root rule. */
   int32_t root_rule_id_ = -1;
 
+ public:
+  /******************* Aux information for matching *******************/
+
+  /*! \brief The ids of the rules that are allowed to be empty. */
+  std::vector<int32_t> allow_empty_rule_ids;
+
   friend class GrammarBuilder;
   friend class GrammarSerializer;
   friend class GrammarDeserializer;

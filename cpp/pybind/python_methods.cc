@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar.cc
+ * \file xgrammar/pybind/python_methods.cc
  */
 
 #include "python_methods.h"
@@ -14,6 +14,7 @@
 #include <iostream>
 #include <vector>
 
+#include "../grammar_data_structure.h"
 #include "../support/dynamic_bitset.h"
 #include "../support/logging.h"
 
@@ -124,6 +125,10 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
   };
 
   ApplyTokenBitmaskInplaceCPU(&logits_dltensor, bitmask_dltensor, indices);
+}
+
+std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_grammar) {
+  return compiled_grammar.GetGrammar()->allow_empty_rule_ids;
 }
 
 }  // namespace xgrammar

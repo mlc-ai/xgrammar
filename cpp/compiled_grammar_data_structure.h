@@ -75,8 +75,11 @@ struct AdaptiveTokenMask {
  */
 class CompiledGrammar::Impl {
  public:
+  /******************* The grammar and tokenizer info *******************/
+
   /*! \brief The grammar for the GrammarMatcher. */
   Grammar grammar;
+
   /*! \brief The tokenizer information. */
   TokenizerInfo tokenizer_info;
 

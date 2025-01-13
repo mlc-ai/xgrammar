@@ -75,6 +75,18 @@ d_1_choice ::= (("bcd") | ("pq"))
     assert after == expected
 
 
+def test_star_quantifier_bugfix():
+    before = """root ::= [a]* [b]* rule1
+rule1 ::= [abc]* [def]*
+"""
+    expected = """root ::= (([a]* [b]* rule1))
+rule1 ::= (([abc]* [def]*))
+"""
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
+    assert after == expected
+
+
 def test_repetition_range():
     before = """root ::= a b c d e f g
 a ::= [a]{1,2}

@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2023 by Contributors
- * \file tokenizer.cc
+ * \file xgrammar/tokenizer_info.cc
  */
 
 #include <picojson.h>

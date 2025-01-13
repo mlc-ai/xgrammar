@@ -291,7 +291,10 @@ int32_t EBNFParser::HandleStarQuantifier(int32_t rule_expr_id) {
   if (rule_expr.type == GrammarBuilder::RuleExprType::kCharacterClass) {
     // We have special handling for character class star, e.g. [a-z]*
     rule_expr.type = GrammarBuilder::RuleExprType::kCharacterClassStar;
-    return builder_.AddRuleExpr(rule_expr);
+    // Copy rule expr because the grammar may change during insertion, and rule_expr is in the
+    // grammar, so it may become invalid
+    std::vector<int32_t> rule_expr_data(rule_expr.begin(), rule_expr.end());
+    return builder_.AddRuleExpr({rule_expr.type, rule_expr_data.data(), rule_expr.data_len});
   } else {
     // For other star quantifiers, we transform it into a rule:
     // a*  -->  rule ::= a rule | ""

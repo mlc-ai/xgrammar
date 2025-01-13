@@ -209,7 +209,7 @@ json_input_pressure = (
 
 @pytest.mark.parametrize("json_input_pressure", json_input_pressure)
 def test_json_pressure(json_input_pressure: str):
-    assert _is_grammar_accept_string(json_grammar, json_input_pressure)
+    assert _is_grammar_accept_string(json_grammar, json_input_pressure, print_time=True)
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [

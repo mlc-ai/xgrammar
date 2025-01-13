@@ -45,6 +45,8 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
     std::optional<std::vector<int>> indices
 );
 
+std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_grammar);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_PYBIND_PYTHON_METHODS_H_

@@ -598,12 +598,12 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
       tmp_new_stack_tops_.clear();
       for (auto stack_top : stack_tops) {
         auto cur_stack_element = persistent_stack_[stack_top];
-        auto new_stack_element = UpdateStackElementWithChar(cur_stack_element, next_char);
+        auto new_stack_element = AdvanceStackElementWithChar(cur_stack_element, next_char);
 
         if (new_stack_element == cur_stack_element) {
-          ExpandStackElement(new_stack_element, &tmp_new_stack_tops_, true, stack_top);
+          ExpandEquivalentStackElements(new_stack_element, &tmp_new_stack_tops_, stack_top);
         } else {
-          ExpandStackElement(new_stack_element, &tmp_new_stack_tops_, true);
+          ExpandEquivalentStackElements(new_stack_element, &tmp_new_stack_tops_);
         }
       }
       stack_tops_history_.PushHistory(tmp_new_stack_tops_);

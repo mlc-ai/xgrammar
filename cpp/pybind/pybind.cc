@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/pybind.cc
+ * \file xgrammar/pybind/pybind.cc
  */
 
 #include <pybind11/pybind11.h>
@@ -86,7 +86,8 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
               bool>(&JSONSchemaToEBNF)
       )
       .def("_regex_to_ebnf", &RegexToEBNF)
-      .def("_get_masked_tokens_from_bitmask", &Matcher_DebugGetMaskedTokensFromBitmask);
+      .def("_get_masked_tokens_from_bitmask", &Matcher_DebugGetMaskedTokensFromBitmask)
+      .def("_get_allow_empty_rule_ids", &GetAllowEmptyRuleIds);
 
   auto pyKernelsModule = m.def_submodule("kernels");
   pyKernelsModule.def("apply_token_bitmask_inplace_cpu", &Kernels_ApplyTokenBitmaskInplaceCPU);

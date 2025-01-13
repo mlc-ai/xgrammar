@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2023 by Contributors
- * \file tokenizer.cc
+ * \file xgrammar/ebnf_script_creator.cc
  */
 #include "ebnf_script_creator.h"
 

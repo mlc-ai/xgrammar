@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple, Union
 import torch
 
 from .base import _core
-from .compiler import GrammarCompiler
+from .compiler import CompiledGrammar, GrammarCompiler
 from .grammar import Grammar
 from .matcher import GrammarMatcher, bitmask_dtype, get_bitmask_shape
 from .tokenizer_info import TokenizerInfo
@@ -202,3 +202,7 @@ def _get_grammar_union(*grammars: "Grammar") -> "Grammar":
     """
     grammar_handles = [grammar._handle for grammar in grammars]
     return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
+
+
+def _get_allow_empty_rule_ids(compiled_grammar: CompiledGrammar) -> List[int]:
+    return _core.testing._get_allow_empty_rule_ids(compiled_grammar._handle)

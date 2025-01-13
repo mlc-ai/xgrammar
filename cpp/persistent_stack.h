@@ -23,7 +23,8 @@ struct StackElement {
   int32_t rule_id = -1;
   /*! \brief Which choice in this rule is selected. */
   int32_t sequence_id = -1;
-  /*! \brief Which element of the choice sequence is to be visited. */
+  /*! \brief Which element of the choice sequence is to be visited. When the current sequence is
+   * a tag dispatch rule, this element id the currently visited node. */
   int32_t element_id = -1;
 
   /*! \brief The number of left utf8 bytes in the current element. Used when the element is
@@ -325,8 +326,11 @@ class StackTopsHistory {
 };
 
 inline bool PersistentStack::IsEndOfGrammar(const StackElement& stack_element) const {
-  return stack_element.parent_id == StackElement::kNoParent &&
-         grammar_->GetRuleExpr(stack_element.sequence_id).size() == stack_element.element_id;
+  if (stack_element.parent_id != StackElement::kNoParent) {
+    return false;
+  }
+  auto seq_expr = grammar_->GetRuleExpr(stack_element.sequence_id);
+  return seq_expr.size() == stack_element.element_id;
 }
 
 inline std::string PersistentStack::PrintNode(int32_t id) const {

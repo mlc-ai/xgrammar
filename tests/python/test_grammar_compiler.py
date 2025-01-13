@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
+from xgrammar.testing import _get_allow_empty_rule_ids
 
 
 def test_compiled_grammar():
@@ -134,6 +135,47 @@ def test_grammar_compiler_json_schema():
     grammar_compiler.clear_cache()
 
     check_with_fmt(False, None, (",", ":"), "9")
+
+
+grammar_expected_test_get_allow_empty_rule_ids = [
+    (
+        r"""root ::= rule1 rule2 | "abc"
+    rule1 ::= "abc" | ""
+    rule2 ::= "def" rule3 | ""
+    rule3 ::= "ghi"
+    """,
+        [0, 1, 2],
+    ),
+    (
+        r"""root ::= rule1 rule2 [a-z]*
+    rule1 ::= "abc" | ""
+    rule2 ::= "def" | ""
+    """,
+        [0, 1, 2],
+    ),
+    (
+        r"""root ::= rule1 rule2
+    rule1 ::= "abc" | ""
+    rule2 ::= "def" | ""
+    rule3 ::= rule1 root
+    """,
+        [0, 1, 2, 3],
+    ),
+    (
+        r"""root ::= [a]* [b]* rule1
+rule1 ::= [abc]* [def]*
+""",
+        [0, 1],
+    ),
+]
+
+
+@pytest.mark.parametrize("grammar, expected", grammar_expected_test_get_allow_empty_rule_ids)
+def test_get_allow_empty_rule_ids(grammar: str, expected: List[int]):
+    grammar_compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
+    compiled_grammar = grammar_compiler.compile_grammar(grammar)
+    allow_empty_rule_ids = _get_allow_empty_rule_ids(compiled_grammar)
+    assert allow_empty_rule_ids == expected
 
 
 schema_instances = [
