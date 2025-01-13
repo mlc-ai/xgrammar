@@ -8,6 +8,7 @@
 #define XGRAMMAR_XGRAMMAR_H_
 
 #include <xgrammar/compiler.h>
+#include <xgrammar/function_calling.h>
 #include <xgrammar/grammar.h>
 #include <xgrammar/matcher.h>
 #include <xgrammar/tokenizer_info.h>

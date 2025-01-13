@@ -1,7 +1,7 @@
 """Testing utilities."""
 
 import time
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 
@@ -202,3 +202,45 @@ def _get_grammar_union(*grammars: "Grammar") -> "Grammar":
     """
     grammar_handles = [grammar._handle for grammar in grammars]
     return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
+
+
+def _parse_message(input: str, *, ignore_error: bool = False) -> List[Tuple[str, Dict[str, str]]]:
+    """Parse function calls from a message in either tag-based or JSON format.
+
+    Parameters
+    ----------
+    input : str
+        The input string containing function calls.
+    ignore_error : bool, default: False
+        Whether to ignore parsing errors and continue parsing.
+
+    Returns
+    -------
+    List[Tuple[str, Dict[str, str]]]
+        A list of (function_name, parameters) pairs.
+
+    Notes
+    -----
+    Supports two formats:
+    1. Tag-based:
+        <function=name>{"param": "value"}</function>
+
+    2. JSON:
+        {"name": "function_name", "parameters": {"param": "value"}}
+
+    Parameters are automatically converted to strings, with:
+    - Numbers converted to their string representation
+    - Booleans converted to "true" or "false"
+    - null converted to "null"
+
+    Examples
+    --------
+    >>> msg = '<function=get_weather>{"location": "SF"}</function>'
+    >>> parse_message(msg)
+    [('get_weather', {'location': 'SF'})]
+
+    >>> msg = '{"name": "get_time", "parameters": {"zone": "PST"}}'
+    >>> parse_message(msg)
+    [('get_time', {'zone': 'PST'})]
+    """
+    return _core.testing._parse_message(input, ignore_error)
