@@ -29,7 +29,9 @@
 
 #ifndef PICOJSON_USE_INT64
 #define PICOJSON_USE_INT64
+#ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS 1
+#endif
 #endif
 
 // If PICOJSON_USE_ORDERED_OBJECT is set, picojson uses object_with_ordered_keys, which maintains
