@@ -60,8 +60,14 @@ class GrammarMatcherBase {
   std::string PrintStackState(int steps_behind_latest = 0) const;
 
  protected:
-  // Push an initial stack state according to the given stack element.
-  // If init_stack_element is kInvalidStackElement, init the stack with the root rule.
+  /*!
+   * \brief Push an initial stack state according to the given stack element.
+   * \param init_stack_element The initial stack element. If kInvalidStackElement, init the stack
+   * with the root rule.
+   * \param expand_init_stack_element Whether to expand the initial stack element to all equivalent
+   * locations. See ExpandEquivalentStackElements. Only meaningful when init_stack_element is not
+   * kInvalidStackElement.
+   */
   void PushInitialState(StackElement init_stack_element, bool expand_init_stack_element);
 
   // Check if the character is accepted by the current stack element.
@@ -94,7 +100,7 @@ class GrammarMatcherBase {
    * current stack element does not exist in the persistent stack, pass -1. This is used to avoid
    * inserting the same stack element again.
    * \param consider_parent Whether to consider the parent position if the current position is
-   * at the end of the rule.
+   * at the end of the rule. Only used in its self recursion.
    */
   void ExpandEquivalentStackElements(
       StackElement cur_stack_element,

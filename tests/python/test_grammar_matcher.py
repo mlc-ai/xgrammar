@@ -197,7 +197,7 @@ def test_rollback():
         result_after_rollback.append(new_token_bitmask2)
         assert matcher.accept_token(i_2)
         for l, r in zip(orig_result, result_after_rollback):
-            torch.testing.assert_allclose(l, r)
+            torch.testing.assert_close(l, r)
 
 
 def test_reset():
@@ -231,7 +231,7 @@ def test_reset():
         assert matcher.accept_token(i)
 
     for l, r in zip(orig_result, result_after_reset):
-        torch.testing.assert_allclose(l, r)
+        torch.testing.assert_close(l, r)
 
 
 def test_termination():

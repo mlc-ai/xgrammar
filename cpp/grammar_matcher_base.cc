@@ -17,6 +17,10 @@
 
 namespace xgrammar {
 
+constexpr int32_t kUnexpandedRuleStartSequenceId = 128000;
+
+constexpr int32_t kDispatchedTagDispatchElementId = -1;
+
 /*! \brief Check the codepoint is contained in the character class. */
 bool GrammarMatcherBase::CheckIfAccepted(const StackElement& stack_element, uint8_t char_value)
     const {
@@ -68,6 +72,24 @@ StackElement GrammarMatcherBase::AdvanceStackElementWithChar(
     const StackElement& stack_element, uint8_t char_value
 ) {
   auto current_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
+  if (current_sequence.type == Grammar::Impl::RuleExprType::kTagDispatch) {
+    auto next_node =
+        grammar_->root_tag_dispatch_fsm->Transition(stack_element.element_id, char_value);
+    auto new_stack_element = stack_element;
+    if (next_node == CompactFSM::NO_TRANSITION) {
+      new_stack_element.element_id = 0;
+    } else if (!grammar_->root_tag_dispatch_fsm->IsEndNode(next_node)) {
+      new_stack_element.element_id = next_node;
+    } else {
+      new_stack_element.element_id = kDispatchedTagDispatchElementId;
+      auto new_stack_element_id = persistent_stack_.NewNode(new_stack_element);
+      auto refered_rule_id = grammar_->tag_dispatch_end_node_to_rule_id.at(next_node);
+      new_stack_element =
+          StackElement(refered_rule_id, kUnexpandedRuleStartSequenceId, 0, new_stack_element_id);
+    }
+    return new_stack_element;
+  }
+
   auto current_element = grammar_->GetRuleExpr(current_sequence[stack_element.element_id]);
   StackElement new_stack_element = stack_element;
   switch (current_element.type) {
@@ -126,49 +148,64 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
     }
   };
 
+  // Step 1. Handle unexpanded rules.
+  if (cur_stack_element.sequence_id == kUnexpandedRuleStartSequenceId) {
+    auto cur_rule_id = cur_stack_element.rule_id;
+    auto cur_rule_body = grammar_->GetRuleExpr(grammar_->GetRule(cur_rule_id).body_expr_id);
+    XGRAMMAR_DCHECK(cur_rule_body.type == RuleExprType::kChoices);
+    for (auto sequence_id : cur_rule_body) {
+      auto ref_rule_sequence = grammar_->GetRuleExpr(sequence_id);
+      if (ref_rule_sequence.type == RuleExprType::kEmptyStr) {
+        continue;
+      }
+      auto new_stack_element =
+          StackElement(cur_rule_id, sequence_id, 0, cur_stack_element.parent_id);
+      ExpandEquivalentStackElements(new_stack_element, new_stack_tops, -1, false);
+    }
+    return;
+  }
+
   auto cur_sequence = grammar_->GetRuleExpr(cur_stack_element.sequence_id);
 
-  // Step 1. The stack element points to the end of a rule.
+  // Step 2. The stack element points to the end of a rule.
   if (cur_sequence.size() == cur_stack_element.element_id) {
     if (cur_stack_element.parent_id == StackElement::kNoParent) {
-      // Case 1.1. The stack element points to the end of the grammar (meaning the matching
+      // Case 2.1. The stack element points to the end of the grammar (meaning the matching
       // succeeded). Insert it and add as a stack top.
       new_stack_tops->push_back(f_add_stack_element(cur_stack_element));
     } else if (consider_parent) {
-      // Case 1.2. When consider_parent is true, we should recurse to the parent rule.
+      // Case 2.2. When consider_parent is true, we should recurse to the parent rule.
       auto new_stack_element = persistent_stack_[cur_stack_element.parent_id];
       new_stack_element.element_id += 1;
       XGRAMMAR_DCHECK(new_stack_element.element_in_string == 0);
       XGRAMMAR_DCHECK(new_stack_element.left_utf8_bytes == 0);
       ExpandEquivalentStackElements(new_stack_element, new_stack_tops, -1, consider_parent);
     }
-    // Case 1.3. When consider_parent is false, we do nothing and return.
+    // Case 2.3. When consider_parent is false, we do nothing and return.
     return;
   }
 
   auto current_element = grammar_->GetRuleExpr(cur_sequence[cur_stack_element.element_id]);
   auto stack_element_id = f_add_stack_element(cur_stack_element);
 
-  // Step 2. Iterate into sub rules
-  if (current_element.type == RuleExprType::kCharacterClass ||
-      current_element.type == RuleExprType::kByteString ||
-      current_element.type == RuleExprType::kCharacterClassStar) {
-    new_stack_tops->push_back(stack_element_id);
+  // Step 3. Iterate into sub rules
+  if (current_element.type == RuleExprType::kRuleRef) {
+    ExpandEquivalentStackElements(
+        StackElement(current_element[0], kUnexpandedRuleStartSequenceId, 0, stack_element_id),
+        new_stack_tops,
+        -1,
+        false
+    );
   } else {
-    XGRAMMAR_DCHECK(current_element.type == RuleExprType::kRuleRef);
-    auto ref_rule_body = grammar_->GetRuleExpr(grammar_->GetRule(current_element[0]).body_expr_id);
-    XGRAMMAR_DCHECK(ref_rule_body.type == RuleExprType::kChoices);
-    for (auto sequence_id : ref_rule_body) {
-      auto ref_rule_sequence = grammar_->GetRuleExpr(sequence_id);
-      if (ref_rule_sequence.type == RuleExprType::kEmptyStr) {
-        continue;
-      }
-      auto new_stack_element = StackElement(current_element[0], sequence_id, 0, stack_element_id);
-      ExpandEquivalentStackElements(new_stack_element, new_stack_tops, -1, false);
-    }
+    XGRAMMAR_DCHECK(
+        current_element.type == RuleExprType::kCharacterClass ||
+        current_element.type == RuleExprType::kByteString ||
+        current_element.type == RuleExprType::kCharacterClassStar
+    );
+    new_stack_tops->push_back(stack_element_id);
   }
 
-  // Step 3. Check the next element in the same rule
+  // Step 4. Check the next element in the same rule
   auto exist_in_vector = [](const std::vector<int32_t>& vec, int32_t value) {
     return std::find(vec.begin(), vec.end(), value) != vec.end();
   };
@@ -256,17 +293,11 @@ void GrammarMatcherBase::PushInitialState(
 ) {
   if (init_stack_element == kInvalidStackElement) {
     // Initialize the stack with the root rule.
-    auto root_rule = grammar_->GetRootRule();
-    auto root_rule_body = grammar_->GetRuleExpr(root_rule.body_expr_id);
+    auto init_stack_element = StackElement(
+        grammar_->GetRootRuleId(), kUnexpandedRuleStartSequenceId, 0, StackElement::kNoParent
+    );
     tmp_new_stack_tops_.clear();
-    for (auto i : root_rule_body) {
-      auto init_stack_element = StackElement(0, i, 0, StackElement::kNoParent);
-      if (expand_init_stack_element) {
-        ExpandEquivalentStackElements(init_stack_element, &tmp_new_stack_tops_);
-      } else {
-        tmp_new_stack_tops_.push_back(persistent_stack_.NewNode(init_stack_element));
-      }
-    }
+    ExpandEquivalentStackElements(init_stack_element, &tmp_new_stack_tops_);
     stack_tops_history_.PushHistory(tmp_new_stack_tops_);
   } else {
     if (expand_init_stack_element) {

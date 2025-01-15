@@ -26,6 +26,8 @@ class FSM {
 
   /********************** Accessors **********************/
 
+  inline static constexpr int NO_TRANSITION = -1;
+
   /*!
    * \brief Transitions from a given state based on an input character.
    * \param from The source state to transition from.
@@ -39,7 +41,7 @@ class FSM {
         return edge.target;
       }
     }
-    return -1;
+    return NO_TRANSITION;
   }
 
   /*! \brief Returns the start node of the FSM. */
@@ -129,6 +131,8 @@ class CompactFSM {
 
   /********************** Accessors **********************/
 
+  inline static constexpr int NO_TRANSITION = -1;
+
   /*!
    * \brief Transitions from a given state based on an input character.
    * \param from The source state to transition from.
@@ -141,12 +145,12 @@ class CompactFSM {
     if (edges.size() <= 16) {
       for (const auto& edge : edges) {
         if (edge.min_ch > character) {
-          return -1;
+          return NO_TRANSITION;
         } else if (edge.max_ch >= character) {
           return edge.target;
         }
       }
-      return -1;
+      return NO_TRANSITION;
     } else {
       auto it = std::lower_bound(
           edges.begin(),
@@ -157,7 +161,7 @@ class CompactFSM {
       if (it != edges.end() && it->min_ch <= character) {
         return it->target;
       }
-      return -1;
+      return NO_TRANSITION;
     }
   }
 
@@ -279,7 +283,7 @@ inline FSM BuildTrie(
     for (const auto& ch : pattern) {
       int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
       int next_node = fsm.Transition(current_node, ch_int16);
-      if (next_node == -1) {
+      if (next_node == FSM::NO_TRANSITION) {
         next_node = fsm.AddNode();
         fsm.AddEdge(current_node, next_node, ch_int16, ch_int16);
       }
