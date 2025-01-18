@@ -29,6 +29,14 @@ bool GrammarMatcherBase::CheckIfAccepted(const StackElement& stack_element, uint
     XGRAMMAR_DCHECK(stack_element.element_id != -1);
     return true;
   }
+
+  if (stack_element.parent_id == StackElement::kNoParent &&
+      current_sequence.size() == stack_element.element_id) {
+    // This StackElement means previous elements has matched the complete rule.
+    // But we are still need to accept a new character, so this stack will become invalid.
+    return false;
+  }
+
   auto current_element = grammar_->GetRuleExpr(current_sequence[stack_element.element_id]);
   if (current_element.type == RuleExprType::kCharacterClass ||
       current_element.type == RuleExprType::kCharacterClassStar) {
@@ -254,11 +262,6 @@ bool GrammarMatcherBase::AcceptChar(uint8_t char_value, bool debug_print) {
   tmp_new_stack_tops_.clear();
   for (auto prev_top : prev_stack_tops) {
     auto cur_stack_element = persistent_stack_[prev_top];
-    if (persistent_stack_.IsEndOfGrammar(cur_stack_element)) {
-      // This StackElement means previous elements has matched the complete rule.
-      // But we are still need to accept a new character, so this stack will become invalid.
-      continue;
-    }
 
     auto accepted = CheckIfAccepted(cur_stack_element, char_value);
     if (!accepted) {
@@ -309,8 +312,8 @@ void GrammarMatcherBase::DiscardEarliestChars(int discard_cnt) {
   stack_tops_history_.DiscardEarliest(discard_cnt);
 }
 
-std::string GrammarMatcherBase::PrintStackState(int steps_behind_latest) const {
-  return stack_tops_history_.PrintHistory(steps_behind_latest);
+std::string GrammarMatcherBase::PrintStackState(int steps_before_latest) const {
+  return stack_tops_history_.PrintHistory(steps_before_latest);
 }
 
 void GrammarMatcherBase::PushInitialState(

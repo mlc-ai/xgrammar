@@ -10,8 +10,8 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-# Fetch and checkout main branch
-git fetch origin main
+# Pull and checkout main branch
+git pull origin main
 git checkout main
 git tag $1 HEAD
 git push origin $1

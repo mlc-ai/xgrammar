@@ -489,6 +489,12 @@ class RuleRefGraphFinder : public GrammarVisitor<std::vector<std::vector<int32_t
     rule_visit_graph_[rule_expr[0]].push_back(cur_rule_id_);
   }
 
+  void VisitTagDispatch(const RuleExpr& rule_expr) {
+    for (int i = 1; i < rule_expr.size(); i += 2) {
+      rule_visit_graph_[rule_expr[i]].push_back(cur_rule_id_);
+    }
+  }
+
   // Inversed reference graph: pointing from referee to referer
   std::vector<std::vector<int32_t>> rule_visit_graph_;
   int32_t cur_rule_id_;
@@ -524,7 +530,9 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       auto rule_expr = base_grammar_->GetRuleExpr(rule.body_expr_id);
       if (rule_expr.type == RuleExprType::kTagDispatch) {
         empty_rule_id_set->insert(i);
+        continue;
       }
+
       XGRAMMAR_DCHECK(rule_expr.type == RuleExprType::kChoices);
       if (base_grammar_->GetRuleExpr(rule_expr[0]).type == RuleExprType::kEmptyStr) {
         empty_rule_id_set->insert(i);
@@ -579,7 +587,8 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
         auto rule = base_grammar_->GetRule(referer_rule_id);
         auto rule_expr = base_grammar_->GetRuleExpr(rule.body_expr_id);
 
-        XGRAMMAR_DCHECK(rule_expr.type == RuleExprType::kChoices);
+        XGRAMMAR_DCHECK(rule_expr.type != RuleExprType::kTagDispatch)
+            << "TagDispatch rules should already exist in empty_rule_id_set";
 
         bool is_epsilon = std::any_of(rule_expr.begin(), rule_expr.end(), [&](int32_t i) {
           auto seq_expr = base_grammar_->GetRuleExpr(i);

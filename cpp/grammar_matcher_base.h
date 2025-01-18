@@ -57,7 +57,7 @@ class GrammarMatcherBase {
   void DiscardEarliestChars(int discard_cnt);
 
   /*! \brief Print the stack state. */
-  std::string PrintStackState(int steps_behind_latest = 0) const;
+  std::string PrintStackState(int steps_before_latest = 0) const;
 
  protected:
   /*!
