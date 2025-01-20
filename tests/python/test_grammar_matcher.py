@@ -237,7 +237,7 @@ def test_reset():
 def test_termination():
     vocab = [
         # fmt: off
-        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", " }", ", ", "6", ":", "\n", " ", '"a"', ':true',
         # fmt: on
     ]
     input_splitted = [
@@ -249,8 +249,9 @@ def test_termination():
         "6",
         ", ",
         " ",
-        '"a":true',
-        "}",
+        '"a"',
+        ":true",
+        " }",
         "</s>",
     ]
     input_ids = [vocab.index(t) for t in input_splitted]
