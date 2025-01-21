@@ -5,6 +5,7 @@
 #include "structural_tag.h"
 
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <string_view>
 
@@ -30,15 +31,22 @@ Grammar StructuralTagToGrammar(
 
   // Step 2: For each tag, find the trigger that is a prefix of the tag.begin
   // Convert the schema to grammar at the same time
-  std::vector<std::vector<std::pair<StructuralTagItem, Grammar>>> tag_groups(triggers.size());
+  std::vector<Grammar> schema_grammars;
+  schema_grammars.reserve(tags.size());
   for (const auto& tag : tags) {
+    auto schema_grammar = Grammar::FromJSONSchema(tag.schema, true);
+    schema_grammars.push_back(schema_grammar);
+  }
+
+  std::vector<std::vector<std::pair<StructuralTagItem, Grammar>>> tag_groups(triggers.size());
+  for (int it_tag = 0; it_tag < static_cast<int>(tags.size()); ++it_tag) {
+    const auto& tag = tags[it_tag];
     bool found = false;
-    for (int i = 0; i < static_cast<int>(sorted_triggers.size()); ++i) {
-      const auto& trigger = sorted_triggers[i];
+    for (int it_trigger = 0; it_trigger < static_cast<int>(sorted_triggers.size()); ++it_trigger) {
+      const auto& trigger = sorted_triggers[it_trigger];
       if (trigger.size() <= tag.start.size() &&
           std::string_view(tag.start).substr(0, trigger.size()) == trigger) {
-        auto schema_grammar = Grammar::FromJSONSchema(tag.schema, true);
-        tag_groups[i].push_back(std::make_pair(tag, schema_grammar));
+        tag_groups[it_trigger].push_back(std::make_pair(tag, schema_grammars[it_tag]));
         found = true;
         break;
       }

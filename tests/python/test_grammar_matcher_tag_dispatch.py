@@ -2,13 +2,12 @@
 a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar matcher.
 """
 
+import json
 import sys
 import time
 from typing import List
 
 import pytest
-import torch
-from aiohttp import TraceResponseChunkReceivedParams
 from pydantic import BaseModel
 from transformers import AutoTokenizer
 
@@ -220,11 +219,19 @@ def test_structural_tag_mask_gen():
 
     # Set up grammar from schemas
     tags = [
-        xgr.StructuralTagItem(start="<function=f>", schema=Schema1, end="</function>"),
-        xgr.StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
+        xgr.StructuralTagItem(
+            start="<function=f>", schema=json.dumps(Schema1.model_json_schema()), end="</function>"
+        ),
+        xgr.StructuralTagItem(
+            start="<function=g>", schema=json.dumps(Schema2.model_json_schema()), end="</function>"
+        ),
     ]
     triggers = ["<function=f", "<function=g"]
+    start = time.monotonic_ns()
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
+    end = time.monotonic_ns()
+    print(f"Time to init grammar: {(end - start) / 1e3} us")
+    exit()
 
     # Set up tokenizer
     tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
@@ -281,5 +288,7 @@ def test_structural_tag_mask_gen():
     assert tokenizer.eos_token_id not in rejected_token_ids
 
 
+test_structural_tag_mask_gen()
+exit()
 if __name__ == "__main__":
     pytest.main(sys.argv)
