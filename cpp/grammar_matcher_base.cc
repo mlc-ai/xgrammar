@@ -266,9 +266,8 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
 
 bool GrammarMatcherBase::AcceptChar(uint8_t char_value, bool debug_print) {
   if (debug_print) {
-    XGRAMMAR_LOG(INFO) << "Matching char: " << static_cast<int>(char_value) << " \""
+    XGRAMMAR_LOG(INFO) << "Trying to accept char: " << static_cast<int>(char_value) << " \""
                        << PrintAsEscapedUTF8(char_value) << "\"";
-    XGRAMMAR_LOG(INFO) << "Previous stack: " << PrintStackState();
   }
   const auto& prev_stack_tops = stack_tops_history_.GetLatest();
 

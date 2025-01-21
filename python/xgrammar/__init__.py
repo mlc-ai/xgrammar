@@ -1,7 +1,7 @@
 from . import testing
 from .compiler import CompiledGrammar, GrammarCompiler
 from .contrib import hf
-from .grammar import Grammar
+from .grammar import Grammar, StructuralTagItem
 from .matcher import (
     GrammarMatcher,
     allocate_token_bitmask,

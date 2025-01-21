@@ -13,7 +13,7 @@
 
 namespace xgrammar {
 
-std::string StructuralTagToEBNF(
+Grammar StructuralTagToGrammar(
     const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
 );
 

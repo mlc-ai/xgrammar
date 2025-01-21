@@ -79,6 +79,20 @@ class GrammarBuilder {
   }
 
   /*!
+   * \brief Add a RuleExpr for string stored in bytes.
+   * \param str The string to be added.
+   */
+  int32_t AddByteString(const std::string& str) {
+    std::vector<int32_t> bytes;
+    bytes.reserve(str.size());
+    for (char c : str) {
+      bytes.push_back(static_cast<int32_t>(c));
+    }
+    return AddRuleExpr({RuleExprType::kByteString, bytes.data(), static_cast<int32_t>(bytes.size())}
+    );
+  }
+
+  /*!
    * \brief One element of a character class, containing a lower and a upper bound. Both bounds are
    * inclusive.
    */

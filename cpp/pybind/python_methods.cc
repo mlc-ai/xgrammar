@@ -58,7 +58,11 @@ std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& 
 }
 
 void GrammarMatcher_FillNextTokenBitmask(
-    GrammarMatcher& matcher, intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t index
+    GrammarMatcher& matcher,
+    intptr_t token_bitmask_ptr,
+    std::vector<int64_t> shape,
+    int32_t index,
+    bool debug_print
 ) {
   XGRAMMAR_CHECK(shape.size() == 1 || shape.size() == 2) << "token_bitmask tensor must be 1D or 2D";
 
@@ -71,7 +75,7 @@ void GrammarMatcher_FillNextTokenBitmask(
       nullptr,
       0
   };
-  matcher.FillNextTokenBitmask(&bitmask_dltensor, index);
+  matcher.FillNextTokenBitmask(&bitmask_dltensor, index, debug_print);
 }
 
 std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(

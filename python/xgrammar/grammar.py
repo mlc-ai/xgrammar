@@ -3,14 +3,14 @@
 import json
 from typing import List, Optional, Tuple, Type, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .base import XGRObject, _core
 
 
 class StructuralTagItem(BaseModel):
     start: str
-    schema: Union[str, Type[BaseModel]]
+    schema_: Union[str, Type[BaseModel]] = Field(alias="schema")
     end: str
 
 
@@ -163,7 +163,7 @@ class Grammar(XGRObject):
 
     @staticmethod
     def from_structural_tag(tags: List[StructuralTagItem], triggers: List[str]) -> "Grammar":
-        tags_tuple = [(tag.start, _handle_pydantic_schema(tag.schema), tag.end) for tag in tags]
+        tags_tuple = [(tag.start, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
         return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
 
     @staticmethod

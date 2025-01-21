@@ -13,6 +13,7 @@
 #include "support/encoding.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
+#include "testing.h"
 
 namespace xgrammar {
 
@@ -45,27 +46,6 @@ AdaptiveTokenMask::AdaptiveTokenMask(
   }
 
   this->uncertain_indices = uncertain_indices;
-}
-
-std::string AdaptiveTokenMask::PrintTokenByIds(
-    const std::vector<int32_t>& token_ids, const TokenizerInfo& tokenizer_info, int max_print_num
-) {
-  std::stringstream ss;
-  const auto& sorted_decoded_vocab = tokenizer_info.GetDecodedVocab();
-  ss << "[";
-  int print_num = std::min(static_cast<int>(token_ids.size()), max_print_num);
-  for (int i = 0; i < print_num; ++i) {
-    ss << "#" << token_ids[i] << " <" << PrintAsEscapedUTF8(sorted_decoded_vocab[token_ids[i]])
-       << ">";
-    if (i < print_num - 1) {
-      ss << ", ";
-    }
-  }
-  if (static_cast<int>(token_ids.size()) > max_print_num) {
-    ss << ", ...";
-  }
-  ss << "]";
-  return ss.str();
 }
 
 std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const {

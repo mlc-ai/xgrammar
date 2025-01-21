@@ -3,9 +3,14 @@ a unoptimized, non-simplified EBNF string. This is to test the robustness of the
 """
 
 import sys
+import time
 from typing import List
 
 import pytest
+import torch
+from aiohttp import TraceResponseChunkReceivedParams
+from pydantic import BaseModel
+from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
@@ -100,6 +105,181 @@ rule2 ::= "dg"
 #     compiler = xgr.GrammarCompiler(tokenizer_info)
 #     compiled_grammar = compiler.compile_grammar(grammar)
 #     matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+
+
+def test_structural_tag():
+    class Schema1(BaseModel):
+        arg1: str
+        arg2: int
+
+    class Schema2(BaseModel):
+        arg3: float
+        arg4: List[str]
+
+    tags = [
+        xgr.StructuralTagItem(start="<function=f1>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(start="<function=f2>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
+    ]
+    # in real cases, we should use one trigger: "<function=" and dispatch to two tags
+    # but here we use two triggers for testing such cases
+    triggers = ["<function=f", "<function=g"]
+
+    grammar = xgr.Grammar.from_structural_tag(tags, triggers)
+
+    expected_grammar = r"""root ::= TagDispatch(("<function=f", trigger_rule_0), ("<function=g", trigger_rule_1))
+trigger_rule_0 ::= (("1>" root_1 "</function>") | ("2>" root_2 "</function>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_choice basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_choice ::= (("0") | (basic_number_1 [1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_7) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_7 ::= ((basic_number_choice_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}"))
+root_2 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer_2 [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_choice_1 ::= (("0") | (basic_number_1_1 [1-9] [0-9]*))
+trigger_rule_1 ::= ((">" root_3 "</function>"))
+basic_escape_2 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_2 ::= (("\"") | ([^\"\\\r\n] basic_string_sub_2) | ("\\" basic_escape_2 basic_string_sub_2)) (=([ \n\t]* [,}\]:]))
+basic_any_2 ::= ((basic_number_8) | (basic_string_2) | (basic_boolean_2) | (basic_null_2) | (basic_array_3) | (basic_object_3))
+basic_integer_3 ::= (("0") | (basic_integer_1_2 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_choice_2 basic_number_3_2 basic_number_6_2))
+basic_string_2 ::= (("\"" basic_string_sub_2))
+basic_boolean_2 ::= (("true") | ("false"))
+basic_null_2 ::= (("null"))
+basic_array_3 ::= (("[" [ \n\t]* basic_any_2 basic_array_1_2 [ \n\t]* "]"))
+basic_object_3 ::= (("{" [ \n\t]* basic_string_2 [ \n\t]* ":" [ \n\t]* basic_any_2 basic_object_1_2 [ \n\t]* "}"))
+root_prop_1 ::= (("[" [ \n\t]* basic_string_2 root_prop_1_1 [ \n\t]* "]"))
+root_3 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_8 [ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "}"))
+basic_integer_1_2 ::= ("" | ("-"))
+basic_number_1_2 ::= ("" | ("-"))
+basic_number_2_2 ::= (([0-9] basic_number_2_2) | ([0-9]))
+basic_number_3_2 ::= ("" | ("." basic_number_2_2))
+basic_number_4_2 ::= ("" | ([+\-]))
+basic_number_5_2 ::= (([0-9] basic_number_5_2) | ([0-9]))
+basic_number_6_2 ::= ("" | ([eE] basic_number_4_2 basic_number_5_2))
+basic_array_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_2 basic_array_1_2))
+basic_object_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 [ \n\t]* ":" [ \n\t]* basic_any_2 basic_object_1_2))
+root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1))
+basic_number_choice_2 ::= (("0") | (basic_number_1_2 [1-9] [0-9]*))
+"""
+    assert str(grammar) == expected_grammar
+
+    accepted_inputs = [
+        '<function=f1>{"arg1": "abc", "arg2": 1}</function>',
+        '<function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>',
+        '<function=f2>{"arg1": "abc", "arg2": 1}</function><function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>',
+        'hhhh<function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>haha<function=f1>{"arg1": "abc", "arg2": 1}</function>123',
+    ]
+    for input in accepted_inputs:
+        assert _is_grammar_accept_string(grammar, input, print_time=True)
+
+
+def test_structural_tag_mask_gen():
+    # Define schemas for the test
+    class Schema1(BaseModel):
+        arg1: str
+        arg2: int
+
+    class Schema2(BaseModel):
+        arg3: float
+        arg4: List[str]
+
+    # Set up grammar from schemas
+    tags = [
+        xgr.StructuralTagItem(start="<function=f>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
+    ]
+    triggers = ["<function=f", "<function=g"]
+    grammar = xgr.Grammar.from_structural_tag(tags, triggers)
+
+    # Set up tokenizer
+    tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(
+        tokenizer_id,
+        use_fast=True,
+        trust_remote_code=True,
+    )
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+
+    # Compile grammar and create matcher
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    time_start = time.monotonic_ns()
+    matcher = xgr.GrammarMatcher(compiler.compile_grammar(grammar))
+    time_end = time.monotonic_ns()
+    print(f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    # Test input string
+    accepted_input = 'hhhh<function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>haha<function=f>{"arg1": "abc", "arg2": 1}</function>123'
+    input_bytes = accepted_input.encode("utf-8")
+
+    # Set up token bitmask for validation
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    # Process input character by character
+    for c in input_bytes:
+        # 1. Test token bitmask generation
+        time_start = time.monotonic_ns()
+        matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+        # 2. Verify token bitmask correctness
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
+        # This checking does not support non-ascii characters for now
+        token_id_for_next_char = tokenizer.convert_tokens_to_ids(chr(c))
+        assert token_id_for_next_char not in rejected_token_ids
+
+        # 3. Test character acceptance
+        print("Accepting char:", bytes([c]))
+        time_start = time.monotonic_ns()
+        assert matcher._debug_accept_string(bytes([c]))
+        time_end = time.monotonic_ns()
+        print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
+
+    # Final verification - check that EOS token is allowed
+    time_start = time.monotonic_ns()
+    matcher.fill_next_token_bitmask(token_bitmask)
+    time_end = time.monotonic_ns()
+    print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    assert tokenizer.eos_token_id not in rejected_token_ids
+
 
 if __name__ == "__main__":
     pytest.main(sys.argv)

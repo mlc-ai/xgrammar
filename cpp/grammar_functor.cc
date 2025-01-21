@@ -420,7 +420,7 @@ class GrammarUnionFunctorImpl : public SubGrammarAdder {
   }
 
   // Avoid hiding the original Apply(const Grammar&)
-  Grammar Apply(const Grammar& grammar) override { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
+  Grammar Apply(const Grammar& grammar) final { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
 };
 
 /*!
@@ -454,7 +454,7 @@ class GrammarConcatFunctorImpl : public SubGrammarAdder {
   }
 
   // Avoid hiding the original Apply(const Grammar&)
-  Grammar Apply(const Grammar& grammar) override { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
+  Grammar Apply(const Grammar& grammar) final { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
 };
 
 /*!
@@ -604,6 +604,79 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
   }
 };
 
+class StructuralTagGrammarCreatorImpl : public SubGrammarAdder {
+ public:
+  Grammar Apply(
+      const std::vector<std::string>& triggers,
+      const std::vector<std::vector<std::pair<StructuralTagItem, Grammar>>>& tag_groups
+  ) {
+    XGRAMMAR_CHECK(triggers.size() == tag_groups.size())
+        << "Number of triggers must match number of tag groups";
+
+    builder_ = GrammarBuilder();
+    auto root_rule_id = builder_.AddEmptyRule("root");
+
+    // Create rules for each trigger group
+    std::vector<std::pair<int32_t, int32_t>> trigger_rule_pairs;
+    trigger_rule_pairs.reserve(triggers.size());
+    for (size_t i = 0; i < triggers.size(); i++) {
+      // Skip empty trigger groups
+      if (tag_groups[i].empty()) {
+        continue;
+      }
+
+      auto rule_name = "trigger_rule_" + std::to_string(i);
+      auto rule_id = builder_.AddEmptyRule(rule_name);
+
+      // Convert trigger string to byte string expr
+      auto trigger_expr_id = builder_.AddByteString(triggers[i]);
+
+      // Create choices for each tag in this trigger group
+      std::vector<int32_t> choices;
+      choices.reserve(tag_groups[i].size());
+      for (const auto& [tag, schema_grammar] : tag_groups[i]) {
+        // Create sequence: start_suffix + schema + end
+        std::vector<int32_t> seq_elements;
+        seq_elements.reserve(3);
+
+        // Add start suffix (everything after trigger)
+        XGRAMMAR_DCHECK(tag.start.size() >= triggers[i].size())
+            << "Tag start must be at least as long as trigger";
+        if (tag.start.size() > triggers[i].size()) {
+          seq_elements.push_back(builder_.AddByteString(tag.start.substr(triggers[i].size())));
+        }
+
+        // Create and visit schema grammar for this tag
+        auto schema_rule_id = VisitSubGrammar(schema_grammar);
+        seq_elements.push_back(builder_.AddRuleRef(schema_rule_id));
+
+        // Add end string
+        if (!tag.end.empty()) {
+          seq_elements.push_back(builder_.AddByteString(tag.end));
+        }
+
+        choices.push_back(builder_.AddSequence(seq_elements));
+      }
+
+      builder_.UpdateRuleBody(rule_id, builder_.AddChoices(choices));
+      trigger_rule_pairs.emplace_back(trigger_expr_id, rule_id);
+    }
+
+    // Create root TagDispatch rule
+    std::vector<std::pair<int32_t, int32_t>> tag_dispatch_data;
+    tag_dispatch_data.reserve(trigger_rule_pairs.size());
+    for (const auto& [trigger_id, rule_id] : trigger_rule_pairs) {
+      tag_dispatch_data.emplace_back(trigger_id, rule_id);
+    }
+
+    builder_.UpdateRuleBody(root_rule_id, builder_.AddTagDispatch(tag_dispatch_data));
+    return builder_.Get(root_rule_id);
+  }
+
+  // Avoid hiding the original Apply(const Grammar&)
+  Grammar Apply(const Grammar& grammar) final { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
+};
+
 /*************************** Forward grammar functors to their impl ***************************/
 
 Grammar GrammarNormalizer::Apply(const Grammar& grammar) {
@@ -620,6 +693,13 @@ Grammar GrammarConcatFunctor::Apply(const std::vector<Grammar>& grammars) {
 
 std::vector<int32_t> AllowEmptyRuleAnalyzer::Apply(const Grammar& grammar) {
   return AllowEmptyRuleAnalyzerImpl().Apply(grammar);
+}
+
+Grammar StructuralTagGrammarCreator::Apply(
+    const std::vector<std::string>& triggers,
+    const std::vector<std::vector<std::pair<StructuralTagItem, Grammar>>>& tag_groups
+) {
+  return StructuralTagGrammarCreatorImpl().Apply(triggers, tag_groups);
 }
 
 }  // namespace xgrammar

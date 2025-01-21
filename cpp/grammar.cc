@@ -39,7 +39,7 @@ Grammar Grammar::FromRegex(const std::string& regex) { return FromEBNF(RegexToEB
 Grammar Grammar::FromStructuralTag(
     const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
 ) {
-  return FromEBNF(StructuralTagToEBNF(tags, triggers));
+  return StructuralTagToGrammar(tags, triggers);
 }
 
 // Optimized json grammar for the speed of the grammar matcher

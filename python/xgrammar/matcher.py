@@ -204,7 +204,9 @@ class GrammarMatcher(XGRObject):
         """
         return self._handle.accept_token(token_id, debug_print)
 
-    def fill_next_token_bitmask(self, bitmask: torch.Tensor, index: int = 0) -> None:
+    def fill_next_token_bitmask(
+        self, bitmask: torch.Tensor, index: int = 0, *, debug_print: bool = False
+    ) -> None:
         """Fill the bitmask for the next token prediction. The input bitmask can be generated
         by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the
         next token bitmask.
@@ -223,7 +225,9 @@ class GrammarMatcher(XGRObject):
             raise ValueError("bitmask should be on CPU.")
         if bitmask.dtype != bitmask_dtype:
             raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
-        self._handle.fill_next_token_bitmask(bitmask.data_ptr(), list(bitmask.shape), index)
+        self._handle.fill_next_token_bitmask(
+            bitmask.data_ptr(), list(bitmask.shape), index, debug_print
+        )
 
     def find_jump_forward_string(self) -> str:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that

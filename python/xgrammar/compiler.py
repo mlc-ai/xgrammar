@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple, Type, Union, overload
 from pydantic import BaseModel
 
 from .base import XGRObject, _core
-from .grammar import Grammar
+from .grammar import Grammar, StructuralTagItem
 from .tokenizer_info import TokenizerInfo
 
 

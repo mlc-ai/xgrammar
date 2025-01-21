@@ -345,14 +345,15 @@ TokenizerInfo::Impl::Impl(
 )
     : vocab_type_(vocab_type),
       vocab_size_(vocab_size.value_or(encoded_vocab.size())),
-      prepend_space_in_tokenization_(prepend_space_in_tokenization),
-      stop_token_ids_(stop_token_ids.value_or(std::vector<int32_t>())) {
+      prepend_space_in_tokenization_(prepend_space_in_tokenization) {
   decoded_vocab_.reserve(encoded_vocab.size());
   sorted_decoded_vocab_.reserve(encoded_vocab.size());
   for (int i = 0; i < static_cast<int>(encoded_vocab.size()); ++i) {
     const std::string& token = TokenDecoder::DecodeToken(encoded_vocab[i], vocab_type_);
     decoded_vocab_.push_back(token);
-    if (!stop_token_ids && DETECTION_STOP_TOKENS.count(token)) {
+    if ((!stop_token_ids && DETECTION_STOP_TOKENS.count(token)) ||
+        (stop_token_ids &&
+         std::find(stop_token_ids->begin(), stop_token_ids->end(), i) != stop_token_ids->end())) {
       stop_token_ids_.push_back(i);
     } else if (IsSpecialToken(token)) {
       special_token_ids_.push_back(i);
