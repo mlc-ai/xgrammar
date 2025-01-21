@@ -171,12 +171,14 @@
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_ebnf"><code class="docutils literal notranslate"><span class="pre">Grammar.from_ebnf()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_json_schema"><code class="docutils literal notranslate"><span class="pre">Grammar.from_json_schema()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_regex"><code class="docutils literal notranslate"><span class="pre">Grammar.from_regex()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_structural_tag"><code class="docutils literal notranslate"><span class="pre">Grammar.from_structural_tag()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.GrammarCompiler"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.clear_cache"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.clear_cache()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_builtin_json_grammar"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_builtin_json_grammar()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_json_schema"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_json_schema()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_structural_tag()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.GrammarMatcher"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a><ul>
@@ -188,6 +190,13 @@
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.reset"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.reset()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.rollback()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.stop_token_ids"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.stop_token_ids</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#xgrammar.StructuralTagItem"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem.start"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.start</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem.schema_"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.schema_</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem.end"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.end</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem.model_config"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.model_config</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.TokenizerInfo"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a><ul>
@@ -307,10 +316,13 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a>(compiled_grammar, *[, ...])</p></td>
 <td><p>Match the output of the LLM to the specified grammar, then generate the mask for the next token.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a>(encoded_vocab[, vocab_type, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a>(*, start, schema, end)</p></td>
+<td><p>A structural tag item.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a>(encoded_vocab[, vocab_type, ...])</p></td>
 <td><p>The tokenizer info contains the vocabulary, the type of the vocabulary, and necessary information for the grammar-guided generation.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.VocabType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">VocabType</span></code></a>(value[, names, module, qualname, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.VocabType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">VocabType</span></code></a>(value[, names, module, qualname, ...])</p></td>
 <td><p>The type of the vocabulary.</p></td>
 </tr>
 </tbody>
@@ -395,6 +407,9 @@ and we follow the specification of GBNF (GGML BNF) in
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_regex" title="xgrammar.Grammar.from_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_regex</span></code></a>(regex_string)</p></td>
 <td><p>Create a grammar from a regular expression string.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_structural_tag" title="xgrammar.Grammar.from_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_structural_tag</span></code></a>(tags, triggers)</p></td>
+<td><p>Create a grammar from structural tags.</p></td>
 </tr>
 </tbody>
 </table>
@@ -516,6 +531,65 @@ schema.</p>
 </dl>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.from_structural_tag">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.grammar.StructuralTagItem"><span class="pre">StructuralTagItem</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triggers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="headerlink" href="#xgrammar.Grammar.from_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a grammar from structural tags. The structural tag handles the dispatching
+of different grammars based on the tags and triggers: it initially allows any output,
+until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
+is encountered, the grammar will allow any following output, until the next trigger is
+encountered.</p>
+<p>The tags parameter is used to specify the output pattern. It is especially useful for LLM
+function calling, where the pattern is:
+&lt;function=func_name&gt;{“arg1”: …, “arg2”: …}&lt;/function&gt;.
+This pattern consists of three parts: a start tag (&lt;function=func_name&gt;), a parameter list
+according to some schema ({“arg1”: …, “arg2”: …}), and an end tag (&lt;/function&gt;). This
+pattern can be described in a StructuralTagItem with a start tag, a schema, and an end tag.
+The structural tag is able to handle multiple such patterns by passing them into multiple
+tags.</p>
+<p>The triggers parameter is used to trigger the dispatching of different grammars. The trigger
+should be a prefix of a provided start tag. When the trigger is encountered, the
+corresponding tag should be used to constrain the following output. There can be multiple
+tags matching the same trigger. Then if the trigger is encountered, the following output
+should match one of the tags. For example, in function calling, the triggers can be
+[“&lt;function=”]. Then if “&lt;function=” is encountered, the following output must match one
+of the tags (e.g. &lt;function=get_weather&gt;{“city”: “Beijing”}&lt;/function&gt;).</p>
+<p>The corrrespondence of tags and triggers is automatically determined: all tags with the
+same trigger will be grouped together. User should make sure any trigger is not a prefix
+of another trigger: then the corrrespondence of tags and triggers will be ambiguous.</p>
+<p>To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
+structural tag will generate a mask for each token. When the trigger is not encountered,
+the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
+False, meaning no token is masked). When a trigger is encountered, the mask should be
+enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
+output logits.</p>
+<p>The benefit of this method is the token boundary between tags and triggers is automatically
+handled. The user does not need to worry about the token boundary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tags</strong> (<em>List</em><em>[</em><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><em>StructuralTagItem</em></a><em>]</em>) – The structural tags.</p></li>
+<li><p><strong>triggers</strong> (<em>List</em><em>[</em><em>str</em><em>]</em>) – The triggers.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Schema1</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg1</span><span class="p">:</span> <span class="nb">str</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg2</span><span class="p">:</span> <span class="nb">int</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Schema2</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg3</span><span class="p">:</span> <span class="nb">float</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg4</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="s2">&quot;&lt;function=f&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema1</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="s2">&quot;&lt;function=g&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema2</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">triggers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&lt;function=&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="n">triggers</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
 </dd></dl>
 
 <dl class="py class">
@@ -545,6 +619,9 @@ same grammar multiple times.</p>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_json_schema" title="xgrammar.GrammarCompiler.compile_json_schema"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_json_schema</span></code></a>(schema, *[, ...])</p></td>
 <td><p>Get CompiledGrammar from the specified JSON schema and format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="xgrammar.GrammarCompiler.compile_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_structural_tag</span></code></a>(tags, triggers)</p></td>
+<td><p>Compile a grammar from structural tags.</p></td>
 </tr>
 </tbody>
 </table>
@@ -595,6 +672,27 @@ setting unevaluatedProperties and unevaluatedItems to false.</p></li>
 </dl>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.compile_structural_tag">
+<span class="sig-name descname"><span class="pre">compile_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.grammar.StructuralTagItem"><span class="pre">StructuralTagItem</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triggers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compile a grammar from structural tags. See Grammar.from_structural_tag() for more
+details.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tags</strong> (<em>List</em><em>[</em><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><em>StructuralTagItem</em></a><em>]</em>) – The structural tags.</p></li>
+<li><p><strong>triggers</strong> (<em>List</em><em>[</em><em>str</em><em>]</em>) – The triggers.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
+</dd>
+</dl>
+</dd></dl>
+
 </dd></dl>
 
 <dl class="py class">
@@ -629,7 +727,7 @@ jump-forward decoding and speculative decoding.</p></li>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><code class="xref py py-obj docutils literal notranslate"><span class="pre">accept_token</span></code></a>(token_id, *[, debug_print])</p></td>
 <td><p>Accept one token and update the state of the matcher.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fill_next_token_bitmask</span></code></a>(bitmask[, index])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fill_next_token_bitmask</span></code></a>(bitmask[, index, ...])</p></td>
 <td><p>Fill the bitmask for the next token prediction.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_jump_forward_string</span></code></a>()</p></td>
@@ -680,7 +778,7 @@ for debugging.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.GrammarMatcher.fill_next_token_bitmask">
-<span class="sig-name descname"><span class="pre">fill_next_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">fill_next_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fill the bitmask for the next token prediction. The input bitmask can be generated
 by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the
 next token bitmask.</p>
@@ -773,6 +871,59 @@ will be used. Otherwise, the stop tokens will be detected from the vocabulary.</
 <dd class="field-even"><p>List[int]</p>
 </dd>
 </dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="xgrammar.StructuralTagItem">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">StructuralTagItem</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">BaseModel</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.StructuralTagItem" title="Permalink to this definition">¶</a></dt>
+<dd><p>A structural tag item. See Grammar.from_structural_tag() for more details.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.start">
+<span class="sig-name descname"><span class="pre">start</span></span><a class="headerlink" href="#xgrammar.StructuralTagItem.start" title="Permalink to this definition">¶</a></dt>
+<dd><p>The start tag.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.schema_">
+<span class="sig-name descname"><span class="pre">schema_</span></span><a class="headerlink" href="#xgrammar.StructuralTagItem.schema_" title="Permalink to this definition">¶</a></dt>
+<dd><p>The schema.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Union[str, Type[BaseModel]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.end">
+<span class="sig-name descname"><span class="pre">end</span></span><a class="headerlink" href="#xgrammar.StructuralTagItem.end" title="Permalink to this definition">¶</a></dt>
+<dd><p>The end tag.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<p><strong>Attributes:</strong></p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.StructuralTagItem.model_config" title="xgrammar.StructuralTagItem.model_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">model_config</span></code></a></p></td>
+<td><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.model_config">
+<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.StructuralTagItem.model_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
 </dd></dl>
