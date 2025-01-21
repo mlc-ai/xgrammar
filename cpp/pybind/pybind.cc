@@ -56,6 +56,11 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
           py::call_guard<py::gil_scoped_release>()
       )
       .def(
+          "compile_structural_tag",
+          &GrammarCompiler_CompileStructuralTag,
+          py::call_guard<py::gil_scoped_release>()
+      )
+      .def(
           "compile_grammar",
           &GrammarCompiler::CompileGrammar,
           py::call_guard<py::gil_scoped_release>()

@@ -61,6 +61,11 @@ class GrammarCompiler {
   /*! \brief Get the compiled grammar for a grammar. */
   CompiledGrammar CompileGrammar(const Grammar& grammar);
 
+  /*! \brief Get the compiled grammar for a structural tag. */
+  CompiledGrammar CompileStructuralTag(
+      const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
+  );
+
   // /*! \brief Get the compiled grammar for a structural tag grammar. */
   // CompiledGrammar CompileStructuralTag(const std::vector<StructuralTagItem>& tags, const
   // std::vector<std::string>& triggers);

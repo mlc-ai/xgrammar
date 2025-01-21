@@ -57,6 +57,12 @@ Grammar Grammar_FromStructuralTag(
     const std::vector<std::string>& triggers
 );
 
+CompiledGrammar GrammarCompiler_CompileStructuralTag(
+    GrammarCompiler& compiler,
+    const std::vector<std::tuple<std::string, std::string, std::string>>& tags,
+    const std::vector<std::string>& triggers
+);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_PYBIND_PYTHON_METHODS_H_

@@ -94,39 +94,7 @@ rule2 ::= "dg"
         assert accepted_tokens == expected_accepted_tokens[i]
 
 
-# def test_tag_dispatch_mask_generation_real():
-#     grammar_str = """root ::= TagDispatch(("<function=func1>", rule1), ("<function=func2>", rule2))
-# rule1 ::= "abc"
-# rule2 ::= "def"
-# """
-#     grammar = xgr.Grammar.from_ebnf(grammar_str)
-#     tokenizer_info = xgr.TokenizerInfo(tokens)
-#     compiler = xgr.GrammarCompiler(tokenizer_info)
-#     compiled_grammar = compiler.compile_grammar(grammar)
-#     matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
-
-
-def test_structural_tag():
-    class Schema1(BaseModel):
-        arg1: str
-        arg2: int
-
-    class Schema2(BaseModel):
-        arg3: float
-        arg4: List[str]
-
-    tags = [
-        xgr.StructuralTagItem(start="<function=f1>", schema=Schema1, end="</function>"),
-        xgr.StructuralTagItem(start="<function=f2>", schema=Schema1, end="</function>"),
-        xgr.StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
-    ]
-    # in real cases, we should use one trigger: "<function=" and dispatch to two tags
-    # but here we use two triggers for testing such cases
-    triggers = ["<function=f", "<function=g"]
-
-    grammar = xgr.Grammar.from_structural_tag(tags, triggers)
-
-    expected_grammar = r"""root ::= TagDispatch(("<function=f", trigger_rule_0), ("<function=g", trigger_rule_1))
+expected_grammar_test_structural_tag = r"""root ::= TagDispatch(("<function=f", trigger_rule_0), ("<function=g", trigger_rule_1))
 trigger_rule_0 ::= (("1>" root_1 "</function>") | ("2>" root_2 "</function>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
@@ -195,7 +163,29 @@ basic_object_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 [ \n\t]* ":" [ 
 root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1))
 basic_number_choice_2 ::= (("0") | (basic_number_1_2 [1-9] [0-9]*))
 """
-    assert str(grammar) == expected_grammar
+
+
+def test_structural_tag():
+    class Schema1(BaseModel):
+        arg1: str
+        arg2: int
+
+    class Schema2(BaseModel):
+        arg3: float
+        arg4: List[str]
+
+    tags = [
+        xgr.StructuralTagItem(start="<function=f1>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(start="<function=f2>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
+    ]
+    # in real cases, we should use one trigger: "<function=" and dispatch to two tags
+    # but here we use two triggers for testing such cases
+    triggers = ["<function=f", "<function=g"]
+
+    grammar = xgr.Grammar.from_structural_tag(tags, triggers)
+
+    assert str(grammar) == expected_grammar_test_structural_tag
 
     accepted_inputs = [
         '<function=f1>{"arg1": "abc", "arg2": 1}</function>',
@@ -205,6 +195,31 @@ basic_number_choice_2 ::= (("0") | (basic_number_1_2 [1-9] [0-9]*))
     ]
     for input in accepted_inputs:
         assert _is_grammar_accept_string(grammar, input, print_time=True)
+
+
+def test_structural_tag_compiler():
+    class Schema1(BaseModel):
+        arg1: str
+        arg2: int
+
+    class Schema2(BaseModel):
+        arg3: float
+        arg4: List[str]
+
+    tags = [
+        xgr.StructuralTagItem(start="<function=f1>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(start="<function=f2>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
+    ]
+
+    # in real cases, we should use one trigger: "<function=" and dispatch to two tags
+    # but here we use two triggers for testing such cases
+    triggers = ["<function=f", "<function=g"]
+
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
+    compiled_grammar = compiler.compile_structural_tag(tags, triggers)
+
+    assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag
 
 
 def test_structural_tag_mask_gen():
@@ -227,11 +242,6 @@ def test_structural_tag_mask_gen():
         ),
     ]
     triggers = ["<function=f", "<function=g"]
-    start = time.monotonic_ns()
-    grammar = xgr.Grammar.from_structural_tag(tags, triggers)
-    end = time.monotonic_ns()
-    print(f"Time to init grammar: {(end - start) / 1e3} us")
-    # exit()
 
     # Set up tokenizer
     tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
@@ -245,7 +255,8 @@ def test_structural_tag_mask_gen():
     # Compile grammar and create matcher
     compiler = xgr.GrammarCompiler(tokenizer_info)
     time_start = time.monotonic_ns()
-    matcher = xgr.GrammarMatcher(compiler.compile_grammar(grammar))
+    compiled_grammar = compiler.compile_structural_tag(tags, triggers)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
     time_end = time.monotonic_ns()
     print(f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
@@ -287,9 +298,6 @@ def test_structural_tag_mask_gen():
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert tokenizer.eos_token_id not in rejected_token_ids
 
-
-# test_structural_tag_mask_gen()
-# exit()
 
 if __name__ == "__main__":
     pytest.main(sys.argv)

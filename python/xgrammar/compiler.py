@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple, Type, Union, overload
 from pydantic import BaseModel
 
 from .base import XGRObject, _core
-from .grammar import Grammar, StructuralTagItem
+from .grammar import Grammar, StructuralTagItem, _handle_pydantic_schema
 from .tokenizer_info import TokenizerInfo
 
 
@@ -101,21 +101,10 @@ class GrammarCompiler(XGRObject):
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        if isinstance(schema, type) and issubclass(schema, BaseModel):
-            if hasattr(schema, "model_json_schema"):
-                # pydantic 2.x
-                schema = json.dumps(schema.model_json_schema())
-            elif hasattr(schema, "schema_json"):
-                # pydantic 1.x
-                schema = json.dumps(schema.schema_json())
-            else:
-                raise ValueError(
-                    "The schema should have a model_json_schema or json_schema method."
-                )
-
+        schema_str = _handle_pydantic_schema(schema)
         return CompiledGrammar._create_from_handle(
             self._handle.compile_json_schema(
-                schema, any_whitespace, indent, separators, strict_mode
+                schema_str, any_whitespace, indent, separators, strict_mode
             )
         )
 
@@ -129,11 +118,28 @@ class GrammarCompiler(XGRObject):
         """
         return CompiledGrammar._create_from_handle(self._handle.compile_builtin_json_grammar())
 
-    def compile_structural_tag_grammar(
+    def compile_structural_tag(
         self, tags: List[StructuralTagItem], triggers: List[str]
     ) -> CompiledGrammar:
+        """Compile a grammar from structural tags. See Grammar.from_structural_tag() for more
+        details.
+
+        Parameters
+        ----------
+        tags : List[StructuralTagItem]
+            The structural tags.
+
+        triggers : List[str]
+            The triggers.
+
+        Returns
+        -------
+        compiled_grammar : CompiledGrammar
+            The compiled grammar.
+        """
+        tags_tuple = [(tag.start, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
         return CompiledGrammar._create_from_handle(
-            self._handle.compile_structural_tag_grammar(tags, triggers)
+            self._handle.compile_structural_tag(tags_tuple, triggers)
         )
 
     @overload

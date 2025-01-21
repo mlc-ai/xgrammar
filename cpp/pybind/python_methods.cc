@@ -149,4 +149,19 @@ Grammar Grammar_FromStructuralTag(
   return Grammar::FromStructuralTag(tags_objects, triggers);
 }
 
+CompiledGrammar GrammarCompiler_CompileStructuralTag(
+    GrammarCompiler& compiler,
+    const std::vector<std::tuple<std::string, std::string, std::string>>& tags,
+    const std::vector<std::string>& triggers
+) {
+  std::vector<StructuralTagItem> tags_objects;
+  tags_objects.reserve(tags.size());
+  for (const auto& tag : tags) {
+    tags_objects.emplace_back(
+        StructuralTagItem{std::get<0>(tag), std::get<1>(tag), std::get<2>(tag)}
+    );
+  }
+  return compiler.CompileStructuralTag(tags_objects, triggers);
+}
+
 }  // namespace xgrammar
