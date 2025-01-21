@@ -206,7 +206,7 @@ class GrammarMatcher(XGRObject):
 
     def fill_next_token_bitmask(
         self, bitmask: torch.Tensor, index: int = 0, *, debug_print: bool = False
-    ) -> None:
+    ) -> bool:
         """Fill the bitmask for the next token prediction. The input bitmask can be generated
         by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the
         next token bitmask.
@@ -220,12 +220,21 @@ class GrammarMatcher(XGRObject):
 
         index : int, default: 0
             The batch id of the bitmask.
+
+        debug_print : bool, default: False
+            Whether to print information about generated bitmask. Helpful for debugging.
+
+        Returns
+        -------
+        need_apply : bool
+            Whether the bitmask need to be applied (not all-true). An optimization: if False,
+            this means the bitmask is already all-true, so no need to apply it.
         """
         if bitmask.device.type != "cpu":
             raise ValueError("bitmask should be on CPU.")
         if bitmask.dtype != bitmask_dtype:
             raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
-        self._handle.fill_next_token_bitmask(
+        return self._handle.fill_next_token_bitmask(
             bitmask.data_ptr(), list(bitmask.shape), index, debug_print
         )
 

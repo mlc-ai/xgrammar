@@ -294,7 +294,7 @@ def test_fill_next_token_bitmask(
     for i, c in enumerate(input_bytes):
         # 1. fill_next_token_bitmask
         time_start = time.monotonic_ns()
-        matcher.fill_next_token_bitmask(token_bitmask)
+        assert matcher.fill_next_token_bitmask(token_bitmask)
         time_end = time.monotonic_ns()
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 

@@ -148,6 +148,21 @@ class DynamicBitset {
     return count;
   }
 
+  bool All() const {
+    if (size_ == 0) return true;
+    // Check all complete blocks except the last one
+    for (int i = 0; i < buffer_size_ - 1; ++i) {
+      if (data_[i] != ~static_cast<uint32_t>(0)) {
+        return false;
+      }
+    }
+    // For the last block, create a mask for valid bits only
+    int remaining_bits = size_ % BITS_PER_BLOCK;
+    uint32_t last_block_mask = remaining_bits ? (static_cast<uint32_t>(1) << remaining_bits) - 1
+                                              : ~static_cast<uint32_t>(0);
+    return (data_[buffer_size_ - 1] & last_block_mask) == last_block_mask;
+  }
+
  private:
   static int LowestBit(uint32_t value) {
 #ifdef __GNUC__

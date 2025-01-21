@@ -57,7 +57,7 @@ std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& 
   return py_result;
 }
 
-void GrammarMatcher_FillNextTokenBitmask(
+bool GrammarMatcher_FillNextTokenBitmask(
     GrammarMatcher& matcher,
     intptr_t token_bitmask_ptr,
     std::vector<int64_t> shape,
@@ -75,7 +75,7 @@ void GrammarMatcher_FillNextTokenBitmask(
       nullptr,
       0
   };
-  matcher.FillNextTokenBitmask(&bitmask_dltensor, index, debug_print);
+  return matcher.FillNextTokenBitmask(&bitmask_dltensor, index, debug_print);
 }
 
 std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(

@@ -30,7 +30,7 @@ std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 
 std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer);
 
-void GrammarMatcher_FillNextTokenBitmask(
+bool GrammarMatcher_FillNextTokenBitmask(
     GrammarMatcher& matcher,
     intptr_t token_bitmask_ptr,
     std::vector<int64_t> shape,

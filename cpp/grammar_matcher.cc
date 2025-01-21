@@ -248,7 +248,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
 
-  void FillNextTokenBitmask(DLTensor* next_token_bitmask, int index, bool debug_print = false);
+  bool FillNextTokenBitmask(DLTensor* next_token_bitmask, int index, bool debug_print = false);
 
   std::string FindJumpForwardString();
 
@@ -299,6 +299,9 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
   bool AcceptStopToken();
 
   bool IsStopTokenAccepted() const;
+
+  /*! \brief Check if the token bitmask is all-true. */
+  bool CheckTokenBitmask(int32_t* bitmask_data_ptr);
 
   std::string PrintBitmask(int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info);
 
@@ -457,7 +460,14 @@ std::string GrammarMatcher::Impl::PrintBitmask(
   return ss.str();
 }
 
-void GrammarMatcher::Impl::FillNextTokenBitmask(
+bool GrammarMatcher::Impl::CheckTokenBitmask(int32_t* bitmask_data_ptr) {
+  DynamicBitset next_token_bitset(
+      tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
+  );
+  return next_token_bitset.All();
+}
+
+bool GrammarMatcher::Impl::FillNextTokenBitmask(
     DLTensor* next_token_bitmask, int index, bool debug_print
 ) {
   XGRAMMAR_CHECK(!IsStopTokenAccepted())
@@ -583,6 +593,7 @@ void GrammarMatcher::Impl::FillNextTokenBitmask(
     XGRAMMAR_LOG(INFO) << "Ended: " << can_reach_end
                        << ", filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
+  return !CheckTokenBitmask(bitmask_data_ptr);
 }
 
 std::string GrammarMatcher::Impl::FindJumpForwardString() {
@@ -773,10 +784,10 @@ bool GrammarMatcher::AcceptToken(int32_t token_id, bool debug_print) {
   return pimpl_->AcceptToken(token_id, debug_print);
 }
 
-void GrammarMatcher::FillNextTokenBitmask(
+bool GrammarMatcher::FillNextTokenBitmask(
     DLTensor* next_token_bitmask, int index, bool debug_print
 ) {
-  pimpl_->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
+  return pimpl_->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
 }
 
 std::string GrammarMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }

@@ -271,9 +271,11 @@ def test_structural_tag_mask_gen():
     for c in input_bytes:
         # 1. Test token bitmask generation
         time_start = time.monotonic_ns()
-        matcher.fill_next_token_bitmask(token_bitmask)
+        need_apply = matcher.fill_next_token_bitmask(token_bitmask, debug_print=True)
         time_end = time.monotonic_ns()
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+        if need_apply:
+            print("Need to apply token bitmask")
 
         # 2. Verify token bitmask correctness
         rejected_token_ids = _get_masked_tokens_from_bitmask(
@@ -298,6 +300,9 @@ def test_structural_tag_mask_gen():
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert tokenizer.eos_token_id not in rejected_token_ids
 
+
+test_structural_tag_mask_gen()
+exit()
 
 if __name__ == "__main__":
     pytest.main(sys.argv)
