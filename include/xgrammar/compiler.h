@@ -66,10 +66,6 @@ class GrammarCompiler {
       const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
   );
 
-  // /*! \brief Get the compiled grammar for a structural tag grammar. */
-  // CompiledGrammar CompileStructuralTag(const std::vector<StructuralTagItem>& tags, const
-  // std::vector<std::string>& triggers);
-
   /*! \brief Clear the internal cache of compiled grammars. */
   void ClearCache();
 

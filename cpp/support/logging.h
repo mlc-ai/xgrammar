@@ -6,10 +6,6 @@
 #ifndef XGRAMMAR_SUPPORT_LOGGING_H_
 #define XGRAMMAR_SUPPORT_LOGGING_H_
 
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
-
 #include <ctime>
 #include <iomanip>
 #include <iostream>
