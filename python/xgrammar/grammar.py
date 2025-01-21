@@ -178,7 +178,10 @@ class Grammar(XGRObject):
     @staticmethod
     def from_structural_tag(tags: List[StructuralTagItem], triggers: List[str]) -> "Grammar":
         """Create a grammar from structural tags. The structural tag handles the dispatching
-        of different grammars based on the tags and triggers.
+        of different grammars based on the tags and triggers: it initially allows any output,
+        until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
+        is encountered, the grammar will allow any following output, until the next trigger is
+        encountered.
 
         The tags parameter is used to specify the output pattern. It is especially useful for LLM
         function calling, where the pattern is:
@@ -197,10 +200,19 @@ class Grammar(XGRObject):
         ["<function="]. Then if "<function=" is encountered, the following output must match one
         of the tags (e.g. <function=get_weather>{"city": "Beijing"}</function>).
 
-
-        The corrrespondance of tags and triggers is automatically determined: all tags with the
+        The corrrespondence of tags and triggers is automatically determined: all tags with the
         same trigger will be grouped together. User should make sure any trigger is not a prefix
-        of another trigger: then the corrrespondance of tags and triggers will be ambiguous.
+        of another trigger: then the corrrespondence of tags and triggers will be ambiguous.
+
+        To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
+        structural tag will generate a mask for each token. When the trigger is not encountered,
+        the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
+        False, meaning no token is masked). When a trigger is encountered, the mask should be
+        enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
+        output logits.
+
+        The benefit of this method is the token boundary between tags and triggers is automatically
+        handled. The user does not need to worry about the token boundary.
 
         Parameters
         ----------
