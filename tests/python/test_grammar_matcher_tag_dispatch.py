@@ -231,7 +231,7 @@ def test_structural_tag_mask_gen():
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
     end = time.monotonic_ns()
     print(f"Time to init grammar: {(end - start) / 1e3} us")
-    exit()
+    # exit()
 
     # Set up tokenizer
     tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
@@ -288,7 +288,8 @@ def test_structural_tag_mask_gen():
     assert tokenizer.eos_token_id not in rejected_token_ids
 
 
-test_structural_tag_mask_gen()
-exit()
+# test_structural_tag_mask_gen()
+# exit()
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
