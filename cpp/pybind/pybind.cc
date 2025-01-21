@@ -34,6 +34,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("from_ebnf", &Grammar::FromEBNF)
       .def_static("from_json_schema", &Grammar::FromJSONSchema)
       .def_static("from_regex", &Grammar::FromRegex)
+      .def_static("from_structural_tag", &Grammar_FromStructuralTag)
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)
       .def_static("union", &Grammar::Union)
       .def_static("concat", &Grammar::Concat);

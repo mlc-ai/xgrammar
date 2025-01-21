@@ -23,6 +23,8 @@
 
 namespace xgrammar {
 
+/******************* Tool functions for token mask *******************/
+
 int32_t GetBitmaskSize(int vocab_size) { return DynamicBitset::GetBufferSize(vocab_size); }
 
 DLDataType GetBitmaskDLType() { return DLDataType{kDLInt, 32, 1}; }
@@ -126,8 +128,11 @@ void ApplyTokenBitmaskInplaceCPU(
   }
 }
 
+/******************* Grammar Matcher with Adaptive Token Mask *******************/
+
 /*
- * Note on the matching algorithm
+ * Note on the matching algorithm (this is the old description for the matching algorithm, please
+ * refer to https://arxiv.org/pdf/2411.15100 for the latest description)
  *
  * Given a context-free grammar, we match the characters in a string one by one.
  *
@@ -449,11 +454,19 @@ void GrammarMatcher::Impl::FillNextTokenBitmask(DLTensor* next_token_bitmask, in
 
   for (auto top : latest_stack_tops) {
     auto cur_stack_element = persistent_stack_[top];
-    if (persistent_stack_.IsEndOfGrammar(cur_stack_element)) {
+    auto cur_sequence = grammar_->GetRuleExpr(cur_stack_element.sequence_id);
+    if (cur_stack_element.parent_id == StackElement::kNoParent &&
+        cur_sequence.type != RuleExprType::kTagDispatch &&
+        cur_stack_element.element_id == cur_sequence.size()) {
       continue;
     }
 
-    const auto& adaptive_token_mask = adaptive_token_mask_cache.at(cur_stack_element);
+    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(cur_stack_element);
+    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end())
+        << "The adaptive token mask is not found for stack element: "
+        << persistent_stack_.PrintStackElement(cur_stack_element);
+
+    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
 
     // For each stack, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -559,6 +572,14 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
     for (auto stack_top : stack_tops) {
       auto stack_element = persistent_stack_[stack_top];
       auto cur_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
+
+      // We cannot deduce the next char for tag dispatch
+      if (cur_sequence.type == RuleExprType::kTagDispatch) {
+        can_find_next_char = false;
+        continue;
+      }
+
+      // The state comes to the end of the grammar
       if (stack_element.parent_id == StackElement::kNoParent &&
           stack_element.element_id == cur_sequence.size()) {
         can_find_next_char = false;

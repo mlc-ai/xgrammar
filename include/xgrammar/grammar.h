@@ -16,6 +16,12 @@
 
 namespace xgrammar {
 
+struct StructuralTagItem {
+  std::string start;
+  std::string schema;
+  std::string end;
+};
+
 /*!
  * \brief This class stores the abstract syntax tree (AST) of the Backus-Naur Form (BNF) grammar.
  * The BNF definition here is standard BNF, and the characters are represented using regex-style
@@ -108,6 +114,14 @@ class Grammar {
    * \param regex The regular expression string.
    */
   static Grammar FromRegex(const std::string& regex);
+
+  /*!
+   * \brief Construct a grammar from a regular expression string.
+   * \param regex The regular expression string.
+   */
+  static Grammar FromStructuralTag(
+      const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
+  );
 
   /*!
    * \brief Get the grammar of standard JSON format. We have built-in support for JSON.

@@ -10,6 +10,7 @@
 #include "grammar_data_structure.h"
 #include "grammar_functor.h"
 #include "grammar_matcher_base.h"
+#include "support/encoding.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
 
@@ -46,11 +47,128 @@ AdaptiveTokenMask::AdaptiveTokenMask(
   this->uncertain_indices = uncertain_indices;
 }
 
+std::string AdaptiveTokenMask::PrintTokenByIds(
+    const std::vector<int32_t>& token_ids, const TokenizerInfo& tokenizer_info, int max_print_num
+) {
+  std::stringstream ss;
+  const auto& sorted_decoded_vocab = tokenizer_info.GetDecodedVocab();
+  ss << "[";
+  int print_num = std::min(static_cast<int>(token_ids.size()), max_print_num);
+  for (int i = 0; i < print_num; ++i) {
+    ss << "#" << token_ids[i] << " <" << PrintAsEscapedUTF8(sorted_decoded_vocab[token_ids[i]])
+       << ">";
+    if (i < print_num - 1) {
+      ss << ", ";
+    }
+  }
+  if (static_cast<int>(token_ids.size()) > max_print_num) {
+    ss << ", ...";
+  }
+  ss << "]";
+  return ss.str();
+}
+
+std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const {
+  constexpr int kMaxPrintTokens = 100;
+  std::stringstream ss;
+  const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
+  std::vector<int32_t> accepted_indices;
+  std::vector<int32_t> rejected_indices;
+  std::unordered_set<int32_t> uncertain_indices_set(
+      uncertain_indices.begin(), uncertain_indices.end()
+  );
+
+  accepted_indices.reserve(sorted_decoded_vocab.size());
+  rejected_indices.reserve(sorted_decoded_vocab.size());
+
+  if (store_type == StoreType::kAcceptedBitset) {
+    for (int i = 0; i < static_cast<int>(sorted_decoded_vocab.size()); ++i) {
+      if (uncertain_indices_set.count(i)) {
+        continue;
+      }
+      if (accepted_bitset[i]) {
+        accepted_indices.push_back(i);
+      } else {
+        rejected_indices.push_back(i);
+      }
+    }
+  } else if (store_type == StoreType::kAccepted) {
+    accepted_indices = this->accepted_indices;
+    // Reject indices = [0, sorted_decoded_vocab.size()) \ accepted_indices \ uncertain_indices
+    int acc_ptr = 0;
+    for (int i = 0; i < static_cast<int>(sorted_decoded_vocab.size()); ++i) {
+      while (acc_ptr < static_cast<int>(accepted_indices.size()) && accepted_indices[acc_ptr] < i) {
+        ++acc_ptr;
+      }
+      if (acc_ptr < static_cast<int>(accepted_indices.size()) && accepted_indices[acc_ptr] == i) {
+        continue;
+      }
+      if (uncertain_indices_set.count(i)) {
+        continue;
+      }
+      rejected_indices.push_back(i);
+    }
+  } else {
+    XGRAMMAR_DCHECK(store_type == StoreType::kRejected);
+    rejected_indices = this->rejected_indices;
+    // Accepted indices = [0, sorted_decoded_vocab.size()) \ rejected_indices \ uncertain_indices
+    int rej_ptr = 0;
+    for (int i = 0; i < static_cast<int>(sorted_decoded_vocab.size()); ++i) {
+      while (rej_ptr < static_cast<int>(rejected_indices.size()) && rejected_indices[rej_ptr] < i) {
+        ++rej_ptr;
+      }
+      if (rej_ptr < static_cast<int>(rejected_indices.size()) && rejected_indices[rej_ptr] == i) {
+        continue;
+      }
+      if (uncertain_indices_set.count(i)) {
+        continue;
+      }
+      accepted_indices.push_back(i);
+    }
+  }
+
+  std::string storage_type_str = store_type == StoreType::kAcceptedBitset ? "AcceptedBitset"
+                                 : store_type == StoreType::kAccepted     ? "Accepted"
+                                                                          : "Rejected";
+
+  ss << "AdaptiveTokenMask(num_tokens=" << sorted_decoded_vocab.size()
+     << ", accepted_num=" << accepted_indices.size() << ", rejected_num=" << rejected_indices.size()
+     << ", uncertain_num=" << uncertain_indices.size() << ", storage_type=" << storage_type_str
+     << ",\n";
+
+  // Convert indices to token ids for printing
+  std::vector<int32_t> accepted_token_ids;
+  std::vector<int32_t> rejected_token_ids;
+  std::vector<int32_t> uncertain_token_ids;
+  accepted_token_ids.reserve(accepted_indices.size());
+  rejected_token_ids.reserve(rejected_indices.size());
+  uncertain_token_ids.reserve(uncertain_indices.size());
+
+  for (auto idx : accepted_indices) {
+    accepted_token_ids.push_back(sorted_decoded_vocab[idx].first);
+  }
+  std::sort(accepted_token_ids.begin(), accepted_token_ids.end());
+  for (auto idx : rejected_indices) {
+    rejected_token_ids.push_back(sorted_decoded_vocab[idx].first);
+  }
+  std::sort(rejected_token_ids.begin(), rejected_token_ids.end());
+  for (auto idx : uncertain_indices) {
+    uncertain_token_ids.push_back(sorted_decoded_vocab[idx].first);
+  }
+  std::sort(uncertain_token_ids.begin(), uncertain_token_ids.end());
+
+  ss << "accepted=" << PrintTokenByIds(accepted_token_ids, tokenizer_info, kMaxPrintTokens)
+     << ",\nrejected=" << PrintTokenByIds(rejected_token_ids, tokenizer_info, kMaxPrintTokens)
+     << ",\nuncertain=" << PrintTokenByIds(uncertain_token_ids, tokenizer_info, kMaxPrintTokens)
+     << "\n)";
+  return ss.str();
+}
+
 Grammar CompiledGrammar::GetGrammar() const { return pimpl_->GetGrammar(); }
 
 TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetTokenizerInfo(); }
 
-/******************* Use GrammarMatcher to generate the AdaptiveTokenMaskCache *******************/
+/************** Use GrammarMatcher to generate the AdaptiveTokenMaskCache **************/
 
 /*! \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcherForTokenMaskCache : public GrammarMatcherBase {
@@ -161,7 +279,8 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
           std::mismatch(token.begin(), token.end(), prev_token.begin(), prev_token.end()).first -
           token.begin();
       if (lcp_len > prev_matched_size) {
-        // Case 1. The common prefix is rejected by the matcher in the last token. Reject directly.
+        // Case 1. The common prefix is rejected by the matcher in the last token. Reject
+        // directly.
         accepted = false;
       } else if (lcp_len < prev_matched_size) {
         // Case 2. The common prefix is shorter than the previous matched size. Rollback
@@ -373,6 +492,16 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
   for (int32_t rule_id = 0; rule_id < static_cast<int>(grammar->NumRules()); ++rule_id) {
     auto rule = grammar->GetRule(rule_id);
     auto rule_body = grammar->GetRuleExpr(rule.body_expr_id);
+
+    if (rule_body.type == RuleExprType::kTagDispatch) {
+      auto cur_stack_element = StackElement(rule_id, rule.body_expr_id, 0);
+      for (int i = 0; i < grammar->root_tag_dispatch_fsm->NumNodes(); ++i) {
+        cur_stack_element.element_id = i;
+        add_task_adaptive_token_mask(cur_stack_element, rule_id == root_rule_id);
+      }
+      continue;
+    }
+
     XGRAMMAR_DCHECK(rule_body.type == RuleExprType::kChoices);
     for (auto sequence_id : rule_body) {
       auto sequence = grammar->GetRuleExpr(sequence_id);
@@ -404,6 +533,7 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
       }
     }
   }
+
   if (max_threads_ > 1) {
     thread_pool->Join();
   }

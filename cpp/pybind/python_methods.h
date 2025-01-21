@@ -12,6 +12,7 @@
 
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -46,6 +47,11 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
 );
 
 std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_grammar);
+
+Grammar Grammar_FromStructuralTag(
+    const std::vector<std::tuple<std::string, std::string, std::string>>& tags,
+    const std::vector<std::string>& triggers
+);
 
 }  // namespace xgrammar
 

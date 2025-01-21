@@ -1,7 +1,7 @@
 """Compiling grammar for efficient token mask generation."""
 
 import json
-from typing import Optional, Tuple, Type, Union, overload
+from typing import List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
 
@@ -128,6 +128,13 @@ class GrammarCompiler(XGRObject):
             The compiled grammar.
         """
         return CompiledGrammar._create_from_handle(self._handle.compile_builtin_json_grammar())
+
+    def compile_structural_tag_grammar(
+        self, tags: List[StructuralTagItem], triggers: List[str]
+    ) -> CompiledGrammar:
+        return CompiledGrammar._create_from_handle(
+            self._handle.compile_structural_tag_grammar(tags, triggers)
+        )
 
     @overload
     def compile_grammar(self, ebnf_string: str, *, root_rule_name: str = "root") -> CompiledGrammar:

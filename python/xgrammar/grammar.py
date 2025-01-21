@@ -8,6 +8,28 @@ from pydantic import BaseModel
 from .base import XGRObject, _core
 
 
+class StructuralTagItem(BaseModel):
+    start: str
+    schema: Union[str, Type[BaseModel]]
+    end: str
+
+
+def _handle_pydantic_schema(schema: Union[str, Type[BaseModel]]) -> str:
+    if isinstance(schema, type) and issubclass(schema, BaseModel):
+        if hasattr(schema, "model_json_schema"):
+            # pydantic 2.x
+            return json.dumps(schema.model_json_schema())
+        elif hasattr(schema, "schema_json"):
+            # pydantic 1.x
+            return json.dumps(schema.schema_json())
+        else:
+            raise ValueError("The schema should have a model_json_schema or json_schema method.")
+    elif isinstance(schema, str):
+        return schema
+    else:
+        raise ValueError("The schema should be a string or a Pydantic model.")
+
+
 class Grammar(XGRObject):
     """This class represents a grammar object in XGrammar, and can be used later in the
     grammar-guided generation.
@@ -111,20 +133,11 @@ class Grammar(XGRObject):
         RuntimeError
             When converting the json schema fails, with details about the parsing error.
         """
-        if isinstance(schema, type) and issubclass(schema, BaseModel):
-            if hasattr(schema, "model_json_schema"):
-                # pydantic 2.x
-                schema = json.dumps(schema.model_json_schema())
-            elif hasattr(schema, "schema_json"):
-                # pydantic 1.x
-                schema = json.dumps(schema.schema_json())
-            else:
-                raise ValueError(
-                    "The schema should have a model_json_schema or json_schema method."
-                )
-
+        schema_str = _handle_pydantic_schema(schema)
         return Grammar._create_from_handle(
-            _core.Grammar.from_json_schema(schema, any_whitespace, indent, separators, strict_mode),
+            _core.Grammar.from_json_schema(
+                schema_str, any_whitespace, indent, separators, strict_mode
+            ),
         )
 
     @staticmethod
@@ -147,6 +160,11 @@ class Grammar(XGRObject):
             When parsing the regex pattern fails, with details about the parsing error.
         """
         return Grammar._create_from_handle(_core.Grammar.from_regex(regex_string))
+
+    @staticmethod
+    def from_structural_tag(tags: List[StructuralTagItem], triggers: List[str]) -> "Grammar":
+        tags_tuple = [(tag.start, _handle_pydantic_schema(tag.schema), tag.end) for tag in tags]
+        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
 
     @staticmethod
     def builtin_json_grammar() -> "Grammar":

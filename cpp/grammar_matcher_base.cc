@@ -82,16 +82,29 @@ StackElement GrammarMatcherBase::AdvanceStackElementWithChar(
 ) {
   auto current_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
   if (current_sequence.type == Grammar::Impl::RuleExprType::kTagDispatch) {
-    auto next_node =
-        grammar_->root_tag_dispatch_fsm->Transition(stack_element.element_id, char_value);
+    auto root_tag_dispatch_fsm = grammar_->root_tag_dispatch_fsm;
+    auto start_node = root_tag_dispatch_fsm->StartNode();
+    auto next_node = root_tag_dispatch_fsm->Transition(stack_element.element_id, char_value);
     auto new_stack_element = stack_element;
     if (next_node == CompactFSM::NO_TRANSITION) {
-      new_stack_element.element_id = 0;
-    } else if (!grammar_->root_tag_dispatch_fsm->IsEndNode(next_node)) {
+      // Case 1. The new char cannot continue to be accepted by the tag dispatch fsm.
+      // We try to accept the new char from the start node. If accepted, we go to the target node.
+      // If it still cannot be accepted, we stay at the start node.
+      auto new_next_node = root_tag_dispatch_fsm->Transition(start_node, char_value);
+      new_stack_element.element_id =
+          new_next_node == CompactFSM::NO_TRANSITION ? start_node : new_next_node;
+    } else if (!root_tag_dispatch_fsm->IsEndNode(next_node)) {
+      // Case 2. The new char can continue to be accepted by the tag dispatch fsm.
+      // We need to update the element id to the next node.
       new_stack_element.element_id = next_node;
     } else {
+      // Case 3. The new char can continue to be accepted by the tag dispatch fsm.
+      // We need to dispatch the tag dispatch fsm to the end node.
+      // We need to create a new stack element to represent the dispatched tag dispatch.
       new_stack_element.element_id = kDispatchedTagDispatchElementId;
       auto new_stack_element_id = persistent_stack_.NewNode(new_stack_element);
+      XGRAMMAR_DCHECK(grammar_->tag_dispatch_end_node_to_rule_id.count(next_node))
+          << "The end node of the tag dispatch fsm does not correspond to any rule id";
       auto refered_rule_id = grammar_->tag_dispatch_end_node_to_rule_id.at(next_node);
       new_stack_element =
           StackElement(refered_rule_id, kUnexpandedRuleStartSequenceId, 0, new_stack_element_id);

@@ -140,6 +140,14 @@ class DynamicBitset {
     return result < size_ ? result : -1;
   }
 
+  int Count() const {
+    int count = 0;
+    for (int i = 0; i < buffer_size_; ++i) {
+      count += PopCount(data_[i]);
+    }
+    return count;
+  }
+
  private:
   static int LowestBit(uint32_t value) {
 #ifdef __GNUC__
@@ -151,6 +159,14 @@ class DynamicBitset {
                                                         16, 7,  26, 12, 18, 6,  11, 5,  10, 9};
     return MultiplyDeBruijnBitPosition[((uint32_t)((value & -value) * 0x077CB531U)) >> 27];
 #endif  // __GNUC__
+  }
+
+  static int PopCount(uint32_t value) {
+#if defined(__GNUC__) || defined(_MSC_VER)
+    return __builtin_popcount(value);
+#else
+    XGRAMMAR_LOG(FATAL) << "PopCount is not supported on this platform";
+#endif
   }
 
   int DoFindZeroFrom(int first_block) const {

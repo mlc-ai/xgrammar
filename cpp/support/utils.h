@@ -10,6 +10,12 @@
 #include <functional>
 #include <tuple>
 
+// Define __builtin_popcount for MSVC
+#ifdef _MSC_VER
+#include <intrin.h>
+#define __builtin_popcount __popcnt
+#endif
+
 namespace xgrammar {
 
 /*!

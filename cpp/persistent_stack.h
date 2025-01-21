@@ -434,7 +434,7 @@ inline std::string StackTopsHistory::PrintHistory(int steps_ago) const {
   const auto& latest_tops =
       stack_tops_history_[static_cast<int64_t>(stack_tops_history_.size()) - 1 - steps_ago];
   std::stringstream ss;
-  ss << "Stacks tops size: " << latest_tops.size() << std::endl;
+  ss << "Num of stacks: " << latest_tops.size() << std::endl;
   int cnt = 0;
   for (auto id : latest_tops) {
     ss << "Stack #" << cnt << ": " << persistent_stack_->PrintStackByTopId(id) << "\n";
