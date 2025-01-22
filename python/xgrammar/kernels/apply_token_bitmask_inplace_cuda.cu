@@ -1,7 +1,10 @@
+// clang-format off
 #include <cuda.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAContext.h>
+// clang-format on
 
 int32_t constexpr kBitsPerMaskElement = 32;
 int32_t constexpr kThreadsPerBlock = 256;
@@ -92,7 +95,7 @@ void applyTokenBitmaskInplaceDispatchToPackedT(
   dim3 const grid(ceilDiv(bitmaskSize, kThreadsPerBlock), batchSize);
   dim3 const block(kThreadsPerBlock);
 
-  cudaStream_t stream = 0;
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
   if (vocabSize % (sizeof(float4) / sizeof(T)) == 0) {
     logitsBitmaskKernel<T, float4>
         <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocabSize, bitmaskSize);

@@ -14,7 +14,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=2048)
     parser.add_argument("--vocab_size", type=int, default=128000)
     parser.add_argument("--num_warmup", type=int, default=10)
-    parser.add_argument("--num_iters", type=int, default=10)
+    parser.add_argument("--num_iters", type=int, default=50)
     args = parser.parse_args()
 
     vocab_size = args.vocab_size
