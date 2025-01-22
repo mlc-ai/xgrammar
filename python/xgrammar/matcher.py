@@ -2,13 +2,18 @@
 token."""
 
 import math
+import os
 from typing import List, Optional, Tuple, Union
 
 import torch
 
 from .base import XGRObject, _core
 from .compiler import CompiledGrammar
-from .kernels import apply_token_bitmask_inplace_cpu, apply_token_bitmask_inplace_triton
+from .kernels import (
+    apply_token_bitmask_inplace_cpu,
+    apply_token_bitmask_inplace_cuda,
+    apply_token_bitmask_inplace_triton,
+)
 
 """The dtype of the bitmask: int32."""
 bitmask_dtype = torch.int32
@@ -122,7 +127,10 @@ def apply_token_bitmask_inplace(
         )
 
     if logits.device.type == "cuda":
-        apply_token_bitmask_inplace_triton(logits, bitmask, indices)
+        if os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") == "1":
+            apply_token_bitmask_inplace_triton(logits, bitmask, indices)
+        else:
+            apply_token_bitmask_inplace_cuda(logits, bitmask, indices)
     elif logits.device.type == "cpu":
         apply_token_bitmask_inplace_cpu(logits, bitmask, indices)
     else:

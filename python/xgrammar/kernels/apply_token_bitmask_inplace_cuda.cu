@@ -182,6 +182,12 @@ void applyTokenBitmaskInplace(
   }
 }
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("apply_token_bitmask_inplace", &applyTokenBitmaskInplace, "Apply token bitmask inplace.");
+TORCH_LIBRARY_FRAGMENT(TORCH_EXTENSION_NAME, m) {
+  m.def(
+      "apply_token_bitmask_inplace_cuda(Tensor logits, Tensor bitmask, Tensor? indices=None) -> ()"
+  );
+}
+
+TORCH_LIBRARY_IMPL(TORCH_EXTENSION_NAME, CUDA, m) {
+  m.impl("apply_token_bitmask_inplace_cuda", &applyTokenBitmaskInplace);
 }
