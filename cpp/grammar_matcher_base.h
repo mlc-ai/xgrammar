@@ -57,29 +57,30 @@ class GrammarMatcherBase {
   void DiscardEarliestChars(int discard_cnt);
 
   /*! \brief Print the stack state. */
-  std::string PrintStackState(int steps_behind_latest = 0) const;
+  std::string PrintStackState(int steps_before_latest = 0) const;
 
  protected:
-  // Push an initial stack state according to the given stack element.
-  // If init_stack_element is kInvalidStackElement, init the stack with the root rule.
-  void PushInitialState(StackElement init_stack_element, bool expand_init_stack_element);
+  /*!
+   * \brief Push an initial stack state according to the given stack element.
+   * \param init_stack_element The initial stack element. If kInvalidStackElement, init the stack
+   * with the root rule.
+   * \param expand_init_stack_element Whether to expand the initial stack element to all equivalent
+   * locations. See ExpandEquivalentStackElements. Only meaningful when init_stack_element is not
+   * kInvalidStackElement.
+   */
+  void PushInitialState(const StackElement& init_stack_element, bool expand_init_stack_element);
 
   // Check if the character is accepted by the current stack element.
   bool CheckIfAccepted(const StackElement& stack_element, uint8_t char_value) const;
 
   /*!
-   * \brief Move to the next position in the grammar. It could be the next position in the current
-   * rule, or the next position in the parent rule if the current position is at the end of the
-   * rule. Does not change the underlying persistent stack.
-   * \param stack_element The current stack element.
-   * \param consider_parent Whether to consider the parent position if the current position is
-   * at the end of the rule.
-   * \returns (success, next_stack_element), indicating if the iteration is successful and the
-   * next stack element.
+   * \brief Move to the next position in the current rule, and return the updated stack element.
    */
-  StackElement MoveToNextPosition(StackElement stack_element);
+  StackElement MoveToNextPosition(const StackElement& stack_element);
 
-  // Return the updated stack element after accepting the char
+  /*!
+   * \brief Return the updated stack element after accepting the character.
+   */
   StackElement AdvanceStackElementWithChar(const StackElement& stack_element, uint8_t char_value);
 
   /*!
@@ -95,14 +96,14 @@ class GrammarMatcherBase {
    * (rule=A, position="c"), since B and [a-z]* can be empty.
    * \param cur_stack_element The current stack element.
    * \param new_stack_tops The vector to store the new stack tops.
-   * \param is_inner_recursion Whether this is an inner recursion. The inner recursion will not
-   * consider the parent rule.
-   * \param first_id_if_inserted An optimization. When cur_stack_element is already inserted to
-   * the state tree, pass its id to avoid inserting it again. -1 (ignore it) by default.
-   * \return Whether the end of the rule can be reached. Useful for inner recursion.
+   * \param cur_stack_element_id The id in the persistent stack of the current stack element. If the
+   * current stack element does not exist in the persistent stack, pass -1. This is used to avoid
+   * inserting the same stack element again.
+   * \param consider_parent Whether to consider the parent position if the current position is
+   * at the end of the rule. Only used in its self recursion.
    */
   void ExpandEquivalentStackElements(
-      StackElement cur_stack_element,
+      const StackElement& cur_stack_element,
       std::vector<int32_t>* new_stack_tops,
       int32_t cur_stack_element_id = -1,
       bool consider_parent = true

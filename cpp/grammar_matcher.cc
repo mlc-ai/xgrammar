@@ -20,8 +20,10 @@
 #include "support/encoding.h"
 #include "support/int_set.h"
 #include "support/logging.h"
-
+#include "testing.h"
 namespace xgrammar {
+
+/******************* Tool functions for token mask *******************/
 
 int32_t GetBitmaskSize(int vocab_size) { return DynamicBitset::GetBufferSize(vocab_size); }
 
@@ -126,8 +128,11 @@ void ApplyTokenBitmaskInplaceCPU(
   }
 }
 
+/******************* Grammar Matcher with Adaptive Token Mask *******************/
+
 /*
- * Note on the matching algorithm
+ * Note on the matching algorithm (this is the old description for the matching algorithm, please
+ * refer to https://arxiv.org/pdf/2411.15100 for the latest description)
  *
  * Given a context-free grammar, we match the characters in a string one by one.
  *
@@ -243,7 +248,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
 
-  void FillNextTokenBitmask(DLTensor* next_token_bitmask, int index);
+  void FillNextTokenBitmask(DLTensor* next_token_bitmask, int index, bool debug_print = false);
 
   std::string FindJumpForwardString();
 
@@ -293,6 +298,10 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
    */
   bool AcceptStopToken();
 
+  bool IsStopTokenAccepted() const;
+
+  std::string PrintBitmask(int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info);
+
   CompiledGrammar compiled_grammar_;
   TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
@@ -322,12 +331,16 @@ bool GrammarMatcher::Impl::IsTerminated() const {
   if (terminate_without_stop_token_) {
     return CanReachEnd();
   }
+  return IsStopTokenAccepted();
+}
+
+bool GrammarMatcher::Impl::IsStopTokenAccepted() const {
   return stack_tops_history_.GetLatest().empty();
 }
 
 // TODO(yixin): Polish verbose logging
 bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
-  if (IsTerminated()) {
+  if (IsStopTokenAccepted()) {
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The matcher has terminated after accepting the stop token, but is "
                             "trying to accept new token with id "
@@ -390,7 +403,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
 }
 
 bool GrammarMatcher::Impl::_DebugAcceptString(const std::string& input_str, bool debug_print) {
-  if (IsTerminated()) {
+  if (IsStopTokenAccepted()) {
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The matcher has terminated after accepting the stop token, but is "
                             "trying to accept new string "
@@ -423,10 +436,35 @@ bool GrammarMatcher::Impl::_DebugAcceptString(const std::string& input_str, bool
   return true;
 }
 
-void GrammarMatcher::Impl::FillNextTokenBitmask(DLTensor* next_token_bitmask, int index) {
-  XGRAMMAR_CHECK(!IsTerminated()
-  ) << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
-       "find the next token mask";
+std::string GrammarMatcher::Impl::PrintBitmask(
+    int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info
+) {
+  constexpr int kMaxPrintTokens = 100;
+  std::vector<int32_t> accepted_ids;
+  std::vector<int32_t> rejected_ids;
+  auto bitset =
+      DynamicBitset(tokenizer_info.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr));
+  for (int i = 0; i < tokenizer_info.GetVocabSize(); ++i) {
+    if (bitset[i]) {
+      accepted_ids.push_back(i);
+    } else {
+      rejected_ids.push_back(i);
+    }
+  }
+  std::stringstream ss;
+  ss << "TokenBitmask(num_tokens=" << tokenizer_info.GetVocabSize()
+     << ", accepted_num=" << accepted_ids.size() << ", rejected_num=" << rejected_ids.size()
+     << ",\naccepted_ids=" << PrintTokenByIds(accepted_ids, tokenizer_info, kMaxPrintTokens)
+     << ",\nrejected_ids=" << PrintTokenByIds(rejected_ids, tokenizer_info, kMaxPrintTokens) << ")";
+  return ss.str();
+}
+
+void GrammarMatcher::Impl::FillNextTokenBitmask(
+    DLTensor* next_token_bitmask, int index, bool debug_print
+) {
+  XGRAMMAR_CHECK(!IsStopTokenAccepted())
+      << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
+         "find the next token mask";
   int32_t* bitmask_data_ptr =
       CheckAndGetBitmaskPtr(*next_token_bitmask, tokenizer_info_.GetVocabSize(), index);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
@@ -445,11 +483,19 @@ void GrammarMatcher::Impl::FillNextTokenBitmask(DLTensor* next_token_bitmask, in
 
   for (auto top : latest_stack_tops) {
     auto cur_stack_element = persistent_stack_[top];
-    if (persistent_stack_.IsEndOfGrammar(cur_stack_element)) {
+    auto cur_sequence = grammar_->GetRuleExpr(cur_stack_element.sequence_id);
+    if (cur_stack_element.parent_id == StackElement::kNoParent &&
+        cur_sequence.type != RuleExprType::kTagDispatch &&
+        cur_stack_element.element_id == cur_sequence.size()) {
       continue;
     }
 
-    const auto& adaptive_token_mask = adaptive_token_mask_cache.at(cur_stack_element);
+    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(cur_stack_element);
+    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end())
+        << "The adaptive token mask is not found for stack element: "
+        << persistent_stack_.PrintStackElement(cur_stack_element);
+
+    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
 
     // For each stack, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -535,12 +581,16 @@ void GrammarMatcher::Impl::FillNextTokenBitmask(DLTensor* next_token_bitmask, in
   // Finally update the rejected_ids bitset
   bool can_reach_end = CanReachEnd();
   SetTokenBitmask(bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end);
+  if (debug_print) {
+    XGRAMMAR_LOG(INFO) << "Ended: " << can_reach_end
+                       << ", filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
+  }
 }
 
 std::string GrammarMatcher::Impl::FindJumpForwardString() {
-  XGRAMMAR_CHECK(!IsTerminated()
-  ) << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
-       "get the jump forward string";
+  XGRAMMAR_CHECK(!IsStopTokenAccepted())
+      << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
+         "get the jump forward string";
 
   std::string result;
   int num_accepted_chars = 0;
@@ -555,6 +605,14 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
     for (auto stack_top : stack_tops) {
       auto stack_element = persistent_stack_[stack_top];
       auto cur_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
+
+      // We cannot deduce the next char for tag dispatch
+      if (cur_sequence.type == RuleExprType::kTagDispatch) {
+        can_find_next_char = false;
+        continue;
+      }
+
+      // The state comes to the end of the grammar
       if (stack_element.parent_id == StackElement::kNoParent &&
           stack_element.element_id == cur_sequence.size()) {
         can_find_next_char = false;
@@ -717,8 +775,10 @@ bool GrammarMatcher::AcceptToken(int32_t token_id, bool debug_print) {
   return pimpl_->AcceptToken(token_id, debug_print);
 }
 
-void GrammarMatcher::FillNextTokenBitmask(DLTensor* next_token_bitmask, int index) {
-  pimpl_->FillNextTokenBitmask(next_token_bitmask, index);
+void GrammarMatcher::FillNextTokenBitmask(
+    DLTensor* next_token_bitmask, int index, bool debug_print
+) {
+  pimpl_->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
 }
 
 std::string GrammarMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }

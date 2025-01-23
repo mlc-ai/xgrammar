@@ -193,10 +193,10 @@ class PersistentStack {
   }
 
   /*! \brief Print the given stack_element to a string. */
-  std::string PrintNode(const StackElement& stack_element) const;
+  std::string PrintStackElement(const StackElement& stack_element) const;
 
   /*! \brief Print the stack_element associated with the given id to a string. */
-  std::string PrintNode(int32_t id) const;
+  std::string PrintStackElement(int32_t id) const;
 
   /*! \brief Print the stack with the given top id to a string. */
   std::string PrintStackByTopId(int32_t top_id) const;
@@ -330,14 +330,18 @@ inline bool PersistentStack::IsEndOfGrammar(const StackElement& stack_element) c
     return false;
   }
   auto seq_expr = grammar_->GetRuleExpr(stack_element.sequence_id);
-  return seq_expr.size() == stack_element.element_id;
+  if (seq_expr.type == Grammar::Impl::RuleExprType::kTagDispatch) {
+    return stack_element.element_id != -1;
+  } else {
+    return seq_expr.size() == stack_element.element_id;
+  }
 }
 
-inline std::string PersistentStack::PrintNode(int32_t id) const {
-  return "id: " + std::to_string(id) + ", " + PrintNode(node_buffer_[id]);
+inline std::string PersistentStack::PrintStackElement(int32_t id) const {
+  return "id: " + std::to_string(id) + ", " + PrintStackElement(node_buffer_[id]);
 }
 
-inline std::string PersistentStack::PrintNode(const StackElement& stack_element) const {
+inline std::string PersistentStack::PrintStackElement(const StackElement& stack_element) const {
   std::stringstream ss;
   ss << "StackElement: rule " << stack_element.rule_id;
   if (stack_element.rule_id != -1) {
@@ -348,7 +352,8 @@ inline std::string PersistentStack::PrintNode(const StackElement& stack_element)
   ss << ", element id: " << stack_element.element_id;
 
   auto sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
-  if (stack_element.element_id < static_cast<int32_t>(sequence.size())) {
+  if (sequence.type != Grammar::Impl::RuleExprType::kTagDispatch &&
+      stack_element.element_id < static_cast<int32_t>(sequence.size())) {
     auto element = grammar_->GetRuleExpr(sequence[stack_element.element_id]);
     if (element.type == Grammar::Impl::RuleExprType::kByteString) {
       ss << ", element in string: " << stack_element.element_in_string;
@@ -372,7 +377,7 @@ inline std::string PersistentStack::PrintStackByTopId(int32_t top_id) const {
   }
   ss << "{\n";
   for (auto it = stack.rbegin(); it != stack.rend(); ++it) {
-    ss << PrintNode(*it) << "\n";
+    ss << PrintStackElement(*it) << "\n";
   }
   ss << "}";
   return ss.str();
@@ -429,7 +434,7 @@ inline std::string StackTopsHistory::PrintHistory(int steps_ago) const {
   const auto& latest_tops =
       stack_tops_history_[static_cast<int64_t>(stack_tops_history_.size()) - 1 - steps_ago];
   std::stringstream ss;
-  ss << "Stacks tops size: " << latest_tops.size() << std::endl;
+  ss << "Num of stacks: " << latest_tops.size() << std::endl;
   int cnt = 0;
   for (auto id : latest_tops) {
     ss << "Stack #" << cnt << ": " << persistent_stack_->PrintStackByTopId(id) << "\n";

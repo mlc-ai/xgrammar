@@ -66,6 +66,8 @@ struct AdaptiveTokenMask {
       const std::vector<int32_t>& rejected_indices,
       const std::vector<int32_t>& uncertain_indices
   );
+
+  std::string Print(const TokenizerInfo& tokenizer_info) const;
 };
 
 /*!

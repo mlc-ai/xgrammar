@@ -34,6 +34,7 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def_static("from_ebnf", &Grammar::FromEBNF)
       .def_static("from_json_schema", &Grammar::FromJSONSchema)
       .def_static("from_regex", &Grammar::FromRegex)
+      .def_static("from_structural_tag", &Grammar_FromStructuralTag)
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)
       .def_static("union", &Grammar::Union)
       .def_static("concat", &Grammar::Concat);
@@ -52,6 +53,11 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       .def(
           "compile_builtin_json_grammar",
           &GrammarCompiler::CompileBuiltinJSONGrammar,
+          py::call_guard<py::gil_scoped_release>()
+      )
+      .def(
+          "compile_structural_tag",
+          &GrammarCompiler_CompileStructuralTag,
           py::call_guard<py::gil_scoped_release>()
       )
       .def(

@@ -93,7 +93,7 @@ class GrammarMatcher {
    * \param next_token_bitmask The bitmask to store the result. The bitmask must be pre-allocated
    * and with shape (GetBitmaskSize(),) and dtype int32.
    */
-  void FillNextTokenBitmask(DLTensor* next_token_bitmask, int index = 0);
+  void FillNextTokenBitmask(DLTensor* next_token_bitmask, int index = 0, bool debug_print = false);
 
   /*!
    * \brief Find the jump-forward string for jump-forward decoding. This is the longest string that

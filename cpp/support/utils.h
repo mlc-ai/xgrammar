@@ -10,6 +10,12 @@
 #include <functional>
 #include <tuple>
 
+// Define __builtin_popcount for MSVC
+#ifdef _MSC_VER
+#include <intrin.h>
+#define __builtin_popcount __popcnt
+#endif
+
 namespace xgrammar {
 
 /*!
@@ -55,6 +61,17 @@ struct hash<std::tuple<Args...>> {
     return std::apply(
         [](const Args&... args) { return xgrammar::HashCombine(std::hash<Args>{}(args)...); }, tuple
     );
+  }
+};
+
+template <typename T>
+struct hash<std::vector<T>> {
+  size_t operator()(const std::vector<T>& vec) const {
+    uint32_t seed = 0;
+    for (const auto& item : vec) {
+      xgrammar::HashCombineBinary(seed, std::hash<T>{}(item));
+    }
+    return seed;
   }
 };
 

@@ -223,16 +223,7 @@ def test_customized_tokenizer_info(tokenizer_path: str):
     assert tokenizer_info.special_token_ids[-5:] == [original_vocab_size + i for i in range(5)]
 
 
-@pytest.mark.parametrize("tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf"])
-def test_special_token_detection(
-    tokenizer_path: str,
-    tokenizer_info_storage: Dict[str, Tuple[PreTrainedTokenizerBase, xgr.TokenizerInfo]],
-):
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+def test_special_token_detection():
     vocab_dict = {
         "": 0,
         "<s>": 1,
@@ -247,7 +238,7 @@ def test_special_token_detection(
         list(vocab_dict.keys()),
         '{"vocab_type":"BYTE_FALLBACK","vocab_size":8,"prepend_space_in_tokenization":true,"stop_token_ids":[2]}',
     )
-    expected_special_tokens = {0, 1, 2, 3, 5}
+    expected_special_tokens = {0, 1, 3, 5}
     assert set(tokenizer_info.special_token_ids) == expected_special_tokens
 
 

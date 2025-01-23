@@ -3,9 +3,45 @@
 import json
 from typing import List, Optional, Tuple, Type, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .base import XGRObject, _core
+
+
+class StructuralTagItem(BaseModel):
+    """A structural tag item. See Grammar.from_structural_tag() for more details.
+
+    Attributes
+    ----------
+    start : str
+        The start tag.
+
+    schema_ : Union[str, Type[BaseModel]]
+        The schema.
+
+    end : str
+        The end tag.
+    """
+
+    start: str
+    schema_: Union[str, Type[BaseModel]] = Field(alias="schema")
+    end: str
+
+
+def _handle_pydantic_schema(schema: Union[str, Type[BaseModel]]) -> str:
+    if isinstance(schema, type) and issubclass(schema, BaseModel):
+        if hasattr(schema, "model_json_schema"):
+            # pydantic 2.x
+            return json.dumps(schema.model_json_schema())
+        elif hasattr(schema, "schema_json"):
+            # pydantic 1.x
+            return json.dumps(schema.schema_json())
+        else:
+            raise ValueError("The schema should have a model_json_schema or json_schema method.")
+    elif isinstance(schema, str):
+        return schema
+    else:
+        raise ValueError("The schema should be a string or a Pydantic model.")
 
 
 class Grammar(XGRObject):
@@ -111,20 +147,11 @@ class Grammar(XGRObject):
         RuntimeError
             When converting the json schema fails, with details about the parsing error.
         """
-        if isinstance(schema, type) and issubclass(schema, BaseModel):
-            if hasattr(schema, "model_json_schema"):
-                # pydantic 2.x
-                schema = json.dumps(schema.model_json_schema())
-            elif hasattr(schema, "schema_json"):
-                # pydantic 1.x
-                schema = json.dumps(schema.schema_json())
-            else:
-                raise ValueError(
-                    "The schema should have a model_json_schema or json_schema method."
-                )
-
+        schema_str = _handle_pydantic_schema(schema)
         return Grammar._create_from_handle(
-            _core.Grammar.from_json_schema(schema, any_whitespace, indent, separators, strict_mode),
+            _core.Grammar.from_json_schema(
+                schema_str, any_whitespace, indent, separators, strict_mode
+            ),
         )
 
     @staticmethod
@@ -147,6 +174,71 @@ class Grammar(XGRObject):
             When parsing the regex pattern fails, with details about the parsing error.
         """
         return Grammar._create_from_handle(_core.Grammar.from_regex(regex_string))
+
+    @staticmethod
+    def from_structural_tag(tags: List[StructuralTagItem], triggers: List[str]) -> "Grammar":
+        """Create a grammar from structural tags. The structural tag handles the dispatching
+        of different grammars based on the tags and triggers: it initially allows any output,
+        until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
+        is encountered, the grammar will allow any following output, until the next trigger is
+        encountered.
+
+        The tags parameter is used to specify the output pattern. It is especially useful for LLM
+        function calling, where the pattern is:
+        <function=func_name>{"arg1": ..., "arg2": ...}</function>.
+        This pattern consists of three parts: a start tag (<function=func_name>), a parameter list
+        according to some schema ({"arg1": ..., "arg2": ...}), and an end tag (</function>). This
+        pattern can be described in a StructuralTagItem with a start tag, a schema, and an end tag.
+        The structural tag is able to handle multiple such patterns by passing them into multiple
+        tags.
+
+        The triggers parameter is used to trigger the dispatching of different grammars. The trigger
+        should be a prefix of a provided start tag. When the trigger is encountered, the
+        corresponding tag should be used to constrain the following output. There can be multiple
+        tags matching the same trigger. Then if the trigger is encountered, the following output
+        should match one of the tags. For example, in function calling, the triggers can be
+        ["<function="]. Then if "<function=" is encountered, the following output must match one
+        of the tags (e.g. <function=get_weather>{"city": "Beijing"}</function>).
+
+        The corrrespondence of tags and triggers is automatically determined: all tags with the
+        same trigger will be grouped together. User should make sure any trigger is not a prefix
+        of another trigger: then the corrrespondence of tags and triggers will be ambiguous.
+
+        To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
+        structural tag will generate a mask for each token. When the trigger is not encountered,
+        the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
+        False, meaning no token is masked). When a trigger is encountered, the mask should be
+        enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
+        output logits.
+
+        The benefit of this method is the token boundary between tags and triggers is automatically
+        handled. The user does not need to worry about the token boundary.
+
+        Parameters
+        ----------
+        tags : List[StructuralTagItem]
+            The structural tags.
+
+        triggers : List[str]
+            The triggers.
+
+        Examples
+        --------
+        >>> class Schema1(BaseModel):
+        >>>     arg1: str
+        >>>     arg2: int
+        >>> class Schema2(BaseModel):
+        >>>     arg3: float
+        >>>     arg4: List[str]
+        >>> tags = [
+        >>>     StructuralTagItem(start="<function=f>", schema=Schema1, end="</function>"),
+        >>>     StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
+        >>> ]
+        >>> triggers = ["<function="]
+        >>> grammar = Grammar.from_structural_tag(tags, triggers)
+        """
+        tags_tuple = [(tag.start, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
+        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
 
     @staticmethod
     def builtin_json_grammar() -> "Grammar":

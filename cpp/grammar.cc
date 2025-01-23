@@ -11,6 +11,7 @@
 #include "grammar_serializer.h"
 #include "json_schema_converter.h"
 #include "regex_converter.h"
+#include "structural_tag.h"
 
 namespace xgrammar {
 
@@ -34,6 +35,12 @@ Grammar Grammar::FromJSONSchema(
 }
 
 Grammar Grammar::FromRegex(const std::string& regex) { return FromEBNF(RegexToEBNF(regex)); }
+
+Grammar Grammar::FromStructuralTag(
+    const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
+) {
+  return StructuralTagToGrammar(tags, triggers);
+}
 
 // Optimized json grammar for the speed of the grammar matcher
 const std::string kJSONGrammarString = R"(

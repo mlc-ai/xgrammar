@@ -58,7 +58,11 @@ std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& 
 }
 
 void GrammarMatcher_FillNextTokenBitmask(
-    GrammarMatcher& matcher, intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t index
+    GrammarMatcher& matcher,
+    intptr_t token_bitmask_ptr,
+    std::vector<int64_t> shape,
+    int32_t index,
+    bool debug_print
 ) {
   XGRAMMAR_CHECK(shape.size() == 1 || shape.size() == 2) << "token_bitmask tensor must be 1D or 2D";
 
@@ -71,7 +75,7 @@ void GrammarMatcher_FillNextTokenBitmask(
       nullptr,
       0
   };
-  matcher.FillNextTokenBitmask(&bitmask_dltensor, index);
+  matcher.FillNextTokenBitmask(&bitmask_dltensor, index, debug_print);
 }
 
 std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(
@@ -129,6 +133,35 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
 
 std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_grammar) {
   return compiled_grammar.GetGrammar()->allow_empty_rule_ids;
+}
+
+Grammar Grammar_FromStructuralTag(
+    const std::vector<std::tuple<std::string, std::string, std::string>>& tags,
+    const std::vector<std::string>& triggers
+) {
+  std::vector<StructuralTagItem> tags_objects;
+  tags_objects.reserve(tags.size());
+  for (const auto& tag : tags) {
+    tags_objects.emplace_back(
+        StructuralTagItem{std::get<0>(tag), std::get<1>(tag), std::get<2>(tag)}
+    );
+  }
+  return Grammar::FromStructuralTag(tags_objects, triggers);
+}
+
+CompiledGrammar GrammarCompiler_CompileStructuralTag(
+    GrammarCompiler& compiler,
+    const std::vector<std::tuple<std::string, std::string, std::string>>& tags,
+    const std::vector<std::string>& triggers
+) {
+  std::vector<StructuralTagItem> tags_objects;
+  tags_objects.reserve(tags.size());
+  for (const auto& tag : tags) {
+    tags_objects.emplace_back(
+        StructuralTagItem{std::get<0>(tag), std::get<1>(tag), std::get<2>(tag)}
+    );
+  }
+  return compiler.CompileStructuralTag(tags_objects, triggers);
 }
 
 }  // namespace xgrammar
