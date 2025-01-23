@@ -373,6 +373,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
         XGRAMMAR_LOG(INFO) << "The token is rejected at position " << pos << ", character "
                            << PrintAsEscapedUTF8(char_value);
       }
+      RollbackChars(pos);
       return false;
     }
     ++pos;
