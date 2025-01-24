@@ -200,6 +200,33 @@ def test_rollback():
             torch.testing.assert_close(l, r)
 
 
+def test_graceful_rollback_failure():
+    vocab = [
+        # fmt: off
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", "6:", ":", "\n", " ", '"a":true',
+        # fmt: on
+    ]
+    input_splitted = ["{", '"', "abc", '"', ":"]
+    input_ids = [vocab.index(t) for t in input_splitted]
+
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, max_rollback_tokens=5
+    )
+
+    for i in input_ids:
+        assert matcher.accept_token(i)
+
+    assert not matcher.accept_token(vocab.index("6:"))
+
+    # The matching should have accepted char '6' but failed to accept char ':'
+    # A graceful revert should then occur, where char '6' is rolled back and
+    # the state of the matcher is the same as before the failed call to accept_token
+
+    for i in map(vocab.index, ['"', "abc", '"', " ", "}"]):
+        assert matcher.accept_token(i)
+
+
 def test_reset():
     vocab = [
         # fmt: off
