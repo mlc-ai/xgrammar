@@ -778,7 +778,7 @@ for debugging.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.GrammarMatcher.fill_next_token_bitmask">
-<span class="sig-name descname"><span class="pre">fill_next_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">fill_next_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fill the bitmask for the next token prediction. The input bitmask can be generated
 by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the
 next token bitmask.</p>
@@ -788,7 +788,15 @@ next token bitmask.</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>bitmask</strong> (<em>torch.Tensor</em>) – The bitmask for the next token prediction.</p></li>
 <li><p><strong>index</strong> (<em>int</em><em>, </em><em>default: 0</em>) – The batch id of the bitmask.</p></li>
+<li><p><strong>debug_print</strong> (<em>bool</em><em>, </em><em>default: False</em>) – Whether to print information about generated bitmask. Helpful for debugging.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>need_apply</strong> – Whether the bitmask need to be applied (not all-true). An optimization: if False,
+this means the bitmask is already all-true, so no need to apply it.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
 </dd>
 </dl>
 </dd></dl>
