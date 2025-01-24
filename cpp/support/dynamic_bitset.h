@@ -10,6 +10,11 @@
 #include <cstring>
 #include <vector>
 
+// For __popcnt
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
+
 #include "logging.h"
 
 namespace xgrammar {
@@ -177,8 +182,10 @@ class DynamicBitset {
   }
 
   static int PopCount(uint32_t value) {
-#if defined(__GNUC__) || defined(_MSC_VER)
+#ifdef __GNUC__
     return __builtin_popcount(value);
+#elif defined(_MSC_VER)
+    return __popcnt(value);
 #else
     XGRAMMAR_LOG(FATAL) << "PopCount is not supported on this platform";
 #endif
