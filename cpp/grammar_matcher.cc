@@ -289,7 +289,8 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
       int32_t* bitmask_data_ptr,
       const DynamicBitset& accepted_bitset,
       const std::vector<int32_t>& rejected_indices,
-      bool can_reach_end
+      bool can_reach_end,
+      bool allow_special_token = false
   );
 
   /*!
@@ -489,13 +490,21 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   // {-1} means the universal set, i.e. all tokens initially
   tmp_rejected_indices_.assign({-1});
 
+  // If there is a stack top that is a tag dispatch, we allow special tokens to be accepted
+  // because in function calling cases, only the part within the tag is constrained
+  bool have_tag_dispatch = false;
+
   for (auto top : latest_stack_tops) {
     auto cur_stack_element = persistent_stack_[top];
     auto cur_sequence = grammar_->GetRuleExpr(cur_stack_element.sequence_id);
-    if (cur_stack_element.parent_id == StackElement::kNoParent &&
-        cur_sequence.type != RuleExprType::kTagDispatch &&
+    if (cur_sequence.type != RuleExprType::kTagDispatch &&
+        cur_stack_element.parent_id == StackElement::kNoParent &&
         cur_stack_element.element_id == cur_sequence.size()) {
       continue;
+    }
+
+    if (cur_sequence.type == RuleExprType::kTagDispatch) {
+      have_tag_dispatch = true;
     }
 
     auto adaptive_token_mask_it = adaptive_token_mask_cache.find(cur_stack_element);
@@ -588,7 +597,13 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
 
   // Finally update the rejected_ids bitset
   bool can_reach_end = CanReachEnd();
-  SetTokenBitmask(bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end);
+  SetTokenBitmask(
+      bitmask_data_ptr,
+      tmp_accepted_bitset_,
+      tmp_rejected_indices_,
+      can_reach_end,
+      have_tag_dispatch
+  );
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Ended: " << can_reach_end
                        << ", filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
@@ -701,7 +716,8 @@ void GrammarMatcher::Impl::SetTokenBitmask(
     int32_t* bitmask_data_ptr,
     const DynamicBitset& accepted_bitset,
     const std::vector<int32_t>& rejected_indices,
-    bool can_reach_end
+    bool can_reach_end,
+    bool allow_special_token
 ) {
   // next_token_bitmask = set(all accepted tokens) =
   // 1. all_tokens - (rejected_ids / accepted_ids)
@@ -717,6 +733,12 @@ void GrammarMatcher::Impl::SetTokenBitmask(
     // If rejected_indices is the universal set, the final accepted token set is just
     // accepted_indices
     next_token_bitset = accepted_bitset;
+
+    if (allow_special_token) {
+      for (int id : tokenizer_info_.GetSpecialTokenIds()) {
+        next_token_bitset.Set(id, true);
+      }
+    }
 
     if (can_reach_end) {
       // add end tokens
@@ -734,9 +756,10 @@ void GrammarMatcher::Impl::SetTokenBitmask(
         next_token_bitset.Set(id, false);
       }
     }
-
-    for (int id : tokenizer_info_.GetSpecialTokenIds()) {
-      next_token_bitset.Set(id, false);
+    if (!allow_special_token) {
+      for (int id : tokenizer_info_.GetSpecialTokenIds()) {
+        next_token_bitset.Set(id, false);
+      }
     }
     if (!can_reach_end) {
       for (int id : stop_token_ids_) {

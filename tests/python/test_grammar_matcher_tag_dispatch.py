@@ -261,21 +261,29 @@ def test_structural_tag_mask_gen():
     print(f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
     # Test input string
-    accepted_input = 'hhhh<function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>haha<function=f>{"arg1": "abc", "arg2": 1}</function>123'
+    accepted_input = (
+        'hhhh<function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>'
+        'haha<function=f>{"arg1": "abc", "arg2": 1}</function>123'
+    )
+    dont_apply_mask_indices = [
+        # fmt: off
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
+        77, 78, 119, 120, 121, 122
+        # fmt: on
+    ]
     input_bytes = accepted_input.encode("utf-8")
 
     # Set up token bitmask for validation
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
     # Process input character by character
-    for c in input_bytes:
+    for i, c in enumerate(input_bytes):
         # 1. Test token bitmask generation
         time_start = time.monotonic_ns()
-        need_apply = matcher.fill_next_token_bitmask(token_bitmask, debug_print=True)
+        need_apply = matcher.fill_next_token_bitmask(token_bitmask)
         time_end = time.monotonic_ns()
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
-        if need_apply:
-            print("Need to apply token bitmask")
+        assert need_apply == (i not in dont_apply_mask_indices)
 
         # 2. Verify token bitmask correctness
         rejected_token_ids = _get_masked_tokens_from_bitmask(
@@ -286,7 +294,7 @@ def test_structural_tag_mask_gen():
         assert token_id_for_next_char not in rejected_token_ids
 
         # 3. Test character acceptance
-        print("Accepting char:", bytes([c]))
+        # print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
         assert matcher._debug_accept_string(bytes([c]))
         time_end = time.monotonic_ns()
@@ -294,15 +302,13 @@ def test_structural_tag_mask_gen():
 
     # Final verification - check that EOS token is allowed
     time_start = time.monotonic_ns()
-    matcher.fill_next_token_bitmask(token_bitmask)
+    need_apply = matcher.fill_next_token_bitmask(token_bitmask)
     time_end = time.monotonic_ns()
+    assert need_apply == (len(input_bytes) not in dont_apply_mask_indices)
     print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert tokenizer.eos_token_id not in rejected_token_ids
 
-
-test_structural_tag_mask_gen()
-exit()
 
 if __name__ == "__main__":
     pytest.main(sys.argv)
