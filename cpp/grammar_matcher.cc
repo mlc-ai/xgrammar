@@ -302,7 +302,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
   bool IsStopTokenAccepted() const;
 
   /*! \brief Check if the token bitmask is all-true. */
-  bool CheckTokenBitmask(int32_t* bitmask_data_ptr);
+  bool IsTokenBitmaskAllTrue(int32_t* bitmask_data_ptr);
 
   std::string PrintBitmask(int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info);
 
@@ -461,7 +461,7 @@ std::string GrammarMatcher::Impl::PrintBitmask(
   return ss.str();
 }
 
-bool GrammarMatcher::Impl::CheckTokenBitmask(int32_t* bitmask_data_ptr) {
+bool GrammarMatcher::Impl::IsTokenBitmaskAllTrue(int32_t* bitmask_data_ptr) {
   DynamicBitset next_token_bitset(
       tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
   );
@@ -608,7 +608,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     XGRAMMAR_LOG(INFO) << "Ended: " << can_reach_end
                        << ", filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
-  return !CheckTokenBitmask(bitmask_data_ptr);
+  return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
 }
 
 std::string GrammarMatcher::Impl::FindJumpForwardString() {
