@@ -150,10 +150,11 @@ TEST(XGrammarParallelTest, CacheCorrectness) {
     return key;
   }};
 
+  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 10;
   auto futures = std::vector<std::future<std::string>>{};
-  futures.reserve(20);
+  futures.reserve(kNumThreads);
 
-  for (auto i = 0; i < 20; ++i) {
+  for (auto i = 0; i < kNumThreads; ++i) {
     futures.push_back(std::async(std::launch::async, [&cache, i] {
       return std::string(cache.Get(std::to_string(i)));
     }));
@@ -164,7 +165,7 @@ TEST(XGrammarParallelTest, CacheCorrectness) {
 
   cache.Clear();
 
-  for (auto i = 0; i < 20; ++i) {
+  for (auto i = 0; i < kNumThreads; ++i) {
     EXPECT_EQ(futures[i].get(), std::to_string(i));
   }
 }
