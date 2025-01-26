@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstddef>
 #include <future>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_set>
@@ -80,24 +81,60 @@ TEST(XGrammarParallelTest, CacheEfficiency) {
   XGRAMMAR_LOG_INFO << "Duration: " << dur << "ms";
 }
 
+// A hook to ensure that the object will not be accessed after its destruction
 struct LifeSpanHook {
+ private:
   inline static std::unordered_set<const void*> manager{};
-  LifeSpanHook() { manager.insert(this); }
-  LifeSpanHook(const LifeSpanHook&) { manager.insert(this); }
+  inline static std::mutex mutex{};
+
+  static auto unsafe_construct(const LifeSpanHook* ptr) -> void {
+    // insert will return a pair of iterator and bool
+    EXPECT_TRUE(manager.insert(ptr).second);
+  }
+  static auto unsafe_destruct(const LifeSpanHook* ptr) -> void {
+    // erase will return 1 if the element is found and removed
+    EXPECT_TRUE(manager.erase(ptr));
+  }
+  static auto unsafe_confirm(const LifeSpanHook* ptr) -> void {
+    // ensure that the object is still alive
+    EXPECT_TRUE(manager.find(ptr) != manager.end());
+  }
+
+ public:
+  LifeSpanHook() {
+    const auto lock = std::lock_guard{mutex};
+    unsafe_construct(this);
+  }
+  LifeSpanHook(const LifeSpanHook& other) {
+    const auto lock = std::lock_guard{mutex};
+    unsafe_construct(this);
+    unsafe_confirm(&other);
+  }
   auto operator=(const LifeSpanHook& other) -> LifeSpanHook& {
-    this->check();
-    other.check();
+    const auto lock = std::lock_guard{mutex};
+    unsafe_confirm(this);
+    unsafe_confirm(&other);
     return *this;
   }
-  ~LifeSpanHook() { EXPECT_TRUE(manager.erase(this)); }
-  auto check() const -> void { EXPECT_TRUE(manager.find(this) != manager.end()); }
+  ~LifeSpanHook() {
+    const auto lock = std::lock_guard{mutex};
+    unsafe_destruct(this);
+  }
+  auto check() const -> void {
+    const auto lock = std::lock_guard{mutex};
+    unsafe_confirm(this);
+  }
 };
 
 struct TestObject : LifeSpanHook {
+ private:
   std::string name;
+
+ public:
   TestObject() = default;
   TestObject(std::string name) : name(std::move(name)) {}
   auto& operator=(std::string name) {
+    this->check();
     this->name = std::move(name);
     return *this;
   }
