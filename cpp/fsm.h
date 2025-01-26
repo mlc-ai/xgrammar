@@ -208,8 +208,9 @@ inline std::ostream& operator<<(std::ostream& os, const FSM& fsm) {
   os << "], edges=[\n";
   for (int i = 0; i < fsm.NumNodes(); ++i) {
     os << i << ": [";
+    const auto& edges = fsm.edges_[i];
     for (int j = 0; j < static_cast<int>(fsm.edges_[i].size()); ++j) {
-      const auto& edge = fsm.edges_[i][j];
+      const auto& edge = edges[j];
       if (edge.min_ch == edge.max_ch) {
         os << "(" << edge.min_ch << ")->" << edge.target;
       } else {
@@ -236,8 +237,9 @@ inline std::ostream& operator<<(std::ostream& os, const CompactFSM& fsm) {
   os << "], edges=[\n";
   for (int i = 0; i < fsm.NumNodes(); ++i) {
     os << i << ": [";
+    const auto& edges = fsm.edges_[i];
     for (int j = 0; j < static_cast<int>(fsm.edges_[i].size()); ++j) {
-      const auto& edge = fsm.edges_[i][j];
+      const auto& edge = edges[j];
       if (edge.min_ch == edge.max_ch) {
         os << "(" << edge.min_ch << ")->" << edge.target;
       } else {
