@@ -15,7 +15,11 @@ else()
 endif()
 
 option(XGRAMMAR_BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
-option(XGRAMMAR_BUILD_CXX_TESTS "Build C++ tests" ON)
+option(XGRAMMAR_BUILD_CXX_TESTS "Build C++ tests" OFF)
+option(XGRAMMAR_ENABLE_CPPTRACE
+       "Enable C++ trace (Now only support Linux, and RelWithDebugInfo or Debug build)" OFF
+)
+
 set(XGRAMMAR_CUDA_ARCHITECTURES
     native
     CACHE STRING "CUDA architectures"
@@ -60,6 +64,12 @@ list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/pybin
 
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
 target_include_directories(xgrammar PUBLIC ${XGRAMMAR_INCLUDE_PATH})
+
+# link to cpptrace
+if(XGRAMMAR_ENABLE_CPPTRACE)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/3rdparty/cpptrace)
+  target_link_libraries(xgrammar PUBLIC cpptrace::cpptrace)
+endif()
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)
