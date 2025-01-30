@@ -14,7 +14,6 @@
 
 #include "grammar_data_structure.h"
 #include "persistent_stack.h"
-#include "support/cpptrace.h"
 
 namespace xgrammar {
 
