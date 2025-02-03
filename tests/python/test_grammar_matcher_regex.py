@@ -86,6 +86,8 @@ test_advanced_regex_string_instance_is_accepted = [
     (r"[a-z0-9]+", "ABC", False),
     (r"[^abc]+", "def", True),
     (r"[^abc]+", "aaa", False),
+    # Lazy character class
+    (r"[abc]+?abc", "aabc", True),
     # Quantifiers
     (r"a*b+c?", "b", True),
     (r"a*b+c?", "aaabbc", True),
