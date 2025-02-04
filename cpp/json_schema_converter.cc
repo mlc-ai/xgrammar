@@ -158,6 +158,239 @@ class JSONSchemaConverter {
   std::string GetSchemaCacheIndex(const picojson::value& schema);
 
   /*! \brief Generate the regex for the range. */
+
+  // Helpers for GenerateRangeRegex
+  static std::string makePatternForDigitRange(char start, char end, int remainingDigits) {
+    std::ostringstream oss;
+    if (start == end) {
+      oss << start;
+    } else {
+      oss << "[" << start << "-" << end << "]";
+    }
+    if (remainingDigits > 0) {
+      oss << "\\d{" << remainingDigits << "}";
+    }
+    return oss.str();
+  }
+
+  static std::vector<std::string> GenerateNumberPatterns(int lower, int upper) {
+    std::vector<std::string> patterns;
+
+    int lowerLen = static_cast<int>(std::to_string(lower).size());
+    int upperLen = static_cast<int>(std::to_string(upper).size());
+
+    for (int len = lowerLen; len <= upperLen; ++len) {
+      const int digitMin = static_cast<int>(std::pow(10, len - 1));
+      const int digitMax = static_cast<int>(std::pow(10, len)) - 1;
+
+      int start = (len == lowerLen) ? lower : digitMin;
+      int end = (len == upperLen) ? upper : digitMax;
+
+      std::string startStr = std::to_string(start);
+      std::string endStr = std::to_string(end);
+
+      if (len == 1) {
+        patterns.push_back(makePatternForDigitRange(startStr[0], endStr[0], 0));
+        continue;
+      }
+
+      int prefix = 0;
+      while (prefix < len && startStr[prefix] == endStr[prefix]) {
+        prefix++;
+      }
+
+      // Generate common prefix pattern if only last digit differs for start/end
+      if (prefix > 0 && prefix >= len - 2) {
+        std::string commonPart = startStr.substr(0, prefix);
+        patterns.push_back(
+            commonPart +
+            makePatternForDigitRange(startStr[prefix], endStr[prefix], len - prefix - 1)
+        );
+        continue;
+      }
+
+      if (len == lowerLen && len == upperLen) {
+        if (start == digitMax) {
+          XGRAMMAR_ICHECK(start == end);
+          patterns.push_back(startStr);
+        } else if (start == digitMin) {
+          if (end == digitMax) {
+            patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
+          } else {
+            for (size_t i = 0; i < endStr.size(); i++) {
+              if (i == 0) {
+                // First digit: range from 1 to end[0]-1
+                if (endStr[0] > '1') {
+                  patterns.push_back(
+                      makePatternForDigitRange('1', static_cast<char>(endStr[0] - 1), len - 1)
+                  );
+                }
+              } else {
+                // Fix first i digits to end[0..i-1], then range from 0 to end[i]-1
+                std::string prefix = endStr.substr(0, i);
+                if (endStr[i] > '0') {
+                  patterns.push_back(
+                      prefix +
+                      makePatternForDigitRange('0', static_cast<char>(endStr[i] - 1), len - i - 1)
+                  );
+                }
+              }
+            }
+            patterns.push_back(endStr);
+          }
+        } else if (end == digitMax) {
+          for (size_t i = 0; i < startStr.size(); i++) {
+            if (i == 0) {
+              // First digit: range from start[0]+1 to 9
+              if (startStr[0] < '9') {
+                patterns.push_back(
+                    makePatternForDigitRange(static_cast<char>(startStr[0] + 1), '9', len - 1)
+                );
+              }
+            } else {
+              // Fix first i digits to start[0..i-1], then range from start[i]+1 to 9
+              std::string prefix = startStr.substr(0, i);
+              if (startStr[i] < '9') {
+                patterns.push_back(
+                    prefix +
+                    makePatternForDigitRange(static_cast<char>(startStr[i] + 1), '9', len - i - 1)
+                );
+              }
+            }
+          }
+          patterns.push_back(startStr);
+        } else {
+          // Handle middle range between first digits if they differ by more than 1
+          char startFirstDigit = startStr[0];
+          char endFirstDigit = endStr[0];
+
+          if (endFirstDigit - startFirstDigit > 1) {
+            patterns.push_back(makePatternForDigitRange(
+                static_cast<char>(startFirstDigit + 1),
+                static_cast<char>(endFirstDigit - 1),
+                len - 1
+            ));
+          }
+
+          // Patterns starting from start
+          for (size_t i = 0; i < startStr.size(); i++) {
+            if (i == 0) {
+              std::string prefix = startStr.substr(0, 1);
+              if (startStr[1] < '9') {
+                patterns.push_back(
+                    prefix +
+                    makePatternForDigitRange(static_cast<char>(startStr[1] + 1), '9', len - 2)
+                );
+              }
+            } else {
+              std::string prefix = startStr.substr(0, i);
+              if (startStr[i] < '9') {
+                patterns.push_back(
+                    prefix +
+                    makePatternForDigitRange(static_cast<char>(startStr[i] + 1), '9', len - i - 1)
+                );
+              }
+            }
+          }
+          patterns.push_back(startStr);
+
+          // Patterns starting from end
+          for (size_t i = 0; i < endStr.size(); i++) {
+            if (i == 0) {
+              std::string prefix = endStr.substr(0, 1);
+              if (endStr[1] > '0') {
+                patterns.push_back(
+                    prefix +
+                    makePatternForDigitRange('0', static_cast<char>(endStr[1] - 1), len - 2)
+                );
+              }
+            } else {
+              std::string prefix = endStr.substr(0, i);
+              if (endStr[i] > '0') {
+                patterns.push_back(
+                    prefix +
+                    makePatternForDigitRange('0', static_cast<char>(endStr[i] - 1), len - i - 1)
+                );
+              }
+            }
+          }
+          patterns.push_back(endStr);
+        }
+      }
+
+      else if (len == lowerLen && len != upperLen) {
+        XGRAMMAR_ICHECK(end == digitMax);
+        if (start == digitMin) {
+          patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
+        } else {
+          for (size_t i = 0; i < startStr.size(); i++) {
+            if (i == 0) {
+              if (startStr[0] < '9') {
+                patterns.push_back(
+                    makePatternForDigitRange(static_cast<char>(startStr[0] + 1), '9', len - 1)
+                );
+              }
+            } else {
+              std::string prefix = startStr.substr(0, i);
+              if (startStr[i] < '9') {
+                patterns.push_back(
+                    prefix +
+                    makePatternForDigitRange(static_cast<char>(startStr[i] + 1), '9', len - i - 1)
+                );
+              }
+            }
+          }
+          patterns.push_back(startStr);
+        }
+      }
+
+      else if (len != lowerLen && len == upperLen) {
+        XGRAMMAR_ICHECK(start == digitMin);
+        if (end == digitMax) {
+          patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
+        } else {
+          for (size_t i = 0; i < endStr.size(); i++) {
+            if (i == 0) {
+              if (endStr[0] > '1') {
+                patterns.push_back(
+                    makePatternForDigitRange('1', static_cast<char>(endStr[0] - 1), len - 1)
+                );
+              }
+            } else {
+              std::string prefix = endStr.substr(0, i);
+              if (endStr[i] > '0') {
+                patterns.push_back(
+                    prefix +
+                    makePatternForDigitRange('0', static_cast<char>(endStr[i] - 1), len - i - 1)
+                );
+              }
+            }
+          }
+          patterns.push_back(endStr);
+        }
+      }
+
+      // len != lowerLen && len != upperLen
+      else {
+        patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
+      }
+    }
+
+    return patterns;
+  }
+
+  static std::string GenerateSubRangeRegex(int lower, int upper) {
+    std::vector<std::string> patterns = GenerateNumberPatterns(lower, upper);
+    std::ostringstream oss;
+    for (size_t i = 0; i < patterns.size(); ++i) {
+      if (i > 0) {
+        oss << "|";
+      }
+      oss << patterns[i];
+    }
+    return "(" + oss.str() + ")";
+  }
+
   static std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end);
 
   /*!
@@ -745,118 +978,132 @@ std::string JSONSchemaConverter::VisitAny(
 std::string JSONSchemaConverter::GenerateRangeRegex(
     std::optional<int> start, std::optional<int> end
 ) {
+  std::vector<std::string> parts;
+  std::ostringstream result;
+
+  // If start and end undefined - match any integer
   if (!start && !end) {
-    return "^\\d+$";  // Match any positive number if no start or end is specified
+    return "^-?\\d+$";
   }
 
-  std::vector<std::string> positive_parts;
-  std::vector<std::string> negative_parts;
-
-  auto generate_group = [](int s, int e) -> std::string {
-    std::ostringstream oss;
-
-    if (s == e) {
-      return std::to_string(s);
-    }
-
-    std::string start_str = std::to_string(s);
-    std::string end_str = std::to_string(e);
-
-    size_t common_prefix = 0;
-    while (common_prefix < start_str.size() && start_str[common_prefix] == end_str[common_prefix]) {
-      ++common_prefix;
-    }
-
-    if (common_prefix > 0) {
-      oss << start_str.substr(0, common_prefix);
-    }
-
-    if (common_prefix < start_str.size()) {
-      oss << "[";
-      oss << start_str[common_prefix];
-      if (start_str[common_prefix] != end_str[common_prefix]) {
-        oss << "-" << end_str[common_prefix];
+  // Only start defined - match numbers >= start
+  if (start && !end) {
+    if (start.value() <= 0) {
+      if (start.value() < 0) {
+        parts.push_back("-" + GenerateSubRangeRegex(-(-start.value()), 1));
       }
-      oss << "]";
+      parts.push_back("0");
+      parts.push_back("[1-9]\\d*");
+    } else {
+      std::string startStr = std::to_string(start.value());
+      int len = static_cast<int>(startStr.length());
 
-      // Add trailing zero ranges
-      if (common_prefix + 1 < start_str.size()) {
-        oss << "\\d{" << start_str.size() - common_prefix - 1 << "}";
+      if (len == 1) {
+        parts.push_back(makePatternForDigitRange(startStr[0], '9', 0));
+        parts.push_back("[1-9]\\d*");
+      } else {
+        parts.push_back(startStr);
+
+        // Handle numbers of same length
+        for (size_t i = 0; i < startStr.size(); i++) {
+          if (i == 0) {
+            // First digit: range from start[0]+1 to 9
+            if (startStr[0] < '9') {
+              parts.push_back(
+                  makePatternForDigitRange(static_cast<char>(startStr[0] + 1), '9', len - 1)
+              );
+            }
+          } else {
+            // Fix first i digits to start[0..i-1], then range from start[i]+1 to 9
+            std::string prefix = startStr.substr(0, i);
+            if (startStr[i] < '9') {
+              parts.push_back(
+                  prefix +
+                  makePatternForDigitRange(static_cast<char>(startStr[i] + 1), '9', len - i - 1)
+              );
+            }
+          }
+        }
+
+        parts.push_back("[1-9]\\d{" + std::to_string(len) + ",}");
       }
     }
+  }
 
-    return oss.str();
-  };
+  // Only end defined - match numbers <= end
+  if (!start && end) {
+    if (end.value() >= 0) {
+      parts.push_back("-[1-9]\\d*");
+      parts.push_back("0");
+      if (end.value() > 0) {
+        parts.push_back(GenerateSubRangeRegex(1, end.value()));
+      }
+    } else {
+      std::string endStr = std::to_string(-end.value());
+      int len = static_cast<int>(endStr.length());
+
+      if (len == 1) {
+        parts.push_back("-" + makePatternForDigitRange(endStr[0], '9', 0));
+        parts.push_back("-[1-9]\\d*");
+      } else {
+        parts.push_back(std::to_string(end.value()));  // Handle -123 exactly
+
+        for (size_t i = 0; i < endStr.size(); i++) {
+          if (i == 0) {
+            if (endStr[0] > '1') {
+              parts.push_back(
+                  "-" + makePatternForDigitRange('1', static_cast<char>(endStr[0] - 1), len - 1)
+              );
+            }
+          } else {
+            std::string prefix = endStr.substr(0, i);
+            if (endStr[i] > '0') {
+              parts.push_back(
+                  "-" + prefix +
+                  makePatternForDigitRange('0', static_cast<char>(endStr[i] - 1), len - i - 1)
+              );
+            }
+          }
+        }
+
+        parts.push_back("-[1-9]\\d{" + std::to_string(len) + ",}");
+      }
+    }
+  }
 
   if (start && end) {
     int range_start = start.value();
     int range_end = end.value();
 
-    // Handle negative part of the range
-    if (range_start < 0) {
-      int negative_end = std::min(range_end, -1);
-      while (range_start <= negative_end) {
-        int next_range_end = (range_start / 10 - 1) * 10 + 9;  // Handle negative tens group
-        if (next_range_end < negative_end) {
-          next_range_end = negative_end;
-        }
-        negative_parts.push_back("-" + generate_group(-next_range_end, -range_start));
-        range_start = next_range_end + 1;
-      }
+    if (range_start > range_end) {
+      return "^()$";  // Invalid input
     }
 
-    // Handle positive part of the range
-    if (range_end >= 0) {
-      range_start = std::max(range_start, 0);
-      while (range_start <= range_end) {
-        int next_range_end = (range_start / 10 + 1) * 10 - 1;  // Handle positive tens group
-        if (next_range_end > range_end) {
-          next_range_end = range_end;
-        }
-        positive_parts.push_back(generate_group(range_start, next_range_end));
-        range_start = next_range_end + 1;
-      }
+    if (range_start < 0) {
+      int neg_start = range_start;
+      int neg_end = std::min(-1, range_end);
+      parts.push_back("-" + GenerateSubRangeRegex(-neg_end, -neg_start));
     }
-  } else if (start) {
-    if (start.value() < 0) {
-      negative_parts.push_back("-" + std::to_string(-start.value()) + "\\d*");
-    } else {
-      positive_parts.push_back(std::to_string(start.value()) + "\\d*");
+
+    if (range_start <= 0 && range_end >= 0) {
+      parts.push_back("0");
     }
-  } else if (end) {
-    if (end.value() < 0) {
-      negative_parts.push_back("-" + std::to_string(-end.value()));
-    } else {
-      positive_parts.push_back(std::to_string(end.value()));
+
+    if (range_end > 0) {
+      int pos_start = std::max(1, range_start);
+      parts.push_back(GenerateSubRangeRegex(pos_start, range_end));
     }
   }
 
-  std::ostringstream result;
   result << "^(";
-  if (!negative_parts.empty()) {
-    result << "(";
-    for (size_t i = 0; i < negative_parts.size(); ++i) {
-      if (i > 0) {
-        result << "|";
-      }
-      result << negative_parts[i];
-    }
-    result << ")";
-    if (!positive_parts.empty()) {
+  for (size_t i = 0; i < parts.size(); ++i) {
+    if (i > 0) {
       result << "|";
     }
-  }
-  if (!positive_parts.empty()) {
-    result << "(";
-    for (size_t i = 0; i < positive_parts.size(); ++i) {
-      if (i > 0) {
-        result << "|";
-      }
-      result << positive_parts[i];
-    }
-    result << ")";
+    result << parts[i];
   }
   result << ")$";
+
   return result.str();
 }
 
