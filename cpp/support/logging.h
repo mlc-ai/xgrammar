@@ -24,22 +24,10 @@
 namespace xgrammar {
 
 /*!
- * \brief exception class that will be thrown by
- *  default logger
- */
-struct Error : public std::runtime_error {
-  /*!
-   * \brief constructor
-   * \param s the error message
-   */
-  explicit Error(const std::string& s) : std::runtime_error(s) {}
-};
-
-/*!
  * \brief Error type for errors from XGRAMMAR_CHECK, XGRAMMAR_ICHECK, and XGRAMMAR_LOG(FATAL). This
  * error contains a backtrace of where it occurred.
  */
-class InternalError : public Error {
+class Error : public std::runtime_error {
  public:
   /*! \brief Construct an error. Not recommended to use directly. Instead use XGRAMMAR_LOG(FATAL).
    *
@@ -47,21 +35,15 @@ class InternalError : public Error {
    * \param lineno The line number where the error occurred.
    * \param message The error message to display.
    * \param time The time at which the error occurred. This should be in local time.
-   * \param backtrace Backtrace from when the error occurred.
    */
-  InternalError(
-      std::string file, int lineno, std::string message, std::time_t time = std::time(nullptr)
-  )
-      : Error(""), file_(file), lineno_(lineno), message_(message), time_(time) {
+  Error(std::string file, int lineno, std::string message, std::time_t time = std::time(nullptr))
+      : std::runtime_error(""), file_(file), lineno_(lineno), message_(message), time_(time) {
     std::ostringstream s;
-    // XXX: Do not change this format, otherwise all error handling in python will break (because it
-    // parses the message to reconstruct the error type).
-    // TODO(tkonolige): Convert errors to Objects, so we can avoid the mess of formatting/parsing
-    // error messages correctly.
     s << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] " << file << ":" << lineno
       << ": " << message << std::endl;
     full_message_ = s.str();
   }
+
   /*! \return The file in which the error occurred. */
   const std::string& file() const { return file_; }
   /*! \return The message associated with this error. */
@@ -171,10 +153,7 @@ class LogFatal {
       this->lineno_ = lineno;
     }
     [[noreturn]] Error Finalize() noexcept(false) {
-      InternalError error(file_, lineno_, stream_.str());
-#if DMLC_LOG_BEFORE_THROW
-      std::cerr << error.what() << std::endl;
-#endif
+      Error error(file_, lineno_, stream_.str());
       throw error;
     }
     std::ostringstream stream_;
@@ -204,19 +183,17 @@ class LogMessage {
   static const char* level_strings_[];
 };
 
-#endif  // if XGRAMMAR_LOG_CUSTOMIZE
+#endif  // XGRAMMAR_LOG_CUSTOMIZE
 
-#define XGRAMMAR_LOG_LEVEL_DEBUG 0
-#define XGRAMMAR_LOG_LEVEL_INFO 1
+#define XGRAMMAR_LOG_LEVEL_INFO 0
+#define XGRAMMAR_LOG_LEVEL_DEBUG 1
 #define XGRAMMAR_LOG_LEVEL_WARNING 2
-#define XGRAMMAR_LOG_LEVEL_ERROR 3
-#define XGRAMMAR_LOG_LEVEL_FATAL 4
+#define XGRAMMAR_LOG_LEVEL_FATAL 3
 
-#define XGRAMMAR_LOG_DEBUG LogMessage(__FILE__, __LINE__, XGRAMMAR_LOG_LEVEL_DEBUG).stream()
-#define XGRAMMAR_LOG_FATAL LogFatal(__FILE__, __LINE__).stream()
 #define XGRAMMAR_LOG_INFO LogMessage(__FILE__, __LINE__, XGRAMMAR_LOG_LEVEL_INFO).stream()
-#define XGRAMMAR_LOG_ERROR LogMessage(__FILE__, __LINE__, XGRAMMAR_LOG_LEVEL_ERROR).stream()
+#define XGRAMMAR_LOG_DEBUG LogMessage(__FILE__, __LINE__, XGRAMMAR_LOG_LEVEL_DEBUG).stream()
 #define XGRAMMAR_LOG_WARNING LogMessage(__FILE__, __LINE__, XGRAMMAR_LOG_LEVEL_WARNING).stream()
+#define XGRAMMAR_LOG_FATAL LogFatal(__FILE__, __LINE__).stream()
 
 #define XGRAMMAR_LOG(level) XGRAMMAR_LOG_##level
 

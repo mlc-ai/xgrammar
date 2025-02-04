@@ -3,8 +3,10 @@
  * \file xgrammar/support/logging.cc
  */
 #include "logging.h"
-#if (XGRAMMAR_LOG_CUSTOMIZE == 0)
+
 namespace xgrammar {
+
+#if XGRAMMAR_LOG_CUSTOMIZE == 0
 
 LogFatal::Entry& LogFatal::GetEntry() {
   static thread_local LogFatal::Entry result;
@@ -12,11 +14,11 @@ LogFatal::Entry& LogFatal::GetEntry() {
 }
 
 const char* LogMessage::level_strings_[] = {
-    ": Debug: ",    // XGRAMMAR_LOG_LEVEL_DEBUG
     ": ",           // XGRAMMAR_LOG_LEVEL_INFO
+    ": Debug: ",    // XGRAMMAR_LOG_LEVEL_DEBUG
     ": Warning: ",  // XGRAMMAR_LOG_LEVEL_WARNING
-    ": Error: ",    // XGRAMMAR_LOG_LEVEL_ERROR
 };
 
-}  // namespace xgrammar
 #endif  // XGRAMMAR_LOG_CUSTOMIZE
+
+}  // namespace xgrammar

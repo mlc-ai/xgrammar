@@ -23,6 +23,9 @@ target_include_directories(xgrammar_bindings PUBLIC ${XGRAMMAR_INCLUDE_PATH})
 
 if(XGRAMMAR_ENABLE_CPPTRACE)
   target_link_libraries(xgrammar_bindings PUBLIC cpptrace::cpptrace)
+  target_compile_definitions(xgrammar_bindings PUBLIC XGRAMMAR_ENABLE_CPPTRACE=1)
+else()
+  target_compile_definitions(xgrammar_bindings PUBLIC XGRAMMAR_ENABLE_CPPTRACE=0)
 endif()
 
 set(LIB_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/python/xgrammar")

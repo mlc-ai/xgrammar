@@ -26,10 +26,9 @@ namespace xgrammar {
 
 void LogMessageImpl(const std::string& file, int lineno, int level, const std::string& message) {
   static const char* level_strings_[] = {
-      "[DEBUG] ",
       "[INFO] ",
+      "[DEBUG] ",
       "[WARNING] ",
-      "[ERROR] ",
   };
   std::cout << level_strings_[level] << file << ":" << lineno << ": " << message << std::endl;
 }
