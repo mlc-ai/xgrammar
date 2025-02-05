@@ -165,7 +165,7 @@ class Grammar(XGRObject):
 
         print_converted_ebnf : bool, default: False
             This method will convert the regex pattern to EBNF first. If this is true, the converted
-            EBNF string will be printed. For debugging purpose. Default: False.
+            EBNF string will be printed. For debugging purposes. Default: False.
 
         Returns
         -------
