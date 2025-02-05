@@ -332,8 +332,17 @@ std::string RegexConverter::Convert() {
     } else if (*current_ == '*' || *current_ == '+' || *current_ == '?') {
       result_ebnf_ += static_cast<char>(*current_);
       ++current_;
+      if (current_ != end_ && *current_ == '?') {
+        // Ignore the non-greedy modifier because our grammar handles all repetition numbers
+        // non-deterministically.
+        ++current_;
+      }
     } else if (*current_ == '{') {
       result_ebnf_ += HandleRepetitionRange();
+      if (current_ != end_ && *current_ == '?') {
+        // Still ignore the non-greedy modifier.
+        ++current_;
+      }
     } else if (*current_ == '|') {
       AddEBNFSegment("|");
       ++current_;

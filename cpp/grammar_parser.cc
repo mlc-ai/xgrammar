@@ -33,7 +33,7 @@ class EBNFParser {
   int32_t ParseElement();
   int64_t ParseInteger();
   std::pair<int64_t, int64_t> ParseRepetitionRange();
-  int32_t ParseQuantifier();
+  int32_t ParseElementWithQuantifier();
   int32_t ParseLookaheadAssertion();
   int32_t ParseSequence();
   int32_t ParseChoices();
@@ -42,7 +42,8 @@ class EBNFParser {
   Rule ParseRule();
 
   // Helper functions
-  // Helper for ParseQuantifier
+
+  // Helper for ParseElementWithQuantifier
   int32_t HandleStarQuantifier(int32_t rule_expr_id);
   int32_t HandlePlusQuantifier(int32_t rule_expr_id);
   int32_t HandleQuestionQuantifier(int32_t rule_expr_id);
@@ -76,7 +77,6 @@ class EBNFParser {
 
   // Report a parsing error with the given message and the line and column number.
   [[noreturn]] void ReportParseError(const std::string& msg) {
-    PrintTrace();
     XGRAMMAR_LOG(FATAL) << "EBNF parse error at line " + std::to_string(cur_line_) + ", column " +
                                std::to_string(cur_column_) + ": " + msg;
   }
@@ -256,6 +256,11 @@ int32_t EBNFParser::ParseElement() {
     case '(': {
       Consume();
       ConsumeSpace();
+      if (Peek() == ')') {
+        // Special case: ( )
+        Consume();
+        return builder_.AddEmptyStr();
+      }
       auto prev_in_parentheses = in_parentheses_;
       in_parentheses_ = true;
       auto rule_expr_id = ParseChoices();
@@ -437,7 +442,7 @@ int32_t EBNFParser::HandleRepetitionRange(int32_t rule_expr_id, int64_t lower, i
   return builder_.AddSequence(elements);
 }
 
-int32_t EBNFParser::ParseQuantifier() {
+int32_t EBNFParser::ParseElementWithQuantifier() {
   int32_t rule_expr_id = ParseElement();
   ConsumeSpace(in_parentheses_);
   if (Peek() != '*' && Peek() != '+' && Peek() != '?' && Peek() != '{') {
@@ -470,7 +475,7 @@ int32_t EBNFParser::ParseQuantifier() {
 int32_t EBNFParser::ParseSequence() {
   std::vector<int32_t> elements;
   do {
-    elements.push_back(ParseQuantifier());
+    elements.push_back(ParseElementWithQuantifier());
     ConsumeSpace(in_parentheses_);
   } while (Peek() && Peek() != '|' && Peek() != ')' && Peek() != '\n' && Peek() != '\r' &&
            (Peek() != '(' || Peek(1) != '='));

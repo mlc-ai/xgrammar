@@ -307,7 +307,30 @@ def test_unmatched_parentheses():
     with pytest.raises(RuntimeError, match="Unmatched '\\)'"):
         _regex_to_ebnf(regex)
 
-    # Test empty alternative with closing parenthesis
+    regex = "abc((a)"
+    with pytest.raises(RuntimeError, match="Unmatched '\\)'"):
+        _regex_to_ebnf(regex)
+
+
+def test_empty_parentheses():
+    regex = "()"
+    grammar_str = _regex_to_ebnf(regex)
+    print(grammar_str)
+    expected_grammar = r"""root ::= ( )
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "")
+
+    regex = "a()b"
+    grammar_str = _regex_to_ebnf(regex)
+    print(grammar_str)
+    expected_grammar = r"""root ::= "a" ( ) "b"
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "ab")
+
+
+def test_empty_alternative():
     regex = "(a|)"
     grammar_str = _regex_to_ebnf(regex)
     expected_grammar = r"""root ::= ( "a" | "" )
@@ -317,7 +340,7 @@ def test_unmatched_parentheses():
     assert _is_grammar_accept_string(grammar_str, "")
     assert not _is_grammar_accept_string(grammar_str, "b")
 
-    # Test unmatched opening parenthesis
+    # Nested case
     regex = "ab(c|)"
     grammar_str = _regex_to_ebnf(regex)
     print(grammar_str)

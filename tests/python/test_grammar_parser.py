@@ -185,6 +185,26 @@ root_choice ::= (("b") | ("cd"))
     assert after == expected
 
 
+def test_empty_parentheses():
+    before = """root ::= "a" ( ) "b"
+"""
+    expected = """root ::= (("ab"))
+"""
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
+    assert after == expected
+
+    before = """root ::= "a" rule1
+rule1 ::= ( )
+"""
+    expected = """root ::= (("a" rule1))
+rule1 ::= ("")
+"""
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
+    assert after == expected
+
+
 def test_tag_dispatch():
     before = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
 rule1 ::= "a"
