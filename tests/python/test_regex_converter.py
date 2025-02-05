@@ -352,6 +352,47 @@ def test_empty_alternative():
     assert not _is_grammar_accept_string(grammar_str, "abd")
 
 
+def test_non_greedy_quantifier():
+    regex = "a{1,3}?"
+    grammar_str = _regex_to_ebnf(regex)
+    expected_grammar = r"""root ::= "a"{1,3}
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert _is_grammar_accept_string(grammar_str, "aa")
+    assert _is_grammar_accept_string(grammar_str, "aaa")
+    assert not _is_grammar_accept_string(grammar_str, "aaaa")
+
+    regex = "a+?"
+    grammar_str = _regex_to_ebnf(regex)
+    expected_grammar = r"""root ::= "a"+
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert _is_grammar_accept_string(grammar_str, "aa")
+    assert _is_grammar_accept_string(grammar_str, "aaa")
+    assert not _is_grammar_accept_string(grammar_str, "")
+
+    regex = "a*?"
+    grammar_str = _regex_to_ebnf(regex)
+    expected_grammar = r"""root ::= "a"*
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert _is_grammar_accept_string(grammar_str, "aa")
+    assert _is_grammar_accept_string(grammar_str, "aaa")
+    assert _is_grammar_accept_string(grammar_str, "")
+
+    regex = "a??"
+    grammar_str = _regex_to_ebnf(regex)
+    expected_grammar = r"""root ::= "a"?
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert _is_grammar_accept_string(grammar_str, "")
+    assert not _is_grammar_accept_string(grammar_str, "aa")
+
+
 tokenizer_paths = ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 regex_instances = [
     (r".+a.+", "bbbabb"),
