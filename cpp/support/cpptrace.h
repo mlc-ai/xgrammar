@@ -2,7 +2,7 @@
  * Copyright (c) 2024 by Contributors
  * \file xgrammar/support/cpptrace.h
  * \details This file is an encapsulation of the cpptrace library. It helps debugging. This file
- * can only be included when XGRAMMAR_ENABLE_CPPTRACE is set to ON, and only support Linux and
+ * takes effect only when XGRAMMAR_ENABLE_CPPTRACE is set to 1, and only support Linux and
  * RelWithDebugInfo or Debug build.
  */
 #ifndef XGRAMMAR_SUPPORT_CPPTRACE_H_

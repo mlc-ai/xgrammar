@@ -35,7 +35,12 @@ class RegexConverter {
   std::string Convert();
 
  private:
-  void AddEBNFSegment(const std::string& element, bool add_space = true);
+  /**
+   * \brief Add a segment string to the result EBNF string. It especially adds a space if needed
+   * and add_space is true.
+   */
+  void AddEBNFSegment(const std::string& element);
+
   [[noreturn]] void RaiseError(const std::string& message);
   void RaiseWarning(const std::string& message);
 
@@ -44,6 +49,12 @@ class RegexConverter {
   std::string HandleCharEscape();
   std::string HandleEscape();
   std::string HandleEscapeInCharClass();
+  /**
+   * \brief Handle group modifier. The general format is "(?" + modifier + content + ")". E.g.
+   * "(?:abc)" is a non-capturing group.
+   */
+  void HandleGroupModifier();
+
   std::string regex_;
   std::vector<TCodepoint> regex_codepoints_;
   TCodepoint* start_;
@@ -53,8 +64,8 @@ class RegexConverter {
   int parenthesis_level_ = 0;
 };
 
-void RegexConverter::AddEBNFSegment(const std::string& element, bool add_space) {
-  if (!result_ebnf_.empty() && add_space) {
+void RegexConverter::AddEBNFSegment(const std::string& element) {
+  if (!result_ebnf_.empty()) {
     result_ebnf_ += ' ';
   }
   result_ebnf_ += element;
@@ -74,6 +85,9 @@ void RegexConverter::RaiseWarning(const std::string& message) {
 std::string RegexConverter::HandleCharacterClass() {
   std::string char_class = "[";
   ++current_;
+  if (*current_ == ']') {
+    RaiseError("Empty character class is not allowed in regex.");
+  }
   while (*current_ != ']' && current_ != end_) {
     if (*current_ == '\\') {
       char_class += HandleEscapeInCharClass();
@@ -245,6 +259,36 @@ std::string RegexConverter::HandleEscape() {
   }
 }
 
+void RegexConverter::HandleGroupModifier() {
+  if (current_ == end_) {
+    RaiseError("Group modifier is not finished.");
+  }
+  if (*current_ == ':') {
+    // Non-capturing group.
+    ++current_;
+  } else if (*current_ == '=' || *current_ == '!') {
+    // Positive or negative lookahead.
+    RaiseError("Lookahead is not supported yet.");
+  } else if (*current_ == '<' && current_ + 1 != end_ &&
+             (current_[1] == '=' || current_[1] == '!')) {
+    // Positive or negative lookbehind.
+    RaiseError("Lookbehind is not supported yet.");
+  } else if (*current_ == '<') {
+    ++current_;
+    while (current_ != end_ && isalpha(*current_)) {
+      ++current_;
+    }
+    if (current_ == end_ || *current_ != '>') {
+      RaiseError("Invalid named capturing group.");
+    }
+    // Just ignore the named of the group.
+    ++current_;
+  } else {
+    // Group modifier flag.
+    RaiseError("Group modifier flag is not supported yet.");
+  }
+}
+
 std::string RegexConverter::Convert() {
   start_ = regex_codepoints_.data();
   current_ = start_;
@@ -267,15 +311,21 @@ std::string RegexConverter::Convert() {
     } else if (*current_ == '[') {
       AddEBNFSegment(HandleCharacterClass());
     } else if (*current_ == '(') {
-      if (current_ != end_ - 1 && current_[1] == '?') {
-        RaiseError(
-            "Assertions, named capturing groups and non-capturing groups are not supported yet."
-        );
-      }
+      ++current_;
       ++parenthesis_level_;
       AddEBNFSegment("(");
-      ++current_;
+      if (current_ != end_ && *current_ == '?') {
+        ++current_;
+        HandleGroupModifier();
+      }
     } else if (*current_ == ')') {
+      if (parenthesis_level_ == 0) {
+        RaiseError("Unmatched ')'");
+      }
+      // Special case: if the previous character is '|', add an empty string to the result.
+      if (current_ != start_ && current_[-1] == '|') {
+        AddEBNFSegment("\"\"");
+      }
       --parenthesis_level_;
       AddEBNFSegment(")");
       ++current_;

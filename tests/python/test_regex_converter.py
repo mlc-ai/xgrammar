@@ -264,6 +264,71 @@ def test_email(instance: str, accepted: bool):
     assert _is_grammar_accept_string(grammar_str, instance) == accepted
 
 
+def test_empty_character_class():
+    regex = "[]"
+    with pytest.raises(RuntimeError, match="Empty character class is not allowed in regex."):
+        _regex_to_ebnf(regex)
+
+
+def test_group_modifiers():
+    # Test non-capturing group
+    regex = "(?:abc)"
+    grammar_str = _regex_to_ebnf(regex)
+    expected_grammar = r"""root ::= ( "a" "b" "c" )
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "abc")
+
+    # Test named capturing group
+    regex = "(?<name>abc)"
+    grammar_str = _regex_to_ebnf(regex)
+    expected_grammar = r"""root ::= ( "a" "b" "c" )
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "abc")
+
+    # Test unsupported group modifiers
+    unsupported_regexes = [
+        "(?=abc)",  # Positive lookahead
+        "(?!abc)",  # Negative lookahead
+        "(?<=abc)",  # Positive lookbehind
+        "(?<!abc)",  # Negative lookbehind
+        "(?i)abc",  # Case-insensitive flag
+    ]
+
+    for regex in unsupported_regexes:
+        with pytest.raises(RuntimeError):
+            _regex_to_ebnf(regex)
+
+
+def test_unmatched_parentheses():
+    # Test unmatched closing parenthesis
+    regex = "abc)"
+    with pytest.raises(RuntimeError, match="Unmatched '\\)'"):
+        _regex_to_ebnf(regex)
+
+    # Test empty alternative with closing parenthesis
+    regex = "(a|)"
+    grammar_str = _regex_to_ebnf(regex)
+    expected_grammar = r"""root ::= ( "a" | "" )
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert _is_grammar_accept_string(grammar_str, "")
+    assert not _is_grammar_accept_string(grammar_str, "b")
+
+    # Test unmatched opening parenthesis
+    regex = "ab(c|)"
+    grammar_str = _regex_to_ebnf(regex)
+    print(grammar_str)
+    expected_grammar = r"""root ::= "a" "b" ( "c" | "" )
+"""
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "abc")
+    assert _is_grammar_accept_string(grammar_str, "ab")
+    assert not _is_grammar_accept_string(grammar_str, "abd")
+
+
 tokenizer_paths = ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 regex_instances = [
     (r".+a.+", "bbbabb"),

@@ -189,7 +189,10 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
       XGRAMMAR_DCHECK(cur_rule_body.type == RuleExprType::kChoices);
       for (auto sequence_id : cur_rule_body) {
         auto ref_rule_sequence = grammar_->GetRuleExpr(sequence_id);
-        if (ref_rule_sequence.type == RuleExprType::kEmptyStr) {
+        if (ref_rule_sequence.type == RuleExprType::kEmptyStr &&
+            cur_stack_element.parent_id != StackElement::kNoParent) {
+          // If the empty string is in a root rule, it indicates the end of the grammar and we
+          // just add it as a stack top to indicate the matching ends.
           continue;
         }
         auto new_stack_element =

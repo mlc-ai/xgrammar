@@ -12,6 +12,7 @@
 #include "grammar_builder.h"
 #include "grammar_data_structure.h"
 #include "support/encoding.h"
+#include "support/logging.h"
 
 namespace xgrammar {
 
@@ -75,6 +76,7 @@ class EBNFParser {
 
   // Report a parsing error with the given message and the line and column number.
   [[noreturn]] void ReportParseError(const std::string& msg) {
+    PrintTrace();
     XGRAMMAR_LOG(FATAL) << "EBNF parse error at line " + std::to_string(cur_line_) + ", column " +
                                std::to_string(cur_column_) + ": " + msg;
   }
