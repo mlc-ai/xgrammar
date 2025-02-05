@@ -128,6 +128,24 @@ def test_quantifier():
     assert _is_grammar_accept_string(grammar_str, instance1)
 
 
+def test_consecutive_quantifiers():
+    regex = "a{1,3}?{1,3}"
+    with pytest.raises(RuntimeError, match="Two consecutive repetition modifiers are not allowed."):
+        _regex_to_ebnf(regex)
+
+    regex = "a???"
+    with pytest.raises(RuntimeError, match="Two consecutive repetition modifiers are not allowed."):
+        _regex_to_ebnf(regex)
+
+    regex = "a++"
+    with pytest.raises(RuntimeError, match="Two consecutive repetition modifiers are not allowed."):
+        _regex_to_ebnf(regex)
+
+    regex = "a+?{1,3}"
+    with pytest.raises(RuntimeError, match="Two consecutive repetition modifiers are not allowed."):
+        _regex_to_ebnf(regex)
+
+
 def test_group():
     regex = r"(a|b)(c|d)"
     instance = "ac"
@@ -308,7 +326,7 @@ def test_unmatched_parentheses():
         _regex_to_ebnf(regex)
 
     regex = "abc((a)"
-    with pytest.raises(RuntimeError, match="Unmatched '\\)'"):
+    with pytest.raises(RuntimeError, match="The parenthesis is not closed."):
         _regex_to_ebnf(regex)
 
 

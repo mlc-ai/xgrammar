@@ -155,13 +155,17 @@ class Grammar(XGRObject):
         )
 
     @staticmethod
-    def from_regex(regex_string: str) -> "Grammar":
+    def from_regex(regex_string: str, *, print_converted_ebnf: bool = False) -> "Grammar":
         """Create a grammar from a regular expression string.
 
         Parameters
         ----------
         regex_string : str
             The regular expression pattern to create the grammar from.
+
+        print_converted_ebnf : bool, default: False
+            This method will convert the regex pattern to EBNF first. If this is true, the converted
+            EBNF string will be printed. For debugging purpose. Default: False.
 
         Returns
         -------
@@ -173,7 +177,9 @@ class Grammar(XGRObject):
         RuntimeError
             When parsing the regex pattern fails, with details about the parsing error.
         """
-        return Grammar._create_from_handle(_core.Grammar.from_regex(regex_string))
+        return Grammar._create_from_handle(
+            _core.Grammar.from_regex(regex_string, print_converted_ebnf)
+        )
 
     @staticmethod
     def from_structural_tag(tags: List[StructuralTagItem], triggers: List[str]) -> "Grammar":

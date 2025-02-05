@@ -337,11 +337,19 @@ std::string RegexConverter::Convert() {
         // non-deterministically.
         ++current_;
       }
+      if (current_ != end_ &&
+          (*current_ == '{' || *current_ == '*' || *current_ == '+' || *current_ == '?')) {
+        RaiseError("Two consecutive repetition modifiers are not allowed.");
+      }
     } else if (*current_ == '{') {
       result_ebnf_ += HandleRepetitionRange();
       if (current_ != end_ && *current_ == '?') {
         // Still ignore the non-greedy modifier.
         ++current_;
+      }
+      if (current_ != end_ &&
+          (*current_ == '{' || *current_ == '*' || *current_ == '+' || *current_ == '?')) {
+        RaiseError("Two consecutive repetition modifiers are not allowed.");
       }
     } else if (*current_ == '|') {
       AddEBNFSegment("|");
@@ -358,7 +366,7 @@ std::string RegexConverter::Convert() {
     }
   }
   if (parenthesis_level_ != 0) {
-    RaiseError("The paranthesis is not closed.");
+    RaiseError("The parenthesis is not closed.");
   }
   return result_ebnf_;
 }

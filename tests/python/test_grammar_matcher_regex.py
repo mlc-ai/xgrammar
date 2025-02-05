@@ -61,9 +61,7 @@ test_regex_refuse_regex_input_refused = (
     r"a{,3}",  # Invalid range
     r"a{3,2}",  # Invalid range (max < min)
     r"[z-a]",  # Invalid range (max < min)
-    r"a??",  # Invalid repetition
     r"a++",  # Invalid repetition
-    r"(?:a)",  # Non-capturing groups not supported
     r"(?=a)",  # Lookahead not supported
     r"(?!a)",  # Negative lookahead not supported
 )

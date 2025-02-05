@@ -116,8 +116,10 @@ class Grammar {
   /*!
    * \brief Construct a grammar from a regular expression string.
    * \param regex The regular expression string.
+   * \param print_converted_ebnf This method will convert the regex to EBNF first. If this is true,
+   * the converted EBNF string will be printed. For debugging purpose. Default: false.
    */
-  static Grammar FromRegex(const std::string& regex);
+  static Grammar FromRegex(const std::string& regex, bool print_converted_ebnf = false);
 
   /*!
    * \brief Construct a grammar from a regular expression string.

@@ -288,7 +288,9 @@ int32_t EBNFParser::ParseElement() {
       if (IsNameChar(Peek(), true)) {
         return ParseRuleRef();
       }
-      ReportParseError("Expect element");
+      ReportParseError(
+          "Expect element, but got character: " + std::string(1, static_cast<char>(Peek()))
+      );
     }
   }
 }

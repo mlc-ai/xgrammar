@@ -74,8 +74,7 @@ d_1_choice ::= (("bcd") | ("pq"))
     after = str(grammar)
     assert after == expected
 
-
-def test_star_quantifier_bugfix():
+    # Here rule1 can be empty
     before = """root ::= [a]* [b]* rule1
 rule1 ::= [abc]* [def]*
 """
@@ -85,6 +84,32 @@ rule1 ::= (([abc]* [def]*))
     grammar = xgr.Grammar.from_ebnf(before)
     after = str(grammar)
     assert after == expected
+
+
+def test_consecutive_quantifiers():
+    grammar_str = """root ::= "a"{1,3}{1,3}
+"""
+    with pytest.raises(
+        RuntimeError,
+        match="EBNF parse error at line 1, column 18: Expect element, but got character: {",
+    ):
+        xgr.Grammar.from_ebnf(grammar_str)
+
+    grammar_str = """root ::= "a"++
+"""
+    with pytest.raises(
+        RuntimeError,
+        match="EBNF parse error at line 1, column 14: Expect element, but got character: +",
+    ):
+        xgr.Grammar.from_ebnf(grammar_str)
+
+    grammar_str = """root ::= "a"??
+"""
+    with pytest.raises(
+        RuntimeError,
+        match="EBNF parse error at line 1, column 14: Expect element, but got character: ?",
+    ):
+        xgr.Grammar.from_ebnf(grammar_str)
 
 
 def test_repetition_range():

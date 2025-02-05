@@ -34,7 +34,13 @@ Grammar Grammar::FromJSONSchema(
   return FromEBNF(ebnf_string);
 }
 
-Grammar Grammar::FromRegex(const std::string& regex) { return FromEBNF(RegexToEBNF(regex)); }
+Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) {
+  auto ebnf_string = RegexToEBNF(regex);
+  if (print_converted_ebnf) {
+    XGRAMMAR_LOG(INFO) << "Converted EBNF: " << ebnf_string << std::endl;
+  }
+  return FromEBNF(ebnf_string);
+}
 
 Grammar Grammar::FromStructuralTag(
     const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
