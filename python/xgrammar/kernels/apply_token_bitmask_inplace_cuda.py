@@ -19,6 +19,20 @@ import torch
 import torch.utils.cpp_extension
 
 
+def _remove_torch_nvcc_flags():
+    REMOVE_NVCC_FLAGS = [
+        "-D__CUDA_NO_HALF_OPERATORS__",
+        "-D__CUDA_NO_HALF_CONVERSIONS__",
+        "-D__CUDA_NO_BFLOAT16_CONVERSIONS__",
+        "-D__CUDA_NO_HALF2_OPERATORS__",
+    ]
+    for flag in REMOVE_NVCC_FLAGS:
+        try:
+            torch.utils.cpp_extension.COMMON_NVCC_FLAGS.remove(flag)
+        except ValueError:
+            pass
+
+
 def _load_torch_ops():
     src = __file__.replace(".py", ".cu")
     cflags = ["-O3", "-Wno-switch-bool"]
@@ -40,6 +54,7 @@ def _load_torch_ops():
     )
 
 
+_remove_torch_nvcc_flags()
 _load_torch_ops()
 
 

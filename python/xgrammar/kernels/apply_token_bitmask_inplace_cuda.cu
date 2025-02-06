@@ -16,7 +16,7 @@
  */
 
 // clang-format off
-#include <cuda.h>
+#include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <torch/extension.h>
@@ -27,18 +27,18 @@ int32_t constexpr kBitsPerMaskElement = 32;
 int32_t constexpr kThreadsPerBlock = 256;
 
 template <typename T>
-__device__ T GetNegativeInfinity() {
+__device__ T const negativeInfinity() {
   return -INFINITY;
 }
 
 template <>
-__device__ half GetNegativeInfinity<half>() {
-  return __float2half(-INFINITY);
+__device__ __half const negativeInfinity<__half>() {
+  return -CUDART_INF_FP16;
 }
 
 template <>
-__device__ __nv_bfloat16 GetNegativeInfinity<__nv_bfloat16>() {
-  return __float2bfloat16(-INFINITY);
+__device__ __nv_bfloat16 const negativeInfinity<__nv_bfloat16>() {
+  return -CUDART_INF_BF16;
 }
 
 template <typename T, typename PackedT>
@@ -78,7 +78,7 @@ __global__ void __launch_bounds__(kThreadsPerBlock) logitsBitmaskKernel(
       continue;
     }
     if (!((bitmaskVal >> offset) & 1)) {
-      logitsSmem[threadIdx.x * kBitsPerMaskElement + offset] = GetNegativeInfinity<T>();
+      logitsSmem[threadIdx.x * kBitsPerMaskElement + offset] = negativeInfinity<T>();
     }
   }
   __syncthreads();
@@ -112,7 +112,7 @@ void applyTokenBitmaskInplaceDispatchToPackedT(
   dim3 const grid(ceilDiv(bitmaskSize, kThreadsPerBlock), batchSize);
   dim3 const block(kThreadsPerBlock);
 
-  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
   if (vocabSize % (sizeof(float4) / sizeof(T)) == 0) {
     logitsBitmaskKernel<T, float4>
         <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocabSize, bitmaskSize);
@@ -176,7 +176,7 @@ void applyTokenBitmaskInplace(
     }
     case torch::kFloat16: {
       applyTokenBitmaskInplaceDispatchToPackedT(
-          reinterpret_cast<half*>(logits.data_ptr<torch::Half>()),
+          reinterpret_cast<__half*>(logits.data_ptr<torch::Half>()),
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocabSize,
