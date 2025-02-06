@@ -345,6 +345,7 @@ class GrammarCompiler::Impl {
         compile_json_schema_cache_(GetCompileJSONSchemaCacheFunc(cache_enabled_)),
         compile_builtin_json_grammar_cache_(GetCompileBuiltinJSONGrammarCacheFunc(cache_enabled_)),
         compile_structural_tag_cache_(GetCompileStructuralTagCacheFunc(cache_enabled_)),
+        compile_regex_cache_(GetCompileRegexCacheFunc(cache_enabled_)),
         compile_grammar_cache_(GetCompileGrammarCacheFunc(cache_enabled_)) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
@@ -360,6 +361,8 @@ class GrammarCompiler::Impl {
   CompiledGrammar CompileStructuralTag(
       const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
   );
+
+  CompiledGrammar CompileRegex(const std::string& regex);
 
   CompiledGrammar CompileGrammar(const Grammar& grammar);
 
@@ -390,6 +393,10 @@ class GrammarCompiler::Impl {
       bool cache_enabled
   );
 
+  std::function<CompiledGrammar(const std::string& regex)> GetCompileRegexCacheFunc(
+      bool cache_enabled
+  );
+
   using GrammarKey = std::pair<std::string, std::string>;
   /*! \brief The cache function for the compiled grammar for a given grammar. */
   std::function<CompiledGrammar(const GrammarKey&)> GetCompileGrammarCacheFunc(bool cache_enabled);
@@ -406,6 +413,8 @@ class GrammarCompiler::Impl {
   ThreadSafeCache<CompiledGrammar> compile_builtin_json_grammar_cache_;
   /*! \brief The cache for the compiled grammar for a given structural tag. */
   ThreadSafeCache<StructuralTagKey, CompiledGrammar> compile_structural_tag_cache_;
+  /*! \brief The cache for the compiled grammar for a given regex. */
+  ThreadSafeCache<std::string, CompiledGrammar> compile_regex_cache_;
   /*! \brief The cache for the compiled grammar for bnf grammar. */
   ThreadSafeCache<GrammarKey, CompiledGrammar> compile_grammar_cache_;
 };
@@ -592,6 +601,16 @@ GrammarCompiler::Impl::GetCompileGrammarCacheFunc(bool cache_enabled) {
   };
 }
 
+std::function<CompiledGrammar(const std::string& regex)>
+GrammarCompiler::Impl::GetCompileRegexCacheFunc(bool cache_enabled) {
+  if (!cache_enabled) {
+    return nullptr;
+  }
+  return [&](const std::string& regex) {
+    return MultiThreadCompileGrammar(Grammar::FromRegex(regex));
+  };
+}
+
 CompiledGrammar GrammarCompiler::Impl::CompileBuiltinJSONGrammar() {
   if (!cache_enabled_) {
     return MultiThreadCompileGrammar(Grammar::BuiltinJSONGrammar());
@@ -626,6 +645,13 @@ CompiledGrammar GrammarCompiler::Impl::CompileStructuralTag(
   }
   auto key = std::make_tuple(tags, triggers);
   return compile_structural_tag_cache_.Get(key);
+}
+
+CompiledGrammar GrammarCompiler::Impl::CompileRegex(const std::string& regex) {
+  if (!cache_enabled_) {
+    return MultiThreadCompileGrammar(Grammar::FromRegex(regex));
+  }
+  return compile_regex_cache_.Get(regex);
 }
 
 CompiledGrammar GrammarCompiler::Impl::CompileGrammar(const Grammar& grammar) {
@@ -666,6 +692,10 @@ CompiledGrammar GrammarCompiler::CompileStructuralTag(
     const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
 ) {
   return pimpl_->CompileStructuralTag(tags, triggers);
+}
+
+CompiledGrammar GrammarCompiler::CompileRegex(const std::string& regex) {
+  return pimpl_->CompileRegex(regex);
 }
 
 CompiledGrammar GrammarCompiler::CompileGrammar(const Grammar& grammar) {

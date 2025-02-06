@@ -1,7 +1,3 @@
-"""This test is adopted from test_builtin_grammar_json.py, but the grammar is parsed from
-a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar matcher.
-"""
-
 import json
 import sys
 import time

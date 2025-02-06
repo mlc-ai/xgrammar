@@ -61,6 +61,9 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
           py::call_guard<py::gil_scoped_release>()
       )
       .def(
+          "compile_regex", &GrammarCompiler::CompileRegex, py::call_guard<py::gil_scoped_release>()
+      )
+      .def(
           "compile_grammar",
           &GrammarCompiler::CompileGrammar,
           py::call_guard<py::gil_scoped_release>()

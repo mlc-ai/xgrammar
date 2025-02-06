@@ -1,13 +1,11 @@
-"""This test is adopted from test_builtin_grammar_json.py, but the grammar is parsed from
-a unoptimized, non-simplified EBNF string. This is to test the robustness of the grammar matcher.
-"""
-
 import sys
+import time
 
 import pytest
+from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _is_grammar_accept_string
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 
 def test_simple():
@@ -120,6 +118,51 @@ test_advanced_regex_string_instance_is_accepted = [
 def test_advanced(regex_string: str, instance: str, is_accepted: bool):
     grammar = xgr.Grammar.from_regex(regex_string)
     assert _is_grammar_accept_string(grammar, instance) == is_accepted
+
+
+regex_input_str_test_fill_next_token_bitmask = [
+    (r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}", "test@email.com"),
+    (r"[0-9]{3}-[0-9]{3}-[0-9]{4}", "123-456-7890"),
+]
+
+
+@pytest.mark.parametrize(
+    "regex, input_str",
+    regex_input_str_test_fill_next_token_bitmask,
+)
+def test_fill_next_token_bitmask(regex: str, input_str: str):
+    tokenizer_path = "meta-llama/Meta-Llama-3-8B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(
+        tokenizer_path,
+        use_fast=True,
+        trust_remote_code=True,
+    )
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    time_start = time.monotonic_ns()
+    compiled_grammar = compiler.compile_regex(regex)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    input_bytes = input_str.encode("utf-8")
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    for c in input_bytes:
+        time_start = time.monotonic_ns()
+        assert matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+        time_start = time.monotonic_ns()
+        assert matcher._debug_accept_string(bytes([c]))
+        time_end = time.monotonic_ns()
+        print(f"Time to accept char {chr(c)}: {(time_end - time_start) / 1e3} us")
+
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    assert tokenizer.eos_token_id not in rejected_token_ids
 
 
 if __name__ == "__main__":

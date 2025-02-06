@@ -118,6 +118,21 @@ class GrammarCompiler(XGRObject):
         """
         return CompiledGrammar._create_from_handle(self._handle.compile_builtin_json_grammar())
 
+    def compile_regex(self, regex: str) -> CompiledGrammar:
+        """Get CompiledGrammar from the specified regex.
+
+        Parameters
+        ----------
+        regex : str
+            The regex string.
+
+        Returns
+        -------
+        compiled_grammar : CompiledGrammar
+            The compiled grammar.
+        """
+        return CompiledGrammar._create_from_handle(self._handle.compile_regex(regex))
+
     def compile_structural_tag(
         self, tags: List[StructuralTagItem], triggers: List[str]
     ) -> CompiledGrammar:
