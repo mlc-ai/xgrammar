@@ -178,6 +178,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.clear_cache"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.clear_cache()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_builtin_json_grammar"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_builtin_json_grammar()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_json_schema"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_json_schema()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_regex"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_regex()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_structural_tag()</span></code></a></li>
 </ul>
 </li>
@@ -624,7 +625,10 @@ same grammar multiple times.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_json_schema" title="xgrammar.GrammarCompiler.compile_json_schema"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_json_schema</span></code></a>(schema, *[, ...])</p></td>
 <td><p>Get CompiledGrammar from the specified JSON schema and format.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="xgrammar.GrammarCompiler.compile_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_structural_tag</span></code></a>(tags, triggers)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_regex" title="xgrammar.GrammarCompiler.compile_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_regex</span></code></a>(regex)</p></td>
+<td><p>Get CompiledGrammar from the specified regex.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="xgrammar.GrammarCompiler.compile_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_structural_tag</span></code></a>(tags, triggers)</p></td>
 <td><p>Compile a grammar from structural tags.</p></td>
 </tr>
 </tbody>
@@ -666,6 +670,23 @@ and (”, “, “: “) otherwise.</p></li>
 properties and items that is not specified in the schema. This is equivalent to
 setting unevaluatedProperties and unevaluatedItems to false.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.compile_regex">
+<span class="sig-name descname"><span class="pre">compile_regex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">regex</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.compile_regex" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get CompiledGrammar from the specified regex.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>regex</strong> (<em>str</em>) – The regex string.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
