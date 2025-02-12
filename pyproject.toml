@@ -16,7 +16,15 @@ classifiers = [
 ]
 keywords = ["machine learning", "inference"]
 requires-python = ">=3.8, <4"
-dependencies = []  # Move requirements.txt contents here or use dynamic dependencies
+dependencies = [
+    "pybind11",
+    "pydantic",
+    "pytest",
+    "sentencepiece",
+    "tiktoken",
+    "torch",
+    "transformers",
+]
 
 [project.urls]
 Homepage = "https://github.com/mlc-ai/xgrammar"
@@ -25,10 +33,9 @@ Homepage = "https://github.com/mlc-ai/xgrammar"
 requires = [
     "scikit-build-core>=0.7.0",
     "pybind11>=2.11.0",
-    "setuptools>=61.0",
     "wheel",
+    "cmake>=3.12",
     "ninja",
-    "cmake>=3.12"
 ]
 build-backend = "scikit_build_core.build"
 
@@ -50,7 +57,6 @@ sdist.include = [
     "docs/**/*",
     "include/**/*",
     "LICENSE",
-    "python/requirements.txt",
     "python/xgrammar/**/*.py",
     "tests/**/*",
     "README.md",
@@ -66,14 +72,6 @@ sdist.exclude = [
     "build",
     "dist"
 ]
-
-# Dependencies will be read from requirements.txt
-[tool.setuptools.dynamic]
-dependencies = {file = ["python/requirements.txt"]}
-
-# For package data
-[tool.setuptools.package-data]
-xgrammar = ["*.so", "*.dylib", "*.dll"]  # Adjust patterns as needed for xgrammar_lib_path
 
 [tool.pytest.ini_options]
 addopts = "-rA --durations=0 --ignore=3rdparty"
