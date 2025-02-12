@@ -21,7 +21,7 @@ def apply_token_bitmask_inplace_kernel(
     for work_id in tl.range(pid, num_rows * num_blocks, NUM_SMS):
         block_offset = (work_id % num_blocks) * BLOCK_SIZE
         row_id = work_id // num_blocks
-        batch_id = tl.load(indices_ptr + row_id)
+        batch_id = row_id if indices_ptr is None else tl.load(indices_ptr + row_id)
         offsets = block_offset + tl.arange(0, BLOCK_SIZE)
         bitmask_offsets = block_offset // 32 + tl.arange(0, BLOCK_SIZE // 32)
         vocab_mask = offsets < vocab_size
@@ -54,10 +54,11 @@ def apply_token_bitmask_inplace_triton(
     else:
         raise ValueError(f"Invalid logits tensor shape {logits.shape}")
 
-    if indices is None:
-        indices = torch.arange(batch_size, dtype=torch.int32, device=logits.device)
-    elif isinstance(indices, list):
+    if isinstance(indices, list):
         indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
+
+    if isinstance(indices, torch.Tensor):
+        batch_size = indices.shape[0]
 
     grid = lambda meta: (NUM_SMS,)
 
@@ -65,7 +66,7 @@ def apply_token_bitmask_inplace_triton(
         logits,
         bitmask,
         indices,
-        indices.shape[0],
+        batch_size,
         vocab_size,
         ceil_div(vocab_size, 32),
         NUM_SMS,

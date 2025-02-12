@@ -14,53 +14,69 @@
 # limitations under the License.
 
 import argparse
-import time
 
 import torch
+from triton.testing import do_bench
 
 from xgrammar.kernels import (
     apply_token_bitmask_inplace_cuda,
     apply_token_bitmask_inplace_triton,
 )
+from xgrammar.testing import _bool_mask_to_bitmask
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--kernel", type=str, choices=["cuda", "triton"], default="cuda")
-    parser.add_argument("--batch_size", type=int, default=2048)
+    parser.add_argument("--impl", type=str, choices=["cuda", "triton"], default="cuda")
+    parser.add_argument("--batch_size", type=int, default=4096)
     parser.add_argument("--vocab_size", type=int, default=128000)
-    parser.add_argument("--num_warmup", type=int, default=10)
-    parser.add_argument("--num_iters", type=int, default=50)
+    parser.add_argument("--masked_cnt", type=int, default=1024)
+    parser.add_argument("--stride", type=int, default=1)
+    parser.add_argument(
+        "--logits_dtype", type=str, choices=["float32", "float16", "bfloat16"], default="float32"
+    )
+    parser.add_argument("--warmup", type=int, default=500)
+    parser.add_argument("--rep", type=int, default=2000)
     args = parser.parse_args()
 
     vocab_size = args.vocab_size
     batch_size = args.batch_size
     bitmask_size = (vocab_size + 32 - 1) // 32
+    masked_cnt = args.masked_cnt
+    stride = args.stride
+    logits_dtype = getattr(torch, args.logits_dtype)
 
-    logits = torch.randn(batch_size, vocab_size, dtype=torch.float32, device="cuda")
-    bitmask = torch.randint(
-        torch.iinfo(torch.int32).min,
-        torch.iinfo(torch.int32).max,
-        (batch_size, bitmask_size),
-        dtype=torch.int32,
-        device="cuda",
+    logits = torch.randn(batch_size, vocab_size, dtype=logits_dtype, device="cuda")
+
+    if masked_cnt >= vocab_size:
+        bool_mask = torch.zeros(batch_size, vocab_size, dtype=torch.bool, device="cuda")
+    else:
+        bool_mask = torch.ones(batch_size, vocab_size, dtype=torch.bool, device="cuda")
+        if masked_cnt > 0:
+            masked_positions = torch.stack(
+                [torch.randperm(vocab_size, device="cuda")[:masked_cnt] for _ in range(batch_size)]
+            )
+            bool_mask.scatter_(1, masked_positions, False)
+            assert (bool_mask.sum(dim=-1) + masked_cnt == vocab_size).all().item()
+    bitmask = _bool_mask_to_bitmask(bool_mask)
+
+    masked_batch_ids = torch.arange(0, batch_size, stride, dtype=torch.int32, device="cuda")
+    kwargs = {} if stride == 1 else {"indices": masked_batch_ids}
+
+    logits_expected = logits.clone()
+    logits_expected[masked_batch_ids] = torch.masked_fill(
+        logits_expected[masked_batch_ids], ~bool_mask[masked_batch_ids], float("-inf")
     )
 
-    def run():
-        if args.kernel == "cuda":
-            apply_token_bitmask_inplace_cuda(logits, bitmask)
-        elif args.kernel == "triton":
-            apply_token_bitmask_inplace_triton(logits, bitmask)
+    if args.impl == "cuda":
+        f = lambda: apply_token_bitmask_inplace_cuda(logits, bitmask, **kwargs)
+    elif args.impl == "triton":
+        f = lambda: apply_token_bitmask_inplace_triton(logits, bitmask, **kwargs)
 
-    for i in range(args.num_warmup):
-        run()
+    f()
+    torch.testing.assert_close(logits, logits_expected.to("cuda"))
+
     torch.cuda.synchronize()
+    exec_time = do_bench(f, warmup=args.warmup, rep=args.rep)
+    exec_time *= 10**3
 
-    start = time.perf_counter()
-    for i in range(args.num_iters):
-        run()
-    torch.cuda.synchronize()
-    exec_time = time.perf_counter() - start
-    exec_time = (exec_time / args.num_iters) * 10**6
-
-    print(f"Kernel: {args.kernel}")
-    print(f"Kernel execution time (us): {exec_time:.4f}")
+    print(f"Implementation: {args.impl}\t| Execution time (μs): {exec_time:.4f}")

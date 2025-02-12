@@ -158,6 +158,34 @@ def _get_masked_tokens_from_bitmask(
     )
 
 
+def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
+    """Get the bitmask from bool mask.
+
+    Parameters
+    ----------
+    bool_mask : torch.Tensor
+        The rejected token bool mask. For each element value, True means the token is allowed,
+        while False means the token is rejected.
+
+    Returns
+    -------
+    bitmask : torch.Tensor
+        The rejected token bitmask.
+    """
+    bool_mask_int32 = bool_mask.to(torch.int32)
+    # Pad to multiple of 32
+    pad_size = (32 - bool_mask.shape[1] % 32) % 32
+    if pad_size > 0:
+        bool_mask_int32 = torch.nn.functional.pad(bool_mask_int32, (0, pad_size))
+    bool_mask_view = bool_mask_int32.view(bool_mask.shape[0], -1, 32)
+    # To avoid error for overflow, we construct int64 weights and convert to int32
+    weights = torch.tensor(
+        [1 << i for i in range(32)], device=bool_mask.device, dtype=torch.int64
+    ).to(torch.int32)
+    bitmask = (bool_mask_view * weights).sum(dim=2)
+    return bitmask.to(torch.int32)
+
+
 def _get_matcher_from_grammar_and_tokenizer_info(
     grammar: Union[Grammar, str], tokenizer_info: Optional[TokenizerInfo] = None, **kwargs
 ) -> GrammarMatcher:
