@@ -1,19 +1,88 @@
-[tool.black]
-exclude = "3rdparty/*"
-line-length = 100
+[project]
+name = "xgrammar"
+description = "Efficient, Flexible and Portable Structured Generation"
+authors = [
+    { name = "MLC Team" }
+]
+version = "0.1.13"
+readme = "README.md"
+license = { text = "Apache 2.0" }
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+]
+keywords = ["machine learning", "inference"]
+requires-python = ">=3.8, <4"
+dependencies = []  # Move requirements.txt contents here or use dynamic dependencies
 
-[tool.isort]
-profile = "black"
-src_paths = ["python"]
+[project.urls]
+Homepage = "https://github.com/mlc-ai/xgrammar"
 
-[tool.mypy]
-strict = true
+[build-system]
+requires = [
+    "scikit-build-core>=0.7.0",
+    "pybind11>=2.11.0",
+    "setuptools>=61.0",
+    "wheel",
+    "ninja",
+    "cmake>=3.12"
+]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+cmake.minimum-version = "3.12"
+cmake.args = []  # Add any custom CMake arguments here
+cmake.build-type = "Release"
+cmake.verbose = true
+wheel.packages = ["python/xgrammar"]  # Adjust to your package location
+wheel.install-dir = "xgrammar"
+sdist.include = [
+    "3rdparty/**/*",
+    "cmake/**/*",
+    "CMakeLists.txt",
+    "cpp/**/*.cc",
+    "cpp/**/*.cpp",
+    "cpp/**/*.h",
+    "cpp/**/CMakeLists.txt",
+    "docs/**/*",
+    "include/**/*",
+    "LICENSE",
+    "python/requirements.txt",
+    "python/xgrammar/**/*.py",
+    "tests/**/*",
+    "README.md",
+    "NOTICE",
+    "grammar_functor.cc", #??
+
+]
+sdist.exclude = [
+    "**/.git",
+    "**/.github",
+    "**/__pycache__",
+    "**/*.pyc",
+    "build",
+    "dist"
+]
+
+# Dependencies will be read from requirements.txt
+[tool.setuptools.dynamic]
+dependencies = {file = ["python/requirements.txt"]}
+
+# For package data
+[tool.setuptools.package-data]
+xgrammar = ["*.so", "*.dylib", "*.dll"]  # Adjust patterns as needed for xgrammar_lib_path
 
 [tool.pytest.ini_options]
 addopts = "-rA --durations=0 --ignore=3rdparty"
 
+[tool.mypy]
+strict = true
+
 [tool.ruff]
-exclude = ["3rdparty", "setup.py"]
+exclude = ["3rdparty"]
 
 [tool.ruff.lint]
 ignore = [
@@ -44,3 +113,11 @@ select = ["ALL"]
 
 [tool.ruff.lint.pylint]
 max-args = 10
+
+[tool.black]
+exclude = "3rdparty/*"
+line-length = 100
+
+[tool.isort]
+profile = "black"
+src_paths = ["python"]
