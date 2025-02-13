@@ -14,6 +14,7 @@
 #include "grammar_data_structure.h"
 #include "persistent_stack.h"
 #include "support/encoding.h"
+#include "support/utils.h"
 
 namespace xgrammar {
 
@@ -83,6 +84,10 @@ StackElement GrammarMatcherBase::AdvanceStackElementWithChar(
   auto current_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
   if (current_sequence.type == Grammar::Impl::RuleExprType::kTagDispatch) {
     auto root_tag_dispatch_fsm = grammar_->root_tag_dispatch_fsm;
+    if (!root_tag_dispatch_fsm) {
+      XGRAMMAR_LOG(FATAL) << "The grammar does not have a root tag dispatch rule; it is not built.";
+      XGRAMMAR_UNREACHABLE();
+    }
     auto start_node = root_tag_dispatch_fsm->StartNode();
     auto next_node = root_tag_dispatch_fsm->Transition(stack_element.element_id, char_value);
     auto new_stack_element = stack_element;
