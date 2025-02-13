@@ -1,7 +1,0 @@
-pybind11
-pydantic
-pytest
-sentencepiece
-tiktoken
-torch
-transformers

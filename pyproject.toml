@@ -1,3 +1,87 @@
+[project]
+name = "xgrammar"
+description = "Efficient, Flexible and Portable Structured Generation"
+authors = [{ name = "MLC Team" }]
+version = "0.1.11"
+readme = "README.md"
+license = { text = "Apache 2.0" }
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Intended Audience :: Science/Research",
+]
+keywords = ["machine learning", "inference"]
+requires-python = ">=3.8, <4"
+dependencies = [
+  "pybind11",
+  "pydantic",
+  "pytest",
+  "sentencepiece",
+  "tiktoken",
+  "torch",
+  "transformers",
+]
+
+[project.urls]
+Homepage = "https://xgrammar.mlc.ai/"
+
+[build-system]
+requires = ["scikit-build-core>=0.7.0", "pybind11>=2.11.0"]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+# Build configuration
+build-dir = "build"
+build.verbose = true
+
+# CMake configuration
+cmake.version = "CMakeLists.txt"
+cmake.args = []
+cmake.build-type = "RelWithDebInfo"
+
+# Logging
+logging.level = "INFO"
+
+# Wheel configuration
+wheel.packages = ["python/xgrammar"]
+wheel.install-dir = "xgrammar"
+
+# Source distribution configuration
+sdist.include = [
+  # Build files
+  "/CMakeLists.txt",
+  "/pyproject.toml",
+  "/cmake/**/*",
+  "/cpp/**/CMakeLists.txt",
+
+  # Source code
+  "/cpp/**/*.cc",
+  "/cpp/**/*.cpp",
+  "/cpp/**/*.h",
+  "/include/**/*",
+  "/python/xgrammar/**/*.py",
+
+  # Third party files
+  "/3rdparty/**/*",
+
+  # Documentation and metadata
+  "/docs/**/*",
+  "/LICENSE",
+  "/README.md",
+  "/NOTICE",
+
+  # Tests
+  "/tests/**/*",
+]
+
+sdist.exclude = ["**/.git", "**/.github", "**/__pycache__", "**/*.pyc", "build", "dist"]
+
+# Editable install settings
+editable.rebuild = true
+editable.verbose = true
+
 [tool.black]
 exclude = "3rdparty/*"
 line-length = 100
@@ -44,3 +128,19 @@ select = ["ALL"]
 
 [tool.ruff.lint.pylint]
 max-args = 10
+
+[tool.cibuildwheel]
+build-verbosity = 1
+skip = ["cp36-*", "cp37-*", "pp*", "*musllinux*"]
+
+# Platform-specific configurations
+[tool.cibuildwheel.linux]
+archs = ["x86_64", "aarch64"]
+# environment = { SKBUILD_BUILD_OPTIONS = "--", CXXFLAGS = "-D_GLIBCXX_USE_CXX11_ABI=0", AUDITWHEEL_PLAT = "manylinux2014_x86_64" }
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]
+environment = { SKBUILD_BUILD_OPTIONS = "--", MACOSX_DEPLOYMENT_TARGET = "10.14" }
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
