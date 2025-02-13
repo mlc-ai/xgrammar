@@ -1,46 +1,46 @@
-[tool.pytest.ini_options]
-addopts = "-rA --durations=0 --ignore=3rdparty"
+[tool.black]
+exclude = "3rdparty/*"
+line-length = 100
+
+[tool.isort]
+profile = "black"
+src_paths = ["python"]
 
 [tool.mypy]
 strict = true
+
+[tool.pytest.ini_options]
+addopts = "-rA --durations=0 --ignore=3rdparty"
 
 [tool.ruff]
 exclude = ["3rdparty", "setup.py"]
 
 [tool.ruff.lint]
-select = ["ALL"]
 ignore = [
-    "E501",   # line too long, handled by black
-    "PTH",
-    "PGH",
-    "D100",
-    "D101",
-    "D102",
-    "D103",
-    "D104",
-    "D107",
-    "D213",
-    "D203",
-    "D205",
-    "D404",
-    "D417",
-    "D105",
-    "FA",
-    "ERA001",
-    "SLF001",
+  "E501",  # line too long, handled by black
+  "PTH",
+  "PGH",
+  "D100",
+  "D101",
+  "D102",
+  "D103",
+  "D104",
+  "D107",
+  "D213",
+  "D203",
+  "D205",
+  "D404",
+  "D417",
+  "D105",
+  "FA",
+  "ERA001",
+  "SLF001"
 ]
+select = ["ALL"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["E741", "PLR2004", "INP001", "ANN201", "S101", "T201", "A", "FBT"]
 
-[tool.black]
-line-length = 100
-exclude = "3rdparty/*"
-
 [tool.ruff.lint.pylint]
 max-args = 10
-
-[tool.isort]
-profile = "black"
-src_paths = ["python"]

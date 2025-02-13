@@ -1,10 +1,14 @@
-# To use:
+# To run for staged files:
+#
+#     pre-commit run
+#
+# To run for all files:
 #
 #     pre-commit run -a
 #
-# Or:
+# To run every time you commit in git:
 #
-#     pre-commit install  # (runs every time you commit in git)
+#     pre-commit install
 #
 # To update this file:
 #
@@ -36,7 +40,7 @@ repos:
 
   # Formatters
   - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 24.8.0
+    rev: 25.1.0
     hooks:
       - id: black
 
@@ -60,6 +64,12 @@ repos:
         additional_dependencies: [pyyaml>=5.1]
 
   - repo: https://github.com/google/yamlfmt
-    rev: v0.15.0
+    rev: v0.16.0
     hooks:
       - id: yamlfmt
+
+  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+    rev: v2.14.0
+    hooks:
+      - id: pretty-format-toml
+        args: [--autofix, --indent, "2"]
