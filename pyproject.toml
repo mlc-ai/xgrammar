@@ -1,9 +1,7 @@
 [project]
 name = "xgrammar"
 description = "Efficient, Flexible and Portable Structured Generation"
-authors = [
-    { name = "MLC Team" }
-]
+authors = [{ name = "MLC Team" }]
 version = "0.1.11"
 readme = "README.md"
 license = { text = "Apache 2.0" }
@@ -27,51 +25,69 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mlc-ai/xgrammar"
+Homepage = "https://xgrammar.mlc.ai/"
 
 [build-system]
-requires = [
-    "scikit-build-core>=0.7.0",
-    "pybind11>=2.11.0",
-    "wheel",
-    "cmake>=3.12",
-    "ninja",
-]
+requires = ["scikit-build-core>=0.7.0", "pybind11>=2.11.0"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
-cmake.minimum-version = "3.12"
-cmake.args = []  # Add any custom CMake arguments here
-cmake.build-type = "Release"
-cmake.verbose = true
-wheel.packages = ["python/xgrammar"]  # Adjust to your package location
-wheel.install-dir = "xgrammar"
-sdist.include = [
-    "3rdparty/**/*",
-    "cmake/**/*",
-    "CMakeLists.txt",
-    "cpp/**/*.cc",
-    "cpp/**/*.cpp",
-    "cpp/**/*.h",
-    "cpp/**/CMakeLists.txt",
-    "docs/**/*",
-    "include/**/*",
-    "LICENSE",
-    "python/xgrammar/**/*.py",
-    "tests/**/*",
-    "README.md",
-    "NOTICE",
-    "grammar_functor.cc", #??
+# Build configuration
+build-dir = "build"
+build.verbose = true
 
+# CMake configuration
+cmake.version = ">=3.18"
+cmake.args = []                     # Add any custom CMake arguments here
+cmake.build-type = "RelWithDebInfo"
+
+# Logging
+logging.level = "INFO"
+
+# Wheel configuration
+wheel.packages = ["python/xgrammar"] # Adjust to your package location
+wheel.install-dir = "xgrammar"
+
+# Source distribution configuration
+sdist.include = [
+    # Build files
+    "/CMakeLists.txt",
+    "/pyproject.toml",
+    "/cmake/**/*",
+    "/cpp/**/CMakeLists.txt",
+
+    # Source code
+    "/cpp/**/*.cc",
+    "/cpp/**/*.cpp",
+    "/cpp/**/*.h",
+    "/include/**/*",
+    "/python/xgrammar/**/*.py",
+
+    # Third party files
+    "/3rdparty/**/*",
+
+    # Documentation and metadata
+    "/docs/**/*",
+    "/LICENSE",
+    "/README.md",
+    "/NOTICE",
+
+    # Tests
+    "/tests/**/*",
 ]
+
 sdist.exclude = [
     "**/.git",
     "**/.github",
     "**/__pycache__",
     "**/*.pyc",
     "build",
-    "dist"
+    "dist",
 ]
+
+# Editable install settings
+editable.rebuild = true
+editable.verbose = true
 
 [tool.pytest.ini_options]
 addopts = "-rA --durations=0 --ignore=3rdparty"
@@ -124,15 +140,11 @@ src_paths = ["python"]
 build-verbosity = 1
 skip = ["cp36-*", "cp37-*", "pp*"]
 build = { requires = ["cmake>=3.12", "ninja"] }
-environment = { SKBUILD_BUILD_OPTIONS="--" }
+environment = { SKBUILD_BUILD_OPTIONS = "--" }
 
 # Platform-specific configurations
 [tool.cibuildwheel.linux]
-environment = { SKBUILD_BUILD_OPTIONS="--", CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0", AUDITWHEEL_PLAT = "manylinux2014_x86_64" }
+environment = { SKBUILD_BUILD_OPTIONS = "--", CXXFLAGS = "-D_GLIBCXX_USE_CXX11_ABI=0", AUDITWHEEL_PLAT = "manylinux2014_x86_64" }
 
 [tool.cibuildwheel.macos]
-environment = { SKBUILD_BUILD_OPTIONS="--", MACOSX_DEPLOYMENT_TARGET="10.14" }
-
-
-
-
+environment = { SKBUILD_BUILD_OPTIONS = "--", MACOSX_DEPLOYMENT_TARGET = "10.14" }
