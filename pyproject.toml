@@ -17,7 +17,7 @@ exclude = ["3rdparty", "setup.py"]
 
 [tool.ruff.lint]
 ignore = [
-  "E501",  # line too long, handled by black
+  "E501",   # line too long, handled by black
   "PTH",
   "PGH",
   "D100",
@@ -34,7 +34,7 @@ ignore = [
   "D105",
   "FA",
   "ERA001",
-  "SLF001"
+  "SLF001",
 ]
 select = ["ALL"]
 

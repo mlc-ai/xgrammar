@@ -68,8 +68,8 @@ repos:
     hooks:
       - id: yamlfmt
 
-  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-    rev: v2.14.0
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
     hooks:
-      - id: pretty-format-toml
-        args: [--autofix, --indent, "2", "--no-sort"]
+      - id: taplo-format
+        args: ["--option", "column_width=100"]
