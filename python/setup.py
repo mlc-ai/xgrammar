@@ -102,7 +102,9 @@ def main() -> None:
         ],
         keywords="machine learning inference",
         packages=find_packages(),
-        package_data={"xgrammar": [xgrammar_lib_path]},
+        package_data={
+            "xgrammar": [xgrammar_lib_path, "kernels/apply_token_bitmask_inplace_cuda.cu"]
+        },
         zip_safe=False,
         install_requires=parse_requirements("requirements.txt")[0],
         python_requires=">=3.8, <4",
