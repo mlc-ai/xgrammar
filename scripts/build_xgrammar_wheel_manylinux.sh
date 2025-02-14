@@ -39,7 +39,7 @@ function audit_xgrammar_wheel() {
 }
 
 XGRAMMAR_PYTHON_DIR="/workspace/python"
-PYTHON_VERSIONS_CPU=("3.9" "3.10" "3.11" "3.12" "3.13")
+PYTHON_VERSIONS_CPU=("3.9" "3.10" "3.11" "3.12")
 
 while [[ $# -gt 0 ]]; do
     arg="$1"
