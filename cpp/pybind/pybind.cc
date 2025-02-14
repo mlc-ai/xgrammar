@@ -93,7 +93,12 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
       )
       .def("_regex_to_ebnf", &RegexToEBNF)
       .def("_get_masked_tokens_from_bitmask", &Matcher_DebugGetMaskedTokensFromBitmask)
-      .def("_get_allow_empty_rule_ids", &GetAllowEmptyRuleIds);
+      .def("_get_allow_empty_rule_ids", &GetAllowEmptyRuleIds)
+      .def("_generate_range_regex", [](std::optional<int> start, std::optional<int> end) {
+        std::string result = GenerateRangeRegex(start, end);
+        result.erase(std::remove(result.begin(), result.end(), '\0'), result.end());
+        return result;
+      });
 
   auto pyKernelsModule = m.def_submodule("kernels");
   pyKernelsModule.def("apply_token_bitmask_inplace_cpu", &Kernels_ApplyTokenBitmaskInplaceCPU);

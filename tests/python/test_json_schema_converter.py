@@ -7,7 +7,11 @@ import pytest
 from pydantic import BaseModel, Field, TypeAdapter, WithJsonSchema, create_model
 
 import xgrammar as xgr
-from xgrammar.testing import _is_grammar_accept_string, _json_schema_to_ebnf
+from xgrammar.testing import (
+    _generate_range_regex,
+    _is_grammar_accept_string,
+    _json_schema_to_ebnf,
+)
 
 
 def check_schema_with_grammar(
@@ -862,6 +866,61 @@ def test_object_with_only_properties_keyword():
     check_schema_with_instance(
         schema_unevaluated_properties, instance_rejected, is_accepted=False, any_whitespace=False
     )
+
+
+def test_generate_range_regex():
+    # Basic range tests
+    assert _generate_range_regex(12, 16) == r"^((1[2-6]))$"
+    assert _generate_range_regex(1, 10) == r"^(([1-9]|10))$"
+    assert (
+        _generate_range_regex(2134, 3459)
+        == r"^((2[2-9]\d{2}|2[2-9]\d{2}|21[4-9]\d{1}|213[5-9]|2134|3[0-3]\d{2}|3[0-3]\d{2}|34[0-4]\d{1}|345[0-8]|3459))$"
+    )
+
+    # Negative to positive range
+    assert _generate_range_regex(-5, 10) == r"^(-([1-5])|0|([1-9]|10))$"
+
+    # Pure negative range
+    assert _generate_range_regex(-15, -10) == r"^(-(1[0-5]))$"
+
+    # Large ranges
+    assert (
+        _generate_range_regex(-1999, -100)
+        == r"^(-([1-9]\d{2}|1[0-8]\d{2}|19[0-8]\d{1}|199[0-8]|1999))$"
+    )
+    assert _generate_range_regex(1, 9999) == r"^(([1-9]|[1-9]\d{1}|[1-9]\d{2}|[1-9]\d{3}))$"
+
+    # Unbounded ranges (None cases)
+    assert _generate_range_regex(None, None) == r"^-?\d+$"
+    assert _generate_range_regex(5, None) == r"^([5-9]|[1-9]\d*)$"
+    assert _generate_range_regex(None, 0) == r"^(-[1-9]\d*|0)$"
+
+    # Medium range
+    assert (
+        _generate_range_regex(78, 1278)
+        == r"^(([8-9]\d{1}|79|78|[1-9]\d{2}|1[0-1]\d{2}|12[0-6]\d{1}|127[0-7]|1278))$"
+    )
+
+    # Symmetric range around zero
+    assert (
+        _generate_range_regex(-100, 100) == r"^(-([1-9]|[1-9]\d{1}|100)|0|([1-9]|[1-9]\d{1}|100))$"
+    )
+
+    # Upper bound negative
+    assert _generate_range_regex(None, -123) == r"^(-123|-1[0-1]\d{1}|-12[0-2]|-[1-9]\d{3,})$"
+
+    # Invalid range test (end < start)
+    assert _generate_range_regex(10, 5) == r"^()$"
+    assert _generate_range_regex(0, -1) == r"^()$"
+    assert _generate_range_regex(100, -100) == r"^()$"
+
+    # Additional edge cases
+    # Single number
+    assert _generate_range_regex(5, 5) == r"^((5))$"
+
+    # Zero-inclusive ranges
+    assert _generate_range_regex(-10, 0) == r"^(-([1-9]|10)|0)$"
+    assert _generate_range_regex(0, 10) == r"^(0|([1-9]|10))$"
 
 
 if __name__ == "__main__":

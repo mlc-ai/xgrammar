@@ -63,6 +63,14 @@ std::string JSONSchemaToEBNF(
     bool strict_mode = true
 );
 
+/*!
+ * \brief Generate regex pattern for integer range.
+ * \param start The start of the range (inclusive). If null assume negative infinity.
+ * \param end The end of the range (inclusive). If null assume infinity.
+ * \returns The regex pattern that matches integers in the given range.
+ */
+std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_JSON_SCHEMA_CONVERTER_H_
