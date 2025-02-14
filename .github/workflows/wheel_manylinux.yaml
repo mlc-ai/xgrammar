@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         config:
-          - image: 'mlcaidev/package-cpu:254d630'
+          - image: 'mlcaidev/package-cpu:5b6f876'
 
     runs-on: ubuntu-latest
     environment:
