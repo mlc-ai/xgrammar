@@ -23,8 +23,8 @@
 #include <ATen/cuda/CUDAContext.h>
 // clang-format on
 
-int32_t constexpr kBitsPerMaskElement = 32;
-int32_t constexpr kThreadsPerBlock = 256;
+constexpr int32_t kBitsPerMaskElement = 32;
+constexpr int32_t kThreadsPerBlock = 256;
 
 template <typename T>
 __device__ T NegativeInfinity() {
@@ -43,7 +43,7 @@ __device__ __nv_bfloat16 NegativeInfinity<__nv_bfloat16>() {
 
 template <typename T, typename PackedT>
 __device__ PackedT PackedNegativeInfinity() {
-  int constexpr kAlignment = sizeof(PackedT) / sizeof(T);
+  constexpr int kAlignment = sizeof(PackedT) / sizeof(T);
   T packed[kAlignment];
 #pragma unroll
   for (int i = 0; i < kAlignment; i++) {
@@ -55,21 +55,21 @@ __device__ PackedT PackedNegativeInfinity() {
 template <typename T, typename PackedT, int32_t kBitsPerThread>
 __global__ void __launch_bounds__(kThreadsPerBlock) LogitsBitmaskKernel(
     T* __restrict__ logits,
-    int32_t const* __restrict__ bitmask,
-    int32_t const* __restrict__ indices,
+    const int32_t* __restrict__ bitmask,
+    const int32_t* __restrict__ indices,
     int32_t vocab_size,
     int32_t bitmask_size
 ) {
-  int constexpr kAlignment = sizeof(PackedT) / sizeof(T);
-  uint32_t constexpr kPackedMask = (1 << kAlignment) - 1;
+  constexpr int kAlignment = sizeof(PackedT) / sizeof(T);
+  constexpr uint32_t kPackedMask = (1 << kAlignment) - 1;
 
-  int const batch_idx = (indices == nullptr) ? blockIdx.y : indices[blockIdx.y];
+  const int batch_idx = (indices == nullptr) ? blockIdx.y : indices[blockIdx.y];
 
-  int const block_offset = blockIdx.x * kThreadsPerBlock * kBitsPerThread;
+  const int block_offset = blockIdx.x * kThreadsPerBlock * kBitsPerThread;
   T* logits_gmem_ptr = logits + batch_idx * vocab_size + block_offset;
-  int32_t const* bitmask_gmem_ptr =
+  const int32_t* bitmask_gmem_ptr =
       bitmask + batch_idx * bitmask_size + block_offset / kBitsPerMaskElement;
-  int const bitmask_inner_idx = threadIdx.x % (kBitsPerMaskElement / kAlignment);
+  const int bitmask_inner_idx = threadIdx.x % (kBitsPerMaskElement / kAlignment);
   T logits_reg[kAlignment];
 
 #pragma unroll
@@ -79,7 +79,7 @@ __global__ void __launch_bounds__(kThreadsPerBlock) LogitsBitmaskKernel(
       break;
     }
 
-    uint32_t const bitmask_val =
+    const uint32_t bitmask_val =
         (~bitmask_gmem_ptr[offset / kBitsPerMaskElement] >> (bitmask_inner_idx * kAlignment)) &
         kPackedMask;
 
@@ -104,40 +104,40 @@ __global__ void __launch_bounds__(kThreadsPerBlock) LogitsBitmaskKernel(
 }
 
 template <typename T, typename = std::enable_if_t<std::is_integral<T>::value>>
-auto constexpr CeilDiv(T numerator, T denominator) {
+constexpr auto CeilDiv(T numerator, T denominator) {
   return (numerator + denominator - 1) / denominator;
 }
 
 template <typename T, typename PackedT>
 void ApplyTokenBitmaskInplaceDispatchToBitsPerThread(
     T* __restrict__ logits,
-    int32_t const* __restrict__ bitmask,
-    int32_t const* __restrict__ indices,
+    const int32_t* __restrict__ bitmask,
+    const int32_t* __restrict__ indices,
     int32_t vocab_size,
     int32_t bitmask_size,
     int32_t batch_size
 ) {
-  int constexpr kAlignment = sizeof(PackedT) / sizeof(T);
-  int32_t const num_blocks_per_row = CeilDiv(2048 / kThreadsPerBlock * 128, batch_size);
-  int32_t const num_bits_per_thread = CeilDiv(vocab_size, kThreadsPerBlock * num_blocks_per_row);
+  constexpr int kAlignment = sizeof(PackedT) / sizeof(T);
+  const int32_t num_blocks_per_row = CeilDiv(2048 / kThreadsPerBlock * 128, batch_size);
+  const int32_t num_bits_per_thread = CeilDiv(vocab_size, kThreadsPerBlock * num_blocks_per_row);
 
-  dim3 const block(kThreadsPerBlock);
+  const dim3 block(kThreadsPerBlock);
   cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
 
   if (num_bits_per_thread <= 4 && kAlignment <= 4) {
-    dim3 const grid(CeilDiv(vocab_size, kThreadsPerBlock * 4), batch_size);
+    const dim3 grid(CeilDiv(vocab_size, kThreadsPerBlock * 4), batch_size);
     LogitsBitmaskKernel<T, PackedT, 4>
         <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocab_size, bitmask_size);
   } else if (num_bits_per_thread <= 8 && kAlignment <= 8) {
-    dim3 const grid(CeilDiv(vocab_size, kThreadsPerBlock * 8), batch_size);
+    const dim3 grid(CeilDiv(vocab_size, kThreadsPerBlock * 8), batch_size);
     LogitsBitmaskKernel<T, PackedT, 8>
         <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocab_size, bitmask_size);
   } else if (num_bits_per_thread <= 16 && kAlignment <= 16) {
-    dim3 const grid(CeilDiv(vocab_size, kThreadsPerBlock * 16), batch_size);
+    const dim3 grid(CeilDiv(vocab_size, kThreadsPerBlock * 16), batch_size);
     LogitsBitmaskKernel<T, PackedT, 16>
         <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocab_size, bitmask_size);
   } else {
-    dim3 const grid(CeilDiv(vocab_size, kThreadsPerBlock * 32), batch_size);
+    const dim3 grid(CeilDiv(vocab_size, kThreadsPerBlock * 32), batch_size);
     LogitsBitmaskKernel<T, PackedT, 32>
         <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocab_size, bitmask_size);
   }
@@ -146,8 +146,8 @@ void ApplyTokenBitmaskInplaceDispatchToBitsPerThread(
 template <typename T>
 void ApplyTokenBitmaskInplaceDispatchToPackedT(
     T* __restrict__ logits,
-    int32_t const* __restrict__ bitmask,
-    int32_t const* __restrict__ indices,
+    const int32_t* __restrict__ bitmask,
+    const int32_t* __restrict__ indices,
     int32_t vocab_size,
     int32_t bitmask_size,
     int32_t batch_size
