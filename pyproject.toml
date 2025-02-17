@@ -52,6 +52,8 @@ requires = [
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
+minimum-version = "build-system.requires"
+
 # Build configuration
 build-dir = "build"
 build.verbose = true
@@ -66,7 +68,7 @@ logging.level = "INFO"
 
 # Wheel configuration
 wheel.packages = ["python/xgrammar"]
-wheel.install-dir = "xgrammar"
+#wheel.install-dir = "xgrammar"
 
 # Source distribution configuration
 sdist.include = [
@@ -152,6 +154,9 @@ src_paths = ["python"]
 [tool.cibuildwheel]
 build-verbosity = 1
 skip = ["cp36-*", "cp37-*", "pp*", "*musllinux*"] # pypy doesn't play nice with pybind11
+build-frontend = "build[uv]"
+test-command = "pytest ."
+test-extras = ["test"]
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64"]
