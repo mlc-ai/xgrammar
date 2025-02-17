@@ -53,7 +53,9 @@ def check_schema_with_instance(
     # instance: pydantic model, json string, or any other object (dumped to json string)
     if isinstance(instance, BaseModel):
         instance = json.dumps(
-            instance.model_dump(mode="json", round_trip=True), indent=indent, separators=separators
+            instance.model_dump(mode="json", round_trip=True),
+            indent=indent,
+            separators=separators,
         )
     elif not isinstance(instance, str):
         instance = json.dumps(instance, indent=indent, separators=separators)
@@ -122,7 +124,9 @@ root ::= "{" "" "\"integer_field\"" ": " basic_integer ", " "\"number_field\"" "
     )
 
     schema = MainModel.model_json_schema()
-    check_schema_with_instance(schema, instance_empty, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(
+        schema, instance_empty, is_accepted=False, any_whitespace=False
+    )
 
 
 def test_indent():
@@ -247,7 +251,9 @@ root ::= "{" "" "\"bars\"" ": " root_prop_0 ", " "\"str_values\"" ": " root_prop
 """
 
     schema = MainModel.model_json_schema()
-    instance = MainModel(foo="a", values=1, bars="a", str_values='a\n\r"', field=Field.FOO)
+    instance = MainModel(
+        foo="a", values=1, bars="a", str_values='a\n\r"', field=Field.FOO
+    )
     check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=False)
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
@@ -284,7 +290,9 @@ root ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " root_p
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
     check_schema_with_instance(schema, '{"size": null}', any_whitespace=False)
-    check_schema_with_instance(schema, '{"size": null, "name": "foo"}', any_whitespace=False)
+    check_schema_with_instance(
+        schema, '{"size": null, "name": "foo"}', any_whitespace=False
+    )
     check_schema_with_instance(
         schema, '{"num": 1, "size": null, "name": "foo"}', any_whitespace=False
     )
@@ -341,9 +349,14 @@ root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": 
     )
 
     check_schema_with_instance(
-        schema, '{"size": 1, "num": 1.5, "other": false}', any_whitespace=False, strict_mode=False
+        schema,
+        '{"size": 1, "num": 1.5, "other": false}',
+        any_whitespace=False,
+        strict_mode=False,
     )
-    check_schema_with_instance(schema, '{"other": false}', any_whitespace=False, strict_mode=False)
+    check_schema_with_instance(
+        schema, '{"other": false}', any_whitespace=False, strict_mode=False
+    )
 
 
 def test_empty():
@@ -369,7 +382,9 @@ root ::= "{" "}"
     instance = MainModel()
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
-    check_schema_with_instance(schema, '{"tmp": 123}', any_whitespace=False, strict_mode=False)
+    check_schema_with_instance(
+        schema, '{"tmp": 123}', any_whitespace=False, strict_mode=False
+    )
 
 
 def test_reference():
@@ -432,7 +447,9 @@ def test_reference_schema():
     instance_rejected = {"value": {"name": "John"}}
 
     check_schema_with_instance(schema, instance, any_whitespace=False)
-    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(
+        schema, instance_rejected, is_accepted=False, any_whitespace=False
+    )
 
     # Test simple reference with definitions
     schema_def = {
@@ -463,7 +480,10 @@ def test_reference_schema():
                 "level2": {
                     "nested": {
                         "type": "object",
-                        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                        "properties": {
+                            "name": {"type": "string"},
+                            "age": {"type": "integer"},
+                        },
                         "required": ["name", "age"],
                     }
                 }
@@ -539,7 +559,9 @@ root ::= root_case_0 | root_case_1
 
     check_schema_with_grammar(model_schema, ebnf_grammar, any_whitespace=False)
 
-    check_schema_with_instance(model_schema, Cat(name="kitty", color="black"), any_whitespace=False)
+    check_schema_with_instance(
+        model_schema, Cat(name="kitty", color="black"), any_whitespace=False
+    )
     check_schema_with_instance(
         model_schema, Dog(name="doggy", breed="bulldog"), any_whitespace=False
     )
@@ -565,7 +587,9 @@ def test_anyof_oneof():
     schema_rejected = '{"name": {"a": 1}}'
     check_schema_with_instance(schema, schema_accepted_1, any_whitespace=False)
     check_schema_with_instance(schema, schema_accepted_2, any_whitespace=False)
-    check_schema_with_instance(schema, schema_rejected, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(
+        schema, schema_rejected, is_accepted=False, any_whitespace=False
+    )
 
     schema = {
         "type": "object",
@@ -584,7 +608,9 @@ def test_anyof_oneof():
     schema_rejected = '{"name": {"a": 1}}'
     check_schema_with_instance(schema, schema_accepted_1, any_whitespace=False)
     check_schema_with_instance(schema, schema_accepted_2, any_whitespace=False)
-    check_schema_with_instance(schema, schema_rejected, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(
+        schema, schema_rejected, is_accepted=False, any_whitespace=False
+    )
 
 
 def test_alias():
@@ -604,15 +630,21 @@ basic_object ::= "{" "" basic_string ": " basic_any (", " basic_string ": " basi
 root ::= "{" "" "\"name\"" ": " basic_string "" "}"
 """
 
-    check_schema_with_grammar(MainModel.model_json_schema(), ebnf_grammar, any_whitespace=False)
+    check_schema_with_grammar(
+        MainModel.model_json_schema(), ebnf_grammar, any_whitespace=False
+    )
 
     instance = MainModel(name="kitty")
-    instance_str = json.dumps(instance.model_dump(mode="json", round_trip=True, by_alias=False))
+    instance_str = json.dumps(
+        instance.model_dump(mode="json", round_trip=True, by_alias=False)
+    )
     check_schema_with_instance(
         MainModel.model_json_schema(by_alias=False), instance_str, any_whitespace=False
     )
 
-    instance_str = json.dumps(instance.model_dump(mode="json", round_trip=True, by_alias=True))
+    instance_str = json.dumps(
+        instance.model_dump(mode="json", round_trip=True, by_alias=True)
+    )
     check_schema_with_instance(
         MainModel.model_json_schema(by_alias=True), instance_str, any_whitespace=False
     )
@@ -644,7 +676,9 @@ root ::= "{" "" "\"name 1\"" ": " root_prop_0 "" "}"
         instance_space.model_dump(mode="json", round_trip=True, by_alias=True),
     )
     check_schema_with_instance(
-        MainModelSpace.model_json_schema(by_alias=True), instance_space_str, any_whitespace=False
+        MainModelSpace.model_json_schema(by_alias=True),
+        instance_space_str,
+        any_whitespace=False,
     )
 
 
@@ -654,7 +688,9 @@ def test_restricted_string():
 
     instance = MainModel(restricted_string="a")
     instance_str = json.dumps(instance.model_dump(mode="json"))
-    check_schema_with_instance(MainModel.model_json_schema(), instance_str, any_whitespace=False)
+    check_schema_with_instance(
+        MainModel.model_json_schema(), instance_str, any_whitespace=False
+    )
 
     check_schema_with_instance(
         MainModel.model_json_schema(),
@@ -666,7 +702,9 @@ def test_restricted_string():
 
 def test_complex_restrictions():
     class RestrictedModel(BaseModel):
-        restricted_string: Annotated[str, WithJsonSchema({"type": "string", "pattern": r"[^\"]*"})]
+        restricted_string: Annotated[
+            str, WithJsonSchema({"type": "string", "pattern": r"[^\"]*"})
+        ]
         restricted_value: Annotated[int, Field(strict=True, ge=0, lt=44)]
 
     # working instance
@@ -695,7 +733,9 @@ def test_complex_restrictions():
 
 def test_dynamic_model():
     class MainModel(BaseModel):
-        restricted_string: Annotated[str, WithJsonSchema({"type": "string", "pattern": r"[a-f]"})]
+        restricted_string: Annotated[
+            str, WithJsonSchema({"type": "string", "pattern": r"[a-f]"})
+        ]
 
     additional_fields = {
         "restricted_string_dynamic": (
@@ -737,7 +777,9 @@ root_prop_2 ::= "{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([
 root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 [ \n\t]* "}"
 """
 
-    check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True, strict_mode=True)
+    check_schema_with_grammar(
+        schema, ebnf_grammar, any_whitespace=True, strict_mode=True
+    )
 
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
@@ -754,7 +796,9 @@ root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer (
 root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}"
 """
 
-    check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True, strict_mode=False)
+    check_schema_with_grammar(
+        schema, ebnf_grammar, any_whitespace=True, strict_mode=False
+    )
 
     # Test that different whitespace variations are accepted when any_whitespace=True
     instances = [
@@ -781,7 +825,9 @@ def test_array_with_only_items_keyword():
     instance_accepted = [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}]
     instance_rejected = [{"name": "John"}]
     check_schema_with_instance(schema, instance_accepted, any_whitespace=False)
-    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(
+        schema, instance_rejected, is_accepted=False, any_whitespace=False
+    )
 
     schema_prefix_items = {
         "prefixItems": [
@@ -804,7 +850,9 @@ def test_array_with_only_items_keyword():
         ],
     }
 
-    check_schema_with_instance(schema_prefix_items, instance_accepted, any_whitespace=False)
+    check_schema_with_instance(
+        schema_prefix_items, instance_accepted, any_whitespace=False
+    )
     check_schema_with_instance(
         schema_prefix_items, instance_rejected, is_accepted=False, any_whitespace=False
     )
@@ -820,9 +868,14 @@ def test_array_with_only_items_keyword():
         },
     }
 
-    check_schema_with_instance(schema_unevaluated_items, instance_accepted, any_whitespace=False)
     check_schema_with_instance(
-        schema_unevaluated_items, instance_rejected, is_accepted=False, any_whitespace=False
+        schema_unevaluated_items, instance_accepted, any_whitespace=False
+    )
+    check_schema_with_instance(
+        schema_unevaluated_items,
+        instance_rejected,
+        is_accepted=False,
+        any_whitespace=False,
     )
 
 
@@ -837,7 +890,9 @@ def test_object_with_only_properties_keyword():
     instance_accepted = {"name": "John", "age": 30}
     instance_rejected = {"name": "John"}
     check_schema_with_instance(schema, instance_accepted, any_whitespace=False)
-    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(
+        schema, instance_rejected, is_accepted=False, any_whitespace=False
+    )
 
     schema_additional_properties = {
         "additionalProperties": {
@@ -851,7 +906,10 @@ def test_object_with_only_properties_keyword():
         schema_additional_properties, instance_accepted, any_whitespace=False
     )
     check_schema_with_instance(
-        schema_additional_properties, instance_rejected, is_accepted=False, any_whitespace=False
+        schema_additional_properties,
+        instance_rejected,
+        is_accepted=False,
+        any_whitespace=False,
     )
 
     schema_unevaluated_properties = {
@@ -864,7 +922,10 @@ def test_object_with_only_properties_keyword():
         schema_unevaluated_properties, instance_accepted, any_whitespace=False
     )
     check_schema_with_instance(
-        schema_unevaluated_properties, instance_rejected, is_accepted=False, any_whitespace=False
+        schema_unevaluated_properties,
+        instance_rejected,
+        is_accepted=False,
+        any_whitespace=False,
     )
 
 
@@ -888,7 +949,10 @@ def test_generate_range_regex():
         _generate_range_regex(-1999, -100)
         == r"^(-([1-9]\d{2}|1[0-8]\d{2}|19[0-8]\d{1}|199[0-8]|1999))$"
     )
-    assert _generate_range_regex(1, 9999) == r"^(([1-9]|[1-9]\d{1}|[1-9]\d{2}|[1-9]\d{3}))$"
+    assert (
+        _generate_range_regex(1, 9999)
+        == r"^(([1-9]|[1-9]\d{1}|[1-9]\d{2}|[1-9]\d{3}))$"
+    )
 
     # Unbounded ranges (None cases)
     assert _generate_range_regex(None, None) == r"^-?\d+$"
@@ -903,11 +967,15 @@ def test_generate_range_regex():
 
     # Symmetric range around zero
     assert (
-        _generate_range_regex(-100, 100) == r"^(-([1-9]|[1-9]\d{1}|100)|0|([1-9]|[1-9]\d{1}|100))$"
+        _generate_range_regex(-100, 100)
+        == r"^(-([1-9]|[1-9]\d{1}|100)|0|([1-9]|[1-9]\d{1}|100))$"
     )
 
     # Upper bound negative
-    assert _generate_range_regex(None, -123) == r"^(-123|-1[0-1]\d{1}|-12[0-2]|-[1-9]\d{3,})$"
+    assert (
+        _generate_range_regex(None, -123)
+        == r"^(-123|-1[0-1]\d{1}|-12[0-2]|-[1-9]\d{3,})$"
+    )
 
     # Invalid range test (end < start)
     assert _generate_range_regex(10, 5) == r"^()$"

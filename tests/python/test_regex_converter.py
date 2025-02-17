@@ -39,13 +39,13 @@ regex_expected_grammar_instance = [
         r"\"\'\a\f\n\r\t\v\0\e",
         r"""root ::= "\"" "\'" "\a" "\f" "\n" "\r" "\t" "\v" "\0" "\e"
 """,
-        "\"'\a\f\n\r\t\v\0\x1B",
+        "\"'\a\f\n\r\t\v\0\x1b",
     ),
     (
         r"\u{20BB7}\u0300\x1F\cJ",
         r"""root ::= "\U00020bb7" "\u0300" "\x1f" "\n"
 """,
-        "\U00020BB7\u0300\x1F\n",
+        "\U00020bb7\u0300\x1f\n",
     ),
     (
         r"[\r\n\$\u0010-\u006F\]\--]+",
@@ -56,7 +56,9 @@ regex_expected_grammar_instance = [
 ]
 
 
-@pytest.mark.parametrize("regex, expected_grammar, instance", regex_expected_grammar_instance)
+@pytest.mark.parametrize(
+    "regex, expected_grammar, instance", regex_expected_grammar_instance
+)
 def test_escape(regex: str, expected_grammar: str, instance: str):
     grammar_str = _regex_to_ebnf(regex)
     assert grammar_str == expected_grammar
@@ -130,19 +132,27 @@ def test_quantifier():
 
 def test_consecutive_quantifiers():
     regex = "a{1,3}?{1,3}"
-    with pytest.raises(RuntimeError, match="Two consecutive repetition modifiers are not allowed."):
+    with pytest.raises(
+        RuntimeError, match="Two consecutive repetition modifiers are not allowed."
+    ):
         _regex_to_ebnf(regex)
 
     regex = "a???"
-    with pytest.raises(RuntimeError, match="Two consecutive repetition modifiers are not allowed."):
+    with pytest.raises(
+        RuntimeError, match="Two consecutive repetition modifiers are not allowed."
+    ):
         _regex_to_ebnf(regex)
 
     regex = "a++"
-    with pytest.raises(RuntimeError, match="Two consecutive repetition modifiers are not allowed."):
+    with pytest.raises(
+        RuntimeError, match="Two consecutive repetition modifiers are not allowed."
+    ):
         _regex_to_ebnf(regex)
 
     regex = "a+?{1,3}"
-    with pytest.raises(RuntimeError, match="Two consecutive repetition modifiers are not allowed."):
+    with pytest.raises(
+        RuntimeError, match="Two consecutive repetition modifiers are not allowed."
+    ):
         _regex_to_ebnf(regex)
 
 
@@ -242,7 +252,9 @@ time_instances_accepted = [
 
 @pytest.mark.parametrize("instance, accepted", time_instances_accepted)
 def test_time(instance: str, accepted: bool):
-    regex = r"^([01]\d|2[0123]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]([01]\d|2[0123]):[0-5]\d)$"
+    regex = (
+        r"^([01]\d|2[0123]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]([01]\d|2[0123]):[0-5]\d)$"
+    )
     grammar_str = _regex_to_ebnf(regex)
     expected_grammar = (
         r"""root ::= ( [01] [0-9] | "2" [0123] ) ":" [0-5] [0-9] ":" [0-5] [0-9] """
@@ -284,7 +296,9 @@ def test_email(instance: str, accepted: bool):
 
 def test_empty_character_class():
     regex = "[]"
-    with pytest.raises(RuntimeError, match="Empty character class is not allowed in regex."):
+    with pytest.raises(
+        RuntimeError, match="Empty character class is not allowed in regex."
+    ):
         _regex_to_ebnf(regex)
 
 
@@ -411,7 +425,10 @@ def test_non_greedy_quantifier():
     assert not _is_grammar_accept_string(grammar_str, "aa")
 
 
-tokenizer_paths = ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
+tokenizer_paths = [
+    "meta-llama/Llama-2-7b-chat-hf",
+    "meta-llama/Meta-Llama-3-8B-Instruct",
+]
 regex_instances = [
     (r".+a.+", "bbbabb"),
     (
@@ -436,10 +453,14 @@ regex_instances = [
         "customer/department=shipping@test.example.test-example.com",
     ),
 ]
-tokenizer_path_regex_instance = [(t, *ri) for t in tokenizer_paths for ri in regex_instances]
+tokenizer_path_regex_instance = [
+    (t, *ri) for t in tokenizer_paths for ri in regex_instances
+]
 
 
-@pytest.mark.parametrize("tokenizer_path, regex, instance", tokenizer_path_regex_instance)
+@pytest.mark.parametrize(
+    "tokenizer_path, regex, instance", tokenizer_path_regex_instance
+)
 def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     print(f"Tokenizer: {tokenizer_path}, regex: {regex}, instance: {instance}")
 

@@ -122,7 +122,9 @@ def _is_grammar_accept_string(
 
     if print_time:
         end = time.monotonic_ns()
-        print(f"Accepting {input_str}, result: {accepted}, time: {(end - start) / 1e3} us")
+        print(
+            f"Accepting {input_str}, result: {accepted}, time: {(end - start) / 1e3} us"
+        )
 
     if not accepted:
         return False
@@ -187,7 +189,9 @@ def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
 
 
 def _get_matcher_from_grammar_and_tokenizer_info(
-    grammar: Union[Grammar, str], tokenizer_info: Optional[TokenizerInfo] = None, **kwargs
+    grammar: Union[Grammar, str],
+    tokenizer_info: Optional[TokenizerInfo] = None,
+    **kwargs,
 ) -> GrammarMatcher:
     """Create a GrammarMatcher from a grammar and tokenizer info.
 
@@ -236,5 +240,7 @@ def _get_allow_empty_rule_ids(compiled_grammar: CompiledGrammar) -> List[int]:
     return _core.testing._get_allow_empty_rule_ids(compiled_grammar._handle)
 
 
-def _generate_range_regex(start: Optional[int] = None, end: Optional[int] = None) -> str:
+def _generate_range_regex(
+    start: Optional[int] = None, end: Optional[int] = None
+) -> str:
     return _core.testing._generate_range_regex(start, end)

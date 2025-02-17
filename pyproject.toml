@@ -32,7 +32,10 @@ GitHub = "https://github.com/mlc-ai/xgrammar"
 triton = [
     "triton",
 ]
-
+test = [
+    "protobuf",
+    "huggingface-hub[cli]",
+]
 
 [tool.scikit-build.metadata.version]
 provider = "scikit_build_core.metadata.regex"
@@ -64,7 +67,6 @@ logging.level = "INFO"
 # Wheel configuration
 wheel.packages = ["python/xgrammar"]
 wheel.install-dir = "xgrammar"
-
 
 # Source distribution configuration
 sdist.include = [

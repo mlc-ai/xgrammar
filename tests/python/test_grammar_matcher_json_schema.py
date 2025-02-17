@@ -66,7 +66,9 @@ def test_json_schema_debug_accept_string():
 
 def test_json_schema_find_jump_forward_string():
     grammar = xgr.Grammar.from_json_schema(MainModel, indent=2)
-    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, xgr.TokenizerInfo([]))
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        grammar, xgr.TokenizerInfo([])
+    )
 
     for i, c in enumerate(instance_str):
         jump_forward_str = matcher.find_jump_forward_string()
@@ -98,7 +100,10 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device="cuda")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logits_gpu = torch.zeros(
+        tokenizer_info.vocab_size, dtype=torch.float32, device=device,
+    )
 
     input_bytes = instance_str.encode("utf-8")
 
@@ -110,12 +115,16 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
         # 2. apply_token_bitmask_inplace
-        torch.cuda.synchronize()
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         time_start = time.monotonic_ns()
-        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to("cuda"))
-        torch.cuda.synchronize()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         time_end = time.monotonic_ns()
-        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+        print(
+            f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us"
+        )
 
         # 3. accept_string
         print("Accepting char:", bytes([c]))
@@ -126,7 +135,9 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
 
     # 5. Final correctness verification
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(
+        token_bitmask, tokenizer_info.vocab_size,
+    )
     assert tokenizer.eos_token_id not in rejected_token_ids
 
 

@@ -219,8 +219,34 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         '{"id": 1,"name": "Example"}',
         [
             # fmt: off
-            31989, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 272, 272, 272, 272,
-            272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999,
+            31989,
+            31912,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            31948,
+            31915,
+            272,
+            272,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            265,
+            265,
+            265,
+            265,
+            265,
+            265,
+            265,
+            265,
+            31974,
+            31999,
             # fmt: on
         ],
     ),
@@ -237,15 +263,123 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 }""",
         [
             # fmt: off
-            31989, 31912, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 31915, 272, 272,
-            272, 31973, 31846, 31846, 265, 265, 265, 31974, 31915, 31915, 272, 272, 272, 31973,
-            31846, 31846, 31997, 31997, 31998, 31974, 31915, 31915, 272, 272, 31973, 31846, 31846,
-            31840, 264, 264, 264, 31969, 31846, 31846, 264, 264, 264, 31969, 31974, 31915, 31915,
-            272, 272, 272, 31973, 31846, 31846, 31908, 272, 272, 272, 272, 31973, 31846, 31846,
-            31906, 272, 272, 272, 272, 31973, 31846, 31846, 264, 264, 264, 31968, 31970, 31915,
-            31915, 272, 272, 272, 272, 31973, 31846, 31846, 31840, 31943, 31846, 31846, 31943,
-            31846, 31846, 31943, 31970, 31974, 31915, 31915, 272, 272, 272, 272, 31973, 31846,
-            31846, 265, 265, 265, 265, 31974, 31974, 31999,
+            31989,
+            31912,
+            31912,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            31948,
+            31915,
+            31915,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            265,
+            265,
+            265,
+            31974,
+            31915,
+            31915,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            31997,
+            31997,
+            31998,
+            31974,
+            31915,
+            31915,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            31840,
+            264,
+            264,
+            264,
+            31969,
+            31846,
+            31846,
+            264,
+            264,
+            264,
+            31969,
+            31974,
+            31915,
+            31915,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            31908,
+            272,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            31906,
+            272,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            264,
+            264,
+            264,
+            31968,
+            31970,
+            31915,
+            31915,
+            272,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            31840,
+            31943,
+            31846,
+            31846,
+            31943,
+            31846,
+            31846,
+            31943,
+            31970,
+            31974,
+            31915,
+            31915,
+            272,
+            272,
+            272,
+            272,
+            31973,
+            31846,
+            31846,
+            265,
+            265,
+            265,
+            265,
+            31974,
+            31974,
+            31999,
             # fmt: on
         ],
     ),
@@ -255,9 +389,40 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         '{"id": 1,"name": "Example哈哈"}',
         [
             # fmt: off
-            128235, 127497, 5002, 5002, 5002, 127849, 126399, 126399, 126760, 127499, 5002, 5002,
-            5002, 5002, 5002, 127849, 126399, 126399, 4952, 4952, 4952, 4952, 4952, 4952, 4952,
-            4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128255,
+            128235,
+            127497,
+            5002,
+            5002,
+            5002,
+            127849,
+            126399,
+            126399,
+            126760,
+            127499,
+            5002,
+            5002,
+            5002,
+            5002,
+            5002,
+            127849,
+            126399,
+            126399,
+            4952,
+            4952,
+            4952,
+            4952,
+            4952,
+            4952,
+            4952,
+            4952,
+            128066,
+            128111,
+            4952,
+            128066,
+            128111,
+            4952,
+            127873,
+            128255,
             # fmt: on
         ],
     ),
@@ -287,7 +452,11 @@ def test_fill_next_token_bitmask(
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device="cuda")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    logits_gpu = torch.zeros(
+        tokenizer_info.vocab_size, dtype=torch.float32, device=device,
+    )
 
     input_bytes = input_str.encode("utf-8")
 
@@ -305,12 +474,16 @@ def test_fill_next_token_bitmask(
         assert len(rejected_token_ids) == expected_rejected_sizes[i]
 
         # 3. apply_token_bitmask_inplace
-        torch.cuda.synchronize()
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         time_start = time.monotonic_ns()
-        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to("cuda"))
-        torch.cuda.synchronize()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         time_end = time.monotonic_ns()
-        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+        print(
+            f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us"
+        )
 
         # 4. accept_string
         print("Accepting char:", bytes([c]))
@@ -321,7 +494,9 @@ def test_fill_next_token_bitmask(
 
     # 5. Final correctness verification
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(
+        token_bitmask, tokenizer_info.vocab_size
+    )
     assert len(rejected_token_ids) == expected_rejected_sizes[-1]
 
 

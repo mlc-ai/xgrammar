@@ -13,13 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from contextlib import suppress
 from typing import List, Optional, Union
 
 import torch
 import torch.utils.cpp_extension
 
 
-def _remove_torch_nvcc_flags():
+def _remove_torch_nvcc_flags() -> None:
     REMOVE_NVCC_FLAGS = [
         "-D__CUDA_NO_HALF_OPERATORS__",
         "-D__CUDA_NO_HALF_CONVERSIONS__",
@@ -27,30 +28,27 @@ def _remove_torch_nvcc_flags():
         "-D__CUDA_NO_HALF2_OPERATORS__",
     ]
     for flag in REMOVE_NVCC_FLAGS:
-        try:
+        with suppress(ValueError):
             torch.utils.cpp_extension.COMMON_NVCC_FLAGS.remove(flag)
-        except ValueError:
-            pass
 
 
-def _load_torch_ops():
-    src = __file__.replace(".py", ".cu")
-    cflags = ["-O3", "-Wno-switch-bool"]
-    cuda_cflags = [
-        "-O3",
-        "-std=c++17",
-        "--threads",
-        "4",
-        "-use_fast_math",
-    ]
-    torch.utils.cpp_extension.load(
+def _load_torch_ops() -> None:
+    with open(__file__.replace(".py", ".cu")) as f:
+        source = f.read()
+    torch.utils.cpp_extension.load_inline(
         name="xgrammar",
-        sources=[src],
-        extra_cflags=cflags,
-        extra_cuda_cflags=cuda_cflags,
+        cpp_sources=[],  # No C++ sources
+        cuda_sources=[source],
+        extra_cflags=["-O3", "-Wno-switch-bool"],
+        extra_cuda_cflags=[
+            "-O3",
+            "-std=c++17",
+            "--threads",
+            "4",
+            "-use_fast_math",
+        ],
         with_cuda=True,
         is_python_module=False,
-        is_standalone=False,
     )
 
 
@@ -58,7 +56,10 @@ _remove_torch_nvcc_flags()
 _load_torch_ops()
 
 
-_is_register_fake_available = hasattr(torch, "library") and hasattr(torch.library, "register_fake")
+_is_register_fake_available = hasattr(torch, "library") and hasattr(
+    torch.library,
+    "register_fake",
+)
 
 if _is_register_fake_available:
 

@@ -363,10 +363,14 @@ def test_error():
     ):
         xgr.Grammar.from_ebnf("root ::= a b")
 
-    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 15: Expect element"):
+    with pytest.raises(
+        RuntimeError, match="EBNF parse error at line 1, column 15: Expect element"
+    ):
         xgr.Grammar.from_ebnf('root ::= "a" |')
 
-    with pytest.raises(RuntimeError, match='EBNF parse error at line 1, column 15: Expect "'):
+    with pytest.raises(
+        RuntimeError, match='EBNF parse error at line 1, column 15: Expect "'
+    ):
         xgr.Grammar.from_ebnf('root ::= "a" "')
 
     with pytest.raises(
@@ -400,7 +404,9 @@ def test_error():
     ):
         xgr.Grammar.from_ebnf(r"root ::= [Z-A]")
 
-    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 6: Expect ::="):
+    with pytest.raises(
+        RuntimeError, match="EBNF parse error at line 1, column 6: Expect ::="
+    ):
         xgr.Grammar.from_ebnf(r'root := "a"')
 
     with pytest.raises(

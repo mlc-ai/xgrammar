@@ -1,5 +1,6 @@
 """Match the output of the LLM to the specified grammar, then generate the mask for the next
-token."""
+token.
+"""
 
 import math
 import os
@@ -9,10 +10,14 @@ import torch
 
 from .base import XGRObject, _core
 from .compiler import CompiledGrammar
-from .kernels import (
-    apply_token_bitmask_inplace_cpu,
-    apply_token_bitmask_inplace_cuda,
-    apply_token_bitmask_inplace_triton,
+from .kernels import apply_token_bitmask_inplace as apply_token_bitmask_inplace_impl
+
+# Add these error message constants at the top of the file after imports
+TRITON_IMPORT_ERROR = "Triton is not installed"
+DEVICE_SUPPORT_ERROR = "Currently, logit masking is only supported on CUDA or CPU."
+BITMASK_CPU_ERROR = "bitmask should be on CPU."
+GRAMMAR_COMPILE_ERROR = (
+    "The grammar should be compiled before passing it to GrammarMatcher."
 )
 
 """The dtype of the bitmask: int32."""
@@ -23,7 +28,7 @@ _is_cuda_available = torch.cuda.is_available()
 
 
 def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
-    """Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32))"""
+    """Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32))."""
     return (batch_size, math.ceil(vocab_size / 32))
 
 
@@ -121,20 +126,43 @@ def apply_token_bitmask_inplace(
         apply the bitmask to all logits in the batch.
     """
     if bitmask.device != logits.device:
-        raise ValueError(
-            "logits and bitmask should be on the same device. "
-            + f"But got logits.device: {logits.device}, bitmask.device: {bitmask.device}"
+        raise DeviceValidationError(
+            DeviceValidationError.device_mismatch(logits.device, bitmask.device)
         )
 
     if logits.device.type == "cuda":
-        if os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") == "1":
-            apply_token_bitmask_inplace_triton(logits, bitmask, indices)
+        if os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") == "1" and "triton" in apply_token_bitmask_inplace_impl:
+            apply_token_bitmask_inplace_impl["triton"](logits, bitmask, indices)
         else:
-            apply_token_bitmask_inplace_cuda(logits, bitmask, indices)
+            apply_token_bitmask_inplace_impl["cuda"](logits, bitmask, indices)
     elif logits.device.type == "cpu":
-        apply_token_bitmask_inplace_cpu(logits, bitmask, indices)
+        apply_token_bitmask_inplace_impl["cpu"](logits, bitmask, indices)
     else:
-        raise ValueError("Currently, logit masking is only supported on CUDA or CPU.")
+        raise ValueError(DEVICE_SUPPORT_ERROR)
+
+
+class BitmaskTypeError(ValueError):
+    def __init__(self, dtype: torch.dtype) -> None:
+        super().__init__(f"bitmask should be of type {dtype}")
+
+
+class DeviceValidationError(ValueError):
+    """Errors related to device validation."""
+
+    @staticmethod
+    def device_mismatch(
+        logits_device: torch.device, bitmask_device: torch.device,
+    ) -> str:
+        return (
+            f"logits and bitmask should be on the same device. "
+            f"But got logits.device: {logits_device}, bitmask.device: {bitmask_device}"
+        )
+
+
+class GrammarTypeError(TypeError):
+    """Errors related to grammar type validation."""
+
+    INVALID_GRAMMAR = "The grammar should be compiled before passing it to GrammarMatcher"
 
 
 class GrammarMatcher(XGRObject):
@@ -179,7 +207,7 @@ class GrammarMatcher(XGRObject):
         max_rollback_tokens: int = 0,
     ) -> None:
         if not isinstance(compiled_grammar, CompiledGrammar):
-            raise ValueError("The grammar should be compiled before passing it to GrammarMatcher.")
+            raise GrammarTypeError(GrammarTypeError.INVALID_GRAMMAR)
 
         if isinstance(override_stop_tokens, int):
             override_stop_tokens = [override_stop_tokens]
@@ -190,7 +218,7 @@ class GrammarMatcher(XGRObject):
                 override_stop_tokens,
                 terminate_without_stop_token,
                 max_rollback_tokens,
-            )
+            ),
         )
 
     def accept_token(self, token_id: int, *, debug_print: bool = False) -> bool:
@@ -239,9 +267,9 @@ class GrammarMatcher(XGRObject):
             this means the bitmask is already all-true, so no need to apply it.
         """
         if bitmask.device.type != "cpu":
-            raise ValueError("bitmask should be on CPU.")
+            raise ValueError(BITMASK_CPU_ERROR)
         if bitmask.dtype != bitmask_dtype:
-            raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
+            raise BitmaskTypeError(bitmask_dtype)
         return self._handle.fill_next_token_bitmask(
             bitmask.data_ptr(), list(bitmask.shape), index, debug_print
         )

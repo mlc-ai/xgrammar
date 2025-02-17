@@ -45,30 +45,261 @@ rule2 ::= "dg"
 """
     tokens = [
         # fmt: off
-        "a", "b", "c", "d", "g", "t", "1", "2", "1a", "2d", "2a", "2dgt",
-        "2dgtag1a", "2dgtag1b", "tag1a", "tag1b", "c哈哈t", "q", "abcdef"
+        "a",
+        "b",
+        "c",
+        "d",
+        "g",
+        "t",
+        "1",
+        "2",
+        "1a",
+        "2d",
+        "2a",
+        "2dgt",
+        "2dgtag1a",
+        "2dgtag1b",
+        "tag1a",
+        "tag1b",
+        "c哈哈t",
+        "q",
+        "abcdef",
         # fmt: on
     ]
     input_str = "tag1abcqqtag2dgq"
     expected_accepted_tokens = [
         # fmt: off
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'abcdef'],
-        ['b'],
-        ['c哈哈t', 'c'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['d'],
-        ['g'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef']
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        ["a", "abcdef"],
+        ["b"],
+        ["c哈哈t", "c"],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        ["d"],
+        ["g"],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
+        [
+            "a",
+            "b",
+            "c",
+            "d",
+            "g",
+            "t",
+            "1",
+            "2",
+            "1a",
+            "2d",
+            "2a",
+            "2dgt",
+            "2dgtag1a",
+            "tag1a",
+            "c哈哈t",
+            "q",
+            "abcdef",
+        ],
         # fmt: on
     ]
 
@@ -82,8 +313,12 @@ rule2 ::= "dg"
     # pad a dummy char to check the final bitmask after accepting the input string
     for i, c in enumerate(input_str + "0"):
         matcher.fill_next_token_bitmask(mask)
-        rejected_indices = _get_masked_tokens_from_bitmask(mask, tokenizer_info.vocab_size)
-        accepted_indices = list(set(range(tokenizer_info.vocab_size)) - set(rejected_indices))
+        rejected_indices = _get_masked_tokens_from_bitmask(
+            mask, tokenizer_info.vocab_size
+        )
+        accepted_indices = list(
+            set(range(tokenizer_info.vocab_size)) - set(rejected_indices)
+        )
         accepted_tokens = [tokens[id] for id in accepted_indices]
         if i < len(input_str):
             assert matcher._debug_accept_string(c)
@@ -231,10 +466,14 @@ def test_structural_tag_mask_gen():
     # Set up grammar from schemas
     tags = [
         xgr.StructuralTagItem(
-            start="<function=f>", schema=json.dumps(Schema1.model_json_schema()), end="</function>"
+            start="<function=f>",
+            schema=json.dumps(Schema1.model_json_schema()),
+            end="</function>",
         ),
         xgr.StructuralTagItem(
-            start="<function=g>", schema=json.dumps(Schema2.model_json_schema()), end="</function>"
+            start="<function=g>",
+            schema=json.dumps(Schema2.model_json_schema()),
+            end="</function>",
         ),
     ]
     triggers = ["<function=f", "<function=g"]
@@ -254,7 +493,9 @@ def test_structural_tag_mask_gen():
     compiled_grammar = compiler.compile_structural_tag(tags, triggers)
     matcher = xgr.GrammarMatcher(compiled_grammar)
     time_end = time.monotonic_ns()
-    print(f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+    print(
+        f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us"
+    )
 
     # Test input string
     accepted_input = (
@@ -263,8 +504,36 @@ def test_structural_tag_mask_gen():
     )
     dont_apply_mask_indices = [
         # fmt: off
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
-        77, 78, 119, 120, 121, 122
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        119,
+        120,
+        121,
+        122,
         # fmt: on
     ]
     input_bytes = accepted_input.encode("utf-8")
@@ -302,7 +571,9 @@ def test_structural_tag_mask_gen():
     time_end = time.monotonic_ns()
     assert need_apply == (len(input_bytes) not in dont_apply_mask_indices)
     print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
-    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(
+        token_bitmask, tokenizer_info.vocab_size
+    )
     assert tokenizer.eos_token_id not in rejected_token_ids
 
 

@@ -18,9 +18,7 @@ import argparse
 import torch
 from triton.testing import do_bench
 
-from xgrammar.kernels import (
-    apply_token_bitmask_inplace_cuda,
-    apply_token_bitmask_inplace_triton,
+from xgrammar.kernels import apply_token_bitmask_inplace
 )
 from xgrammar.testing import _bool_mask_to_bitmask
 
@@ -32,7 +30,10 @@ if __name__ == "__main__":
     parser.add_argument("--masked_cnt", type=int, default=1024)
     parser.add_argument("--stride", type=int, default=1)
     parser.add_argument(
-        "--logits_dtype", type=str, choices=["float32", "float16", "bfloat16"], default="float32"
+        "--logits_dtype",
+        type=str,
+        choices=["float32", "float16", "bfloat16"],
+        default="float32",
     )
     parser.add_argument("--warmup", type=int, default=500)
     parser.add_argument("--rep", type=int, default=2000)
@@ -53,13 +54,18 @@ if __name__ == "__main__":
         bool_mask = torch.ones(batch_size, vocab_size, dtype=torch.bool, device="cuda")
         if masked_cnt > 0:
             masked_positions = torch.stack(
-                [torch.randperm(vocab_size, device="cuda")[:masked_cnt] for _ in range(batch_size)]
+                [
+                    torch.randperm(vocab_size, device="cuda")[:masked_cnt]
+                    for _ in range(batch_size)
+                ]
             )
             bool_mask.scatter_(1, masked_positions, False)
             assert (bool_mask.sum(dim=-1) + masked_cnt == vocab_size).all().item()
     bitmask = _bool_mask_to_bitmask(bool_mask)
 
-    masked_batch_ids = torch.arange(0, batch_size, stride, dtype=torch.int32, device="cuda")
+    masked_batch_ids = torch.arange(
+        0, batch_size, stride, dtype=torch.int32, device="cuda"
+    )
     kwargs = {} if stride == 1 else {"indices": masked_batch_ids}
 
     logits_expected = logits.clone()
@@ -68,9 +74,13 @@ if __name__ == "__main__":
     )
 
     if args.impl == "cuda":
-        f = lambda: apply_token_bitmask_inplace_cuda(logits, bitmask, **kwargs)
+        if "cuda" not in apply_token_bitmask_inplace:
+            raise ImportError("CUDA is not installed")
+        f = lambda: apply_token_bitmask_inplace["cuda"](logits, bitmask, **kwargs)
     elif args.impl == "triton":
-        f = lambda: apply_token_bitmask_inplace_triton(logits, bitmask, **kwargs)
+        if "triton" not in apply_token_bitmask_inplace:
+            raise ImportError("Triton is not installed")
+        f = lambda: apply_token_bitmask_inplace["triton"](logits, bitmask, **kwargs)
 
     f()
     torch.testing.assert_close(logits, logits_expected.to("cuda"))
