@@ -4,7 +4,6 @@ description = "Efficient, Flexible and Portable Structured Generation"
 authors = [
     { name = "MLC Team" }
 ]
-version = "0.1.13"
 readme = "README.md"
 license = { text = "Apache 2.0" }
 classifiers = [
@@ -25,26 +24,40 @@ dependencies = [
     "torch",
     "transformers",
 ]
+dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/mlc-ai/xgrammar"
+Homepage = "https://xgrammar.mlc.ai/"
+GitHub = "https://github.com/mlc-ai/xgrammar"
+
+[project.optional-dependencies]
+triton = [
+    "triton",
+]
+
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "python/xgrammar/version.py"
 
 [build-system]
 requires = [
-    "scikit-build-core>=0.7.0",
+    "scikit-build-core>=0.10.0",
     "pybind11>=2.11.0",
     "wheel",
-    "cmake>=3.12",
+    "cmake>=3.18",
     "ninja",
 ]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
-cmake.minimum-version = "3.12"
+cmake.verison = ">=3.18"
+ninja.version = ">=1.11"
 cmake.args = []  # Add any custom CMake arguments here
-cmake.build-type = "Release"
-cmake.verbose = true
-wheel.packages = ["python/xgrammar"]  # Adjust to your package location
+# cmake.build-type = "Release" # release is default
+build.verbose = true
+wheel.packages = ["python/xgrammar"] 
+wheel.license-files = ["LICENSE"]
 wheel.install-dir = "xgrammar"
 sdist.include = [
     "3rdparty/**/*",
@@ -61,8 +74,6 @@ sdist.include = [
     "tests/**/*",
     "README.md",
     "NOTICE",
-    "grammar_functor.cc", #??
-
 ]
 sdist.exclude = [
     "**/.git",
@@ -119,3 +130,12 @@ line-length = 100
 [tool.isort]
 profile = "black"
 src_paths = ["python"]
+
+[tool.cibuildwheel]
+build-verbosity = 1
+skip = ["cp36-*", "cp37-*", "pp*"] # pypy is not nice with pybind11
+build = { requires = ["cmake>=3.12", "ninja"] }
+environment = { SKBUILD_BUILD_OPTIONS="--" }
+
+
+
