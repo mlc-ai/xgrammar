@@ -1,20 +1,4 @@
-# Setup Pybind11
-find_package(
-  Python3
-  COMPONENTS Interpreter Development
-  REQUIRED
-)
-
-execute_process(
-  COMMAND ${Python3_EXECUTABLE} "-c" "import pybind11 as pb11; print(pb11.get_cmake_dir(),end='');"
-  RESULT_VARIABLE PYBIND_CMAKE_DIR_RET
-  OUTPUT_VARIABLE PYBIND_CMAKE_DIR
-)
-if(PYBIND_CMAKE_DIR_RET MATCHES 0)
-  list(APPEND CMAKE_PREFIX_PATH "${PYBIND_CMAKE_DIR}")
-else()
-  message(FATAL_ERROR "pybind11 is not installed. Please install pybind11 with pip or conda first")
-endif()
+set(PYBIND11_NEWPYTHON ON)
 find_package(pybind11 CONFIG REQUIRED)
 
 file(GLOB_RECURSE XGRAMMAR_BINDINGS_PATH ${PROJECT_SOURCE_DIR}/cpp/*.cc)

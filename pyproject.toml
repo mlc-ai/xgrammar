@@ -151,9 +151,15 @@ src_paths = ["python"]
 
 [tool.cibuildwheel]
 build-verbosity = 1
-skip = ["cp36-*", "cp37-*", "pp*"] # pypy is not nice with pybind11
-build = { requires = ["cmake>=3.18", "ninja"] }
-environment = { SKBUILD_BUILD_OPTIONS="--" }
+skip = ["cp36-*", "cp37-*", "pp*", "*musllinux*"] # pypy doesn't play nice with pybind11
 
+[tool.cibuildwheel.linux]
+archs = ["x86_64", "aarch64"]
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
 
 
