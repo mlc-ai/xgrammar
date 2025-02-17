@@ -1,9 +1,7 @@
 [project]
 name = "xgrammar"
 description = "Efficient, Flexible and Portable Structured Generation"
-authors = [
-    { name = "MLC Team" }
-]
+authors = [{ name = "MLC Team" }]
 readme = "README.md"
 license = { text = "Apache 2.0" }
 classifiers = [
@@ -51,38 +49,56 @@ requires = [
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
-cmake.verison = ">=3.18"
-ninja.version = ">=1.11"
-cmake.args = []  # Add any custom CMake arguments here
-# cmake.build-type = "Release" # release is default
+# Build configuration
+build-dir = "build"
 build.verbose = true
-wheel.packages = ["python/xgrammar"] 
-wheel.license-files = ["LICENSE"]
+
+# CMake configuration
+cmake.version = "CMakeLists.txt"
+cmake.args = []
+cmake.build-type = "RelWithDebInfo" # Release is Default
+
+# Logging
+logging.level = "INFO"
+
+# Wheel configuration
+wheel.packages = ["python/xgrammar"]
 wheel.install-dir = "xgrammar"
+
+
+# Source distribution configuration
 sdist.include = [
-    "3rdparty/**/*",
-    "cmake/**/*",
-    "CMakeLists.txt",
-    "cpp/**/*.cc",
-    "cpp/**/*.cpp",
-    "cpp/**/*.h",
-    "cpp/**/CMakeLists.txt",
-    "docs/**/*",
-    "include/**/*",
-    "LICENSE",
-    "python/xgrammar/**/*.py",
-    "tests/**/*",
-    "README.md",
-    "NOTICE",
+  # Build files
+  "/CMakeLists.txt",
+  "/pyproject.toml",
+  "/cmake/**/*",
+  "/cpp/**/CMakeLists.txt",
+
+  # Source code
+  "/cpp/**/*.cc",
+  "/cpp/**/*.cpp",
+  "/cpp/**/*.h",
+  "/include/**/*",
+  "/python/xgrammar/**/*.py",
+
+  # Third party files
+  "/3rdparty/**/*",
+
+  # Documentation and metadata
+  "/docs/**/*",
+  "/LICENSE",
+  "/README.md",
+  "/NOTICE",
+
+  # Tests
+  "/tests/**/*",
 ]
-sdist.exclude = [
-    "**/.git",
-    "**/.github",
-    "**/__pycache__",
-    "**/*.pyc",
-    "build",
-    "dist"
-]
+
+sdist.exclude = ["**/.git", "**/.github", "**/__pycache__", "**/*.pyc", "build", "dist"]
+
+# Editable install settings
+editable.rebuild = true
+editable.verbose = true
 
 [tool.pytest.ini_options]
 addopts = "-rA --durations=0 --ignore=3rdparty"
@@ -134,7 +150,7 @@ src_paths = ["python"]
 [tool.cibuildwheel]
 build-verbosity = 1
 skip = ["cp36-*", "cp37-*", "pp*"] # pypy is not nice with pybind11
-build = { requires = ["cmake>=3.12", "ninja"] }
+build = { requires = ["cmake>=3.18", "ninja"] }
 environment = { SKBUILD_BUILD_OPTIONS="--" }
 
 
