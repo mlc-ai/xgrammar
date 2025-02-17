@@ -23,6 +23,14 @@
 #include <ATen/cuda/CUDAContext.h>
 // clang-format on
 
+#ifndef CUDART_INF_FP16
+#define CUDART_INF_FP16 __ushort_as_half((unsigned short)0x7C00U)
+#endif
+
+#ifndef CUDART_INF_BF16
+#define CUDART_INF_BF16 __ushort_as_bfloat16((unsigned short)0x7F80U)
+#endif
+
 constexpr int32_t kBitsPerMaskElement = 32;
 constexpr int32_t kThreadsPerBlock = 256;
 
