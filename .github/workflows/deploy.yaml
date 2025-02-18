@@ -30,6 +30,9 @@ jobs:
           submodules: recursive
 
       - name: Build wheels
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          CIBW_ENVIRONMENT: HF_TOKEN=${{ secrets.HF_TOKEN }}
         uses: pypa/cibuildwheel@v2.22.0
 
       - uses: actions/upload-artifact@v4
@@ -52,7 +55,6 @@ jobs:
 
       - name: Check metadata
         run: pipx run twine check dist/*
-
 
       - uses: actions/upload-artifact@v4
         with:
