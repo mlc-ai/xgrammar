@@ -30,10 +30,6 @@ jobs:
           submodules: recursive
 
       - name: Build wheels
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CIBW_ENVIRONMENT: HF_TOKEN=${{ secrets.HF_TOKEN }}
-          CIBW_ENVIRONMENT_MACOSX: HF_TOKEN=${{ secrets.HF_TOKEN }} MACOSX_DEPLOYMENT_TARGET=10.14
         uses: pypa/cibuildwheel@v2.22.0
 
       - uses: actions/upload-artifact@v4
