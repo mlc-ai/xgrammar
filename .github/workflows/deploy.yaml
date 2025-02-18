@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-          
+
       - uses: astral-sh/setup-uv@v4
 
       - name: Build sdist
@@ -60,6 +60,7 @@ jobs:
     environment: pypi
     permissions:
       id-token: write
+      attestations: write
     if: github.event_name == 'release' && github.event.action == 'published'
     # or, alternatively, upload to PyPI on every tag starting with 'v' (remove on: release above to use this)
     # if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -71,6 +72,13 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Generate artifact attestation for sdist and wheels
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: dist/*
+
       - uses: pypa/gh-action-pypi-publish@release/v1
-        # with:
-        # To test: repository-url: https://test.pypi.org/legacy/
+        with:
+          attestations: true
+          # repository-url: https://test.pypi.org/legacy/
+          # To test: repository-url: https://test.pypi.org/legacy/
