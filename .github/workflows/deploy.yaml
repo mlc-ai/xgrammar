@@ -17,6 +17,7 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         # macos-13 is an intel runner, macos-14 is apple silicon
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-13, macos-14]
@@ -48,6 +49,10 @@ jobs:
 
       - name: Build sdist
         run: pipx run build --sdist
+
+      - name: Check metadata
+        run: pipx run twine check dist/*
+
 
       - uses: actions/upload-artifact@v4
         with:
