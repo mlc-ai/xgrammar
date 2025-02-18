@@ -49,6 +49,9 @@ def test_apply_token_bitmask_inplace(impl: str):
     expected = torch.where(bool_mask, logits, neginf)
 
     if impl in ["cuda", "triton"]:
+        if not torch.cuda.is_available():
+            pytest.skip(reason="CUDA is not installed")
+
         logits_gpu = logits.to("cuda")
         bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
         if impl == "cuda":
@@ -125,6 +128,9 @@ def test_apply_token_bitmask_inplace_large(
 
     bitmask = _bool_mask_to_bitmask(bool_mask)
     if impl in ["cuda", "triton"]:
+        if not torch.cuda.is_available():
+            pytest.skip(reason="CUDA is not installed")
+
         logits_gpu = logits.to("cuda")
         bitmask_gpu = bitmask.to("cuda")
         masked_batch_ids_gpu = masked_batch_ids.to("cuda")

@@ -157,7 +157,7 @@ src_paths = ["python"]
 
 [tool.cibuildwheel]
 build-verbosity = 1
-skip = ["cp36-*", "cp37-*", "cp38-*", "pp*", "*musllinux*"] # pypy doesn't play nice with pybind11
+skip = ["cp36-*", "cp37-*", "cp38-*", "pp*", "*musllinux*", "cp313-manylinux_aarch64", "cp313-macosx_x86_64"] # pypy doesn't play nice with pybind11
 build-frontend = "build[uv]"
 test-command = "pytest {project}/tests -m \"not hf_token_required\""
 test-extras = ["test"]
