@@ -19,8 +19,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-13 is an intel runner, macos-14 is apple silicon
-        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+        include:
+        - { os: ubuntu-latest,    arch: x86_64,     build: 'cp*-manylinux*' }
+        - { os: ubuntu-24.04-arm, arch: aarch64,    build: 'cp*-manylinux*' }
+        - { os: windows-latest,   arch: AMD64,      build: 'cp*'          }
+        - { os: macos-13,         arch: x86_64,     build: 'cp*'          }
+        - { os: macos-14,         arch: arm64,      build: 'cp*'          }
 
     steps:
       - uses: astral-sh/setup-uv@v4
@@ -29,20 +33,18 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up QEMU
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        uses: docker/setup-qemu-action@v3
-        with:
-            platforms: all
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          CIBW_ARCHS_LINUX: auto aarch64 ppc64le s390x
+          CIBW_ARCHS_MACOS: ${{ matrix.arch }}
+          CIBW_ARCHS_LINUX: ${{ matrix.arch }}
+          CIBW_ARCHS_WINDOWS: ${{ matrix.arch }}
+          CIBW_BUILD: ${{ matrix.build }}
+          CIBW_BUILD_VERBOSITY: 1
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          name: cibw-wheels-${{ matrix.os }}-${{ matrix.arch }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
 
   build_sdist:
