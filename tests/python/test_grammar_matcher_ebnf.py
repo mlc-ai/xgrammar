@@ -496,6 +496,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 ]
 
 
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
