@@ -131,7 +131,10 @@ def apply_token_bitmask_inplace(
         )
 
     if logits.device.type == "cuda":
-        if os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") == "1" and "triton" in apply_token_bitmask_inplace_impl:
+        if (
+            os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") == "1"
+            and "triton" in apply_token_bitmask_inplace_impl
+        ):
             apply_token_bitmask_inplace_impl["triton"](logits, bitmask, indices)
         else:
             apply_token_bitmask_inplace_impl["cuda"](logits, bitmask, indices)
@@ -151,7 +154,8 @@ class DeviceValidationError(ValueError):
 
     @staticmethod
     def device_mismatch(
-        logits_device: torch.device, bitmask_device: torch.device,
+        logits_device: torch.device,
+        bitmask_device: torch.device,
     ) -> str:
         return (
             f"logits and bitmask should be on the same device. "
@@ -162,7 +166,9 @@ class DeviceValidationError(ValueError):
 class GrammarTypeError(TypeError):
     """Errors related to grammar type validation."""
 
-    INVALID_GRAMMAR = "The grammar should be compiled before passing it to GrammarMatcher"
+    INVALID_GRAMMAR = (
+        "The grammar should be compiled before passing it to GrammarMatcher"
+    )
 
 
 class GrammarMatcher(XGRObject):

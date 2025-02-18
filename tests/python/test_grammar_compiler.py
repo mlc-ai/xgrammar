@@ -13,6 +13,7 @@ import xgrammar as xgr
 from xgrammar.testing import _get_allow_empty_rule_ids
 
 
+@pytest.mark.hf_token_required
 def test_compiled_grammar():
     grammar = xgr.Grammar.builtin_json_grammar()
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
@@ -42,6 +43,7 @@ def test_compiled_grammar():
 
 
 # Test max_threads=1 since we have a special logic to avoid using ThreadPool and mutex
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize("max_threads", (8, 1))
 def test_grammar_compiler_json(max_threads):
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
@@ -83,6 +85,7 @@ def test_grammar_compiler_json(max_threads):
     check_matcher(matcher)
 
 
+@pytest.mark.hf_token_required
 def test_grammar_compiler_json_schema():
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
@@ -233,6 +236,7 @@ schema_instances = [
 ]
 
 
+@pytest.mark.hf_token_required
 def test_grammar_compiler_json_schema_concurrent():
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)

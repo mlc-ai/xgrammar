@@ -521,7 +521,9 @@ def test_fill_next_token_bitmask(
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logits_gpu = torch.zeros(
-        tokenizer_info.vocab_size, dtype=torch.float32, device=device,
+        tokenizer_info.vocab_size,
+        dtype=torch.float32,
+        device=device,
     )
 
     input_bytes = input_str.encode("utf-8")

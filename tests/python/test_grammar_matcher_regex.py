@@ -129,11 +129,12 @@ regex_input_str_test_fill_next_token_bitmask = [
 ]
 
 
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "regex, input_str",
     regex_input_str_test_fill_next_token_bitmask,
 )
-def test_fill_next_token_bitmask(regex: str, input_str: str):
+def test_fill_next_token_bitmask(regex: str, input_str: str) -> None:
     tokenizer_path = "meta-llama/Meta-Llama-3-8B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_path,

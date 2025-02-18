@@ -121,7 +121,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
     ),
 ]
 
-
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
@@ -489,16 +489,16 @@ tokenizer_path_override_stop_tokens = [
     ("deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct", [100001]),
 ]
 
-
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path, override_stop_tokens", tokenizer_path_override_stop_tokens
 )
 def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[int]):
     tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path, use_fast=True, trust_remote_code=True
+        tokenizer_path, use_fast=True, trust_remote_code=True,
     )
     tokenizer_info_1 = xgr.TokenizerInfo.from_huggingface(
-        tokenizer, stop_token_ids=override_stop_tokens
+        tokenizer, stop_token_ids=override_stop_tokens,
     )
     matcher_1 = _get_matcher_from_grammar_and_tokenizer_info(
         json_grammar, tokenizer_info_1

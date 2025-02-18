@@ -77,7 +77,7 @@ endif()
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)
-  install(TARGETS xgrammar_bindings DESTINATION xgrammar)
+  install(TARGETS xgrammar_bindings DESTINATION . )
 endif()
 
 if(XGRAMMAR_BUILD_CXX_TESTS)

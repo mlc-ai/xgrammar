@@ -143,6 +143,7 @@ def test_apply_token_bitmask_inplace_large(
 
         try:
             from triton.testing import do_bench
+
             exec_time = do_bench(f, warmup=100, rep=1000)
             exec_time *= 1e3
         except ImportError:

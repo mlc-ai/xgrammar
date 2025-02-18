@@ -14,10 +14,12 @@ __all__ = [
 
 if torch.cuda.is_available():
     from .apply_token_bitmask_inplace_cuda import apply_token_bitmask_inplace_cuda
+
     apply_token_bitmask_inplace["cuda"] = apply_token_bitmask_inplace_cuda
 
 try:
     from .apply_token_bitmask_inplace_triton import apply_token_bitmask_inplace_triton  # isort:skip
+
     apply_token_bitmask_inplace["triton"] = apply_token_bitmask_inplace_triton
 except ImportError:
     # If triton is not installed, we can still use the CPU and CUDA implementations.

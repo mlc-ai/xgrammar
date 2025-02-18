@@ -38,6 +38,7 @@ instance = MainModel(
 instance_str = instance.model_dump_json(indent=2, round_trip=True)
 
 
+@pytest.mark.hf_token_required
 def test_json_schema_debug_accept_string():
     grammar = xgr.Grammar.from_json_schema(MainModel, indent=2)
 
@@ -83,6 +84,7 @@ tokenizer_path = [
 ]
 
 
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize("tokenizer_path", tokenizer_path)
 def test_fill_next_token_bitmask(tokenizer_path: str):
     tokenizer = AutoTokenizer.from_pretrained(
@@ -102,7 +104,9 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logits_gpu = torch.zeros(
-        tokenizer_info.vocab_size, dtype=torch.float32, device=device,
+        tokenizer_info.vocab_size,
+        dtype=torch.float32,
+        device=device,
     )
 
     input_bytes = instance_str.encode("utf-8")
@@ -136,7 +140,8 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
     # 5. Final correctness verification
     matcher.fill_next_token_bitmask(token_bitmask)
     rejected_token_ids = _get_masked_tokens_from_bitmask(
-        token_bitmask, tokenizer_info.vocab_size,
+        token_bitmask,
+        tokenizer_info.vocab_size,
     )
     assert tokenizer.eos_token_id not in rejected_token_ids
 
