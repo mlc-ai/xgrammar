@@ -452,7 +452,7 @@ def test_structural_tag_compiler():
 
     assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag
 
-
+@pytest.mark.hf_token_required
 def test_structural_tag_mask_gen():
     # Define schemas for the test
     class Schema1(BaseModel):
@@ -494,7 +494,7 @@ def test_structural_tag_mask_gen():
     matcher = xgr.GrammarMatcher(compiled_grammar)
     time_end = time.monotonic_ns()
     print(
-        f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us"
+        f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us",
     )
 
     # Test input string

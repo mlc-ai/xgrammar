@@ -457,7 +457,7 @@ tokenizer_path_regex_instance = [
     (t, *ri) for t in tokenizer_paths for ri in regex_instances
 ]
 
-
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path, regex, instance", tokenizer_path_regex_instance
 )
