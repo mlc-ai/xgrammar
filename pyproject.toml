@@ -155,7 +155,7 @@ src_paths = ["python"]
 build-verbosity = 1
 skip = ["cp36-*", "cp37-*", "pp*", "*musllinux*"] # pypy doesn't play nice with pybind11
 build-frontend = "build[uv]"
-test-command = "pytest ."
+test-command = "pytest {project}/tests"
 test-extras = ["test"]
 
 [tool.cibuildwheel.linux]
