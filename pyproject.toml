@@ -68,7 +68,7 @@ logging.level = "INFO"
 
 # Wheel configuration
 wheel.packages = ["python/xgrammar"]
-wheel.install-dir = "xgrammar"
+# wheel.install-dir = "xgrammar"
 
 # Source distribution configuration
 sdist.include = [
