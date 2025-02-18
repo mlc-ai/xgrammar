@@ -16,7 +16,6 @@ requires-python = ">=3.8, <4"
 dependencies = [
     "pybind11",
     "pydantic",
-    "pytest",
     "sentencepiece",
     "tiktoken",
     "torch",
@@ -33,6 +32,7 @@ triton = [
     "triton",
 ]
 test = [
+    "pytest",
     "protobuf",
     "huggingface-hub[cli]",
 ]
@@ -68,7 +68,7 @@ logging.level = "INFO"
 
 # Wheel configuration
 wheel.packages = ["python/xgrammar"]
-#wheel.install-dir = "xgrammar"
+wheel.install-dir = "xgrammar"
 
 # Source distribution configuration
 sdist.include = [
