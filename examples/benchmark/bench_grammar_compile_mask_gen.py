@@ -31,7 +31,10 @@ def xgrammar_build(schema: str, grammar_compiler: xgr.GrammarCompiler):
 
 
 def xgrammar_exec(
-    matcher: xgr.GrammarMatcher, logits: torch.Tensor, bitmask: torch.Tensor, token_id: int
+    matcher: xgr.GrammarMatcher,
+    logits: torch.Tensor,
+    bitmask: torch.Tensor,
+    token_id: int,
 ):
     # Logits processing
     matcher.fill_next_token_bitmask(bitmask)
@@ -65,7 +68,9 @@ def lmformatenforcer_build(schema: str, tokenizer: TokenEnforcerTokenizerData):
     return token_enforcer
 
 
-def lmformatenforcer_exec(token_enforcer: TokenEnforcer, logits: torch.Tensor, token_ids):
+def lmformatenforcer_exec(
+    token_enforcer: TokenEnforcer, logits: torch.Tensor, token_ids
+):
     # Logits processing
     allowed_tokens = token_enforcer.get_allowed_tokens(token_ids)
     logits[allowed_tokens] = float("-inf")
@@ -87,7 +92,9 @@ if __name__ == "__main__":
 
     backend = args.backend
     num_iters = args.num_iters
-    num_warmup = args.num_warmup if args.num_warmup != -1 else 5 if num_iters >= 40 else 1
+    num_warmup = (
+        args.num_warmup if args.num_warmup != -1 else 5 if num_iters >= 40 else 1
+    )
 
     dataset = datasets.load_dataset("NousResearch/json-mode-eval", split="train")
 
@@ -110,7 +117,9 @@ if __name__ == "__main__":
     tqdm_iter = tqdm(range(-num_warmup, num_iters))
     for iter in tqdm_iter:
         if iter < 0:
-            tqdm_iter.set_description(f"Backend: {backend}, Warmup Iter: {iter + num_warmup}")
+            tqdm_iter.set_description(
+                f"Backend: {backend}, Warmup Iter: {iter + num_warmup}"
+            )
         else:
             tqdm_iter.set_description(f"Backend: {backend}, Iter: {iter}")
 
@@ -189,6 +198,8 @@ if __name__ == "__main__":
                 total_tokens += len(token_ids)
 
     print(f"Backend: {backend}")
-    print(f"Fail count: {fail_cnt / num_iters:.0f} / {len(dataset) - len(wrong_data_indices)}")
+    print(
+        f"Fail count: {fail_cnt / num_iters:.0f} / {len(dataset) - len(wrong_data_indices)}"
+    )
     print(f"Grammar preprocessing time (ms): {build_time/total_data_points * 1e3:.4f}")
     print(f"Mask generation time (us/token): {exec_time/total_tokens * 1e6:.4f}")

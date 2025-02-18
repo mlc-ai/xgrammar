@@ -1,8 +1,15 @@
 from typing import List, Optional, Union
 
 import torch
-import triton
-import triton.language as tl
+
+TRITON_IMPORT_ERROR = "Triton is not installed"
+try:
+    import triton
+    import triton.language as tl
+except ImportError as err:
+    raise ImportError(TRITON_IMPORT_ERROR) from err
+
+INVALID_SHAPE_ERROR = "Invalid logits tensor shape {}"
 
 
 @triton.jit
@@ -32,7 +39,11 @@ def apply_token_bitmask_inplace_kernel(
         bitmask = ((packed_bitmask[:, None] >> (tl.arange(0, 32)[None, :])) & 1) == 0
         bitmask = bitmask.reshape(BLOCK_SIZE)
 
-        tl.store(logits_ptr + batch_id * vocab_size + offsets, -float("inf"), vocab_mask & bitmask)
+        tl.store(
+            logits_ptr + batch_id * vocab_size + offsets,
+            -float("inf"),
+            vocab_mask & bitmask,
+        )
 
 
 def apply_token_bitmask_inplace_triton(
@@ -52,7 +63,7 @@ def apply_token_bitmask_inplace_triton(
         batch_size = 1
         (vocab_size,) = logits.shape
     else:
-        raise ValueError(f"Invalid logits tensor shape {logits.shape}")
+        raise ValueError(INVALID_SHAPE_ERROR.format(logits.shape))
 
     if isinstance(indices, list):
         indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)

@@ -55,7 +55,9 @@ class LogitsProcessor(transformers.LogitsProcessor):
         self.prefilled = False
         self.batch_size = 0
 
-    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+    def __call__(
+        self, input_ids: torch.LongTensor, scores: torch.FloatTensor
+    ) -> torch.FloatTensor:
         """
         Accept token sampled in the last iteration, fill in bitmask, and apply bitmask to logits.
 
@@ -66,9 +68,12 @@ class LogitsProcessor(transformers.LogitsProcessor):
         if len(self.matchers) == 0:
             self.batch_size = input_ids.shape[0]
             self.matchers = [
-                xgr.GrammarMatcher(self.compiled_grammar) for _ in range(self.batch_size)
+                xgr.GrammarMatcher(self.compiled_grammar)
+                for _ in range(self.batch_size)
             ]
-            self.token_bitmask = xgr.allocate_token_bitmask(self.batch_size, self.full_vocab_size)
+            self.token_bitmask = xgr.allocate_token_bitmask(
+                self.batch_size, self.full_vocab_size
+            )
 
         if input_ids.shape[0] != self.batch_size:
             raise RuntimeError(

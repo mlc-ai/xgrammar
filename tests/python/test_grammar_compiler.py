@@ -13,6 +13,7 @@ import xgrammar as xgr
 from xgrammar.testing import _get_allow_empty_rule_ids
 
 
+@pytest.mark.hf_token_required
 def test_compiled_grammar():
     grammar = xgr.Grammar.builtin_json_grammar()
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
@@ -42,6 +43,7 @@ def test_compiled_grammar():
 
 
 # Test max_threads=1 since we have a special logic to avoid using ThreadPool and mutex
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize("max_threads", (8, 1))
 def test_grammar_compiler_json(max_threads):
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
@@ -76,11 +78,14 @@ def test_grammar_compiler_json(max_threads):
     time_start = time.monotonic_ns()
     compiled_grammar = grammar_compiler.compile_builtin_json_grammar()
     time_end = time.monotonic_ns()
-    print(f"Time to get compiled grammar after clear: {(time_end - time_start) / 1e3} us")
+    print(
+        f"Time to get compiled grammar after clear: {(time_end - time_start) / 1e3} us"
+    )
     matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
     check_matcher(matcher)
 
 
+@pytest.mark.hf_token_required
 def test_grammar_compiler_json_schema():
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
@@ -112,11 +117,18 @@ def test_grammar_compiler_json_schema():
 
         time_start = time.monotonic_ns()
         compiled_grammar = grammar_compiler.compile_json_schema(
-            MainModel, any_whitespace=any_whitespace, indent=indent, separators=separators
+            MainModel,
+            any_whitespace=any_whitespace,
+            indent=indent,
+            separators=separators,
         )
         time_end = time.monotonic_ns()
-        print(f"Time to get compiled grammar {test_id}: {(time_end - time_start) / 1e3} us")
-        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        print(
+            f"Time to get compiled grammar {test_id}: {(time_end - time_start) / 1e3} us"
+        )
+        matcher = xgr.GrammarMatcher(
+            compiled_grammar, terminate_without_stop_token=True
+        )
 
         assert not matcher.is_terminated()
         assert matcher._debug_accept_string(instance_str)
@@ -170,7 +182,9 @@ rule1 ::= [abc]* [def]*
 ]
 
 
-@pytest.mark.parametrize("grammar, expected", grammar_expected_test_get_allow_empty_rule_ids)
+@pytest.mark.parametrize(
+    "grammar, expected", grammar_expected_test_get_allow_empty_rule_ids
+)
 def test_get_allow_empty_rule_ids(grammar: str, expected: List[int]):
     grammar_compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
     compiled_grammar = grammar_compiler.compile_grammar(grammar)
@@ -222,6 +236,7 @@ schema_instances = [
 ]
 
 
+@pytest.mark.hf_token_required
 def test_grammar_compiler_json_schema_concurrent():
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
@@ -239,18 +254,26 @@ def test_grammar_compiler_json_schema_concurrent():
     def compile_grammar(id: int, schema: str, instance_str: str):
         schema_id = id % num_schemas
         time_mid = time.monotonic_ns()
-        print(f"Thread {id} start compile grammar {schema_id}: {(time_mid - time_start) / 1e3} us")
+        print(
+            f"Thread {id} start compile grammar {schema_id}: {(time_mid - time_start) / 1e3} us"
+        )
         compiled_grammar = grammar_compiler.compile_json_schema(
             schema, indent=None, separators=(",", ":"), strict_mode=True
         )
         time_end = time.monotonic_ns()
-        print(f"Thread {id} end compile grammar {schema_id}: {(time_end - time_start) / 1e3} us")
-        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        print(
+            f"Thread {id} end compile grammar {schema_id}: {(time_end - time_start) / 1e3} us"
+        )
+        matcher = xgr.GrammarMatcher(
+            compiled_grammar, terminate_without_stop_token=True
+        )
         check_matcher(matcher, instance_str)
 
     time_start = time.monotonic_ns()
     for i in range(thread_cnt):
-        t = threading.Thread(target=compile_grammar, args=(i, *schema_instances[i % num_schemas]))
+        t = threading.Thread(
+            target=compile_grammar, args=(i, *schema_instances[i % num_schemas])
+        )
         threads.append(t)
         t.start()
 
