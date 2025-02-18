@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 
 import pytest
 import torch
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
@@ -128,6 +128,41 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
     matcher.fill_next_token_bitmask(token_bitmask)
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert tokenizer.eos_token_id not in rejected_token_ids
+
+
+class RangeSchema(BaseModel):
+    value: int = Field(ge=1, le=100)
+
+
+ir_instance = RangeSchema(value=42)
+ir_instance_str = instance.model_dump_json(indent=2)
+
+
+@pytest.mark.parametrize("tokenizer_path", tokenizer_path)
+def test_fill_next_token_bitmask_integer_range(tokenizer_path: str):
+    tokenizer = AutoTokenizer.from_pretrained(
+        tokenizer_path,
+        use_fast=True,
+        trust_remote_code=True,
+    )
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    time_start = time.monotonic_ns()
+    compiled_grammar = compiler.compile_json_schema(RangeSchema)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    input_bytes = ir_instance_str.encode("utf-8")
+    for c in input_bytes:
+        # Fill next token bitmask
+        time_start = time.monotonic_ns()
+        matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
 
 if __name__ == "__main__":

@@ -1161,6 +1161,8 @@ std::string JSONSchemaConverter::VisitInteger(
           << "exclusiveMaximum must be an integer";
       end = static_cast<int>(end_double);
     }
+    XGRAMMAR_CHECK(!(start && end) || *start <= *end)
+        << "Invalid range, start value greater than end value";
     range_regex = GenerateRangeRegex(start, end);
   }
   if (!range_regex.empty()) {

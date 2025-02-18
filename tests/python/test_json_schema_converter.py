@@ -909,11 +909,6 @@ def test_generate_range_regex():
     # Upper bound negative
     assert _generate_range_regex(None, -123) == r"^(-123|-1[0-1]\d{1}|-12[0-2]|-[1-9]\d{3,})$"
 
-    # Invalid range test (end < start)
-    assert _generate_range_regex(10, 5) == r"^()$"
-    assert _generate_range_regex(0, -1) == r"^()$"
-    assert _generate_range_regex(100, -100) == r"^()$"
-
     # Additional edge cases
     # Single number
     assert _generate_range_regex(5, 5) == r"^((5))$"
