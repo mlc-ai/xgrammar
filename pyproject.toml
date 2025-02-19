@@ -44,7 +44,6 @@ input = "python/xgrammar/version.py"
 requires = [
     "scikit-build-core>=0.10.0",
     "pybind11>=2.11.0",
-    "wheel",
     "cmake>=3.18",
     "ninja",
 ]
