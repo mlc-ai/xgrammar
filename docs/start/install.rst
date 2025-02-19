@@ -72,7 +72,8 @@ This step is useful when you want to make modification or obtain a specific vers
     conda create -n xgrammar-venv -c conda-forge \
         "cmake>=3.18" \
         git \
-        python=3.11
+        python=3.11 \
+        ninja
     # enter the build environment
     conda activate xgrammar-venv
 
