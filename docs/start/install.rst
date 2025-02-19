@@ -90,7 +90,7 @@ This step is useful when you want to make modification or obtain a specific vers
     git clone --recursive https://github.com/mlc-ai/xgrammar.git && cd xgrammar
     # 2. Install pre-commit hooks (optional, recommended for contributing to XGrammar)
     pre-commit install
-    # 3. build XGrammar core and Python bindings
+    # 3. build and install XGrammar core and Python bindings
     python3 -m pip install .
 
 **Step 3. Validate installation.** You may validate if XGrammar is compiled successfully in command line.
