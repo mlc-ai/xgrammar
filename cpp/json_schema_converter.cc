@@ -133,6 +133,8 @@ class JSONSchemaConverter {
   static std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end);
 
  private:
+  // The name of the root rule
+  inline static const std::string kRootRuleName = "root";
   // The name of the basic rules
   inline static const std::string kBasicAny = "basic_any";
   inline static const std::string kBasicInteger = "basic_integer";
@@ -427,8 +429,8 @@ class JSONSchemaConverter {
   /*! \brief Visit a reference schema. */
   std::string VisitRef(const picojson::object& schema, const std::string& rule_name);
 
-  /*! \brief Get the schema from the URI. */
-  picojson::value URIToSchema(const std::string& uri);
+  /*! \brief Get the rule from the URI. */
+  std::string URIToRule(const std::string& uri);
 
   /*! \brief Visit a const schema. */
   std::string VisitConst(const picojson::object& schema, const std::string& rule_name);
@@ -595,9 +597,11 @@ class JSONSchemaConverter {
   std::string colon_pattern_;
   // The cache for basic rules. Mapping from the key of schema returned by GetSchemaCacheIndex()
   // to the basic rule name.
-  std::map<std::string, std::string> basic_rules_cache_;
+  std::unordered_map<std::string, std::string> basic_rules_cache_;
   // Whether to use any whitespace in the conversion
   bool any_whitespace_;
+  // The cache for URI to rule. Mapping from the URI to the rule name.
+  std::unordered_map<std::string, std::string> uri_to_rule_cache_;
 };
 
 JSONSchemaConverter::JSONSchemaConverter(
@@ -630,7 +634,7 @@ JSONSchemaConverter::JSONSchemaConverter(
 }
 
 std::string JSONSchemaConverter::Convert() {
-  CreateRuleFromSchema(json_schema_, "root");
+  CreateRuleFromSchema(json_schema_, kRootRuleName);
   return ebnf_script_creator_.GetScript();
 }
 
@@ -712,8 +716,7 @@ void JSONSchemaConverter::WarnUnsupportedKeywords(
   }
   for (const auto& keyword : keywords) {
     if (schema.find(keyword) != schema.end()) {
-      XGRAMMAR_LOG(WARNING) << "Keyword " << keyword << " is not supported in schema "
-                            << picojson::value(schema).serialize(false);
+      XGRAMMAR_LOG(WARNING) << "Keyword " << keyword << " is not supported";
     }
   }
 }
@@ -726,8 +729,9 @@ std::string JSONSchemaConverter::CreateRuleFromSchema(
     return basic_rules_cache_[idx];
   }
 
-  std::string rule_name =
-      ebnf_script_creator_.AddRule(rule_name_hint, VisitSchema(schema, rule_name_hint));
+  auto rule_name = ebnf_script_creator_.AllocateRuleName(rule_name_hint);
+  std::string rule_content = VisitSchema(schema, rule_name);
+  ebnf_script_creator_.AddRuleWithAllocatedName(rule_name, rule_content);
   return rule_name;
 }
 
@@ -815,6 +819,7 @@ std::string JSONSchemaConverter::VisitSchema(
   } else if (schema_obj.count("allOf")) {
     return VisitAllOf(schema_obj, rule_name);
   } else if (schema_obj.count("type")) {
+    XGRAMMAR_CHECK(schema_obj.at("type").is<std::string>()) << "Type should be a string";
     const std::string& type = schema_obj.at("type").get<std::string>();
     if (type == "integer") {
       return VisitInteger(schema_obj, rule_name);
@@ -851,31 +856,41 @@ std::string JSONSchemaConverter::VisitRef(
 ) {
   XGRAMMAR_CHECK(schema.count("$ref") && schema.at("$ref").is<std::string>())
       << "Schema $ref should be a string";
-  picojson::value new_schema = URIToSchema(schema.at("$ref").get<std::string>());
-  if (!new_schema.is<bool>()) {
-    XGRAMMAR_CHECK(new_schema.is<picojson::object>()) << "Schema should be an object or bool";
-    picojson::object new_schema_obj = new_schema.get<picojson::object>();
-    for (const auto& [k, v] : schema) {
-      if (k != "$ref") {
-        new_schema_obj[k] = v;
-      }
-    }
-    new_schema = picojson::value(new_schema_obj);
-  }
-  return VisitSchema(new_schema, rule_name);
+  auto ref_str = schema.at("$ref").get<std::string>();
+  return URIToRule(ref_str);
 }
 
-picojson::value JSONSchemaConverter::URIToSchema(const std::string& uri) {
-  if (uri.size() < 2 || uri[0] != '#' || uri[1] != '/') {
-    XGRAMMAR_LOG(WARNING) << "Now only support URI starting with '#/' but got " << uri;
-    return picojson::value(true);
+std::string JSONSchemaConverter::URIToRule(const std::string& uri) {
+  if (uri_to_rule_cache_.count(uri)) {
+    return uri_to_rule_cache_[uri];
   }
+
+  if (uri == "#") {
+    return kRootRuleName;
+  }
+
+  if (uri.size() < 2 || uri[0] != '#' || uri[1] != '/') {
+    XGRAMMAR_LOG(WARNING) << "URI should either be '#' or start with '#/' but got " << uri;
+    return kBasicAny;
+  }
+
   std::vector<std::string> parts;
   std::stringstream ss(uri.substr(2));
   std::string part;
+  std::string new_rule_name_perfix;
   while (std::getline(ss, part, '/')) {
     if (!part.empty()) {
       parts.push_back(part);
+    }
+    // Update new_rule_name_perfix
+    if (!new_rule_name_perfix.empty()) {
+      new_rule_name_perfix += "_";
+    }
+    // filter out non-alpha characters
+    for (const auto& c : part) {
+      if (std::isalpha(c) || c == '_' || c == '-' || c == '.') {
+        new_rule_name_perfix += c;
+      }
     }
   }
 
@@ -886,11 +901,11 @@ picojson::value JSONSchemaConverter::URIToSchema(const std::string& uri) {
     current = current.get(part);
   }
 
-  // Handle recursive reference
-  if (current.is<picojson::object>() && current.get<picojson::object>().count("$ref")) {
-    return URIToSchema(current.get<picojson::object>().at("$ref").get<std::string>());
-  }
-  return current;
+  auto new_rule_name = ebnf_script_creator_.AllocateRuleName(new_rule_name_perfix);
+  uri_to_rule_cache_[uri] = new_rule_name;
+  auto body = VisitSchema(current, new_rule_name);
+  ebnf_script_creator_.AddRuleWithAllocatedName(new_rule_name, body);
+  return new_rule_name;
 }
 
 std::string JSONSchemaConverter::VisitConst(

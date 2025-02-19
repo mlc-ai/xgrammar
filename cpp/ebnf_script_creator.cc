@@ -18,17 +18,18 @@ class EBNFScriptCreator::Impl {
   Impl() {}
 
   std::string AddRule(const std::string& rule_name_hint, const std::string& rule_body);
+  std::string AllocateRuleName(const std::string& rule_name_hint);
+  std::string AddRuleWithAllocatedName(const std::string& rule_name, const std::string& rule_body);
   std::string GetScript();
   std::string GetRuleContent(const std::string& rule_name);
 
  private:
-  std::string GetRuleName(const std::string& rule_name_hint);
   std::vector<std::pair<std::string, std::string>> rules_;
   std::unordered_set<std::string> rule_names_;
   const int NAME_SUFFIX_MAXIMUM = 10000;
 };
 
-std::string EBNFScriptCreator::Impl::GetRuleName(const std::string& rule_name_hint) {
+std::string EBNFScriptCreator::Impl::AllocateRuleName(const std::string& rule_name_hint) {
   if (rule_names_.find(rule_name_hint) == rule_names_.end()) {
     rule_names_.insert(rule_name_hint);
     return rule_name_hint;
@@ -46,7 +47,14 @@ std::string EBNFScriptCreator::Impl::GetRuleName(const std::string& rule_name_hi
 std::string EBNFScriptCreator::Impl::AddRule(
     const std::string& rule_name_hint, const std::string& rule_body
 ) {
-  std::string rule_name = GetRuleName(rule_name_hint);
+  return AddRuleWithAllocatedName(AllocateRuleName(rule_name_hint), rule_body);
+}
+
+std::string EBNFScriptCreator::Impl::AddRuleWithAllocatedName(
+    const std::string& rule_name, const std::string& rule_body
+) {
+  XGRAMMAR_CHECK(rule_names_.find(rule_name) != rule_names_.end())
+      << "Rule name " << rule_name << " is not allocated";
   rules_.emplace_back(rule_name, rule_body);
   return rule_name;
 }
@@ -77,10 +85,20 @@ std::string EBNFScriptCreator::AddRule(
   return pimpl_->AddRule(rule_name_hint, rule_body);
 }
 
+std::string EBNFScriptCreator::AllocateRuleName(const std::string& rule_name_hint) {
+  return pimpl_->AllocateRuleName(rule_name_hint);
+}
+
 std::string EBNFScriptCreator::GetScript() { return pimpl_->GetScript(); }
 
 std::string EBNFScriptCreator::GetRuleContent(const std::string& rule_name) {
   return pimpl_->GetRuleContent(rule_name);
+}
+
+std::string EBNFScriptCreator::AddRuleWithAllocatedName(
+    const std::string& rule_name, const std::string& rule_body
+) {
+  return pimpl_->AddRuleWithAllocatedName(rule_name, rule_body);
 }
 
 }  // namespace xgrammar

@@ -196,7 +196,10 @@ void ApplyTokenBitmaskInplace(
   TORCH_CHECK(bitmask_batch_size == batch_size, "bitmask must have the batch size same to logits.");
   TORCH_CHECK(
       bitmask_size == CeilDiv(vocab_size, kBitsPerMaskElement),
-      "bitmask must have the hidden size equal to CeilDiv(vocabSize, 32)."
+      "bitmask must have the hidden size equal to CeilDiv(vocab_size, 32), but got vocab_size=",
+      vocab_size,
+      " and bitmask_size=",
+      bitmask_size
   );
 
   int32_t* indices_ptr = nullptr;

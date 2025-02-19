@@ -25,12 +25,27 @@ class EBNFScriptCreator {
   EBNFScriptCreator(EmptyConstructorTag);
 
   /*!
-   * \brief Adds a new rule to the grammar
+   * \brief Adds a new rule to the grammar with a suggested name
    * \param rule_name_hint Suggested name for the rule
    * \param rule_body The EBNF content/definition of the rule
    * \return The actual name assigned to the rule
    */
   std::string AddRule(const std::string& rule_name_hint, const std::string& rule_body);
+
+  /*!
+   * \brief Generates a new rule name based on a suggested name
+   * \param rule_name_hint Suggested name for the rule
+   * \return The actual name assigned to the rule
+   */
+  std::string AllocateRuleName(const std::string& rule_name_hint);
+
+  /*!
+   * \brief Adds a new rule to the grammar with a allocated name. Used with AllocateRuleName()
+   * \param rule_name The name of the rule to add
+   * \param rule_body The EBNF content/definition of the rule
+   * \return The actual name assigned to the rule
+   */
+  std::string AddRuleWithAllocatedName(const std::string& rule_name, const std::string& rule_body);
 
   /*!
    * \brief Gets the complete EBNF grammar script

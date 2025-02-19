@@ -184,7 +184,8 @@ basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[" "]"
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{" "}"
 root_prop_0_item_1 ::= "[" "\n      " basic_integer ",\n      " basic_integer (",\n      " basic_any)* "\n    " "]"
 root_prop_0 ::= "[" "\n    " basic_string ",\n    " root_prop_0_item_1 (",\n    " basic_any)* "\n  " "]"
-root_prop_1 ::= ("{" "\n    " basic_string ": " basic_any (",\n    " basic_string ": " basic_any)* "\n  " "}") | "{" "}"
+defs_Foo ::= ("{" "\n    " basic_string ": " basic_any (",\n    " basic_string ": " basic_any)* "\n  " "}") | "{" "}"
+root_prop_1 ::= defs_Foo
 root_prop_2 ::= ("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | "[" "]"
 root ::= "{" "\n  " "\"tuple_field\"" ": " root_prop_0 ",\n  " "\"foo_field\"" ": " root_prop_1 ",\n  " "\"list_field\"" ": " root_prop_2 ",\n  " "\"object_field\"" ": " basic_object (",\n  " basic_string ": " basic_any)* "\n" "}"
 """
@@ -242,7 +243,8 @@ root_prop_0 ::= "\"a\""
 root_prop_1 ::= "\"a\\n\\r\\\"\""
 root_prop_2 ::= ("\"a\"") | ("\"b\"") | ("\"c\"")
 root_prop_3 ::= ("1") | ("\"a\"") | ("true")
-root_prop_4 ::= ("\"foo\"") | ("\"bar\"")
+defs_Field ::= ("\"foo\"") | ("\"bar\"")
+root_prop_4 ::= defs_Field
 root ::= "{" "" "\"bars\"" ": " root_prop_0 ", " "\"str_values\"" ": " root_prop_1 ", " "\"foo\"" ": " root_prop_2 ", " "\"values\"" ": " root_prop_3 ", " "\"field\"" ": " root_prop_4 "" "}"
 """
 
@@ -400,10 +402,12 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= "[" "" basic_any (", " basic_any)* "" "]"
 basic_object ::= "{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}"
-root_prop_0_prop_1 ::= basic_number | basic_null
-root_prop_0 ::= "{" "" "\"count\"" ": " basic_integer (", " "\"size\"" ": " root_prop_0_prop_1)? "" "}"
-root_prop_1_items_part_0 ::= "" | ", " "\"banana\"" ": " basic_string ""
-root_prop_1_items ::= "{" "" (("\"apple\"" ": " basic_string root_prop_1_items_part_0) | ("\"banana\"" ": " basic_string "")) "" "}"
+defs_Foo_prop_1 ::= basic_number | basic_null
+defs_Foo ::= "{" "" "\"count\"" ": " basic_integer (", " "\"size\"" ": " defs_Foo_prop_1)? "" "}"
+root_prop_0 ::= defs_Foo
+defs_Bar_part_0 ::= "" | ", " "\"banana\"" ": " basic_string ""
+defs_Bar ::= "{" "" (("\"apple\"" ": " basic_string defs_Bar_part_0) | ("\"banana\"" ": " basic_string "")) "" "}"
+root_prop_1_items ::= defs_Bar
 root_prop_1 ::= "[" "" root_prop_1_items (", " root_prop_1_items)* "" "]"
 root ::= "{" "" "\"foo\"" ": " root_prop_0 ", " "\"bars\"" ": " root_prop_1 "" "}"
 """
@@ -508,6 +512,104 @@ def test_reference_schema():
         schema_nested, instance_nested_rejected, is_accepted=False, any_whitespace=False
     )
 
+    # Test schema with self-recursion through $defs
+    schema_self_recursive = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/$defs/node"}},
+        "required": ["value"],
+        "$defs": {
+            "node": {
+                "type": "object",
+                "properties": {"id": {"type": "integer"}, "next": {"$ref": "#/$defs/node"}},
+                "required": ["id"],
+            }
+        },
+    }
+
+    instance_self_recursive = {"value": {"id": 1, "next": {"id": 2, "next": {"id": 3}}}}
+    instance_self_recursive_1 = {"value": {"id": 1}}
+    instance_self_recursive_rejected = {"value": {"id": 1, "next": {"next": {"id": 3}}}}
+
+    check_schema_with_instance(schema_self_recursive, instance_self_recursive, any_whitespace=False)
+    check_schema_with_instance(
+        schema_self_recursive, instance_self_recursive_1, any_whitespace=False
+    )
+    check_schema_with_instance(
+        schema_self_recursive,
+        instance_self_recursive_rejected,
+        is_accepted=False,
+        any_whitespace=False,
+    )
+
+    # Test schema with circular references between multiple schemas
+    schema_circular = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/$defs/schema_a"}},
+        "required": ["value"],
+        "$defs": {
+            "schema_a": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "next": {"$ref": "#/$defs/schema_b"}},
+                "required": ["name", "next"],
+            },
+            "schema_b": {
+                "type": "object",
+                "properties": {"id": {"type": "integer"}, "child": {"$ref": "#/$defs/schema_a"}},
+                "required": ["id"],
+            },
+        },
+    }
+
+    instance_circular = {
+        "value": {
+            "name": "first",
+            "next": {"id": 1, "child": {"name": "second", "next": {"id": 2}}},
+        }
+    }
+    instance_circular_complex = {
+        # fmt: off
+        "value": {"name": "root", "next": {
+            "id": 1, "child": {"name": "level1", "next": {
+                "id": 2, "child": {"name": "level2", "next": {
+                    "id": 3, "child": {"name": "level3", "next": {
+                        "id": 4, "child": {"name": "level4", "next": {"id": 5}}
+                    }}
+                }}
+            }}
+        }}
+        # fmt: on
+    }
+    instance_circular_rejected = {
+        "value": {"name": "first", "next": {"child": {"name": "second", "next": {"id": 2}}}}
+    }
+
+    check_schema_with_instance(schema_circular, instance_circular, any_whitespace=False)
+    check_schema_with_instance(schema_circular, instance_circular_complex, any_whitespace=False)
+    check_schema_with_instance(
+        schema_circular, instance_circular_rejected, is_accepted=False, any_whitespace=False
+    )
+
+    # Test self-referential schema
+    schema_recursive = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "children": {"type": "array", "items": {"$ref": "#"}},
+        },
+        "required": ["name"],
+    }
+
+    instance_recursive = {
+        "name": "root",
+        "children": [{"name": "child1", "children": [{"name": "grandchild1"}]}, {"name": "child2"}],
+    }
+    instance_recursive_rejected = {"children": [{"name": "child1"}]}
+
+    check_schema_with_instance(schema_recursive, instance_recursive, any_whitespace=False)
+    check_schema_with_instance(
+        schema_recursive, instance_recursive_rejected, is_accepted=False, any_whitespace=False
+    )
+
 
 def test_union():
     class Cat(BaseModel):
@@ -532,8 +634,10 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= "[" "" basic_any (", " basic_any)* "" "]"
 basic_object ::= "{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}"
-root_case_0 ::= "{" "" "\"name\"" ": " basic_string ", " "\"color\"" ": " basic_string "" "}"
-root_case_1 ::= "{" "" "\"name\"" ": " basic_string ", " "\"breed\"" ": " basic_string "" "}"
+defs_Cat ::= "{" "" "\"name\"" ": " basic_string ", " "\"color\"" ": " basic_string "" "}"
+root_case_0 ::= defs_Cat
+defs_Dog ::= "{" "" "\"name\"" ": " basic_string ", " "\"breed\"" ": " basic_string "" "}"
+root_case_1 ::= defs_Dog
 root ::= root_case_0 | root_case_1
 """
 
