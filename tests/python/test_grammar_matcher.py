@@ -39,41 +39,14 @@ def test_refuse(input_refused: str):
     assert not _is_grammar_accept_string(json_grammar, input_refused)
 
 
+# fmt: off
 tokenizer_path__input_str__expected_rejected_sizes = [
     (
         "meta-llama/Llama-2-7b-chat-hf",
         '{"id": 1,"name": "Example"}',
         [
-            # fmt: off
-            31989,
-            31912,
-            272,
-            272,
-            272,
-            31973,
-            31846,
-            31846,
-            31948,
-            31915,
-            272,
-            272,
-            272,
-            272,
-            272,
-            31973,
-            31846,
-            31846,
-            265,
-            265,
-            265,
-            265,
-            265,
-            265,
-            265,
-            265,
-            31974,
-            31999,
-            # fmt: on
+            31989, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 272, 272, 272, 272,
+            272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999,
         ],
     ),
     (
@@ -81,45 +54,14 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         "meta-llama/Meta-Llama-3-8B-Instruct",
         '{"id": 1,"name": "Example哈哈"}',
         [
-            # fmt: off
-            128235,
-            127497,
-            5002,
-            5002,
-            5002,
-            127849,
-            126399,
-            126399,
-            126760,
-            127499,
-            5002,
-            5002,
-            5002,
-            5002,
-            5002,
-            127849,
-            126399,
-            126399,
-            4952,
-            4952,
-            4952,
-            4952,
-            4952,
-            4952,
-            4952,
-            4952,
-            128066,
-            128111,
-            4952,
-            128066,
-            128111,
-            4952,
-            127873,
-            128255,
-            # fmt: on
+            128235, 127497, 5002, 5002, 5002, 127849, 126399, 126399, 126760, 127499, 5002, 5002,
+            5002, 5002, 5002, 127849, 126399, 126399, 4952, 4952, 4952, 4952, 4952, 4952, 4952,
+            4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128255,
         ],
     ),
 ]
+# fmt: on
+
 
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize(
@@ -158,35 +100,19 @@ def test_fill_next_token_bitmask(
         assert matcher._debug_accept_string(bytes([c]))
 
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = _get_masked_tokens_from_bitmask(
-        token_bitmask, tokenizer_info.vocab_size
-    )
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     rejected_sizes.append(len(rejected_token_ids))
     if expected_rejected_sizes is not None:
         assert rejected_sizes[-1] == expected_rejected_sizes[-1]
 
 
-def test_token_operations():
+def test_token_operations() -> None:
     """Test accepting token and finding the next token mask."""
+    # fmt: off
     vocab = [
-        # fmt: off
-        "<s>",
-        "</s>",
-        "a",
-        "abc",
-        'b"',
-        '"',
-        ':"',
-        "{",
-        "}",
-        ", ",
-        "6",
-        ":",
-        "\n",
-        " ",
-        '"a":true',
-        # fmt: on
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
     ]
+    # fmt: on
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
@@ -222,9 +148,7 @@ def test_token_operations():
         assert matcher.accept_token(id)
 
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = _get_masked_tokens_from_bitmask(
-        token_bitmask, tokenizer_info.vocab_size
-    )
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
     accepted_tokens = [vocab[i] for i in accepted]
     result.append(accepted_tokens)
@@ -232,26 +156,12 @@ def test_token_operations():
     assert result == expected
 
 
-def test_rollback():
+def test_rollback() -> None:
+    # fmt: off
     vocab = [
-        # fmt: off
-        "<s>",
-        "</s>",
-        "a",
-        "abc",
-        'b"',
-        '"',
-        ':"',
-        "{",
-        "}",
-        ", ",
-        "6",
-        ":",
-        "\n",
-        " ",
-        '"a":true',
-        # fmt: on
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
     ]
+    # fmt: on
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
@@ -289,27 +199,12 @@ def test_rollback():
             torch.testing.assert_close(l, r)
 
 
-def test_graceful_rollback_failure():
+def test_graceful_rollback_failure() -> None:
+    # fmt: off
     vocab = [
-        # fmt: off
-        "<s>",
-        "</s>",
-        "a",
-        "abc",
-        'b"',
-        '"',
-        ':"',
-        "{",
-        "}",
-        ", ",
-        "6",
-        "6:",
-        ":",
-        "\n",
-        " ",
-        '"a":true',
-        # fmt: on
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", "6:", ":", "\n", " ", '"a":true',
     ]
+    # fmt: on
     input_splitted = ["{", '"', "abc", '"', ":"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
@@ -332,25 +227,11 @@ def test_graceful_rollback_failure():
 
 
 def test_reset():
+    # fmt: off
     vocab = [
-        # fmt: off
-        "<s>",
-        "</s>",
-        "a",
-        "abc",
-        'b"',
-        '"',
-        ':"',
-        "{",
-        "}",
-        ", ",
-        "6",
-        ":",
-        "\n",
-        " ",
-        '"a":true',
-        # fmt: on
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
     ]
+    # fmt: on
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
@@ -379,27 +260,12 @@ def test_reset():
         torch.testing.assert_close(l, r)
 
 
-def test_termination():
+def test_termination() -> None:
+    # fmt: off
     vocab = [
-        # fmt: off
-        "<s>",
-        "</s>",
-        "a",
-        "abc",
-        'b"',
-        '"',
-        ':"',
-        "{",
-        " }",
-        ", ",
-        "6",
-        ":",
-        "\n",
-        " ",
-        '"a"',
-        ":true",
-        # fmt: on
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", " }", ", ", "6", ":", "\n", " ", '"a"', ':true',
     ]
+    # fmt: on
     input_splitted = [
         "{",
         '"',
@@ -451,25 +317,11 @@ sub_rule ::= "b"
 
 
 def test_vocab_size():
+    # fmt: off
     vocab = [
-        # fmt: off
-        "<s>",
-        "</s>",
-        "a",
-        "abc",
-        'b"',
-        '"',
-        ':"',
-        "{",
-        "}",
-        ", ",
-        "6",
-        ":",
-        "\n",
-        " ",
-        '"a":true',
-        # fmt: on
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
     ]
+    # fmt: on
     tokenizer_info = xgr.TokenizerInfo(vocab, vocab_size=64)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
@@ -477,9 +329,7 @@ def test_vocab_size():
     matcher.fill_next_token_bitmask(token_bitmask)
     assert token_bitmask.shape == (1, 2)
 
-    rejected_tokens = _get_masked_tokens_from_bitmask(
-        token_bitmask, tokenizer_info.vocab_size
-    )
+    rejected_tokens = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert rejected_tokens == [i for i in range(64) if i != 7]
 
 
@@ -489,20 +339,22 @@ tokenizer_path_override_stop_tokens = [
     ("deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct", [100001]),
 ]
 
+
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path, override_stop_tokens", tokenizer_path_override_stop_tokens
 )
 def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[int]):
     tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path, use_fast=True, trust_remote_code=True,
+        tokenizer_path,
+        use_fast=True,
+        trust_remote_code=True,
     )
     tokenizer_info_1 = xgr.TokenizerInfo.from_huggingface(
-        tokenizer, stop_token_ids=override_stop_tokens,
+        tokenizer,
+        stop_token_ids=override_stop_tokens,
     )
-    matcher_1 = _get_matcher_from_grammar_and_tokenizer_info(
-        json_grammar, tokenizer_info_1
-    )
+    matcher_1 = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info_1)
     assert tokenizer_info_1.stop_token_ids == override_stop_tokens
     assert matcher_1.stop_token_ids == override_stop_tokens
 

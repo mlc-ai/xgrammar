@@ -19,7 +19,6 @@ import torch
 from triton.testing import do_bench
 
 from xgrammar.kernels import apply_token_bitmask_inplace
-)
 from xgrammar.testing import _bool_mask_to_bitmask
 
 if __name__ == "__main__":
@@ -54,18 +53,13 @@ if __name__ == "__main__":
         bool_mask = torch.ones(batch_size, vocab_size, dtype=torch.bool, device="cuda")
         if masked_cnt > 0:
             masked_positions = torch.stack(
-                [
-                    torch.randperm(vocab_size, device="cuda")[:masked_cnt]
-                    for _ in range(batch_size)
-                ]
+                [torch.randperm(vocab_size, device="cuda")[:masked_cnt] for _ in range(batch_size)]
             )
             bool_mask.scatter_(1, masked_positions, False)
             assert (bool_mask.sum(dim=-1) + masked_cnt == vocab_size).all().item()
     bitmask = _bool_mask_to_bitmask(bool_mask)
 
-    masked_batch_ids = torch.arange(
-        0, batch_size, stride, dtype=torch.int32, device="cuda"
-    )
+    masked_batch_ids = torch.arange(0, batch_size, stride, dtype=torch.int32, device="cuda")
     kwargs = {} if stride == 1 else {"indices": masked_batch_ids}
 
     logits_expected = logits.clone()

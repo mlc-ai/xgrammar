@@ -67,9 +67,7 @@ def test_json_schema_debug_accept_string():
 
 def test_json_schema_find_jump_forward_string():
     grammar = xgr.Grammar.from_json_schema(MainModel, indent=2)
-    matcher = _get_matcher_from_grammar_and_tokenizer_info(
-        grammar, xgr.TokenizerInfo([])
-    )
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, xgr.TokenizerInfo([]))
 
     for i, c in enumerate(instance_str):
         jump_forward_str = matcher.find_jump_forward_string()
@@ -126,9 +124,7 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         time_end = time.monotonic_ns()
-        print(
-            f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us"
-        )
+        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
 
         # 3. accept_string
         print("Accepting char:", bytes([c]))

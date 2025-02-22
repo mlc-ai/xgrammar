@@ -120,9 +120,7 @@ class TokenizerInfo(XGRObject):
         has_nested_sp_model_attr = (
             hasattr(tokenizer, "tokenizer")
             and hasattr(tokenizer.tokenizer, "sp_model")
-            and isinstance(
-                tokenizer.tokenizer.sp_model, sentencepiece.SentencePieceProcessor
-            )
+            and isinstance(tokenizer.tokenizer.sp_model, sentencepiece.SentencePieceProcessor)
         )
 
         return has_sp_model_attr or has_nested_sp_model_attr
@@ -205,10 +203,7 @@ class TokenizerInfo(XGRObject):
             # - stop token id is provided by user, or auto detected.
             backend_str = tokenizer.backend_tokenizer.to_str()
             if stop_token_ids is None:
-                if (
-                    hasattr(tokenizer, "eos_token_id")
-                    and tokenizer.eos_token_id is not None
-                ):
+                if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
                     stop_token_ids = [tokenizer.eos_token_id]
                 else:
                     logger.warning(
@@ -225,10 +220,7 @@ class TokenizerInfo(XGRObject):
             # tiktoken tokenizer
             # e.g. Phi-3-small-8k-instruct, Qwen-7B-Chat, stablelm-2-12b-chat (previously)
             if stop_token_ids is None:
-                if (
-                    hasattr(tokenizer, "eos_token_id")
-                    and tokenizer.eos_token_id is not None
-                ):
+                if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
                     stop_token_ids = [tokenizer.eos_token_id]
                 else:
                     logger.warning(
@@ -248,16 +240,11 @@ class TokenizerInfo(XGRObject):
             # e.g. Chatglm3-6b
             if hasattr(tokenizer, "sp_model"):
                 sp_model = tokenizer.sp_model
-            elif hasattr(tokenizer, "tokenizer") and hasattr(
-                tokenizer.tokenizer, "sp_model"
-            ):
+            elif hasattr(tokenizer, "tokenizer") and hasattr(tokenizer.tokenizer, "sp_model"):
                 sp_model = tokenizer.tokenizer.sp_model
 
             if stop_token_ids is None:
-                if (
-                    hasattr(tokenizer, "eos_token_id")
-                    and tokenizer.eos_token_id is not None
-                ):
+                if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
                     stop_token_ids = [tokenizer.eos_token_id]
                 else:
                     eos_id = sp_model.eos_id()

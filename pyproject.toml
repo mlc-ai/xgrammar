@@ -5,21 +5,15 @@ authors = [{ name = "MLC Team" }]
 readme = "README.md"
 license = { text = "Apache 2.0" }
 classifiers = [
-    "License :: OSI Approved :: Apache Software License",
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Education",
-    "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Intended Audience :: Science/Research",
 ]
 keywords = ["machine learning", "inference"]
 requires-python = ">=3.9, <4"
-dependencies = [
-    "pydantic",
-    "sentencepiece",
-    "tiktoken",
-    "torch>=1.10.0",
-    "transformers>=4.38.0",
-]
+dependencies = ["pydantic", "sentencepiece", "tiktoken", "torch>=1.10.0", "transformers>=4.38.0"]
 dynamic = ["version"]
 
 [project.urls]
@@ -27,24 +21,15 @@ Homepage = "https://xgrammar.mlc.ai/"
 GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
-triton = [
-    "triton",
-]
-test = [
-    "pytest",
-    "protobuf",
-    "huggingface-hub[cli]",
-]
+triton = ["triton"]
+test = ["pytest", "protobuf", "huggingface-hub[cli]"]
 
 [tool.scikit-build.metadata.version]
 provider = "scikit_build_core.metadata.regex"
 input = "python/xgrammar/version.py"
 
 [build-system]
-requires = [
-    "scikit-build-core>=0.10.0",
-    "pybind11>=2.11.0",
-]
+requires = ["scikit-build-core>=0.10.0", "pybind11>=2.11.0"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
@@ -103,15 +88,14 @@ sdist.exclude = ["**/.git", "**/.github", "**/__pycache__", "**/*.pyc", "build",
 
 [tool.pytest.ini_options]
 addopts = "-rA --durations=0 --ignore=3rdparty"
-markers = [
-    "hf_token_required: mark test as requiring a huggingface token",
-]
+markers = ["hf_token_required: mark test as requiring a huggingface token"]
 
 [tool.mypy]
 strict = true
 
 [tool.ruff]
 exclude = ["3rdparty"]
+line-length = 100
 
 [tool.ruff.lint]
 ignore = [
@@ -153,7 +137,18 @@ src_paths = ["python"]
 
 [tool.cibuildwheel]
 build-verbosity = 1
-skip = ["cp36-*", "cp37-*", "cp38-*", "pp*", "*musllinux*", "cp313-manylinux_aarch64", "cp313-macosx_x86_64"] # pypy doesn't play nice with pybind11
+# pypy doesn't play nice with pybind11 so skip pp* builds
+# pytorch stopped supporting Mac x64 back in 2.2 so there will be no Mac x64 wheels for python 3.13 so skip cp313-macosx_x86_64
+# python 3.13 support is still early and wheels are missing for Linux aarch64 for pytorch so temporarily skip cp313-manylinux_aarch64
+skip = [
+  "cp36-*",
+  "cp37-*",
+  "cp38-*",
+  "pp*",
+  "*musllinux*",
+  "cp313-manylinux_aarch64",
+  "cp313-macosx_x86_64",
+] # pypy doesn't play nice with pybind11
 build-frontend = "build[uv]"
 test-command = "pytest {project}/tests -m \"not hf_token_required\""
 test-extras = ["test"]
@@ -167,5 +162,3 @@ environment = { MACOSX_DEPLOYMENT_TARGET = "10.14" }
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
-
-

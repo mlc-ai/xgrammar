@@ -25,9 +25,7 @@ config = AutoConfig.from_pretrained(model_name)
 full_vocab_size = config.vocab_size
 
 # 1. Compile grammar (NOTE: you can substitute this with other grammars like EBNF, JSON Schema)
-tokenizer_info = xgr.TokenizerInfo.from_huggingface(
-    tokenizer, vocab_size=full_vocab_size
-)
+tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=full_vocab_size)
 grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
 compiled_grammar: xgr.CompiledGrammar = grammar_compiler.compile_builtin_json_grammar()
 

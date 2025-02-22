@@ -26,9 +26,7 @@ test_repetition_input_accepted_test_repetition = (
 )
 
 
-@pytest.mark.parametrize(
-    "input, accepted", test_repetition_input_accepted_test_repetition
-)
+@pytest.mark.parametrize("input, accepted", test_repetition_input_accepted_test_repetition)
 def test_repetition(input: str, accepted: bool):
     regex_str = "(a|[bc]{4,}){2,3}"
     grammar = xgr.Grammar.from_regex(regex_str)
@@ -165,9 +163,7 @@ def test_fill_next_token_bitmask(regex: str, input_str: str) -> None:
         print(f"Time to accept char {chr(c)}: {(time_end - time_start) / 1e3} us")
 
     matcher.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = _get_masked_tokens_from_bitmask(
-        token_bitmask, tokenizer_info.vocab_size
-    )
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert tokenizer.eos_token_id not in rejected_token_ids
 
 

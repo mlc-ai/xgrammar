@@ -16,9 +16,7 @@ from .kernels import apply_token_bitmask_inplace as apply_token_bitmask_inplace_
 TRITON_IMPORT_ERROR = "Triton is not installed"
 DEVICE_SUPPORT_ERROR = "Currently, logit masking is only supported on CUDA or CPU."
 BITMASK_CPU_ERROR = "bitmask should be on CPU."
-GRAMMAR_COMPILE_ERROR = (
-    "The grammar should be compiled before passing it to GrammarMatcher."
-)
+GRAMMAR_COMPILE_ERROR = "The grammar should be compiled before passing it to GrammarMatcher."
 
 """The dtype of the bitmask: int32."""
 bitmask_dtype = torch.int32
@@ -166,9 +164,7 @@ class DeviceValidationError(ValueError):
 class GrammarTypeError(TypeError):
     """Errors related to grammar type validation."""
 
-    INVALID_GRAMMAR = (
-        "The grammar should be compiled before passing it to GrammarMatcher"
-    )
+    INVALID_GRAMMAR = "The grammar should be compiled before passing it to GrammarMatcher"
 
 
 class GrammarMatcher(XGRObject):

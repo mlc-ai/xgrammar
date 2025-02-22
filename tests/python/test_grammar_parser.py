@@ -363,14 +363,10 @@ def test_error():
     ):
         xgr.Grammar.from_ebnf("root ::= a b")
 
-    with pytest.raises(
-        RuntimeError, match="EBNF parse error at line 1, column 15: Expect element"
-    ):
+    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 15: Expect element"):
         xgr.Grammar.from_ebnf('root ::= "a" |')
 
-    with pytest.raises(
-        RuntimeError, match='EBNF parse error at line 1, column 15: Expect "'
-    ):
+    with pytest.raises(RuntimeError, match='EBNF parse error at line 1, column 15: Expect "'):
         xgr.Grammar.from_ebnf('root ::= "a" "')
 
     with pytest.raises(
@@ -380,8 +376,7 @@ def test_error():
 
     with pytest.raises(
         RuntimeError,
-        match="EBNF parse error at line 1, column 12: Character class should not contain "
-        "newline",
+        match="EBNF parse error at line 1, column 12: Character class should not contain newline",
     ):
         xgr.Grammar.from_ebnf("root ::= [a\n]")
 
@@ -404,9 +399,7 @@ def test_error():
     ):
         xgr.Grammar.from_ebnf(r"root ::= [Z-A]")
 
-    with pytest.raises(
-        RuntimeError, match="EBNF parse error at line 1, column 6: Expect ::="
-    ):
+    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 6: Expect ::="):
         xgr.Grammar.from_ebnf(r'root := "a"')
 
     with pytest.raises(
@@ -417,8 +410,7 @@ def test_error():
 
     with pytest.raises(
         RuntimeError,
-        match="EBNF parse error at line 1, column 10: "
-        'The root rule with name "root" is not found.',
+        match='EBNF parse error at line 1, column 10: The root rule with name "root" is not found.',
     ):
         xgr.Grammar.from_ebnf('a ::= "a"')
 

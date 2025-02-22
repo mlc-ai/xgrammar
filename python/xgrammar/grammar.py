@@ -31,9 +31,7 @@ class StructuralTagItem(BaseModel):
 class SchemaValidationError(ValueError):
     """Errors related to schema validation."""
 
-    MISSING_SCHEMA_METHOD = (
-        "The schema should have a model_json_schema or json_schema method"
-    )
+    MISSING_SCHEMA_METHOD = "The schema should have a model_json_schema or json_schema method"
     INVALID_SCHEMA_TYPE = "The schema should be a string or a Pydantic model"
 
 
@@ -89,9 +87,7 @@ class Grammar(XGRObject):
         RuntimeError
             When converting the regex pattern fails, with details about the parsing error.
         """
-        return Grammar._create_from_handle(
-            _core.Grammar.from_ebnf(ebnf_string, root_rule_name)
-        )
+        return Grammar._create_from_handle(_core.Grammar.from_ebnf(ebnf_string, root_rule_name))
 
     @staticmethod
     def from_json_schema(
@@ -162,9 +158,7 @@ class Grammar(XGRObject):
         )
 
     @staticmethod
-    def from_regex(
-        regex_string: str, *, print_converted_ebnf: bool = False
-    ) -> "Grammar":
+    def from_regex(regex_string: str, *, print_converted_ebnf: bool = False) -> "Grammar":
         """Create a grammar from a regular expression string.
 
         Parameters
@@ -191,9 +185,7 @@ class Grammar(XGRObject):
         )
 
     @staticmethod
-    def from_structural_tag(
-        tags: List[StructuralTagItem], triggers: List[str]
-    ) -> "Grammar":
+    def from_structural_tag(tags: List[StructuralTagItem], triggers: List[str]) -> "Grammar":
         """Create a grammar from structural tags. The structural tag handles the dispatching
         of different grammars based on the tags and triggers: it initially allows any output,
         until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
@@ -254,12 +246,8 @@ class Grammar(XGRObject):
         >>> triggers = ["<function="]
         >>> grammar = Grammar.from_structural_tag(tags, triggers)
         """
-        tags_tuple = [
-            (tag.start, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags
-        ]
-        return Grammar._create_from_handle(
-            _core.Grammar.from_structural_tag(tags_tuple, triggers)
-        )
+        tags_tuple = [(tag.start, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
+        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
 
     @staticmethod
     def builtin_json_grammar() -> "Grammar":

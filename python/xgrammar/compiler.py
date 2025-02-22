@@ -12,7 +12,9 @@ from .tokenizer_info import TokenizerInfo
 class TokenizerTypeError(TypeError):
     """Errors related to tokenizer type validation."""
 
-    INVALID_TOKENIZER = "Please convert the tokenizer to TokenizerInfo before passing it to GrammarCompiler"
+    INVALID_TOKENIZER = (
+        "Please convert the tokenizer to TokenizerInfo before passing it to GrammarCompiler"
+    )
 
 
 class CompiledGrammar(XGRObject):
@@ -66,9 +68,7 @@ class GrammarCompiler(XGRObject):
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise TokenizerTypeError(TokenizerTypeError.INVALID_TOKENIZER)
 
-        self._init_handle(
-            _core.GrammarCompiler(tokenizer_info._handle, max_threads, cache_enabled)
-        )
+        self._init_handle(_core.GrammarCompiler(tokenizer_info._handle, max_threads, cache_enabled))
 
     def compile_json_schema(
         self,
@@ -120,9 +120,7 @@ class GrammarCompiler(XGRObject):
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        return CompiledGrammar._create_from_handle(
-            self._handle.compile_builtin_json_grammar()
-        )
+        return CompiledGrammar._create_from_handle(self._handle.compile_builtin_json_grammar())
 
     def compile_regex(self, regex: str) -> CompiledGrammar:
         """Get CompiledGrammar from the specified regex.
@@ -158,17 +156,13 @@ class GrammarCompiler(XGRObject):
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        tags_tuple = [
-            (tag.start, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags
-        ]
+        tags_tuple = [(tag.start, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
         return CompiledGrammar._create_from_handle(
             self._handle.compile_structural_tag(tags_tuple, triggers)
         )
 
     @overload
-    def compile_grammar(
-        self, ebnf_string: str, *, root_rule_name: str = "root"
-    ) -> CompiledGrammar:
+    def compile_grammar(self, ebnf_string: str, *, root_rule_name: str = "root") -> CompiledGrammar:
         """Compile a grammar from EBNF string. The EBNF string should follow the format
         in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.
 
@@ -203,9 +197,7 @@ class GrammarCompiler(XGRObject):
     ) -> CompiledGrammar:
         if isinstance(grammar, str):
             grammar = Grammar.from_ebnf(grammar, root_rule_name=root_rule_name)
-        return CompiledGrammar._create_from_handle(
-            self._handle.compile_grammar(grammar._handle)
-        )
+        return CompiledGrammar._create_from_handle(self._handle.compile_grammar(grammar._handle))
 
     def clear_cache(self) -> None:
         """Clear all cached compiled grammars."""

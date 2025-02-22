@@ -38,23 +38,13 @@ def apply_token_bitmask_inplace_cpu(
     if bitmask.dtype != torch.int32:
         raise BitmaskValidationError(BITMASK_TYPE_ERROR)
     if logits.dim() != 1 and logits.dim() != MAX_DIMS:
-        raise BitmaskValidationError(
-            BitmaskValidationError.dims_error("logits", logits.dim())
-        )
+        raise BitmaskValidationError(BitmaskValidationError.dims_error("logits", logits.dim()))
     if bitmask.dim() != 1 and bitmask.dim() != MAX_DIMS:
-        raise BitmaskValidationError(
-            BitmaskValidationError.dims_error("bitmask", bitmask.dim())
-        )
+        raise BitmaskValidationError(BitmaskValidationError.dims_error("bitmask", bitmask.dim()))
 
-    logits_shape = (
-        (1, logits.shape[0])
-        if logits.dim() == 1
-        else (logits.shape[0], logits.shape[1])
-    )
+    logits_shape = (1, logits.shape[0]) if logits.dim() == 1 else (logits.shape[0], logits.shape[1])
     bitmask_shape = (
-        (1, bitmask.shape[0])
-        if bitmask.dim() == 1
-        else (bitmask.shape[0], bitmask.shape[1])
+        (1, bitmask.shape[0]) if bitmask.dim() == 1 else (bitmask.shape[0], bitmask.shape[1])
     )
 
     _core.kernels.apply_token_bitmask_inplace_cpu(
