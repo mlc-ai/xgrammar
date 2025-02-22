@@ -100,7 +100,7 @@ You should see the path you used to build from source with:
 
    python -c "import xgrammar; print(xgrammar)"
 
-**Step 4. (Optional) Run Python Tests.** You will need a HuggingFace token to run the tests that has gated models.
+**Step 4. (Optional) Run Python Tests.** You will need a HuggingFace token and access to gated models to run the tests that have gated models.
 
 .. code:: bash
 
