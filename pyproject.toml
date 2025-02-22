@@ -13,7 +13,14 @@ classifiers = [
 ]
 keywords = ["machine learning", "inference"]
 requires-python = ">=3.9, <4"
-dependencies = ["pydantic", "sentencepiece", "tiktoken", "torch>=1.10.0", "transformers>=4.38.0"]
+dependencies = [
+  "pydantic",
+  "sentencepiece",
+  "tiktoken",
+  "torch>=1.10.0",
+  "transformers>=4.38.0",
+  "triton; platform_system == 'linux' and platform_machine == 'x86_64'",
+]
 dynamic = ["version"]
 
 [project.urls]
@@ -21,7 +28,6 @@ Homepage = "https://xgrammar.mlc.ai/"
 GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
-triton = ["triton"]
 test = ["pytest", "protobuf", "huggingface-hub[cli]"]
 
 [tool.scikit-build.metadata.version]
