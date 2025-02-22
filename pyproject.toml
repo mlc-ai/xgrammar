@@ -57,7 +57,7 @@ build.verbose = true
 # CMake configuration
 cmake.version = "CMakeLists.txt"
 cmake.args = []
-cmake.build-type = "RelWithDebInfo" # Release is Default
+cmake.build-type = "RelWithDebInfo"
 
 # Logging
 logging.level = "INFO"
