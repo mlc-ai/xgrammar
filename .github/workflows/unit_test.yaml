@@ -17,8 +17,7 @@ jobs:
         run: |
           sudo apt install -y gcc g++ cmake
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pybind11 ninja
+          python -m pip install ninja pybind11 torch
 
       - name: Build xgrammar and run C++ tests
         run: |
