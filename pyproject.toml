@@ -100,35 +100,16 @@ markers = ["hf_token_required: mark test as requiring a huggingface token"]
 strict = true
 
 [tool.ruff]
-exclude = ["3rdparty"]
-line-length = 100
+include = ["python/**/*.py", "tests/**/*.py"]
 
 [tool.ruff.lint]
-ignore = [
-  "E501",   # line too long, handled by black
-  "PTH",
-  "PGH",
-  "D100",
-  "D101",
-  "D102",
-  "D103",
-  "D104",
-  "D107",
-  "D213",
-  "D203",
-  "D205",
-  "D404",
-  "D417",
-  "D105",
-  "FA",
-  "ERA001",
-  "SLF001",
-]
-select = ["ALL"]
+# Never enforce `E501` (line length violations).
+ignore = ["C901", "E501", "E741", "F402", "F823"]
+select = ["C", "E", "F", "W"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"tests/*" = ["E741", "PLR2004", "INP001", "ANN201", "S101", "T201", "A", "FBT"]
+"tests/*" = ["E741"]
 
 [tool.ruff.lint.pylint]
 max-args = 10
@@ -136,10 +117,14 @@ max-args = 10
 [tool.black]
 exclude = "3rdparty/*"
 line-length = 100
+skip-magic-trailing-comma = true
 
 [tool.isort]
 profile = "black"
-src_paths = ["python"]
+src_paths = ["python", "tests"]
+extend_skip = ["3rdparty"]
+line_length = 100
+skip_gitignore = true
 
 [tool.cibuildwheel]
 build-verbosity = 1

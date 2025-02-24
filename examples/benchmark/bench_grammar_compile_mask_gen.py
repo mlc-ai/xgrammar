@@ -31,10 +31,7 @@ def xgrammar_build(schema: str, grammar_compiler: xgr.GrammarCompiler):
 
 
 def xgrammar_exec(
-    matcher: xgr.GrammarMatcher,
-    logits: torch.Tensor,
-    bitmask: torch.Tensor,
-    token_id: int,
+    matcher: xgr.GrammarMatcher, logits: torch.Tensor, bitmask: torch.Tensor, token_id: int
 ):
     # Logits processing
     matcher.fill_next_token_bitmask(bitmask)

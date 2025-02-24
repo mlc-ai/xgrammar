@@ -17,10 +17,7 @@ from xgrammar.testing import (
 json_grammar = xgr.Grammar.builtin_json_grammar()
 
 
-input_accepted = [
-    '{"name": "John"}',
-    '{ "name" : "John" }',
-]
+input_accepted = ['{"name": "John"}', '{ "name" : "John" }']
 
 
 @pytest.mark.parametrize("input_accepted", input_accepted)
@@ -28,10 +25,7 @@ def test_accept(input_accepted: str):
     assert _is_grammar_accept_string(json_grammar, input_accepted)
 
 
-input_refused = (
-    '{ name: "John" }',
-    '{ "name": "John" } ',
-)
+input_refused = ('{ name: "John" }', '{ "name": "John" } ')
 
 
 @pytest.mark.parametrize("input_refused", input_refused)
@@ -39,14 +33,15 @@ def test_refuse(input_refused: str):
     assert not _is_grammar_accept_string(json_grammar, input_refused)
 
 
-# fmt: off
 tokenizer_path__input_str__expected_rejected_sizes = [
     (
         "meta-llama/Llama-2-7b-chat-hf",
         '{"id": 1,"name": "Example"}',
         [
+            # fmt: off
             31989, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 272, 272, 272, 272,
             272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999,
+            # fmt: on
         ],
     ),
     (
@@ -54,13 +49,14 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         "meta-llama/Meta-Llama-3-8B-Instruct",
         '{"id": 1,"name": "Example哈哈"}',
         [
+            # fmt: off
             128235, 127497, 5002, 5002, 5002, 127849, 126399, 126399, 126760, 127499, 5002, 5002,
             5002, 5002, 5002, 127849, 126399, 126399, 4952, 4952, 4952, 4952, 4952, 4952, 4952,
             4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128255,
+            # fmt: on
         ],
     ),
 ]
-# fmt: on
 
 
 @pytest.mark.hf_token_required
@@ -69,15 +65,9 @@ tokenizer_path__input_str__expected_rejected_sizes = [
     tokenizer_path__input_str__expected_rejected_sizes,
 )
 def test_fill_next_token_bitmask(
-    tokenizer_path: str,
-    input_str: str,
-    expected_rejected_sizes: Optional[List[int]],
+    tokenizer_path: str, input_str: str, expected_rejected_sizes: Optional[List[int]]
 ):
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
@@ -106,13 +96,13 @@ def test_fill_next_token_bitmask(
         assert rejected_sizes[-1] == expected_rejected_sizes[-1]
 
 
-def test_token_operations() -> None:
+def test_token_operations():
     """Test accepting token and finding the next token mask."""
-    # fmt: off
     vocab = [
+        # fmt: off
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
+        # fmt: on
     ]
-    # fmt: on
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
@@ -156,12 +146,12 @@ def test_token_operations() -> None:
     assert result == expected
 
 
-def test_rollback() -> None:
-    # fmt: off
+def test_rollback():
     vocab = [
+        # fmt: off
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
+        # fmt: on
     ]
-    # fmt: on
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
@@ -199,12 +189,12 @@ def test_rollback() -> None:
             torch.testing.assert_close(l, r)
 
 
-def test_graceful_rollback_failure() -> None:
-    # fmt: off
+def test_graceful_rollback_failure():
     vocab = [
+        # fmt: off
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", "6:", ":", "\n", " ", '"a":true',
+        # fmt: on
     ]
-    # fmt: on
     input_splitted = ["{", '"', "abc", '"', ":"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
@@ -227,11 +217,11 @@ def test_graceful_rollback_failure() -> None:
 
 
 def test_reset():
-    # fmt: off
     vocab = [
+        # fmt: off
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
+        # fmt: on
     ]
-    # fmt: on
     input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
     input_ids = [vocab.index(t) for t in input_splitted]
 
@@ -260,26 +250,13 @@ def test_reset():
         torch.testing.assert_close(l, r)
 
 
-def test_termination() -> None:
-    # fmt: off
+def test_termination():
     vocab = [
+        # fmt: off
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", " }", ", ", "6", ":", "\n", " ", '"a"', ':true',
+        # fmt: on
     ]
-    # fmt: on
-    input_splitted = [
-        "{",
-        '"',
-        "abc",
-        'b"',
-        ":",
-        "6",
-        ", ",
-        " ",
-        '"a"',
-        ":true",
-        " }",
-        "</s>",
-    ]
+    input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a"', ":true", " }", "</s>"]
     input_ids = [vocab.index(t) for t in input_splitted]
     tokenizer_info = xgr.TokenizerInfo(vocab)
 
@@ -317,11 +294,11 @@ sub_rule ::= "b"
 
 
 def test_vocab_size():
-    # fmt: off
     vocab = [
+        # fmt: off
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
+        # fmt: on
     ]
-    # fmt: on
     tokenizer_info = xgr.TokenizerInfo(vocab, vocab_size=64)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
@@ -345,14 +322,9 @@ tokenizer_path_override_stop_tokens = [
     "tokenizer_path, override_stop_tokens", tokenizer_path_override_stop_tokens
 )
 def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[int]):
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info_1 = xgr.TokenizerInfo.from_huggingface(
-        tokenizer,
-        stop_token_ids=override_stop_tokens,
+        tokenizer, stop_token_ids=override_stop_tokens
     )
     matcher_1 = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info_1)
     assert tokenizer_info_1.stop_token_ids == override_stop_tokens

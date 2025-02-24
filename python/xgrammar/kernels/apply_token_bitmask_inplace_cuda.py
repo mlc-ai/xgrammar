@@ -33,20 +33,18 @@ def _remove_torch_nvcc_flags() -> None:
 
 
 def _load_torch_ops() -> None:
-    with open(__file__.replace(".py", ".cu")) as f:
+    torch_op_file_path = __file__.replace(".py", ".cu")
+    with open(torch_op_file_path) as f:
         source = f.read()
+    cflags = ["-O3", "-Wno-switch-bool"]
+    cuda_cflags = ["-O3", "-std=c++17", "--threads", "4", "-use_fast_math"]
+    # Use the safer cpp_extension.load_inline instead of cpp_extension.load
     torch.utils.cpp_extension.load_inline(
         name="xgrammar",
         cpp_sources=[],  # No C++ sources
         cuda_sources=[source],
-        extra_cflags=["-O3", "-Wno-switch-bool"],
-        extra_cuda_cflags=[
-            "-O3",
-            "-std=c++17",
-            "--threads",
-            "4",
-            "-use_fast_math",
-        ],
+        extra_cflags=cflags,
+        extra_cuda_cflags=cuda_cflags,
         with_cuda=True,
         is_python_module=False,
     )
@@ -56,18 +54,13 @@ _remove_torch_nvcc_flags()
 _load_torch_ops()
 
 
-_is_register_fake_available = hasattr(torch, "library") and hasattr(
-    torch.library,
-    "register_fake",
-)
+_is_register_fake_available = hasattr(torch, "library") and hasattr(torch.library, "register_fake")
 
 if _is_register_fake_available:
-
+    # To support torch.compile with fullgraph=True, a fake kernel is needed.
     @torch.library.register_fake("xgrammar::apply_token_bitmask_inplace_cuda")
     def _(
-        logits: torch.Tensor,
-        bitmask: torch.Tensor,
-        indices: Optional[torch.Tensor] = None,
+        logits: torch.Tensor, bitmask: torch.Tensor, indices: Optional[torch.Tensor] = None
     ) -> None:
         pass
 

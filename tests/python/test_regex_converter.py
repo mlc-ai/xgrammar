@@ -2,7 +2,6 @@ import sys
 import time
 
 import pytest
-import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
@@ -411,10 +410,7 @@ def test_non_greedy_quantifier():
     assert not _is_grammar_accept_string(grammar_str, "aa")
 
 
-tokenizer_paths = [
-    "meta-llama/Llama-2-7b-chat-hf",
-    "meta-llama/Meta-Llama-3-8B-Instruct",
-]
+tokenizer_paths = ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 regex_instances = [
     (r".+a.+", "bbbabb"),
     (

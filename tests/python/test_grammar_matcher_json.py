@@ -212,15 +212,16 @@ def test_json_pressure(json_input_pressure: str):
     assert _is_grammar_accept_string(json_grammar, json_input_pressure, print_time=True)
 
 
-# fmt: off
 tokenizer_path__input_str__expected_rejected_sizes = [
     (
         # short test
         "meta-llama/Llama-2-7b-chat-hf",
         '{"id": 1,"name": "Example"}',
         [
+            # fmt: off
             31989, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 272, 272, 272, 272,
             272, 31973, 31846, 31846, 265, 265, 265, 265, 265, 265, 265, 265, 31974, 31999,
+            # fmt: on
         ],
     ),
     (
@@ -235,6 +236,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 "res": "res"
 }""",
         [
+            # fmt: off
             31989, 31912, 31912, 272, 272, 272, 31973, 31846, 31846, 31948, 31915, 31915, 272, 272,
             272, 31973, 31846, 31846, 265, 265, 265, 31974, 31915, 31915, 272, 272, 272, 31973,
             31846, 31846, 31997, 31997, 31998, 31974, 31915, 31915, 272, 272, 31973, 31846, 31846,
@@ -244,6 +246,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
             31915, 272, 272, 272, 272, 31973, 31846, 31846, 31840, 31943, 31846, 31846, 31943,
             31846, 31846, 31943, 31970, 31974, 31915, 31915, 272, 272, 272, 272, 31973, 31846,
             31846, 265, 265, 265, 265, 31974, 31974, 31999,
+            # fmt: on
         ],
     ),
     (
@@ -251,13 +254,14 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         "meta-llama/Meta-Llama-3-8B-Instruct",
         '{"id": 1,"name": "Example哈哈"}',
         [
+            # fmt: off
             128235, 127497, 5002, 5002, 5002, 127849, 126399, 126399, 126760, 127499, 5002, 5002,
             5002, 5002, 5002, 127849, 126399, 126399, 4952, 4952, 4952, 4952, 4952, 4952, 4952,
             4952, 128066, 128111, 4952, 128066, 128111, 4952, 127873, 128255,
+            # fmt: on
         ],
     ),
 ]
-# fmt: on
 
 
 @pytest.mark.hf_token_required
@@ -266,15 +270,9 @@ tokenizer_path__input_str__expected_rejected_sizes = [
     tokenizer_path__input_str__expected_rejected_sizes,
 )
 def test_fill_next_token_bitmask(
-    tokenizer_path: str,
-    input_str: str,
-    expected_rejected_sizes: List[int],
+    tokenizer_path: str, input_str: str, expected_rejected_sizes: List[int]
 ):
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -286,11 +284,7 @@ def test_fill_next_token_bitmask(
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    logits_gpu = torch.zeros(
-        tokenizer_info.vocab_size,
-        dtype=torch.float32,
-        device=device,
-    )
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device=device)
 
     input_bytes = input_str.encode("utf-8")
 

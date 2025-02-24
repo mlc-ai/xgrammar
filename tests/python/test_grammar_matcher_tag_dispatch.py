@@ -43,15 +43,15 @@ def test_tag_dispatch_mask_generation_correctness():
 rule1 ::= "abc"
 rule2 ::= "dg"
 """
-    # fmt: off
     tokens = [
+        # fmt: off
         "a", "b", "c", "d", "g", "t", "1", "2", "1a", "2d", "2a", "2dgt",
         "2dgtag1a", "2dgtag1b", "tag1a", "tag1b", "c哈哈t", "q", "abcdef"
+        # fmt: on
     ]
-    # fmt: on
     input_str = "tag1abcqqtag2dgq"
-    # fmt: off
     expected_accepted_tokens = [
+        # fmt: off
         ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
         ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
         ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
@@ -69,8 +69,8 @@ rule2 ::= "dg"
         ['g'],
         ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
         ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef']
+        # fmt: on
     ]
-    # fmt: on
 
     grammar = xgr.Grammar.from_ebnf(grammar_str)
     tokenizer_info = xgr.TokenizerInfo(tokens)
@@ -232,25 +232,17 @@ def test_structural_tag_mask_gen():
     # Set up grammar from schemas
     tags = [
         xgr.StructuralTagItem(
-            start="<function=f>",
-            schema=json.dumps(Schema1.model_json_schema()),
-            end="</function>",
+            start="<function=f>", schema=json.dumps(Schema1.model_json_schema()), end="</function>"
         ),
         xgr.StructuralTagItem(
-            start="<function=g>",
-            schema=json.dumps(Schema2.model_json_schema()),
-            end="</function>",
+            start="<function=g>", schema=json.dumps(Schema2.model_json_schema()), end="</function>"
         ),
     ]
     triggers = ["<function=f", "<function=g"]
 
     # Set up tokenizer
     tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_id,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 
     # Compile grammar and create matcher
@@ -259,21 +251,19 @@ def test_structural_tag_mask_gen():
     compiled_grammar = compiler.compile_structural_tag(tags, triggers)
     matcher = xgr.GrammarMatcher(compiled_grammar)
     time_end = time.monotonic_ns()
-    print(
-        f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us",
-    )
+    print(f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
     # Test input string
     accepted_input = (
         'hhhh<function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>'
         'haha<function=f>{"arg1": "abc", "arg2": 1}</function>123'
     )
-    # fmt: off
     dont_apply_mask_indices = [
+        # fmt: off
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
-        77, 78, 119, 120, 121, 122,
+        77, 78, 119, 120, 121, 122
+        # fmt: on
     ]
-    # fmt: on
     input_bytes = accepted_input.encode("utf-8")
 
     # Set up token bitmask for validation

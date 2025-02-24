@@ -113,8 +113,7 @@ test_advanced_regex_string_instance_is_accepted = [
 
 
 @pytest.mark.parametrize(
-    "regex_string, instance, is_accepted",
-    test_advanced_regex_string_instance_is_accepted,
+    "regex_string, instance, is_accepted", test_advanced_regex_string_instance_is_accepted
 )
 def test_advanced(regex_string: str, instance: str, is_accepted: bool):
     grammar = xgr.Grammar.from_regex(regex_string)
@@ -128,17 +127,10 @@ regex_input_str_test_fill_next_token_bitmask = [
 
 
 @pytest.mark.hf_token_required
-@pytest.mark.parametrize(
-    "regex, input_str",
-    regex_input_str_test_fill_next_token_bitmask,
-)
-def test_fill_next_token_bitmask(regex: str, input_str: str) -> None:
+@pytest.mark.parametrize("regex, input_str", regex_input_str_test_fill_next_token_bitmask)
+def test_fill_next_token_bitmask(regex: str, input_str: str):
     tokenizer_path = "meta-llama/Meta-Llama-3-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 

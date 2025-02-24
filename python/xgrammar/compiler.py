@@ -9,14 +9,6 @@ from .grammar import Grammar, StructuralTagItem, _handle_pydantic_schema
 from .tokenizer_info import TokenizerInfo
 
 
-class TokenizerTypeError(TypeError):
-    """Errors related to tokenizer type validation."""
-
-    INVALID_TOKENIZER = (
-        "Please convert the tokenizer to TokenizerInfo before passing it to GrammarCompiler"
-    )
-
-
 class CompiledGrammar(XGRObject):
     """This is the primary object to store compiled grammar.
 
@@ -59,14 +51,13 @@ class GrammarCompiler(XGRObject):
     """
 
     def __init__(
-        self,
-        tokenizer_info: TokenizerInfo,
-        *,
-        max_threads: int = 8,
-        cache_enabled: bool = True,
+        self, tokenizer_info: TokenizerInfo, *, max_threads: int = 8, cache_enabled: bool = True
     ):
         if not isinstance(tokenizer_info, TokenizerInfo):
-            raise TokenizerTypeError(TokenizerTypeError.INVALID_TOKENIZER)
+            raise ValueError(
+                "Please convert the tokenizer to TokenizerInfo before passing it "
+                "to GrammarCompiler."
+            )
 
         self._init_handle(_core.GrammarCompiler(tokenizer_info._handle, max_threads, cache_enabled))
 

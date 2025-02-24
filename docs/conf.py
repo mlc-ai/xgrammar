@@ -64,21 +64,14 @@ footer_note = " "
 
 # html_logo = "_static/img/mlc-logo-with-text-landscape.svg"
 
-html_theme_options = {
-    "logo_only": False,
-}
+html_theme_options = {"logo_only": False}
 
 header_links = [
     ("Home", "https://xgrammar.mlc.ai/"),
     ("Github", "https://github.com/mlc-ai/xgrammar"),
 ]
 
-header_dropdown = {
-    "name": "Other Resources",
-    "items": [
-        ("MLC Blog", "https://blog.mlc.ai/"),
-    ],
-}
+header_dropdown = {"name": "Other Resources", "items": [("MLC Blog", "https://blog.mlc.ai/")]}
 
 html_context = {
     "footer_copyright": footer_copyright,

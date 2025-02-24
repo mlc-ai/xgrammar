@@ -358,8 +358,7 @@ rule3 ::= (("c"))
 
 def test_error():
     with pytest.raises(
-        RuntimeError,
-        match='EBNF parse error at line 1, column 11: Rule "a" is not defined',
+        RuntimeError, match='EBNF parse error at line 1, column 11: Rule "a" is not defined'
     ):
         xgr.Grammar.from_ebnf("root ::= a b")
 
@@ -381,14 +380,12 @@ def test_error():
         xgr.Grammar.from_ebnf("root ::= [a\n]")
 
     with pytest.raises(
-        RuntimeError,
-        match="EBNF parse error at line 1, column 11: Invalid escape sequence",
+        RuntimeError, match="EBNF parse error at line 1, column 11: Invalid escape sequence"
     ):
         xgr.Grammar.from_ebnf(r'root ::= "\@"')
 
     with pytest.raises(
-        RuntimeError,
-        match="EBNF parse error at line 1, column 11: Invalid escape sequence",
+        RuntimeError, match="EBNF parse error at line 1, column 11: Invalid escape sequence"
     ):
         xgr.Grammar.from_ebnf(r'root ::= "\uFF"')
 
@@ -415,8 +412,7 @@ def test_error():
         xgr.Grammar.from_ebnf('a ::= "a"')
 
     with pytest.raises(
-        RuntimeError,
-        match="EBNF parse error at line 1, column 21: Unexpected lookahead assertion",
+        RuntimeError, match="EBNF parse error at line 1, column 21: Unexpected lookahead assertion"
     ):
         xgr.Grammar.from_ebnf('root ::= "a" (="a") (="b")')
 

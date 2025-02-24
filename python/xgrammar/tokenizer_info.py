@@ -329,5 +329,5 @@ class TokenizerInfo(XGRObject):
             The metadata string in json format.
         """
         return TokenizerInfo._create_from_handle(
-            _core.TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata),
+            _core.TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata)
         )

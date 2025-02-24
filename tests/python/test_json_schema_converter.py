@@ -7,11 +7,7 @@ import pytest
 from pydantic import BaseModel, Field, TypeAdapter, WithJsonSchema, create_model
 
 import xgrammar as xgr
-from xgrammar.testing import (
-    _generate_range_regex,
-    _is_grammar_accept_string,
-    _json_schema_to_ebnf,
-)
+from xgrammar.testing import _generate_range_regex, _is_grammar_accept_string, _json_schema_to_ebnf
 
 
 def check_schema_with_grammar(
@@ -53,9 +49,7 @@ def check_schema_with_instance(
     # instance: pydantic model, json string, or any other object (dumped to json string)
     if isinstance(instance, BaseModel):
         instance = json.dumps(
-            instance.model_dump(mode="json", round_trip=True),
-            indent=indent,
-            separators=separators,
+            instance.model_dump(mode="json", round_trip=True), indent=indent, separators=separators
         )
     elif not isinstance(instance, str):
         instance = json.dumps(instance, indent=indent, separators=separators)
@@ -343,10 +337,7 @@ root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": 
     )
 
     check_schema_with_instance(
-        schema,
-        '{"size": 1, "num": 1.5, "other": false}',
-        any_whitespace=False,
-        strict_mode=False,
+        schema, '{"size": 1, "num": 1.5, "other": false}', any_whitespace=False, strict_mode=False
     )
     check_schema_with_instance(schema, '{"other": false}', any_whitespace=False, strict_mode=False)
 
@@ -391,8 +382,7 @@ def test_reference():
         bars: List[Bar]
 
     instance = MainModel(
-        foo=Foo(count=42, size=3.14),
-        bars=[Bar(apple="a", banana="b"), Bar(apple="c", banana="d")],
+        foo=Foo(count=42, size=3.14), bars=[Bar(apple="a", banana="b"), Bar(apple="c", banana="d")]
     )
 
     ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
@@ -468,10 +458,7 @@ def test_reference_schema():
                 "level2": {
                     "nested": {
                         "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "age": {"type": "integer"},
-                        },
+                        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
                         "required": ["name", "age"],
                     }
                 }
@@ -500,9 +487,7 @@ def test_reference_schema():
             },
             "node_b": {
                 "type": "object",
-                "properties": {
-                    "id": {"type": "integer"},
-                },
+                "properties": {"id": {"type": "integer"}},
                 "required": ["id"],
             },
         },
@@ -559,14 +544,7 @@ root ::= root_case_0 | root_case_1
 def test_anyof_oneof():
     schema = {
         "type": "object",
-        "properties": {
-            "name": {
-                "anyOf": [
-                    {"type": "string"},
-                    {"type": "integer"},
-                ],
-            },
-        },
+        "properties": {"name": {"anyOf": [{"type": "string"}, {"type": "integer"}]}},
     }
     schema_accepted_1 = '{"name": "John"}'
     schema_accepted_2 = '{"name": 123}'
@@ -577,14 +555,7 @@ def test_anyof_oneof():
 
     schema = {
         "type": "object",
-        "properties": {
-            "name": {
-                "oneOf": [
-                    {"type": "string"},
-                    {"type": "integer"},
-                ],
-            },
-        },
+        "properties": {"name": {"oneOf": [{"type": "string"}, {"type": "integer"}]}},
     }
 
     schema_accepted_1 = '{"name": "John"}'
@@ -649,12 +620,10 @@ root ::= "{" "" "\"name 1\"" ": " root_prop_0 "" "}"
 
     instance_space = MainModelSpace(**{"name 1": "abc"})
     instance_space_str = json.dumps(
-        instance_space.model_dump(mode="json", round_trip=True, by_alias=True),
+        instance_space.model_dump(mode="json", round_trip=True, by_alias=True)
     )
     check_schema_with_instance(
-        MainModelSpace.model_json_schema(by_alias=True),
-        instance_space_str,
-        any_whitespace=False,
+        MainModelSpace.model_json_schema(by_alias=True), instance_space_str, any_whitespace=False
     )
 
 
@@ -689,10 +658,7 @@ def test_complex_restrictions():
     instance_err = RestrictedModel(restricted_string='"', restricted_value=42)
     instance_str = json.dumps(instance_err.model_dump(mode="json"))
     check_schema_with_instance(
-        RestrictedModel.model_json_schema(),
-        instance_str,
-        is_accepted=False,
-        any_whitespace=False,
+        RestrictedModel.model_json_schema(), instance_str, is_accepted=False, any_whitespace=False
     )
 
     check_schema_with_instance(
@@ -781,12 +747,9 @@ def test_array_with_only_items_keyword():
     schema = {
         "items": {
             "type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "age": {"type": "integer"},
-            },
+            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
             "required": ["name", "age"],
-        },
+        }
     }
     instance_accepted = [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}]
     instance_rejected = [{"name": "John"}]
@@ -797,21 +760,15 @@ def test_array_with_only_items_keyword():
         "prefixItems": [
             {
                 "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "age": {"type": "integer"},
-                },
+                "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
                 "required": ["name", "age"],
             },
             {
                 "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "age": {"type": "integer"},
-                },
+                "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
                 "required": ["name", "age"],
             },
-        ],
+        ]
     }
 
     check_schema_with_instance(schema_prefix_items, instance_accepted, any_whitespace=False)
@@ -822,29 +779,20 @@ def test_array_with_only_items_keyword():
     schema_unevaluated_items = {
         "unevaluatedItems": {
             "type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "age": {"type": "integer"},
-            },
+            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
             "required": ["name", "age"],
-        },
+        }
     }
 
     check_schema_with_instance(schema_unevaluated_items, instance_accepted, any_whitespace=False)
     check_schema_with_instance(
-        schema_unevaluated_items,
-        instance_rejected,
-        is_accepted=False,
-        any_whitespace=False,
+        schema_unevaluated_items, instance_rejected, is_accepted=False, any_whitespace=False
     )
 
 
 def test_object_with_only_properties_keyword():
     schema = {
-        "properties": {
-            "name": {"type": "string"},
-            "age": {"type": "integer"},
-        },
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
         "required": ["name", "age"],
     }
     instance_accepted = {"name": "John", "age": 30}
@@ -852,11 +800,7 @@ def test_object_with_only_properties_keyword():
     check_schema_with_instance(schema, instance_accepted, any_whitespace=False)
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=False)
 
-    schema_additional_properties = {
-        "additionalProperties": {
-            "type": "string",
-        },
-    }
+    schema_additional_properties = {"additionalProperties": {"type": "string"}}
     instance_accepted = {"name": "John"}
     instance_rejected = {"name": "John", "age": 30}
 
@@ -864,26 +808,16 @@ def test_object_with_only_properties_keyword():
         schema_additional_properties, instance_accepted, any_whitespace=False
     )
     check_schema_with_instance(
-        schema_additional_properties,
-        instance_rejected,
-        is_accepted=False,
-        any_whitespace=False,
+        schema_additional_properties, instance_rejected, is_accepted=False, any_whitespace=False
     )
 
-    schema_unevaluated_properties = {
-        "unevaluatedProperties": {
-            "type": "string",
-        },
-    }
+    schema_unevaluated_properties = {"unevaluatedProperties": {"type": "string"}}
 
     check_schema_with_instance(
         schema_unevaluated_properties, instance_accepted, any_whitespace=False
     )
     check_schema_with_instance(
-        schema_unevaluated_properties,
-        instance_rejected,
-        is_accepted=False,
-        any_whitespace=False,
+        schema_unevaluated_properties, instance_rejected, is_accepted=False, any_whitespace=False
     )
 
 

@@ -115,10 +115,7 @@ def test_grammar_compiler_json_schema():
 
         time_start = time.monotonic_ns()
         compiled_grammar = grammar_compiler.compile_json_schema(
-            MainModel,
-            any_whitespace=any_whitespace,
-            indent=indent,
-            separators=separators,
+            MainModel, any_whitespace=any_whitespace, indent=indent, separators=separators
         )
         time_end = time.monotonic_ns()
         print(f"Time to get compiled grammar {test_id}: {(time_end - time_start) / 1e3} us")

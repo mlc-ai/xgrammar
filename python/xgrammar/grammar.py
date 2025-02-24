@@ -28,23 +28,18 @@ class StructuralTagItem(BaseModel):
     end: str
 
 
-class SchemaValidationError(ValueError):
-    """Errors related to schema validation."""
-
-    MISSING_SCHEMA_METHOD = "The schema should have a model_json_schema or json_schema method"
-    INVALID_SCHEMA_TYPE = "The schema should be a string or a Pydantic model"
-
-
 def _handle_pydantic_schema(schema: Union[str, Type[BaseModel]]) -> str:
     if isinstance(schema, type) and issubclass(schema, BaseModel):
         if hasattr(schema, "model_json_schema"):
             return json.dumps(schema.model_json_schema())
         if hasattr(schema, "schema_json"):
             return json.dumps(schema.schema_json())
-        raise SchemaValidationError(SchemaValidationError.MISSING_SCHEMA_METHOD)
-    if isinstance(schema, str):
+        else:
+            raise ValueError("The schema should have a model_json_schema or json_schema method.")
+    elif isinstance(schema, str):
         return schema
-    raise SchemaValidationError(SchemaValidationError.INVALID_SCHEMA_TYPE)
+    else:
+        raise ValueError("The schema should be a string or a Pydantic model.")
 
 
 class Grammar(XGRObject):
@@ -154,7 +149,7 @@ class Grammar(XGRObject):
         return Grammar._create_from_handle(
             _core.Grammar.from_json_schema(
                 schema_str, any_whitespace, indent, separators, strict_mode
-            ),
+            )
         )
 
     @staticmethod
