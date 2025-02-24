@@ -21,7 +21,7 @@ jobs:
 
       - name: Build xgrammar and run C++ tests
         run: |
-          echo "\nset(XGRAMMAR_BUILD_CXX_TESTS ON)\n" >> cmake/config.cmake
+          echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
           mkdir build && cd build
           cmake .. -G Ninja
           ninja && ctest
