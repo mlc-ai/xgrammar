@@ -8,6 +8,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <algorithm>
+#include <queue>
 #include <unordered_set>
 #include <vector>
 

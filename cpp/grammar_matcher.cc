@@ -8,19 +8,16 @@
 
 #include <xgrammar/matcher.h>
 
-#include <chrono>
-#include <queue>
-
 #include "compiled_grammar_data_structure.h"
 #include "grammar_data_structure.h"
 #include "grammar_matcher_base.h"
-#include "grammar_serializer.h"
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
 #include "support/int_set.h"
 #include "support/logging.h"
 #include "testing.h"
+
 namespace xgrammar {
 
 /******************* Tool functions for token mask *******************/
