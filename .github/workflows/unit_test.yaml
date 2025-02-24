@@ -1,0 +1,35 @@
+on: [push]
+
+jobs:
+  run_unit_test:
+    name: Run unit test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: |
+          sudo apt install -y gcc g++ cmake
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pybind11 ninja
+
+      - name: Build xgrammar and run C++ tests
+        run: |
+          echo "\nset(XGRAMMAR_BUILD_CXX_TESTS ON)\n" >> cmake/config.cmake
+          mkdir build && cd build
+          cmake .. -G Ninja
+          ninja && ctest
+          cd ..
+
+      - name: Run Python tests
+        run: |
+          cd python && pip install -e . && cd ..
+          python -m pytest tests/python
+        timeout-minutes: 5 # to avoid blocking the CI
