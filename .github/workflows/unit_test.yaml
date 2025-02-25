@@ -16,21 +16,15 @@ jobs:
         with:
           python-version: 3.11
 
-      - name: Install dependencies
-        run: |
-          sudo apt install -y gcc g++ cmake
-          python -m pip install --upgrade pip
-          python -m pip install ninja pybind11 torch
-
-      - name: Build xgrammar and run C++ tests
+      - name: Build xgrammar from source
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
-          mkdir build && cd build
-          cmake .. -G Ninja
-          ninja && ctest
-          cd ..
+          pip install -e .
+
+      - name: Run C++ tests
+        run: |
+          cd build && ctest && cd ..
 
       - name: Run Python tests
         run: |
-          pip install -e .
           pytest -m "not hf_token_required"
