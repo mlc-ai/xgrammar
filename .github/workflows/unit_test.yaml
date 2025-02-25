@@ -39,9 +39,17 @@ jobs:
           cd build && ctest && cd ..
 
       - name: Run Python tests
-        if: ${{ secrets.HF_TOKEN != '' }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        if: env.HF_TOKEN != ''
         run: |
           pip install pytest
           pytest
+
+      - name: Run Python tests without HF_TOKEN
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        if: env.HF_TOKEN == ''
+        run: |
+          pip install pytest
+          pytest -m "not hf_token_required"
