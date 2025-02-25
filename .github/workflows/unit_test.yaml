@@ -27,4 +27,5 @@ jobs:
 
       - name: Run Python tests
         run: |
+          pip install pytest
           pytest -m "not hf_token_required"
