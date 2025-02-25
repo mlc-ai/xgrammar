@@ -32,6 +32,5 @@ jobs:
 
       - name: Run Python tests
         run: |
-          cd python && pip install -e . && cd ..
-          python -m pytest tests/python
-        timeout-minutes: 5 # to avoid blocking the CI
+          pip install -e .
+          pytest -m "not hf_token_required"
