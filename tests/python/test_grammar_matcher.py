@@ -17,10 +17,7 @@ from xgrammar.testing import (
 json_grammar = xgr.Grammar.builtin_json_grammar()
 
 
-input_accepted = [
-    '{"name": "John"}',
-    '{ "name" : "John" }',
-]
+input_accepted = ['{"name": "John"}', '{ "name" : "John" }']
 
 
 @pytest.mark.parametrize("input_accepted", input_accepted)
@@ -28,10 +25,7 @@ def test_accept(input_accepted: str):
     assert _is_grammar_accept_string(json_grammar, input_accepted)
 
 
-input_refused = (
-    '{ name: "John" }',
-    '{ "name": "John" } ',
-)
+input_refused = ('{ name: "John" }', '{ "name": "John" } ')
 
 
 @pytest.mark.parametrize("input_refused", input_refused)
@@ -65,20 +59,15 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 ]
 
 
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
 )
 def test_fill_next_token_bitmask(
-    tokenizer_path: str,
-    input_str: str,
-    expected_rejected_sizes: Optional[List[int]],
+    tokenizer_path: str, input_str: str, expected_rejected_sizes: Optional[List[int]]
 ):
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
@@ -267,20 +256,7 @@ def test_termination():
         "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", " }", ", ", "6", ":", "\n", " ", '"a"', ':true',
         # fmt: on
     ]
-    input_splitted = [
-        "{",
-        '"',
-        "abc",
-        'b"',
-        ":",
-        "6",
-        ", ",
-        " ",
-        '"a"',
-        ":true",
-        " }",
-        "</s>",
-    ]
+    input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a"', ":true", " }", "</s>"]
     input_ids = [vocab.index(t) for t in input_splitted]
     tokenizer_info = xgr.TokenizerInfo(vocab)
 
@@ -341,6 +317,7 @@ tokenizer_path_override_stop_tokens = [
 ]
 
 
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path, override_stop_tokens", tokenizer_path_override_stop_tokens
 )

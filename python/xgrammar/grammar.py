@@ -31,10 +31,8 @@ class StructuralTagItem(BaseModel):
 def _handle_pydantic_schema(schema: Union[str, Type[BaseModel]]) -> str:
     if isinstance(schema, type) and issubclass(schema, BaseModel):
         if hasattr(schema, "model_json_schema"):
-            # pydantic 2.x
             return json.dumps(schema.model_json_schema())
-        elif hasattr(schema, "schema_json"):
-            # pydantic 1.x
+        if hasattr(schema, "schema_json"):
             return json.dumps(schema.schema_json())
         else:
             raise ValueError("The schema should have a model_json_schema or json_schema method.")
@@ -151,7 +149,7 @@ class Grammar(XGRObject):
         return Grammar._create_from_handle(
             _core.Grammar.from_json_schema(
                 schema_str, any_whitespace, indent, separators, strict_mode
-            ),
+            )
         )
 
     @staticmethod

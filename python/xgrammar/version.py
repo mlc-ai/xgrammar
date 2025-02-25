@@ -67,10 +67,7 @@ def git_describe_version():
         "v[0-9]*.[0-9]*.dev[0-9]*",
     ]
     with subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        cwd=PROJ_ROOT,
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=PROJ_ROOT
     ) as proc:
         (out, _) = proc.communicate()
 

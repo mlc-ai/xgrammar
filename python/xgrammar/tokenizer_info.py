@@ -25,7 +25,7 @@ class VocabType(Enum):
 
     BYTE_FALLBACK
         The vocabulary used in the byte fallback BPE tokenizer. The tokens are encoded through
-        the byte-fallback conversion. E.g. "\u001B" -> "<0x1B>", " apple" -> "▁apple". This kind of
+        the byte-fallback conversion. E.g. "\u001b" -> "<0x1B>", " apple" -> "▁apple". This kind of
         tokenizer includes meta-llama/Llama-2-7b-chat, microsoft/Phi-3.5-mini-instruct, etc.
 
     BYTE_LEVEL
@@ -47,8 +47,8 @@ class TokenizerInfo(XGRObject):
     information for the grammar-guided generation.
 
     Note that although some tokenizers will encode the tokens in a special format, e.g.
-    "<0x1B>" for "\u001B" in the ByteFallback tokenizer, and "Ġ" for " " in the Byte-Level BPE
-    tokenizer, TokenizerInfo always decodes the vocabulary to the original format (e.g. "\u001B"
+    "<0x1B>" for "\u001b" in the ByteFallback tokenizer, and "Ġ" for " " in the Byte-Level BPE
+    tokenizer, TokenizerInfo always decodes the vocabulary to the original format (e.g. "\u001b"
     and " ").
 
     Also note that some models (e.g. Phi-3 and Deepseek-V2) may pad the vocabulary to a multiple
@@ -293,7 +293,7 @@ class TokenizerInfo(XGRObject):
     def decoded_vocab(self) -> List[bytes]:
         """The decoded vocabulary of the tokenizer. This converts the tokens in the LLM's
         vocabulary back to the original format of the input text. E.g. for type ByteFallback,
-        the token <0x1B> is converted back to "\u001B".
+        the token <0x1B> is converted back to "\u001b".
         """
         return self._handle.decoded_vocab
 
@@ -329,5 +329,5 @@ class TokenizerInfo(XGRObject):
             The metadata string in json format.
         """
         return TokenizerInfo._create_from_handle(
-            _core.TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata),
+            _core.TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata)
         )

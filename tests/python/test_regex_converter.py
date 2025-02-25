@@ -2,7 +2,6 @@ import sys
 import time
 
 import pytest
-import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
@@ -39,13 +38,13 @@ regex_expected_grammar_instance = [
         r"\"\'\a\f\n\r\t\v\0\e",
         r"""root ::= "\"" "\'" "\a" "\f" "\n" "\r" "\t" "\v" "\0" "\e"
 """,
-        "\"'\a\f\n\r\t\v\0\x1B",
+        "\"'\a\f\n\r\t\v\0\x1b",
     ),
     (
         r"\u{20BB7}\u0300\x1F\cJ",
         r"""root ::= "\U00020bb7" "\u0300" "\x1f" "\n"
 """,
-        "\U00020BB7\u0300\x1F\n",
+        "\U00020bb7\u0300\x1f\n",
     ),
     (
         r"[\r\n\$\u0010-\u006F\]\--]+",
@@ -439,6 +438,7 @@ regex_instances = [
 tokenizer_path_regex_instance = [(t, *ri) for t in tokenizer_paths for ri in regex_instances]
 
 
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize("tokenizer_path, regex, instance", tokenizer_path_regex_instance)
 def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     print(f"Tokenizer: {tokenizer_path}, regex: {regex}, instance: {instance}")

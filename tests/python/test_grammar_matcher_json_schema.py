@@ -38,6 +38,7 @@ instance = MainModel(
 instance_str = instance.model_dump_json(indent=2, round_trip=True)
 
 
+@pytest.mark.hf_token_required
 def test_json_schema_debug_accept_string():
     grammar = xgr.Grammar.from_json_schema(MainModel, indent=2)
 
@@ -75,19 +76,13 @@ def test_json_schema_find_jump_forward_string():
     assert matcher.find_jump_forward_string() == ""
 
 
-tokenizer_path = [
-    "meta-llama/Llama-2-7b-chat-hf",
-    "meta-llama/Meta-Llama-3-8B-Instruct",
-]
+tokenizer_path = ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 
 
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize("tokenizer_path", tokenizer_path)
 def test_fill_next_token_bitmask(tokenizer_path: str):
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -98,7 +93,8 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device="cuda")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device=device)
 
     input_bytes = instance_str.encode("utf-8")
 
@@ -110,10 +106,12 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
         # 2. apply_token_bitmask_inplace
-        torch.cuda.synchronize()
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         time_start = time.monotonic_ns()
-        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to("cuda"))
-        torch.cuda.synchronize()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         time_end = time.monotonic_ns()
         print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
 

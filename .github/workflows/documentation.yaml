@@ -1,20 +1,19 @@
 name: Build Docs
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
   pull_request:
+  push:
     branches:
       - main
 
 jobs:
-  test_linux:
+  deploy_docs:
     name: Deploy Docs
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 

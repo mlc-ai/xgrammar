@@ -8,7 +8,7 @@ import torch
 from .base import _core
 from .compiler import CompiledGrammar, GrammarCompiler
 from .grammar import Grammar
-from .matcher import GrammarMatcher, bitmask_dtype, get_bitmask_shape
+from .matcher import GrammarMatcher, bitmask_dtype
 from .tokenizer_info import TokenizerInfo
 
 
@@ -49,11 +49,7 @@ def _json_schema_to_ebnf(
         The BNF grammar string.
     """
     return _core.testing._json_schema_to_ebnf(
-        schema,
-        any_whitespace,
-        indent,
-        separators,
-        strict_mode,
+        schema, any_whitespace, indent, separators, strict_mode
     )
 
 

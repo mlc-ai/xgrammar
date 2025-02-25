@@ -218,6 +218,7 @@ def test_structural_tag_compiler():
     assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag
 
 
+@pytest.mark.hf_token_required
 def test_structural_tag_mask_gen():
     # Define schemas for the test
     class Schema1(BaseModel):
@@ -241,11 +242,7 @@ def test_structural_tag_mask_gen():
 
     # Set up tokenizer
     tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_id,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 
     # Compile grammar and create matcher

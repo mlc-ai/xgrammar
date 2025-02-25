@@ -190,5 +190,5 @@ if __name__ == "__main__":
 
     print(f"Backend: {backend}")
     print(f"Fail count: {fail_cnt / num_iters:.0f} / {len(dataset) - len(wrong_data_indices)}")
-    print(f"Grammar preprocessing time (ms): {build_time/total_data_points * 1e3:.4f}")
-    print(f"Mask generation time (us/token): {exec_time/total_tokens * 1e6:.4f}")
+    print(f"Grammar preprocessing time (ms): {build_time / total_data_points * 1e3:.4f}")
+    print(f"Mask generation time (us/token): {exec_time / total_tokens * 1e6:.4f}")

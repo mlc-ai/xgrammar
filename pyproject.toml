@@ -1,46 +1,155 @@
-[tool.black]
-exclude = "3rdparty/*"
-line-length = 100
+[project]
+name = "xgrammar"
+description = "Efficient, Flexible and Portable Structured Generation"
+authors = [{ name = "MLC Team" }]
+readme = "README.md"
+license = { text = "Apache 2.0" }
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Intended Audience :: Science/Research",
+]
+keywords = ["machine learning", "inference"]
+requires-python = ">=3.9, <4"
+dependencies = [
+  "pydantic",
+  "sentencepiece",
+  "tiktoken",
+  "torch>=1.10.0",
+  "transformers>=4.38.0",
+  "triton; platform_system == 'linux' and platform_machine == 'x86_64'",
+]
+dynamic = ["version"]
 
-[tool.isort]
-profile = "black"
-src_paths = ["python"]
+[project.urls]
+Homepage = "https://xgrammar.mlc.ai/"
+GitHub = "https://github.com/mlc-ai/xgrammar"
+
+[project.optional-dependencies]
+test = ["pytest", "protobuf", "huggingface-hub[cli]"]
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "python/xgrammar/version.py"
+
+[build-system]
+requires = ["scikit-build-core>=0.10.0", "pybind11>=2.11.0"]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+
+# Build configuration
+build-dir = "build"
+build.verbose = true
+
+# CMake configuration
+cmake.version = "CMakeLists.txt"
+cmake.args = []
+cmake.build-type = "RelWithDebInfo"
+
+# Logging
+logging.level = "INFO"
+
+# Wheel configuration
+wheel.packages = ["python/xgrammar"]
+wheel.install-dir = "xgrammar"
+
+# Source distribution configuration
+sdist.include = [
+  # Build files
+  "/CMakeLists.txt",
+  "/pyproject.toml",
+  "/cmake/**/*",
+  "/cpp/**/CMakeLists.txt",
+
+  # Source code
+  "/cpp/**/*.cc",
+  "/cpp/**/*.cpp",
+  "/cpp/**/*.h",
+  "/include/**/*",
+  "/python/xgrammar/**/*.py",
+
+  # Third party files
+  "/3rdparty/**/*",
+
+  # Documentation and metadata
+  "/docs/**/*",
+  "/LICENSE",
+  "/README.md",
+  "/NOTICE",
+
+  # Tests
+  "/tests/**/*",
+]
+
+sdist.exclude = ["**/.git", "**/.github", "**/__pycache__", "**/*.pyc", "build", "dist"]
+
+# Editable install settings
+# Editables are fairly buggy
+# editable.rebuild = true
+# editable.verbose = true
+
+[tool.pytest.ini_options]
+addopts = "-rA --durations=0 --ignore=3rdparty"
+markers = ["hf_token_required: mark test as requiring a huggingface token"]
 
 [tool.mypy]
 strict = true
 
-[tool.pytest.ini_options]
-addopts = "-rA --durations=0 --ignore=3rdparty"
-
 [tool.ruff]
-exclude = ["3rdparty", "setup.py"]
+include = ["python/**/*.py", "tests/**/*.py"]
 
 [tool.ruff.lint]
-ignore = [
-  "E501",   # line too long, handled by black
-  "PTH",
-  "PGH",
-  "D100",
-  "D101",
-  "D102",
-  "D103",
-  "D104",
-  "D107",
-  "D213",
-  "D203",
-  "D205",
-  "D404",
-  "D417",
-  "D105",
-  "FA",
-  "ERA001",
-  "SLF001",
-]
-select = ["ALL"]
+# Never enforce `E501` (line length violations).
+ignore = ["C901", "E501", "E741", "F402", "F823"]
+select = ["C", "E", "F", "W"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"tests/*" = ["E741", "PLR2004", "INP001", "ANN201", "S101", "T201", "A", "FBT"]
+"tests/*" = ["E741"]
 
 [tool.ruff.lint.pylint]
 max-args = 10
+
+[tool.black]
+exclude = "3rdparty/*"
+line-length = 100
+skip-magic-trailing-comma = true
+
+[tool.isort]
+profile = "black"
+src_paths = ["python", "tests"]
+extend_skip = ["3rdparty"]
+line_length = 100
+skip_gitignore = true
+
+[tool.cibuildwheel]
+build-verbosity = 1
+# pypy doesn't play nice with pybind11 so skip pp* builds
+# pytorch stopped supporting Mac x64 back in 2.2 so there will be no Mac x64 wheels for python 3.13 so skip cp313-macosx_x86_64
+# python 3.13 support is still early and wheels are missing for Linux aarch64 for pytorch so temporarily skip cp313-manylinux_aarch64
+skip = [
+  "cp36-*",
+  "cp37-*",
+  "cp38-*",
+  "pp*",
+  "*musllinux*",
+  "cp313-manylinux_aarch64",
+  "cp313-macosx_x86_64",
+] # pypy doesn't play nice with pybind11
+build-frontend = "build[uv]"
+test-command = "pytest {project}/tests -m \"not hf_token_required\""
+test-extras = ["test"]
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64", "aarch64"]
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]
+environment = { MACOSX_DEPLOYMENT_TARGET = "10.14" }
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]

@@ -1,6 +1,5 @@
 """Compiling grammar for efficient token mask generation."""
 
-import json
 from typing import List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
@@ -52,11 +51,7 @@ class GrammarCompiler(XGRObject):
     """
 
     def __init__(
-        self,
-        tokenizer_info: TokenizerInfo,
-        *,
-        max_threads: int = 8,
-        cache_enabled: bool = True,
+        self, tokenizer_info: TokenizerInfo, *, max_threads: int = 8, cache_enabled: bool = True
     ):
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(

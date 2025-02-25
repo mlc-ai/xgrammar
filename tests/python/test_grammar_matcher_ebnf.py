@@ -329,20 +329,15 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 ]
 
 
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
 )
 def test_fill_next_token_bitmask(
-    tokenizer_path: str,
-    input_str: str,
-    expected_rejected_sizes: List[int],
+    tokenizer_path: str, input_str: str, expected_rejected_sizes: List[int]
 ):
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path,
-        use_fast=True,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -352,7 +347,8 @@ def test_fill_next_token_bitmask(
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device="cuda")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device=device)
 
     input_bytes = input_str.encode("utf-8")
 
@@ -370,10 +366,12 @@ def test_fill_next_token_bitmask(
         assert len(rejected_token_ids) == expected_rejected_sizes[i]
 
         # 3. apply_token_bitmask_inplace
-        torch.cuda.synchronize()
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         time_start = time.monotonic_ns()
-        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to("cuda"))
-        torch.cuda.synchronize()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         time_end = time.monotonic_ns()
         print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
 

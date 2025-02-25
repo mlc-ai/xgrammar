@@ -1,6 +1,5 @@
 """CPU implementation for in-place applying token mask."""
 
-import time
 from typing import List, Optional, Union
 
 import torch
@@ -33,9 +32,5 @@ def apply_token_bitmask_inplace_cpu(
     )
 
     _core.kernels.apply_token_bitmask_inplace_cpu(
-        logits.data_ptr(),
-        logits_shape,
-        bitmask.data_ptr(),
-        bitmask_shape,
-        indices,
+        logits.data_ptr(), logits_shape, bitmask.data_ptr(), bitmask_shape, indices
     )

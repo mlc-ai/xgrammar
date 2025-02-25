@@ -18,10 +18,7 @@ import argparse
 import torch
 from triton.testing import do_bench
 
-from xgrammar.kernels import (
-    apply_token_bitmask_inplace_cuda,
-    apply_token_bitmask_inplace_triton,
-)
+from xgrammar.kernels import apply_token_bitmask_inplace_kernels
 from xgrammar.testing import _bool_mask_to_bitmask
 
 if __name__ == "__main__":
@@ -68,9 +65,13 @@ if __name__ == "__main__":
     )
 
     if args.impl == "cuda":
-        f = lambda: apply_token_bitmask_inplace_cuda(logits, bitmask, **kwargs)
+        if "cuda" not in apply_token_bitmask_inplace_kernels:
+            raise ImportError("CUDA is not installed")
+        f = lambda: apply_token_bitmask_inplace_kernels["cuda"](logits, bitmask, **kwargs)
     elif args.impl == "triton":
-        f = lambda: apply_token_bitmask_inplace_triton(logits, bitmask, **kwargs)
+        if "triton" not in apply_token_bitmask_inplace_kernels:
+            raise ImportError("Triton is not installed")
+        f = lambda: apply_token_bitmask_inplace_kernels["triton"](logits, bitmask, **kwargs)
 
     f()
     torch.testing.assert_close(logits, logits_expected.to("cuda"))
