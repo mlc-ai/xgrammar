@@ -14,6 +14,7 @@
 </div>
 
 ## News
+- [2025/02] XGrammar has been officially integrated into [Modular's MAX](https://docs.modular.com/max/serve/structured-output)
 - [2025/01] XGrammar has been officially integrated into [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM).
 - [2024/12] XGrammar has been officially integrated into [vLLM](https://github.com/vllm-project/vllm).
 - [2024/12] We presented research talks on XGrammar at CMU Catalyst, Berkeley SkyLab, MIT HANLAB, THU IIIS, Ant Group, SGLang Meetup and Qingke AI. The slides can be found [here](https://docs.google.com/presentation/d/1iS7tu2EV4IKRWDaR0F3YD7ubrNqtGYUStSskceneelc/edit?usp=sharing).
