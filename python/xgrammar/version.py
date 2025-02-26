@@ -20,7 +20,7 @@ import subprocess
 
 # ---------------------------------------------------
 
-__version__ = "0.1.13"
+__version__ = "0.1.14"
 PROJ_ROOT = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
 
 
