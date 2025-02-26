@@ -1193,18 +1193,23 @@ operation will be</p>
             <span class="n">logits</span><span class="p">[</span><span class="n">batch_id</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">inf</span>
 </pre></div>
 </div>
+<p>When indices is specified, the batch sizes of logits and bitmask do not need to be the same.
+As long as the indices are valid, the operation will be performed.</p>
 <p>The logits and bitmask should be on the same device. If both them are on CUDA, we launch a CUDA
 kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The CUDA kernel
 is optimized and should be preferred.</p>
 <p>In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
 manually copy the bitmask to GPU before calling this function.</p>
+<p>This method also supports additional padding on the vocabulary dimension of the logits. The
+shape of logits can be (batch_size, vocab_size + padding). Then the vocab size will be
+determined by the bitmask size.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>logits</strong> (<em>torch.Tensor</em>) – The tensor to apply the bitmask to.</p></li>
 <li><p><strong>bitmask</strong> (<em>torch.Tensor</em>) – The bitmask to apply.</p></li>
-<li><p><strong>indices</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – A list of indices to specify which logits in the batch to apply the bitmask to. If None,
-apply the bitmask to all logits in the batch.</p></li>
+<li><p><strong>indices</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – A list of indices to specify which logits in the batch to apply the bitmask to. Should be
+unique. If None, apply the bitmask to all logits in the batch.</p></li>
 </ul>
 </dd>
 </dl>
