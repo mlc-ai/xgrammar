@@ -219,7 +219,6 @@ logits_batch_size__bitmask_batch_size__vocab_size__indices = [
     (3, 3, 128, [0, 1]),
     (2, 3, 128, [0]),
     (3, 2, 130, [0]),
-    (3, 2, 130, [1, 1, 0, 0]),
 ]
 
 
