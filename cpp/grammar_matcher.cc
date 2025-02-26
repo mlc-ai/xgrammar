@@ -112,18 +112,6 @@ void ApplyTokenBitmaskInplaceCPU(
   std::vector<int> indices_value;
   if (indices.has_value()) {
     indices_value = indices.value();
-    std::sort(indices_value.begin(), indices_value.end());
-    indices_value.erase(
-        std::unique(indices_value.begin(), indices_value.end()), indices_value.end()
-    );
-    XGRAMMAR_CHECK(indices_value.front() >= 0)
-        << "The provided indices is negative: " << indices_value.front();
-    XGRAMMAR_CHECK(indices_value.back() < logits_shape.first)
-        << "The provided indices is larger than the logits's batch size: " << indices_value.back()
-        << " >= " << logits_shape.first;
-    XGRAMMAR_CHECK(static_cast<int>(indices_value.size()) <= bitmask_shape.first)
-        << "The provided indices is larger than the bitmask's batch size: " << indices_value.size()
-        << " >= " << bitmask_shape.first;
   } else {
     XGRAMMAR_CHECK(logits_shape.first == bitmask_shape.first)
         << "When indices is not provided, the logits's batch size should be equal to the "

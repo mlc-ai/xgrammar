@@ -110,16 +110,6 @@ def apply_token_bitmask_inplace_triton(
     num_rows = None
     if isinstance(indices, list) or isinstance(indices, torch.Tensor):
         indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
-        indices = torch.unique(indices)
-
-        assert (
-            indices.shape[0] <= bitmask_shape[0]
-        ), f"indices count ({indices.shape[0]}) exceeds bitmask batch size ({bitmask_shape[0]})"
-        assert indices.min() >= 0, f"negative index found: {indices.min()}"
-        assert (
-            indices.max() < logits_shape[0]
-        ), f"index {indices.max()} out of bounds for logits batch size {logits_shape[0]}"
-
         num_rows = indices.shape[0]
     else:
         assert (

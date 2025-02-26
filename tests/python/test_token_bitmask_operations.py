@@ -253,13 +253,7 @@ def test_apply_token_bitmask_inplace_select_indices(
         torch.testing.assert_close(logits, logits_expected)
 
 
-logits_shape__bitmask_shape__indices = [
-    ((2, 128), (1, 4), None),
-    ((2, 128), (2, 5), None),
-    ((2, 128), (1, 4), [0, 1]),
-    ((2, 128), (2, 5), [-1]),
-    ((2, 128), (3, 4), [2]),
-]
+logits_shape__bitmask_shape__indices = [((2, 128), (1, 4), None), ((2, 128), (2, 5), None)]
 
 
 @pytest.mark.parametrize(

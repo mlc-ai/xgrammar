@@ -222,18 +222,6 @@ void ApplyTokenBitmaskInplace(
     TORCH_CHECK(indices->is_contiguous(), "indices must be contiguous.");
     TORCH_CHECK(indices->dim() == 1, "indices must be a 1D tensor.");
     TORCH_CHECK(indices->dtype() == torch::kInt32, "indices must be of type int32.");
-    TORCH_CHECK(
-        indices->size(0) <= bitmask_shape.first,
-        "indices must have the batch size no larger than bitmask's batch size."
-    );
-    TORCH_CHECK(
-        indices->index({0}).item<int32_t>() >= 0,
-        "indices must have the minimum value no less than 0."
-    );
-    TORCH_CHECK(
-        indices->index({indices->size(0) - 1}).item<int32_t>() < logits_shape.first,
-        "indices must have the maximum value no larger than logits's batch size."
-    );
     num_rows = indices->size(0);
     indices_ptr = indices->data_ptr<int32_t>();
   } else {
