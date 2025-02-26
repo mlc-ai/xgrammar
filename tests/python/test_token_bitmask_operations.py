@@ -154,9 +154,9 @@ def test_apply_token_bitmask_inplace_large(
         except ImportError:
             pytest.skip(reason="Triton is not installed")
     else:
-        kwargs = {} if stride == 1 else {"indices": batch_indices.tolist()}
+        indices = batch_indices.tolist() if stride == 1 else None
         time_start = time.monotonic_ns()
-        xgr.apply_token_bitmask_inplace(logits, bitmask, **kwargs)
+        xgr.apply_token_bitmask_inplace(logits, bitmask, indices=indices)
         time_end = time.monotonic_ns()
         exec_time = (time_end - time_start) / 1e3
         torch.testing.assert_close(logits, logits_expected)
