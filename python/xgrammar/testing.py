@@ -155,7 +155,8 @@ def _get_masked_tokens_from_bitmask(
 
 
 def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
-    """Get the bitmask from bool mask.
+    """Get the bitmask from bool mask. If the bool mask does not align with the 32-bit block
+    size, it will add extra 1 paddings.
 
     Parameters
     ----------
@@ -172,7 +173,7 @@ def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
     # Pad to multiple of 32
     pad_size = (32 - bool_mask.shape[1] % 32) % 32
     if pad_size > 0:
-        bool_mask_int32 = torch.nn.functional.pad(bool_mask_int32, (0, pad_size))
+        bool_mask_int32 = torch.nn.functional.pad(bool_mask_int32, (0, pad_size), value=1)
     bool_mask_view = bool_mask_int32.view(bool_mask.shape[0], -1, 32)
     # To avoid error for overflow, we construct int64 weights and convert to int32
     weights = torch.tensor(

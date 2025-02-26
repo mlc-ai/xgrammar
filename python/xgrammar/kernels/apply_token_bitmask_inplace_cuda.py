@@ -72,4 +72,6 @@ def apply_token_bitmask_inplace_cuda(
 ) -> None:
     if isinstance(indices, list):
         indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
+    if indices is not None:
+        indices = torch.unique(indices.to(logits.device))
     torch.ops.xgrammar.apply_token_bitmask_inplace_cuda(logits, bitmask, indices)

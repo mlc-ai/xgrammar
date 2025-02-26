@@ -114,6 +114,7 @@ def apply_token_bitmask_inplace(
         A list of indices to specify which logits in the batch to apply the bitmask to. If None,
         apply the bitmask to all logits in the batch.
     """
+    # dispatch to different implementations based on the device of logits and bitmask
     if bitmask.device != logits.device:
         raise ValueError(
             "logits and bitmask should be on the same device. "

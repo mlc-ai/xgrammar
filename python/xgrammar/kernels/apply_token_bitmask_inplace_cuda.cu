@@ -31,8 +31,8 @@
 #define CUDART_INF_BF16 __ushort_as_bfloat16((unsigned short)0x7F80U)
 #endif
 
-constexpr int32_t kBitsPerMaskElement = 32;
-constexpr int32_t kThreadsPerBlock = 256;
+constexpr int32_t BITS_PER_BLOCK = 32;
+constexpr int32_t THREADS_PER_THREAD_BLOCK = 256;
 
 template <typename T>
 __device__ T NegativeInfinity() {
@@ -61,34 +61,35 @@ __device__ PackedT PackedNegativeInfinity() {
 }
 
 template <typename T, typename PackedT, int32_t kBitsPerThread>
-__global__ void __launch_bounds__(kThreadsPerBlock) LogitsBitmaskKernel(
+__global__ void __launch_bounds__(THREADS_PER_THREAD_BLOCK) LogitsBitmaskKernel(
     T* __restrict__ logits,
     const int32_t* __restrict__ bitmask,
     const int32_t* __restrict__ indices,
     int32_t vocab_size,
-    int32_t bitmask_size
+    int32_t logits_stride,
+    int32_t bitmask_stride
 ) {
   constexpr int kAlignment = sizeof(PackedT) / sizeof(T);
   constexpr uint32_t kPackedMask = (1 << kAlignment) - 1;
 
   const int batch_idx = (indices == nullptr) ? blockIdx.y : indices[blockIdx.y];
 
-  const int block_offset = blockIdx.x * kThreadsPerBlock * kBitsPerThread;
-  T* logits_gmem_ptr = logits + batch_idx * vocab_size + block_offset;
+  const int block_offset = blockIdx.x * THREADS_PER_THREAD_BLOCK * kBitsPerThread;
+  T* logits_gmem_ptr = logits + batch_idx * logits_stride + block_offset;
   const int32_t* bitmask_gmem_ptr =
-      bitmask + batch_idx * bitmask_size + block_offset / kBitsPerMaskElement;
-  const int bitmask_inner_idx = threadIdx.x % (kBitsPerMaskElement / kAlignment);
+      bitmask + batch_idx * bitmask_stride + block_offset / BITS_PER_BLOCK;
+  const int bitmask_inner_idx = threadIdx.x % (BITS_PER_BLOCK / kAlignment);
   T logits_reg[kAlignment];
 
 #pragma unroll
-  for (int offset = threadIdx.x * kAlignment; offset < kThreadsPerBlock * kBitsPerThread;
-       offset += kThreadsPerBlock * kAlignment) {
+  for (int offset = threadIdx.x * kAlignment; offset < THREADS_PER_THREAD_BLOCK * kBitsPerThread;
+       offset += THREADS_PER_THREAD_BLOCK * kAlignment) {
     if (block_offset + offset >= vocab_size) {
       break;
     }
 
     const uint32_t bitmask_val =
-        (~bitmask_gmem_ptr[offset / kBitsPerMaskElement] >> (bitmask_inner_idx * kAlignment)) &
+        (~bitmask_gmem_ptr[offset / BITS_PER_BLOCK] >> (bitmask_inner_idx * kAlignment)) &
         kPackedMask;
 
     if (bitmask_val == 0) {
@@ -122,32 +123,38 @@ void ApplyTokenBitmaskInplaceDispatchToBitsPerThread(
     const int32_t* __restrict__ bitmask,
     const int32_t* __restrict__ indices,
     int32_t vocab_size,
-    int32_t bitmask_size,
-    int32_t batch_size
+    int32_t logits_stride,
+    int32_t bitmask_stride,
+    int32_t num_rows
 ) {
   constexpr int kAlignment = sizeof(PackedT) / sizeof(T);
-  const int32_t num_blocks_per_row = CeilDiv(2048 / kThreadsPerBlock * 128, batch_size);
-  const int32_t num_bits_per_thread = CeilDiv(vocab_size, kThreadsPerBlock * num_blocks_per_row);
+  const int32_t num_blocks_per_row = CeilDiv(2048 / THREADS_PER_THREAD_BLOCK * 128, num_rows);
+  const int32_t num_bits_per_thread =
+      CeilDiv(vocab_size, THREADS_PER_THREAD_BLOCK * num_blocks_per_row);
 
-  const dim3 block(kThreadsPerBlock);
+  const dim3 block(THREADS_PER_THREAD_BLOCK);
   cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
 
   if (num_bits_per_thread <= 4 && kAlignment <= 4) {
-    const dim3 grid(CeilDiv(vocab_size, kThreadsPerBlock * 4), batch_size);
-    LogitsBitmaskKernel<T, PackedT, 4>
-        <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocab_size, bitmask_size);
+    const dim3 grid(CeilDiv(vocab_size, THREADS_PER_THREAD_BLOCK * 4), num_rows);
+    LogitsBitmaskKernel<T, PackedT, 4><<<grid, block, 0, stream>>>(
+        logits, bitmask, indices, vocab_size, logits_stride, bitmask_stride
+    );
   } else if (num_bits_per_thread <= 8 && kAlignment <= 8) {
-    const dim3 grid(CeilDiv(vocab_size, kThreadsPerBlock * 8), batch_size);
-    LogitsBitmaskKernel<T, PackedT, 8>
-        <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocab_size, bitmask_size);
+    const dim3 grid(CeilDiv(vocab_size, THREADS_PER_THREAD_BLOCK * 8), num_rows);
+    LogitsBitmaskKernel<T, PackedT, 8><<<grid, block, 0, stream>>>(
+        logits, bitmask, indices, vocab_size, logits_stride, bitmask_stride
+    );
   } else if (num_bits_per_thread <= 16 && kAlignment <= 16) {
-    const dim3 grid(CeilDiv(vocab_size, kThreadsPerBlock * 16), batch_size);
-    LogitsBitmaskKernel<T, PackedT, 16>
-        <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocab_size, bitmask_size);
+    const dim3 grid(CeilDiv(vocab_size, THREADS_PER_THREAD_BLOCK * 16), num_rows);
+    LogitsBitmaskKernel<T, PackedT, 16><<<grid, block, 0, stream>>>(
+        logits, bitmask, indices, vocab_size, logits_stride, bitmask_stride
+    );
   } else {
-    const dim3 grid(CeilDiv(vocab_size, kThreadsPerBlock * 32), batch_size);
-    LogitsBitmaskKernel<T, PackedT, 32>
-        <<<grid, block, 0, stream>>>(logits, bitmask, indices, vocab_size, bitmask_size);
+    const dim3 grid(CeilDiv(vocab_size, THREADS_PER_THREAD_BLOCK * 32), num_rows);
+    LogitsBitmaskKernel<T, PackedT, 32><<<grid, block, 0, stream>>>(
+        logits, bitmask, indices, vocab_size, logits_stride, bitmask_stride
+    );
   }
 }
 
@@ -157,16 +164,17 @@ void ApplyTokenBitmaskInplaceDispatchToPackedT(
     const int32_t* __restrict__ bitmask,
     const int32_t* __restrict__ indices,
     int32_t vocab_size,
-    int32_t bitmask_size,
-    int32_t batch_size
+    int32_t logits_stride,
+    int32_t bitmask_stride,
+    int32_t num_rows
 ) {
-  if (vocab_size % (sizeof(float4) / sizeof(T)) == 0) {
+  if (logits_stride % (sizeof(float4) / sizeof(T)) == 0) {
     ApplyTokenBitmaskInplaceDispatchToBitsPerThread<T, float4>(
-        logits, bitmask, indices, vocab_size, bitmask_size, batch_size
+        logits, bitmask, indices, vocab_size, logits_stride, bitmask_stride, num_rows
     );
   } else {
     ApplyTokenBitmaskInplaceDispatchToBitsPerThread<T, T>(
-        logits, bitmask, indices, vocab_size, bitmask_size, batch_size
+        logits, bitmask, indices, vocab_size, logits_stride, bitmask_stride, num_rows
     );
   }
 }
@@ -177,35 +185,62 @@ void ApplyTokenBitmaskInplace(
   TORCH_CHECK(logits.is_cuda(), "logits must be a CUDA tensor.");
   TORCH_CHECK(logits.is_contiguous(), "logits must be contiguous.");
   TORCH_CHECK(logits.dim() == 1 || logits.dim() == 2, "logits must be a 1D or 2D tensor.");
-  int32_t batch_size = 1;
-  int32_t vocab_size = logits.size(0);
-  if (logits.dim() == 2) {
-    batch_size = logits.size(0);
-    vocab_size = logits.size(1);
-  }
+  std::pair<int32_t, int32_t> logits_shape =
+      logits.dim() == 2
+          ? std::make_pair(
+                static_cast<int32_t>(logits.size(0)), static_cast<int32_t>(logits.size(1))
+            )
+          : std::make_pair(1, static_cast<int32_t>(logits.size(0)));
 
   TORCH_CHECK(bitmask.is_cuda(), "bitmask must be a CUDA tensor.");
   TORCH_CHECK(bitmask.is_contiguous(), "bitmask must be contiguous.");
   TORCH_CHECK(bitmask.dim() == 1 || bitmask.dim() == 2, "bitmask must be a 1D or 2D tensor.");
-  int32_t bitmask_batch_size = 1;
-  int32_t bitmask_size = bitmask.size(0);
-  if (bitmask.dim() == 2) {
-    bitmask_batch_size = bitmask.size(0);
-    bitmask_size = bitmask.size(1);
-  }
-  TORCH_CHECK(bitmask_batch_size == batch_size, "bitmask must have the batch size same to logits.");
+  std::pair<int32_t, int32_t> bitmask_shape =
+      bitmask.dim() == 2
+          ? std::make_pair(
+                static_cast<int32_t>(bitmask.size(0)), static_cast<int32_t>(bitmask.size(1))
+            )
+          : std::make_pair(1, static_cast<int32_t>(bitmask.size(0)));
+
+  TORCH_CHECK(bitmask.dtype() == torch::kInt32, "bitmask must be of type int32.");
+
   TORCH_CHECK(
-      bitmask_size == CeilDiv(vocab_size, kBitsPerMaskElement),
-      "bitmask must have the hidden size equal to CeilDiv(vocab_size, 32), but got vocab_size=",
-      vocab_size,
-      " and bitmask_size=",
-      bitmask_size
+      (logits_shape.second + BITS_PER_BLOCK - 1) / BITS_PER_BLOCK >= bitmask_shape.second,
+      "The provided logits's vocab size should be no less than the bitmask's vocab size "
+      "(converted from bitmask size). But got vocab size ",
+      logits_shape.second,
+      " vs bitmask size ",
+      bitmask_shape.second
   );
 
+  int vocab_size = std::min(logits_shape.second, bitmask_shape.second * BITS_PER_BLOCK);
+
+  int32_t num_rows = logits_shape.first;
   int32_t* indices_ptr = nullptr;
   if (indices) {
-    batch_size = indices->size(0);
+    TORCH_CHECK(indices->is_cuda(), "indices must be a CUDA tensor.");
+    TORCH_CHECK(indices->is_contiguous(), "indices must be contiguous.");
+    TORCH_CHECK(indices->dim() == 1, "indices must be a 1D tensor.");
+    TORCH_CHECK(indices->dtype() == torch::kInt32, "indices must be of type int32.");
+    TORCH_CHECK(
+        indices->size(0) <= bitmask_shape.first,
+        "indices must have the batch size no larger than bitmask's batch size."
+    );
+    TORCH_CHECK(
+        indices->index({0}).item<int32_t>() >= 0,
+        "indices must have the minimum value no less than 0."
+    );
+    TORCH_CHECK(
+        indices->index({indices->size(0) - 1}).item<int32_t>() < logits_shape.first,
+        "indices must have the maximum value no larger than logits's batch size."
+    );
+    num_rows = indices->size(0);
     indices_ptr = indices->data_ptr<int32_t>();
+  } else {
+    TORCH_CHECK(
+        logits_shape.first == bitmask_shape.first,
+        "logits and bitmask must have the same batch size."
+    );
   }
 
   switch (logits.scalar_type()) {
@@ -215,8 +250,9 @@ void ApplyTokenBitmaskInplace(
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocab_size,
-          bitmask_size,
-          batch_size
+          logits_shape.second,
+          bitmask_shape.second,
+          num_rows
       );
       break;
     }
@@ -226,8 +262,9 @@ void ApplyTokenBitmaskInplace(
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocab_size,
-          bitmask_size,
-          batch_size
+          logits_shape.second,
+          bitmask_shape.second,
+          num_rows
       );
       break;
     }
@@ -237,8 +274,9 @@ void ApplyTokenBitmaskInplace(
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocab_size,
-          bitmask_size,
-          batch_size
+          logits_shape.second,
+          bitmask_shape.second,
+          num_rows
       );
       break;
     }
