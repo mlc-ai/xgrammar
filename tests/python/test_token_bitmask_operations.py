@@ -187,6 +187,10 @@ def test_apply_token_bitmask_inplace_special_shape(
 ):
     if impl == "cpu" and logits_dtype != "float32":
         pytest.skip(reason="cpu implementation supports float32 only")
+    if impl == "cuda" and "cuda" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
+        pytest.skip(reason="CUDA is not installed")
+    if impl == "triton" and "triton" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
+        pytest.skip(reason="Triton is not installed")
 
     logits_dtype = getattr(torch, logits_dtype)
     logits = torch.ones(batch_size, logits_strides, dtype=logits_dtype)
@@ -227,6 +231,11 @@ logits_batch_size__bitmask_batch_size__vocab_size__indices = [
 def test_apply_token_bitmask_inplace_select_indices(
     logits_batch_size: int, bitmask_batch_size: int, vocab_size: int, indices: List[int], impl: str
 ):
+    if impl == "cuda" and "cuda" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
+        pytest.skip(reason="CUDA is not installed")
+    if impl == "triton" and "triton" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
+        pytest.skip(reason="Triton is not installed")
+
     logits = torch.ones(logits_batch_size, vocab_size, dtype=torch.float32)
     bool_mask = torch.zeros(bitmask_batch_size, vocab_size, dtype=torch.bool)
     bitmask = _bool_mask_to_bitmask(bool_mask)
@@ -263,6 +272,11 @@ logits_shape__bitmask_shape__indices = [((2, 128), (1, 4), None), ((2, 128), (2,
 def test_apply_token_bitmask_inplace_invalid_shape(
     logits_shape: Tuple[int], bitmask_shape: Tuple[int], indices: Optional[List[int]], impl: str
 ):
+    if impl == "cuda" and "cuda" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
+        pytest.skip(reason="CUDA is not installed")
+    if impl == "triton" and "triton" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
+        pytest.skip(reason="Triton is not installed")
+
     device = "cpu" if impl == "cpu" else "cuda"
     logits = torch.ones(logits_shape, dtype=torch.float32, device=device)
     bitmask = torch.zeros(bitmask_shape, dtype=torch.int32, device=device)
