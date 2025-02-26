@@ -17,12 +17,12 @@
 namespace xgrammar {
 
 struct StructuralTagItem {
-  std::string start;
+  std::string begin;
   std::string schema;
   std::string end;
 
   bool operator==(const StructuralTagItem& other) const {
-    return start == other.start && schema == other.schema && end == other.end;
+    return begin == other.begin && schema == other.schema && end == other.end;
   }
 };
 

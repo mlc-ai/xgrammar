@@ -639,11 +639,11 @@ class StructuralTagGrammarCreatorImpl : public SubGrammarAdder {
         std::vector<int32_t> seq_elements;
         seq_elements.reserve(3);
 
-        // Add start suffix (everything after trigger)
-        XGRAMMAR_DCHECK(tag.start.size() >= triggers[i].size())
-            << "Tag start must be at least as long as trigger";
-        if (tag.start.size() > triggers[i].size()) {
-          seq_elements.push_back(builder_.AddByteString(tag.start.substr(triggers[i].size())));
+        // Add begin suffix (everything after trigger)
+        XGRAMMAR_DCHECK(tag.begin.size() >= triggers[i].size())
+            << "Tag begin must be at least as long as trigger";
+        if (tag.begin.size() > triggers[i].size()) {
+          seq_elements.push_back(builder_.AddByteString(tag.begin.substr(triggers[i].size())));
         }
 
         // Create and visit schema grammar for this tag

@@ -22,7 +22,7 @@ template <>
 struct hash<xgrammar::StructuralTagItem> {
   size_t operator()(const xgrammar::StructuralTagItem& tag) const {
     return xgrammar::HashCombine(
-        std::hash<std::string>{}(tag.start),
+        std::hash<std::string>{}(tag.begin),
         std::hash<std::string>{}(tag.schema),
         std::hash<std::string>{}(tag.end)
     );

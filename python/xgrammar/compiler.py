@@ -147,7 +147,7 @@ class GrammarCompiler(XGRObject):
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        tags_tuple = [(tag.start, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
+        tags_tuple = [(tag.begin, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
         return CompiledGrammar._create_from_handle(
             self._handle.compile_structural_tag(tags_tuple, triggers)
         )

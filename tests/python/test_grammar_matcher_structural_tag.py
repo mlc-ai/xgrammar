@@ -171,9 +171,9 @@ def test_structural_tag():
         arg4: List[str]
 
     tags = [
-        xgr.StructuralTagItem(start="<function=f1>", schema=Schema1, end="</function>"),
-        xgr.StructuralTagItem(start="<function=f2>", schema=Schema1, end="</function>"),
-        xgr.StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
+        xgr.StructuralTagItem(begin="<function=f1>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(begin="<function=f2>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(begin="<function=g>", schema=Schema2, end="</function>"),
     ]
     # in real cases, we should use one trigger: "<function=" and dispatch to two tags
     # but here we use two triggers for testing such cases
@@ -203,9 +203,9 @@ def test_structural_tag_compiler():
         arg4: List[str]
 
     tags = [
-        xgr.StructuralTagItem(start="<function=f1>", schema=Schema1, end="</function>"),
-        xgr.StructuralTagItem(start="<function=f2>", schema=Schema1, end="</function>"),
-        xgr.StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
+        xgr.StructuralTagItem(begin="<function=f1>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(begin="<function=f2>", schema=Schema1, end="</function>"),
+        xgr.StructuralTagItem(begin="<function=g>", schema=Schema2, end="</function>"),
     ]
 
     # in real cases, we should use one trigger: "<function=" and dispatch to two tags
@@ -232,10 +232,10 @@ def test_structural_tag_mask_gen():
     # Set up grammar from schemas
     tags = [
         xgr.StructuralTagItem(
-            start="<function=f>", schema=json.dumps(Schema1.model_json_schema()), end="</function>"
+            begin="<function=f>", schema=json.dumps(Schema1.model_json_schema()), end="</function>"
         ),
         xgr.StructuralTagItem(
-            start="<function=g>", schema=json.dumps(Schema2.model_json_schema()), end="</function>"
+            begin="<function=g>", schema=json.dumps(Schema2.model_json_schema()), end="</function>"
         ),
     ]
     triggers = ["<function=f", "<function=g"]
