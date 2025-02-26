@@ -154,7 +154,7 @@ def test_apply_token_bitmask_inplace_large(
         except ImportError:
             pytest.skip(reason="Triton is not installed")
     else:
-        indices = batch_indices.tolist() if stride == 1 else None
+        indices = batch_indices.tolist() if stride != 1 else None
         time_start = time.monotonic_ns()
         xgr.apply_token_bitmask_inplace(logits, bitmask, indices=indices)
         time_end = time.monotonic_ns()
