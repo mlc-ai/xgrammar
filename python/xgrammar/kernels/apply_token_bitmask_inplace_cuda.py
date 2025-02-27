@@ -34,7 +34,7 @@ def _check_cuda_toolchain() -> None:
     # This is similar logic to what pytorch does to find the nvcc compiler
     nvcc_path = shutil.which("nvcc")
     if nvcc_path is None:
-        cuda_home = os.environ.get("CUDA_HOME", os.environ.get("CUDA_PATH"), None)
+        cuda_home = os.environ.get("CUDA_HOME", os.environ.get("CUDA_PATH", None))
         if cuda_home is None:
             if os.name == "nt":
                 cuda_homes = glob.glob("C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v*.*")
