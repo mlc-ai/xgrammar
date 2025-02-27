@@ -37,6 +37,7 @@ def _check_cuda_toolchain() -> None:
         cuda_home = os.environ.get("CUDA_HOME", os.environ.get("CUDA_PATH", None))
         if cuda_home is None:
             if os.name == "nt":
+                # This is a very hardcoded asumption about install directories but pytorch does this.
                 cuda_homes = glob.glob("C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v*.*")
 
                 if len(cuda_homes) == 0:
