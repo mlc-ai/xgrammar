@@ -26,11 +26,11 @@ class TokenizerInfo::Impl {
       VocabType vocab_type,
       std::optional<int> vocab_size,
       std::optional<std::vector<int32_t>> stop_token_ids,
-      bool prepend_space_in_tokenization
+      bool add_prefix_space
   );
 
   VocabType GetVocabType() const { return vocab_type_; }
-  bool GetPrependSpaceInTokenization() const { return prepend_space_in_tokenization_; }
+  bool GetAddPrefixSpace() const { return add_prefix_space_; }
   int GetVocabSize() const { return vocab_size_; }
   const std::vector<std::string>& GetDecodedVocab() { return decoded_vocab_; }
   const std::vector<int32_t>& GetStopTokenIds() const { return stop_token_ids_; }
@@ -57,8 +57,8 @@ class TokenizerInfo::Impl {
   VocabType vocab_type_;
   /*! \brief The size of the vocabulary. */
   int vocab_size_;
-  /*! \brief Whether to prepend space in tokenization. */
-  bool prepend_space_in_tokenization_;
+  /*! \brief Whether to add prefix space. */
+  bool add_prefix_space_;
 
   /*! \brief The vocabulary. Special tokens are included. */
   std::vector<std::string> decoded_vocab_;
@@ -318,11 +318,11 @@ class HFTokenizerAnalyzer {
   }
 
   /*!
-   * \brief Detect whether prepend space in tokenization from tokenizer.json.
+   * \brief Detect whether add prefix space from tokenizer.json.
    * \details Find {"type": "Prepend", "prepend": "▁"} in "normalizer" field of the tokenizer, or
    * "pre_tokenizer": {"type": "Metaspace", "prepend_scheme": "always" | "first"} in the tokenizer.
    */
-  static bool DetectPrependSpaceInTokenization(const picojson::object& hf_tokenizer_obj) {
+  static bool DetectAddPrefixSpace(const picojson::object& hf_tokenizer_obj) {
     return DetectPrependNormalizer(hf_tokenizer_obj) ||
            DetectMetaspacePreTokenizer(hf_tokenizer_obj);
   }
@@ -330,22 +330,18 @@ class HFTokenizerAnalyzer {
 
 /************* TokenizerInfo::Impl *************/
 
-bool TokenizerInfo::Impl::IsSpecialToken(const std::string& token) {
-  // gemma treats [@BOS@] as a special token
-  return (token[0] == '<' && token.back() == '>' && token.size() >= 3) || token == "[@BOS@]" ||
-         token == "";
-}
+bool TokenizerInfo::Impl::IsSpecialToken(const std::string& token) { return token == ""; }
 
 TokenizerInfo::Impl::Impl(
     const std::vector<std::string>& encoded_vocab,
     VocabType vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int32_t>> stop_token_ids,
-    bool prepend_space_in_tokenization
+    bool add_prefix_space
 )
     : vocab_type_(vocab_type),
       vocab_size_(vocab_size.value_or(encoded_vocab.size())),
-      prepend_space_in_tokenization_(prepend_space_in_tokenization) {
+      add_prefix_space_(add_prefix_space) {
   decoded_vocab_.reserve(encoded_vocab.size());
   sorted_decoded_vocab_.reserve(encoded_vocab.size());
   for (int i = 0; i < static_cast<int>(encoded_vocab.size()); ++i) {
@@ -377,7 +373,7 @@ std::string TokenizerInfo::Impl::DumpMetadata() const {
   picojson::object obj;
   obj["vocab_type"] = picojson::value(VOCAB_TYPE_NAMES[static_cast<int>(vocab_type_)]);
   obj["vocab_size"] = picojson::value(static_cast<int64_t>(vocab_size_));
-  obj["prepend_space_in_tokenization"] = picojson::value(prepend_space_in_tokenization_);
+  obj["add_prefix_space"] = picojson::value(add_prefix_space_);
   picojson::array stop_token_ids_array;
   for (auto id : stop_token_ids_) {
     stop_token_ids_array.push_back(picojson::value(static_cast<int64_t>(id)));
@@ -415,10 +411,9 @@ std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
       << "Missing or invalid 'vocab_size' in metadata";
   int vocab_size = static_cast<int>(obj["vocab_size"].get<int64_t>());
 
-  XGRAMMAR_CHECK(
-      obj.count("prepend_space_in_tokenization") && obj["prepend_space_in_tokenization"].is<bool>()
-  ) << "Missing or invalid 'prepend_space_in_tokenization' in metadata";
-  bool prepend_space_in_tokenization = obj["prepend_space_in_tokenization"].get<bool>();
+  XGRAMMAR_CHECK(obj.count("add_prefix_space") && obj["add_prefix_space"].is<bool>())
+      << "Missing or invalid 'add_prefix_space' in metadata";
+  bool add_prefix_space = obj["add_prefix_space"].get<bool>();
 
   std::vector<int32_t> stop_token_ids;
   XGRAMMAR_CHECK(obj.count("stop_token_ids") && obj["stop_token_ids"].is<picojson::array>())
@@ -428,7 +423,7 @@ std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
     stop_token_ids.push_back(static_cast<int32_t>(id.get<int64_t>()));
   }
   return std::make_shared<Impl>(
-      encoded_vocab, vocab_type, vocab_size, stop_token_ids, prepend_space_in_tokenization
+      encoded_vocab, vocab_type, vocab_size, stop_token_ids, add_prefix_space
   );
 }
 
@@ -443,9 +438,9 @@ std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromHuggingFace(
   XGRAMMAR_CHECK(err.empty() && v.is<picojson::object>()) << "Failed to parse JSON object: " << err;
   const picojson::object& obj = v.get<picojson::object>();
   VocabType vocab_type = HFTokenizerAnalyzer::DetectVocabType(obj);
-  bool prepend_space_in_tokenization = HFTokenizerAnalyzer::DetectPrependSpaceInTokenization(obj);
+  bool add_prefix_space = HFTokenizerAnalyzer::DetectAddPrefixSpace(obj);
   return std::make_shared<Impl>(
-      encoded_vocab, vocab_type, vocab_size, stop_token_ids, prepend_space_in_tokenization
+      encoded_vocab, vocab_type, vocab_size, stop_token_ids, add_prefix_space
   );
 }
 
@@ -456,17 +451,15 @@ TokenizerInfo::TokenizerInfo(
     VocabType vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int32_t>> stop_token_ids,
-    bool prepend_space_in_tokenization
+    bool add_prefix_space
 )
     : pimpl_(std::make_shared<Impl>(
-          encoded_vocab, vocab_type, vocab_size, stop_token_ids, prepend_space_in_tokenization
+          encoded_vocab, vocab_type, vocab_size, stop_token_ids, add_prefix_space
       )) {}
 
 int TokenizerInfo::GetVocabSize() const { return pimpl_->GetVocabSize(); }
 VocabType TokenizerInfo::GetVocabType() const { return pimpl_->GetVocabType(); }
-bool TokenizerInfo::GetPrependSpaceInTokenization() const {
-  return pimpl_->GetPrependSpaceInTokenization();
-}
+bool TokenizerInfo::GetAddPrefixSpace() const { return pimpl_->GetAddPrefixSpace(); }
 const std::vector<std::string>& TokenizerInfo::GetDecodedVocab() const {
   return pimpl_->GetDecodedVocab();
 }

@@ -29,11 +29,11 @@ class TokenizerInfo {
       VocabType vocab_type = VocabType::RAW,
       std::optional<int> vocab_size = std::nullopt,
       std::optional<std::vector<int32_t>> stop_token_ids = std::nullopt,
-      bool prepend_space_in_tokenization = false
+      bool add_prefix_space = false
   );
 
   VocabType GetVocabType() const;
-  bool GetPrependSpaceInTokenization() const;
+  bool GetAddPrefixSpace() const;
   int GetVocabSize() const;
   const std::vector<std::string>& GetDecodedVocab() const;
   const std::vector<int32_t>& GetStopTokenIds() const;

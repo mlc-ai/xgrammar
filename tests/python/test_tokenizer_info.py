@@ -14,8 +14,7 @@ def tokenizer_info_storage() -> Dict[str, Tuple[PreTrainedTokenizerBase, xgr.Tok
     return {}
 
 
-# # (tokenizer_path, vocab_type, prepend_space_in_tokenization)
-tokenizer_paths_metadata = [
+tokenizer_path__vocab_type__prepend_space = [
     ("luodian/llama-7b-hf", xgr.VocabType.BYTE_FALLBACK, True),
     ("meta-llama/Llama-2-7b-chat-hf", xgr.VocabType.BYTE_FALLBACK, True),
     ("meta-llama/Meta-Llama-3-8B-Instruct", xgr.VocabType.BYTE_LEVEL, False),
@@ -43,9 +42,12 @@ tokenizer_paths_metadata = [
     ("mistralai/Mixtral-8x22B-Instruct-v0.1", xgr.VocabType.BYTE_FALLBACK, True),
     ("THUDM/glm-4-9b-chat", xgr.VocabType.RAW, False),
     ("THUDM/chatglm3-6b", xgr.VocabType.BYTE_FALLBACK, True),
+    ("deepseek-ai/DeepSeek-R1", xgr.VocabType.BYTE_LEVEL, False),
+    ("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", xgr.VocabType.BYTE_LEVEL, False),
+    ("deepseek-ai/DeepSeek-R1-Distill-Llama-8B", xgr.VocabType.BYTE_LEVEL, False),
 ]
 
-tokenizer_paths = [path for path, *_ in tokenizer_paths_metadata]
+tokenizer_paths = [path for path, *_ in tokenizer_path__vocab_type__prepend_space]
 
 
 @pytest.mark.hf_token_required
@@ -56,18 +58,18 @@ def test_build_tokenizer_info(
 ):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
-    print(f"{tokenizer_info.vocab_type}, {tokenizer_info.prepend_space_in_tokenization}")
+    print(f"{tokenizer_info.vocab_type}, {tokenizer_info.add_prefix_space}")
     tokenizer_info_storage[tokenizer_path] = (tokenizer, tokenizer_info)
 
 
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize(
-    "tokenizer_path, vocab_type, prepend_space_in_tokenization", tokenizer_paths_metadata
+    "tokenizer_path, vocab_type, add_prefix_space", tokenizer_path__vocab_type__prepend_space
 )
 def test_properties(
     tokenizer_path: str,
     vocab_type: xgr.VocabType,
-    prepend_space_in_tokenization: bool,
+    add_prefix_space: bool,
     tokenizer_info_storage: Dict[str, Tuple[PreTrainedTokenizerBase, xgr.TokenizerInfo]],
 ):
     tokenizer, tokenizer_info = tokenizer_info_storage[tokenizer_path]
@@ -75,7 +77,7 @@ def test_properties(
     max_id = max(vocab_dict.values()) if vocab_dict else -1
     assert tokenizer_info.vocab_size == max(len(vocab_dict), max_id + 1)
     assert tokenizer_info.vocab_type == vocab_type
-    assert tokenizer_info.prepend_space_in_tokenization == prepend_space_in_tokenization
+    assert tokenizer_info.add_prefix_space == add_prefix_space
 
 
 @pytest.mark.hf_token_required
@@ -116,7 +118,7 @@ def test_decode_text(
     text = (
         "Hello 你好 こんにちは 안녕하세요! 🌎🌍🌏 \u0300\u0301\u0302 \U0001f600\U0001f601\U0001f602 "
         + "αβγδ АБВГД عربي עברית"
-        + "\n\t\r Special chars: &*()_+-=[]{}|;:'\",.<>?/\\~`!@#$%^"
+        + "\n\t\r Special chars: &*()_+-=[]{}|;:'\",.<>?/\\~`!@#$%^<think>haha</think>"
     )
     tokenizer, tokenizer_info = tokenizer_info_storage[tokenizer_path]
     decoded_vocab = tokenizer_info.decoded_vocab
@@ -133,13 +135,13 @@ def test_decode_text(
     assert trial_text_roundtrip[-1] == "a"
     detected_prefix = trial_text_roundtrip[:-1]
 
-    assert tokenizer_info.prepend_space_in_tokenization == (
+    assert tokenizer_info.add_prefix_space == (
         len(detected_prefix) > 0 and detected_prefix[-1] == " "
     )
     assert detected_prefix + text == recovered_text
 
 
-tokenizer_paths_token_ids_raw_tokens = [
+tokenizer_path__token_ids__raw_tokens = [
     # raw
     ("microsoft/Phi-3-small-8k-instruct", [10, 94, 37046], [b"+", b"\xa1", b"\xe6\x88\x91"]),
     # byte_fallback
@@ -159,7 +161,7 @@ tokenizer_paths_token_ids_raw_tokens = [
 
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize(
-    "tokenizer_path, token_ids, raw_tokens", tokenizer_paths_token_ids_raw_tokens
+    "tokenizer_path, token_ids, raw_tokens", tokenizer_path__token_ids__raw_tokens
 )
 def test_vocab_conversion(tokenizer_path: str, token_ids: List[int], raw_tokens: List[bytes]):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
@@ -169,24 +171,24 @@ def test_vocab_conversion(tokenizer_path: str, token_ids: List[int], raw_tokens:
         assert vocab[token_id] == raw_token
 
 
-tokenizer_path_metadata_str = [
+tokenizer_path__metadata_str = [
     (
         "microsoft/Phi-3-small-8k-instruct",
-        '{"vocab_type":"RAW","vocab_size":100352,"prepend_space_in_tokenization":false,"stop_token_ids":[100257]}',
+        '{"vocab_type":"RAW","vocab_size":100352,"add_prefix_space":false,"stop_token_ids":[100257]}',
     ),
     (
         "meta-llama/Llama-2-7b-chat-hf",
-        '{"vocab_type":"BYTE_FALLBACK","vocab_size":32000,"prepend_space_in_tokenization":true,"stop_token_ids":[2]}',
+        '{"vocab_type":"BYTE_FALLBACK","vocab_size":32000,"add_prefix_space":true,"stop_token_ids":[2]}',
     ),
     (
         "meta-llama/Meta-Llama-3-8B-Instruct",
-        '{"vocab_type":"BYTE_LEVEL","vocab_size":128256,"prepend_space_in_tokenization":false,"stop_token_ids":[128009]}',
+        '{"vocab_type":"BYTE_LEVEL","vocab_size":128256,"add_prefix_space":false,"stop_token_ids":[128009]}',
     ),
 ]
 
 
 @pytest.mark.hf_token_required
-@pytest.mark.parametrize("tokenizer_path, metadata_str", tokenizer_path_metadata_str)
+@pytest.mark.parametrize("tokenizer_path, metadata_str", tokenizer_path__metadata_str)
 def test_dump_metadata_load(tokenizer_path: str, metadata_str: str):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
@@ -218,21 +220,23 @@ def test_customized_tokenizer_info(tokenizer_path: str):
 
 
 def test_special_token_detection():
-    vocab_dict = {
-        "": 0,
-        "<s>": 1,
-        "</s>": 2,
-        "[@BOS@]": 3,
-        "regular": 4,
-        "<test_token>": 5,
-        "not<special>": 6,
-        "<>": 7,
-    }
+    vocab_dict = [
+        "",
+        "<s>",
+        "</s>",
+        "[@BOS@]",
+        "regular",
+        "<test_token>",
+        "not<special>",
+        "<>",
+        "<think>",
+        "</think>",
+    ]
     tokenizer_info = xgr.TokenizerInfo.from_vocab_and_metadata(
-        list(vocab_dict.keys()),
-        '{"vocab_type":"BYTE_FALLBACK","vocab_size":8,"prepend_space_in_tokenization":true,"stop_token_ids":[2]}',
+        vocab_dict,
+        '{"vocab_type":"BYTE_FALLBACK","vocab_size":8,"add_prefix_space":true,"stop_token_ids":[2]}',
     )
-    expected_special_tokens = {0, 1, 3, 5}
+    expected_special_tokens = {0}
     assert set(tokenizer_info.special_token_ids) == expected_special_tokens
 
 

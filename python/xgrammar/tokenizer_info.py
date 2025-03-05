@@ -71,7 +71,7 @@ class TokenizerInfo(XGRObject):
         The stop token ids. If not provided, the stop token ids will be auto detected (but may not
         be correct).
 
-    prepend_space_in_tokenization : bool, default: False
+    add_prefix_space : bool, default: False
         Whether the tokenizer will prepend a space before the text in the tokenization process.
     """
 
@@ -82,17 +82,13 @@ class TokenizerInfo(XGRObject):
         *,
         vocab_size: Optional[int] = None,
         stop_token_ids: Optional[Union[List[int], int]] = None,
-        prepend_space_in_tokenization: bool = False,
+        add_prefix_space: bool = False,
     ) -> None:
         if isinstance(stop_token_ids, int):
             stop_token_ids = [stop_token_ids]
         self._init_handle(
             _core.TokenizerInfo(
-                encoded_vocab,
-                vocab_type.value,
-                vocab_size,
-                stop_token_ids,
-                prepend_space_in_tokenization,
+                encoded_vocab, vocab_type.value, vocab_size, stop_token_ids, add_prefix_space
             )
         )
 
@@ -198,7 +194,7 @@ class TokenizerInfo(XGRObject):
             #   (tokenizer.backend_tokenizer.to_str() may not contain the full vocab, special
             #   tokens may be omitted)
             # - the vocab size is obtained from len(tokenizer.get_vocab()) or provided by user
-            # - the vocab type and prepend_space_in_tokenization are obtained from
+            # - the vocab type and add_prefix_space are obtained from
             #   tokenizer.backend_tokenizer.to_str()
             # - stop token id is provided by user, or auto detected.
             backend_str = tokenizer.backend_tokenizer.to_str()
@@ -233,7 +229,7 @@ class TokenizerInfo(XGRObject):
                 VocabType.RAW,
                 vocab_size=vocab_size,
                 stop_token_ids=stop_token_ids,
-                prepend_space_in_tokenization=False,
+                add_prefix_space=False,
             )
         elif TokenizerInfo._is_sentencepiece_tokenizer(tokenizer):
             # sentencepiece tokenizer
@@ -267,7 +263,7 @@ class TokenizerInfo(XGRObject):
                 vocab_type=vocab_type,
                 vocab_size=vocab_size,
                 stop_token_ids=stop_token_ids,
-                prepend_space_in_tokenization=True,
+                add_prefix_space=True,
             )
         else:
             # TODO(yixin): unsupported tokenizer
@@ -284,10 +280,20 @@ class TokenizerInfo(XGRObject):
         return self._handle.vocab_size
 
     @property
-    def prepend_space_in_tokenization(self) -> bool:
+    def add_prefix_space(self) -> bool:
         """Whether the tokenizer will prepend a space before the text in the tokenization
         process."""
-        return self._handle.prepend_space_in_tokenization
+        return self._handle.add_prefix_space
+
+    @property
+    def prepend_space_in_tokenization(self) -> bool:
+        """Whether the tokenizer will prepend a space before the text in the tokenization
+        process.
+
+        This property is deprecated. Use add_prefix_space instead.
+        """
+        logger.warning("prepend_space_in_tokenization is deprecated. Use add_prefix_space instead.")
+        return self.add_prefix_space
 
     @property
     def decoded_vocab(self) -> List[bytes]:

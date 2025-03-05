@@ -23,7 +23,7 @@ TokenizerInfo TokenizerInfo_Init(
     std::string vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int32_t>> stop_token_ids,
-    bool prepend_space_in_tokenization
+    bool add_prefix_space
 );
 
 std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);

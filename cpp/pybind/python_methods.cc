@@ -25,7 +25,7 @@ TokenizerInfo TokenizerInfo_Init(
     std::string vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int32_t>> stop_token_ids,
-    bool prepend_space_in_tokenization
+    bool add_prefix_space
 ) {
   const std::unordered_map<std::string, VocabType> VOCAB_TYPE_MAP = {
       {"RAW", VocabType::RAW},
@@ -34,11 +34,7 @@ TokenizerInfo TokenizerInfo_Init(
   };
   XGRAMMAR_CHECK(VOCAB_TYPE_MAP.count(vocab_type)) << "Invalid vocab type: " << vocab_type;
   return TokenizerInfo(
-      encoded_vocab,
-      VOCAB_TYPE_MAP.at(vocab_type),
-      vocab_size,
-      stop_token_ids,
-      prepend_space_in_tokenization
+      encoded_vocab, VOCAB_TYPE_MAP.at(vocab_type), vocab_size, stop_token_ids, add_prefix_space
   );
 }
 

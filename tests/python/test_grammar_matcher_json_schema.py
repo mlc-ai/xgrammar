@@ -93,8 +93,6 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device=device)
 
     input_bytes = instance_str.encode("utf-8")
 
@@ -105,24 +103,14 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
         time_end = time.monotonic_ns()
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
-        # 2. apply_token_bitmask_inplace
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-        time_start = time.monotonic_ns()
-        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-        time_end = time.monotonic_ns()
-        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
-
-        # 3. accept_string
+        # 2. accept_string
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
         assert matcher._debug_accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
-    # 5. Final correctness verification
+    # 3. Final correctness verification
     matcher.fill_next_token_bitmask(token_bitmask)
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert tokenizer.eos_token_id not in rejected_token_ids
