@@ -202,6 +202,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.TokenizerInfo"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.add_prefix_space"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.add_prefix_space</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.decoded_vocab"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.decoded_vocab</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.dump_metadata"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.dump_metadata()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.from_huggingface"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.from_huggingface()</span></code></a></li>
@@ -985,7 +986,7 @@ will be used. Otherwise, the stop tokens will be detected from the vocabulary.</
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">TokenizerInfo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">bytes</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">VocabType.RAW</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prepend_space_in_tokenization</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.TokenizerInfo" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">TokenizerInfo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">bytes</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">VocabType.RAW</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_prefix_space</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.TokenizerInfo" title="Permalink to this definition">¶</a></dt>
 <dd><p>The tokenizer info contains the vocabulary, the type of the vocabulary, and necessary
 information for the grammar-guided generation.</p>
 <p>Note that although some tokenizers will encode the tokens in a special format, e.g.
@@ -1004,29 +1005,32 @@ this information is used to determine the size of the token mask.</p>
 <li><p><strong>vocab_size</strong> (<em>Optional</em><em>[</em><em>int</em><em>]</em><em>, </em><em>default: None</em>) – The size of the vocabulary. If not provided, the vocabulary size will be len(encoded_vocab).</p></li>
 <li><p><strong>stop_token_ids</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – The stop token ids. If not provided, the stop token ids will be auto detected (but may not
 be correct).</p></li>
-<li><p><strong>prepend_space_in_tokenization</strong> (<em>bool</em><em>, </em><em>default: False</em>) – Whether the tokenizer will prepend a space before the text in the tokenization process.</p></li>
+<li><p><strong>add_prefix_space</strong> (<em>bool</em><em>, </em><em>default: False</em>) – Whether the tokenizer will prepend a space before the text in the tokenization process.</p></li>
 </ul>
 </dd>
 </dl>
 <p><strong>Attributes:</strong></p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.decoded_vocab" title="xgrammar.TokenizerInfo.decoded_vocab"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decoded_vocab</span></code></a></p></td>
-<td><p>The decoded vocabulary of the tokenizer.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization" title="xgrammar.TokenizerInfo.prepend_space_in_tokenization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">prepend_space_in_tokenization</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.add_prefix_space" title="xgrammar.TokenizerInfo.add_prefix_space"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_prefix_space</span></code></a></p></td>
 <td><p>Whether the tokenizer will prepend a space before the text in the tokenization process.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.special_token_ids" title="xgrammar.TokenizerInfo.special_token_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">special_token_ids</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.decoded_vocab" title="xgrammar.TokenizerInfo.decoded_vocab"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decoded_vocab</span></code></a></p></td>
+<td><p>The decoded vocabulary of the tokenizer.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization" title="xgrammar.TokenizerInfo.prepend_space_in_tokenization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">prepend_space_in_tokenization</span></code></a></p></td>
+<td><p>Whether the tokenizer will prepend a space before the text in the tokenization process.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.special_token_ids" title="xgrammar.TokenizerInfo.special_token_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">special_token_ids</span></code></a></p></td>
 <td><p>The special token ids.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.stop_token_ids" title="xgrammar.TokenizerInfo.stop_token_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stop_token_ids</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.stop_token_ids" title="xgrammar.TokenizerInfo.stop_token_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stop_token_ids</span></code></a></p></td>
 <td><p>The stop token ids.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_size" title="xgrammar.TokenizerInfo.vocab_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vocab_size</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_size" title="xgrammar.TokenizerInfo.vocab_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vocab_size</span></code></a></p></td>
 <td><p>The size of the vocabulary.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_type" title="xgrammar.TokenizerInfo.vocab_type"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vocab_type</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_type" title="xgrammar.TokenizerInfo.vocab_type"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vocab_type</span></code></a></p></td>
 <td><p>The type of the vocabulary.</p></td>
 </tr>
 </tbody>
@@ -1045,6 +1049,13 @@ be correct).</p></li>
 </tr>
 </tbody>
 </table>
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.add_prefix_space">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">add_prefix_space</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.add_prefix_space" title="Permalink to this definition">¶</a></dt>
+<dd><p>Whether the tokenizer will prepend a space before the text in the tokenization
+process.</p>
+</dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.decoded_vocab">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">decoded_vocab</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">bytes</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.decoded_vocab" title="Permalink to this definition">¶</a></dt>
@@ -1112,6 +1123,7 @@ format.</p>
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">prepend_space_in_tokenization</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization" title="Permalink to this definition">¶</a></dt>
 <dd><p>Whether the tokenizer will prepend a space before the text in the tokenization
 process.</p>
+<p>This property is deprecated. Use add_prefix_space instead.</p>
 </dd></dl>
 
 <dl class="py property">
