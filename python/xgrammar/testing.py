@@ -211,24 +211,6 @@ def _get_matcher_from_grammar_and_tokenizer_info(
     return GrammarMatcher(compiled_grammar, **kwargs)
 
 
-def _get_grammar_union(*grammars: "Grammar") -> "Grammar":
-    """Create a grammar that matches any of the grammars in the list. That is equivalent to
-    using the `|` operator to concatenate the grammars in the list.
-
-    Parameters
-    ----------
-    grammars : List[Grammar]
-        The grammars to create the union of.
-
-    Returns
-    -------
-    grammar : Grammar
-        The union of the grammars.
-    """
-    grammar_handles = [grammar._handle for grammar in grammars]
-    return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
-
-
 def _get_allow_empty_rule_ids(compiled_grammar: CompiledGrammar) -> List[int]:
     return _core.testing._get_allow_empty_rule_ids(compiled_grammar._handle)
 

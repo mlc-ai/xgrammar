@@ -273,3 +273,21 @@ class Grammar(XGRObject):
         """
         grammar_handles = [grammar._handle for grammar in grammars]
         return Grammar._create_from_handle(_core.Grammar.concat(grammar_handles))
+
+    @staticmethod
+    def union(*grammars: "Grammar") -> "Grammar":
+        """Create a grammar that matches any of the grammars in the list. That is equivalent to
+        using the `|` operator to concatenate the grammars in the list.
+
+        Parameters
+        ----------
+        grammars : List[Grammar]
+            The grammars to create the union of.
+
+        Returns
+        -------
+        grammar : Grammar
+            The union of the grammars.
+        """
+        grammar_handles = [grammar._handle for grammar in grammars]
+        return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
