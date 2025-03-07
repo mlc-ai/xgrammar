@@ -43,12 +43,12 @@ std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer) {
   return VOCAB_TYPE_NAMES[static_cast<int>(tokenizer.GetVocabType())];
 }
 
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
+std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
   const auto& decoded_vocab = tokenizer.GetDecodedVocab();
-  std::vector<pybind11::bytes> py_result;
+  std::vector<nanobind::bytes> py_result;
   py_result.reserve(decoded_vocab.size());
   for (const auto& item : decoded_vocab) {
-    py_result.emplace_back(pybind11::bytes(item));
+    py_result.emplace_back(nanobind::bytes(item.c_str()));
   }
   return py_result;
 }
@@ -69,8 +69,7 @@ bool GrammarMatcher_FillNextTokenBitmask(
       GetBitmaskDLType(),
       shape.data(),
       nullptr,
-      0
-  };
+      0};
   return matcher.FillNextTokenBitmask(&bitmask_dltensor, index, debug_print);
 }
 
@@ -86,8 +85,7 @@ std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(
       GetBitmaskDLType(),
       shape.data(),
       nullptr,
-      0
-  };
+      0};
 
   std::vector<int> result;
   _DebugGetMaskedTokensFromBitmask(&result, bitmask_dltensor, vocab_size, index);
@@ -111,8 +109,7 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
       DLDataType{kDLFloat, 32, 1},
       logits_shape_arr.data(),
       nullptr,
-      0
-  };
+      0};
 
   DLTensor bitmask_dltensor{
       reinterpret_cast<void*>(bitmask_ptr),
@@ -121,8 +118,7 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
       GetBitmaskDLType(),
       bitmask_shape_arr.data(),
       nullptr,
-      0
-  };
+      0};
 
   ApplyTokenBitmaskInplaceCPU(&logits_dltensor, bitmask_dltensor, indices);
 }
@@ -138,9 +134,8 @@ Grammar Grammar_FromStructuralTag(
   std::vector<StructuralTagItem> tags_objects;
   tags_objects.reserve(tags.size());
   for (const auto& tag : tags) {
-    tags_objects.emplace_back(
-        StructuralTagItem{std::get<0>(tag), std::get<1>(tag), std::get<2>(tag)}
-    );
+    tags_objects.emplace_back(StructuralTagItem{
+        std::get<0>(tag), std::get<1>(tag), std::get<2>(tag)});
   }
   return Grammar::FromStructuralTag(tags_objects, triggers);
 }
@@ -153,9 +148,8 @@ CompiledGrammar GrammarCompiler_CompileStructuralTag(
   std::vector<StructuralTagItem> tags_objects;
   tags_objects.reserve(tags.size());
   for (const auto& tag : tags) {
-    tags_objects.emplace_back(
-        StructuralTagItem{std::get<0>(tag), std::get<1>(tag), std::get<2>(tag)}
-    );
+    tags_objects.emplace_back(StructuralTagItem{
+        std::get<0>(tag), std::get<1>(tag), std::get<2>(tag)});
   }
   return compiler.CompileStructuralTag(tags_objects, triggers);
 }

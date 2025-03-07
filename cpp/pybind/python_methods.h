@@ -7,7 +7,7 @@
 #ifndef XGRAMMAR_PYBIND_PYTHON_METHODS_H_
 #define XGRAMMAR_PYBIND_PYTHON_METHODS_H_
 
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 #include <xgrammar/xgrammar.h>
 
 #include <optional>
@@ -28,7 +28,7 @@ TokenizerInfo TokenizerInfo_Init(
 
 std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer);
+std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer);
 
 bool GrammarMatcher_FillNextTokenBitmask(
     GrammarMatcher& matcher,

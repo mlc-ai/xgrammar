@@ -1,8 +1,8 @@
-set(PYBIND11_NEWPYTHON ON)
-find_package(pybind11 CONFIG REQUIRED)
+find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(nanobind CONFIG REQUIRED)
 
 file(GLOB_RECURSE XGRAMMAR_BINDINGS_PATH ${PROJECT_SOURCE_DIR}/cpp/*.cc)
-pybind11_add_module(xgrammar_bindings ${XGRAMMAR_BINDINGS_PATH})
+nanobind_add_module(xgrammar_bindings ${XGRAMMAR_BINDINGS_PATH})
 target_include_directories(xgrammar_bindings PUBLIC ${XGRAMMAR_INCLUDE_PATH})
 
 if(XGRAMMAR_ENABLE_CPPTRACE)
