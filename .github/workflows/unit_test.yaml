@@ -28,6 +28,12 @@ jobs:
         with:
           python-version: 3.11
 
+      - name: Pre-commit
+        uses: pre-commit/action@v3.0.1
+
+      - name: Ruff check
+        uses: astral-sh/ruff-action@v3
+      
       - name: Build xgrammar from source
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
