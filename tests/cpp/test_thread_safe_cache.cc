@@ -34,7 +34,9 @@ using namespace std::chrono_literals;
 TEST(XGrammarParallelTest, CacheEfficiency) {
   auto cache = ThreadSafeCache<std::string, MockGrammar>{[](const std::string&) {
     std::this_thread::sleep_for(1s);  // simulate a slow operation
-    return MockGrammar{.uuid = counter++, .padding = {}};
+    MockGrammar g{};
+    g.uuid = counter++;
+    return g;
   }};
   auto futures = std::vector<std::future<std::size_t>>{};
 
