@@ -7,8 +7,6 @@
 
 #include <picojson.h>
 
-#include <memory>
-
 #include "grammar_builder.h"
 #include "grammar_data_structure.h"
 #include "support/encoding.h"

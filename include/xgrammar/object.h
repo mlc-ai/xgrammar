@@ -7,8 +7,8 @@
 #ifndef XGRAMMAR_OBJECT_H_
 #define XGRAMMAR_OBJECT_H_
 
-#include <memory>
-#include <utility>
+#include <memory>   // IWYU pragma: keep
+#include <utility>  // IWYU pragma: keep
 
 namespace xgrammar {
 

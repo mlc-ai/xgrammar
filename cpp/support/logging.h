@@ -12,8 +12,6 @@
 #include <sstream>
 #include <string>
 
-#include "cpptrace.h"
-
 /*!
  * \brief Whether or not customize the logging output.
  *  If log customize is enabled, the user must implement

@@ -5,10 +5,8 @@
 #include "regex_converter.h"
 
 #include <iostream>
-#include <optional>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "support/encoding.h"

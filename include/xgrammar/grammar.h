@@ -9,7 +9,6 @@
 
 #include <xgrammar/object.h>
 
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>

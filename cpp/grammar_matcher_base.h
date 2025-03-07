@@ -8,7 +8,6 @@
 
 #include <xgrammar/grammar.h>
 
-#include <algorithm>
 #include <string>
 #include <vector>
 

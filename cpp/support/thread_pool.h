@@ -172,7 +172,7 @@ class ThreadPool {
   int unfinished_task_count_ = 0;
 };
 
-void ParallelFor(int low, int high, int num_threads, std::function<void(int)> f) {
+inline void ParallelFor(int low, int high, int num_threads, std::function<void(int)> f) {
   if (high - low == 1) {
     f(low);
     return;
