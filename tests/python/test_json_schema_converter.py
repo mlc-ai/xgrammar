@@ -1,10 +1,12 @@
 import json
 import sys
+import time
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
 import pytest
 from pydantic import BaseModel, Field, TypeAdapter, WithJsonSchema, create_model
+from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _generate_range_regex, _is_grammar_accept_string, _json_schema_to_ebnf
@@ -978,6 +980,508 @@ def test_generate_range_regex():
     # Zero-inclusive ranges
     assert _generate_range_regex(-10, 0) == r"^(-([1-9]|10)|0)$"
     assert _generate_range_regex(0, 10) == r"^(0|([1-9]|10))$"
+
+
+email_instances_accepted = [
+    (r"simple@example.com", True),
+    (r"very.common@example.com", True),
+    (r"FirstName.LastName@EasierReading.org", True),
+    (r"x@example.com", True),
+    (r"long.email-address-with-hyphens@and.subdomains.example.com", True),
+    (r"user.name+tag+sorting@example.com", True),
+    (r"name/surname@example.com", True),
+    (r"admin@example", True),
+    (r"example@s.example", True),
+    (r'" "@example.org', True),
+    (r'"john..doe"@example.org', True),
+    (r"mailhost!username@example.org", True),
+    (r'"very.(),:;<>[]\".VERY.\"very@\\ \"very\".unusual"@strange.example.com', True),
+    (r"user%example.com@example.org", True),
+    (r"user-@example.org", True),
+    (r"abc.example.com", False),
+    (r"a@b@c@example.com", False),
+    (r'a"b(c)d,e:f;g<h>i[j\k]l@example.com', False),
+    (r'just"not"right@example.com', False),
+    (r'this is"not\allowed@example.com', False),
+    (r"this\ still\"not\\allowed@example.com", False),
+    (r"i.like.underscores@but_they_are_not_allowed_in_this_part", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", email_instances_accepted)
+def test_email_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "email"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+date_instances_accepted = [
+    (r"0000-01-01", True),
+    (r"9999-12-31", True),
+    (r"10-01-01", False),
+    (r"2025-00-01", False),
+    (r"2025-13-01", False),
+    (r"2025-01-00", False),
+    (r"2025-01-32", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", date_instances_accepted)
+def test_date_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "date"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+time_instances_accepted = [
+    (r"00:00:00Z", True),
+    (r"23:59:60Z", True),
+    (r"12:34:56Z", True),
+    (r"12:34:56+07:08", True),
+    (r"12:34:56-07:08", True),
+    (r"12:34:56.7Z", True),
+    (r"12:34:56.7+08:09", True),
+    (r"12:34:56.7-08:09", True),
+    (r"00:00:00", False),
+    (r"23:59:60", False),
+    (r"12:34:56.7", False),
+    (r"12:34:56.7890", False),
+    (r"24:00:00", False),
+    (r"00:60:00", False),
+    (r"00:00:61", False),
+    (r"00:00:00.", False),
+    (r"12:34:56+07:", False),
+    (r"12:34:56-07:", False),
+    (r"12:34:56.7+-08:09", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", time_instances_accepted)
+def test_time_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "time"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+duration_instances_accepted = [
+    (r"P0Y", True),
+    (r"P12M", True),
+    (r"P345D", True),
+    (r"P6789W", True),
+    (r"P01234D", True),
+    (r"PT9H", True),
+    (r"PT87M", True),
+    (r"PT654S", True),
+    (r"P1Y23M456D", True),
+    (r"P23M456D", True),
+    (r"P1Y0M456D", True),
+    (r"P1Y23M", True),
+    (r"PT9H87M654S", True),
+    (r"PT87M654S", True),
+    (r"PT9H0M654S", True),
+    (r"PT9H87M", True),
+    (r"P1Y23M456DT9H87M654S", True),
+    (r"P", False),
+    (r"PD", False),
+    (r"P1", False),
+    (r"PT", False),
+    (r"P1Y456D", False),
+    (r"PT9H654S", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", duration_instances_accepted)
+def test_duration_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "duration"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+ipv6_instances_accepted = [
+    (r"0123:4567:890a:bced:fABC:DEF0:1234:5678", True),
+    (r"::6666:6666:6666:6666:6666:6666", True),
+    (r"::6666:6666:6666:6666:6666", True),
+    (r"::6666:6666:6666:6666", True),
+    (r"::6666:6666:6666", True),
+    (r"::6666:6666", True),
+    (r"::6666", True),
+    (r"::", True),
+    (r"8888:8888:8888:8888:8888:8888::", True),
+    (r"8888:8888:8888:8888:8888::", True),
+    (r"8888:8888:8888:8888::", True),
+    (r"8888:8888:8888::", True),
+    (r"8888:8888::", True),
+    (r"8888::", True),
+    (r"1111::2222", True),
+    (r"1111:1111::2222", True),
+    (r"1111::2222:2222", True),
+    (r"1111:1111:1111::2222", True),
+    (r"1111:1111::2222:2222", True),
+    (r"1111::2222:2222:2222", True),
+    (r"1111:1111:1111:1111::2222", True),
+    (r"1111:1111:1111::2222:2222", True),
+    (r"1111:1111::2222:2222:2222", True),
+    (r"1111::2222:2222:2222:2222", True),
+    (r"1111:1111:1111:1111:1111::2222", True),
+    (r"1111:1111:1111:1111::2222:2222", True),
+    (r"1111:1111:1111::2222:2222:2222", True),
+    (r"1111:1111::2222:2222:2222:2222", True),
+    (r"1111::2222:2222:2222:2222:2222", True),
+    (r"1111:1111:1111:1111:1111:1111::2222", True),
+    (r"1111:1111:1111:1111:1111::2222:2222", True),
+    (r"1111:1111:1111:1111::2222:2222:2222", True),
+    (r"1111:1111:1111::2222:2222:2222:2222", True),
+    (r"1111:1111::2222:2222:2222:2222:2222", True),
+    (r"1111::2222:2222:2222:2222:2222:2222", True),
+    (r"0123:4567:890a:bced:fABC:DEF0:012.034.056.078", True),
+    (r"::111.111.222.222", True),
+    (r":", False),
+    (r":::", False),
+    (r"::5555:5555:5555:5555:5555:5555:5555:5555", False),
+    (r"5555::5555:5555:5555:5555:5555:5555:5555", False),
+    (r"5555:5555::5555:5555:5555:5555:5555:5555", False),
+    (r"5555:5555:5555::5555:5555:5555:5555:5555", False),
+    (r"5555:5555:5555:5555::5555:5555:5555:5555", False),
+    (r"5555:5555:5555:5555:5555::5555:5555:5555", False),
+    (r"5555:5555:5555:5555:5555:5555::5555:5555", False),
+    (r"5555:5555:5555:5555:5555:5555:5555::5555", False),
+    (r"5555:5555:5555:5555:5555:5555:5555:5555::", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", ipv6_instances_accepted)
+def test_ipv6_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "ipv6"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+ipv4_instances_accepted = [
+    # (r"0.0.0.0", True),
+    (r"00.00.00.00", True),
+    (r"000.000.000.000", True),
+    (r"255.255.255.255", True),
+    (r"1", False),
+    (r"1.", False),
+    (r"1.1", False),
+    (r"1.1.", False),
+    (r"1.1.1", False),
+    (r"1.1.1.", False),
+    (r"0001.0001.0001.0001", False),
+    (r"256.256.256.256", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", ipv4_instances_accepted)
+def test_ipv4_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "ipv4"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+hostname_instances_accepted = [
+    (r"0", True),
+    (r"9", True),
+    (r"a", True),
+    (r"z", True),
+    (r"www.github.com", True),
+    (r"w-w-w.g-i-t-h-u-b.c-o-m", True),
+    (r"ww-w.gi-th-ub.co-m", True),
+    (r"w--ww.git---hub.co----m", True),
+    (r".", False),
+    (r"-", False),
+    (r"-.", False),
+    (r".-", False),
+    (r"_", False),
+    (r"a.", False),
+    (r"-b", False),
+    (r"c-", False),
+    (r"d.-", False),
+    (r"e-.", False),
+    (r"-f.", False),
+    (r"g-.h", False),
+    (r"-i.j", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", hostname_instances_accepted)
+def test_hostname_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "hostname"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+uuid_instances_accepted = [
+    (r"00000000-0000-0000-0000-000000000000", True),
+    (r"FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF", True),
+    (r"01234567-89AB-CDEF-abcd-ef0123456789", True),
+    (r"-", False),
+    (r"----", False),
+    (r"AAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", False),
+    (r"BBBBBBBB-BBB-BBBB-BBBB-BBBBBBBBBBBB", False),
+    (r"CCCCCCCC-CCCC-CCC-CCCC-CCCCCCCCCCCC", False),
+    (r"DDDDDDDD-DDDD-DDDD-DDD-DDDDDDDDDDDD", False),
+    (r"EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEE", False),
+    (r"AAAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", False),
+    (r"BBBBBBBB-BBBBB-BBBB-BBBB-BBBBBBBBBBBB", False),
+    (r"CCCCCCCC-CCCC-CCCCC-CCCC-CCCCCCCCCCCC", False),
+    (r"DDDDDDDD-DDDD-DDDD-DDDDD-DDDDDDDDDDDD", False),
+    (r"EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEEE", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", uuid_instances_accepted)
+def test_uuid_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "uuid"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+uri_instances_accepted = [
+    (r"aaa:?azAZ09-._~%Ff!$&'()*+,;=:@#azAZ09-._~%Aa!$&'()*+,;=:@", True),
+    (r"z+.-:", True),
+    (r"abc:", True),
+    (r"abc:a", True),
+    (r"abc:/", True),
+    (r"abc:/a", True),
+    (r"abc://", True),
+    (r"abc://///////", True),
+    (r"abc://azAZ09-._~%Ff!$&'()*+,;=:@", True),
+    (r"abc://:", True),
+    (r"abc://:0123", True),
+    (r"abc://azAZ09-._~%Ff!$&'()*+,;=", True),
+    (r"xyz:/a", True),
+    (r"xyz:/azAZ09-._~%Ff!$&'()*+,;=:@", True),
+    (r"aaa:?[#]", False),
+    (r"abc://@@", False),
+    (r"abc://::", False),
+    (r"abc:/[]", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", uri_instances_accepted)
+def test_uri_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "uri"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+uri_reference_instances_accepted = [
+    (r"?azAZ09-._~%Ff!$&'()*+,;=:@#azAZ09-._~%Aa!$&'()*+,;=:@", True),
+    (r"", True),
+    (r"a", True),
+    (r"/", True),
+    (r"/a", True),
+    (r"//", True),
+    (r"/////////", True),
+    (r"//azAZ09-._~%Ff!$&'()*+,;=:@", True),
+    (r"//:", True),
+    (r"//:0123", True),
+    (r"//azAZ09-._~%Ff!$&'()*+,;=", True),
+    (r"/a", True),
+    (r"/azAZ09-._~%Ff!$&'()*+,;=:@", True),
+    (r"?[#]", False),
+    (r"//@@", False),
+    (r"//::", False),
+    (r"/[]", False),
+    (r":", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", uri_reference_instances_accepted)
+def test_uri_reference_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "uri-reference"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+uri_template_instances_accepted = [
+    (r"", True),
+    (r"!#$&()*+,-./09:;=?@AZ[]_az~%Ff", True),
+    (r"{+a}{#a}{.a}{/a}{;a}{?a}{&a}{=a}{,a}{!a}{@a}{|a}", True),
+    (r"{%Ff}", True),
+    (r"{i.j.k}", True),
+    (r"{a_b_c:1234}", True),
+    (r"{x_y_z*}", True),
+    (r'"', False),
+    (r"'", False),
+    (r"%", False),
+    (r"<", False),
+    (r">", False),
+    (r"\\", False),
+    (r"^", False),
+    (r"`", False),
+    (r"{", False),
+    (r"|", False),
+    (r"}", False),
+    (r"{n.}", False),
+    (r"{m:100001}", False),
+    (r"%1", False),
+    (r"%Gg", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", uri_template_instances_accepted)
+def test_uri_template_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "uri-template"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+json_pointer_instances_accepted = [
+    (r"/", True),
+    (r"//", True),
+    (r"/a/bc/def/ghij", True),
+    (r"/~0/~1/", True),
+    (r"abc", False),
+    (r"/~", False),
+    (r"/~2", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", json_pointer_instances_accepted)
+def test_json_pointer_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "json-pointer"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+relative_json_pointer_instances_accepted = [
+    (r"0/", True),
+    (r"123/a/bc/def/ghij", True),
+    (r"45/~0/~1/", True),
+    (r"6789#", True),
+    (r"#", False),
+    (r"abc", False),
+    (r"/", False),
+    (r"9/~2", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", relative_json_pointer_instances_accepted)
+def test_relative_json_pointer_format(instance: str, accepted: bool):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": "relative-json-pointer"})
+
+    schema = MainModel.model_json_schema()
+    check_schema_with_instance(
+        schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+string_format_instances = [
+    (r"long.email-address-with-hyphens@and.subdomains.example.com", "email"),
+    (r'"very.(),:;<>[]\".VERY.\"very@\\ \"very\".unusual"@strange.example.com', "email"),
+    (r"128.255.000.222", "ipv4"),
+    (r"abcd:ABCD::0123:5678:000.111.222.123", "ipv6"),
+    (r"P1Y23M456DT9H87M654S", "duration"),
+    (r"2025-01-01T12:34:56.7+08:09", "date-time"),
+    (r"123--abc.efgh---789-xyz.rst-uvw", "hostname"),
+    (r"01234567-89AB-CDEF-abcd-ef0123456789", "uuid"),
+    (
+        r"http://azAZ09-._~%Ff!$&'()*+,;=:@xyz:987/-/./+/*?aA0-._~%Ff!$&'()@#zZ9-._~%Aa!$&,;=:",
+        "uri",
+    ),
+    (
+        r"//azAZ09-._~%Ff!$&'()*+,;=:@xyz:987/-/./+/*?aA0-._~%Ff!$&'()@#zZ9-._~%Aa!$&,;=:",
+        "uri-reference",
+    ),
+    (r"!#$&()*+,-./{+abc}{#def}{.ghi}{/jkl}{;mno:2468}", "uri-template"),
+    (r"/a/bc/def/ghij/~0~1//", "json-pointer"),
+    (r"1234/a/bc/def/ghij/~0~1//", "relative-json-pointer"),
+]
+
+
+@pytest.mark.parametrize("value, format", string_format_instances)
+def test_mask_generation_format(value: str, format: str):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": format})
+
+    instance = json.dumps(MainModel(name=value).model_dump(mode="json"))
+
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-8B-Instruct")
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+
+    time_start = time.monotonic_ns()
+    ebnf = _json_schema_to_ebnf(
+        json.dumps(MainModel.model_json_schema()),
+        any_whitespace=None,
+        indent=None,
+        separators=None,
+        strict_mode=True,
+    )
+    matcher_compiled_grammar = grammar_compiler.compile_grammar(ebnf)
+    time_end = time.monotonic_ns()
+    print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
+    matcher = xgr.GrammarMatcher(matcher_compiled_grammar)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    for c in instance.encode("utf-8"):
+        time_start = time.monotonic_ns()
+        matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        delta = (time_end - time_start) / 1e3
+        if delta > 1000:
+            print(f"Time for fill_next_token_bitmask: {delta} us on char {bytes([c])}")
+        accepted = matcher._debug_accept_string(bytes([c]))
+        assert accepted
+
+    time_start = time.monotonic_ns()
+    matcher.fill_next_token_bitmask(token_bitmask)
+    time_end = time.monotonic_ns()
+    print(f"Time for fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+    assert matcher.accept_token(tokenizer.eos_token_id)
+    assert matcher.is_terminated()
 
 
 if __name__ == "__main__":
