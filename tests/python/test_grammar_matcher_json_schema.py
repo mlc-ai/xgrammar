@@ -3,7 +3,6 @@ import time
 from typing import Dict, List, Tuple
 
 import pytest
-import torch
 from pydantic import BaseModel
 from transformers import AutoTokenizer
 
