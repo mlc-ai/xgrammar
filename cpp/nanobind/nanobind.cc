@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/pybind/pybind.cc
+ * \file xgrammar/nanobind/nanobind.cc
  */
 
 #include <nanobind/nanobind.h>

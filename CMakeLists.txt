@@ -61,7 +61,7 @@ set(XGRAMMAR_INCLUDE_PATH
 )
 
 file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH "${PROJECT_SOURCE_DIR}/cpp/*.cc")
-list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/pybind/.*\\.cc")
+list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/nanobind/.*\\.cc")
 
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
 target_include_directories(xgrammar PUBLIC ${XGRAMMAR_INCLUDE_PATH})
@@ -76,7 +76,7 @@ else()
 endif()
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/nanobind)
   install(TARGETS xgrammar_bindings DESTINATION .)
 endif()
 

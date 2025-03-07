@@ -85,7 +85,7 @@ for python_version in ${PYTHON_VERSIONS[*]}; do
     echo set\(XGRAMMAR_BUILD_PYTHON_BINDINGS ON\) >>config.cmake
     echo set\(XGRAMMAR_BUILD_CXX_TESTS OFF\) >>config.cmake
 
-    python3 -m pip install pybind11
+    python3 -m pip install nanobind
     python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
     rm -rf build
     mkdir -p build
