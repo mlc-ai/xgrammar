@@ -80,7 +80,12 @@ NB_MODULE(xgrammar_bindings, m) {
       .def(
           "compile_json_schema",
           &GrammarCompiler::CompileJSONSchema,
-          nb::call_guard<nb::gil_scoped_release>()
+          nb::call_guard<nb::gil_scoped_release>(),
+          nb::arg("schema"),
+          nb::arg("any_whitespace"),
+          nb::arg("indent").none(),
+          nb::arg("separators").none(),
+          nb::arg("strict_mode")
       )
       .def(
           "compile_builtin_json_grammar",
