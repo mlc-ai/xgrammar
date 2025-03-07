@@ -8,10 +8,17 @@ apply_token_bitmask_inplace_kernels = {"cpu": apply_token_bitmask_inplace_cpu}
 
 __all__ = ["apply_token_bitmask_inplace_kernels"]
 
-if torch.cuda.is_available():
-    from .apply_token_bitmask_inplace_cuda import apply_token_bitmask_inplace_cuda
+try:
+    if torch.cuda.is_available():
+        from .apply_token_bitmask_inplace_cuda import apply_token_bitmask_inplace_cuda
 
-    apply_token_bitmask_inplace_kernels["cuda"] = apply_token_bitmask_inplace_cuda
+        apply_token_bitmask_inplace_kernels["cuda"] = apply_token_bitmask_inplace_cuda
+except ImportError:
+    # If we can't find nvcc, then don't register the CUDA kernel.
+    pass
+except RuntimeError:
+    # If we are unable to compile the CUDA kernel, then don't register the CUDA kernel.
+    pass
 
 try:
     from .apply_token_bitmask_inplace_triton import (  # isort: skip
