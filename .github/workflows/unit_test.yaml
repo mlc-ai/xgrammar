@@ -19,8 +19,8 @@ jobs:
       - name: Pre-commit
         uses: pre-commit/action@v3.0.1
 
-    # - name: Ruff check
-    #   uses: astral-sh/ruff-action@v3
+      - name: Ruff check
+        uses: astral-sh/ruff-action@v3
 
   run_unit_test:
     needs: [pre_check]
