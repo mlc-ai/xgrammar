@@ -8,6 +8,7 @@
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
@@ -18,19 +19,36 @@
 namespace nb = nanobind;
 using namespace xgrammar;
 
+std::vector<std::string> common_encoded_vocab_type(
+    const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab
+) {
+  std::vector<std::string> encoded_vocab_strs;
+  encoded_vocab_strs.reserve(encoded_vocab.size());
+  for (const auto& token : encoded_vocab) {
+    if (nb::bytes result; nb::try_cast(token, result)) {
+      encoded_vocab_strs.emplace_back(result.c_str());
+    } else if (nb::str result; nb::try_cast(token, result)) {
+      encoded_vocab_strs.emplace_back(result.c_str());
+    } else {
+      throw nb::type_error("Expected str or bytes for encoded_vocab");
+    }
+  }
+  return encoded_vocab_strs;
+}
+
 NB_MODULE(xgrammar_bindings, m) {
   auto pyTokenizerInfo = nb::class_<TokenizerInfo>(m, "TokenizerInfo");
   pyTokenizerInfo
       .def(
           "__init__",
           [](TokenizerInfo* out,
-             const std::vector<std::string>& encoded_vocab,
+             const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab,
              std::string vocab_type,
              std::optional<int> vocab_size,
              std::optional<std::vector<int32_t>> stop_token_ids,
              bool add_prefix_space) {
             new (out) TokenizerInfo{TokenizerInfo_Init(
-                encoded_vocab,
+                common_encoded_vocab_type(encoded_vocab),
                 std::move(vocab_type),
                 vocab_size,
                 std::move(stop_token_ids),
@@ -51,7 +69,15 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_prop_ro("special_token_ids", &TokenizerInfo::GetSpecialTokenIds)
       .def("dump_metadata", &TokenizerInfo::DumpMetadata)
       .def_static("from_huggingface", &TokenizerInfo::FromHuggingFace)
-      .def_static("from_vocab_and_metadata", &TokenizerInfo::FromVocabAndMetadata);
+      .def_static(
+          "from_vocab_and_metadata",
+          [](const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab,
+             const std::string& metadata) {
+            return TokenizerInfo::FromVocabAndMetadata(
+                common_encoded_vocab_type(encoded_vocab), metadata
+            );
+          }
+      );
 
   auto pyGrammar = nb::class_<Grammar>(m, "Grammar");
   pyGrammar.def("to_string", &Grammar::ToString)
@@ -124,7 +150,23 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("reset", &GrammarMatcher::Reset)
       .def_prop_ro("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens)
       .def_prop_ro("stop_token_ids", &GrammarMatcher::GetStopTokenIds)
-      .def("_debug_accept_string", &GrammarMatcher::_DebugAcceptString);
+      .def("_debug_accept_string", &GrammarMatcher::_DebugAcceptString)
+      .def(
+          "_debug_accept_string",
+          [](GrammarMatcher& self, const nb::bytes& input_str, bool debug_print) {
+            // Based on pybind11's bytes to std::string conversion here:
+            // https://github.com/pybind/pybind11/blob/d422fda12507f94a30e57541746546048e202b21/include/pybind11/pytypes.h#L1731
+            // Nanobind does not have this conversion built in.
+            char* buffer = nullptr;
+            ssize_t length = 0;
+            if (PyBytes_AsStringAndSize(input_str.ptr(), &buffer, &length) != 0) {
+              throw nb::python_error();
+            }
+            return self._DebugAcceptString(
+                std::string(buffer, static_cast<size_t>(length)), debug_print
+            );
+          }
+      );
 
   auto pyTestingModule = m.def_submodule("testing");
   pyTestingModule
