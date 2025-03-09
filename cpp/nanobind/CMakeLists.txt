@@ -1,16 +1,17 @@
-find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(Python COMPONENTS Development.Module REQUIRED)
 find_package(nanobind CONFIG REQUIRED)
 
-file(GLOB_RECURSE XGRAMMAR_BINDINGS_PATH ${PROJECT_SOURCE_DIR}/cpp/*.cc)
-nanobind_add_module(xgrammar_bindings LTO ${XGRAMMAR_BINDINGS_PATH})
-target_include_directories(xgrammar_bindings PUBLIC ${XGRAMMAR_INCLUDE_PATH})
+# Compile this source file seperately. Nanobind suggests to optimize
+# bindings code for size, but this source file contains mostly core logic.
+# See notes about size optimizations here:
+# https://nanobind.readthedocs.io/en/latest/api_cmake.html#command:nanobind_add_module
+add_library(python_methods STATIC)
+target_sources(python_methods PRIVATE python_methods.cc)
+target_link_libraries(python_methods PUBLIC xgrammar)
 
-if(XGRAMMAR_ENABLE_CPPTRACE)
-  target_link_libraries(xgrammar_bindings PUBLIC cpptrace::cpptrace)
-  target_compile_definitions(xgrammar_bindings PUBLIC XGRAMMAR_ENABLE_CPPTRACE=1)
-else()
-  target_compile_definitions(xgrammar_bindings PUBLIC XGRAMMAR_ENABLE_CPPTRACE=0)
-endif()
+# Any code that uses nanobind directly lives here
+nanobind_add_module(xgrammar_bindings LTO nanobind.cc)
+target_link_libraries(xgrammar_bindings PRIVATE python_methods)
 
 if(DEFINED SKBUILD_PROJECT_NAME)
   # Building wheel through scikit-build-core
