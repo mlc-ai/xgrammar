@@ -164,17 +164,7 @@ NB_MODULE(xgrammar_bindings, m) {
       .def(
           "_debug_accept_string",
           [](GrammarMatcher& self, const nb::bytes& input_str, bool debug_print) {
-            // Based on pybind11's bytes to std::string conversion here:
-            // https://github.com/pybind/pybind11/blob/d422fda12507f94a30e57541746546048e202b21/include/pybind11/pytypes.h#L1731
-            // Nanobind does not have this conversion built in.
-            char* buffer = nullptr;
-            ssize_t length = 0;
-            if (PyBytes_AsStringAndSize(input_str.ptr(), &buffer, &length) != 0) {
-              throw nb::python_error();
-            }
-            return self._DebugAcceptString(
-                std::string(buffer, static_cast<size_t>(length)), debug_print
-            );
+            return self._DebugAcceptString(input_str.c_str(), debug_print);
           }
       );
 
