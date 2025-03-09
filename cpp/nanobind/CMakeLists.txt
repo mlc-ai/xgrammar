@@ -1,9 +1,12 @@
-find_package(Python COMPONENTS Development.Module REQUIRED)
+find_package(
+  Python
+  COMPONENTS Development.Module
+  REQUIRED
+)
 find_package(nanobind CONFIG REQUIRED)
 
-# Compile this source file seperately. Nanobind suggests to optimize
-# bindings code for size, but this source file contains mostly core logic.
-# See notes about size optimizations here:
+# Compile this source file seperately. Nanobind suggests to optimize bindings code for size, but
+# this source file contains mostly core logic. See notes about size optimizations here:
 # https://nanobind.readthedocs.io/en/latest/api_cmake.html#command:nanobind_add_module
 add_library(python_methods STATIC)
 target_sources(python_methods PRIVATE python_methods.cc)
