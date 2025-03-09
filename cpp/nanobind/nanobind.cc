@@ -19,7 +19,7 @@
 namespace nb = nanobind;
 using namespace xgrammar;
 
-std::vector<std::string> common_encoded_vocab_type(
+std::vector<std::string> CommonEncodedVocabType(
     const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab
 ) {
   std::vector<std::string> encoded_vocab_strs;
@@ -36,6 +36,16 @@ std::vector<std::string> common_encoded_vocab_type(
   return encoded_vocab_strs;
 }
 
+std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
+  const auto& decoded_vocab = tokenizer.GetDecodedVocab();
+  std::vector<nanobind::bytes> py_result;
+  py_result.reserve(decoded_vocab.size());
+  for (const auto& item : decoded_vocab) {
+    py_result.emplace_back(nanobind::bytes(item.c_str()));
+  }
+  return py_result;
+}
+
 NB_MODULE(xgrammar_bindings, m) {
   auto pyTokenizerInfo = nb::class_<TokenizerInfo>(m, "TokenizerInfo");
   pyTokenizerInfo
@@ -48,7 +58,7 @@ NB_MODULE(xgrammar_bindings, m) {
              std::optional<std::vector<int32_t>> stop_token_ids,
              bool add_prefix_space) {
             new (out) TokenizerInfo{TokenizerInfo_Init(
-                common_encoded_vocab_type(encoded_vocab),
+                CommonEncodedVocabType(encoded_vocab),
                 std::move(vocab_type),
                 vocab_size,
                 std::move(stop_token_ids),
@@ -74,7 +84,7 @@ NB_MODULE(xgrammar_bindings, m) {
           [](const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab,
              const std::string& metadata) {
             return TokenizerInfo::FromVocabAndMetadata(
-                common_encoded_vocab_type(encoded_vocab), metadata
+                CommonEncodedVocabType(encoded_vocab), metadata
             );
           }
       );

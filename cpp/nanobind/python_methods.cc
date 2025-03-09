@@ -43,16 +43,6 @@ std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer) {
   return VOCAB_TYPE_NAMES[static_cast<int>(tokenizer.GetVocabType())];
 }
 
-std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
-  const auto& decoded_vocab = tokenizer.GetDecodedVocab();
-  std::vector<nanobind::bytes> py_result;
-  py_result.reserve(decoded_vocab.size());
-  for (const auto& item : decoded_vocab) {
-    py_result.emplace_back(nanobind::bytes(item.c_str()));
-  }
-  return py_result;
-}
-
 bool GrammarMatcher_FillNextTokenBitmask(
     GrammarMatcher& matcher,
     intptr_t token_bitmask_ptr,
