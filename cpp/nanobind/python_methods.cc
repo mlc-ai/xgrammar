@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/pybind/python_methods.cc
+ * \file xgrammar/nanobind/python_methods.cc
  */
 
 #include "python_methods.h"
@@ -41,16 +41,6 @@ TokenizerInfo TokenizerInfo_Init(
 std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer) {
   const std::string VOCAB_TYPE_NAMES[] = {"RAW", "BYTE_FALLBACK", "BYTE_LEVEL"};
   return VOCAB_TYPE_NAMES[static_cast<int>(tokenizer.GetVocabType())];
-}
-
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
-  const auto& decoded_vocab = tokenizer.GetDecodedVocab();
-  std::vector<pybind11::bytes> py_result;
-  py_result.reserve(decoded_vocab.size());
-  for (const auto& item : decoded_vocab) {
-    py_result.emplace_back(pybind11::bytes(item));
-  }
-  return py_result;
 }
 
 bool GrammarMatcher_FillNextTokenBitmask(
