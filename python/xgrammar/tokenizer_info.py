@@ -1,7 +1,7 @@
 """This module provides the tokenizer info class to handle the tokenizer information."""
 
-from enum import Enum
 import json
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 import sentencepiece

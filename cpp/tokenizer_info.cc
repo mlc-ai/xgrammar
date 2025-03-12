@@ -439,11 +439,9 @@ TokenizerInfo::TokenizerInfo(
     std::optional<std::vector<int32_t>> stop_token_ids,
     bool add_prefix_space
 )
-    : pimpl_(
-          std::make_shared<Impl>(
-              encoded_vocab, vocab_type, vocab_size, stop_token_ids, add_prefix_space
-          )
-      ) {}
+    : pimpl_(std::make_shared<Impl>(
+          encoded_vocab, vocab_type, vocab_size, stop_token_ids, add_prefix_space
+      )) {}
 
 int TokenizerInfo::GetVocabSize() const { return pimpl_->GetVocabSize(); }
 VocabType TokenizerInfo::GetVocabType() const { return pimpl_->GetVocabType(); }

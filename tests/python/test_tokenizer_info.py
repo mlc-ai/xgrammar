@@ -208,8 +208,7 @@ def test_special_token_detection():
     # Now only empty string "" is treated as a special token.
     vocab_dict = ["", "<s>", "</s>", "[@BOS@]", "regular", "<>", "<think>", "</think>"]
     tokenizer_info = xgr.TokenizerInfo.from_vocab_and_metadata(
-        vocab_dict,
-        '{"vocab_type":1,"vocab_size":8,"add_prefix_space":true,"stop_token_ids":[2]}',
+        vocab_dict, '{"vocab_type":1,"vocab_size":8,"add_prefix_space":true,"stop_token_ids":[2]}'
     )
     expected_special_tokens = {0}
     assert set(tokenizer_info.special_token_ids) == expected_special_tokens
