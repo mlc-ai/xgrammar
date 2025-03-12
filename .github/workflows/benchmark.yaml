@@ -1,9 +1,8 @@
 name: XGrammar Benchmark
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '0 0 * * *'
 
 jobs:
   run_benchmark:
