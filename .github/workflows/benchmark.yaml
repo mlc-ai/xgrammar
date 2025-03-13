@@ -32,7 +32,7 @@ jobs:
       - name: Run benchmark
         id: benchmark
         run: |
-          python examples/benchmark/cibench_grammar_compile_mask_gen.py --num_iters 5 --num_warmup 3 --datasets all | tee benchmark_output.txt
+          python examples/benchmark/cibench_grammar_compile_mask_gen.py --num_iters 3 --num_warmup 2 --datasets all | tee benchmark_output.txt
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4

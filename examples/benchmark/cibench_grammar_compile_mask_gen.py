@@ -197,13 +197,7 @@ def convert_ground_truth_to_completion(ground_truth: Dict) -> str:
 
 
 def run_benchmark(
-    dataset_name: str,
-    dataset_data,
-    tokenizer_info,
-    grammar_compiler,
-    hf_tokenizer,
-    num_iters,
-    num_warmup,
+    dataset_name: str, dataset_data, tokenizer_info, hf_tokenizer, num_iters, num_warmup
 ):
     vocab_size = len(hf_tokenizer)
 
@@ -270,6 +264,7 @@ def run_benchmark(
                 completion = json.dumps(completion)
 
             token_ids = hf_tokenizer.encode(completion, add_special_tokens=False)
+            grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
 
             start = time.perf_counter()
             try:
@@ -337,7 +332,7 @@ def run_benchmark(
         "grammar_compilation_time_ms": (
             build_time / total_data_points * 1e3 if total_data_points > 0 else float("inf")
         ),
-        "mask_generation_time_us_per_token": (
+        "per_token_overhead_us_per_token": (
             exec_time / total_tokens * 1e6 if total_tokens > 0 else float("inf")
         ),
     }
@@ -365,7 +360,6 @@ if __name__ == "__main__":
     print(f"Loading tokenizer from {hf_model_path}...")
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_model_path)
     xgrammar_tokenizer_info = xgr.TokenizerInfo.from_huggingface(hf_tokenizer)
-    xgrammar_grammar_compiler = xgr.GrammarCompiler(xgrammar_tokenizer_info)
 
     # Try to get GPU info
     try:
@@ -390,7 +384,6 @@ if __name__ == "__main__":
             "json-mode-eval",
             json_mode_eval_data,
             xgrammar_tokenizer_info,
-            xgrammar_grammar_compiler,
             hf_tokenizer,
             num_iters,
             num_warmup,
@@ -407,7 +400,6 @@ if __name__ == "__main__":
                 "gorilla-bfcl",
                 gorilla_data,
                 xgrammar_tokenizer_info,
-                xgrammar_grammar_compiler,
                 hf_tokenizer,
                 num_iters,
                 num_warmup,
@@ -430,4 +422,4 @@ if __name__ == "__main__":
             f"Failed data points: {result['failed_data_points']:.0f} / {result['total_possible_data_points']}"
         )
         print(f"Grammar compilation time (ms): {result['grammar_compilation_time_ms']:.4f}")
-        print(f"Mask generation time (us/token): {result['mask_generation_time_us_per_token']:.4f}")
+        print(f"Per token overhead (us/token): {result['per_token_overhead_us_per_token']:.4f}")
