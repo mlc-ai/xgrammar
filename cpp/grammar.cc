@@ -5,7 +5,6 @@
 
 #include <xgrammar/grammar.h>
 
-#include "grammar_data_structure.h"
 #include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_serializer.h"

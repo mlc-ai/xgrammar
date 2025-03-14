@@ -19,13 +19,13 @@ namespace xgrammar {
 
 TokenizerInfo TokenizerInfo_Init(
     const std::vector<std::string>& encoded_vocab,
-    std::string vocab_type,
+    int vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int32_t>> stop_token_ids,
     bool add_prefix_space
 );
 
-std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
+int TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 
 bool GrammarMatcher_FillNextTokenBitmask(
     GrammarMatcher& matcher,

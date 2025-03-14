@@ -9,8 +9,6 @@
 
 #include <xgrammar/xgrammar.h>
 
-#include "support/logging.h"
-
 namespace xgrammar {
 
 /*!
