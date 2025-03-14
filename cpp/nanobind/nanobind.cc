@@ -53,13 +53,13 @@ NB_MODULE(xgrammar_bindings, m) {
           "__init__",
           [](TokenizerInfo* out,
              const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab,
-             std::string vocab_type,
+             int vocab_type,
              std::optional<int> vocab_size,
              std::optional<std::vector<int32_t>> stop_token_ids,
              bool add_prefix_space) {
             new (out) TokenizerInfo{TokenizerInfo_Init(
                 CommonEncodedVocabType(encoded_vocab),
-                std::move(vocab_type),
+                vocab_type,
                 vocab_size,
                 std::move(stop_token_ids),
                 add_prefix_space
@@ -78,7 +78,6 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_prop_ro("stop_token_ids", &TokenizerInfo::GetStopTokenIds)
       .def_prop_ro("special_token_ids", &TokenizerInfo::GetSpecialTokenIds)
       .def("dump_metadata", &TokenizerInfo::DumpMetadata)
-      .def_static("from_huggingface", &TokenizerInfo::FromHuggingFace)
       .def_static(
           "from_vocab_and_metadata",
           [](const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab,
@@ -87,7 +86,8 @@ NB_MODULE(xgrammar_bindings, m) {
                 CommonEncodedVocabType(encoded_vocab), metadata
             );
           }
-      );
+      )
+      .def_static("_detect_metadata_from_hf", &TokenizerInfo::DetectMetadataFromHF);
 
   auto pyGrammar = nb::class_<Grammar>(m, "Grammar");
   pyGrammar.def("to_string", &Grammar::ToString)
