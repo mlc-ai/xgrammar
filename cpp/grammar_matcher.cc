@@ -46,7 +46,7 @@ int32_t* CheckAndGetBitmaskPtr(const DLTensor& token_bitmask, int vocab_size, in
         << "The provided index is out of bounds";
   }
 
-  XGRAMMAR_CHECK(token_bitmask.device.device_type == kDLCPU)
+  XGRAMMAR_CHECK(token_bitmask.device.device_type == kDLCPU || token_bitmask.device.device_type == kDLCUDAHost)
       << "The provided bitmask's device is not valid: should be CPU";
 
   return reinterpret_cast<int32_t*>(token_bitmask.data) + index * buffer_size;
