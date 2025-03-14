@@ -1,0 +1,55 @@
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+
+jobs:
+  run_unit_test:
+    name: Run unit tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, arch: x86_64}
+          - {os: ubuntu-24.04-arm, arch: aarch64}
+          - {os: windows-latest, arch: AMD64}
+          - {os: macos-14, arch: arm64}
+          - {os: macos-13, arch: x86_64,}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      - name: Build xgrammar from source
+        run: |
+          echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run C++ tests
+        run: |
+          ctest --test-dir build
+
+      - name: Run Python tests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        if: env.HF_TOKEN != ''
+        run: |
+          pip install pytest
+          pytest
+
+      - name: Run Python tests without HF_TOKEN
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        if: env.HF_TOKEN == ''
+        run: |
+          pip install pytest
+          pytest -m "not hf_token_required"
