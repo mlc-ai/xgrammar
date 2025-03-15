@@ -6,6 +6,8 @@
 #ifndef XGRAMMAR_SUPPORT_THREAD_SAFE_CACHE_H_
 #define XGRAMMAR_SUPPORT_THREAD_SAFE_CACHE_H_
 
+#include <atomic>
+#include <cstddef>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -177,6 +179,103 @@ class ThreadSafeCache<Key, Value> {
   std::shared_mutex cache_mutex_;
   /*! \brief Mutex protecting removing elements */
   std::shared_mutex erase_mutex_;
+};
+
+template <typename Key, typename Value>
+struct DefaultPolicy {
+  // function-like member to compute
+  std::function<Value(const Key&)> compute;
+  std::function<void(std::size_t, bool)> callback;
+  std::function<std::size_t(const Value&)> size;
+};
+
+template <typename Key, typename Value, typename Policy = DefaultPolicy<Key, Value>>
+class ThreadSafeCacheSized {
+ public:
+  /*!
+   * \brief Constructs a new thread-safe cache
+   * \param compute The function that computes values for uncached keys
+   */
+  explicit ThreadSafeCacheSized(Policy policy) : policy_(std::move(policy)) {}
+
+  auto Get(const Key& key) -> Value {
+    policy_.callback(current_size_, false);
+    auto result = GetAux(key);
+    policy_.callback(current_size_, true);
+    return result;
+  }
+
+  /*!
+   * \brief Clears all cached values and associated per-key mutexes
+   * This function removes all cached key-value pairs, so subsequent calls to Get() will recompute
+   * them.
+   */
+  auto Clear() -> void {
+    auto erase_lock = std::unique_lock(erase_mutex_);
+    cache_.clear();
+    current_size_ = 0;
+  }
+
+ private:
+  /*!
+   * \brief Gets or computes the value for a key
+   * \param key The key to lookup
+   * \return The cached or newly computed value of the key
+   */
+  auto GetAux(const Key& key) -> Value {
+    auto erase_lock = std::shared_lock(erase_mutex_);
+
+    // First attempt to read from cache_
+    {
+      auto cache_lock = std::shared_lock(cache_mutex_);
+      auto it = cache_.find(key);
+      if (it != cache_.end()) {    // Cache hit
+        auto& entry = it->second;  // The iterator is invalidated after releasing the lock
+        cache_lock.unlock();       // Therefore, we should hold the entry by reference first
+
+        // We should not hold lock here, since this function may be blocking.
+        return entry.get(policy_, key, current_size_);
+      }
+    }
+
+    // Acquire exclusive lock to compute value
+    {
+      auto cache_lock = std::unique_lock(cache_mutex_);
+      auto& entry = cache_[key];  // Create a new entry
+      cache_lock.unlock();        // Release the lock before blocking
+
+      // We should not hold lock here, since this function may be blocking.
+      return entry.get(policy_, key, current_size_);
+    }
+  }
+
+ private:
+  struct Entry {
+   private:
+    Value value;
+    std::once_flag flag;
+
+   public:
+    auto get(const Policy& p, const Key& key, std::atomic_size_t& size) -> const Value& {
+      // block in this lambda until the value is computed
+      std::call_once(flag, [&] {
+        value = p.compute(key);
+        size += Policy::size(value);
+      });
+      return value;
+    }
+  };
+
+  /*! \brief The function to call when cache is full */
+  const Policy policy_;
+  /*! \brief The cache mapping keys to computed values */
+  std::unordered_map<Key, Entry> cache_;
+  /*! \brief Reader-writer lock protecting access to cache_ */
+  std::shared_mutex cache_mutex_;
+  /*! \brief Mutex protecting removing elements */
+  std::shared_mutex erase_mutex_;
+  /*! \brief The current size of the cache */
+  std::atomic_size_t current_size_{0};
 };
 
 }  // namespace xgrammar
