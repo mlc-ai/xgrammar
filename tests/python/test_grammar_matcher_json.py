@@ -5,7 +5,6 @@ import time
 from typing import List
 
 import pytest
-import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr

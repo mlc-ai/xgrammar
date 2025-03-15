@@ -3,7 +3,6 @@
 #include <chrono>
 
 #include "support/thread_pool.h"
-
 using namespace xgrammar;
 
 TEST(XGramamrThreadPoolTest, FunctionalTest) {

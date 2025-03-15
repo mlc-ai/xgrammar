@@ -3,6 +3,5 @@
 set -e
 set -x
 
-black .
-mypy .
+pre-commit run --all-files
 ruff check . --fix
