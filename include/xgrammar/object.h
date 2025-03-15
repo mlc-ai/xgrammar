@@ -39,7 +39,7 @@ struct EmptyConstructorTag {};
   const Impl* operator->() const { return pimpl_.get(); }                      \
                                                                                \
  private:                                                                      \
-  std::shared_ptr<Impl> pimpl_;
+  std::shared_ptr<Impl> pimpl_
 
 }  // namespace xgrammar
 

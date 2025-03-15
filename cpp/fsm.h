@@ -6,11 +6,13 @@
 #define XGRAMMAR_FSM_H_
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <vector>
 
 #include "support/csr_array.h"
+#include "support/utils.h"
 
 namespace xgrammar {
 
@@ -183,6 +185,10 @@ class CompactFSM {
   int NumNodes() const { return edges_.Size(); }
 
   friend std::ostream& operator<<(std::ostream& os, const CompactFSM& fsm);
+
+  friend auto sizeof_heap(const CompactFSM& self) -> std::size_t {
+    return sizeof_heap(self.edges_) + sizeof_heap(self.end_nodes_);
+  }
 
  private:
   using Edge = FSM::Edge;
