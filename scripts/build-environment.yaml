@@ -15,6 +15,6 @@ dependencies:
   - pytest
   - pip
   - cython
-  - pybind11
+  - nanobind
   - pytorch
   - cpuonly

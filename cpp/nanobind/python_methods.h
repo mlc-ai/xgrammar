@@ -1,13 +1,12 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/pybind/python_methods.h
+ * \file xgrammar/nanobind/python_methods.h
  * \brief The header for the support of grammar-guided generation.
  */
 
-#ifndef XGRAMMAR_PYBIND_PYTHON_METHODS_H_
-#define XGRAMMAR_PYBIND_PYTHON_METHODS_H_
+#ifndef XGRAMMAR_NANOBIND_PYTHON_METHODS_H_
+#define XGRAMMAR_NANOBIND_PYTHON_METHODS_H_
 
-#include <pybind11/pybind11.h>
 #include <xgrammar/xgrammar.h>
 
 #include <optional>
@@ -27,8 +26,6 @@ TokenizerInfo TokenizerInfo_Init(
 );
 
 int TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
-
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer);
 
 bool GrammarMatcher_FillNextTokenBitmask(
     GrammarMatcher& matcher,
@@ -65,4 +62,4 @@ CompiledGrammar GrammarCompiler_CompileStructuralTag(
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_PYBIND_PYTHON_METHODS_H_
+#endif  // XGRAMMAR_NANOBIND_PYTHON_METHODS_H_
