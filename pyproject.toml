@@ -20,6 +20,7 @@ dependencies = [
   "torch>=1.10.0",
   "transformers>=4.38.0",
   "triton; platform_system == 'linux' and platform_machine == 'x86_64'",
+  "ninja",
 ]
 dynamic = ["version"]
 
