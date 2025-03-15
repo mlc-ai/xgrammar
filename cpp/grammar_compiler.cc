@@ -347,7 +347,8 @@ namespace {
 // in constexpr branches, so we need to use a deduced false to avoid it.
 // see https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2593r1.html
 template <auto>
-inline constexpr auto false_value = false;
+[[maybe_unused]]
+constexpr auto false_value = false;
 
 enum class CacheType { JSONSchema, StructuralTag, Regex, EBNGGrammar, Max };
 
