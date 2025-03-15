@@ -8,6 +8,7 @@
 
 #include <xgrammar/grammar.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -15,6 +16,7 @@
 #include <vector>
 
 // matcher_data_structure.h is included to use StackElement
+#include "grammar_data_structure.h"
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
 #include "support/utils.h"
@@ -113,6 +115,8 @@ class CompiledGrammar::Impl {
   Grammar GetGrammar() const { return grammar; }
 
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
+
+  std::size_t EstimatedSize() const { return sizeof(Impl) + grammar->EstimatedHeapSize(); }
 };
 
 }  // namespace xgrammar

@@ -9,11 +9,14 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
 #include "fsm.h"
 #include "support/logging.h"
+#include "support/utils.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -176,6 +179,17 @@ class Grammar::Impl {
   friend class GrammarSerializer;
   friend class GrammarDeserializer;
   friend class GrammarCompiler;
+
+  auto EstimatedHeapSize() const -> std::size_t {
+    auto result = std::size_t{};
+    result += rules_.size() * sizeof(Rule);  // assume string is not long
+    result += sizeof_heap(rule_expr_data_);
+    result += sizeof_heap(rule_expr_indptr_);
+    if (auto fsm = root_tag_dispatch_fsm) result += sizeof_heap(*fsm);
+    result += sizeof_heap(tag_dispatch_end_node_to_rule_id);
+    result += sizeof_heap(allow_empty_rule_ids);
+    return result;
+  }
 };
 
 }  // namespace xgrammar

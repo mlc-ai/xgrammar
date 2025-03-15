@@ -7,10 +7,12 @@
 
 #include <picojson.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
 #include "logging.h"
+#include "utils.h"
 
 namespace xgrammar {
 
@@ -44,6 +46,10 @@ class CSRArray {
 
   /*! \brief Get the number of rows in the CSRArray. */
   int32_t Size() const { return static_cast<int32_t>(indptr_.size()) - 1; }
+
+  friend auto sizeof_heap(const CSRArray<DataType>& arr) -> std::size_t {
+    return sizeof_heap(arr.data_) + sizeof_heap(arr.indptr_);
+  }
 
   /*!
    * \brief Struct representing a row in the CSRArray.
