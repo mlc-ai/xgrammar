@@ -388,7 +388,7 @@ class GrammarCompilerBase {
     };
   }
 
-  auto CacheEnabled() const { return cache_enabled_; }
+  auto CacheEnabled() const -> bool { return cache_enabled_; }
 
  private:
   /*! \brief The vocabulary associated with this storage class. */
@@ -637,6 +637,9 @@ CompiledGrammar GrammarCompiler::Impl::CompileGrammar(const Grammar& grammar) {
 void GrammarCompiler::Impl::ClearCache() {
   compile_builtin_json_grammar_cache_.Clear();
   compile_json_schema_cache_.Clear();
+  compile_structural_tag_cache_.Clear();
+  compile_regex_cache_.Clear();
+  compile_grammar_cache_.Clear();
 }
 
 /******************* GrammarCompiler *******************/
