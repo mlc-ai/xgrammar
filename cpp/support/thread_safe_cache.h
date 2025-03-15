@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cstddef>
 #include <functional>
+#include <list>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
@@ -200,7 +201,7 @@ class ThreadSafeCacheSized {
 
   auto Get(const Key& key) -> Value {
     policy_.callback(current_size_, false);
-    auto result = GetAux(key);
+    auto result = get_aux(key);
     policy_.callback(current_size_, true);
     return result;
   }
@@ -216,13 +217,25 @@ class ThreadSafeCacheSized {
     current_size_ = 0;
   }
 
+  auto PopLast() -> void {
+    auto erase_lock = std::unique_lock(erase_mutex_);
+    if (lru_.empty()) return;
+    const Key& key = lru_.front().get();
+    lru_.pop_front();
+    auto it = cache_.find(key);
+    if (it == cache_.end()) return;
+    auto& entry = it->second;
+    current_size_ -= entry.get_size();
+    cache_.erase(it);
+  }
+
  private:
   /*!
    * \brief Gets or computes the value for a key
    * \param key The key to lookup
    * \return The cached or newly computed value of the key
    */
-  auto GetAux(const Key& key) -> Value {
+  auto get_aux(const Key& key) -> Value {
     auto erase_lock = std::shared_lock(erase_mutex_);
 
     // First attempt to read from cache_
@@ -231,36 +244,62 @@ class ThreadSafeCacheSized {
       auto it = cache_.find(key);
       if (it != cache_.end()) {    // Cache hit
         auto& entry = it->second;  // The iterator is invalidated after releasing the lock
-        cache_lock.unlock();       // Therefore, we should hold the entry by reference first
+        lru_visit(entry.get_iterator());
+        cache_lock.unlock();  // Therefore, we should hold the entry by reference first
 
         // We should not hold lock here, since this function may be blocking.
-        return entry.get(policy_, key, current_size_);
+        return entry.get_value(policy_, key, current_size_);
       }
     }
 
-    // Acquire exclusive lock to compute value
+    /// \attention: the cache_lock is dropped here
+    /// as a result, another thread may insert the key
+    /// before we acquire the lock again
     {
       auto cache_lock = std::unique_lock(cache_mutex_);
-      auto& entry = cache_[key];  // Create a new entry
-      cache_lock.unlock();        // Release the lock before blocking
+      auto [it, success] = cache_.try_emplace(key);
+      auto& entry = it->second;
+      if (success) {  // current thread inserted the key
+        entry.set_iterator(lru_push(it->first));
+      } else {
+        // if other thread has created this entry,
+        // it just happened when we released the cache_mutex_
+        // so the new entry should be close to the end of the list.
+        // As a result, we don't spare the effort to move it to the end.
+
+        // lru_visit(entry.get_iterator());
+      }
+
+      cache_lock.unlock();  // Release the lock before blocking
 
       // We should not hold lock here, since this function may be blocking.
-      return entry.get(policy_, key, current_size_);
+      return entry.get_value(policy_, key, current_size_);
     }
   }
 
- private:
+  using LRU_list = std::list<std::reference_wrapper<const Key>>;
+  using iterator = typename LRU_list::iterator;
+
+  auto lru_visit(iterator it) -> void { lru_.splice(lru_.end(), lru_, it); }
+  auto lru_push(const Key& key) -> iterator { return lru_.insert(lru_.end(), std::cref(key)); }
+
   struct Entry {
    private:
-    Value value;
     std::once_flag flag;
+    Value value;
+    std::size_t size;
+    iterator it;
 
    public:
-    auto get(const Policy& p, const Key& key, std::atomic_size_t& size) -> const Value& {
+    auto set_iterator(iterator it) -> void { this->it = it; }
+    auto get_iterator() const -> iterator { return it; }
+    auto get_size() const -> std::size_t { return size; }
+    auto get_value(const Policy& p, const Key& key, std::atomic_size_t& sum) -> const Value& {
       // block in this lambda until the value is computed
       std::call_once(flag, [&] {
         value = p.compute(key);
-        size += Policy::size(value);
+        size = p.size(value);
+        sum += size;
       });
       return value;
     }
@@ -270,6 +309,8 @@ class ThreadSafeCacheSized {
   const Policy policy_;
   /*! \brief The cache mapping keys to computed values */
   std::unordered_map<Key, Entry> cache_;
+  /*! \brief LRU list */
+  LRU_list lru_;
   /*! \brief Reader-writer lock protecting access to cache_ */
   std::shared_mutex cache_mutex_;
   /*! \brief Mutex protecting removing elements */
