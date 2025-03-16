@@ -17,6 +17,7 @@
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 
 namespace xgrammar {
@@ -336,8 +337,21 @@ using type_identity_t = typename type_identity<T>::type;
 
 template <typename Key, typename Value>
 struct LockedMap {
+ private:
   std::unordered_map<Key, Value> map;
-  std::shared_mutex mutex;
+  mutable std::shared_mutex mutex;
+
+ public:
+  template <typename Fn>
+  auto read_access(Fn&& fn) const -> decltype(fn(map)) {
+    std::shared_lock lock(mutex);
+    return std::forward<Fn>(fn)(map);
+  }
+  template <typename Fn>
+  auto write_access(Fn&& fn) -> decltype(fn(map)) {
+    std::unique_lock lock(mutex);
+    return std::forward<Fn>(fn)(map);
+  }
 };
 
 template <typename Value, typename... Keys>
@@ -374,7 +388,7 @@ class ThreadSafeCacheImpl {
     return std::get<LockedMap<Key, Entry>>(storage);
   }
 
-  auto lru_visit(Entry& entry) -> const Value& {
+  auto lru_visit(const Entry& entry) -> const Value& {
     const auto guard = std::lock_guard{lru_mutex};
     /** \attention The dereference of the iterator must be done within the lock */
     const auto iterator = entry.iterator;
@@ -415,9 +429,8 @@ class ThreadSafeCacheImpl {
       std::visit(
           [&](auto* key) {
             using Key_t = std::decay_t<decltype(*key)>;
-            auto& [map, mutex] = get_cache_lock<Key_t>();
-            const auto guard = std::lock_guard{mutex};
-            map.erase(*key);
+            auto& locked_map = get_cache_lock<Key_t>();
+            locked_map.write_access([&](auto& map) { map.erase(*key); });
           },
           keyset
       );
@@ -465,15 +478,18 @@ class ThreadSafeCacheSized2 : private Policy, details::ThreadSafeCacheSized<Valu
  private:
   template <typename Key>
   auto GetFuture(const Key& key) -> Future {
-    auto& [map, mutex] = Impl::template get_cache_lock<Key>();
+    auto& locked_map = Impl::template get_cache_lock<Key>();
+    auto future = Future{};
 
-    {
-      auto lock = std::shared_lock{mutex};
+    auto first_hit = locked_map.read_access([&](const auto& map) {
       if (auto it = map.find(key); it != map.end()) {
-        /** \attention We must hold the reference here */
-        Impl::lru_visit(it->second);
+        future = Impl::lru_visit(it->second);
+        return true;
+      } else {
+        return false;
       }
-    }
+    });
+    if (first_hit) return future;
 
     auto task = std::packaged_task<Sized()>{[this, &key] {
       return Sized{
@@ -485,17 +501,20 @@ class ThreadSafeCacheSized2 : private Policy, details::ThreadSafeCacheSized<Valu
           }
       };
     }};
-    auto future = task.get_future().share();
+    future = task.get_future().share();
 
-    {
-      auto lock = std::unique_lock{mutex};
+    auto second_hit = locked_map.write_access([&](auto& map) {
       auto [it, success] = map.try_emplace(key);
-      if (!success)  // some other thread has inserted the key
-        return Impl::lru_visit(it->second);
-      Impl::lru_init(*it, future);
-    }
+      if (!success) {
+        future = Impl::lru_visit(it->second);
+        return true;
+      } else {
+        Impl::lru_init(*it, future);
+        return false;
+      }
+    });
+    if (!second_hit) task();
 
-    task();
     return future;
   }
 
