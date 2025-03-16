@@ -32,7 +32,7 @@ jobs:
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: Run C++ tests
         run: |
@@ -43,7 +43,6 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         if: env.HF_TOKEN != ''
         run: |
-          pip install pytest
           pytest
 
       - name: Run Python tests without HF_TOKEN
@@ -51,5 +50,4 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         if: env.HF_TOKEN == ''
         run: |
-          pip install pytest
           pytest -m "not hf_token_required"
