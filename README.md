@@ -5,6 +5,7 @@
 [![Documentation](https://img.shields.io/badge/docs-latest-green)](https://xgrammar.mlc.ai/docs/)
 [![License](https://img.shields.io/badge/license-apache_2-blue)](https://github.com/mlc-ai/xgrammar/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/xgrammar)](https://pypi.org/project/xgrammar)
+[![PyPI Downloads](https://static.pepy.tech/badge/xgrammar)](https://pepy.tech/projects/xgrammar)
 
 **Efficient, Flexible and Portable Structured Generation**
 
