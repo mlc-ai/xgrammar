@@ -187,153 +187,7 @@ class ThreadSafeCache<Key, Value> {
   std::shared_mutex erase_mutex_;
 };
 
-template <typename Key, typename Value>
-struct DefaultPolicy {
-  // function-like member to compute
-  std::function<Value(const Key&)> compute;
-  std::function<void(std::size_t, bool)> callback;
-  std::function<std::size_t(const Value&)> size;
-};
-
-template <typename Key, typename Value, typename Policy = DefaultPolicy<Key, Value>>
-class ThreadSafeCacheSized {
- public:
-  /*!
-   * \brief Constructs a new thread-safe cache
-   * \param compute The function that computes values for uncached keys
-   */
-  explicit ThreadSafeCacheSized(Policy policy) : policy_(std::move(policy)) {}
-
-  auto Get(const Key& key) -> Value {
-    policy_.callback(current_size_, false);
-    auto result = get_aux(key);
-    policy_.callback(current_size_, true);
-    return result;
-  }
-
-  /*!
-   * \brief Clears all cached values and associated per-key mutexes
-   * This function removes all cached key-value pairs, so subsequent calls to Get() will recompute
-   * them.
-   */
-  auto Clear() -> void {
-    auto erase_lock = std::unique_lock(erase_mutex_);
-    cache_.clear();
-    current_size_ = 0;
-  }
-
-  auto PopLast() -> void {
-    auto erase_lock = std::unique_lock(erase_mutex_);
-    if (lru_.empty()) return;
-    const Key& key = lru_.front().get();
-    lru_.pop_front();
-    auto it = cache_.find(key);
-    if (it == cache_.end()) return;
-    auto& entry = it->second;
-    current_size_ -= entry.get_size();
-    cache_.erase(it);
-  }
-
- private:
-  /*!
-   * \brief Gets or computes the value for a key
-   * \param key The key to lookup
-   * \return The cached or newly computed value of the key
-   */
-  auto get_aux(const Key& key) -> Value {
-    auto erase_lock = std::shared_lock(erase_mutex_);
-
-    // First attempt to read from cache_
-    {
-      auto cache_lock = std::shared_lock(cache_mutex_);
-      auto it = cache_.find(key);
-      if (it != cache_.end()) {    // Cache hit
-        auto& entry = it->second;  // The iterator is invalidated after releasing the lock
-        lru_visit(entry.get_iterator());
-        cache_lock.unlock();  // Therefore, we should hold the entry by reference first
-
-        // We should not hold lock here, since this function may be blocking.
-        return entry.get_value(policy_, key, current_size_);
-      }
-    }
-
-    /// \attention: the cache_lock is dropped here
-    /// as a result, another thread may insert the key
-    /// before we acquire the lock again
-    {
-      auto cache_lock = std::unique_lock(cache_mutex_);
-      auto [it, success] = cache_.try_emplace(key);
-      auto& entry = it->second;
-      if (success) {  // current thread inserted the key
-        entry.set_iterator(lru_push(it->first));
-      } else {
-        // if other thread has created this entry,
-        // it just happened when we released the cache_mutex_
-        // so the new entry should be close to the end of the list.
-        // As a result, we don't spare the effort to move it to the end.
-
-        // lru_visit(entry.get_iterator());
-      }
-
-      cache_lock.unlock();  // Release the lock before blocking
-
-      // We should not hold lock here, since this function may be blocking.
-      return entry.get_value(policy_, key, current_size_);
-    }
-  }
-
-  using LRU_list = std::list<std::reference_wrapper<const Key>>;
-  using iterator = typename LRU_list::iterator;
-
-  auto lru_visit(iterator it) -> void { lru_.splice(lru_.end(), lru_, it); }
-  auto lru_push(const Key& key) -> iterator { return lru_.insert(lru_.end(), std::cref(key)); }
-
-  struct Entry {
-   private:
-    std::once_flag flag;
-    Value value;
-    std::size_t size;
-    iterator it;
-
-   public:
-    auto set_iterator(iterator it) -> void { this->it = it; }
-    auto get_iterator() const -> iterator { return it; }
-    auto get_size() const -> std::size_t { return size; }
-    auto get_value(const Policy& p, const Key& key, std::atomic_size_t& sum) -> const Value& {
-      // block in this lambda until the value is computed
-      std::call_once(flag, [&] {
-        value = p.compute(key);
-        size = p.size(value);
-        sum += size;
-      });
-      return value;
-    }
-  };
-
-  /*! \brief The function to call when cache is full */
-  const Policy policy_;
-  /*! \brief The cache mapping keys to computed values */
-  std::unordered_map<Key, Entry> cache_;
-  /*! \brief LRU list */
-  LRU_list lru_;
-  /*! \brief Reader-writer lock protecting access to cache_ */
-  std::shared_mutex cache_mutex_;
-  /*! \brief Mutex protecting removing elements */
-  std::shared_mutex erase_mutex_;
-  /*! \brief The current size of the cache */
-  std::atomic_size_t current_size_{0};
-};
-
 namespace details {
-
-// since C++17 don't have std::type_identity, we implement it here
-template <typename T>
-struct type_identity {
-  using type = T;
-};
-
-template <typename T>
-using type_identity_t = typename type_identity<T>::type;
 
 template <typename Key, typename Value>
 struct LockedMap {
@@ -494,7 +348,7 @@ using ThreadSafeCacheSized = ThreadSafeCacheImpl<std::shared_future<SizedValue<V
 }  // namespace details
 
 template <typename Policy, typename Value, typename... Keys>
-class ThreadSafeCacheSized2 : private Policy, details::ThreadSafeCacheSized<Value, Keys...> {
+class ThreadSafeLRUCache : private Policy, details::ThreadSafeCacheSized<Value, Keys...> {
  private:
   using Impl = details::ThreadSafeCacheSized<Value, Keys...>;
   using Sized = details::SizedValue<Value>;
@@ -503,13 +357,24 @@ class ThreadSafeCacheSized2 : private Policy, details::ThreadSafeCacheSized<Valu
  public:
   using Policy::Policy;
 
-  template <typename Key>
-  auto Get(const details::type_identity_t<Key>& key) -> Value {
+  template <typename Key, typename Tp>
+  auto Get(const Tp& key) -> Value {
     /// \attention We use type_identity_t to force the user to provide the key type
     static_assert((std::is_same_v<Key, Keys> || ...), "Key type not found in the cache");
     auto future = GetFuture<Key>(key);
     Pop();
     return future.get().value;
+  }
+
+  auto Clear() -> void {
+    // Remove all the ready entries.
+    Impl::lru_evict(
+        [] { return true; },
+        [](const Future& value) {
+          using namespace std::chrono_literals;
+          return value.wait_for(0s) == std::future_status::ready;
+        }
+    );
   }
 
  private:
