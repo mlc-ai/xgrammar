@@ -47,17 +47,30 @@ struct LRUPolicy0 {
   static auto size(const MockGrammar&) -> std::size_t { return 1; }
 };
 
-auto test_performance(std::size_t max_size, std::size_t num_threads, std::size_t num_tests)
+template <bool use_lru>
+auto test_contention(std::size_t num_threads, std::size_t num_tests, std::size_t num_reads)
     -> void {
-  auto cache = ThreadSafeLRUCache<LRUPolicy0, MockGrammar, std::string>{max_size};
+  ASSERT_GE(num_threads, num_tests);
+  ASSERT_GE(num_tests, 1);
+  auto cache = [=] {
+    if constexpr (use_lru) {
+      return ThreadSafeLRUCache<LRUPolicy0, MockGrammar, std::string>{num_tests};
+    } else {
+      static std::atomic_size_t counter{0};
+      counter = 0;
+      return ThreadSafeCache<std::string, MockGrammar>{
+          [&](const std::string& key) {
+            std::this_thread::sleep_for(1s);  // simulate a slow operation
+            MockGrammar g{};
+            g.uuid = counter++;
+            return g;
+          },
+      };
+    };
+  }();
   auto futures = std::vector<std::future<std::size_t>>{};
 
-  static constexpr std::size_t kReadGroup = 20;
-
-  const std::size_t kNumThreads = num_threads;
-  const std::size_t kNumTests = num_tests;
-
-  futures.reserve(kNumThreads);
+  futures.reserve(num_threads);
   const auto target = std::chrono::steady_clock::now() + 1s;
 
   // Whatever the execution order, the cache will only call the constructor for kNumTests times.
@@ -65,52 +78,124 @@ auto test_performance(std::size_t max_size, std::size_t num_threads, std::size_t
   // integers.
 
   const auto tic = std::chrono::high_resolution_clock::now();
-  for (std::size_t i = 0; i < kNumThreads; ++i) {
-    futures.push_back(std::async(std::launch::async, [&cache, target, i, kNumTests] {
+
+  for (std::size_t i = 0; i < num_threads; ++i) {
+    futures.push_back(std::async(std::launch::async, [=, &cache] {
       std::this_thread::sleep_until(target);
       auto sum = std::size_t{0};
       // Test writing to the cache concurrently
-      for (std::size_t j = 0; j < kNumTests; ++j) {
-        const auto key = std::to_string((j + i) % kNumTests);
-        sum += cache.Get<std::string>(key).uuid;
+      for (std::size_t j = 0; j < num_tests; ++j) {
+        const auto key = std::to_string((j + i) % num_tests);
+        if constexpr (use_lru) {
+          sum += cache.template Get<std::string>(key).uuid;
+        } else {
+          sum += cache.Get(key).uuid;
+        }
       }
       // Test reading the same keys again
-      for (std::size_t j = 0; j < kNumTests * kReadGroup; ++j) {
-        const auto key = std::to_string(j % kNumTests);
+      for (std::size_t j = 0; j < num_tests * num_reads; ++j) {
+        const auto key = std::to_string(j % num_tests);
+        if constexpr (use_lru) {
+          sum += cache.template Get<std::string>(key).uuid;
+        } else {
+          sum += cache.Get(key).uuid;
+        }
+      }
+      return sum;
+    }));
+  }
+
+  // Sum of [0, kNumTests) * (num_reads + 1)
+  const auto kExpected = num_tests * (num_tests - 1) / 2 * (num_reads + 1);
+  for (auto& future : futures) {
+    future.wait();
+    EXPECT_EQ(future.get(), kExpected);
+  }
+  if constexpr (use_lru) {
+    EXPECT_EQ(cache.GetPolicy().counter, num_tests);
+  }
+
+  const auto toc = std::chrono::high_resolution_clock::now();
+  // Skip the first 1s sleeping time, and another 1s for the computation
+  const auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic - 2s).count();
+
+  XGRAMMAR_LOG_INFO << "  Contention Settings:"
+                    << " | Use LRU: " << (use_lru ? " true" : "false")  // start a new line
+                    << " | Read: " << num_reads << " | Threads: " << num_threads
+                    << " | Elements: " << num_tests << " | Overhead: " << dur << "ms";
+}
+
+auto test_eviction(std::size_t num_threads, std::size_t num_inserts, std::size_t max_size) -> void {
+  ASSERT_GE(num_inserts, 1);
+
+  auto cache = ThreadSafeLRUCache<LRUPolicy0, MockGrammar, std::string>{max_size};
+  auto futures = std::vector<std::future<std::size_t>>{};
+
+  // Whatever the execution order, the cache will call the constructor for kNumTests * kGroup times.
+  // And there will be some eviction happening.
+
+  futures.reserve(num_threads);
+
+  const auto target = std::chrono::steady_clock::now() + 1s;
+  const auto tic = std::chrono::high_resolution_clock::now();
+
+  for (std::size_t i = 0; i < num_threads; ++i) {
+    futures.push_back(std::async(std::launch::async, [=, &cache] {
+      std::this_thread::sleep_until(target);
+      auto sum = std::size_t{0};
+      // unique key for each thread
+      for (std::size_t j = 0; j < num_inserts; ++j) {
+        const auto key = std::to_string(j + i * num_inserts);
         sum += cache.Get<std::string>(key).uuid;
       }
       return sum;
     }));
   }
 
-  // Sum of [0, kNumTests) (I wish i'm not wrong)
-  const auto kResult = kNumTests * (kNumTests - 1) / 2;
-
+  const auto kNewEntry = num_inserts * num_threads;
+  const auto kExpected = kNewEntry * (kNewEntry - 1) / 2;
+  auto sum = std::size_t{0};
   for (auto& future : futures) {
-    future.wait();
-    if (max_size >= kNumTests) {  // no eviction in this case
-      EXPECT_EQ(future.get(), kResult * kReadGroup);
-    }
+    sum += future.get();
   }
-  const auto toc = std::chrono::high_resolution_clock::now();
+  EXPECT_EQ(sum, kExpected);
+  EXPECT_EQ(cache.GetPolicy().counter, kNewEntry);
 
-  // Skip the first 1s sleeping time, and another 1s for the computation
-  const auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic - 2s).count();
-  auto max_num = max_size == std::size_t(-1) ? "+inf" : std::to_string(max_size);
-  XGRAMMAR_LOG_INFO << "  Setting: max_elements=" << max_num << ", num_threads=" << num_threads;
-  XGRAMMAR_LOG_INFO << "  Duration: " << dur << "ms";
+  const auto toc = std::chrono::high_resolution_clock::now();
+  // Skip the first 1s sleeping time, and another num_tests * 1s for the computation
+  const auto dur =
+      std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic - 1s * (num_inserts + 1))
+          .count();
+  XGRAMMAR_LOG_INFO << "  Eviction Settings:"
+                    << " | Max Size: " << max_size << " | Threads: " << num_threads
+                    << " | Elements: " << kNewEntry << " | Overhead: " << dur << "ms";
 }
 
-TEST(XGrammarParallelTest, CacheEfficiency) {
-  const auto kMaxThreads = std::size_t(std::thread::hardware_concurrency()) * 2;
-  const auto kNumTests = kMaxThreads / 2;
-  XGRAMMAR_LOG_INFO << "Testing the contention of the cache";
-  for (auto n = kMaxThreads; n > 0; n /= 2) {
-    test_performance(std::size_t(-1), n, kNumTests);
+// This test should cost about 2 * 4 * (log2(64) + 1) * 2s = 112s
+TEST(XGrammarParallelTest, CacheContention) {
+  const std::size_t kMaxTest = std::max(std::thread::hardware_concurrency(), 8u) / 2;
+  const std::size_t kMaxRead = 64;
+
+  XGRAMMAR_LOG_INFO << "Testing the contention performance of the cache";
+  for (auto n = 4; n >= 1; --n) {
+    for (auto m = kMaxRead; m >= 1; m /= 2) {
+      test_contention<true>(n * kMaxTest, kMaxTest, m);
+      test_contention<false>(n * kMaxTest, kMaxTest, m);
+    }
   }
-  XGRAMMAR_LOG_INFO << "Testing the eviction of the cache";
-  for (auto n = kMaxThreads; n > 0; n /= 2) {
-    test_performance(10, n, kNumTests);
+}
+
+// This test should cost at most 4 * (log2(64) + 1) * (1s + 4s) = 140s
+TEST(XGrammarParallelTest, CacheEviction) {
+  const std::size_t kMaxThreads = std::max(std::thread::hardware_concurrency(), 8u) / 2;
+  const std::size_t kInserts = 4;
+  const std::size_t kMaxSize = std::min<std::size_t>(kMaxThreads, 64);
+
+  XGRAMMAR_LOG_INFO << "Testing the eviction performance of the cache";
+  for (auto n = 4; n >= 1; --n) {
+    for (auto m = kMaxSize; m >= 1; m /= 2) {
+      test_eviction(n * kMaxThreads, kInserts, m);
+    }
   }
 }
 
