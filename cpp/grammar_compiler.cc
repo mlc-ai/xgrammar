@@ -382,6 +382,7 @@ class GrammarCompilerBase {
 auto GrammarCompilerBase::CompileJson() -> CompiledGrammar {
   return MultiThreadCompileGrammar(Grammar::BuiltinJSONGrammar());
 }
+
 template <>
 auto GrammarCompilerBase::Compile<SchemaKey>(const SchemaKey& key) {
   const auto& [schema, any_whitespace, indent, separators, strict_mode] = key;

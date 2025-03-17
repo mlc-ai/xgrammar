@@ -345,6 +345,15 @@ struct SizedValue {
 template <typename Value, typename... Keys>
 using ThreadSafeCacheSized = ThreadSafeCacheImpl<std::shared_future<SizedValue<Value>>, Keys...>;
 
+template <typename Value>
+struct DemoPolicy {
+  // The interface of the policy
+  template <typename KeyType>
+  auto compute(const KeyType&) -> Value;
+  auto should_evict(std::size_t) -> bool;
+  auto size(const Value&) -> std::size_t;
+};
+
 }  // namespace details
 
 template <typename Policy, typename Value, typename... Keys>
