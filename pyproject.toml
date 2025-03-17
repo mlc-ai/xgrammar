@@ -89,9 +89,8 @@ sdist.include = [
 sdist.exclude = ["**/.git", "**/.github", "**/__pycache__", "**/*.pyc", "build", "dist"]
 
 # Editable install settings
-# Editables are fairly buggy
-# editable.rebuild = true
-# editable.verbose = true
+editable.rebuild = true
+editable.verbose = true
 
 [tool.pytest.ini_options]
 addopts = "-rA --durations=0 --ignore=3rdparty"
