@@ -7,6 +7,7 @@
 #define XGRAMMAR_SUPPORT_THREAD_SAFE_CACHE_H_
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <future>
