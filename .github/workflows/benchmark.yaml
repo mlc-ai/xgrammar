@@ -21,9 +21,8 @@ jobs:
 
       - name: Build xgrammar from source
         run: |
-          echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install .
 
       - name: Install dependencies
         run: |
@@ -39,30 +38,3 @@ jobs:
         with:
           name: benchmark-results
           path: benchmark_output.txt
-
-      - name: Post benchmark results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const benchmarkOutput = fs.readFileSync('benchmark_output.txt', 'utf8');
-
-            // Extract the results section
-            const resultsSection = benchmarkOutput.split('===== XGrammar Benchmark Results =====')[1] || benchmarkOutput;
-
-            const comment = `## XGrammar Benchmark Results
-
-            \`\`\`
-            ${resultsSection.trim()}
-            \`\`\`
-
-            [Full Results](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})
-            `;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
