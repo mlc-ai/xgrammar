@@ -366,6 +366,8 @@ class ThreadSafeLRUCache : private Policy, details::ThreadSafeCacheSized<Value, 
  public:
   using Policy::Policy;
 
+  auto GetPolicy() -> Policy& { return *this; }
+
   template <typename Key, typename Tp>
   auto Get(const Tp& key) -> Value {
     /// \attention We use type_identity_t to force the user to provide the key type
