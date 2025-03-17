@@ -88,8 +88,9 @@ auto test_performance(std::size_t max_size, std::size_t num_threads, std::size_t
 
   for (auto& future : futures) {
     future.wait();
-    if (max_size >= kNumTests)  // no eviction in this case
+    if (max_size >= kNumTests) {  // no eviction in this case
       EXPECT_EQ(future.get(), kResult * kReadGroup);
+    }
   }
   const auto toc = std::chrono::high_resolution_clock::now();
 
@@ -185,7 +186,7 @@ struct LRUPolicy1 {
     return TestObject{key};
   }
   auto should_evict(std::size_t cur_size) -> bool { return false; }
-  static auto size(const MockGrammar&) -> std::size_t { return 1; }
+  static auto size(const TestObject&) -> std::size_t { return 1; }
 };
 
 TEST(XGrammarParallelTest, CacheCorrectness) {

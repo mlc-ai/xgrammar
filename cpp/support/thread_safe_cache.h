@@ -394,7 +394,7 @@ class ThreadSafeLRUCache : private Policy, details::ThreadSafeCacheSized<Value, 
     using Task = std::packaged_task<Sized()>;
     auto& locked_map = Impl::template get_map<Key>();
     const auto exist = [this](const auto& pair) {
-      return Impl::lru_visit(pair);  // simply move the entry to the end
+      return this->Impl::lru_visit(pair);  // simply move the entry to the end
     };
     const auto prepare = [&] {
       return Task{[this, &key] {
@@ -410,7 +410,7 @@ class ThreadSafeLRUCache : private Policy, details::ThreadSafeCacheSized<Value, 
     };
     const auto init = [this](auto& pair, Task& task) {
       auto future = task.get_future().share();
-      Impl::lru_init(pair, future);
+      this->Impl::lru_init(pair, future);
       return future;
     };
     const auto exit = [](Task& task, Future future) {
