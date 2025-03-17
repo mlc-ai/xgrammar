@@ -36,7 +36,7 @@ jobs:
 
       - name: Run C++ tests
         run: |
-          ctest --test-dir build
+          ctest --test-dir build -V --timeout 300 --stop-on-failure
 
       - name: Run Python tests
         env:
