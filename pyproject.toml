@@ -36,7 +36,7 @@ provider = "scikit_build_core.metadata.regex"
 input = "python/xgrammar/version.py"
 
 [build-system]
-requires = ["scikit-build-core>=0.10.0", "nanobind>=2.5.0"]
+requires = ["scikit-build-core>=0.10.0", "nanobind>=2.0.0"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
