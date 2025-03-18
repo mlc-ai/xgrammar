@@ -13,7 +13,7 @@ target_sources(python_methods PRIVATE python_methods.cc)
 target_link_libraries(python_methods PUBLIC xgrammar)
 
 # Any code that uses nanobind directly lives here
-nanobind_add_module(xgrammar_bindings LTO NB_SUPPRESS_WARNINGS nanobind.cc)
+nanobind_add_module(xgrammar_bindings LTO nanobind.cc)
 target_link_libraries(xgrammar_bindings PRIVATE python_methods)
 
 if(DEFINED SKBUILD_PROJECT_NAME)
