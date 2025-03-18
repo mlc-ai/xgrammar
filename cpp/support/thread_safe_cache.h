@@ -7,7 +7,7 @@
 #define XGRAMMAR_SUPPORT_THREAD_SAFE_CACHE_H_
 
 #include <atomic>
-#include <chrono>
+#include <chrono>  // IWYU pragma: keep
 #include <cstddef>
 #include <functional>
 #include <future>
@@ -190,51 +190,8 @@ class ThreadSafeCache<Key, Value> {
 
 namespace details {
 
-template <typename Key, typename Value>
-struct LockedMap {
- private:
-  std::unordered_map<Key, Value> map;
-  mutable std::shared_mutex mutex;
-
- public:
-  /**
-   * \brief Try to insert a key-value pair into the map
-   * \param key The key to insert
-   * \param exist The function to call if the key already exists (in the lock)
-   * \param prepare The function to call to prepare the value (outside the lock)
-   * \param init The function to call to initialize the value (in the lock)
-   * \param exit The function to finalize the value (outside the lock)
-   * \return The result of the exit function or the exist function
-   */
-  template <typename F0, typename F1, typename F2, typename F3>
-  auto try_insert(const Key& key, F0&& exist, F1&& prepare, F2&& init, F3&& exit) {
-    {
-      auto lock = std::shared_lock(mutex);
-      if (auto it = map.find(key); it != map.end()) {
-        return std::forward<F0>(exist)(*it);
-      }
-    }
-    auto tmp = std::forward<F1>(prepare)();
-    {
-      auto lock = std::unique_lock(mutex);
-      auto [it, success] = map.try_emplace(key);
-      if (success == false) {
-        return std::forward<F0>(exist)(*it);
-      }
-      auto tmp2 = std::forward<F2>(init)(*it, tmp);
-      lock.unlock();
-      return std::forward<F3>(exit)(tmp, tmp2);
-    }
-  }
-
-  auto erase(const Key& key) -> void {
-    auto lock = std::unique_lock(mutex);
-    map.erase(key);
-  }
-};
-
 template <typename Value, typename... Keys>
-class ThreadSafeCacheImpl {
+class LRUCacheImpl {
  protected:
   struct LRUnode;
   using KeySet = std::variant<const Keys*...>;
@@ -250,7 +207,7 @@ class ThreadSafeCacheImpl {
    private:
     Value value;
     LRUiterator iterator;
-    friend class ThreadSafeCacheImpl;
+    friend class LRUCacheImpl;
   };
 
   struct LRUnode {
@@ -259,34 +216,26 @@ class ThreadSafeCacheImpl {
     LRUnode(KeySet k, Entry& e) : key{k}, entry{e} {}
   };
 
- protected:
   template <typename Key>
-  auto get_map() -> LockedMap<Key, Entry>& {
+  auto get_map() -> std::unordered_map<Key, Entry>& {
     static_assert((std::is_same_v<Key, Keys> || ...), "Key type not found in the cache");
-    return std::get<LockedMap<Key, Entry>>(storage);
+    return std::get<std::unordered_map<Key, Entry>>(storage_);
   }
 
   template <typename Key>
   auto lru_visit(const std::pair<const Key, Entry>& pair) -> const Value& {
     static_assert((std::is_same_v<Key, Keys> || ...), "Key type not found in the cache");
-    const auto guard = std::lock_guard{lru_mutex};
-    /// \attention The dereference of the iterator must be done within the lock
     const auto& entry = pair.second;
-    const auto iterator = entry.iterator;
-    if (iterator != LRUiterator{}) {  // if not to be evicted
-      lru_list.splice(lru_list.end(), lru_list, iterator);
-    }
+    lru_list_.splice(lru_list_.end(), lru_list_, entry.iterator);
     return entry.value;
   }
 
   template <typename Key>
   auto lru_init(std::pair<const Key, Entry>& pair, const Value& init) -> void {
     static_assert((std::is_same_v<Key, Keys> || ...), "Key type not found in the cache");
-    const auto guard = std::lock_guard{lru_mutex};
-    /// \attention This must be done in the lock to ensure the iterator is valid
     auto& [key, entry] = pair;
     entry.value = init;
-    entry.iterator = lru_list.emplace(lru_list.end(), KeySet{&key}, entry);
+    entry.iterator = lru_list_.emplace(lru_list_.end(), KeySet{&key}, entry);
   }
 
   template <typename Predicate, typename Evict>
@@ -294,45 +243,34 @@ class ThreadSafeCacheImpl {
     if (!predicate())  // short circuit if the predicate is false
       return;
 
-    // only hold the lru lock when doing the eviction
-    auto free_list = [&]() -> LRUlist {
-      const auto guard = std::lock_guard{lru_mutex};
-      auto iter = lru_list.begin();
-      if (iter == lru_list.end()) return {};
-      auto evicted = LRUlist{};
-      auto waiting = LRUlist{};
-      do {
-        auto old_iter = iter++;
-        auto& [_, entry] = *old_iter;
-        if (evict(entry.value)) {
-          entry.iterator = LRUiterator{};  // to be evicted
-          evicted.splice(evicted.end(), lru_list, old_iter);
-        } else {
-          waiting.splice(waiting.end(), lru_list, old_iter);
-        }
-      } while (predicate() && iter != lru_list.end());
-      // move the waiting list to the end of the lru list
-      lru_list.splice(lru_list.end(), waiting);
-      return evicted;
-    }();
+    auto iter = lru_list_.begin();
+    if (iter == lru_list_.end()) return;
 
-    // free the memory of the map outside the lru lock
-    for (auto& [keyset, _] : free_list) {
-      std::visit(
-          [&](auto* key) {
-            using Key_t = std::decay_t<decltype(*key)>;
-            auto& locked_map = get_map<Key_t>();
-            locked_map.erase(*key);
-          },
-          keyset
-      );
-    }
+    auto waiting = LRUlist{};
+
+    do {
+      auto& [keyset, entry] = *iter;
+      if (evict(entry.value)) {
+        std::visit(
+            [&](const auto* key) {
+              using Key_t = std::decay_t<decltype(*key)>;
+              get_map<Key_t>().erase(*key);
+            },
+            keyset
+        );
+        iter = lru_list_.erase(iter);
+      } else {
+        waiting.splice(waiting.end(), lru_list_, iter++);
+      }
+    } while (predicate() && iter != lru_list_.end());
+
+    // move the waiting list to the end of the lru list
+    lru_list_.splice(lru_list_.end(), waiting);
   }
 
  private:
-  std::tuple<LockedMap<Keys, Entry>...> storage;
-  LRUlist lru_list;
-  std::mutex lru_mutex;
+  std::tuple<std::unordered_map<Keys, Entry>...> storage_;
+  LRUlist lru_list_;
 };
 
 template <typename Value>
@@ -344,7 +282,7 @@ struct SizedValue {
 };
 
 template <typename Value, typename... Keys>
-using ThreadSafeCacheSized = ThreadSafeCacheImpl<std::shared_future<SizedValue<Value>>, Keys...>;
+using LRUCacheSizedImpl = LRUCacheImpl<std::shared_future<SizedValue<Value>>, Keys...>;
 
 template <typename Value>
 struct DemoPolicy {
@@ -358,11 +296,13 @@ struct DemoPolicy {
 }  // namespace details
 
 template <typename Policy, typename Value, typename... Keys>
-class ThreadSafeLRUCache : private Policy, details::ThreadSafeCacheSized<Value, Keys...> {
+class ThreadSafeLRUCache : private Policy, details::LRUCacheSizedImpl<Value, Keys...> {
  private:
-  using Impl = details::ThreadSafeCacheSized<Value, Keys...>;
+  using Impl = details::LRUCacheSizedImpl<Value, Keys...>;
   using Sized = details::SizedValue<Value>;
   using Future = std::shared_future<Sized>;
+  using Task = std::packaged_task<Sized()>;
+  using typename Impl::Entry;
 
  public:
   using Policy::Policy;
@@ -371,55 +311,68 @@ class ThreadSafeLRUCache : private Policy, details::ThreadSafeCacheSized<Value, 
 
   template <typename Key, typename Tp>
   auto Get(const Tp& key) -> Value {
-    /// \attention We use type_identity_t to force the user to provide the key type
     static_assert((std::is_same_v<Key, Keys> || ...), "Key type not found in the cache");
-    auto future = GetFuture<Key>(key);
-    Pop();
+    auto future = GetFuture<Key>(key, Impl::template get_map<Key>());
     return future.get().value;
   }
 
   auto Clear() -> void {
     // Remove all the ready entries.
+    const auto lock_map = std::lock_guard{map_mutex_};
+    const auto lock_lru = std::lock_guard{lru_mutex_};
     Impl::lru_evict(
         [] { return true; },
-        [](const Future& value) {
-          using namespace std::chrono_literals;
-          return value.wait_for(0s) == std::future_status::ready;
+        [&](const Future& value) {  // always evict and block until the value is ready
+          current_size_ -= value.get().size;
+          return true;
         }
     );
   }
 
  private:
   template <typename Key>
-  auto GetFuture(const Key& key) -> Future {
-    using Task = std::packaged_task<Sized()>;
-    auto& locked_map = Impl::template get_map<Key>();
-    const auto exist = [this](const auto& pair) {
-      return this->Impl::lru_visit(pair);  // simply move the entry to the end
-    };
-    const auto prepare = [&] {
-      return Task{[this, &key] {
-        return Sized{
-            Policy::template compute<Key>(key),  // compute the value
-            [&](const Value& value) {
-              auto size = Policy::size(value);
-              current_size_ += size;
-              return size;
-            }
-        };
-      }};
-    };
-    const auto init = [this](auto& pair, Task& task) {
-      auto future = task.get_future().share();
-      this->Impl::lru_init(pair, future);
-      return future;
-    };
-    const auto exit = [](Task& task, Future future) {
-      task();  // only perform task on first access
-      return future;
-    };
+  auto GetFuture(const Key& key, std::unordered_map<Key, Entry>& map) -> Future {
+    {
+      auto lock_map = std::shared_lock{map_mutex_};
+      auto it = map.find(key);
+      if (it != map.end()) {
+        const auto lock_lru = std::lock_guard{lru_mutex_};
+        return Impl::lru_visit(*it);
+      }
+    }
 
-    return locked_map.try_insert(key, exist, prepare, init, exit);
+    auto task = Task{[this, &key] {
+      return Sized{
+          Policy::template compute<Key>(key),  // compute the value
+          [&](const Value& value) {
+            auto size = Policy::size(value);
+            current_size_ += size;
+            return size;
+          }
+      };
+    }};
+
+    {
+      auto lock_map = std::unique_lock{map_mutex_};
+      auto [it, success] = map.try_emplace(key);
+      if (!success) {
+        const auto lock_lru = std::lock_guard{lru_mutex_};
+        return Impl::lru_visit(*it);
+      }
+
+      // in this case, we insert the task, and we need to compute the value
+      auto future = task.get_future().share();
+      {
+        const auto lock_lru = std::lock_guard{lru_mutex_};
+        Impl::lru_init(*it, future);
+        this->Pop();
+      }
+      lock_map.unlock();
+
+      // perform the costly computation outside all locks
+      task();
+      return future;
+    }
   }
 
   auto Pop() -> void {
@@ -429,8 +382,7 @@ class ThreadSafeLRUCache : private Policy, details::ThreadSafeCacheSized<Value, 
           using namespace std::chrono_literals;
           // if not ready, then do not wait and block here
           if (value.wait_for(0s) != std::future_status::ready) return false;
-          auto size = value.get().size;
-          current_size_ -= size;
+          current_size_ -= value.get().size;
           return true;
         }
     );
@@ -438,6 +390,8 @@ class ThreadSafeLRUCache : private Policy, details::ThreadSafeCacheSized<Value, 
 
  private:
   std::atomic_size_t current_size_{0};
+  std::mutex lru_mutex_;
+  std::shared_mutex map_mutex_;
 };
 }  // namespace xgrammar
 
