@@ -55,8 +55,8 @@ else()
   )
 endif()
 
-set(XGRAMMAR_INCLUDE_PATH
-    ${PROJECT_SOURCE_DIR}/3rdparty/picojson ${PROJECT_SOURCE_DIR}/3rdparty/dlpack/include
+set(XGRAMMAR_INCLUDE_PATH ${PROJECT_SOURCE_DIR}/3rdparty/picojson
+                          ${PROJECT_SOURCE_DIR}/3rdparty/dlpack/include
 )
 
 file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH "${PROJECT_SOURCE_DIR}/cpp/*.cc")
