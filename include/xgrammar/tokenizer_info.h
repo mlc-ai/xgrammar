@@ -44,12 +44,8 @@ class TokenizerInfo {
   static TokenizerInfo FromVocabAndMetadata(
       const std::vector<std::string>& encoded_vocab, const std::string& metadata
   );
-  static TokenizerInfo FromHuggingFace(
-      const std::vector<std::string>& encoded_vocab,
-      const std::string& backend_str,
-      std::optional<int> vocab_size = std::nullopt,
-      std::optional<std::vector<int32_t>> stop_token_ids = std::nullopt
-  );
+
+  static std::string DetectMetadataFromHF(const std::string& backend_str);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
 };

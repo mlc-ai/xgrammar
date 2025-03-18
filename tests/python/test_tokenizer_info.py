@@ -174,15 +174,15 @@ def test_vocab_conversion(tokenizer_path: str, token_ids: List[int], raw_tokens:
 tokenizer_path__metadata_str = [
     (
         "microsoft/Phi-3-small-8k-instruct",
-        '{"vocab_type":"RAW","vocab_size":100352,"add_prefix_space":false,"stop_token_ids":[100257]}',
+        '{"vocab_type":0,"vocab_size":100352,"add_prefix_space":false,"stop_token_ids":[100257]}',
     ),
     (
         "meta-llama/Llama-2-7b-chat-hf",
-        '{"vocab_type":"BYTE_FALLBACK","vocab_size":32000,"add_prefix_space":true,"stop_token_ids":[2]}',
+        '{"vocab_type":1,"vocab_size":32000,"add_prefix_space":true,"stop_token_ids":[2]}',
     ),
     (
         "meta-llama/Meta-Llama-3-8B-Instruct",
-        '{"vocab_type":"BYTE_LEVEL","vocab_size":128256,"add_prefix_space":false,"stop_token_ids":[128009]}',
+        '{"vocab_type":2,"vocab_size":128256,"add_prefix_space":false,"stop_token_ids":[128009]}',
     ),
 ]
 
@@ -204,40 +204,58 @@ def test_dump_metadata_load(tokenizer_path: str, metadata_str: str):
     assert loaded_new.decoded_vocab == tokenizer_info.decoded_vocab
 
 
+def test_special_token_detection():
+    # Now only empty string "" is treated as a special token.
+    vocab_dict = ["", "<s>", "</s>", "[@BOS@]", "regular", "<>", "<think>", "</think>"]
+    tokenizer_info = xgr.TokenizerInfo.from_vocab_and_metadata(
+        vocab_dict, '{"vocab_type":1,"vocab_size":8,"add_prefix_space":true,"stop_token_ids":[2]}'
+    )
+    expected_special_tokens = {0}
+    assert set(tokenizer_info.special_token_ids) == expected_special_tokens
+
+
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 )
-def test_customized_tokenizer_info(tokenizer_path: str):
+def test_customize_stop_token_ids(tokenizer_path: str):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, stop_token_ids=[1, 2, 3])
+    assert tokenizer_info.stop_token_ids == [1, 2, 3]
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize(
+    "tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
+)
+def test_padding_vocab_size(tokenizer_path: str):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     original_vocab_size = len(tokenizer.get_vocab())
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(
-        tokenizer, stop_token_ids=[1, 2, 3], vocab_size=original_vocab_size + 5
+        tokenizer, vocab_size=original_vocab_size + 5
     )
     assert tokenizer_info.vocab_size == original_vocab_size + 5
-    assert tokenizer_info.stop_token_ids == [1, 2, 3]
     assert tokenizer_info.special_token_ids[-5:] == [original_vocab_size + i for i in range(5)]
 
 
-def test_special_token_detection():
-    vocab_dict = [
-        "",
-        "<s>",
-        "</s>",
-        "[@BOS@]",
-        "regular",
-        "<test_token>",
-        "not<special>",
-        "<>",
-        "<think>",
-        "</think>",
-    ]
-    tokenizer_info = xgr.TokenizerInfo.from_vocab_and_metadata(
-        vocab_dict,
-        '{"vocab_type":"BYTE_FALLBACK","vocab_size":8,"add_prefix_space":true,"stop_token_ids":[2]}',
-    )
-    expected_special_tokens = {0}
-    assert set(tokenizer_info.special_token_ids) == expected_special_tokens
+tokenizer_path__model_vocab_size = [
+    ("meta-llama/Llama-3.2-11B-Vision-Instruct", 128256),
+    ("meta-llama/Llama-Guard-3-11B-Vision", 128256),
+    ("allenai/Molmo-72B-0924", 152064),
+]
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("tokenizer_path, model_vocab_size", tokenizer_path__model_vocab_size)
+def test_model_vocab_size_smaller_than_tokenizer(tokenizer_path: str, model_vocab_size: int):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    original_vocab_size = len(tokenizer.get_vocab())
+    assert original_vocab_size > model_vocab_size
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=model_vocab_size)
+    assert tokenizer_info.vocab_size == model_vocab_size
+    assert len(tokenizer_info.decoded_vocab) == model_vocab_size
+    print(tokenizer_info.special_token_ids)
+    print(len(tokenizer_info.decoded_vocab))
 
 
 if __name__ == "__main__":

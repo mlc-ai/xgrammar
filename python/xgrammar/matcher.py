@@ -124,15 +124,26 @@ def apply_token_bitmask_inplace(
         )
 
     if logits.device.type == "cuda":
-        if os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") == "1":
-            if "triton" not in apply_token_bitmask_inplace_kernels:
-                raise RuntimeError(
-                    "The triton kernel is not available even though XGRAMMAR_TOKEN_BITMASK_TRITON "
-                    "is set to 1"
-                )
+        if (
+            "triton" not in apply_token_bitmask_inplace_kernels
+            and os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") == "1"
+        ):
+            raise RuntimeError(
+                "The triton kernel is not available even though XGRAMMAR_TOKEN_BITMASK_TRITON "
+                "is set to 1"
+            )
+
+        if (
+            "cuda" in apply_token_bitmask_inplace_kernels
+            and os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") != "1"
+        ):
+            apply_token_bitmask_inplace_kernels["cuda"](logits, bitmask, indices)
+        elif "triton" in apply_token_bitmask_inplace_kernels:
             apply_token_bitmask_inplace_kernels["triton"](logits, bitmask, indices)
         else:
-            apply_token_bitmask_inplace_kernels["cuda"](logits, bitmask, indices)
+            raise RuntimeError(
+                "No CUDA kernel is available. Check if you have a CUDA compatible toolchain installed."
+            )
     elif logits.device.type == "cpu":
         apply_token_bitmask_inplace_kernels["cpu"](logits, bitmask, indices)
     else:

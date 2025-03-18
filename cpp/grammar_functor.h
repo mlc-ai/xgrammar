@@ -9,12 +9,10 @@
 
 #include <xgrammar/xgrammar.h>
 
-#include <queue>
 #include <string>
 
 #include "grammar_builder.h"
 #include "grammar_data_structure.h"
-#include "grammar_serializer.h"
 
 namespace xgrammar {
 
