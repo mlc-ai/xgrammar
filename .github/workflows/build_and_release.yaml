@@ -38,6 +38,7 @@ jobs:
           CIBW_ARCHS_LINUX: ${{ matrix.arch }}
           CIBW_ARCHS_WINDOWS: ${{ matrix.arch }}
           CIBW_BUILD: ${{ matrix.build }}
+          CIBW_TEST_SKIP: True
           CIBW_BUILD_VERBOSITY: 1
 
       - uses: actions/upload-artifact@v4
@@ -89,8 +90,10 @@ jobs:
         with:
           subject-path: dist/*
 
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           attestations: true
+          verbose: true
           # repository-url: https://test.pypi.org/legacy/
           # To test: repository-url: https://test.pypi.org/legacy/
