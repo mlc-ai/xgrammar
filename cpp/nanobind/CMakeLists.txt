@@ -1,6 +1,6 @@
 find_package(
   Python
-  COMPONENTS Development.Module
+  COMPONENTS Interpreter Development.Module
   REQUIRED
 )
 find_package(nanobind CONFIG REQUIRED)
