@@ -14,6 +14,7 @@
 #include "grammar_matcher_base.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
+#include "support/utils.h"
 #include "testing.h"
 #include "xgrammar/grammar.h"
 
@@ -34,6 +35,33 @@ struct hash<xgrammar::StructuralTagItem> {
 }  // namespace std
 
 namespace xgrammar {
+
+/******************* EstimatedSize *******************/
+
+auto Grammar::Impl::EstimatedSize() const -> std::size_t {
+  // assume string is not long, so we don't iterate through all the rules
+  // just to get a precise heap size usage, which may be too time-consuming
+  const auto kEstimatedRuleSize = rules_.size() * sizeof(Rule);
+  return sizeof(*this) + kEstimatedRuleSize + sizeof_heap(rule_expr_data_) +
+         sizeof_heap(rule_expr_indptr_) + sizeof_heap(root_tag_dispatch_fsm) +
+         sizeof_heap(tag_dispatch_end_node_to_rule_id) + sizeof_heap(allow_empty_rule_ids);
+}
+
+auto AdaptiveTokenMask::EstimatedSize() const -> std::size_t {
+  // do not count into sizeof(*this) since it's not pimpl
+  return sizeof_heap(uncertain_indices) + sizeof_heap(accepted_indices) +
+         sizeof_heap(rejected_indices) + sizeof_heap(accepted_bitset);
+}
+
+auto CompiledGrammar::Impl::EstimatedSize() const -> std::size_t {
+  using ValueType = typename decltype(adaptive_token_mask_cache)::value_type;
+  auto sum = sizeof(*this) + grammar->EstimatedSize() +
+             sizeof(ValueType) * adaptive_token_mask_cache.size();
+  for (auto& [_, mask] : adaptive_token_mask_cache) {
+    sum += mask.EstimatedSize();
+  }
+  return sum;
+}
 
 /******************* AdaptiveTokenMask and CompiledGrammar *******************/
 

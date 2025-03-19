@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <tuple>
 #include <type_traits>
 
@@ -48,6 +49,11 @@ inline constexpr auto sizeof_heap(const Range& range) -> std::size_t {
   static_assert(std::is_trivially_copyable_v<Element_t>, "Element type must be trivial");
   static_assert(!std::is_trivially_copyable_v<Range>, "Container type must not be trivial");
   return sizeof(Element_t) * std::size(range);
+}
+
+template <typename Tp>
+inline constexpr auto sizeof_heap(const std::optional<Tp>& range) -> std::size_t {
+  return range.has_value() ? sizeof_heap(*range) : 0;
 }
 
 }  // namespace xgrammar

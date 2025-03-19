@@ -16,7 +16,6 @@
 #include <vector>
 
 // matcher_data_structure.h is included to use StackElement
-#include "grammar_data_structure.h"
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
 #include "support/utils.h"
@@ -70,6 +69,8 @@ struct AdaptiveTokenMask {
   );
 
   std::string Print(const TokenizerInfo& tokenizer_info) const;
+
+  std::size_t EstimatedSize() const;
 };
 
 /*!
@@ -116,7 +117,7 @@ class CompiledGrammar::Impl {
 
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
 
-  std::size_t EstimatedSize() const { return sizeof(Impl) + grammar->EstimatedHeapSize(); }
+  std::size_t EstimatedSize() const;
 };
 
 }  // namespace xgrammar
