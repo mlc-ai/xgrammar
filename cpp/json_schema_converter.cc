@@ -1246,8 +1246,9 @@ std::string JSONSchemaConverter::VisitString(
   if (schema.count("minLength") || schema.count("maxLength")) {
     int min_length = schema.count("minLength") ? schema.at("minLength").get<int64_t>() : 0;
     int max_length = schema.count("maxLength") ? schema.at("maxLength").get<int64_t>() : -1;
-    XGRAMMAR_CHECK(min_length <= max_length) << "In string schema, minLength " << min_length
-                                             << " is greater than " << "maxLength " << max_length;
+    XGRAMMAR_CHECK(max_length == -1 || min_length <= max_length)
+        << "In string schema, minLength " << min_length << " is greater than " << "maxLength "
+        << max_length;
     std::string range_part = "{" + std::to_string(min_length) + "," +
                              (max_length == -1 ? "" : std::to_string(max_length)) + "}";
     return "\"\\\"\" " + std::string("[^\"\\\\\\r\\n]") + range_part + " \"\\\"\"";
