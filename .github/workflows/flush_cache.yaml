@@ -1,22 +1,28 @@
-name: flush caches
+name: Flush Cache
+
 on:
   workflow_dispatch:
 
+permissions:
+  actions: write
+
 jobs:
-  cleanup:
+  clear-cache:
     runs-on: ubuntu-latest
     steps:
-      - name: Cleanup
-        run: |
-          echo "Fetching list of cache key"
-          cacheKeys=$(gh cache list --limit 100 --json id --jq '.[].id')
-          set +e
-          echo "Deleting caches..."
-          for cacheKey in $cacheKeys
-          do
-              gh cache delete $cacheKey
-          done
-          echo "Done"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+      - name: Flush Cache
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const caches = await github.rest.actions.getActionsCacheList({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            })
+            for (const cache of caches.data.actions_caches) {
+              github.rest.actions.deleteActionsCacheById({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                cache_id: cache.id,
+              })
+            }
+            console.log("Cache Flushed.")
