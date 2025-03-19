@@ -47,7 +47,6 @@ jobs:
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
           python -m pip install --upgrade pip
-          pip install torch>=1.10.0
           pip install -v ".[test]"
 
       - name: Run C++ tests
