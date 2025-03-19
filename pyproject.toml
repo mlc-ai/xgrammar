@@ -17,7 +17,7 @@ dependencies = [
   "pydantic",
   "sentencepiece",
   "tiktoken",
-  "torch>=2.0.0",
+  "torch",
   "transformers>=4.38.0",
   "triton; platform_system == 'linux' and platform_machine == 'x86_64'",
   "ninja",
