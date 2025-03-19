@@ -853,8 +853,7 @@ std::string JSONSchemaConverter::VisitSchema(
     } else if (type == "object") {
       return VisitObject(schema_obj, rule_name);
     } else {
-      XGRAMMAR_LOG(FATAL) << "Unsupported type " << type << " in schema "
-                          << schema.serialize(false);
+      XGRAMMAR_LOG(FATAL) << "Unsupported type \"" << type << "\"";
     }
   } else if (schema_obj.count("properties") || schema_obj.count("additionalProperties") ||
              schema_obj.count("unevaluatedProperties")) {
