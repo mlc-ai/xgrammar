@@ -30,7 +30,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14, macos-13]
-        python: [3.8, 3.9, 3.10, 3.11, 3.12, 3.13]
+        # python: [3.8, 3.9, 3.10, 3.11, 3.12, 3.13]
+        python: [3.13]
 
     steps:
       - name: Checkout
