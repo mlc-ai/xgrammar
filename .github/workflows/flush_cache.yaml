@@ -1,7 +1,6 @@
 name: Flush Cache
 
 on:
-  push:
   workflow_dispatch:
 
 permissions:
