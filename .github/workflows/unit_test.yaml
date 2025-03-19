@@ -43,7 +43,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Python environments
+      - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
