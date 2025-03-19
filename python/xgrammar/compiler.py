@@ -1,11 +1,11 @@
 """Compiling grammar for efficient token mask generation."""
 
-from typing import List, Optional, Tuple, Type, Union, overload
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
 
 from .base import XGRObject, _core
-from .grammar import Grammar, StructuralTagItem, _handle_pydantic_schema
+from .grammar import Grammar, StructuralTagItem, _convert_schema_to_str
 from .tokenizer_info import TokenizerInfo
 
 
@@ -63,7 +63,7 @@ class GrammarCompiler(XGRObject):
 
     def compile_json_schema(
         self,
-        schema: Union[str, Type[BaseModel]],
+        schema: Union[str, Type[BaseModel], Dict[str, Any]],
         *,
         any_whitespace: bool = True,
         indent: Optional[int] = None,
@@ -96,7 +96,7 @@ class GrammarCompiler(XGRObject):
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        schema_str = _handle_pydantic_schema(schema)
+        schema_str = _convert_schema_to_str(schema)
         return CompiledGrammar._create_from_handle(
             self._handle.compile_json_schema(
                 schema_str, any_whitespace, indent, separators, strict_mode
@@ -147,7 +147,7 @@ class GrammarCompiler(XGRObject):
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        tags_tuple = [(tag.begin, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
+        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
         return CompiledGrammar._create_from_handle(
             self._handle.compile_structural_tag(tags_tuple, triggers)
         )

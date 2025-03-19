@@ -975,5 +975,86 @@ def test_generate_range_regex():
     assert _generate_range_regex(0, 10) == r"^(0|([1-9]|10))$"
 
 
+def test_min_max_length():
+    schema = {"type": "string", "minLength": 1, "maxLength": 10}
+
+    ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= "[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]"
+basic_object ::= "{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}"
+root ::= "\"" [^"\\\r\n]{1,10} "\""
+"""
+
+    check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True)
+
+    instance_accepted = '"abcdefghij"'
+    instance_rejected = '"abcdefghijk"'
+
+    check_schema_with_instance(schema, instance_accepted, any_whitespace=True)
+    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
+
+
+def test_type_array():
+    schema = {
+        "type": ["integer", "string"],
+        "minLength": 1,
+        "maxLength": 10,
+        "minimum": 1,
+        "maximum": 10,
+    }
+
+    ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= "[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]"
+basic_object ::= "{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}"
+root_integer ::= ( ( [1-9] | "1" "0" ) )
+root_string ::= "\"" [^"\\\r\n]{1,10} "\""
+root ::= root_integer | root_string
+"""
+
+    check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True)
+
+    instance_accepted = "1"
+    instance_accepted_2 = '"1234567890"'
+    instance_rejected = "11"
+    instance_rejected_2 = '"12345678901"'
+
+    check_schema_with_instance(schema, instance_accepted, any_whitespace=True)
+    check_schema_with_instance(schema, instance_accepted_2, any_whitespace=True)
+    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
+    check_schema_with_instance(schema, instance_rejected_2, is_accepted=False, any_whitespace=True)
+
+
+def test_type_array_empty():
+    schema = {"type": []}
+
+    ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= "[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]"
+basic_object ::= "{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}"
+root ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+"""
+
+    check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

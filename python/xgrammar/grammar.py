@@ -1,7 +1,7 @@
 """This module provides classes representing grammars."""
 
 import json
-from typing import List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from pydantic import BaseModel, Field
 
@@ -24,11 +24,34 @@ class StructuralTagItem(BaseModel):
     """
 
     begin: str
-    schema_: Union[str, Type[BaseModel]] = Field(alias="schema")
+    schema_: Union[str, Type[BaseModel], Dict[str, Any]] = Field(alias="schema")
     end: str
 
 
-def _handle_pydantic_schema(schema: Union[str, Type[BaseModel]]) -> str:
+def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
+    """Convert a schema to a string representation.
+
+    This function handles different schema input types and converts them to a JSON string:
+    - Pydantic models are converted using their schema methods
+    - String inputs are returned as-is (assumed to be valid JSON)
+    - Dictionary inputs are converted to JSON strings
+
+    Parameters
+    ----------
+    schema : Union[str, Type[BaseModel], Dict[str, Any]]
+        The schema to convert, which can be a Pydantic model class,
+        a JSON schema string, or a dictionary representing a JSON schema.
+
+    Returns
+    -------
+    str
+        The JSON schema as a string.
+
+    Raises
+    ------
+    ValueError, TypeError
+        If the schema type is not supported, or the dictionary is not serializable.
+    """
     if isinstance(schema, type) and issubclass(schema, BaseModel):
         if hasattr(schema, "model_json_schema"):
             return json.dumps(schema.model_json_schema())
@@ -38,6 +61,8 @@ def _handle_pydantic_schema(schema: Union[str, Type[BaseModel]]) -> str:
             raise ValueError("The schema should have a model_json_schema or json_schema method.")
     elif isinstance(schema, str):
         return schema
+    elif isinstance(schema, dict):
+        return json.dumps(schema)
     else:
         raise ValueError("The schema should be a string or a Pydantic model.")
 
@@ -86,7 +111,7 @@ class Grammar(XGRObject):
 
     @staticmethod
     def from_json_schema(
-        schema: Union[str, Type[BaseModel]],
+        schema: Union[str, Type[BaseModel], Dict[str, Any]],
         *,
         any_whitespace: bool = True,
         indent: Optional[int] = None,
@@ -145,7 +170,7 @@ class Grammar(XGRObject):
         RuntimeError
             When converting the json schema fails, with details about the parsing error.
         """
-        schema_str = _handle_pydantic_schema(schema)
+        schema_str = _convert_schema_to_str(schema)
         return Grammar._create_from_handle(
             _core.Grammar.from_json_schema(
                 schema_str, any_whitespace, indent, separators, strict_mode
@@ -241,7 +266,7 @@ class Grammar(XGRObject):
         >>> triggers = ["<function="]
         >>> grammar = Grammar.from_structural_tag(tags, triggers)
         """
-        tags_tuple = [(tag.begin, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
+        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
         return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
 
     @staticmethod
