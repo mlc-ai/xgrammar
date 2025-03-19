@@ -12,7 +12,7 @@ classifiers = [
   "Intended Audience :: Science/Research",
 ]
 keywords = ["machine learning", "inference"]
-requires-python = ">=3.9, <4"
+requires-python = ">=3.8, <4"
 dependencies = [
   "pydantic",
   "sentencepiece",
