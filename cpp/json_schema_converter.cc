@@ -607,8 +607,6 @@ class JSONSchemaConverter {
   picojson::value json_schema_;
   // Whether to use strict mode in conversion. See JSONSchemaToEBNF().
   bool strict_mode_;
-  // Whether to allow empty object/array
-  bool allow_empty_;
   // The colon separator
   std::string colon_pattern_;
   // The cache for basic rules. Mapping from the key of schema returned by GetSchemaCacheIndex()
@@ -644,7 +642,6 @@ JSONSchemaConverter::JSONSchemaConverter(
   } else {
     colon_pattern_ = "\"" + separators->second + "\"";
   }
-  allow_empty_ = !strict_mode_;
 
   AddBasicRules();
 }
@@ -1348,7 +1345,7 @@ std::string JSONSchemaConverter::VisitArray(
 
   result += " \"]\"";
 
-  if (allow_empty_ && could_be_empty) {
+  if (could_be_empty) {
     // result = (result) | []
     auto rest = "\"[\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"]\"";
     result = "(" + result + ") | " + rest;
@@ -1589,7 +1586,7 @@ std::string JSONSchemaConverter::VisitObject(
   indentManager_->EndIndent();
 
   result += " \"}\"";
-  if (allow_empty_ && could_be_empty) {
+  if (could_be_empty) {
     // result = (result) | {}
     auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"}\"";
     result = "(" + result + ") | " + rest;

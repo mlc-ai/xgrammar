@@ -154,8 +154,7 @@ class Grammar(XGRObject):
         strict_mode : bool, default: True
             Whether to use strict mode. In strict mode, the generated grammar will not allow
             properties and items that is not specified in the schema. This is equivalent to
-            setting unevaluatedProperties and unevaluatedItems to false. It also disallows empty
-            JSON objects and arrays.
+            setting unevaluatedProperties and unevaluatedItems to false.
 
             This helps LLM to generate accurate output in the grammar-guided generation with JSON
             schema.

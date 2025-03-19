@@ -91,6 +91,9 @@ class GrammarCompiler(XGRObject):
             properties and items that is not specified in the schema. This is equivalent to
             setting unevaluatedProperties and unevaluatedItems to false.
 
+            This helps LLM to generate accurate output in the grammar-guided generation with JSON
+            schema.
+
         Returns
         -------
         compiled_grammar : CompiledGrammar
