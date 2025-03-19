@@ -1598,20 +1598,24 @@ std::string JSONSchemaConverter::VisitTypeArray(
     const picojson::object& schema, const std::string& rule_name
 ) {
   XGRAMMAR_CHECK(schema.at("type").is<picojson::array>());
-  picojson::object type_copy = schema;
-  if (schema.at("type").get<picojson::array>().size() == 0) {
-    type_copy.erase("type");
-    return VisitSchema(picojson::value(type_copy), rule_name);
+  auto type_array = schema.at("type").get<picojson::array>();
+
+  picojson::object schema_copy = schema;
+  if (type_array.size() == 0) {
+    schema_copy.erase("type");
+    return VisitSchema(picojson::value(schema_copy), rule_name);
   }
   std::string result;
-  for (const auto& type : schema.at("type").get<picojson::array>()) {
-    XGRAMMAR_CHECK(type.is<std::string>()) << "type must be a string, but got " << type;
+  for (const auto& type : type_array) {
+    XGRAMMAR_CHECK(type.is<std::string>())
+        << "type must be a string or an array of strings, but got " << type;
     if (!result.empty()) {
       result += " | ";
     }
-    type_copy["type"] = type;
-    result +=
-        CreateRuleFromSchema(picojson::value(type_copy), rule_name + "_" + type.get<std::string>());
+    schema_copy["type"] = type;
+    result += CreateRuleFromSchema(
+        picojson::value(schema_copy), rule_name + "_" + type.get<std::string>()
+    );
   }
   return result;
 }
