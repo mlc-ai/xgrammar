@@ -11,6 +11,7 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
+#include <cstddef>
 
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
@@ -109,10 +110,11 @@ NB_MODULE(xgrammar_bindings, m) {
 
   auto pyCompiledGrammar = nb::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_prop_ro("grammar", &CompiledGrammar::GetGrammar)
-      .def_prop_ro("tokenizer_info", &CompiledGrammar::GetTokenizerInfo);
+      .def_prop_ro("tokenizer_info", &CompiledGrammar::GetTokenizerInfo)
+      .def_prop_ro("memory_usage", &CompiledGrammar::MemorySize);
 
   auto pyGrammarCompiler = nb::class_<GrammarCompiler>(m, "GrammarCompiler");
-  pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool>())
+  pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, std::size_t>())
       .def(
           "compile_json_schema",
           &GrammarCompiler::CompileJSONSchema,
