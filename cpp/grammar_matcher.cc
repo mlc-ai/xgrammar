@@ -46,8 +46,11 @@ int32_t* CheckAndGetBitmaskPtr(const DLTensor& token_bitmask, int vocab_size, in
         << "The provided index is out of bounds";
   }
 
-  XGRAMMAR_CHECK(token_bitmask.device.device_type == kDLCPU)
-      << "The provided bitmask's device is not valid: should be CPU";
+  XGRAMMAR_CHECK(
+      token_bitmask.device.device_type == kDLCPU ||
+      token_bitmask.device.device_type == kDLCUDAHost ||
+      token_bitmask.device.device_type == kDLROCMHost
+  ) << "The provided bitmask's device is not valid: should be CPU";
 
   return reinterpret_cast<int32_t*>(token_bitmask.data) + index * buffer_size;
 }
@@ -67,10 +70,14 @@ void ApplyTokenBitmaskInplaceCPU(
     DLTensor* logits, const DLTensor& bitmask, std::optional<std::vector<int>> indices
 ) {
   // Check device and dim
-  XGRAMMAR_CHECK(logits->device.device_type == kDLCPU)
-      << "The provided logits's device is not valid: should be CPU";
-  XGRAMMAR_CHECK(bitmask.device.device_type == kDLCPU)
-      << "The provided bitmask's device is not valid: should be CPU";
+  XGRAMMAR_CHECK(
+      logits->device.device_type == kDLCPU || logits->device.device_type == kDLCUDAHost ||
+      logits->device.device_type == kDLROCMHost
+  ) << "The provided logits's device is not valid: should be CPU";
+  XGRAMMAR_CHECK(
+      bitmask.device.device_type == kDLCPU || bitmask.device.device_type == kDLCUDAHost ||
+      bitmask.device.device_type == kDLROCMHost
+  ) << "The provided bitmask's device is not valid: should be CPU";
   XGRAMMAR_CHECK(logits->ndim == 2 || logits->ndim == 1)
       << "The provided logits's shape is not valid: should be 2D or 1D";
   XGRAMMAR_CHECK(bitmask.ndim == 2 || bitmask.ndim == 1)

@@ -1,4 +1,4 @@
-"""This module provides classes to handle C++ objects from pybind11."""
+"""This module provides classes to handle C++ objects from nanobind."""
 
 import os
 
@@ -10,7 +10,7 @@ else:
 
 class XGRObject:
     """The base class for all objects in XGrammar. This class provides methods to handle the
-    C++ handle from pybind11.
+    C++ handle from nanobind.
 
     In subclasses, the handle should be initialized via the the _create_from_handle, or via
     the _init_handle method called within the __init__ method, and should not be modified
