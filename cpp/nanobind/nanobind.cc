@@ -11,6 +11,7 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
+
 #include <cstddef>
 
 #include "../json_schema_converter.h"
