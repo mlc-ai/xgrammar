@@ -26,7 +26,6 @@ def check_schema_with_grammar(
         separators=separators,
         strict_mode=strict_mode,
     )
-    print(json_schema_ebnf)
     assert json_schema_ebnf == expected_grammar_ebnf
 
 
