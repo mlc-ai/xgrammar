@@ -43,10 +43,16 @@ class GrammarCompiler {
   /*!
    * \brief Construct a GrammarCompiler with a vocabulary. This class will always
    * create compiled grammars with this vocabulary.
-   * \param decoded_vocab The vocabulary that the grammar will use.
+   * \param tokenizer_info The tokenizer info.
+   * \param max_threads The maximum number of threads to use for compiling grammars.
+   * \param cache_enabled Whether to enable the cache.
+   * \param max_memory_bytes The maximum memory usage in bytes.
    */
   GrammarCompiler(
-      const TokenizerInfo& tokenizer_info, int max_threads = 8, bool cache_enabled = true
+      const TokenizerInfo& tokenizer_info,
+      int max_threads = 8,
+      bool cache_enabled = true,
+      std::size_t max_memory_bytes = 1024 * 1024 * 1024  // 1 GiB
   );
 
   /*! \brief Get the compiled grammar for a JSON schema string. */

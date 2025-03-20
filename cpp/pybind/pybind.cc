@@ -7,6 +7,8 @@
 #include <pybind11/stl.h>
 #include <xgrammar/xgrammar.h>
 
+#include <cstddef>
+
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
 #include "python_methods.h"
@@ -39,10 +41,11 @@ PYBIND11_MODULE(xgrammar_bindings, m) {
 
   auto pyCompiledGrammar = py::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_property_readonly("grammar", &CompiledGrammar::GetGrammar)
-      .def_property_readonly("tokenizer_info", &CompiledGrammar::GetTokenizerInfo);
+      .def_property_readonly("tokenizer_info", &CompiledGrammar::GetTokenizerInfo)
+      .def_property_readonly("memory_usage", &CompiledGrammar::MemorySize);
 
   auto pyGrammarCompiler = py::class_<GrammarCompiler>(m, "GrammarCompiler");
-  pyGrammarCompiler.def(py::init<const TokenizerInfo&, int, bool>())
+  pyGrammarCompiler.def(py::init<const TokenizerInfo&, int, bool, std::size_t>())
       .def(
           "compile_json_schema",
           &GrammarCompiler::CompileJSONSchema,

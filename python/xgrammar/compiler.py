@@ -1,6 +1,6 @@
 """Compiling grammar for efficient token mask generation."""
 
-from typing import List, Optional, Tuple, Type, Union, overload
+from typing import List, Literal, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
 
@@ -31,6 +31,11 @@ class CompiledGrammar(XGRObject):
         """The tokenizer info associated with the compiled grammar."""
         return TokenizerInfo._create_from_handle(self._handle.tokenizer_info)
 
+    @property
+    def memory_usage_bytes(self) -> int:
+        """The approximate memory usage of the compiled grammar in bytes."""
+        return self._handle.memory_usage
+
 
 class GrammarCompiler(XGRObject):
     """The compiler for grammars. It is associated with a certain tokenizer info, and compiles
@@ -48,10 +53,23 @@ class GrammarCompiler(XGRObject):
 
     cache_enabled : bool, default: True
         Whether to enable the cache.
+
+    max_memory_usage : float, default: 1024
+        The maximum memory usage for the cache in the specified unit.
+        Note that the actual memory usage may slightly exceed this value.
+
+    memory_unit : Literal["B", "KiB", "MiB", "GiB"], default: "MiB"
+        The unit of the memory usage.
     """
 
     def __init__(
-        self, tokenizer_info: TokenizerInfo, *, max_threads: int = 8, cache_enabled: bool = True
+        self,
+        tokenizer_info: TokenizerInfo,
+        *,
+        max_threads: int = 8,
+        cache_enabled: bool = True,
+        max_memory_usage: float = 1024,
+        memory_unit: Literal["B", "KiB", "MiB", "GiB"] = "MiB",
     ):
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(
@@ -59,7 +77,13 @@ class GrammarCompiler(XGRObject):
                 "to GrammarCompiler."
             )
 
-        self._init_handle(_core.GrammarCompiler(tokenizer_info._handle, max_threads, cache_enabled))
+        unit_map = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
+        max_memory_bytes = int(max_memory_usage * unit_map[memory_unit])
+        self._init_handle(
+            _core.GrammarCompiler(
+                tokenizer_info._handle, max_threads, cache_enabled, max_memory_bytes
+            )
+        )
 
     def compile_json_schema(
         self,

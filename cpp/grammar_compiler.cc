@@ -585,11 +585,11 @@ class GrammarCompiler::Impl : private GrammarCompilerBase {
       const TokenizerInfo& tokenizer_info,
       int max_threads,
       bool cache_enabled,
-      std::size_t max_size = std::size_t(-1)
+      std::size_t max_memory_bytes
   )
       : GrammarCompilerBase(tokenizer_info, max_threads, cache_enabled),
         compile_builtin_json_grammar_cache_([&] { return CompileJson(); }),
-        compile_cache_(max_size, static_cast<GrammarCompilerBase&>(*this)) {}
+        compile_cache_(max_memory_bytes, static_cast<GrammarCompilerBase&>(*this)) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -689,9 +689,13 @@ void GrammarCompiler::Impl::ClearCache() {
 /******************* GrammarCompiler *******************/
 
 GrammarCompiler::GrammarCompiler(
-    const TokenizerInfo& tokenizer_info, int max_threads, bool cache_enabled
+    const TokenizerInfo& tokenizer_info,
+    int max_threads,
+    bool cache_enabled,
+    std::size_t max_memory_bytes
 )
-    : pimpl_(std::make_shared<Impl>(tokenizer_info, max_threads, cache_enabled)) {}
+    : pimpl_(std::make_shared<Impl>(tokenizer_info, max_threads, cache_enabled, max_memory_bytes)) {
+}
 
 CompiledGrammar GrammarCompiler::CompileJSONSchema(
     const std::string& schema,
