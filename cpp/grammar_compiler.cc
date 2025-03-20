@@ -36,34 +36,34 @@ struct hash<xgrammar::StructuralTagItem> {
 
 namespace xgrammar {
 
-/******************* EstimatedSize *******************/
+/******************* MemorySize *******************/
 
-auto Grammar::Impl::EstimatedSize() const -> std::size_t {
+auto Grammar::Impl::MemorySize() const -> std::size_t {
   // assume string is not long, so we don't iterate through all the rules
   // just to get a precise heap size usage, which may be too time-consuming
   const auto kEstimatedRuleSize = rules_.size() * sizeof(Rule);
-  return sizeof(*this) + kEstimatedRuleSize + sizeof_heap(rule_expr_data_) +
-         sizeof_heap(rule_expr_indptr_) + sizeof_heap(root_tag_dispatch_fsm) +
-         sizeof_heap(tag_dispatch_end_node_to_rule_id) + sizeof_heap(allow_empty_rule_ids);
+  return sizeof(*this) + kEstimatedRuleSize + SizeOfHeap(rule_expr_data_) +
+         SizeOfHeap(rule_expr_indptr_) + SizeOfHeap(root_tag_dispatch_fsm) +
+         SizeOfHeap(tag_dispatch_end_node_to_rule_id) + SizeOfHeap(allow_empty_rule_ids);
 }
 
-auto AdaptiveTokenMask::EstimatedSize() const -> std::size_t {
+auto AdaptiveTokenMask::MemorySize() const -> std::size_t {
   // do not count into sizeof(*this) since it's not pimpl
-  return sizeof_heap(uncertain_indices) + sizeof_heap(accepted_indices) +
-         sizeof_heap(rejected_indices) + sizeof_heap(accepted_bitset);
+  return SizeOfHeap(uncertain_indices) + SizeOfHeap(accepted_indices) +
+         SizeOfHeap(rejected_indices) + SizeOfHeap(accepted_bitset);
 }
 
-auto CompiledGrammar::Impl::EstimatedSize() const -> std::size_t {
+auto CompiledGrammar::Impl::MemorySize() const -> std::size_t {
   using ValueType = typename decltype(adaptive_token_mask_cache)::value_type;
-  auto sum = sizeof(*this) + grammar->EstimatedSize() +
-             sizeof(ValueType) * adaptive_token_mask_cache.size();
+  auto sum =
+      sizeof(*this) + grammar->MemorySize() + sizeof(ValueType) * adaptive_token_mask_cache.size();
   for (auto& [_, mask] : adaptive_token_mask_cache) {
-    sum += mask.EstimatedSize();
+    sum += mask.MemorySize();
   }
   return sum;
 }
 
-auto CompiledGrammar::MemorySize() const -> std::size_t { return pimpl_->EstimatedSize(); }
+auto CompiledGrammar::MemorySize() const -> std::size_t { return pimpl_->MemorySize(); }
 
 /******************* AdaptiveTokenMask and CompiledGrammar *******************/
 
@@ -396,9 +396,9 @@ class GrammarCompilerBase {
   auto CompileJson() -> CompiledGrammar;
 
   template <typename KeyType>
-  auto Compile(const KeyType& key);
+  auto Compile(const KeyType& key) -> CompiledGrammar = delete;
 
-  auto CacheEnabled() const -> bool { return cache_enabled_; }
+  bool CacheEnabled() const { return cache_enabled_; }
 
  private:
   /*! \brief The vocabulary associated with this storage class. */
@@ -414,25 +414,26 @@ auto GrammarCompilerBase::CompileJson() -> CompiledGrammar {
 }
 
 template <>
-auto GrammarCompilerBase::Compile<SchemaKey>(const SchemaKey& key) {
+auto GrammarCompilerBase::Compile<SchemaKey>(const SchemaKey& key) -> CompiledGrammar {
   const auto& [schema, any_whitespace, indent, separators, strict_mode] = key;
   auto grammar = Grammar::FromJSONSchema(schema, any_whitespace, indent, separators, strict_mode);
   return MultiThreadCompileGrammar(grammar);
 }
 
 template <>
-auto GrammarCompilerBase::Compile<StructuralTagKey>(const StructuralTagKey& key) {
+auto GrammarCompilerBase::Compile<StructuralTagKey>(const StructuralTagKey& key)
+    -> CompiledGrammar {
   const auto& [tags, triggers] = key;
   return MultiThreadCompileGrammar(Grammar::FromStructuralTag(tags, triggers));
 }
 
 template <>
-auto GrammarCompilerBase::Compile<std::string>(const std::string& key) {
+auto GrammarCompilerBase::Compile<std::string>(const std::string& key) -> CompiledGrammar {
   return MultiThreadCompileGrammar(Grammar::FromRegex(key));
 }
 
 template <>
-auto GrammarCompilerBase::Compile<GrammarKey>(const GrammarKey& key) {
+auto GrammarCompilerBase::Compile<GrammarKey>(const GrammarKey& key) -> CompiledGrammar {
   const auto& [grammar_str, root_rule_name] = key;
   return MultiThreadCompileGrammar(Grammar::FromEBNF(grammar_str, root_rule_name));
 }

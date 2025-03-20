@@ -179,7 +179,7 @@ class Grammar::Impl {
   friend class GrammarDeserializer;
   friend class GrammarCompiler;
 
-  auto EstimatedSize() const -> std::size_t;
+  std::size_t MemorySize() const;
 };
 
 }  // namespace xgrammar

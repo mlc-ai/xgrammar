@@ -70,7 +70,7 @@ struct AdaptiveTokenMask {
 
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
-  std::size_t EstimatedSize() const;
+  std::size_t MemorySize() const;
 };
 
 /*!
@@ -117,7 +117,7 @@ class CompiledGrammar::Impl {
 
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
 
-  std::size_t EstimatedSize() const;
+  std::size_t MemorySize() const;
 };
 
 }  // namespace xgrammar

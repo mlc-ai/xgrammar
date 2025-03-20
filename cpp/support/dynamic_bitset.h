@@ -11,8 +11,6 @@
 #include <cstring>
 #include <vector>
 
-#include "utils.h"
-
 // For __popcnt
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -173,8 +171,8 @@ class DynamicBitset {
 
   static constexpr int BITS_PER_BLOCK = 32;
 
-  friend auto sizeof_heap(const DynamicBitset& bitset) -> std::size_t {
-    return sizeof_heap(bitset.internal_buffer_);
+  friend std::size_t SizeOfHeap(const DynamicBitset& bitset) {
+    return bitset.buffer_size_ * sizeof(bitset.data_[0]);
   }
 
  private:

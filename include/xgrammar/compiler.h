@@ -25,6 +25,7 @@ class CompiledGrammar {
  public:
   Grammar GetGrammar() const;
   TokenizerInfo GetTokenizerInfo() const;
+  /*! \brief Return the approximate memory usage of the grammar in bytes. */
   std::size_t MemorySize() const;
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);

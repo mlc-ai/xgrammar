@@ -186,8 +186,8 @@ class CompactFSM {
 
   friend std::ostream& operator<<(std::ostream& os, const CompactFSM& fsm);
 
-  friend auto sizeof_heap(const CompactFSM& self) -> std::size_t {
-    return sizeof_heap(self.edges_) + sizeof_heap(self.end_nodes_);
+  friend std::size_t SizeOfHeap(const CompactFSM& self) {
+    return SizeOfHeap(self.edges_) + SizeOfHeap(self.end_nodes_);
   }
 
  private:
