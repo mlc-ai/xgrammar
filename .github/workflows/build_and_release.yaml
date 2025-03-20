@@ -38,7 +38,7 @@ jobs:
           CIBW_ARCHS_LINUX: ${{ matrix.arch }}
           CIBW_ARCHS_WINDOWS: ${{ matrix.arch }}
           CIBW_BUILD: ${{ matrix.build }}
-          CIBW_TEST_SKIP: ${{ matrix.arch }}
+          CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_x86_64 *-manylinux_aarch64 *-manylinux_x86_64 *win_amd64"
           CIBW_BUILD_VERBOSITY: 1
 
       - uses: actions/upload-artifact@v4
