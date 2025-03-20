@@ -289,12 +289,24 @@ struct DemoPolicy {
   // The interface of the policy
   template <typename KeyType>
   auto compute(const KeyType&) -> Value;
-  auto should_evict(std::size_t) -> bool;
-  auto size(const Value&) -> std::size_t;
 };
 
 }  // namespace details
 
+/**
+ * \brief A thread-safe key-value cache with on-demand computation and LRU eviction
+ * \tparam Policy The policy class that provides the compute method
+ * \tparam Value The type of values stored in the cache
+ * \tparam Keys The types of keys used to lookup values. Should be hashable.
+ * \details This cache provides thread-safe access to computed values with the following features:
+ * - Lazy computation: Values are only computed when first requested
+ * - LRU eviction: When the cache is full, the least recently used value is evicted
+ * - Thread safety: Uses reader-writer locks for concurrent reads
+ * \attention User should guarantee the following:
+ * 1. The policy class should provide a compute method that takes a key and returns a value.
+ * 2. The value type should have a MemorySize method that returns the size of the value in bytes.
+ * 3. All the key types should be hashable by std::hash.
+ */
 template <typename Policy, typename Value, typename... Keys>
 class ThreadSafeLRUCache : private Policy, details::LRUCacheSizedImpl<Value, Keys...> {
  private:
@@ -305,9 +317,13 @@ class ThreadSafeLRUCache : private Policy, details::LRUCacheSizedImpl<Value, Key
   using typename Impl::Entry;
 
  public:
-  using Policy::Policy;
+  template <typename... Args>
+  ThreadSafeLRUCache(std::size_t max_size, Args&&... args)
+      : Policy(std::forward<Args>(args)...), max_size_{max_size} {}
 
   auto GetPolicy() -> Policy& { return *this; }
+
+  auto MaxSize() const -> std::size_t { return max_size_; }
 
   template <typename Key, typename Tp>
   auto Get(const Tp& key) -> Value {
@@ -345,7 +361,7 @@ class ThreadSafeLRUCache : private Policy, details::LRUCacheSizedImpl<Value, Key
       return Sized{
           Policy::template compute<Key>(key),  // compute the value
           [&](const Value& value) {
-            auto size = Policy::size(value);
+            const auto size = value.MemorySize();
             current_size_ += size;
             return size;
           }
@@ -377,7 +393,7 @@ class ThreadSafeLRUCache : private Policy, details::LRUCacheSizedImpl<Value, Key
 
   auto Pop() -> void {
     Impl::lru_evict(
-        [&] { return Policy::should_evict(current_size_); },
+        [&] { return current_size_ > max_size_; },
         [&](const Future& value) {
           using namespace std::chrono_literals;
           // if not ready, then do not wait and block here
@@ -389,6 +405,7 @@ class ThreadSafeLRUCache : private Policy, details::LRUCacheSizedImpl<Value, Key
   }
 
  private:
+  const std::size_t max_size_;
   std::atomic_size_t current_size_{0};
   std::mutex lru_mutex_;
   std::shared_mutex map_mutex_;

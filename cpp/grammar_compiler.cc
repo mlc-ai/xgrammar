@@ -63,6 +63,8 @@ auto CompiledGrammar::Impl::EstimatedSize() const -> std::size_t {
   return sum;
 }
 
+auto CompiledGrammar::MemorySize() const -> std::size_t { return pimpl_->EstimatedSize(); }
+
 /******************* AdaptiveTokenMask and CompiledGrammar *******************/
 
 AdaptiveTokenMask::AdaptiveTokenMask(
@@ -586,7 +588,7 @@ class GrammarCompiler::Impl : private GrammarCompilerBase {
   )
       : GrammarCompilerBase(tokenizer_info, max_threads, cache_enabled),
         compile_builtin_json_grammar_cache_([&] { return CompileJson(); }),
-        compile_cache_(*this, max_size) {}
+        compile_cache_(max_size, static_cast<GrammarCompilerBase&>(*this)) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -611,22 +613,14 @@ class GrammarCompiler::Impl : private GrammarCompilerBase {
  private:
   struct Policy {
    public:
-    Policy(GrammarCompilerBase& compiler, std::size_t max_size)
-        : compiler(compiler), max_size(max_size) {}
+    Policy(GrammarCompilerBase& compiler) : compiler(compiler) {}
     template <typename KeyType>
     auto compute(const KeyType& key) -> CompiledGrammar {
       return compiler.Compile<KeyType>(key);
     }
-    auto should_evict(std::size_t size) -> bool {
-      return size > max_size;  // whether to evict the least recently used cache
-    }
-    static auto size(const CompiledGrammar& grammar) -> std::size_t {
-      return grammar->EstimatedSize();
-    }
 
    private:
     GrammarCompilerBase& compiler;
-    std::size_t max_size;
   };
 
   /*! \brief The cache for the compiled grammar for JSON. */

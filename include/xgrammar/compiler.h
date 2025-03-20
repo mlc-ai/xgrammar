@@ -10,6 +10,7 @@
 #include <xgrammar/grammar.h>
 #include <xgrammar/tokenizer_info.h>
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -24,6 +25,7 @@ class CompiledGrammar {
  public:
   Grammar GetGrammar() const;
   TokenizerInfo GetTokenizerInfo() const;
+  std::size_t MemorySize() const;
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);
 };

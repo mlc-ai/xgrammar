@@ -27,15 +27,13 @@ static_assert(
 struct MockGrammar {
   std::size_t uuid;
   std::byte padding[sizeof(CompiledGrammar) - sizeof(std::size_t)];
+  auto MemorySize() const -> std::size_t { return 1; }
 };
 
 using namespace std::chrono_literals;
 
 struct LRUPolicy0 {
-  // The interface of the policy
   std::atomic_size_t counter{0};
-  const std::size_t max_size;
-  LRUPolicy0(std::size_t max_size) : max_size(max_size) {}
   template <typename KeyType>
   auto compute(const KeyType&) -> MockGrammar {
     std::this_thread::sleep_for(1s);  // simulate a slow operation
@@ -43,8 +41,6 @@ struct LRUPolicy0 {
     g.uuid = counter++;
     return g;
   }
-  auto should_evict(std::size_t cur_size) -> bool { return cur_size > max_size; }
-  static auto size(const MockGrammar&) -> std::size_t { return 1; }
 };
 
 template <bool use_lru>
@@ -260,22 +256,22 @@ struct TestObject : LifeSpanHook {
     this->check();
     return this->name;
   }
+  auto MemorySize() const -> std::size_t {
+    this->check();
+    return 1;
+  }
 };
 
 struct LRUPolicy1 {
-  // The interface of the policy
-  std::atomic_size_t counter{0};
   template <typename KeyType>
   auto compute(const KeyType& key) -> TestObject {
     std::this_thread::sleep_for(5s);  // simulate a slow operation
     return TestObject{key};
   }
-  auto should_evict(std::size_t cur_size) -> bool { return false; }
-  static auto size(const TestObject&) -> std::size_t { return 1; }
 };
 
 TEST(XGrammarParallelTest, CacheCorrectness) {
-  auto cache = ThreadSafeLRUCache<LRUPolicy1, TestObject, std::string>{};
+  auto cache = ThreadSafeLRUCache<LRUPolicy1, TestObject, std::string>{std::size_t(-1)};
 
   const auto kNumThreads = int(std::thread::hardware_concurrency()) * 10;
   auto futures = std::vector<std::future<std::string>>{};
