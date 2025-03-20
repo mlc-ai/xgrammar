@@ -26,6 +26,7 @@ def check_schema_with_grammar(
         separators=separators,
         strict_mode=strict_mode,
     )
+    print(json_schema_ebnf)
     assert json_schema_ebnf == expected_grammar_ebnf
 
 
@@ -1098,6 +1099,54 @@ root ::= ("{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string "")) [ \n
 
     check_schema_with_instance(schema, instance_accepted, any_whitespace=True)
     check_schema_with_instance(schema, instance_accepted_2, any_whitespace=True)
+
+
+def test_primitive_type_string():
+    schema = {"type": "string"}
+    ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= ("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+root ::= basic_string
+"""
+
+    check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True)
+
+    instance_accepted = '"test"'
+    instance_rejected = "123"
+
+    check_schema_with_instance(schema, instance_accepted, any_whitespace=True)
+    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
+
+
+def test_primitive_type_object():
+    schema = {"type": "object"}
+    ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= ("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+root ::= basic_object
+"""
+
+    check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True)
+
+    instance_accepted = '{"name": "test"}'
+    instance_rejected = '"test"'
+
+    check_schema_with_instance(schema, instance_accepted, any_whitespace=True)
+    check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
 
 
 if __name__ == "__main__":

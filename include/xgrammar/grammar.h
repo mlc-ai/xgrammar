@@ -109,7 +109,8 @@ class Grammar {
       bool any_whitespace = true,
       std::optional<int> indent = std::nullopt,
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
-      bool strict_mode = true
+      bool strict_mode = true,
+      bool print_converted_ebnf = false
   );
 
   /*!

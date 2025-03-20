@@ -739,6 +739,11 @@ std::string JSONSchemaConverter::CreateRuleFromSchema(
 ) {
   std::string idx = GetSchemaCacheIndex(schema);
   if (basic_rules_cache_.count(idx)) {
+    if (rule_name_hint == kRootRuleName) {
+      // If the rule name is root, we need to define the root rule instead of just using the
+      // cached rule.
+      return ebnf_script_creator_.AddRule(rule_name_hint, basic_rules_cache_[idx]);
+    }
     return basic_rules_cache_[idx];
   }
 

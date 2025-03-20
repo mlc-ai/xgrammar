@@ -117,6 +117,7 @@ class Grammar(XGRObject):
         indent: Optional[int] = None,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
+        print_converted_ebnf: bool = False,
     ) -> "Grammar":
         """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
         used to specify the schema.
@@ -159,6 +160,9 @@ class Grammar(XGRObject):
             This helps LLM to generate accurate output in the grammar-guided generation with JSON
             schema.
 
+        print_converted_ebnf : bool, default: False
+            If True, the converted EBNF string will be printed. For debugging purposes.
+
         Returns
         -------
         grammar : Grammar
@@ -172,7 +176,7 @@ class Grammar(XGRObject):
         schema_str = _convert_schema_to_str(schema)
         return Grammar._create_from_handle(
             _core.Grammar.from_json_schema(
-                schema_str, any_whitespace, indent, separators, strict_mode
+                schema_str, any_whitespace, indent, separators, strict_mode, print_converted_ebnf
             )
         )
 

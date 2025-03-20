@@ -99,7 +99,8 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("any_whitespace"),
           nb::arg("indent").none(),
           nb::arg("separators").none(),
-          nb::arg("strict_mode")
+          nb::arg("strict_mode"),
+          nb::arg("print_converted_ebnf")
       )
       .def_static("from_regex", &Grammar::FromRegex)
       .def_static("from_structural_tag", &Grammar_FromStructuralTag)
