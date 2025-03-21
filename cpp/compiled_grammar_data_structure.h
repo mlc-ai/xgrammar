@@ -8,6 +8,7 @@
 
 #include <xgrammar/grammar.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -68,6 +69,8 @@ struct AdaptiveTokenMask {
   );
 
   std::string Print(const TokenizerInfo& tokenizer_info) const;
+
+  std::size_t MemorySize() const;
 };
 
 /*!
@@ -113,6 +116,8 @@ class CompiledGrammar::Impl {
   Grammar GetGrammar() const { return grammar; }
 
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
+
+  std::size_t MemorySize() const;
 };
 
 }  // namespace xgrammar
