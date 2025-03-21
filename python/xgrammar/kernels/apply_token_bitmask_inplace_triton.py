@@ -113,7 +113,6 @@ def apply_token_bitmask_inplace_triton(
         assert (
             logits_shape[0] == bitmask_shape[0]
         ), f"batch size mismatch: logits {logits_shape[0]} vs bitmask {bitmask_shape[0]}"
-
         num_rows = logits_shape[0]
 
     grid = (NUM_SMS,)
