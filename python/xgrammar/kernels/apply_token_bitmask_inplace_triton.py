@@ -105,8 +105,6 @@ def apply_token_bitmask_inplace_triton(
 
     vocab_size = min(logits_shape[1], bitmask_shape[1] * BITS_PER_BLOCK)
 
-    vocab_size = min(logits_shape[1], bitmask_shape[1] * BITS_PER_BLOCK)
-
     num_rows = None
     if isinstance(indices, list) or isinstance(indices, torch.Tensor):
         indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
