@@ -51,6 +51,13 @@ jobs:
           cache: 'pip'
           python-version: ${{ matrix.python }}
 
+      - name: Cache huggingface
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+          key: ${{ runner.os }}-huggingface-${{ matrix.python }}
+
       - name: Build xgrammar from source
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
