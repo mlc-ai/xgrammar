@@ -64,6 +64,7 @@ jobs:
       - name: Run Python tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_DOWNLOAD_TIMEOUT: 60
         if: env.HF_TOKEN != ''
         run: |
           pytest
