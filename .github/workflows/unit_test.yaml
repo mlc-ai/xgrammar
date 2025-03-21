@@ -56,7 +56,7 @@ jobs:
         with:
           path: |
             ~/.cache/huggingface
-          key: ${{ runner.os }}-huggingface-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-huggingface-${{ matrix.python }}
 
       - name: Build xgrammar from source
         run: |
