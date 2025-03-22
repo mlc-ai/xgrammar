@@ -5,7 +5,6 @@ import sys
 import pytest
 
 import xgrammar as xgr
-from xgrammar.testing import _get_grammar_union
 
 
 def test_grammar_union():
@@ -42,7 +41,7 @@ r2_1 ::= (("false") | (r3))
 r3 ::= (("abc"))
 """
 
-    union_grammar = _get_grammar_union(grammar1, grammar2, grammar3)
+    union_grammar = xgr.Grammar.union(grammar1, grammar2, grammar3)
     assert str(union_grammar) == expected
 
 

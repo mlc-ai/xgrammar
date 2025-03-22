@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/pybind/python_methods.cc
+ * \file xgrammar/nanobind/python_methods.cc
  */
 
 #include "python_methods.h"
@@ -22,39 +22,24 @@ namespace xgrammar {
 
 TokenizerInfo TokenizerInfo_Init(
     const std::vector<std::string>& encoded_vocab,
-    std::string vocab_type,
+    int vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int32_t>> stop_token_ids,
-    bool prepend_space_in_tokenization
+    bool add_prefix_space
 ) {
-  const std::unordered_map<std::string, VocabType> VOCAB_TYPE_MAP = {
-      {"RAW", VocabType::RAW},
-      {"BYTE_FALLBACK", VocabType::BYTE_FALLBACK},
-      {"BYTE_LEVEL", VocabType::BYTE_LEVEL},
-  };
-  XGRAMMAR_CHECK(VOCAB_TYPE_MAP.count(vocab_type)) << "Invalid vocab type: " << vocab_type;
+  XGRAMMAR_CHECK(vocab_type == 0 || vocab_type == 1 || vocab_type == 2)
+      << "Invalid vocab type: " << vocab_type;
   return TokenizerInfo(
       encoded_vocab,
-      VOCAB_TYPE_MAP.at(vocab_type),
+      static_cast<VocabType>(vocab_type),
       vocab_size,
       stop_token_ids,
-      prepend_space_in_tokenization
+      add_prefix_space
   );
 }
 
-std::string TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer) {
-  const std::string VOCAB_TYPE_NAMES[] = {"RAW", "BYTE_FALLBACK", "BYTE_LEVEL"};
-  return VOCAB_TYPE_NAMES[static_cast<int>(tokenizer.GetVocabType())];
-}
-
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
-  const auto& decoded_vocab = tokenizer.GetDecodedVocab();
-  std::vector<pybind11::bytes> py_result;
-  py_result.reserve(decoded_vocab.size());
-  for (const auto& item : decoded_vocab) {
-    py_result.emplace_back(pybind11::bytes(item));
-  }
-  return py_result;
+int TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer) {
+  return static_cast<int>(tokenizer.GetVocabType());
 }
 
 bool GrammarMatcher_FillNextTokenBitmask(

@@ -29,11 +29,11 @@ class TokenizerInfo {
       VocabType vocab_type = VocabType::RAW,
       std::optional<int> vocab_size = std::nullopt,
       std::optional<std::vector<int32_t>> stop_token_ids = std::nullopt,
-      bool prepend_space_in_tokenization = false
+      bool add_prefix_space = false
   );
 
   VocabType GetVocabType() const;
-  bool GetPrependSpaceInTokenization() const;
+  bool GetAddPrefixSpace() const;
   int GetVocabSize() const;
   const std::vector<std::string>& GetDecodedVocab() const;
   const std::vector<int32_t>& GetStopTokenIds() const;
@@ -44,12 +44,8 @@ class TokenizerInfo {
   static TokenizerInfo FromVocabAndMetadata(
       const std::vector<std::string>& encoded_vocab, const std::string& metadata
   );
-  static TokenizerInfo FromHuggingFace(
-      const std::vector<std::string>& encoded_vocab,
-      const std::string& backend_str,
-      std::optional<int> vocab_size = std::nullopt,
-      std::optional<std::vector<int32_t>> stop_token_ids = std::nullopt
-  );
+
+  static std::string DetectMetadataFromHF(const std::string& backend_str);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
 };

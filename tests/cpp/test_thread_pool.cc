@@ -1,7 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "support/thread_pool.h"
+#include <chrono>
 
+#include "support/thread_pool.h"
 using namespace xgrammar;
 
 TEST(XGramamrThreadPoolTest, FunctionalTest) {

@@ -20,6 +20,42 @@ import torch
 import torch.utils.cpp_extension
 
 
+def _check_cuda_toolchain() -> None:
+    """check if nvcc is available and if pytorch will likely find it"""
+    import glob
+    import os
+    import shutil
+    from pathlib import Path
+
+    # First check if CUDA is available in PyTorch
+    if not torch.cuda.is_available():
+        raise ImportError("CUDA is not available in PyTorch")
+
+    # This is similar logic to what pytorch does to find the nvcc compiler
+    nvcc_path = shutil.which("nvcc")
+    if nvcc_path is None:
+        cuda_home = os.environ.get("CUDA_HOME", os.environ.get("CUDA_PATH", None))
+        if cuda_home is None:
+            if os.name == "nt":
+                # This is a very hardcoded asumption about install directories but pytorch does this.
+                cuda_homes = glob.glob("C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v*.*")
+
+                if len(cuda_homes) == 0:
+                    cuda_home = ""
+                else:
+                    cuda_home = cuda_homes[0]
+            else:
+                cuda_home = "/usr/local/cuda"
+
+        if cuda_home is None:
+            raise ImportError("No CUDA toolchain found")
+
+        nvcc_path = str(Path(cuda_home) / "bin" / "nvcc")
+
+    if not os.path.exists(nvcc_path):
+        raise ImportError(f"nvcc compiler not found at {nvcc_path}")
+
+
 def _remove_torch_nvcc_flags() -> None:
     REMOVE_NVCC_FLAGS = [
         "-D__CUDA_NO_HALF_OPERATORS__",
@@ -50,6 +86,7 @@ def _load_torch_ops() -> None:
     )
 
 
+_check_cuda_toolchain()
 _remove_torch_nvcc_flags()
 _load_torch_ops()
 
@@ -72,4 +109,6 @@ def apply_token_bitmask_inplace_cuda(
 ) -> None:
     if isinstance(indices, list):
         indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
+    if indices is not None:
+        indices = indices.to(logits.device)
     torch.ops.xgrammar.apply_token_bitmask_inplace_cuda(logits, bitmask, indices)

@@ -43,7 +43,7 @@ TokenizerInfo TokenizerInfo_Init(
     std::string vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int>> stop_token_ids,
-    bool prepend_space_in_tokenization
+    bool add_prefix_space
 ) {
   static const std::unordered_map<std::string, VocabType> VOCAB_TYPE_MAP = {
       {"RAW", VocabType::RAW},
@@ -51,11 +51,7 @@ TokenizerInfo TokenizerInfo_Init(
       {"BYTE_LEVEL", VocabType::BYTE_LEVEL},
   };
   return TokenizerInfo(
-      encoded_vocab,
-      VOCAB_TYPE_MAP.at(vocab_type),
-      vocab_size,
-      stop_token_ids,
-      prepend_space_in_tokenization
+      encoded_vocab, VOCAB_TYPE_MAP.at(vocab_type), vocab_size, stop_token_ids, add_prefix_space
   );
 }
 

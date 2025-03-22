@@ -5,7 +5,6 @@
 #include "structural_tag.h"
 
 #include <algorithm>
-#include <chrono>
 #include <string>
 #include <string_view>
 
@@ -44,24 +43,24 @@ Grammar StructuralTagToGrammar(
     bool found = false;
     for (int it_trigger = 0; it_trigger < static_cast<int>(sorted_triggers.size()); ++it_trigger) {
       const auto& trigger = sorted_triggers[it_trigger];
-      if (trigger.size() <= tag.start.size() &&
-          std::string_view(tag.start).substr(0, trigger.size()) == trigger) {
+      if (trigger.size() <= tag.begin.size() &&
+          std::string_view(tag.begin).substr(0, trigger.size()) == trigger) {
         tag_groups[it_trigger].push_back(std::make_pair(tag, schema_grammars[it_tag]));
         found = true;
         break;
       }
     }
-    XGRAMMAR_CHECK(found) << "Tag " << tag.start << " does not match any trigger";
+    XGRAMMAR_CHECK(found) << "Tag " << tag.begin << " does not match any trigger";
   }
 
   // Step 3: Combine the tags to form a grammar
   // root ::= TagDispatch((trigger1, rule1), (trigger2, rule2), ...)
   // Suppose tag1 and tag2 matches trigger1, then
-  // rule1 ::= (tag1.start[trigger1.size():] + ToEBNF(tag1.schema) + tag1.end) |
-  //            (tag2.start[trigger1.size():] + ToEBNF(tag2.schema) + tag2.end) | ...
+  // rule1 ::= (tag1.begin[trigger1.size():] + ToEBNF(tag1.schema) + tag1.end) |
+  //            (tag2.begin[trigger1.size():] + ToEBNF(tag2.schema) + tag2.end) | ...
   //
   // Suppose tag3 matches trigger2, then
-  // rule2 ::= (tag3.start[trigger2.size():] + ToEBNF(tag3.schema) + tag3.end)
+  // rule2 ::= (tag3.begin[trigger2.size():] + ToEBNF(tag3.schema) + tag3.end)
   //
   // ...
   return StructuralTagGrammarCreator::Apply(sorted_triggers, tag_groups);

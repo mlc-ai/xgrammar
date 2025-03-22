@@ -10,13 +10,9 @@ import torch
 
 from .base import XGRObject, _core
 from .compiler import CompiledGrammar
-from .kernels import apply_token_bitmask_inplace_kernels
 
 """The dtype of the bitmask: int32."""
 bitmask_dtype = torch.int32
-
-
-_is_cuda_available = torch.cuda.is_available()
 
 
 def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
@@ -50,12 +46,7 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
         The shape of the bitmask.
     """
     # In CUDA, use pinned memory to speed up data transfer from CPU to GPU
-    return torch.full(
-        get_bitmask_shape(batch_size, vocab_size),
-        _FULL_MASK,
-        dtype=bitmask_dtype,
-        pin_memory=_is_cuda_available,
-    )
+    return torch.full(get_bitmask_shape(batch_size, vocab_size), _FULL_MASK, dtype=bitmask_dtype)
 
 
 def reset_token_bitmask(bitmask: torch.Tensor) -> None:
@@ -95,12 +86,19 @@ def apply_token_bitmask_inplace(
                 if get_bitmask_value(bitmask, batch_id, j) == 0:
                     logits[batch_id, j] = -inf
 
+    When indices is specified, the batch sizes of logits and bitmask do not need to be the same.
+    As long as the indices are valid, the operation will be performed.
+
     The logits and bitmask should be on the same device. If both them are on CUDA, we launch a CUDA
     kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The CUDA kernel
     is optimized and should be preferred.
 
     In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
     manually copy the bitmask to GPU before calling this function.
+
+    This method also supports additional padding on the vocabulary dimension of the logits. The
+    shape of logits can be (batch_size, vocab_size + padding). Then the vocab size will be
+    determined by the bitmask size.
 
     Parameters
     ----------
@@ -111,9 +109,14 @@ def apply_token_bitmask_inplace(
         The bitmask to apply.
 
     indices : Optional[List[int]], default: None
-        A list of indices to specify which logits in the batch to apply the bitmask to. If None,
-        apply the bitmask to all logits in the batch.
+        A list of indices to specify which logits in the batch to apply the bitmask to. Should be
+        unique. If None, apply the bitmask to all logits in the batch.
     """
+    # Fix (from vLLM team): postpone the import of apply_token_bitmask_inplace_kernels to the
+    # calling site to avoid re-initializing CUDA in forked subprocess.
+    from .kernels import apply_token_bitmask_inplace_kernels
+
+    # dispatch to different implementations based on the device of logits and bitmask
     if bitmask.device != logits.device:
         raise ValueError(
             "logits and bitmask should be on the same device. "
@@ -121,15 +124,26 @@ def apply_token_bitmask_inplace(
         )
 
     if logits.device.type == "cuda":
-        if os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") == "1":
-            if "triton" not in apply_token_bitmask_inplace_kernels:
-                raise RuntimeError(
-                    "The triton kernel is not available even though XGRAMMAR_TOKEN_BITMASK_TRITON "
-                    "is set to 1"
-                )
+        if (
+            "triton" not in apply_token_bitmask_inplace_kernels
+            and os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") == "1"
+        ):
+            raise RuntimeError(
+                "The triton kernel is not available even though XGRAMMAR_TOKEN_BITMASK_TRITON "
+                "is set to 1"
+            )
+
+        if (
+            "cuda" in apply_token_bitmask_inplace_kernels
+            and os.environ.get("XGRAMMAR_TOKEN_BITMASK_TRITON") != "1"
+        ):
+            apply_token_bitmask_inplace_kernels["cuda"](logits, bitmask, indices)
+        elif "triton" in apply_token_bitmask_inplace_kernels:
             apply_token_bitmask_inplace_kernels["triton"](logits, bitmask, indices)
         else:
-            apply_token_bitmask_inplace_kernels["cuda"](logits, bitmask, indices)
+            raise RuntimeError(
+                "No CUDA kernel is available. Check if you have a CUDA compatible toolchain installed."
+            )
     elif logits.device.type == "cpu":
         apply_token_bitmask_inplace_kernels["cpu"](logits, bitmask, indices)
     else:

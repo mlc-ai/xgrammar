@@ -8,19 +8,16 @@
 
 #include <xgrammar/matcher.h>
 
-#include <chrono>
-#include <queue>
-
 #include "compiled_grammar_data_structure.h"
 #include "grammar_data_structure.h"
 #include "grammar_matcher_base.h"
-#include "grammar_serializer.h"
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
 #include "support/int_set.h"
 #include "support/logging.h"
 #include "testing.h"
+
 namespace xgrammar {
 
 /******************* Tool functions for token mask *******************/
@@ -49,8 +46,11 @@ int32_t* CheckAndGetBitmaskPtr(const DLTensor& token_bitmask, int vocab_size, in
         << "The provided index is out of bounds";
   }
 
-  XGRAMMAR_CHECK(token_bitmask.device.device_type == kDLCPU)
-      << "The provided bitmask's device is not valid: should be CPU";
+  XGRAMMAR_CHECK(
+      token_bitmask.device.device_type == kDLCPU ||
+      token_bitmask.device.device_type == kDLCUDAHost ||
+      token_bitmask.device.device_type == kDLROCMHost
+  ) << "The provided bitmask's device is not valid: should be CPU";
 
   return reinterpret_cast<int32_t*>(token_bitmask.data) + index * buffer_size;
 }
@@ -69,31 +69,21 @@ void _DebugGetMaskedTokensFromBitmask(
 void ApplyTokenBitmaskInplaceCPU(
     DLTensor* logits, const DLTensor& bitmask, std::optional<std::vector<int>> indices
 ) {
-  XGRAMMAR_CHECK(logits->device.device_type == kDLCPU)
-      << "The provided logits's device is not valid: should be CPU";
-  XGRAMMAR_CHECK(bitmask.device.device_type == kDLCPU)
-      << "The provided bitmask's device is not valid: should be CPU";
-  int batch_size;
-  int vocab_size;
-  if (logits->ndim == 2) {
-    batch_size = logits->shape[0];
-    vocab_size = logits->shape[1];
-  } else {
-    batch_size = 1;
-    vocab_size = logits->shape[0];
-  }
-  int bitmask_size = GetBitmaskSize(vocab_size);
-  if (bitmask.ndim == 2) {
-    XGRAMMAR_CHECK(bitmask.shape[0] == batch_size)
-        << "The provided bitmask's batch size is not consistent with logits";
-    XGRAMMAR_CHECK(bitmask.shape[1] == bitmask_size)
-        << "The provided bitmask's bitmask size is not consistent with logits";
-  } else {
-    XGRAMMAR_CHECK(bitmask.ndim == 1)
-        << "The provided bitmask's shape is not valid: should be (batch_size, vocab_size)";
-    XGRAMMAR_CHECK(bitmask.shape[0] == bitmask_size)
-        << "The provided bitmask's bitmask size is not consistent with logits";
-  }
+  // Check device and dim
+  XGRAMMAR_CHECK(
+      logits->device.device_type == kDLCPU || logits->device.device_type == kDLCUDAHost ||
+      logits->device.device_type == kDLROCMHost
+  ) << "The provided logits's device is not valid: should be CPU";
+  XGRAMMAR_CHECK(
+      bitmask.device.device_type == kDLCPU || bitmask.device.device_type == kDLCUDAHost ||
+      bitmask.device.device_type == kDLROCMHost
+  ) << "The provided bitmask's device is not valid: should be CPU";
+  XGRAMMAR_CHECK(logits->ndim == 2 || logits->ndim == 1)
+      << "The provided logits's shape is not valid: should be 2D or 1D";
+  XGRAMMAR_CHECK(bitmask.ndim == 2 || bitmask.ndim == 1)
+      << "The provided bitmask's shape is not valid: should be 2D or 1D";
+
+  // Check type
   XGRAMMAR_CHECK(
       logits->dtype.code == kDLFloat && logits->dtype.bits == 32 && logits->dtype.lanes == 1
   ) << "The provided logits's dtype is not valid: should be float32";
@@ -101,27 +91,46 @@ void ApplyTokenBitmaskInplaceCPU(
       bitmask.dtype.code == kDLInt && bitmask.dtype.bits == 32 && bitmask.dtype.lanes == 1
   ) << "The provided bitmask's dtype is not valid: should be int32";
 
+  // Check shape
+  std::pair<int, int> logits_shape =
+      logits->ndim == 2
+          ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
+          : std::make_pair(1, static_cast<int>(logits->shape[0]));
+  std::pair<int, int> bitmask_shape =
+      bitmask.ndim == 2
+          ? std::make_pair(static_cast<int>(bitmask.shape[0]), static_cast<int>(bitmask.shape[1]))
+          : std::make_pair(1, static_cast<int>(bitmask.shape[0]));
+
+  // logits may have extra paddings (in vLLM) so its vocab size can be larger than the bitmask's
+  // vocab size. So we are using >= instead of == here
+  XGRAMMAR_CHECK(GetBitmaskSize(logits_shape.second) >= bitmask_shape.second)
+      << "The provided logits's vocab size should be no less than the bitmask's vocab size "
+         "(converted from bitmask size). But got vocab size "
+      << logits_shape.second << " vs bitmask size " << bitmask_shape.second;
+
+  int vocab_size =
+      std::min(logits_shape.second, bitmask_shape.second * DynamicBitset::BITS_PER_BLOCK);
+
+  // Sort and deduplicate indices
   std::vector<int> indices_value;
   if (indices.has_value()) {
     indices_value = indices.value();
-    std::sort(indices_value.begin(), indices_value.end());
-    indices_value.erase(
-        std::unique(indices_value.begin(), indices_value.end()), indices_value.end()
-    );
-    XGRAMMAR_CHECK(indices_value.back() < batch_size)
-        << "The provided indices is out of bounds: " << indices_value.back()
-        << " >= " << batch_size;
   } else {
-    indices_value.resize(batch_size);
-    for (int i = 0; i < batch_size; ++i) {
-      indices_value[i] = i;
+    XGRAMMAR_CHECK(logits_shape.first == bitmask_shape.first)
+        << "When indices is not provided, the logits's batch size should be equal to the "
+           "bitmask's batch size, but got "
+        << logits_shape.first << " vs " << bitmask_shape.first;
+    indices_value.reserve(logits_shape.first);
+    for (int i = 0; i < logits_shape.first; ++i) {
+      indices_value.push_back(i);
     }
   }
 
+  // Apply mask
   for (auto idx : indices_value) {
-    uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_size;
+    uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_shape.second;
     DynamicBitset bitset(vocab_size, data_ptr);
-    auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * vocab_size;
+    auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_shape.second;
     for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
       logits_ptr[i] = -std::numeric_limits<float>::infinity();
     }

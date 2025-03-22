@@ -168,6 +168,8 @@ class DynamicBitset {
     return (data_[buffer_size_ - 1] & last_block_mask) == last_block_mask;
   }
 
+  static constexpr int BITS_PER_BLOCK = 32;
+
  private:
   static int LowestBit(uint32_t value) {
 #ifdef __GNUC__
@@ -203,7 +205,6 @@ class DynamicBitset {
     return position * BITS_PER_BLOCK + LowestBit(~data_[position]);
   }
 
-  static constexpr int BITS_PER_BLOCK = 32;
   // The size of the bitset.
   int size_;
   // The size of the buffer.

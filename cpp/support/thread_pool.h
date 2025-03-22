@@ -12,6 +12,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #include "logging.h"
@@ -67,9 +68,8 @@ class ThreadPool {
    * \note Tasks are executed in FIFO order but may complete in any order.
    */
   template <class F, class... Args>
-  auto Submit(F&& f, Args&&... args)
-      -> std::shared_future<typename std::result_of<F(Args...)>::type> {
-    using return_type = typename std::result_of<F(Args...)>::type;
+  auto Submit(F&& f, Args&&... args) -> std::shared_future<std::invoke_result_t<F, Args...>> {
+    using return_type = std::invoke_result_t<F, Args...>;
 
     // Package the task with its arguments into a shared pointer
     auto task = std::make_shared<std::packaged_task<return_type()>>(
@@ -172,7 +172,7 @@ class ThreadPool {
   int unfinished_task_count_ = 0;
 };
 
-void ParallelFor(int low, int high, int num_threads, std::function<void(int)> f) {
+inline void ParallelFor(int low, int high, int num_threads, std::function<void(int)> f) {
   if (high - low == 1) {
     f(low);
     return;

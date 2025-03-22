@@ -12,7 +12,7 @@ classifiers = [
   "Intended Audience :: Science/Research",
 ]
 keywords = ["machine learning", "inference"]
-requires-python = ">=3.9, <4"
+requires-python = ">=3.8, <4"
 dependencies = [
   "pydantic",
   "sentencepiece",
@@ -20,6 +20,7 @@ dependencies = [
   "torch>=1.10.0",
   "transformers>=4.38.0",
   "triton; platform_system == 'linux' and platform_machine == 'x86_64'",
+  "ninja",
 ]
 dynamic = ["version"]
 
@@ -35,7 +36,7 @@ provider = "scikit_build_core.metadata.regex"
 input = "python/xgrammar/version.py"
 
 [build-system]
-requires = ["scikit-build-core>=0.10.0", "pybind11>=2.11.0"]
+requires = ["scikit-build-core>=0.10.0", "nanobind>=2.0.0"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
@@ -88,9 +89,8 @@ sdist.include = [
 sdist.exclude = ["**/.git", "**/.github", "**/__pycache__", "**/*.pyc", "build", "dist"]
 
 # Editable install settings
-# Editables are fairly buggy
-# editable.rebuild = true
-# editable.verbose = true
+editable.rebuild = true
+editable.verbose = true
 
 [tool.pytest.ini_options]
 addopts = "-rA --durations=0 --ignore=3rdparty"

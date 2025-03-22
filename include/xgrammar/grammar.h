@@ -9,7 +9,6 @@
 
 #include <xgrammar/object.h>
 
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -17,12 +16,12 @@
 namespace xgrammar {
 
 struct StructuralTagItem {
-  std::string start;
+  std::string begin;
   std::string schema;
   std::string end;
 
   bool operator==(const StructuralTagItem& other) const {
-    return start == other.start && schema == other.schema && end == other.end;
+    return begin == other.begin && schema == other.schema && end == other.end;
   }
 };
 
@@ -110,7 +109,8 @@ class Grammar {
       bool any_whitespace = true,
       std::optional<int> indent = std::nullopt,
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
-      bool strict_mode = true
+      bool strict_mode = true,
+      bool print_converted_ebnf = false
   );
 
   /*!

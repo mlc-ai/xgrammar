@@ -1,7 +1,7 @@
 """This module provides classes representing grammars."""
 
 import json
-from typing import List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from pydantic import BaseModel, Field
 
@@ -13,8 +13,8 @@ class StructuralTagItem(BaseModel):
 
     Attributes
     ----------
-    start : str
-        The start tag.
+    begin : str
+        The begin tag.
 
     schema_ : Union[str, Type[BaseModel]]
         The schema.
@@ -23,12 +23,35 @@ class StructuralTagItem(BaseModel):
         The end tag.
     """
 
-    start: str
-    schema_: Union[str, Type[BaseModel]] = Field(alias="schema")
+    begin: str
+    schema_: Union[str, Type[BaseModel], Dict[str, Any]] = Field(alias="schema")
     end: str
 
 
-def _handle_pydantic_schema(schema: Union[str, Type[BaseModel]]) -> str:
+def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
+    """Convert a schema to a string representation.
+
+    This function handles different schema input types and converts them to a JSON string:
+    - Pydantic models are converted using their schema methods
+    - String inputs are returned as-is (assumed to be valid JSON)
+    - Dictionary inputs are converted to JSON strings
+
+    Parameters
+    ----------
+    schema : Union[str, Type[BaseModel], Dict[str, Any]]
+        The schema to convert, which can be a Pydantic model class,
+        a JSON schema string, or a dictionary representing a JSON schema.
+
+    Returns
+    -------
+    str
+        The JSON schema as a string.
+
+    Raises
+    ------
+    ValueError, TypeError
+        If the schema type is not supported, or the dictionary is not serializable.
+    """
     if isinstance(schema, type) and issubclass(schema, BaseModel):
         if hasattr(schema, "model_json_schema"):
             return json.dumps(schema.model_json_schema())
@@ -38,6 +61,8 @@ def _handle_pydantic_schema(schema: Union[str, Type[BaseModel]]) -> str:
             raise ValueError("The schema should have a model_json_schema or json_schema method.")
     elif isinstance(schema, str):
         return schema
+    elif isinstance(schema, dict):
+        return json.dumps(schema)
     else:
         raise ValueError("The schema should be a string or a Pydantic model.")
 
@@ -86,12 +111,13 @@ class Grammar(XGRObject):
 
     @staticmethod
     def from_json_schema(
-        schema: Union[str, Type[BaseModel]],
+        schema: Union[str, Type[BaseModel], Dict[str, Any]],
         *,
         any_whitespace: bool = True,
         indent: Optional[int] = None,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
+        print_converted_ebnf: bool = False,
     ) -> "Grammar":
         """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
         used to specify the schema.
@@ -129,11 +155,13 @@ class Grammar(XGRObject):
         strict_mode : bool, default: True
             Whether to use strict mode. In strict mode, the generated grammar will not allow
             properties and items that is not specified in the schema. This is equivalent to
-            setting unevaluatedProperties and unevaluatedItems to false. It also disallows empty
-            JSON objects and arrays.
+            setting unevaluatedProperties and unevaluatedItems to false.
 
             This helps LLM to generate accurate output in the grammar-guided generation with JSON
             schema.
+
+        print_converted_ebnf : bool, default: False
+            If True, the converted EBNF string will be printed. For debugging purposes.
 
         Returns
         -------
@@ -145,10 +173,10 @@ class Grammar(XGRObject):
         RuntimeError
             When converting the json schema fails, with details about the parsing error.
         """
-        schema_str = _handle_pydantic_schema(schema)
+        schema_str = _convert_schema_to_str(schema)
         return Grammar._create_from_handle(
             _core.Grammar.from_json_schema(
-                schema_str, any_whitespace, indent, separators, strict_mode
+                schema_str, any_whitespace, indent, separators, strict_mode, print_converted_ebnf
             )
         )
 
@@ -190,14 +218,14 @@ class Grammar(XGRObject):
         The tags parameter is used to specify the output pattern. It is especially useful for LLM
         function calling, where the pattern is:
         <function=func_name>{"arg1": ..., "arg2": ...}</function>.
-        This pattern consists of three parts: a start tag (<function=func_name>), a parameter list
+        This pattern consists of three parts: a begin tag (<function=func_name>), a parameter list
         according to some schema ({"arg1": ..., "arg2": ...}), and an end tag (</function>). This
-        pattern can be described in a StructuralTagItem with a start tag, a schema, and an end tag.
+        pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag.
         The structural tag is able to handle multiple such patterns by passing them into multiple
         tags.
 
         The triggers parameter is used to trigger the dispatching of different grammars. The trigger
-        should be a prefix of a provided start tag. When the trigger is encountered, the
+        should be a prefix of a provided begin tag. When the trigger is encountered, the
         corresponding tag should be used to constrain the following output. There can be multiple
         tags matching the same trigger. Then if the trigger is encountered, the following output
         should match one of the tags. For example, in function calling, the triggers can be
@@ -235,13 +263,13 @@ class Grammar(XGRObject):
         >>>     arg3: float
         >>>     arg4: List[str]
         >>> tags = [
-        >>>     StructuralTagItem(start="<function=f>", schema=Schema1, end="</function>"),
-        >>>     StructuralTagItem(start="<function=g>", schema=Schema2, end="</function>"),
+        >>>     StructuralTagItem(begin="<function=f>", schema=Schema1, end="</function>"),
+        >>>     StructuralTagItem(begin="<function=g>", schema=Schema2, end="</function>"),
         >>> ]
         >>> triggers = ["<function="]
         >>> grammar = Grammar.from_structural_tag(tags, triggers)
         """
-        tags_tuple = [(tag.start, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
+        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
         return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
 
     @staticmethod
@@ -273,3 +301,21 @@ class Grammar(XGRObject):
         """
         grammar_handles = [grammar._handle for grammar in grammars]
         return Grammar._create_from_handle(_core.Grammar.concat(grammar_handles))
+
+    @staticmethod
+    def union(*grammars: "Grammar") -> "Grammar":
+        """Create a grammar that matches any of the grammars in the list. That is equivalent to
+        using the `|` operator to concatenate the grammars in the list.
+
+        Parameters
+        ----------
+        grammars : List[Grammar]
+            The grammars to create the union of.
+
+        Returns
+        -------
+        grammar : Grammar
+            The union of the grammars.
+        """
+        grammar_handles = [grammar._handle for grammar in grammars]
+        return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))

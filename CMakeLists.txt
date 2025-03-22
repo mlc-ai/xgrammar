@@ -55,16 +55,16 @@ else()
   )
 endif()
 
-set(XGRAMMAR_INCLUDE_PATH
-    ${PROJECT_SOURCE_DIR}/3rdparty/picojson ${PROJECT_SOURCE_DIR}/3rdparty/dlpack/include
-    ${PROJECT_SOURCE_DIR}/include
+set(XGRAMMAR_INCLUDE_PATH ${PROJECT_SOURCE_DIR}/3rdparty/picojson
+                          ${PROJECT_SOURCE_DIR}/3rdparty/dlpack/include
 )
 
 file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH "${PROJECT_SOURCE_DIR}/cpp/*.cc")
-list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/pybind/.*\\.cc")
+list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/nanobind/.*\\.cc")
 
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
-target_include_directories(xgrammar PUBLIC ${XGRAMMAR_INCLUDE_PATH})
+target_include_directories(xgrammar PUBLIC include)
+target_include_directories(xgrammar SYSTEM PUBLIC ${XGRAMMAR_INCLUDE_PATH})
 
 # link to cpptrace
 if(XGRAMMAR_ENABLE_CPPTRACE)
@@ -76,7 +76,7 @@ else()
 endif()
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/pybind)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/nanobind)
   install(TARGETS xgrammar_bindings DESTINATION .)
 endif()
 
