@@ -1254,7 +1254,7 @@ std::string JSONSchemaConverter::VisitString(
     }
     if (format == "date") {
       // refer to RFC 3339, section 5.6
-      std::string date_regex_pattern = "^(\\d\\d\\d\\d-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))$";
+      std::string date_regex_pattern = "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))$";
       std::string date_ebnf = RegexToEBNF(date_regex_pattern, false);
       return "\"\\\"\" " + date_ebnf + " \"\\\"\"";
     }
@@ -1268,7 +1268,7 @@ std::string JSONSchemaConverter::VisitString(
     if (format == "date-time") {
       // refer to RFC 3339, section 5.6
       std::string date_time_regex_pattern =
-          "^(\\d\\d\\d\\d-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))T([01]\\d|2[0-3]):([0-5]\\d|60):["
+          "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))T([01]\\d|2[0-3]):([0-5]\\d|60):["
           "0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
       std::string date_time_ebnf = RegexToEBNF(date_time_regex_pattern, false);
       return "\"\\\"\" " + date_time_ebnf + " \"\\\"\"";
@@ -1284,32 +1284,41 @@ std::string JSONSchemaConverter::VisitString(
     if (format == "ipv4") {
       // refer to RFC 2673, section 3.2
       std::string decbyte = "(25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)";
-      std::string ipv4_regex_pattern =
-          "^" + decbyte + "\\." + decbyte + "\\." + decbyte + "\\." + decbyte + "$";
+      std::string ipv4_regex_pattern = "^(" + decbyte + "\\.){3}" + decbyte + "$";
       std::string ipv4_ebnf = RegexToEBNF(ipv4_regex_pattern, false);
       return "\"\\\"\" " + ipv4_ebnf + " \"\\\"\"";
     }
     if (format == "ipv6") {
       // refer to RFC 3986, section 3.3.2
-      std::string decbyte = "(25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)";
-      std::string ipv4 = "(" + decbyte + "\\." + decbyte + "\\." + decbyte + "\\." + decbyte + ")";
-      std::string h16 = "([\\dA-Fa-f][\\dA-Fa-f]?[\\dA-Fa-f]?[\\dA-Fa-f]?)";
-      std::string ls32 = "(" + h16 + ":" + h16 + "|" + ipv4 + ")";
-      auto f = [h16](int low, int high, std::string end) {
-        std::string out = "";
-        for (int i = 0; i < low; ++i) {
-          out += h16 + ":";
-        }
-        for (int i = low; i < high; ++i) {
-          out += "(" + h16 + ":)?";
-        }
-        return out + end;
-      };
       std::string ipv6_regex_pattern =
-          "^(" + f(6, 6, ls32) + "|::" + f(5, 5, ls32) + "|" + h16 + "?::" + f(4, 4, ls32) + "|(" +
-          f(0, 1, h16) + ")?::" + f(3, 3, ls32) + "|(" + f(0, 2, h16) + ")?::" + f(2, 2, ls32) +
-          "|(" + f(0, 3, h16) + ")?::" + f(1, 1, ls32) + "|(" + f(0, 4, h16) + ")?::" + ls32 +
-          "|(" + f(0, 5, h16) + ")?::" + h16 + "|(" + f(0, 6, h16) + ")?::)$";
+          "("
+          "([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|"  // 1:2:3:4:5:6:7:8
+          "([0-9a-fA-F]{1,4}:){1,7}:|"  // 1::                              1:2:3:4:5:6:7::
+          "([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|"         // 1::8             1:2:3:4:5:6::8
+                                                               // 1:2:3:4:5:6::8
+          "([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|"  // 1::7:8           1:2:3:4:5::7:8
+                                                               // 1:2:3:4:5::8
+          "([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|"  // 1::6:7:8         1:2:3:4::6:7:8
+                                                               // 1:2:3:4::8
+          "([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|"  // 1::5:6:7:8       1:2:3::5:6:7:8
+                                                               // 1:2:3::8
+          "([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|"  // 1::4:5:6:7:8     1:2::4:5:6:7:8
+                                                               // 1:2::8
+          "[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|"  // 1::3:4:5:6:7:8   1::3:4:5:6:7:8  1::8
+          ":((:[0-9a-fA-F]{1,4}){1,7}|:)|"  // ::2:3:4:5:6:7:8  ::2:3:4:5:6:7:8 ::8       ::
+          "::(ffff(:0{1,4}){0,1}:){0,1}"
+          "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}"
+          "(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|"  // ::255.255.255.255   ::ffff:255.255.255.255
+                                                       // ::ffff:0:255.255.255.255  (IPv4-mapped
+                                                       // IPv6 addresses and IPv4-translated
+                                                       // addresses)
+          "([0-9a-fA-F]{1,4}:){1,4}:"
+          "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}"
+          "(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])"  // 2001:db8:3:4::192.0.2.33
+                                                      // 64:ff9b::192.0.2.33 (IPv4-Embedded IPv6
+                                                      // Address)
+          ")";
+
       std::string ipv6_ebnf = RegexToEBNF(ipv6_regex_pattern, false);
       return "\"\\\"\" " + ipv6_ebnf + " \"\\\"\"";
     }
@@ -1322,18 +1331,8 @@ std::string JSONSchemaConverter::VisitString(
     }
     if (format == "uuid") {
       // refer to RFC 4122, section 3
-      std::string uuid_regex_pattern = "";
-      std::string hex_digit = "[0-9A-Fa-f]";
-      for (int i = 0; i < 8; ++i) uuid_regex_pattern += hex_digit;
-      uuid_regex_pattern += "-";
-      for (int i = 0; i < 4; ++i) uuid_regex_pattern += hex_digit;
-      uuid_regex_pattern += "-";
-      for (int i = 0; i < 4; ++i) uuid_regex_pattern += hex_digit;
-      uuid_regex_pattern += "-";
-      for (int i = 0; i < 4; ++i) uuid_regex_pattern += hex_digit;
-      uuid_regex_pattern += "-";
-      for (int i = 0; i < 12; ++i) uuid_regex_pattern += hex_digit;
-      uuid_regex_pattern = "^" + uuid_regex_pattern + "$";
+      std::string uuid_regex_pattern =
+          "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$";
       std::string uuid_ebnf = RegexToEBNF(uuid_regex_pattern, false);
       return "\"\\\"\" " + uuid_ebnf + " \"\\\"\"";
     }
@@ -1406,12 +1405,6 @@ std::string JSONSchemaConverter::VisitString(
       return "\"\\\"\" " + relative_json_pointer_ebnf + " \"\\\"\"";
     }
   }
-  WarnUnsupportedKeywords(
-      schema,
-      {
-          "format",
-      }
-  );
   if (schema.count("pattern")) {
     if (schema.count("minLength") || schema.count("maxLength") || schema.count("format")) {
       XGRAMMAR_LOG(WARNING) << "Specifying pattern and minLength/maxLength/format is not "
