@@ -55,7 +55,7 @@ jobs:
         with:
           path: |
             ~/.cache/huggingface
-          key: ${{ matrix.os }}-huggingface-${{ matrix.python }}
+          key: huggingface-${{ matrix.os }}-python-${{ matrix.python }}
 
       - name: Build xgrammar from source
         run: |
