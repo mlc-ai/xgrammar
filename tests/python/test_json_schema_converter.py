@@ -95,9 +95,8 @@ def test_basic():
         object_field: Dict[str, int]
         nested_object_field: Dict[str, Dict[str, int]]
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""root_prop_3 ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[" "]"
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""root_prop_3 ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[" "]"
 root_prop_4 ::= ("[" "" basic_string (", " basic_string)* "" "]") | "[" "]"
 root_prop_5_item_2 ::= ("[" "" basic_string (", " basic_string)* "" "]") | "[" "]"
 root_prop_5 ::= "[" "" basic_string ", " basic_integer ", " root_prop_5_item_2 "" "]"
@@ -130,9 +129,8 @@ def test_indent():
         tuple_field: Tuple[str, int, List[str]]
         object_field: Dict[str, int]
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""root_prop_0 ::= ("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | "[" "]"
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""root_prop_0 ::= ("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | "[" "]"
 root_prop_1_item_2 ::= ("[" "\n      " basic_string (",\n      " basic_string)* "\n    " "]") | "[" "]"
 root_prop_1 ::= "[" "\n    " basic_string ",\n    " basic_integer ",\n    " root_prop_1_item_2 "\n  " "]"
 root_prop_2 ::= ("{" "\n    " basic_string ": " basic_integer (",\n    " basic_string ": " basic_integer)* "\n  " "}") | "{" "}"
@@ -164,9 +162,8 @@ def test_non_strict():
         list_field: List[str]
         object_field: Dict[str, Any]
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""root_prop_0_item_1 ::= "[" "\n      " basic_integer ",\n      " basic_integer (",\n      " basic_any)* "\n    " "]"
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""root_prop_0_item_1 ::= "[" "\n      " basic_integer ",\n      " basic_integer (",\n      " basic_any)* "\n    " "]"
 root_prop_0 ::= "[" "\n    " basic_string ",\n    " root_prop_0_item_1 (",\n    " basic_any)* "\n  " "]"
 defs_Foo ::= ("{" "\n    " basic_string ": " basic_any (",\n    " basic_string ": " basic_any)* "\n  " "}") | "{" "}"
 root_prop_1 ::= defs_Foo
@@ -214,9 +211,8 @@ def test_enum_const():
         values: Literal[1, "a", True]
         field: Field
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""root_prop_0 ::= "\"a\""
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""root_prop_0 ::= "\"a\""
 root_prop_1 ::= "\"a\\n\\r\\\"\""
 root_prop_2 ::= ("\"a\"") | ("\"b\"") | ("\"c\"")
 root_prop_3 ::= ("1") | ("\"a\"") | ("true")
@@ -239,9 +235,8 @@ def test_optional():
         size: Optional[float]
         name: str = ""
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""root_prop_1 ::= basic_boolean | basic_null
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""root_prop_1 ::= basic_boolean | basic_null
 root_prop_2 ::= basic_number | basic_null
 root ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " root_prop_1 ", ")? "\"size\"" ": " root_prop_2 (", " "\"name\"" ": " basic_string)? "" "}"
 """
@@ -269,9 +264,8 @@ def test_all_optional():
         state: bool = False
         num: float = 0
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""root_part_1 ::= "" | ", " "\"num\"" ": " basic_number ""
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""root_part_1 ::= "" | ", " "\"num\"" ": " basic_number ""
 root_part_0 ::= root_part_1 | ", " "\"state\"" ": " basic_boolean root_part_1
 root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": " basic_boolean root_part_1) | ("\"num\"" ": " basic_number "")) "" "}") | "{" "}"
 """
@@ -293,9 +287,8 @@ def test_all_optional_non_strict():
         state: bool = False
         num: float = 0
 
-    ebnf_grammar_non_strict = (
-        basic_json_rules_ebnf_no_space
-        + r"""root_part_2 ::= (", " basic_string ": " basic_any)*
+    ebnf_grammar_non_strict = basic_json_rules_ebnf_no_space + (
+        r"""root_part_2 ::= (", " basic_string ": " basic_any)*
 root_part_1 ::= root_part_2 | ", " "\"num\"" ": " basic_number root_part_2
 root_part_0 ::= root_part_1 | ", " "\"state\"" ": " basic_boolean root_part_1
 root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": " basic_boolean root_part_1) | ("\"num\"" ": " basic_number root_part_2) | basic_string ": " basic_any root_part_2) "" "}") | "{" "}"
@@ -317,9 +310,8 @@ def test_empty():
     class MainModel(BaseModel):
         pass
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""root ::= "{" "}"
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""root ::= "{" "}"
 """
     )
 
@@ -349,9 +341,8 @@ def test_reference():
         foo=Foo(count=42, size=3.14), bars=[Bar(apple="a", banana="b"), Bar(apple="c", banana="d")]
     )
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""defs_Foo_prop_1 ::= basic_number | basic_null
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""defs_Foo_prop_1 ::= basic_number | basic_null
 defs_Foo ::= "{" "" "\"count\"" ": " basic_integer (", " "\"size\"" ": " defs_Foo_prop_1)? "" "}"
 root_prop_0 ::= defs_Foo
 defs_Bar_part_0 ::= "" | ", " "\"banana\"" ": " basic_string ""
@@ -572,9 +563,8 @@ def test_union():
 
     model_schema = ta.json_schema()
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""defs_Cat ::= "{" "" "\"name\"" ": " basic_string ", " "\"color\"" ": " basic_string "" "}"
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""defs_Cat ::= "{" "" "\"name\"" ": " basic_string ", " "\"color\"" ": " basic_string "" "}"
 root_case_0 ::= defs_Cat
 defs_Dog ::= "{" "" "\"name\"" ": " basic_string ", " "\"breed\"" ": " basic_string "" "}"
 root_case_1 ::= defs_Dog
@@ -622,9 +612,8 @@ def test_alias():
     class MainModel(BaseModel):
         test: str = Field(..., alias="name")
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf_no_space
-        + r"""root ::= "{" "" "\"name\"" ": " basic_string "" "}"
+    ebnf_grammar = basic_json_rules_ebnf_no_space + (
+        r"""root ::= "{" "" "\"name\"" ": " basic_string "" "}"
 """
     )
 
@@ -645,9 +634,8 @@ def test_alias():
     class MainModelSpace(BaseModel):
         test: Literal["abc"] = Field(..., alias="name 1")
 
-    ebnf_grammar_space = (
-        basic_json_rules_ebnf_no_space
-        + r"""root_prop_0 ::= "\"abc\""
+    ebnf_grammar_space = basic_json_rules_ebnf_no_space + (
+        r"""root_prop_0 ::= "\"abc\""
 root ::= "{" "" "\"name 1\"" ": " root_prop_0 "" "}"
 """
     )
@@ -731,9 +719,8 @@ def test_any_whitespace():
 
     schema = SimpleModel.model_json_schema()
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf
-        + r"""root_prop_1 ::= ("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root_prop_1 ::= ("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | "[" [ \n\t]* "]"
 root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 [ \n\t]* "}"
 """
@@ -741,9 +728,8 @@ root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* ",
 
     check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True, strict_mode=True)
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf
-        + r"""root_prop_1 ::= ("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root_prop_1 ::= ("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | "[" [ \n\t]* "]"
 root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}"
 """
@@ -919,16 +905,17 @@ def test_generate_range_regex():
 # @pytest.mark.parametrize("instance, accepted", instance__accepted__test_email_format)
 # def test_email_format(instance: str, accepted: bool):
 #     schema = {"type": "string", "format": "email"}
-#     grammar = _json_schema_to_ebnf(json.dumps(schema))
-#     print(grammar)
 
-#     # check_schema_with_instance(
-#     #     schema, MainModel(name=instance), is_accepted=accepted, any_whitespace=False
-#     # )
+#     expected_grammar = basic_json_rules_ebnf + (
+#         r"""root ::= "\"" ( ( [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ ( "." [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ )* ) """
+#         r"""| "\\" "\"" ( "\\" [ -~] | [ !#-[\]-~] )* "\\" "\"" ) "@" ( [A-Za-z0-9] ( [\-A-Za-z0-9]* [A-Za-z0-9] )? ) """
+#         r"""( ( "." [A-Za-z0-9] [\-A-Za-z0-9]* [A-Za-z0-9] )* ) "\""
+# """
+#     )
+#     check_schema_with_grammar(schema, expected_grammar)
 
+#     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
-# test_email_format(*instance__accepted__test_email_format[0])
-# exit()
 
 # date_instances_accepted = [
 #     (r"0000-01-01", True),
@@ -1331,9 +1318,8 @@ def test_generate_range_regex():
 def test_min_max_length():
     schema = {"type": "string", "minLength": 1, "maxLength": 10}
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf
-        + r"""root ::= "\"" [^"\\\r\n]{1,10} "\""
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root ::= "\"" [^"\\\r\n]{1,10} "\""
 """
     )
 
@@ -1355,9 +1341,8 @@ def test_type_array():
         "maximum": 10,
     }
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf
-        + r"""root_integer ::= ( ( [1-9] | "1" "0" ) )
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root_integer ::= ( ( [1-9] | "1" "0" ) )
 root_string ::= "\"" [^"\\\r\n]{1,10} "\""
 root ::= root_integer | root_string
 """
@@ -1379,9 +1364,8 @@ root ::= root_integer | root_string
 def test_type_array_empty():
     schema = {"type": []}
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf
-        + r"""root ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 """
     )
 
@@ -1391,9 +1375,8 @@ def test_type_array_empty():
 def test_empty_array():
     schema = {"items": {"type": "string"}, "type": "array"}
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf
-        + r"""root ::= ("[" [ \n\t]* basic_string ([ \n\t]* "," [ \n\t]* basic_string)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root ::= ("[" [ \n\t]* basic_string ([ \n\t]* "," [ \n\t]* basic_string)* [ \n\t]* "]") | "[" [ \n\t]* "]"
 """
     )
 
@@ -1409,9 +1392,8 @@ def test_empty_array():
 def test_empty_object():
     schema = {"properties": {"name": {"type": "string"}}, "type": "object"}
 
-    ebnf_grammar = (
-        basic_json_rules_ebnf
-        + r"""root ::= ("{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string "")) [ \n\t]* "}") | "{" [ \n\t]* "}"
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root ::= ("{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string "")) [ \n\t]* "}") | "{" [ \n\t]* "}"
 """
     )
 
@@ -1426,9 +1408,8 @@ def test_empty_object():
 
 def test_primitive_type_string():
     schema = {"type": "string"}
-    ebnf_grammar = (
-        basic_json_rules_ebnf
-        + r"""root ::= basic_string
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root ::= basic_string
 """
     )
 
@@ -1443,9 +1424,8 @@ def test_primitive_type_string():
 
 def test_primitive_type_object():
     schema = {"type": "object"}
-    ebnf_grammar = (
-        basic_json_rules_ebnf
-        + r"""root ::= basic_object
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root ::= basic_object
 """
     )
 
