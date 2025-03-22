@@ -58,7 +58,6 @@ def test_build_tokenizer_info(
 ):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
-    print(f"{tokenizer_info.vocab_type}, {tokenizer_info.add_prefix_space}")
     tokenizer_info_storage[tokenizer_path] = (tokenizer, tokenizer_info)
 
 
