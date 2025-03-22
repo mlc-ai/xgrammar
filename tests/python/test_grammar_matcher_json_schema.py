@@ -242,7 +242,7 @@ string_format_instances = [
     (r"long.email-address-with-hyphens@and.subdomains.example.com", "email"),
     (r'"very.(),:;<>[]\".VERY.\"very@\\ \"very\".unusual"@strange.example.com', "email"),
     (r"128.255.000.222", "ipv4"),
-    (r"abcd:ABCD::0123:5678:000.111.222.123", "ipv6"),
+    (r"2001:db8:3:4::192.0.2.33", "ipv6"),
     (r"P1Y23M456DT9H87M654S", "duration"),
     (r"2025-01-01T12:34:56.7+08:09", "date-time"),
     (r"123--abc.efgh---789-xyz.rst-uvw", "hostname"),
@@ -274,9 +274,7 @@ def test_mask_generation_format(value: str, format: str):
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
 
     time_start = time.monotonic_ns()
-    compiled_grammar = grammar_compiler.compile_json_schema(
-        MainModel, any_whitespace=None, indent=None, separators=None, strict_mode=True
-    )
+    compiled_grammar = grammar_compiler.compile_json_schema(MainModel)
     time_end = time.monotonic_ns()
     print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
     matcher = xgr.GrammarMatcher(compiled_grammar)

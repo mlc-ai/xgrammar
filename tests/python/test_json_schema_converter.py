@@ -916,7 +916,7 @@ def test_email_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-date_instances_accepted = [
+instance__accepted__test_date_format = [
     (r"0000-01-01", True),
     (r"9999-12-31", True),
     (r"10-01-01", False),
@@ -927,7 +927,7 @@ date_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", date_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_date_format)
 def test_date_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "date"}
 
@@ -940,7 +940,7 @@ def test_date_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-time_instances_accepted = [
+instance__accepted__test_time_format = [
     (r"00:00:00Z", True),
     (r"23:59:60Z", True),
     (r"12:34:56Z", True),
@@ -963,7 +963,7 @@ time_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", time_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_time_format)
 def test_time_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "time"}
 
@@ -976,7 +976,7 @@ def test_time_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-duration_instances_accepted = [
+instance__accepted__test_duration_format = [
     (r"P0Y", True),
     (r"P12M", True),
     (r"P345D", True),
@@ -1003,7 +1003,7 @@ duration_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", duration_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_duration_format)
 def test_duration_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "duration"}
 
@@ -1016,7 +1016,7 @@ def test_duration_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-ipv6_instances_accepted = [
+instance__accepted__test_ipv6_format = [
     (r"0123:4567:890a:bced:fABC:DEF0:1234:5678", True),
     (r"::6666:6666:6666:6666:6666:6666", True),
     (r"::6666:6666:6666:6666:6666", True),
@@ -1070,7 +1070,7 @@ ipv6_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", ipv6_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_ipv6_format)
 def test_ipv6_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "ipv6"}
 
@@ -1091,7 +1091,7 @@ def test_ipv6_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-ipv4_instances_accepted = [
+instance__accepted__test_ipv4_format = [
     # (r"0.0.0.0", True),
     (r"00.00.00.00", True),
     (r"000.000.000.000", True),
@@ -1107,7 +1107,7 @@ ipv4_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", ipv4_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_ipv4_format)
 def test_ipv4_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "ipv4"}
 
@@ -1120,7 +1120,7 @@ def test_ipv4_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-hostname_instances_accepted = [
+instance__accepted__test_hostname_format = [
     (r"0", True),
     (r"9", True),
     (r"a", True),
@@ -1145,7 +1145,7 @@ hostname_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", hostname_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_hostname_format)
 def test_hostname_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "hostname"}
 
@@ -1158,7 +1158,7 @@ def test_hostname_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-uuid_instances_accepted = [
+instance__accepted__test_uuid_format = [
     (r"00000000-0000-0000-0000-000000000000", True),
     (r"FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF", True),
     (r"01234567-89AB-CDEF-abcd-ef0123456789", True),
@@ -1177,7 +1177,7 @@ uuid_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", uuid_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_uuid_format)
 def test_uuid_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "uuid"}
 
@@ -1190,7 +1190,7 @@ def test_uuid_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-uri_instances_accepted = [
+instance__accepted__test_uri_format = [
     (r"aaa:?azAZ09-._~%Ff!$&'()*+,;=:@#azAZ09-._~%Aa!$&'()*+,;=:@", True),
     (r"z+.-:", True),
     (r"abc:", True),
@@ -1212,7 +1212,7 @@ uri_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", uri_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_uri_format)
 def test_uri_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "uri"}
 
@@ -1230,7 +1230,7 @@ def test_uri_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-uri_reference_instances_accepted = [
+instance__accepted__test_uri_reference_format = [
     (r"?azAZ09-._~%Ff!$&'()*+,;=:@#azAZ09-._~%Aa!$&'()*+,;=:@", True),
     (r"", True),
     (r"a", True),
@@ -1252,7 +1252,7 @@ uri_reference_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", uri_reference_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_uri_reference_format)
 def test_uri_reference_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "uri-reference"}
 
@@ -1272,7 +1272,7 @@ def test_uri_reference_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-uri_template_instances_accepted = [
+instance__accepted__test_uri_template_format = [
     (r"", True),
     (r"!#$&()*+,-./09:;=?@AZ[]_az~%Ff", True),
     (r"{+a}{#a}{.a}{/a}{;a}{?a}{&a}{=a}{,a}{!a}{@a}{|a}", True),
@@ -1298,7 +1298,7 @@ uri_template_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", uri_template_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_uri_template_format)
 def test_uri_template_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "uri-template"}
 
@@ -1315,7 +1315,7 @@ def test_uri_template_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-json_pointer_instances_accepted = [
+instance__accepted__test_json_pointer_format = [
     (r"/", True),
     (r"//", True),
     (r"/a/bc/def/ghij", True),
@@ -1326,7 +1326,7 @@ json_pointer_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", json_pointer_instances_accepted)
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_json_pointer_format)
 def test_json_pointer_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "json-pointer"}
 
@@ -1339,7 +1339,7 @@ def test_json_pointer_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
-relative_json_pointer_instances_accepted = [
+instance__accepted__test_relative_json_pointer_format = [
     (r"0/", True),
     (r"123/a/bc/def/ghij", True),
     (r"45/~0/~1/", True),
@@ -1351,7 +1351,9 @@ relative_json_pointer_instances_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, accepted", relative_json_pointer_instances_accepted)
+@pytest.mark.parametrize(
+    "instance, accepted", instance__accepted__test_relative_json_pointer_format
+)
 def test_relative_json_pointer_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "relative-json-pointer"}
 
