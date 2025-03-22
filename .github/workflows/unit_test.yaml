@@ -16,7 +16,7 @@ jobs:
           submodules: recursive
 
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
 
       - name: Pre-commit
         uses: pre-commit/action@v3.0.1
@@ -47,6 +47,8 @@ jobs:
 
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
 
       - name: Cache huggingface
         uses: actions/cache@v4
