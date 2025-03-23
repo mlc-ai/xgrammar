@@ -1,6 +1,6 @@
 """Compiling grammar for efficient token mask generation."""
 
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, overload
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
 
