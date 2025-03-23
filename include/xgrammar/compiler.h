@@ -52,7 +52,7 @@ class GrammarCompiler {
       const TokenizerInfo& tokenizer_info,
       int max_threads = 8,
       bool cache_enabled = true,
-      std::size_t max_memory_bytes = 1024 * 1024 * 1024  // 1 GiB
+      long long max_memory_bytes = -1  // unlimited
   );
 
   /*! \brief Get the compiled grammar for a JSON schema string. */

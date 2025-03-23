@@ -12,8 +12,6 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
-#include <cstddef>
-
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
 #include "python_methods.h"
@@ -115,7 +113,7 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_prop_ro("memory_usage", &CompiledGrammar::MemorySize);
 
   auto pyGrammarCompiler = nb::class_<GrammarCompiler>(m, "GrammarCompiler");
-  pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, std::size_t>())
+  pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, long long>())
       .def(
           "compile_json_schema",
           &GrammarCompiler::CompileJSONSchema,

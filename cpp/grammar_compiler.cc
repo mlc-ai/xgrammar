@@ -13,6 +13,7 @@
 #include "grammar_data_structure.h"
 #include "grammar_functor.h"
 #include "grammar_matcher_base.h"
+#include "support/logging.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
 #include "support/utils.h"
@@ -689,9 +690,13 @@ GrammarCompiler::GrammarCompiler(
     const TokenizerInfo& tokenizer_info,
     int max_threads,
     bool cache_enabled,
-    std::size_t max_memory_bytes
+    long long max_memory_bytes
 )
     : pimpl_(std::make_shared<Impl>(tokenizer_info, max_threads, cache_enabled, max_memory_bytes)) {
+  if (max_memory_bytes < -1) {
+    XGRAMMAR_LOG(FATAL) << "Invalid max_memory_bytes: " << max_memory_bytes << ". "
+                        << "It should be -1 (unlimited) or a non-negative integer.";
+  }
 }
 
 CompiledGrammar GrammarCompiler::CompileJSONSchema(

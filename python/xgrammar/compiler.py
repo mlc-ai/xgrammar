@@ -54,12 +54,9 @@ class GrammarCompiler(XGRObject):
     cache_enabled : bool, default: True
         Whether to enable the cache.
 
-    max_memory_usage : float, default: 1024
+    cache_limit_bytes : int, default: -1
         The maximum memory usage for the cache in the specified unit.
         Note that the actual memory usage may slightly exceed this value.
-
-    memory_unit : Literal["B", "KiB", "MiB", "GiB"], default: "MiB"
-        The unit of the memory usage.
     """
 
     def __init__(
@@ -68,8 +65,7 @@ class GrammarCompiler(XGRObject):
         *,
         max_threads: int = 8,
         cache_enabled: bool = True,
-        max_memory_usage: float = 1024,
-        memory_unit: Literal["B", "KiB", "MiB", "GiB"] = "MiB",
+        cache_limit_bytes: int = -1,
     ):
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(
@@ -77,11 +73,9 @@ class GrammarCompiler(XGRObject):
                 "to GrammarCompiler."
             )
 
-        unit_map = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
-        max_memory_bytes = int(max_memory_usage * unit_map[memory_unit])
         self._init_handle(
             _core.GrammarCompiler(
-                tokenizer_info._handle, max_threads, cache_enabled, max_memory_bytes
+                tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
             )
         )
 
