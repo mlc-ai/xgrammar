@@ -15,11 +15,8 @@
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
-#include <tuple>
-#include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <variant>
 
 namespace xgrammar {
 
@@ -190,74 +187,46 @@ class ThreadSafeCache<Key, Value> {
 
 namespace details {
 
-template <typename Value, typename... Keys>
+template <typename Key, typename Value>
 class LRUCacheImpl {
  protected:
-  struct LRUnode;
-  using KeySet = std::variant<const Keys*...>;
-  using LRUlist = std::list<LRUnode>;
-  using LRUiterator = typename LRUlist::iterator;
-
-  struct Entry {
-   public:
-    Entry() = default;
-    Entry(const Value&) = delete;
-    Entry& operator=(const Value&) = delete;
-
-   private:
-    Value value;
-    LRUiterator iterator;
-    friend class LRUCacheImpl;
-  };
+  struct Entry;
 
   struct LRUnode {
-    KeySet key;
-    Entry& entry;
-    LRUnode(KeySet k, Entry& e) : key{k}, entry{e} {}
+    std::pair<const Key, Entry>& pair;
+    LRUnode(std::pair<const Key, Entry>& pair) : pair(pair) {}
   };
 
-  template <typename Key>
-  auto get_map() -> std::unordered_map<Key, Entry>& {
-    static_assert((std::is_same_v<Key, Keys> || ...), "Key type not found in the cache");
-    return std::get<std::unordered_map<Key, Entry>>(storage_);
-  }
+  struct Entry {
+    Value value;
+    typename std::list<LRUnode>::iterator iterator;
+  };
 
-  template <typename Key>
   auto lru_visit(const std::pair<const Key, Entry>& pair) -> const Value& {
-    static_assert((std::is_same_v<Key, Keys> || ...), "Key type not found in the cache");
     const auto& entry = pair.second;
     lru_list_.splice(lru_list_.end(), lru_list_, entry.iterator);
     return entry.value;
   }
 
-  template <typename Key>
   auto lru_init(std::pair<const Key, Entry>& pair, const Value& init) -> void {
-    static_assert((std::is_same_v<Key, Keys> || ...), "Key type not found in the cache");
     auto& [key, entry] = pair;
     entry.value = init;
-    entry.iterator = lru_list_.emplace(lru_list_.end(), KeySet{&key}, entry);
+    entry.iterator = lru_list_.emplace(lru_list_.end(), pair);
   }
 
   template <typename Predicate, typename Evict>
   auto lru_evict(const Predicate& predicate, const Evict& evict) -> void {
-    if (!predicate())  // short circuit if the predicate is false
-      return;
+    if (!predicate()) return;
 
     auto iter = lru_list_.begin();
     if (iter == lru_list_.end()) return;
 
-    auto waiting = LRUlist{};
+    auto waiting = std::list<LRUnode>{};
 
     do {
-      auto& [keyset, entry] = *iter;
+      auto& [key, entry] = iter->pair;
       if (evict(entry.value)) {
-        std::visit(
-            [&](const auto* key) {
-              using Key_t = std::decay_t<decltype(*key)>;
-              get_map<Key_t>().erase(*key);
-            },
-            keyset
-        );
+        map_.erase(key);
         iter = lru_list_.erase(iter);
       } else {
         waiting.splice(waiting.end(), lru_list_, iter++);
@@ -268,36 +237,30 @@ class LRUCacheImpl {
     lru_list_.splice(lru_list_.end(), waiting);
   }
 
+  auto get_map() -> std::unordered_map<Key, Entry>& { return map_; }
+
  private:
-  std::tuple<std::unordered_map<Keys, Entry>...> storage_;
-  LRUlist lru_list_;
+  std::unordered_map<Key, Entry> map_;
+  std::list<LRUnode> lru_list_;
 };
 
 template <typename Value>
 struct SizedValue {
   Value value;
   std::size_t size;
-  template <typename Fn>
-  SizedValue(Value value, const Fn& size_fn) : value{value}, size{size_fn(value)} {}
 };
 
-template <typename Value, typename... Keys>
-using LRUCacheSizedImpl = LRUCacheImpl<std::shared_future<SizedValue<Value>>, Keys...>;
-
-template <typename Value>
-struct DemoPolicy {
-  // The interface of the policy
-  template <typename KeyType>
-  auto compute(const KeyType&) -> Value;
-};
+template <typename Key, typename Value>
+using LRUCacheSizedImpl = LRUCacheImpl<Key, std::shared_future<SizedValue<Value>>>;
 
 }  // namespace details
 
 /**
  * \brief A thread-safe key-value cache with on-demand computation and LRU eviction
- * \tparam Policy The policy class that provides the compute method
+ * \tparam Key The type of keys used to lookup values. Should be hashable.
  * \tparam Value The type of values stored in the cache
- * \tparam Keys The types of keys used to lookup values. Should be hashable.
+ * \tparam Computer The functor that computes values for uncached keys
+ * \tparam SizeEstimator The functor that estimates the size of a value in bytes
  * \details This cache provides thread-safe access to computed values with the following features:
  * - Lazy computation: Values are only computed when first requested
  * - LRU eviction: When the cache is full, the least recently used value is evicted
@@ -305,30 +268,26 @@ struct DemoPolicy {
  * \attention User should guarantee the following:
  * 1. The policy class should provide a compute method that takes a key and returns a value.
  * 2. The value type should have a MemorySize method that returns the size of the value in bytes.
- * 3. All the key types should be hashable by std::hash.
  */
-template <typename Policy, typename Value, typename... Keys>
-class ThreadSafeLRUCache : private Policy, details::LRUCacheSizedImpl<Value, Keys...> {
+template <typename Key, typename Value, typename Computer, typename SizeEstimator>
+class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
  private:
-  using Impl = details::LRUCacheSizedImpl<Value, Keys...>;
+  using Impl = details::LRUCacheSizedImpl<Key, Value>;
   using Sized = details::SizedValue<Value>;
   using Future = std::shared_future<Sized>;
-  using Task = std::packaged_task<Sized()>;
-  using typename Impl::Entry;
 
  public:
-  template <typename... Args>
-  ThreadSafeLRUCache(std::size_t max_size, Args&&... args)
-      : Policy(std::forward<Args>(args)...), max_size_{max_size} {}
-
-  auto GetPolicy() -> Policy& { return *this; }
+  explicit ThreadSafeLRUCache(
+      std::size_t max_size,
+      const Computer& computer = Computer{},
+      const SizeEstimator& size_estimator = SizeEstimator{}
+  )
+      : Impl(), max_size_(max_size), computer_(computer), size_estimator_(size_estimator) {}
 
   auto MaxSize() const -> std::size_t { return max_size_; }
 
-  template <typename Key, typename Tp>
-  auto Get(const Tp& key) -> Value {
-    static_assert((std::is_same_v<Key, Keys> || ...), "Key type not found in the cache");
-    auto future = GetFuture<Key>(key, Impl::template get_map<Key>());
+  auto Get(const Key& key) -> Value {
+    auto future = GetFuture(key);
     return future.get().value;
   }
 
@@ -346,8 +305,9 @@ class ThreadSafeLRUCache : private Policy, details::LRUCacheSizedImpl<Value, Key
   }
 
  private:
-  template <typename Key>
-  auto GetFuture(const Key& key, std::unordered_map<Key, Entry>& map) -> Future {
+  auto GetFuture(const Key& key) -> Future {
+    auto& map = Impl::get_map();
+
     {
       auto lock_map = std::shared_lock{map_mutex_};
       auto it = map.find(key);
@@ -357,59 +317,53 @@ class ThreadSafeLRUCache : private Policy, details::LRUCacheSizedImpl<Value, Key
       }
     }
 
-    auto task = Task{[this, &key] {
-      return Sized{
-          Policy::template compute<Key>(key),  // compute the value
-          [&](const Value& value) {
-            const auto size = value.MemorySize();
-            current_size_ += size;
-            return size;
-          }
-      };
+    auto task = std::packaged_task<Sized()>{[this, &key] {
+      auto result = Sized();
+      result.value = computer_(key);
+      result.size = size_estimator_(result.value);
+      return result;
     }};
 
-    {
-      auto lock_map = std::unique_lock{map_mutex_};
-      auto [it, success] = map.try_emplace(key);
-      if (!success) {
-        const auto lock_lru = std::lock_guard{lru_mutex_};
-        return Impl::lru_visit(*it);
-      }
-
-      // in this case, we insert the task, and we need to compute the value
-      auto future = task.get_future().share();
-      {
-        const auto lock_lru = std::lock_guard{lru_mutex_};
-        Impl::lru_init(*it, future);
-        this->Pop();
-      }
-      lock_map.unlock();
-
-      // perform the costly computation outside all locks
-      task();
-      return future;
+    auto lock_map = std::unique_lock{map_mutex_};
+    auto [it, success] = map.try_emplace(key);
+    if (!success) {
+      const auto lock_lru = std::lock_guard{lru_mutex_};
+      return Impl::lru_visit(*it);
     }
-  }
 
-  auto Pop() -> void {
-    Impl::lru_evict(
-        [&] { return current_size_ > max_size_; },
-        [&](const Future& value) {
-          using namespace std::chrono_literals;
-          // if not ready, then do not wait and block here
-          if (value.wait_for(0s) != std::future_status::ready) return false;
-          current_size_ -= value.get().size;
-          return true;
-        }
-    );
+    // in this case, we insert the task, and we need to compute the value
+    auto future = task.get_future().share();
+    {
+      const auto lock_lru = std::lock_guard{lru_mutex_};
+      // perform eviction if the cache is full
+      Impl::lru_init(*it, future);
+      Impl::lru_evict(
+          [&] { return current_size_ > max_size_; },
+          [&](const Future& value) {
+            using namespace std::chrono_literals;
+            // if not ready, then do not wait and block here
+            if (value.wait_for(0s) != std::future_status::ready) return false;
+            current_size_ -= value.get().size;
+            return true;
+          }
+      );
+    }
+
+    // perform the costly computation outside all locks
+    lock_map.unlock();
+    task();
+    return future;
   }
 
  private:
   const std::size_t max_size_;
+  const Computer computer_;
+  const SizeEstimator size_estimator_;
   std::atomic_size_t current_size_{0};
   std::mutex lru_mutex_;
   std::shared_mutex map_mutex_;
 };
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_SUPPORT_THREAD_SAFE_CACHE_H_

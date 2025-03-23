@@ -6,6 +6,7 @@
 #include <xgrammar/compiler.h>
 
 #include <cstddef>
+#include <variant>
 
 #include "compiled_grammar_data_structure.h"
 #include "fsm.h"
@@ -368,8 +369,6 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
 
 /******************* GrammarCompiler::Impl *******************/
 
-namespace {
-
 using SchemaKey =
     std::tuple<std::string, bool, std::optional<int>, std::pair<std::string, std::string>, bool>;
 using StructuralTagKey = std::tuple<std::vector<StructuralTagItem>, std::vector<std::string>>;
@@ -380,25 +379,28 @@ class GrammarCompilerBase {
   GrammarCompilerBase(const TokenizerInfo& tokenizer_info, int max_threads, bool cache_enabled)
       : tokenizer_info_(tokenizer_info), max_threads_(max_threads), cache_enabled_(cache_enabled) {}
 
-  GrammarCompilerBase(const GrammarCompilerBase&) = delete;
-  GrammarCompilerBase(GrammarCompilerBase&&) = delete;
-  GrammarCompilerBase& operator=(const GrammarCompilerBase&) = delete;
-  GrammarCompilerBase& operator=(GrammarCompilerBase&&) = delete;
-
   /*!
    * \brief Build the tag dispatch fsm for the root rule and store in the compiled grammar.
    */
   void BuildTagDispatchFSM(Grammar grammar, const Grammar::Impl::RuleExpr& root_rule_expr);
 
   /*! \brief Multi-thread compile the grammar. */
-  auto MultiThreadCompileGrammar(Grammar grammar) -> CompiledGrammar;
+  CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
 
-  auto CompileJson() -> CompiledGrammar;
+  /*! \brief Compile the built-in JSON grammar. */
+  CompiledGrammar CompileJson();
 
+  /*! \brief Compile different types of grammars. */
   template <typename KeyType>
-  auto Compile(const KeyType& key) -> CompiledGrammar = delete;
+  CompiledGrammar Compile(const KeyType& key) = delete;
 
   bool CacheEnabled() const { return cache_enabled_; }
+
+  // dispatch the key to the corresponding compile function
+  template <typename KeyType>
+  CompiledGrammar operator()(const KeyType& key) {
+    return Compile(key);
+  }
 
  private:
   /*! \brief The vocabulary associated with this storage class. */
@@ -409,31 +411,30 @@ class GrammarCompilerBase {
   const bool cache_enabled_;
 };
 
-auto GrammarCompilerBase::CompileJson() -> CompiledGrammar {
+CompiledGrammar GrammarCompilerBase::CompileJson() {
   return MultiThreadCompileGrammar(Grammar::BuiltinJSONGrammar());
 }
 
 template <>
-auto GrammarCompilerBase::Compile<SchemaKey>(const SchemaKey& key) -> CompiledGrammar {
+CompiledGrammar GrammarCompilerBase::Compile<SchemaKey>(const SchemaKey& key) {
   const auto& [schema, any_whitespace, indent, separators, strict_mode] = key;
   auto grammar = Grammar::FromJSONSchema(schema, any_whitespace, indent, separators, strict_mode);
   return MultiThreadCompileGrammar(grammar);
 }
 
 template <>
-auto GrammarCompilerBase::Compile<StructuralTagKey>(const StructuralTagKey& key)
-    -> CompiledGrammar {
+CompiledGrammar GrammarCompilerBase::Compile<StructuralTagKey>(const StructuralTagKey& key) {
   const auto& [tags, triggers] = key;
   return MultiThreadCompileGrammar(Grammar::FromStructuralTag(tags, triggers));
 }
 
 template <>
-auto GrammarCompilerBase::Compile<std::string>(const std::string& key) -> CompiledGrammar {
+CompiledGrammar GrammarCompilerBase::Compile<std::string>(const std::string& key) {
   return MultiThreadCompileGrammar(Grammar::FromRegex(key));
 }
 
 template <>
-auto GrammarCompilerBase::Compile<GrammarKey>(const GrammarKey& key) -> CompiledGrammar {
+CompiledGrammar GrammarCompilerBase::Compile<GrammarKey>(const GrammarKey& key) {
   const auto& [grammar_str, root_rule_name] = key;
   return MultiThreadCompileGrammar(Grammar::FromEBNF(grammar_str, root_rule_name));
 }
@@ -577,8 +578,6 @@ CompiledGrammar GrammarCompilerBase::MultiThreadCompileGrammar(Grammar grammar) 
   return CompiledGrammar(compiled_grammar_impl);
 }
 
-}  // namespace
-
 class GrammarCompiler::Impl : private GrammarCompilerBase {
  public:
   Impl(
@@ -589,7 +588,7 @@ class GrammarCompiler::Impl : private GrammarCompilerBase {
   )
       : GrammarCompilerBase(tokenizer_info, max_threads, cache_enabled),
         compile_builtin_json_grammar_cache_([&] { return CompileJson(); }),
-        compile_cache_(max_memory_bytes, static_cast<GrammarCompilerBase&>(*this)) {}
+        compile_cache_(max_memory_bytes, *this) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -612,22 +611,25 @@ class GrammarCompiler::Impl : private GrammarCompilerBase {
   void ClearCache();
 
  private:
-  struct Policy {
-   public:
-    Policy(GrammarCompilerBase& compiler) : compiler(compiler) {}
-    template <typename KeyType>
-    auto compute(const KeyType& key) -> CompiledGrammar {
-      return compiler.Compile<KeyType>(key);
-    }
+  using KeyType = std::variant<SchemaKey, StructuralTagKey, std::string, GrammarKey>;
 
-   private:
+  struct Computer {
+    Computer(Impl& compiler) : compiler(compiler) {}
+    // dispatch the key to the corresponding compile function
+    auto operator()(const KeyType& key) const -> CompiledGrammar {
+      return std::visit(compiler, key);
+    }
     GrammarCompilerBase& compiler;
   };
 
-  /*! \brief The cache for the compiled grammar for JSON. */
+  struct SizeEstimator {
+    auto operator()(const CompiledGrammar& value) const -> std::size_t {
+      return value.MemorySize();
+    }
+  };
+
   ThreadSafeCache<CompiledGrammar> compile_builtin_json_grammar_cache_;
-  ThreadSafeLRUCache<Policy, CompiledGrammar, SchemaKey, StructuralTagKey, std::string, GrammarKey>
-      compile_cache_;
+  ThreadSafeLRUCache<KeyType, CompiledGrammar, Computer, SizeEstimator> compile_cache_;
 };
 
 CompiledGrammar GrammarCompiler::Impl::CompileBuiltinJSONGrammar() {
@@ -653,7 +655,7 @@ CompiledGrammar GrammarCompiler::Impl::CompileJSONSchema(
       (indent == std::nullopt) ? std::make_pair(", ", ": ") : std::make_pair(",", ": ")
   );
   auto key = std::make_tuple(schema, any_whitespace, indent, separators_value, strict_mode);
-  return compile_cache_.Get<SchemaKey>(key);
+  return compile_cache_.Get(key);
 }
 
 CompiledGrammar GrammarCompiler::Impl::CompileStructuralTag(
@@ -663,14 +665,14 @@ CompiledGrammar GrammarCompiler::Impl::CompileStructuralTag(
     return MultiThreadCompileGrammar(Grammar::FromStructuralTag(tags, triggers));
   }
   auto key = std::make_tuple(tags, triggers);
-  return compile_cache_.Get<StructuralTagKey>(key);
+  return compile_cache_.Get(key);
 }
 
 CompiledGrammar GrammarCompiler::Impl::CompileRegex(const std::string& regex) {
   if (!CacheEnabled()) {
     return MultiThreadCompileGrammar(Grammar::FromRegex(regex));
   }
-  return compile_cache_.Get<std::string>(regex);
+  return compile_cache_.Get(regex);
 }
 
 CompiledGrammar GrammarCompiler::Impl::CompileGrammar(const Grammar& grammar) {
@@ -678,7 +680,7 @@ CompiledGrammar GrammarCompiler::Impl::CompileGrammar(const Grammar& grammar) {
     return MultiThreadCompileGrammar(grammar);
   }
   auto key = std::make_pair(grammar.ToString(), grammar->GetRootRule().name);
-  return compile_cache_.Get<GrammarKey>(key);
+  return compile_cache_.Get(key);
 }
 
 void GrammarCompiler::Impl::ClearCache() {
