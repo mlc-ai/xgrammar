@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstddef>
 #include <future>
+#include <iostream>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -54,8 +55,8 @@ constexpr auto kUnlimited = std::size_t(-1);
 
 TEST(XGrammarParallelTest, CacheContention) {
   XGRAMMAR_LOG_INFO << "Testing the contention performance of the cache (no eviction)";
-  constexpr auto kReadGroup = 20;
-  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 10;
+  constexpr auto kReadGroup = 8;
+  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 4;
   Computer0::sleep_time = 10s;
 
   // never evict
@@ -67,7 +68,7 @@ TEST(XGrammarParallelTest, CacheContention) {
   const auto target = tic + 1s;
 
   for (int i = 0; i < kNumThreads; ++i) {
-    futures.push_back(std::async(std::launch::async, [&] {
+    futures.push_back(std::async(std::launch::async, [=, &cache] {
       std::this_thread::sleep_until(target);
       auto sum = std::size_t{};
       // write group: they should not compete with each other
@@ -97,7 +98,7 @@ TEST(XGrammarParallelTest, CacheContention) {
                     << "* " << kNumThreads << " threads | "
                     << "overhead = " << overhead.count() << "ms";
 
-  // shouldn't exceed 2 times the compute + sleep time
+  // shouldn't exceed compute + sleep time
   if (overhead > 1s + Computer0::sleep_time) {
     XGRAMMAR_LOG(FATAL) << "The overhead is too high, maybe the cache holds the lock too long?";
   }
@@ -105,8 +106,8 @@ TEST(XGrammarParallelTest, CacheContention) {
 
 TEST(XGrammarParallelTest, CacheEviction) {
   XGRAMMAR_LOG_INFO << "Testing the eviction performance of the cache (always evict)";
-  constexpr auto kInsertGroup = 30;
-  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 10;
+  constexpr auto kInsertGroup = 20;
+  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 16;
   Computer0::sleep_time = 1s;
 
   // always evict
@@ -118,7 +119,7 @@ TEST(XGrammarParallelTest, CacheEviction) {
   const auto target = tic + 1s;
 
   for (int i = 0; i < kNumThreads; ++i) {
-    futures.push_back(std::async(std::launch::async, [&] {
+    futures.push_back(std::async(std::launch::async, [=, &cache] {
       std::this_thread::sleep_until(target);
       auto sum = std::size_t{};
       // each thread writes to a different key
@@ -146,8 +147,8 @@ TEST(XGrammarParallelTest, CacheEviction) {
                     << "* " << kNumThreads << " threads | "
                     << "overhead = " << overhead.count() << "ms";
 
-  // shouldn't exceed 2 times the compute + sleep time
-  if (overhead > 1s + Computer0::sleep_time * kInsertGroup) {
+  // shouldn't exceed compute + sleep time
+  if (overhead > 1s + Computer0::sleep_time) {
     XGRAMMAR_LOG(FATAL) << "The overhead is too high, maybe the cache holds the lock too long?";
   }
 }
@@ -230,13 +231,13 @@ TEST(XGrammarParallelTest, CacheCorrectness) {
   auto cache =
       ThreadSafeLRUCache<std::string, TestObject, Computer1, SizeEstimator>{std::size_t(-1)};
 
-  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 10;
+  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 16;
   auto futures = std::vector<std::future<std::string>>{};
   futures.reserve(kNumThreads);
 
   for (auto i = 0; i < kNumThreads; ++i) {
     futures.push_back(std::async(std::launch::async, [&cache, i] {
-      return cache.Get(std::to_string(i)).to_string();
+      return cache.Get(std::to_string(-i)).to_string();
     }));
   }
 
@@ -246,7 +247,7 @@ TEST(XGrammarParallelTest, CacheCorrectness) {
   cache.Clear();
 
   for (auto i = 0; i < kNumThreads; ++i) {
-    EXPECT_EQ(futures[i].get(), std::to_string(i));
+    EXPECT_EQ(futures[i].get(), std::to_string(-i));
   }
 }
 
