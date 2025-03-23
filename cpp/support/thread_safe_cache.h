@@ -11,12 +11,13 @@
 #include <cstddef>
 #include <functional>
 #include <future>
-#include <list>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <unordered_map>
 #include <utility>
+
+#include "container.h"
 
 namespace xgrammar {
 
@@ -190,28 +191,23 @@ namespace details {
 template <typename Key, typename Value>
 class LRUCacheImpl {
  protected:
-  struct Entry;
-
-  struct LRUnode {
-    std::pair<const Key, Entry>& pair;
-    LRUnode(std::pair<const Key, Entry>& pair) : pair(pair) {}
-  };
-
   struct Entry {
-    Value value;
-    typename std::list<LRUnode>::iterator iterator;
+    Value value;  // value of the node
+    int index;    // node index
   };
 
+  /*! \brief Visits the node and moves it to the back of the LRU list. Return its value. */
   auto lru_visit(const std::pair<const Key, Entry>& pair) -> const Value& {
     const auto& entry = pair.second;
-    lru_list_.splice(lru_list_.end(), lru_list_, entry.iterator);
+    lru_list_.move_back(entry.index);
     return entry.value;
   }
 
+  /*! \brief Initializes the node with the given value and moves it to the back of the LRU list. */
   auto lru_init(std::pair<const Key, Entry>& pair, const Value& init) -> void {
-    auto& [key, entry] = pair;
+    auto& entry = pair.second;
     entry.value = init;
-    entry.iterator = lru_list_.emplace(lru_list_.end(), pair);
+    entry.index = lru_list_.push_back(&pair);
   }
 
   template <typename Predicate, typename Evict>
@@ -221,27 +217,22 @@ class LRUCacheImpl {
     auto iter = lru_list_.begin();
     if (iter == lru_list_.end()) return;
 
-    auto waiting = std::list<LRUnode>{};
-
     do {
-      auto& [key, entry] = iter->pair;
+      auto& [key, entry] = **iter;
       if (evict(entry.value)) {
-        map_.erase(key);
         iter = lru_list_.erase(iter);
+        map_.erase(key);
       } else {
-        waiting.splice(waiting.end(), lru_list_, iter++);
+        ++iter;  // simply skip those waiting for computation
       }
     } while (predicate() && iter != lru_list_.end());
-
-    // move the waiting list to the end of the lru list
-    lru_list_.splice(lru_list_.end(), waiting);
   }
 
   auto get_map() -> std::unordered_map<Key, Entry>& { return map_; }
 
  private:
   std::unordered_map<Key, Entry> map_;
-  std::list<LRUnode> lru_list_;
+  list<std::pair<const Key, Entry>*> lru_list_;
 };
 
 template <typename Value>
@@ -297,7 +288,8 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
     const auto lock_lru = std::lock_guard{lru_mutex_};
     Impl::lru_evict(
         [] { return true; },
-        [&](const Future& value) {  // always evict and block until the value is ready
+        [&](const Future& value) {
+          // always evict and block until the value is ready
           current_size_ -= value.get().size;
           return true;
         }
