@@ -180,6 +180,7 @@ class Grammar::Impl {
   friend class GrammarCompiler;
 
   std::size_t MemorySize() const;
+  friend std::size_t MemorySize(const Impl& impl);
 };
 
 }  // namespace xgrammar

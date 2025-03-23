@@ -39,28 +39,27 @@ namespace xgrammar {
 
 /******************* MemorySize *******************/
 
-auto Grammar::Impl::MemorySize() const -> std::size_t {
-  // assume string is not long, so we don't iterate through all the rules
-  // just to get a precise heap size usage, which may be too time-consuming
-  const auto kEstimatedRuleSize = rules_.size() * sizeof(Rule);
-  return sizeof(*this) + kEstimatedRuleSize + SizeOfHeap(rule_expr_data_) +
-         SizeOfHeap(rule_expr_indptr_) + SizeOfHeap(root_tag_dispatch_fsm) +
-         SizeOfHeap(tag_dispatch_end_node_to_rule_id) + SizeOfHeap(allow_empty_rule_ids);
+auto MemorySize(const Grammar::Impl& impl) -> std::size_t {
+  // we assume strings are not long, so we don't iterate through all the rules
+  return impl.rules_.size() * sizeof(impl.rules_[0]) + MemorySize(impl.rule_expr_data_) +
+         MemorySize(impl.rule_expr_indptr_) + MemorySize(impl.root_tag_dispatch_fsm) +
+         MemorySize(impl.tag_dispatch_end_node_to_rule_id) + MemorySize(impl.allow_empty_rule_ids);
 }
 
-auto AdaptiveTokenMask::MemorySize() const -> std::size_t {
-  // do not count into sizeof(*this) since it's not pimpl
-  return SizeOfHeap(uncertain_indices) + SizeOfHeap(accepted_indices) +
-         SizeOfHeap(rejected_indices) + SizeOfHeap(accepted_bitset);
+auto Grammar::Impl::MemorySize() const -> std::size_t { return xgrammar::MemorySize(*this); }
+
+auto MemorySize(const AdaptiveTokenMask& mask) -> std::size_t {
+  return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
+         MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset);
 }
+
+auto AdaptiveTokenMask::MemorySize() const -> std::size_t { return xgrammar::MemorySize(*this); }
 
 auto CompiledGrammar::Impl::MemorySize() const -> std::size_t {
-  using ValueType = typename decltype(adaptive_token_mask_cache)::value_type;
-  auto sum =
-      sizeof(*this) + grammar->MemorySize() + sizeof(ValueType) * adaptive_token_mask_cache.size();
-  for (auto& [_, mask] : adaptive_token_mask_cache) {
-    sum += mask.MemorySize();
-  }
+  std::size_t sum = 0;
+  sum += grammar->MemorySize();
+  sum += adaptive_token_mask_cache.size() * sizeof(*adaptive_token_mask_cache.begin());
+  for (auto& [_, mask] : adaptive_token_mask_cache) sum += mask.MemorySize();
   return sum;
 }
 
@@ -616,16 +615,12 @@ class GrammarCompiler::Impl : private GrammarCompilerBase {
   struct Computer {
     Computer(Impl& compiler) : compiler(compiler) {}
     // dispatch the key to the corresponding compile function
-    auto operator()(const KeyType& key) const -> CompiledGrammar {
-      return std::visit(compiler, key);
-    }
+    CompiledGrammar operator()(const KeyType& key) const { return std::visit(compiler, key); }
     GrammarCompilerBase& compiler;
   };
 
   struct SizeEstimator {
-    auto operator()(const CompiledGrammar& value) const -> std::size_t {
-      return value.MemorySize();
-    }
+    std::size_t operator()(const CompiledGrammar& value) const { return value.MemorySize(); }
   };
 
   ThreadSafeCache<CompiledGrammar> compile_builtin_json_grammar_cache_;

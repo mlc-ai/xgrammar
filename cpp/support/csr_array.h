@@ -47,8 +47,8 @@ class CSRArray {
   /*! \brief Get the number of rows in the CSRArray. */
   int32_t Size() const { return static_cast<int32_t>(indptr_.size()) - 1; }
 
-  friend std::size_t SizeOfHeap(const CSRArray<DataType>& arr) {
-    return SizeOfHeap(arr.data_) + SizeOfHeap(arr.indptr_);
+  friend std::size_t MemorySize(const CSRArray<DataType>& arr) {
+    return MemorySize(arr.data_) + MemorySize(arr.indptr_);
   }
 
   /*!

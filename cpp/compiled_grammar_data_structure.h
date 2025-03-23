@@ -71,6 +71,7 @@ struct AdaptiveTokenMask {
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
   std::size_t MemorySize() const;
+  friend std::size_t MemorySize(const AdaptiveTokenMask& mask);
 };
 
 /*!

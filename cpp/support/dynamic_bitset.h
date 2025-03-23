@@ -171,7 +171,7 @@ class DynamicBitset {
 
   static constexpr int BITS_PER_BLOCK = 32;
 
-  friend std::size_t SizeOfHeap(const DynamicBitset& bitset) {
+  friend std::size_t MemorySize(const DynamicBitset& bitset) {
     return bitset.buffer_size_ * sizeof(bitset.data_[0]);
   }
 

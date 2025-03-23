@@ -44,7 +44,7 @@ inline uint32_t HashCombine(Args... args) {
 
 // Return the memory consumption in heap memory of a container.
 template <typename Container>
-inline constexpr std::size_t SizeOfHeap(const Container& container) {
+inline constexpr std::size_t MemorySize(const Container& container) {
   using Element_t = std::decay_t<decltype(*std::begin(container))>;
   static_assert(std::is_trivially_copyable_v<Element_t>, "Element type must be trivial");
   static_assert(!std::is_trivially_copyable_v<Container>, "Container type must not be trivial");
@@ -52,8 +52,8 @@ inline constexpr std::size_t SizeOfHeap(const Container& container) {
 }
 
 template <typename Tp>
-inline constexpr std::size_t SizeOfHeap(const std::optional<Tp>& range) {
-  return range.has_value() ? SizeOfHeap(*range) : 0;
+inline constexpr std::size_t MemorySize(const std::optional<Tp>& range) {
+  return range.has_value() ? MemorySize(*range) : 0;
 }
 
 }  // namespace xgrammar
