@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <xgrammar/xgrammar.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <future>
@@ -26,6 +27,8 @@ static_assert(
 struct MockGrammar {
   std::size_t uuid;
   std::byte padding[sizeof(CompiledGrammar) - sizeof(std::size_t)];
+  MockGrammar() = default;
+  MockGrammar(std::size_t uuid) : uuid(uuid) {}
   auto MemorySize() const -> std::size_t { return 1; }
 };
 
@@ -38,26 +41,114 @@ struct SizeEstimator {
 
 using namespace std::chrono_literals;
 
-// This test should cost about 2 * 4 * (log2(64) + 1) * 2s = 112s
-TEST(XGrammarParallelTest, CacheContention) {
-  const std::size_t kMaxRead = 64;
+struct Computer0 {
+  inline static auto counter = std::atomic_size_t{};
+  inline static auto sleep_time = 1000ms;
+  auto operator()(std::size_t key) const -> MockGrammar {
+    std::this_thread::sleep_for(sleep_time);  // simulate a slow operation
+    return MockGrammar{counter++};
+  }
+};
 
-  XGRAMMAR_LOG_INFO << "Testing the contention performance of the cache";
-  for (auto n = 4; n >= 1; --n) {
-    for (auto m = kMaxRead; m >= 1; m /= 2) {
-    }
+constexpr auto kUnlimited = std::size_t(-1);
+
+TEST(XGrammarParallelTest, CacheContention) {
+  XGRAMMAR_LOG_INFO << "Testing the contention performance of the cache (no eviction)";
+  constexpr auto kReadGroup = 20;
+  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 10;
+  Computer0::sleep_time = 10s;
+
+  // never evict
+  auto cache = ThreadSafeLRUCache<std::size_t, MockGrammar, Computer0, SizeEstimator>{kUnlimited};
+
+  auto futures = std::vector<std::future<std::size_t>>{};
+  futures.reserve(kNumThreads);
+  const auto tic = std::chrono::high_resolution_clock::now();
+  const auto target = tic + 1s;
+
+  for (int i = 0; i < kNumThreads; ++i) {
+    futures.push_back(std::async(std::launch::async, [&] {
+      std::this_thread::sleep_until(target);
+      auto sum = std::size_t{};
+      // write group: they should not compete with each other
+      for (int j = 0; j < kNumThreads; ++j) {
+        sum += cache.Get((i + j) % kNumThreads).uuid;
+      }
+      // read group: they should not compete with each other
+      for (int k = 0; k < kReadGroup; ++k) {
+        for (int j = 0; j < kNumThreads; ++j) {
+          sum += cache.Get((i + j) % kNumThreads).uuid;
+        }
+      }
+      return sum;
+    }));
+  }
+
+  const auto kResult = std::size_t(kNumThreads) * (kNumThreads - 1) / 2 * (1 + kReadGroup);
+  for (int i = 0; i < kNumThreads; ++i) EXPECT_EQ(futures[i].get(), kResult);
+
+  const auto toc = std::chrono::high_resolution_clock::now();
+  const auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic);
+
+  // remove 1s sleep time and computing sleep time
+  const auto overhead = dur - 1s - Computer0::sleep_time;
+
+  XGRAMMAR_LOG_INFO << "(1 write + " << kReadGroup << " reads) "
+                    << "* " << kNumThreads << " threads | "
+                    << "overhead = " << overhead.count() << "ms";
+
+  // shouldn't exceed 2 times the compute + sleep time
+  if (overhead > 1s + Computer0::sleep_time) {
+    XGRAMMAR_LOG(FATAL) << "The overhead is too high, maybe the cache holds the lock too long?";
   }
 }
 
-// This test should cost at most 4 * (log2(64) + 1) * (1s + 4s) = 140s
 TEST(XGrammarParallelTest, CacheEviction) {
-  const std::size_t kMaxThreads = std::max(std::thread::hardware_concurrency(), 8u) / 2;
-  const std::size_t kMaxSize = std::min<std::size_t>(kMaxThreads, 64);
+  XGRAMMAR_LOG_INFO << "Testing the eviction performance of the cache (always evict)";
+  constexpr auto kInsertGroup = 30;
+  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 10;
+  Computer0::sleep_time = 1s;
 
-  XGRAMMAR_LOG_INFO << "Testing the eviction performance of the cache";
-  for (auto n = 4; n >= 1; --n) {
-    for (auto m = kMaxSize; m >= 1; m /= 2) {
-    }
+  // always evict
+  auto cache = ThreadSafeLRUCache<std::size_t, MockGrammar, Computer0, SizeEstimator>{0};
+
+  auto futures = std::vector<std::future<std::size_t>>{};
+  futures.reserve(kNumThreads);
+  const auto tic = std::chrono::high_resolution_clock::now();
+  const auto target = tic + 1s;
+
+  for (int i = 0; i < kNumThreads; ++i) {
+    futures.push_back(std::async(std::launch::async, [&] {
+      std::this_thread::sleep_until(target);
+      auto sum = std::size_t{};
+      // each thread writes to a different key
+      for (int j = 0; j < kInsertGroup; ++j) {
+        sum += cache.Get(i * kInsertGroup + j).uuid;
+      }
+      return sum;
+    }));
+  }
+
+  const auto kNumInsert = std::size_t(kNumThreads) * kInsertGroup;
+  const auto kResult = kNumInsert * (kNumInsert - 1) / 2;
+
+  auto sum = std::size_t{};
+  for (int i = 0; i < kNumThreads; ++i) sum += futures[i].get();
+  EXPECT_EQ(sum, kResult);
+
+  const auto toc = std::chrono::high_resolution_clock::now();
+  const auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic);
+
+  // remove 1s sleep time and computing sleep time
+  const auto overhead = dur - 1s - Computer0::sleep_time * kInsertGroup;
+
+  XGRAMMAR_LOG_INFO << "(" << kInsertGroup << " writes) "
+                    << "* " << kNumThreads << " threads | "
+                    << "overhead = " << overhead.count() << "ms";
+
+  // shouldn't exceed 2 times the compute + sleep time
+  if (overhead > 1s + Computer0::sleep_time * kInsertGroup) {
+    XGRAMMAR_LOG(FATAL) << "The overhead is too high, maybe the cache holds the lock too long?";
   }
 }
 
@@ -150,7 +241,7 @@ TEST(XGrammarParallelTest, CacheCorrectness) {
   }
 
   // Wait the futures to block
-  std::this_thread::sleep_for(100ms);
+  std::this_thread::sleep_for(1s);
 
   cache.Clear();
 
