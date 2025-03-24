@@ -2,7 +2,47 @@
 #define XGRAMMAR_SUPPORT_CONTAINER_H_
 #include <vector>
 
+#include "logging.h"
+
 namespace xgrammar {
+
+namespace details {
+
+template <typename Node>
+class NodePool {
+ public:
+  NodePool() = default;
+
+  void reserve(int n) { node_pool_.reserve(n); }
+
+  [[nodiscard]]
+  int allocate() {
+    if (free_list_.empty()) {
+      int node = static_cast<int>(node_pool_.size());
+      node_pool_.emplace_back();
+      return node;
+    } else {
+      int node = free_list_.back();
+      free_list_.pop_back();
+      return node;
+    }
+  }
+
+  void deallocate(int node) { free_list_.push_back(node); }
+
+  void clear() {
+    node_pool_.clear();
+    free_list_.clear();
+  }
+
+  Node& operator[](int node) { return node_pool_[node]; }
+
+ private:
+  std::vector<Node> node_pool_;
+  std::vector<int> free_list_;
+};
+
+}  // namespace details
 
 template <typename Value>
 class List {
@@ -14,6 +54,7 @@ class List {
     Node() : prev(0), next(0), value() {}
   };
 
+ public:
   struct iterator {
    public:
     iterator(int n, List& c) : node_(n), list_(&c) {}
@@ -43,15 +84,13 @@ class List {
     List* list_;
   };
 
- public:
   List(int reserved = 0) {
     node_pool_.reserve(reserved);
-    free_list_.reserve(reserved);
-    node_pool_.emplace_back();  // create a dummy node
+    init_guard();
   }
 
   int push_back(const Value& value) {
-    int node = allocate();
+    int node = node_pool_.allocate();
     node_pool_[node].value = value;
     insert_before(node, 0);
     return node;
@@ -66,29 +105,22 @@ class List {
     int node = it.node_;
     int next = node_pool_[node].next;
     unlink(node);
-    free_list_.push_back(node);
+    node_pool_.deallocate(node);
     return iterator(next, *this);
   }
 
   void clear() {
     node_pool_.clear();
-    free_list_.clear();
-    node_pool_.emplace_back();  // create a dummy node
+    init_guard();
   }
 
   iterator begin() { return iterator(node_pool_[0].next, *this); }
   iterator end() { return iterator(0, *this); }
 
  private:
-  int allocate() {
-    if (free_list_.empty()) {
-      node_pool_.emplace_back();
-      return int(node_pool_.size()) - 1;
-    } else {
-      int node_id = free_list_.back();
-      free_list_.pop_back();
-      return node_id;
-    }
+  void init_guard() {
+    int node_id = node_pool_.allocate();
+    XGRAMMAR_DCHECK(node_id == 0) << "node 0 should be reserved as guard node";
   }
 
   void insert_before(int node, int next) {
@@ -106,8 +138,7 @@ class List {
     node_pool_[next].prev = prev;
   }
 
-  std::vector<Node> node_pool_;
-  std::vector<int> free_list_;
+  details::NodePool<Node> node_pool_;
 };
 
 }  // namespace xgrammar
