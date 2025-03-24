@@ -307,6 +307,8 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
 
  private:
   auto GetFuture(const Key& key) -> Future {
+    if (this->max_size_ == static_cast<std::size_t>(-1)) return GetFutureUnlimited(key);
+
     auto& map = Impl::get_map();
 
     {
@@ -349,6 +351,34 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
           }
       );
     }
+
+    // perform the costly computation outside all locks
+    lock_map.unlock();
+    task();
+    return future;
+  }
+
+  auto GetFutureUnlimited(const Key& key) -> Future {
+    auto& map = Impl::get_map();
+    {
+      auto lock_map = std::shared_lock{map_mutex_};
+      auto it = map.find(key);
+      if (it != map.end()) return it->second.value;
+    }
+
+    auto task = std::packaged_task<Sized()>{[this, &key] {
+      auto result = Sized();
+      result.value = computer_(key);
+      result.size = size_estimator_(result.value);
+      return result;
+    }};
+
+    auto lock_map = std::unique_lock{map_mutex_};
+    auto [it, success] = map.try_emplace(key);
+    if (!success) return it->second.value;
+
+    auto future = task.get_future().share();
+    it->second.value = future;
 
     // perform the costly computation outside all locks
     lock_map.unlock();
