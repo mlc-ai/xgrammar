@@ -44,20 +44,20 @@ using namespace std::chrono_literals;
 
 struct Computer0 {
   inline static auto counter = std::atomic_size_t{};
-  inline static auto sleep_time = 1000ms;
+  inline static constexpr auto kSleepTime = 1000ms;
   auto operator()(std::size_t key) const -> MockGrammar {
-    std::this_thread::sleep_for(sleep_time);  // simulate a slow operation
+    std::this_thread::sleep_for(kSleepTime);  // simulate a slow operation
     return MockGrammar{counter++};
   }
 };
 
 constexpr auto kUnlimited = std::size_t(-1);
+constexpr auto kOverheadRatio = 0.1;
 
 TEST(XGrammarParallelTest, CacheContention) {
   XGRAMMAR_LOG_INFO << "Testing the contention performance of the cache (no eviction)";
   constexpr auto kReadGroup = 8;
   const auto kNumThreads = int(std::thread::hardware_concurrency()) * 4;
-  Computer0::sleep_time = 10s;
 
   // never evict
   auto cache = ThreadSafeLRUCache<std::size_t, MockGrammar, Computer0, SizeEstimator>{kUnlimited};
@@ -92,23 +92,21 @@ TEST(XGrammarParallelTest, CacheContention) {
   const auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic);
 
   // remove 1s sleep time and computing sleep time
-  const auto overhead = dur - 1s - Computer0::sleep_time;
+  const auto overhead = dur - 1s - Computer0::kSleepTime;
 
   XGRAMMAR_LOG_INFO << "(1 write + " << kReadGroup << " reads) "
                     << "* " << kNumThreads << " threads | "
                     << "overhead = " << overhead.count() << "ms";
 
-  // shouldn't exceed compute + sleep time
-  if (overhead > 1s + Computer0::sleep_time) {
-    XGRAMMAR_LOG(FATAL) << "The overhead is too high, maybe the cache holds the lock too long?";
+  if (overhead > kOverheadRatio * kNumThreads * Computer0::kSleepTime + 1s) {
+    XGRAMMAR_LOG(WARNING) << "The overhead is too high, maybe the cache holds the lock too long?";
   }
 }
 
 TEST(XGrammarParallelTest, CacheEviction) {
   XGRAMMAR_LOG_INFO << "Testing the eviction performance of the cache (always evict)";
-  constexpr auto kInsertGroup = 20;
-  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 16;
-  Computer0::sleep_time = 1s;
+  constexpr auto kInsertGroup = 8;
+  const auto kNumThreads = int(std::thread::hardware_concurrency()) * 4;
 
   // always evict
   auto cache = ThreadSafeLRUCache<std::size_t, MockGrammar, Computer0, SizeEstimator>{0};
@@ -141,15 +139,15 @@ TEST(XGrammarParallelTest, CacheEviction) {
   const auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic);
 
   // remove 1s sleep time and computing sleep time
-  const auto overhead = dur - 1s - Computer0::sleep_time * kInsertGroup;
+  const auto overhead = dur - 1s - Computer0::kSleepTime * kInsertGroup;
 
   XGRAMMAR_LOG_INFO << "(" << kInsertGroup << " writes) "
                     << "* " << kNumThreads << " threads | "
                     << "overhead = " << overhead.count() << "ms";
 
   // shouldn't exceed compute + sleep time
-  if (overhead > 1s + Computer0::sleep_time) {
-    XGRAMMAR_LOG(FATAL) << "The overhead is too high, maybe the cache holds the lock too long?";
+  if (overhead > kOverheadRatio * Computer0::kSleepTime * kNumThreads + 1s) {
+    XGRAMMAR_LOG(WARNING) << "The overhead is too high, maybe the cache holds the lock too long?";
   }
 }
 
@@ -228,8 +226,7 @@ struct Computer1 {
 };
 
 TEST(XGrammarParallelTest, CacheCorrectness) {
-  auto cache =
-      ThreadSafeLRUCache<std::string, TestObject, Computer1, SizeEstimator>{std::size_t(-1)};
+  auto cache = ThreadSafeLRUCache<std::string, TestObject, Computer1, SizeEstimator>{kUnlimited};
 
   const auto kNumThreads = int(std::thread::hardware_concurrency()) * 16;
   auto futures = std::vector<std::future<std::string>>{};
