@@ -197,21 +197,30 @@ class LRUCacheImpl {
   };
 
   /*! \brief Visits the node and moves it to the back of the LRU list. Return its value. */
-  auto lru_visit(const std::pair<const Key, Entry>& pair) -> const Value& {
+  auto LRUvisit(const std::pair<const Key, Entry>& pair) -> const Value& {
     const auto& entry = pair.second;
     lru_list_.move_back(entry.index);
     return entry.value;
   }
 
   /*! \brief Initializes the node with the given value and moves it to the back of the LRU list. */
-  auto lru_init(std::pair<const Key, Entry>& pair, const Value& init) -> void {
+  auto LRUinit(std::pair<const Key, Entry>& pair, const Value& init) -> void {
     auto& entry = pair.second;
     entry.value = init;
     entry.index = lru_list_.push_back(&pair);
   }
 
+  /*!
+   * \brief Evicts the least recently used nodes until the predicate returns false.
+   * \param predicate The function that returns true if eviction should continue.
+   * \param evict The function takes a value and returns true if the value can be evicted.
+   * This will be only called when the predicate returns true.
+   * If this function returns true, it should update the size information before return.
+   * \details This function will evict the least recently used nodes until the predicate returns
+   * false. The evict function will be called for each node to determine if it should be evicted.
+   */
   template <typename Predicate, typename Evict>
-  auto lru_evict(const Predicate& predicate, const Evict& evict) -> void {
+  auto LRUevict(const Predicate& predicate, const Evict& evict) -> void {
     if (!predicate()) return;
 
     auto iter = lru_list_.begin();
@@ -286,7 +295,7 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
     // Remove all the ready entries.
     const auto lock_map = std::lock_guard{map_mutex_};
     const auto lock_lru = std::lock_guard{lru_mutex_};
-    Impl::lru_evict(
+    Impl::LRUevict(
         [] { return true; },
         [&](const Future& value) {
           // always evict and block until the value is ready
@@ -305,7 +314,7 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
       auto it = map.find(key);
       if (it != map.end()) {
         const auto lock_lru = std::lock_guard{lru_mutex_};
-        return Impl::lru_visit(*it);
+        return Impl::LRUvisit(*it);
       }
     }
 
@@ -320,7 +329,7 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
     auto [it, success] = map.try_emplace(key);
     if (!success) {
       const auto lock_lru = std::lock_guard{lru_mutex_};
-      return Impl::lru_visit(*it);
+      return Impl::LRUvisit(*it);
     }
 
     // in this case, we insert the task, and we need to compute the value
@@ -328,8 +337,8 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
     {
       const auto lock_lru = std::lock_guard{lru_mutex_};
       // perform eviction if the cache is full
-      Impl::lru_init(*it, future);
-      Impl::lru_evict(
+      Impl::LRUinit(*it, future);
+      Impl::LRUevict(
           [&] { return current_size_ > max_size_; },
           [&](const Future& value) {
             using namespace std::chrono_literals;
