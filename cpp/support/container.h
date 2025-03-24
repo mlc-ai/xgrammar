@@ -5,7 +5,7 @@
 namespace xgrammar {
 
 template <typename Value>
-class list {
+class List {
  private:
   struct Node {
     int prev;
@@ -16,7 +16,7 @@ class list {
 
   struct iterator {
    public:
-    iterator(int n, list& c) : node_(n), list_(&c) {}
+    iterator(int n, List& c) : node_(n), list_(&c) {}
     iterator& operator++() {
       node_ = get_node().next;
       return *this;
@@ -36,15 +36,15 @@ class list {
     }
 
    private:
-    friend class list;
+    friend class List;
     Node& get_node() { return list_->node_pool_[node_]; }
 
     int node_;
-    list* list_;
+    List* list_;
   };
 
  public:
-  list(int reserved = 0) {
+  List(int reserved = 0) {
     node_pool_.reserve(reserved);
     free_list_.reserve(reserved);
     node_pool_.emplace_back();  // create a dummy node
@@ -76,8 +76,8 @@ class list {
     node_pool_.emplace_back();  // create a dummy node
   }
 
-  auto begin() { return iterator(node_pool_[0].next, *this); }
-  auto end() { return iterator(0, *this); }
+  iterator begin() { return iterator(node_pool_[0].next, *this); }
+  iterator end() { return iterator(0, *this); }
 
  private:
   int allocate() {

@@ -241,7 +241,7 @@ class LRUCacheImpl {
 
  private:
   std::unordered_map<Key, Entry> map_;
-  list<std::pair<const Key, Entry>*> lru_list_;
+  List<std::pair<const Key, Entry>*> lru_list_;
 };
 
 template <typename Value>
