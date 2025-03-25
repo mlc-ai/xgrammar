@@ -18,7 +18,7 @@ class NodePool {
   [[nodiscard]]
   int Allocate() {
     if (free_list_.empty()) {
-      int node = static_cast<int>(node_pool_.size());
+      int node = Size();
       node_pool_.emplace_back();
       return node;
     } else {
@@ -35,7 +35,12 @@ class NodePool {
     free_list_.clear();
   }
 
-  Node& operator[](int node) { return node_pool_[node]; }
+  Node& operator[](int node) {
+    XGRAMMAR_DCHECK(0 <= node && node < Size());
+    return node_pool_[node];
+  }
+
+  int Size() const { return static_cast<int>(node_pool_.size()); }
 
  private:
   std::vector<Node> node_pool_;
@@ -51,13 +56,14 @@ class List {
     int prev;
     int next;
     Value value;
-    Node() : prev(0), next(0), value() {}
   };
 
  public:
   struct iterator {
    public:
-    iterator(int n, List& c) : node_(n), list_(&c) {}
+    iterator(int n, List& c) : node_(n), list_(&c) {
+      XGRAMMAR_DCHECK(0 <= node_ && node_ < list_->node_pool_.Size());
+    }
     iterator& operator++() {
       node_ = GetNode().next;
       return *this;
@@ -67,12 +73,14 @@ class List {
       ++*this;
       return tmp;
     }
-    Value& operator*() { return GetNode().value; }
-    Value* operator->() { return &GetNode().value; }
+    Value& operator*() const { return GetNode().value; }
+    Value* operator->() const { return &GetNode().value; }
     bool operator==(const iterator& rhs) const {
+      XGRAMMAR_DCHECK(list_ == rhs.list_) << "compare different container is UB";
       return node_ == rhs.node_;  // compare different container is UB
     }
     bool operator!=(const iterator& rhs) const {
+      XGRAMMAR_DCHECK(list_ == rhs.list_) << "compare different container is UB";
       return node_ != rhs.node_;  // compare different container is UB
     }
 
@@ -80,7 +88,7 @@ class List {
 
    private:
     friend class List;
-    Node& GetNode() { return list_->node_pool_[node_]; }
+    Node& GetNode() const { return list_->node_pool_[node_]; }
 
     int node_;
     List* list_;
@@ -93,18 +101,21 @@ class List {
 
   iterator PushBack(const Value& value) {
     int node = node_pool_.Allocate();
+    XGRAMMAR_DCHECK(0 < node && node < node_pool_.Size());
     node_pool_[node].value = value;
     LinkBefore(node, 0);
     return iterator(node, *this);
   }
 
   void MoveBack(int node) {
+    XGRAMMAR_DCHECK(0 < node && node < node_pool_.Size());
     Unlink(node);
     LinkBefore(node, 0);
   }
 
   iterator Erase(iterator it) {
-    int node = it.node_;
+    int node = it.Index();
+    XGRAMMAR_DCHECK(0 < node && node < node_pool_.Size());
     int next = node_pool_[node].next;
     Unlink(node);
     node_pool_.Deallocate(node);
@@ -123,6 +134,8 @@ class List {
   void InitGuard() {
     int node_id = node_pool_.Allocate();
     XGRAMMAR_DCHECK(node_id == 0) << "node 0 should be reserved as guard node";
+    node_pool_[0].prev = 0;
+    node_pool_[0].next = 0;
   }
 
   void LinkBefore(int node, int next) {

@@ -190,21 +190,21 @@ namespace details {
 
 template <typename Key, typename Value>
 class LRUCacheImpl {
- protected:
+ public:
   struct Entry {
     Value value;  // value of the node
     int index;    // node index
   };
 
   /*! \brief Visits the node and moves it to the back of the LRU list. Return its value. */
-  const Value& LRUvisit(const std::pair<const Key, Entry>& pair) {
+  const Value& LRUVisit(const std::pair<const Key, Entry>& pair) {
     const auto& entry = pair.second;
     lru_list_.MoveBack(entry.index);
     return entry.value;
   }
 
   /*! \brief Initializes the node with the given value and moves it to the back of the LRU list. */
-  void LRUinit(std::pair<const Key, Entry>& pair, const Value& init) {
+  void LRUInit(std::pair<const Key, Entry>& pair, const Value& init) {
     auto& entry = pair.second;
     entry.value = init;
     entry.index = lru_list_.PushBack(&pair).Index();
@@ -220,7 +220,7 @@ class LRUCacheImpl {
    * false. The evict function will be called for each node to determine if it should be evicted.
    */
   template <typename Predicate, typename Evict>
-  void LRUevict(const Predicate& predicate, const Evict& evict) {
+  void LRUEvict(const Predicate& predicate, const Evict& evict) {
     if (!predicate()) return;
 
     auto iter = lru_list_.begin();
@@ -237,21 +237,12 @@ class LRUCacheImpl {
     } while (predicate() && iter != lru_list_.end());
   }
 
-  std::unordered_map<Key, Entry>& get_map() { return map_; }
+  std::unordered_map<Key, Entry>& GetMap() { return map_; }
 
  private:
   std::unordered_map<Key, Entry> map_;
   List<std::pair<const Key, Entry>*> lru_list_;
 };
-
-template <typename Value>
-struct SizedValue {
-  Value value;
-  std::size_t size;
-};
-
-template <typename Key, typename Value>
-using LRUCacheFutureSizedImpl = LRUCacheImpl<Key, std::shared_future<SizedValue<Value>>>;
 
 }  // namespace details
 
@@ -270,19 +261,22 @@ using LRUCacheFutureSizedImpl = LRUCacheImpl<Key, std::shared_future<SizedValue<
  * 2. The value type should have a MemorySize method that returns the size of the value in bytes.
  */
 template <typename Key, typename Value, typename Computer, typename SizeEstimator>
-class ThreadSafeLRUCache : private details::LRUCacheFutureSizedImpl<Key, Value> {
+class ThreadSafeLRUCache {
  private:
-  using Impl = details::LRUCacheFutureSizedImpl<Key, Value>;
+  struct SizedValue {
+    Value value;
+    std::size_t size;
+  };
 
  public:
-  inline static constexpr std::size_t kUnlimitedSize = static_cast<std::size_t>(-1);
+  inline static constexpr std::size_t UNLIMITED_SIZE = static_cast<std::size_t>(-1);
 
   explicit ThreadSafeLRUCache(
-      std::size_t max_size,
+      std::size_t max_size = UNLIMITED_SIZE,
       const Computer& computer = Computer{},
       const SizeEstimator& size_estimator = SizeEstimator{}
   )
-      : Impl(), max_size_(max_size), computer_(computer), size_estimator_(size_estimator) {}
+      : max_size_(max_size), computer_(computer), size_estimator_(size_estimator), cache_() {}
 
   std::size_t MaxMemorySize() const { return max_size_; }
   std::size_t MemorySize() const { return current_size_; }
@@ -295,10 +289,9 @@ class ThreadSafeLRUCache : private details::LRUCacheFutureSizedImpl<Key, Value> 
   void Clear() {
     // Remove all the ready entries.
     const auto lock_map = std::lock_guard{map_mutex_};
-    const auto lock_lru = std::lock_guard{lru_mutex_};
-    Impl::LRUevict(
+    cache_.LRUEvict(
         [] { return true; },
-        [&](const std::shared_future<details::SizedValue<Value>>& value) {
+        [&](const std::shared_future<SizedValue>& value) {
           // always evict and block until the value is ready
           current_size_ -= value.get().size;
           return true;
@@ -307,22 +300,24 @@ class ThreadSafeLRUCache : private details::LRUCacheFutureSizedImpl<Key, Value> 
   }
 
  private:
-  std::shared_future<details::SizedValue<Value>> GetFuture(const Key& key) {
-    if (this->max_size_ == kUnlimitedSize) return GetFutureUnlimited(key);
-
-    auto& map = Impl::get_map();
+  std::shared_future<SizedValue> GetFuture(const Key& key) {
+    if (this->max_size_ == UNLIMITED_SIZE) return GetFutureUnlimited(key);
+    auto& map = cache_.GetMap();
 
     {
       auto lock_map = std::shared_lock{map_mutex_};
       auto it = map.find(key);
       if (it != map.end()) {
+        // We only need to hold LRU lock when shared lock is held here.
+        // When unique lock of map_mutex_ is held, only 1 thread can access the
+        // LRU list at the same time, so we do not need to hold the LRU lock then.
         const auto lock_lru = std::lock_guard{lru_mutex_};
-        return Impl::LRUvisit(*it);
+        return cache_.LRUVisit(*it);
       }
     }
 
-    auto task = std::packaged_task<details::SizedValue<Value>()>{[this, &key] {
-      auto result = details::SizedValue<Value>();
+    auto task = std::packaged_task<SizedValue()>{[this, &key] {
+      auto result = SizedValue();
       result.value = computer_(key);
       result.size = size_estimator_(result.value);
       current_size_ += result.size;
@@ -331,28 +326,23 @@ class ThreadSafeLRUCache : private details::LRUCacheFutureSizedImpl<Key, Value> 
 
     auto lock_map = std::unique_lock{map_mutex_};
     auto [it, success] = map.try_emplace(key);
-    if (!success) {
-      const auto lock_lru = std::lock_guard{lru_mutex_};
-      return Impl::LRUvisit(*it);
-    }
+    if (!success) return cache_.LRUVisit(*it);
 
     // in this case, we insert the task, and we need to compute the value
     auto future = task.get_future().share();
-    {
-      const auto lock_lru = std::lock_guard{lru_mutex_};
-      // perform eviction if the cache is full
-      Impl::LRUinit(*it, future);
-      Impl::LRUevict(
-          [&] { return current_size_ > max_size_; },
-          [&](const std::shared_future<details::SizedValue<Value>>& value) {
-            using namespace std::chrono_literals;
-            // if not ready, then do not wait and block here
-            if (value.wait_for(0s) != std::future_status::ready) return false;
-            current_size_ -= value.get().size;
-            return true;
-          }
-      );
-    }
+
+    // perform eviction if the cache is full
+    cache_.LRUInit(*it, future);
+    cache_.LRUEvict(
+        [&] { return current_size_ > max_size_; },
+        [&](const std::shared_future<SizedValue>& value) {
+          using namespace std::chrono_literals;
+          // if not ready, then do not wait and block here
+          if (value.wait_for(0s) != std::future_status::ready) return false;
+          current_size_ -= value.get().size;
+          return true;
+        }
+    );
 
     // perform the costly computation outside all locks
     lock_map.unlock();
@@ -360,16 +350,17 @@ class ThreadSafeLRUCache : private details::LRUCacheFutureSizedImpl<Key, Value> 
     return future;
   }
 
-  std::shared_future<details::SizedValue<Value>> GetFutureUnlimited(const Key& key) {
-    auto& map = Impl::get_map();
+  std::shared_future<SizedValue> GetFutureUnlimited(const Key& key) {
+    auto& map = cache_.GetMap();
+
     {
       auto lock_map = std::shared_lock{map_mutex_};
       auto it = map.find(key);
       if (it != map.end()) return it->second.value;
     }
 
-    auto task = std::packaged_task<details::SizedValue<Value>()>{[this, &key] {
-      auto result = details::SizedValue<Value>();
+    auto task = std::packaged_task<SizedValue()>{[this, &key] {
+      auto result = SizedValue();
       result.value = computer_(key);
       result.size = size_estimator_(result.value);
       current_size_ += result.size;
@@ -393,9 +384,10 @@ class ThreadSafeLRUCache : private details::LRUCacheFutureSizedImpl<Key, Value> 
   const std::size_t max_size_;
   const Computer computer_;
   const SizeEstimator size_estimator_;
+  details::LRUCacheImpl<Key, std::shared_future<SizedValue>> cache_;
   std::atomic_size_t current_size_{0};
-  std::mutex lru_mutex_;
   std::shared_mutex map_mutex_;
+  std::mutex lru_mutex_;
 };
 
 }  // namespace xgrammar
