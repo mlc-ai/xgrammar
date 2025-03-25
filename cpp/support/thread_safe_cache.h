@@ -275,7 +275,7 @@ class ThreadSafeLRUCache : private details::LRUCacheFutureSizedImpl<Key, Value> 
   using Impl = details::LRUCacheFutureSizedImpl<Key, Value>;
 
  public:
-  inline static constexpr std::size_t kUlimitedSize = static_cast<std::size_t>(-1);
+  inline static constexpr std::size_t kUnlimitedSize = static_cast<std::size_t>(-1);
 
   explicit ThreadSafeLRUCache(
       std::size_t max_size,
@@ -308,7 +308,7 @@ class ThreadSafeLRUCache : private details::LRUCacheFutureSizedImpl<Key, Value> 
 
  private:
   std::shared_future<details::SizedValue<Value>> GetFuture(const Key& key) {
-    if (this->max_size_ == kUlimitedSize) return GetFutureUnlimited(key);
+    if (this->max_size_ == kUnlimitedSize) return GetFutureUnlimited(key);
 
     auto& map = Impl::get_map();
 

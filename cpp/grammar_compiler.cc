@@ -686,7 +686,7 @@ long long GrammarCompiler::Impl::MemorySize() const {
 
 long long GrammarCompiler::Impl::MemoryLimit() const {
   const auto size = compile_cache_.MaxMemorySize();
-  if (size == compile_cache_.kUlimitedSize) return -1;
+  if (size == compile_cache_.kUnlimitedSize) return -1;
   return static_cast<long long>(size);
 }
 
