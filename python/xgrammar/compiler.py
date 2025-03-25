@@ -214,3 +214,16 @@ class GrammarCompiler(XGRObject):
     def clear_cache(self) -> None:
         """Clear all cached compiled grammars."""
         self._handle.clear_cache()
+
+    @property
+    def memory_usage_bytes(self) -> int:
+        """The approximate memory usage of the cache in bytes."""
+        return self._handle.memory_usage
+
+    @property
+    def cache_limit_bytes(self) -> int:
+        """
+        The maximum memory usage for the cache in bytes.
+        Returns -1 if the cache has no memory limit.
+        """
+        return self._handle.memory_limit

@@ -142,7 +142,9 @@ NB_MODULE(xgrammar_bindings, m) {
           &GrammarCompiler::CompileGrammar,
           nb::call_guard<nb::gil_scoped_release>()
       )
-      .def("clear_cache", &GrammarCompiler::ClearCache);
+      .def("clear_cache", &GrammarCompiler::ClearCache)
+      .def_prop_ro("memory_usage", &GrammarCompiler::MemorySize)
+      .def_prop_ro("memory_limit", &GrammarCompiler::MemoryLimit);
 
   auto pyGrammarMatcher = nb::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher

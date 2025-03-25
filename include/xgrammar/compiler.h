@@ -81,6 +81,12 @@ class GrammarCompiler {
   /*! \brief Clear the internal cache of compiled grammars. */
   void ClearCache();
 
+  /*! \brief Return the approximate memory usage of the compiler in bytes. */
+  long long MemorySize() const;
+
+  /*! \brief Return the approximate memory usage of the compiler in bytes. -1 means unlimited. */
+  long long MemoryLimit() const;
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarCompiler);
 };
 

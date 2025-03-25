@@ -262,5 +262,60 @@ def test_grammar_compiler_json_schema_concurrent():
         t.join()
 
 
+def test_grammar_compiler_cache():
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+
+    def make_schema(name_str: str):
+        return {
+            "properties": {name_str: {"type": "string"}},
+            "required": [name_str],
+            "type": "object",
+        }
+
+    MB = 1024 * 1024
+
+    # Default no limit
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+    assert grammar_compiler.cache_limit_bytes == -1  # No limit (default, -1)
+    assert grammar_compiler.memory_usage_bytes == 0  # No memory usage
+    sum_single = 0
+    for i in range(100):
+        schema = make_schema(f"name_{i}")
+        compiled_grammar = grammar_compiler.compile_json_schema(schema, strict_mode=True)
+        sum_single += compiled_grammar.memory_usage_bytes
+        memory_usage = grammar_compiler.memory_usage_bytes
+        assert memory_usage == sum_single
+        if (i + 1) % 10 == 0:
+            print(
+                f"Cache memory usage after {i + 1} schemas: {memory_usage / MB:.3f} MB / unlimited"
+            )
+
+    old_size = grammar_compiler.memory_usage_bytes
+    grammar_compiler.compile_json_schema(make_schema("name_0"), strict_mode=True)
+    assert grammar_compiler.memory_usage_bytes == old_size
+
+    # with a 10MB limit
+    limit = int(1 * MB)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_limit_bytes=limit)
+    assert grammar_compiler.cache_limit_bytes == limit
+    assert grammar_compiler.memory_usage_bytes == 0
+    sum_single = 0
+    for i in range(100):
+        schema = make_schema(f"name_{i}")
+        compiled_grammar = grammar_compiler.compile_json_schema(schema, strict_mode=True)
+        sum_single += compiled_grammar.memory_usage_bytes
+        memory_usage = grammar_compiler.memory_usage_bytes
+        assert 0 <= memory_usage <= min(sum_single, limit * 2)  # this is a rough estimate
+        if (i + 1) % 10 == 0:
+            print(
+                f"Cache memory usage after {i + 1} schemas: {memory_usage / MB:.3f} MB / {limit / MB:.3f} MB"
+            )
+
+    # Test clear_cache
+    grammar_compiler.clear_cache()
+    assert grammar_compiler.memory_usage_bytes == 0
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

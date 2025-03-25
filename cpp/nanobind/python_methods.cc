@@ -7,15 +7,12 @@
 
 #include <xgrammar/xgrammar.h>
 
-#include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <vector>
 
 #include "../grammar_data_structure.h"
-#include "../support/dynamic_bitset.h"
 #include "../support/logging.h"
 
 namespace xgrammar {

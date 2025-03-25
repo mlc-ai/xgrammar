@@ -251,7 +251,7 @@ struct SizedValue {
 };
 
 template <typename Key, typename Value>
-using LRUCacheSizedImpl = LRUCacheImpl<Key, std::shared_future<SizedValue<Value>>>;
+using LRUCacheFutureSizedImpl = LRUCacheImpl<Key, std::shared_future<SizedValue<Value>>>;
 
 }  // namespace details
 
@@ -270,13 +270,13 @@ using LRUCacheSizedImpl = LRUCacheImpl<Key, std::shared_future<SizedValue<Value>
  * 2. The value type should have a MemorySize method that returns the size of the value in bytes.
  */
 template <typename Key, typename Value, typename Computer, typename SizeEstimator>
-class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
+class ThreadSafeLRUCache : private details::LRUCacheFutureSizedImpl<Key, Value> {
  private:
-  using Impl = details::LRUCacheSizedImpl<Key, Value>;
-  using Sized = details::SizedValue<Value>;
-  using Future = std::shared_future<Sized>;
+  using Impl = details::LRUCacheFutureSizedImpl<Key, Value>;
 
  public:
+  inline static constexpr std::size_t kUlimitedSize = static_cast<std::size_t>(-1);
+
   explicit ThreadSafeLRUCache(
       std::size_t max_size,
       const Computer& computer = Computer{},
@@ -284,7 +284,8 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
   )
       : Impl(), max_size_(max_size), computer_(computer), size_estimator_(size_estimator) {}
 
-  std::size_t MaxSize() const { return max_size_; }
+  std::size_t MaxMemorySize() const { return max_size_; }
+  std::size_t MemorySize() const { return current_size_; }
 
   Value Get(const Key& key) {
     auto future = GetFuture(key);
@@ -297,7 +298,7 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
     const auto lock_lru = std::lock_guard{lru_mutex_};
     Impl::LRUevict(
         [] { return true; },
-        [&](const Future& value) {
+        [&](const std::shared_future<details::SizedValue<Value>>& value) {
           // always evict and block until the value is ready
           current_size_ -= value.get().size;
           return true;
@@ -306,8 +307,8 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
   }
 
  private:
-  Future GetFuture(const Key& key) {
-    if (this->max_size_ == static_cast<std::size_t>(-1)) return GetFutureUnlimited(key);
+  std::shared_future<details::SizedValue<Value>> GetFuture(const Key& key) {
+    if (this->max_size_ == kUlimitedSize) return GetFutureUnlimited(key);
 
     auto& map = Impl::get_map();
 
@@ -320,10 +321,11 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
       }
     }
 
-    auto task = std::packaged_task<Sized()>{[this, &key] {
-      auto result = Sized();
+    auto task = std::packaged_task<details::SizedValue<Value>()>{[this, &key] {
+      auto result = details::SizedValue<Value>();
       result.value = computer_(key);
       result.size = size_estimator_(result.value);
+      current_size_ += result.size;
       return result;
     }};
 
@@ -342,7 +344,7 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
       Impl::LRUinit(*it, future);
       Impl::LRUevict(
           [&] { return current_size_ > max_size_; },
-          [&](const Future& value) {
+          [&](const std::shared_future<details::SizedValue<Value>>& value) {
             using namespace std::chrono_literals;
             // if not ready, then do not wait and block here
             if (value.wait_for(0s) != std::future_status::ready) return false;
@@ -358,7 +360,7 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
     return future;
   }
 
-  Future GetFutureUnlimited(const Key& key) {
+  std::shared_future<details::SizedValue<Value>> GetFutureUnlimited(const Key& key) {
     auto& map = Impl::get_map();
     {
       auto lock_map = std::shared_lock{map_mutex_};
@@ -366,10 +368,11 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
       if (it != map.end()) return it->second.value;
     }
 
-    auto task = std::packaged_task<Sized()>{[this, &key] {
-      auto result = Sized();
+    auto task = std::packaged_task<details::SizedValue<Value>()>{[this, &key] {
+      auto result = details::SizedValue<Value>();
       result.value = computer_(key);
       result.size = size_estimator_(result.value);
+      current_size_ += result.size;
       return result;
     }};
 

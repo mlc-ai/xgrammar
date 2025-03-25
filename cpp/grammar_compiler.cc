@@ -380,13 +380,13 @@ class GrammarCompiler::Impl {
       const TokenizerInfo& tokenizer_info,
       int max_threads,
       bool cache_enabled,
-      std::size_t max_memory_bytes
+      long long max_memory_bytes
   )
       : tokenizer_info_(tokenizer_info),
         max_threads_(max_threads),
         cache_enabled_(cache_enabled),
         compile_builtin_json_grammar_cache_([&] { return CompileJson(); }),
-        compile_cache_(max_memory_bytes, *this) {}
+        compile_cache_(static_cast<std::size_t>(max_memory_bytes), *this) {}
 
   /*!
    * \brief Build the tag dispatch fsm for the root rule and store in the compiled grammar.
@@ -428,6 +428,9 @@ class GrammarCompiler::Impl {
   CompiledGrammar CompileGrammar(const Grammar& grammar);
 
   void ClearCache();
+
+  long long MemorySize() const;
+  long long MemoryLimit() const;
 
  private:
   using MultipleKey = std::variant<SchemaKey, StructuralTagKey, std::string, GrammarKey>;
@@ -677,6 +680,16 @@ void GrammarCompiler::Impl::ClearCache() {
   compile_cache_.Clear();
 }
 
+long long GrammarCompiler::Impl::MemorySize() const {
+  return static_cast<long long>(compile_cache_.MemorySize());
+}
+
+long long GrammarCompiler::Impl::MemoryLimit() const {
+  const auto size = compile_cache_.MaxMemorySize();
+  if (size == compile_cache_.kUlimitedSize) return -1;
+  return static_cast<long long>(size);
+}
+
 /******************* GrammarCompiler *******************/
 
 GrammarCompiler::GrammarCompiler(
@@ -721,5 +734,9 @@ CompiledGrammar GrammarCompiler::CompileGrammar(const Grammar& grammar) {
 }
 
 void GrammarCompiler::ClearCache() { pimpl_->ClearCache(); }
+
+long long GrammarCompiler::MemorySize() const { return pimpl_->MemorySize(); }
+
+long long GrammarCompiler::MemoryLimit() const { return pimpl_->MemoryLimit(); }
 
 }  // namespace xgrammar
