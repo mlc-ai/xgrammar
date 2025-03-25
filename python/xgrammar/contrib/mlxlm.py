@@ -1,20 +1,20 @@
 """
 Usage:
-    python xgrammar.py --model mlx-community/Qwen2.5-Coder-32B-Instruct-3bit
+    python mlxlm.py --model mlx-community/Qwen2.5-Coder-32B-Instruct-3bit
 """
 
 import argparse
+
 import mlx.core as mx
+import torch
 from mlx_lm.generate import generate as mlx_generate
 from mlx_lm.utils import load as mlx_load
 from transformers import AutoTokenizer
+
 import xgrammar
-import torch
 
 
-def apply_token_bitmask_inplace_mlx(
-    bitmask: torch.Tensor, logits: mx.array
-) -> mx.array:
+def apply_token_bitmask_inplace_mlx(bitmask: torch.Tensor, logits: mx.array) -> mx.array:
     """This is an easy mimic of the apply_token_bitmask_inplace function.
 
     Args:
@@ -40,25 +40,15 @@ def apply_token_bitmask_inplace_mlx(
 
 
 class XGrammarLogitsProcessor:
-    def __init__(
-        self,
-        grammar: xgrammar.CompiledGrammar,
-        max_rollback_tokens: int = 16,
-    ):
-        self.matcher = xgrammar.GrammarMatcher(
-            grammar, max_rollback_tokens=max_rollback_tokens
-        )
+    def __init__(self, grammar: xgrammar.CompiledGrammar, max_rollback_tokens: int = 16):
+        self.matcher = xgrammar.GrammarMatcher(grammar, max_rollback_tokens=max_rollback_tokens)
         self.vocab_size = grammar.tokenizer_info.vocab_size
         self.bitmask = xgrammar.allocate_token_bitmask(1, self.vocab_size)
 
     def __call__(self, tokens: mx.array, logits: mx.array) -> mx.array:
         assert tokens.size > 0  # In the first call, tokens.size == #tokens in prompt
         last_token = tokens[-1].item()
-        acc = (
-            self.matcher.accept_token(last_token)
-            if not self.matcher.is_terminated()
-            else False
-        )
+        acc = self.matcher.accept_token(last_token) if not self.matcher.is_terminated() else False
         if not acc:
             self.matcher.reset()
             self.matcher.accept_token(last_token)
@@ -72,9 +62,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
     parser.add_argument(
-        "--prompt",
-        type=str,
-        default="Generate a simple example JSON. No text. Only the JSON",
+        "--prompt", type=str, default="Generate a simple example JSON. No text. Only the JSON"
     )
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
