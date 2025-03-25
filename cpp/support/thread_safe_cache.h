@@ -197,14 +197,14 @@ class LRUCacheImpl {
   };
 
   /*! \brief Visits the node and moves it to the back of the LRU list. Return its value. */
-  auto LRUvisit(const std::pair<const Key, Entry>& pair) -> const Value& {
+  const Value& LRUvisit(const std::pair<const Key, Entry>& pair) {
     const auto& entry = pair.second;
     lru_list_.move_back(entry.index);
     return entry.value;
   }
 
   /*! \brief Initializes the node with the given value and moves it to the back of the LRU list. */
-  auto LRUinit(std::pair<const Key, Entry>& pair, const Value& init) -> void {
+  void LRUinit(std::pair<const Key, Entry>& pair, const Value& init) {
     auto& entry = pair.second;
     entry.value = init;
     entry.index = lru_list_.push_back(&pair);
@@ -220,7 +220,7 @@ class LRUCacheImpl {
    * false. The evict function will be called for each node to determine if it should be evicted.
    */
   template <typename Predicate, typename Evict>
-  auto LRUevict(const Predicate& predicate, const Evict& evict) -> void {
+  void LRUevict(const Predicate& predicate, const Evict& evict) {
     if (!predicate()) return;
 
     auto iter = lru_list_.begin();
@@ -237,7 +237,7 @@ class LRUCacheImpl {
     } while (predicate() && iter != lru_list_.end());
   }
 
-  auto get_map() -> std::unordered_map<Key, Entry>& { return map_; }
+  std::unordered_map<Key, Entry>& get_map() { return map_; }
 
  private:
   std::unordered_map<Key, Entry> map_;
@@ -284,14 +284,14 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
   )
       : Impl(), max_size_(max_size), computer_(computer), size_estimator_(size_estimator) {}
 
-  auto MaxSize() const -> std::size_t { return max_size_; }
+  std::size_t MaxSize() const { return max_size_; }
 
-  auto Get(const Key& key) -> Value {
+  Value Get(const Key& key) {
     auto future = GetFuture(key);
     return future.get().value;
   }
 
-  auto Clear() -> void {
+  void Clear() {
     // Remove all the ready entries.
     const auto lock_map = std::lock_guard{map_mutex_};
     const auto lock_lru = std::lock_guard{lru_mutex_};
@@ -306,7 +306,7 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
   }
 
  private:
-  auto GetFuture(const Key& key) -> Future {
+  Future GetFuture(const Key& key) {
     if (this->max_size_ == static_cast<std::size_t>(-1)) return GetFutureUnlimited(key);
 
     auto& map = Impl::get_map();
@@ -358,7 +358,7 @@ class ThreadSafeLRUCache : private details::LRUCacheSizedImpl<Key, Value> {
     return future;
   }
 
-  auto GetFutureUnlimited(const Key& key) -> Future {
+  Future GetFutureUnlimited(const Key& key) {
     auto& map = Impl::get_map();
     {
       auto lock_map = std::shared_lock{map_mutex_};
