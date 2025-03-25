@@ -13,10 +13,10 @@ class NodePool {
  public:
   NodePool() = default;
 
-  void reserve(int n) { node_pool_.reserve(n); }
+  void Reserve(int n) { node_pool_.reserve(n); }
 
   [[nodiscard]]
-  int allocate() {
+  int Allocate() {
     if (free_list_.empty()) {
       int node = static_cast<int>(node_pool_.size());
       node_pool_.emplace_back();
@@ -28,9 +28,9 @@ class NodePool {
     }
   }
 
-  void deallocate(int node) { free_list_.push_back(node); }
+  void Deallocate(int node) { free_list_.push_back(node); }
 
-  void clear() {
+  void Clear() {
     node_pool_.clear();
     free_list_.clear();
   }
@@ -59,7 +59,7 @@ class List {
    public:
     iterator(int n, List& c) : node_(n), list_(&c) {}
     iterator& operator++() {
-      node_ = get_node().next;
+      node_ = GetNode().next;
       return *this;
     }
     iterator operator++(int) {
@@ -67,8 +67,8 @@ class List {
       ++*this;
       return tmp;
     }
-    Value& operator*() { return get_node().value; }
-    Value* operator->() { return &get_node().value; }
+    Value& operator*() { return GetNode().value; }
+    Value* operator->() { return &GetNode().value; }
     bool operator==(const iterator& rhs) const {
       return node_ == rhs.node_;  // compare different container is UB
     }
@@ -76,54 +76,56 @@ class List {
       return node_ != rhs.node_;  // compare different container is UB
     }
 
+    int Index() const { return node_; }
+
    private:
     friend class List;
-    Node& get_node() { return list_->node_pool_[node_]; }
+    Node& GetNode() { return list_->node_pool_[node_]; }
 
     int node_;
     List* list_;
   };
 
   List(int reserved = 0) {
-    node_pool_.reserve(reserved);
-    init_guard();
+    node_pool_.Reserve(reserved);
+    InitGuard();
   }
 
-  int push_back(const Value& value) {
-    int node = node_pool_.allocate();
+  iterator PushBack(const Value& value) {
+    int node = node_pool_.Allocate();
     node_pool_[node].value = value;
-    insert_before(node, 0);
-    return node;
+    LinkBefore(node, 0);
+    return iterator(node, *this);
   }
 
-  void move_back(int node) {
-    unlink(node);
-    insert_before(node, 0);
+  void MoveBack(int node) {
+    Unlink(node);
+    LinkBefore(node, 0);
   }
 
-  iterator erase(iterator it) {
+  iterator Erase(iterator it) {
     int node = it.node_;
     int next = node_pool_[node].next;
-    unlink(node);
-    node_pool_.deallocate(node);
+    Unlink(node);
+    node_pool_.Deallocate(node);
     return iterator(next, *this);
   }
 
-  void clear() {
-    node_pool_.clear();
-    init_guard();
+  void Clear() {
+    node_pool_.Clear();
+    InitGuard();
   }
 
   iterator begin() { return iterator(node_pool_[0].next, *this); }
   iterator end() { return iterator(0, *this); }
 
  private:
-  void init_guard() {
-    int node_id = node_pool_.allocate();
+  void InitGuard() {
+    int node_id = node_pool_.Allocate();
     XGRAMMAR_DCHECK(node_id == 0) << "node 0 should be reserved as guard node";
   }
 
-  void insert_before(int node, int next) {
+  void LinkBefore(int node, int next) {
     int prev = node_pool_[next].prev;
     node_pool_[node].prev = prev;
     node_pool_[node].next = next;
@@ -131,7 +133,7 @@ class List {
     node_pool_[next].prev = node;
   }
 
-  void unlink(int node) {
+  void Unlink(int node) {
     int prev = node_pool_[node].prev;
     int next = node_pool_[node].next;
     node_pool_[prev].next = next;

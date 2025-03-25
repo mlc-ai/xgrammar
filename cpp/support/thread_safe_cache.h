@@ -199,7 +199,7 @@ class LRUCacheImpl {
   /*! \brief Visits the node and moves it to the back of the LRU list. Return its value. */
   const Value& LRUvisit(const std::pair<const Key, Entry>& pair) {
     const auto& entry = pair.second;
-    lru_list_.move_back(entry.index);
+    lru_list_.MoveBack(entry.index);
     return entry.value;
   }
 
@@ -207,7 +207,7 @@ class LRUCacheImpl {
   void LRUinit(std::pair<const Key, Entry>& pair, const Value& init) {
     auto& entry = pair.second;
     entry.value = init;
-    entry.index = lru_list_.push_back(&pair);
+    entry.index = lru_list_.PushBack(&pair).Index();
   }
 
   /*!
@@ -229,7 +229,7 @@ class LRUCacheImpl {
     do {
       auto& [key, entry] = **iter;
       if (evict(entry.value)) {
-        iter = lru_list_.erase(iter);
+        iter = lru_list_.Erase(iter);
         map_.erase(key);
       } else {
         ++iter;  // simply skip those waiting for computation
