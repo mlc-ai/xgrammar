@@ -64,7 +64,7 @@ auto CompiledGrammar::Impl::MemorySize() const -> std::size_t {
   return sum;
 }
 
-auto CompiledGrammar::MemorySize() const -> std::size_t { return pimpl_->MemorySize(); }
+auto CompiledGrammar::MemorySizeBytes() const -> std::size_t { return pimpl_->MemorySize(); }
 
 /******************* AdaptiveTokenMask and CompiledGrammar *******************/
 
@@ -399,7 +399,11 @@ class GrammarCompiler::Impl {
   /*! \brief Compile the built-in JSON grammar. */
   CompiledGrammar CompileJson();
 
-  /*! \brief Compile different types of grammars. */
+  /*!
+   * \brief Compile different types of grammars.
+   * \attention This template function is marked as deleted.
+   * User must explicitly specialize the template to support new key types.
+   */
   template <typename KeyType>
   CompiledGrammar Compute(const KeyType& key) = delete;
 
@@ -443,7 +447,7 @@ class GrammarCompiler::Impl {
   };
 
   struct SizeEstimator {
-    std::size_t operator()(const CompiledGrammar& value) const { return value.MemorySize(); }
+    std::size_t operator()(const CompiledGrammar& value) const { return value.MemorySizeBytes(); }
   };
 
   /*! \brief The vocabulary associated with this storage class. */
@@ -735,8 +739,8 @@ CompiledGrammar GrammarCompiler::CompileGrammar(const Grammar& grammar) {
 
 void GrammarCompiler::ClearCache() { pimpl_->ClearCache(); }
 
-long long GrammarCompiler::MemorySize() const { return pimpl_->MemorySize(); }
+long long GrammarCompiler::MemorySizeBytes() const { return pimpl_->MemorySize(); }
 
-long long GrammarCompiler::MemoryLimit() const { return pimpl_->MemoryLimit(); }
+long long GrammarCompiler::MemoryLimitBytes() const { return pimpl_->MemoryLimit(); }
 
 }  // namespace xgrammar

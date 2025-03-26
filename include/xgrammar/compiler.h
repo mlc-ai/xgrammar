@@ -26,7 +26,7 @@ class CompiledGrammar {
   Grammar GetGrammar() const;
   TokenizerInfo GetTokenizerInfo() const;
   /*! \brief Return the approximate memory usage of the grammar in bytes. */
-  std::size_t MemorySize() const;
+  std::size_t MemorySizeBytes() const;
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);
 };
@@ -82,10 +82,10 @@ class GrammarCompiler {
   void ClearCache();
 
   /*! \brief Return the approximate memory usage of the compiler in bytes. */
-  long long MemorySize() const;
+  long long MemorySizeBytes() const;
 
   /*! \brief Return the approximate memory usage of the compiler in bytes. -1 means unlimited. */
-  long long MemoryLimit() const;
+  long long MemoryLimitBytes() const;
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarCompiler);
 };

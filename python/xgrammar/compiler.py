@@ -32,9 +32,9 @@ class CompiledGrammar(XGRObject):
         return TokenizerInfo._create_from_handle(self._handle.tokenizer_info)
 
     @property
-    def memory_usage_bytes(self) -> int:
+    def memory_size_bytes(self) -> int:
         """The approximate memory usage of the compiled grammar in bytes."""
-        return self._handle.memory_usage
+        return self._handle.memory_size_bytes
 
 
 class GrammarCompiler(XGRObject):
@@ -215,10 +215,9 @@ class GrammarCompiler(XGRObject):
         """Clear all cached compiled grammars."""
         self._handle.clear_cache()
 
-    @property
-    def memory_usage_bytes(self) -> int:
+    def get_cache_size_bytes(self) -> int:
         """The approximate memory usage of the cache in bytes."""
-        return self._handle.memory_usage
+        return self._handle.memory_size_bytes
 
     @property
     def cache_limit_bytes(self) -> int:
@@ -226,4 +225,4 @@ class GrammarCompiler(XGRObject):
         The maximum memory usage for the cache in bytes.
         Returns -1 if the cache has no memory limit.
         """
-        return self._handle.memory_limit
+        return self._handle.memory_limit_bytes
