@@ -433,8 +433,8 @@ class GrammarCompiler::Impl {
 
   void ClearCache();
 
-  long long MemorySize() const;
-  long long MemoryLimit() const;
+  long long GetCacheSizeBytes() const;
+  long long CacheLimitBytes() const;
 
  private:
   using MultipleKey = std::variant<SchemaKey, StructuralTagKey, std::string, GrammarKey>;
@@ -684,11 +684,11 @@ void GrammarCompiler::Impl::ClearCache() {
   compile_cache_.Clear();
 }
 
-long long GrammarCompiler::Impl::MemorySize() const {
+long long GrammarCompiler::Impl::GetCacheSizeBytes() const {
   return static_cast<long long>(compile_cache_.MemorySize());
 }
 
-long long GrammarCompiler::Impl::MemoryLimit() const {
+long long GrammarCompiler::Impl::CacheLimitBytes() const {
   const auto size = compile_cache_.MaxMemorySize();
   if (size == compile_cache_.UNLIMITED_SIZE) return -1;
   return static_cast<long long>(size);
@@ -739,8 +739,8 @@ CompiledGrammar GrammarCompiler::CompileGrammar(const Grammar& grammar) {
 
 void GrammarCompiler::ClearCache() { pimpl_->ClearCache(); }
 
-long long GrammarCompiler::MemorySizeBytes() const { return pimpl_->MemorySize(); }
+long long GrammarCompiler::GetCacheSizeBytes() const { return pimpl_->GetCacheSizeBytes(); }
 
-long long GrammarCompiler::MemoryLimitBytes() const { return pimpl_->MemoryLimit(); }
+long long GrammarCompiler::CacheLimitBytes() const { return pimpl_->CacheLimitBytes(); }
 
 }  // namespace xgrammar

@@ -217,7 +217,7 @@ class GrammarCompiler(XGRObject):
 
     def get_cache_size_bytes(self) -> int:
         """The approximate memory usage of the cache in bytes."""
-        return self._handle.memory_size_bytes
+        return self._handle.get_cache_size_bytes()
 
     @property
     def cache_limit_bytes(self) -> int:
@@ -225,4 +225,4 @@ class GrammarCompiler(XGRObject):
         The maximum memory usage for the cache in bytes.
         Returns -1 if the cache has no memory limit.
         """
-        return self._handle.memory_limit_bytes
+        return self._handle.cache_limit_bytes
