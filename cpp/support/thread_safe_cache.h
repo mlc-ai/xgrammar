@@ -169,7 +169,7 @@ class ThreadSafeCache<Key, Value> {
   struct Entry {
     Value value;
     std::once_flag flag;
-    auto get(const std::function<Value(const Key&)>& f, const Key& key) -> const Value& {
+    const Value& get(const std::function<Value(const Key&)>& f, const Key& key) {
       // block in this lambda until the value is computed
       std::call_once(flag, [&] { value = f(key); });
       return value;

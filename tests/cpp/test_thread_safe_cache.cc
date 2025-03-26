@@ -30,12 +30,11 @@ struct MockGrammar {
   std::byte padding[sizeof(CompiledGrammar) - sizeof(std::size_t)];
   MockGrammar() = default;
   MockGrammar(std::size_t uuid) : uuid(uuid) {}
-  auto MemorySize() const -> std::size_t { return 1; }
 };
 
 struct SizeEstimator {
   template <typename T>
-  auto operator()(const T&) const -> std::size_t {
+  std::size_t operator()(const T&) const {
     return 1;
   }
 };
@@ -45,7 +44,7 @@ using namespace std::chrono_literals;
 struct Computer0 {
   inline static auto counter = std::atomic_size_t{};
   inline static constexpr auto kSleepTime = 1000ms;
-  auto operator()(std::size_t key) const -> MockGrammar {
+  MockGrammar operator()(std::size_t key) const {
     std::this_thread::sleep_for(kSleepTime);  // simulate a slow operation
     return MockGrammar{counter++};
   }
@@ -157,15 +156,15 @@ struct LifeSpanHook {
   inline static std::unordered_set<const void*> manager{};
   inline static std::mutex mutex{};
 
-  static auto unsafe_construct(const LifeSpanHook* ptr) -> void {
+  static void unsafe_construct(const LifeSpanHook* ptr) {
     // insert will return a pair of iterator and bool
     EXPECT_TRUE(manager.insert(ptr).second);
   }
-  static auto unsafe_destruct(const LifeSpanHook* ptr) -> void {
+  static void unsafe_destruct(const LifeSpanHook* ptr) {
     // erase will return 1 if the element is found and removed
     EXPECT_TRUE(manager.erase(ptr));
   }
-  static auto unsafe_confirm(const LifeSpanHook* ptr) -> void {
+  static void unsafe_confirm(const LifeSpanHook* ptr) {
     // ensure that the object is still alive
     EXPECT_TRUE(manager.find(ptr) != manager.end());
   }
@@ -180,7 +179,7 @@ struct LifeSpanHook {
     unsafe_construct(this);
     unsafe_confirm(&other);
   }
-  auto operator=(const LifeSpanHook& other) -> LifeSpanHook& {
+  LifeSpanHook& operator=(const LifeSpanHook& other) {
     const auto lock = std::lock_guard{mutex};
     unsafe_confirm(this);
     unsafe_confirm(&other);
@@ -190,7 +189,7 @@ struct LifeSpanHook {
     const auto lock = std::lock_guard{mutex};
     unsafe_destruct(this);
   }
-  auto check() const -> void {
+  void check() const {
     const auto lock = std::lock_guard{mutex};
     unsafe_confirm(this);
   }
@@ -203,23 +202,23 @@ struct TestObject : LifeSpanHook {
  public:
   TestObject() = default;
   TestObject(std::string name) : name(std::move(name)) {}
-  auto& operator=(std::string name) {
+  TestObject& operator=(std::string name) {
     this->check();
     this->name = std::move(name);
     return *this;
   }
-  auto to_string() const -> std::string {
+  std::string to_string() const {
     this->check();
     return this->name;
   }
-  auto MemorySize() const -> std::size_t {
+  std::size_t MemorySize() const {
     this->check();
     return 1;
   }
 };
 
 struct Computer1 {
-  auto operator()(const TestObject& key) const -> TestObject {
+  TestObject operator()(const TestObject& key) const {
     std::this_thread::sleep_for(5s);  // simulate a slow operation
     return TestObject{key};
   }
