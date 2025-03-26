@@ -162,6 +162,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">xgrammar</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.CompiledGrammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.grammar</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.memory_size_bytes</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.tokenizer_info</span></code></a></li>
 </ul>
 </li>
@@ -176,11 +177,13 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.GrammarCompiler"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.cache_limit_bytes"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.cache_limit_bytes</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.clear_cache"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.clear_cache()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_builtin_json_grammar"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_builtin_json_grammar()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_json_schema"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_json_schema()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_regex"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_regex()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_structural_tag()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.get_cache_size_bytes"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.get_cache_size_bytes()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.GrammarMatcher"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a><ul>
@@ -364,7 +367,10 @@ use <a class="reference internal" href="#xgrammar.GrammarCompiler" title="xgramm
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar" title="xgrammar.CompiledGrammar.grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">grammar</span></code></a></p></td>
 <td><p>The original grammar.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info" title="xgrammar.CompiledGrammar.tokenizer_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tokenizer_info</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="xgrammar.CompiledGrammar.memory_size_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memory_size_bytes</span></code></a></p></td>
+<td><p>The approximate memory usage of the compiled grammar in bytes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info" title="xgrammar.CompiledGrammar.tokenizer_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tokenizer_info</span></code></a></p></td>
 <td><p>The tokenizer info associated with the compiled grammar.</p></td>
 </tr>
 </tbody>
@@ -373,6 +379,12 @@ use <a class="reference internal" href="#xgrammar.GrammarCompiler" title="xgramm
 <dt class="sig sig-object py" id="xgrammar.CompiledGrammar.grammar">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">grammar</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.grammar" title="Permalink to this definition">¶</a></dt>
 <dd><p>The original grammar.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.memory_size_bytes">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">memory_size_bytes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="Permalink to this definition">¶</a></dt>
+<dd><p>The approximate memory usage of the compiled grammar in bytes.</p>
 </dd></dl>
 
 <dl class="py property">
@@ -622,7 +634,7 @@ using the <cite>|</cite> operator to concatenate the grammars in the list.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.GrammarCompiler">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">GrammarCompiler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tokenizer_info</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_enabled</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.GrammarCompiler" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">GrammarCompiler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tokenizer_info</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_enabled</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_limit_bytes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.GrammarCompiler" title="Permalink to this definition">¶</a></dt>
 <dd><p>The compiler for grammars. It is associated with a certain tokenizer info, and compiles
 grammars into CompiledGrammar with the tokenizer info. It allows parallel compilation with
 multiple threads, and has a cache to store the compilation result, avoiding compiling the
@@ -633,9 +645,19 @@ same grammar multiple times.</p>
 <li><p><strong>tokenizer_info</strong> (<a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><em>TokenizerInfo</em></a>) – The tokenizer info.</p></li>
 <li><p><strong>max_threads</strong> (<em>int</em><em>, </em><em>default: 8</em>) – The maximum number of threads used to compile the grammar.</p></li>
 <li><p><strong>cache_enabled</strong> (<em>bool</em><em>, </em><em>default: True</em>) – Whether to enable the cache.</p></li>
+<li><p><strong>cache_limit_bytes</strong> (<em>int</em><em>, </em><em>default: -1</em>) – The maximum memory usage for the cache in the specified unit.
+Note that the actual memory usage may slightly exceed this value.</p></li>
 </ul>
 </dd>
 </dl>
+<p><strong>Attributes:</strong></p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.cache_limit_bytes" title="xgrammar.GrammarCompiler.cache_limit_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cache_limit_bytes</span></code></a></p></td>
+<td><p>The maximum memory usage for the cache in bytes.</p></td>
+</tr>
+</tbody>
+</table>
 <p><strong>Methods:</strong></p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
@@ -654,8 +676,18 @@ same grammar multiple times.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="xgrammar.GrammarCompiler.compile_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_structural_tag</span></code></a>(tags, triggers)</p></td>
 <td><p>Compile a grammar from structural tags.</p></td>
 </tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.get_cache_size_bytes" title="xgrammar.GrammarCompiler.get_cache_size_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_cache_size_bytes</span></code></a>()</p></td>
+<td><p>The approximate memory usage of the cache in bytes.</p></td>
+</tr>
 </tbody>
 </table>
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.cache_limit_bytes">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cache_limit_bytes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#xgrammar.GrammarCompiler.cache_limit_bytes" title="Permalink to this definition">¶</a></dt>
+<dd><p>The maximum memory usage for the cache in bytes.
+Returns -1 if the cache has no memory limit.</p>
+</dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.GrammarCompiler.clear_cache">
 <span class="sig-name descname"><span class="pre">clear_cache</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.clear_cache" title="Permalink to this definition">¶</a></dt>
@@ -742,6 +774,12 @@ details.</p>
 <dd class="field-odd"><p><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.get_cache_size_bytes">
+<span class="sig-name descname"><span class="pre">get_cache_size_bytes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.get_cache_size_bytes" title="Permalink to this definition">¶</a></dt>
+<dd><p>The approximate memory usage of the cache in bytes.</p>
 </dd></dl>
 
 </dd></dl>
