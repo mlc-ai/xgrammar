@@ -9,11 +9,13 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
 #include "fsm.h"
 #include "support/logging.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -176,6 +178,9 @@ class Grammar::Impl {
   friend class GrammarSerializer;
   friend class GrammarDeserializer;
   friend class GrammarCompiler;
+
+  std::size_t MemorySize() const;
+  friend std::size_t MemorySize(const Impl& impl);
 };
 
 }  // namespace xgrammar

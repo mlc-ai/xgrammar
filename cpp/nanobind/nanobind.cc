@@ -110,10 +110,11 @@ NB_MODULE(xgrammar_bindings, m) {
 
   auto pyCompiledGrammar = nb::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_prop_ro("grammar", &CompiledGrammar::GetGrammar)
-      .def_prop_ro("tokenizer_info", &CompiledGrammar::GetTokenizerInfo);
+      .def_prop_ro("tokenizer_info", &CompiledGrammar::GetTokenizerInfo)
+      .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes);
 
   auto pyGrammarCompiler = nb::class_<GrammarCompiler>(m, "GrammarCompiler");
-  pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool>())
+  pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, long long>())
       .def(
           "compile_json_schema",
           &GrammarCompiler::CompileJSONSchema,
@@ -142,7 +143,9 @@ NB_MODULE(xgrammar_bindings, m) {
           &GrammarCompiler::CompileGrammar,
           nb::call_guard<nb::gil_scoped_release>()
       )
-      .def("clear_cache", &GrammarCompiler::ClearCache);
+      .def("clear_cache", &GrammarCompiler::ClearCache)
+      .def("get_cache_size_bytes", &GrammarCompiler::GetCacheSizeBytes)
+      .def_prop_ro("cache_limit_bytes", &GrammarCompiler::CacheLimitBytes);
 
   auto pyGrammarMatcher = nb::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher
