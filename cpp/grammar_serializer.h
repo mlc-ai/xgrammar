@@ -64,54 +64,6 @@ class GrammarPrinter {
   Grammar grammar_;
 };
 
-/*!
- * \brief Serialize the raw representation of the BNF AST to a string with JSON format. Stale for
- * now.
- * \sa BNFJSONParser::Parse for parsing the JSON string.
- * \details JSON format:
- *  {
- *    "rules": [
- *      {"name": "...", "rule_expr": rule_expr_id},
- *      {"name": "...", "rule_expr": rule_expr_id},
- *    ],
- *    "rule_expr_data": [integers...],
- *    "rule_expr_indptr": [integers...],
- *  }
- */
-class GrammarSerializer {
- public:
-  /*!
-   * \brief Constructor.
-   * \param grammar The grammar to print.
-   */
-  explicit GrammarSerializer(const Grammar& grammar, bool prettify = true)
-      : grammar_(grammar), prettify_(prettify) {}
-
-  /*!
-   * \brief Dump the raw representation of the AST to a JSON file.
-   * \param prettify Whether to format the JSON string. If false, all whitespaces will be removed.
-   */
-  std::string Serialize();
-
- private:
-  Grammar grammar_;
-  bool prettify_;
-};
-
-/*!
- * \brief Parse a BNF grammar from the raw representation of the AST in JSON format. Stale for
- * now.
- */
-class GrammarDeserializer {
- public:
-  /*!
-   * \brief Parse the JSON string
-   * \param json_string The JSON string.
-   * \return The parsed BNF grammar.
-   */
-  static Grammar Deserialize(std::string json_string);
-};
-
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_GRAMMAR_SERIALIZER_H_
