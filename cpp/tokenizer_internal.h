@@ -1,8 +1,9 @@
 #ifndef XGRAMMAR_TOKENIZER_INTERNAL_H_
 #define XGRAMMAR_TOKENIZER_INTERNAL_H_
 
+#include <picojson.h>
+
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -34,11 +35,16 @@ class TokenizerInfo::Impl {
 
   std::string DumpMetadata() const;
 
-  static std::shared_ptr<Impl> FromVocabAndMetadata(
+  static TokenizerInfo FromVocabAndMetadata(
       const std::vector<std::string>& encoded_vocab, const std::string& metadata
   );
 
   static std::string DetectMetadataFromHF(const std::string& backend_str);
+
+  picojson::value Serialize() const;
+  static TokenizerInfo Deserialize(
+      const picojson::value& value, const std::vector<std::string>& encoded_vocab = {}
+  );
 
  private:
   static bool IsSpecialToken(const std::string& decoded_token);

@@ -134,19 +134,10 @@ class DynamicBitset {
     return *this;
   }
 
-  int FindFirstOne() const { return DoFindOneFrom(0); }
-
-  int FindNextOne(int pos) const {
-    if (pos >= size_ - 1 || size_ == 0) return -1;
-    ++pos;
-    int blk = pos / BITS_PER_BLOCK;
-    int ind = pos % BITS_PER_BLOCK;
-    uint32_t fore = data_[blk] >> ind;
-    int result = fore ? pos + LowestBit(fore) : DoFindOneFrom(blk + 1);
+  int FindFirstZero() const {
+    int result = DoFindZeroFrom(0);
     return result < size_ ? result : -1;
   }
-
-  int FindFirstZero() const { return DoFindZeroFrom(0); }
 
   int FindNextZero(int pos) const {
     if (pos >= size_ - 1 || size_ == 0) return -1;
@@ -155,6 +146,21 @@ class DynamicBitset {
     int ind = pos % BITS_PER_BLOCK;
     uint32_t fore = (~data_[blk]) >> ind;
     int result = fore ? pos + LowestBit(fore) : DoFindZeroFrom(blk + 1);
+    return result < size_ ? result : -1;
+  }
+
+  int FindFirstOne() const {
+    int result = DoFindOneFrom(0);
+    return result < size_ ? result : -1;
+  }
+
+  int FindNextOne(int pos) const {
+    if (pos >= size_ - 1 || size_ == 0) return -1;
+    ++pos;
+    int blk = pos / BITS_PER_BLOCK;
+    int ind = pos % BITS_PER_BLOCK;
+    uint32_t fore = data_[blk] >> ind;
+    int result = fore ? pos + LowestBit(fore) : DoFindOneFrom(blk + 1);
     return result < size_ ? result : -1;
   }
 
@@ -187,6 +193,53 @@ class DynamicBitset {
     return bitset.buffer_size_ * sizeof(bitset.data_[0]);
   }
 
+  std::vector<int32_t> ToIndices(bool indice_one = 1, std::size_t hint = 0) const {
+    std::vector<int32_t> indices;
+    indices.reserve(hint + BITS_PER_BLOCK);  // a size hint to improve performance
+    if (indice_one) {
+      for (int i = 0; i < buffer_size_; ++i) {
+        if (data_[i] == 0) continue;
+        for (int j = 0; j < BITS_PER_BLOCK; ++j) {
+          if (data_[i] & (1u << j)) {
+            indices.push_back(i * BITS_PER_BLOCK + j);
+          }
+        }
+      }
+    } else {
+      for (int i = 0; i < buffer_size_; ++i) {
+        if (data_[i] == ~static_cast<uint32_t>(0)) continue;
+        for (int j = 0; j < BITS_PER_BLOCK; ++j) {
+          if (!(data_[i] & (1u << j))) {
+            indices.push_back(i * BITS_PER_BLOCK + j);
+          }
+        }
+      }
+    }
+    while (!indices.empty() && indices.back() >= size_) indices.pop_back();
+    return indices;
+  }
+
+  void FromIndices(const std::vector<int32_t>& indices, std::size_t size, bool indice_one = 1) {
+    size_ = size;
+    buffer_size_ = GetBufferSize(size_);
+    is_internal_ = true;
+    if (indice_one) {
+      internal_buffer_.assign(buffer_size_, 0);
+      data_ = internal_buffer_.data();
+      for (auto idx : indices) {
+        XGRAMMAR_DCHECK(idx >= 0 && idx < size_);
+        data_[idx / BITS_PER_BLOCK] |= 1u << (idx % BITS_PER_BLOCK);
+      }
+    } else {
+      internal_buffer_.assign(buffer_size_, ~static_cast<uint32_t>(0));
+      data_ = internal_buffer_.data();
+      for (auto idx : indices) {
+        XGRAMMAR_DCHECK(idx >= 0 && idx < size_);
+        data_[idx / BITS_PER_BLOCK] &= ~(1u << (idx % BITS_PER_BLOCK));
+      }
+    }
+  }
+
  private:
   static int LowestBit(uint32_t value) {
 #ifdef __GNUC__
@@ -208,6 +261,18 @@ class DynamicBitset {
 #else
     XGRAMMAR_LOG(FATAL) << "PopCount is not supported on this platform";
 #endif
+  }
+
+  int DoFindOneFrom(int first_block) const {
+    int position = -1;
+    for (int i = first_block; i < buffer_size_; ++i) {
+      if (data_[i] != 0) {
+        position = i;
+        break;
+      }
+    }
+    if (position == -1) return -1;
+    return position * BITS_PER_BLOCK + LowestBit(data_[position]);
   }
 
   int DoFindZeroFrom(int first_block) const {
