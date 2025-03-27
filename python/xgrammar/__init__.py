@@ -10,4 +10,5 @@ from .matcher import (
     get_bitmask_shape,
     reset_token_bitmask,
 )
+from .serializer import JSONSerializer
 from .tokenizer_info import TokenizerInfo, VocabType
