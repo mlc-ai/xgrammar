@@ -2,7 +2,7 @@
 
 from typing import List, Union
 
-from .base import XGRObject, _core
+from .base import _core
 from .compiler import CompiledGrammar
 from .grammar import Grammar
 from .tokenizer_info import TokenizerInfo
