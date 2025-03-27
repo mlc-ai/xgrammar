@@ -6,6 +6,7 @@
 #ifndef XGRAMMAR_SUPPORT_DYNAMIC_BITSET_H_
 #define XGRAMMAR_SUPPORT_DYNAMIC_BITSET_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -169,6 +170,10 @@ class DynamicBitset {
   }
 
   static constexpr int BITS_PER_BLOCK = 32;
+
+  friend std::size_t MemorySize(const DynamicBitset& bitset) {
+    return bitset.buffer_size_ * sizeof(bitset.data_[0]);
+  }
 
  private:
   static int LowestBit(uint32_t value) {

@@ -31,6 +31,11 @@ class CompiledGrammar(XGRObject):
         """The tokenizer info associated with the compiled grammar."""
         return TokenizerInfo._create_from_handle(self._handle.tokenizer_info)
 
+    @property
+    def memory_size_bytes(self) -> int:
+        """The approximate memory usage of the compiled grammar in bytes."""
+        return self._handle.memory_size_bytes
+
 
 class GrammarCompiler(XGRObject):
     """The compiler for grammars. It is associated with a certain tokenizer info, and compiles
@@ -48,10 +53,19 @@ class GrammarCompiler(XGRObject):
 
     cache_enabled : bool, default: True
         Whether to enable the cache.
+
+    cache_limit_bytes : int, default: -1
+        The maximum memory usage for the cache in the specified unit.
+        Note that the actual memory usage may slightly exceed this value.
     """
 
     def __init__(
-        self, tokenizer_info: TokenizerInfo, *, max_threads: int = 8, cache_enabled: bool = True
+        self,
+        tokenizer_info: TokenizerInfo,
+        *,
+        max_threads: int = 8,
+        cache_enabled: bool = True,
+        cache_limit_bytes: int = -1,
     ):
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(
@@ -59,7 +73,11 @@ class GrammarCompiler(XGRObject):
                 "to GrammarCompiler."
             )
 
-        self._init_handle(_core.GrammarCompiler(tokenizer_info._handle, max_threads, cache_enabled))
+        self._init_handle(
+            _core.GrammarCompiler(
+                tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
+            )
+        )
 
     def compile_json_schema(
         self,
@@ -196,3 +214,15 @@ class GrammarCompiler(XGRObject):
     def clear_cache(self) -> None:
         """Clear all cached compiled grammars."""
         self._handle.clear_cache()
+
+    def get_cache_size_bytes(self) -> int:
+        """The approximate memory usage of the cache in bytes."""
+        return self._handle.get_cache_size_bytes()
+
+    @property
+    def cache_limit_bytes(self) -> int:
+        """
+        The maximum memory usage for the cache in bytes.
+        Returns -1 if the cache has no memory limit.
+        """
+        return self._handle.cache_limit_bytes

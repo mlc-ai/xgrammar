@@ -6,9 +6,13 @@
 #ifndef XGRAMMAR_SUPPORT_UTILS_H_
 #define XGRAMMAR_SUPPORT_UTILS_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
+#include <optional>
 #include <tuple>
+#include <type_traits>
 
 namespace xgrammar {
 
@@ -24,7 +28,7 @@ inline void HashCombineBinary(uint32_t& seed, uint32_t value) {
  * \brief Find the hash sum of several uint32_t args.
  */
 template <typename... Args>
-uint32_t HashCombine(Args... args) {
+inline uint32_t HashCombine(Args... args) {
   uint32_t seed = 0;
   (..., HashCombineBinary(seed, args));
   return seed;
@@ -37,6 +41,20 @@ uint32_t HashCombine(Args... args) {
 #else
 #define XGRAMMAR_UNREACHABLE()
 #endif
+
+// Return the memory consumption in heap memory of a container.
+template <typename Container>
+inline constexpr std::size_t MemorySize(const Container& container) {
+  using Element_t = std::decay_t<decltype(*std::begin(container))>;
+  static_assert(std::is_trivially_copyable_v<Element_t>, "Element type must be trivial");
+  static_assert(!std::is_trivially_copyable_v<Container>, "Container type must not be trivial");
+  return sizeof(Element_t) * std::size(container);
+}
+
+template <typename Tp>
+inline constexpr std::size_t MemorySize(const std::optional<Tp>& range) {
+  return range.has_value() ? MemorySize(*range) : 0;
+}
 
 }  // namespace xgrammar
 
