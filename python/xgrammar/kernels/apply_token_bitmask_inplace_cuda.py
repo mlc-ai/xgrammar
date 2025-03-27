@@ -71,7 +71,7 @@ def _remove_torch_nvcc_flags() -> None:
 def _load_torch_ops() -> None:
     from pathlib import Path
 
-    torch_op_file_path = Path(__file__).with_suffix('.cu')
+    torch_op_file_path = Path(__file__).with_suffix(".cu")
     with open(torch_op_file_path) as f:
         source = f.read()
     cflags = ["-O3", "-Wno-switch-bool"]
