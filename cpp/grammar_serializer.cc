@@ -200,34 +200,34 @@ Grammar Grammar::Impl::Deserialize(const picojson::value& serialized_value) {
     return iter->second;
   };
 
-  auto as_type = [&](const picojson::value& val, auto* type_ptr) -> const auto& {
-    using type = std::remove_pointer_t<decltype(type_ptr)>;
+  auto as_type = [&](const picojson::value& val, auto type_obj) -> const auto& {
+    using type = decltype(type_obj);
     checker(val.is<type>());
     return val.get<type>();
   };
 
-  const auto& serialized_obj = as_type(serialized_value, (picojson::object*){});
+  const auto& serialized_obj = as_type(serialized_value, picojson::object{});
 
   // rules
-  const auto& rules_array = as_type(get_key(serialized_obj, "rules"), (picojson::array*){});
+  const auto& rules_array = as_type(get_key(serialized_obj, "rules"), picojson::array{});
   checker(rules_array.size() > 0);
   for (const auto& rule_value : rules_array) {
-    const auto& rule_obj = as_type(rule_value, (picojson::object*){});
-    const auto& name = as_type(get_key(rule_obj, "name"), (std::string*){});
-    const auto& rule_expr = as_type(get_key(rule_obj, "body_expr_id"), (int64_t*){});
+    const auto& rule_obj = as_type(rule_value, picojson::object{});
+    const auto& name = as_type(get_key(rule_obj, "name"), std::string{});
+    const auto& rule_expr = as_type(get_key(rule_obj, "body_expr_id"), int64_t{});
     node->rules_.push_back(Grammar::Impl::Rule({name, static_cast<int32_t>(rule_expr)}));
   }
 
   // rule_expr_data
   const auto& rule_expr_data_array =
-      as_type(get_key(serialized_obj, "rule_expr_data"), (picojson::array*){});
+      as_type(get_key(serialized_obj, "rule_expr_data"), picojson::array{});
   for (const auto& data_json : rule_expr_data_array) {
     node->rule_expr_data_.push_back(static_cast<int32_t>(data_json.get<int64_t>()));
   }
 
   // rule_expr_indptr
   const auto& rule_expr_indptr_array =
-      as_type(get_key(serialized_obj, "rule_expr_indptr"), (picojson::array*){});
+      as_type(get_key(serialized_obj, "rule_expr_indptr"), picojson::array{});
   for (const auto& index_ptr_json : rule_expr_indptr_array) {
     node->rule_expr_indptr_.push_back(static_cast<int32_t>(index_ptr_json.get<int64_t>()));
   }
@@ -405,13 +405,13 @@ CompiledGrammar CompiledGrammar::Impl::Deserialize(
     return iter->second;
   };
 
-  auto as_type = [&](const picojson::value& val, auto* type_ptr) -> const auto& {
-    using type = std::remove_pointer_t<decltype(type_ptr)>;
+  auto as_type = [&](const picojson::value& val, auto type_obj) -> const auto& {
+    using type = decltype(type_obj);
     checker(val.is<type>());
     return val.get<type>();
   };
 
-  const auto& serialized_obj = as_type(value, (picojson::object*){});
+  const auto& serialized_obj = as_type(value, picojson::object{});
   const auto& serialized_grammar = get_key(serialized_obj, "grammar");
   node->grammar = Grammar::Impl::Deserialize(serialized_grammar);
 
@@ -419,7 +419,7 @@ CompiledGrammar CompiledGrammar::Impl::Deserialize(
   node->tokenizer_info = TokenizerInfo::Impl::Deserialize(serialized_tokenizer_info, encoded_vocab);
 
   const auto& serialized_adaptive_token_mask_cache_array =
-      as_type(get_key(serialized_obj, "adaptive_token_mask_cache"), (picojson::array*){});
+      as_type(get_key(serialized_obj, "adaptive_token_mask_cache"), picojson::array{});
 
   for (const auto& entry_value : serialized_adaptive_token_mask_cache_array) {
     deserialized_entry(node->adaptive_token_mask_cache, entry_value, node->tokenizer_info);
