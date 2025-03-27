@@ -243,7 +243,7 @@ enum class SerializeMaskStoreType {
   RejectedBitsetIndices = 4,
 };
 
-static constexpr std::size_t ENTRY_DATA_OFFSET = 9;
+static constexpr std::size_t ENTRY_DATA_OFFSET = 10;
 
 picojson::value CompiledGrammar::Impl::Serialize() const {
   static constexpr auto serialized_entry =
@@ -341,7 +341,7 @@ CompiledGrammar CompiledGrammar::Impl::Deserialize(
     const auto store_type = static_cast<SerializeMaskStoreType>(entry_array[6].get<int64_t>());
     const auto storage_indices_size = static_cast<std::size_t>(entry_array[7].get<int64_t>());
     const auto mask_bitset_size = static_cast<std::size_t>(entry_array[8].get<int64_t>());
-    const auto uncertain_indices_size = static_cast<std::size_t>(entry_array[8].get<int64_t>());
+    const auto uncertain_indices_size = static_cast<std::size_t>(entry_array[9].get<int64_t>());
 
     XGRAMMAR_CHECK(
         entry_array.size() == ENTRY_DATA_OFFSET + storage_indices_size + uncertain_indices_size
