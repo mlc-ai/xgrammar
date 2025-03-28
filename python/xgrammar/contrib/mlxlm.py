@@ -17,6 +17,9 @@ import xgrammar
 def apply_token_bitmask_inplace_mlx(bitmask: torch.Tensor, logits: mx.array) -> mx.array:
     """This is an easy mimic of the apply_token_bitmask_inplace function.
 
+    NOTE: This function works with only the case of batch size is 1, which is common for on-device
+          applications.
+
     Args:
         bitmask (torch.Tensor): Created by calling xgrammar.allocate_token_bitmask.
         logits (mx.array): Passed in from mlx_generate.
