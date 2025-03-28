@@ -3,7 +3,7 @@ import sys
 import mlx.core as mx
 import pytest
 
-import xgrammar.mlx.build._ext
+from xgrammar.mlx import _ext
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="MLX tests only run on macOS")
