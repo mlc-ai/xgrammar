@@ -51,7 +51,7 @@ else()
   endif()
 
   set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter \
--Woverloaded-virtual -flto=auto ${CMAKE_CXX_FLAGS}"
+-Woverloaded-virtual -Wno-sign-compare -flto=auto ${CMAKE_CXX_FLAGS}"
   )
 endif()
 
