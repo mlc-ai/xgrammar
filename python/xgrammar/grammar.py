@@ -130,8 +130,8 @@ class Grammar(XGRObject):
 
         Parameters
         ----------
-        schema : Union[str, Type[BaseModel]]
-            The schema string or Pydantic model.
+        schema : Union[str, Type[BaseModel], Dict[str, Any]]
+            The schema string or Pydantic model or JSON schema dict.
 
         any_whitespace : bool, default: True
             Whether to use any whitespace. If True, the generated grammar will ignore the
