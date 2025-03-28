@@ -6,6 +6,7 @@
 #ifndef XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
 #define XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
 
+#include <picojson.h>
 #include <xgrammar/grammar.h>
 
 #include <cstddef>
@@ -119,6 +120,11 @@ class CompiledGrammar::Impl {
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
 
   std::size_t MemorySize() const;
+
+  picojson::value Serialize() const;
+  static CompiledGrammar Deserialize(
+      const picojson::value& value, const std::vector<std::string>& encoded_vocab = {}
+  );
 };
 
 }  // namespace xgrammar
