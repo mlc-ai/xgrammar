@@ -20,6 +20,12 @@ option(XGRAMMAR_ENABLE_CPPTRACE
        "Enable C++ trace (Now only support Linux, and RelWithDebugInfo or Debug build)" OFF
 )
 
+# Add MLX support for macOS
+option(XGRAMMAR_ENABLE_MLX "Enable MLX support (macOS only)" OFF)
+if(APPLE AND XGRAMMAR_ENABLE_MLX)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/mlx)
+endif()
+
 set(XGRAMMAR_CUDA_ARCHITECTURES
     native
     CACHE STRING "CUDA architectures"
