@@ -47,7 +47,7 @@ if(MSVC)
   set(CMAKE_CXX_FLAGS "/Wall ${CMAKE_CXX_FLAGS}")
 else()
   if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CMAKE_CXX_FLAGS "-Ofast ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS "-O3 ${CMAKE_CXX_FLAGS}")
   endif()
 
   set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter \
