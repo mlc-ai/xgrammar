@@ -1,5 +1,5 @@
+import _ext
 import mlx.core as mx
-from mlx_sample_extensions import _ext
 
 bitmask = mx.array([5], dtype=mx.uint32)  # 5 = 0b0101
 logits = mx.array([1.0, 2.0, 3.0, 4.0], dtype=mx.float16)
