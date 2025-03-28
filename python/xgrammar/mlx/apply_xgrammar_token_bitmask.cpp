@@ -1,5 +1,3 @@
-// Copyright © 2024 Apple Inc.
-
 #include "apply_xgrammar_token_bitmask.h"
 
 #include <iostream>

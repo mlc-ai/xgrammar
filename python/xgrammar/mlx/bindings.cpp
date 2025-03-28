@@ -1,5 +1,3 @@
-// Copyright © 2023-2024 Apple Inc.
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
