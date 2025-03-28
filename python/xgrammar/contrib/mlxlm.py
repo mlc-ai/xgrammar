@@ -27,7 +27,7 @@ def apply_token_bitmask_inplace_mlx(bitmask: torch.Tensor, logits: mx.array) -> 
     vocab_size = logits.shape[-1]
     # Create mask as torch tensor for mutability
     logits_mask = torch.zeros(logits.shape, dtype=torch.float32)
-    for i in range(bitmask.size(0)):
+    for i in range(bitmask.size(1)):
         mask_int = bitmask[0][i].item()  # batch size is 1
         for bit in range(32):
             token_idx = i * 32 + bit
@@ -73,7 +73,7 @@ def main():
     model, _ = mlx_load(args.model)
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     mx.random.seed(args.seed)
-    generated_text = mlx_generate(
+    with_logits_processor = mlx_generate(
         model=model,
         tokenizer=tokenizer,
         prompt=tokenizer.apply_chat_template(
@@ -88,7 +88,15 @@ def main():
             )
         ],
     )
-    print(generated_text)
+    without_logits_processor = mlx_generate(
+        model=model,
+        tokenizer=tokenizer,
+        prompt=tokenizer.apply_chat_template(
+            [{"role": "user", "content": args.prompt}], add_generation_prompt=True
+        ),
+        verbose=False,
+    )
+    assert without_logits_processor == with_logits_processor
 
 
 if __name__ == "__main__":
