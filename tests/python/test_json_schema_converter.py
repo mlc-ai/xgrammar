@@ -169,7 +169,8 @@ root_prop_0 ::= "[" "\n    " basic_string ",\n    " root_prop_0_item_1 (",\n    
 defs_Foo ::= ("{" "\n    " basic_string ": " basic_any (",\n    " basic_string ": " basic_any)* "\n  " "}") | "{" "}"
 root_prop_1 ::= defs_Foo
 root_prop_2 ::= ("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | "[" "]"
-root ::= "{" "\n  " "\"tuple_field\"" ": " root_prop_0 ",\n  " "\"foo_field\"" ": " root_prop_1 ",\n  " "\"list_field\"" ": " root_prop_2 ",\n  " "\"object_field\"" ": " basic_object (",\n  " basic_string ": " basic_any)* "\n" "}"
+root_prop_3 ::= ("{" "\n    " basic_string ": " basic_any (",\n    " basic_string ": " basic_any)* "\n  " "}") | "{" "}"
+root ::= "{" "\n  " "\"tuple_field\"" ": " root_prop_0 ",\n  " "\"foo_field\"" ": " root_prop_1 ",\n  " "\"list_field\"" ": " root_prop_2 ",\n  " "\"object_field\"" ": " root_prop_3 (",\n  " basic_string ": " basic_any)* "\n" "}"
 """
 
     instance_json = r"""{
