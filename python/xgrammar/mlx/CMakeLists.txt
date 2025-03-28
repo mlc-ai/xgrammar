@@ -83,3 +83,16 @@ target_link_libraries(_ext PRIVATE mlx_ext)
 if(BUILD_SHARED_LIBS)
   target_link_options(_ext PRIVATE -Wl,-rpath,@loader_path)
 endif()
+
+# Add custom target to copy built files to source directory for packaging.
+add_custom_target(
+  copy_mlx_extensions ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "${CMAKE_CURRENT_BINARY_DIR}/_ext.cpython-*-darwin.so" ${CMAKE_CURRENT_SOURCE_DIR}/
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/libmlx_ext.dylib
+          ${CMAKE_CURRENT_SOURCE_DIR}/
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/mlx_ext.metallib
+          ${CMAKE_CURRENT_SOURCE_DIR}/
+  DEPENDS _ext mlx_ext
+  COMMENT "Copying MLX extensions to source directory"
+)
