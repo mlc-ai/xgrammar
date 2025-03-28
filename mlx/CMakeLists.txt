@@ -9,6 +9,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(BUILD_SHARED_LIBS "Build extensions as a shared library" ON)
 
+# Set output directories
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
 # ----------------------------- Dependencies -----------------------------
 find_package(
   Python 3.8
