@@ -21,7 +21,7 @@ dependencies = [
   "transformers>=4.38.0",
   "triton; platform_system == 'linux' and platform_machine == 'x86_64'",
   "ninja",
-  "nanobind==2.4.0",                                                     # Since 2.6.0, nanobind requires Python >=3.12. 2.4.0 consistent with MLX.
+  "nanobind==2.5.0",                                                     # https://github.com/mlc-ai/xgrammar/pull/280
 ]
 dynamic = ["version"]
 
@@ -44,7 +44,7 @@ provider = "scikit_build_core.metadata.regex"
 input = "python/xgrammar/version.py"
 
 [build-system]
-requires = ["scikit-build-core>=0.10.0", "nanobind==2.4.0"]
+requires = ["scikit-build-core>=0.10.0", "nanobind==2.5.0"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
