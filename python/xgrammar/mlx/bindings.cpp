@@ -7,7 +7,7 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-NB_MODULE(_ext, m) {
+NB_MODULE(extension, m) {
   m.doc() = "XGrammar extension for MLX";
 
   m.def(
