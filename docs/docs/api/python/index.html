@@ -494,7 +494,7 @@ meaning and the default values of the parameters follows the convention in json.
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>schema</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>Type</em><em>[</em><em>BaseModel</em><em>]</em><em>]</em>) – The schema string or Pydantic model.</p></li>
+<li><p><strong>schema</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>Type</em><em>[</em><em>BaseModel</em><em>]</em><em>, </em><em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em><em>]</em>) – The schema string or Pydantic model or JSON schema dict.</p></li>
 <li><p><strong>any_whitespace</strong> (<em>bool</em><em>, </em><em>default: True</em>) – Whether to use any whitespace. If True, the generated grammar will ignore the
 indent and separators parameters, and allow any whitespace.</p></li>
 <li><p><strong>indent</strong> (<em>Optional</em><em>[</em><em>int</em><em>]</em><em>, </em><em>default: None</em>) – <p>The number of spaces for indentation. If None, the output will be in one line.</p>
@@ -716,7 +716,7 @@ and separators parameters follow the same convention as in json.dumps().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>schema</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>Type</em><em>[</em><em>BaseModel</em><em>]</em><em>]</em>) – The schema string or Pydantic model.</p></li>
+<li><p><strong>schema</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>Type</em><em>[</em><em>BaseModel</em><em>]</em><em>, </em><em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em><em>]</em>) – The schema string or Pydantic model or JSON schema dict.</p></li>
 <li><p><strong>indent</strong> (<em>Optional</em><em>[</em><em>int</em><em>]</em><em>, </em><em>default: None</em>) – The number of spaces for indentation. If None, the output will be in one line.</p></li>
 <li><p><strong>separators</strong> (<em>Optional</em><em>[</em><em>Tuple</em><em>[</em><em>str</em><em>, </em><em>str</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – Two separators used in the schema: comma and colon. Examples: (“,”, “:”), (”, “, “: “).
 If None, the default separators will be used: (“,”, “: “) when the indent is not None,
