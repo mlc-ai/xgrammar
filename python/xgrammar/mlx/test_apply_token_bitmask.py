@@ -1,9 +1,13 @@
+import platform
 import sys
 
 import pytest
 
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="MLX tests only run on macOS")
+@pytest.mark.skipif(
+    sys.platform != "darwin" or not platform.machine().startswith("arm64"),
+    reason="MLX tests only run on macOS with Apple Silicon",
+)
 def test_apply_token_bitmask():
     import mlx.core as mx  # import mlx and extension only if running on macOS
 
