@@ -5,7 +5,8 @@
 
 namespace mx = mlx::core;
 
-namespace my_ext {
+namespace xgrammar {
+namespace mlx_ext {
 
 ///////////////////////////////////////////////////////////////////////////////
 // Operation
@@ -63,4 +64,5 @@ class ApplyTokenBitmask : public mx::Primitive {
   bool is_equivalent(const mx::Primitive& other) const override;
 };
 
-}  // namespace my_ext
+}  // namespace mlx_ext
+}  // namespace xgrammar

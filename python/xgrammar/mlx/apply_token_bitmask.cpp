@@ -12,7 +12,8 @@
 #include "mlx/backend/metal/utils.h"
 #endif
 
-namespace my_ext {
+namespace xgrammar {
+namespace mlx_ext {
 
 ///////////////////////////////////////////////////////////////////////////////
 // Operation Implementation
@@ -202,4 +203,5 @@ bool ApplyTokenBitmask::is_equivalent(const Primitive& other) const {
   return true;  // No parameters to compare
 }
 
-}  // namespace my_ext
+}  // namespace mlx_ext
+}  // namespace xgrammar

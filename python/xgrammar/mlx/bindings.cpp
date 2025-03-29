@@ -12,7 +12,7 @@ NB_MODULE(extension, m) {
 
   m.def(
       "apply_token_bitmask",
-      &my_ext::apply_token_bitmask,
+      &xgrammar::mlx_ext::apply_token_bitmask,
       "bitmask"_a,
       "logits"_a,
       nb::kw_only(),
