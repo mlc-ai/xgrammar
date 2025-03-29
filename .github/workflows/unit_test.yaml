@@ -57,13 +57,16 @@ jobs:
             ~/.cache/huggingface
           key: huggingface-${{ matrix.os }}-python-${{ matrix.python }}
 
-      - name: Install MLX
+      - name: Build xgrammar from source with MLX extension
         if: ${{ runner.os == 'macOS' && runner.arch == 'arm64' }}
         run: |
           python -m pip install --upgrade pip
-          pip install -v mlx mlx-lm
+          pip install -v mlx mlx-lm scikit_build_core
+          echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
+          pip install  --no-build-isolation -v .[test]
 
       - name: Build xgrammar from source
+        if: ${{ runner.os != 'macOS' || runner.arch != 'arm64' }}
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
           python -m pip install --upgrade pip

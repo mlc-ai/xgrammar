@@ -29,6 +29,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
   OUTPUT_VARIABLE MLX_ROOT
 )
+message(STATUS "MLX package directory: ${MLX_ROOT}")
 find_package(MLX CONFIG REQUIRED)
 
 # Build extension library mlx_ext including MLX operation and primitive.
@@ -52,6 +53,15 @@ if(MLX_BUILD_METAL)
     ${CMAKE_CURRENT_BINARY_DIR}
   )
   add_dependencies(mlx_ext mlx_ext_metallib)
+
+  # Copy mlx.metallib from MLX package directory
+  add_custom_command(
+    TARGET mlx_ext
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${MLX_ROOT}/lib/mlx.metallib"
+            "${CMAKE_CURRENT_BINARY_DIR}/mlx.metallib"
+    COMMENT "Copying mlx.metallib from MLX package directory"
+  )
 endif()
 
 # Wrap the extension library mlx_ext in a Python module.
@@ -78,6 +88,8 @@ add_custom_target(
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/libmlx_ext.dylib
           ${CMAKE_CURRENT_SOURCE_DIR}/
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/mlx_ext.metallib
+          ${CMAKE_CURRENT_SOURCE_DIR}/
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/mlx.metallib
           ${CMAKE_CURRENT_SOURCE_DIR}/
   DEPENDS extension mlx_ext
   COMMENT "Copying MLX extensions to source directory"
