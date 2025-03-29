@@ -49,7 +49,7 @@ class LogitsProcessor(transformers.LogitsProcessor):
             One or more grammars compiled according to the given grammar and the model's tokenizer_info.
         """
         self.matchers: List[xgr.GrammarMatcher] = []
-        self.compiled_grammars = (
+        self.compiled_grammars: List[xgr.CompiledGrammar] = (
             compiled_grammar if isinstance(compiled_grammar, list) else [compiled_grammar]
         )
         self.full_vocab_size = self.compiled_grammars[0].tokenizer_info.vocab_size
