@@ -178,6 +178,9 @@ xcuserdata/
 *.dylib
 *.dll
 
+# Compiled Metal libraries
+*.metallib
+
 # Compiled Object files
 *.slo
 *.lo

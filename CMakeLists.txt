@@ -20,6 +20,11 @@ option(XGRAMMAR_ENABLE_CPPTRACE
        "Enable C++ trace (Now only support Linux, and RelWithDebugInfo or Debug build)" OFF
 )
 
+# Add MLX support for macOS
+if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^arm64")
+  add_subdirectory(${PROJECT_SOURCE_DIR}/python/xgrammar/mlx)
+endif()
+
 set(XGRAMMAR_CUDA_ARCHITECTURES
     native
     CACHE STRING "CUDA architectures"

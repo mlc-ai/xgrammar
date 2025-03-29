@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 
-from .base import XGRObject, _core
+from .base import XGRObject, core
 from .compiler import CompiledGrammar
 
 """The dtype of the bitmask: int32."""
@@ -198,7 +198,7 @@ class GrammarMatcher(XGRObject):
             override_stop_tokens = [override_stop_tokens]
 
         self._init_handle(
-            _core.GrammarMatcher(
+            core().GrammarMatcher(
                 compiled_grammar._handle,
                 override_stop_tokens,
                 terminate_without_stop_token,
