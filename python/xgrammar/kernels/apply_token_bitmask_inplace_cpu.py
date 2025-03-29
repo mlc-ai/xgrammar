@@ -4,7 +4,7 @@ from typing import List, Optional, Union
 
 import torch
 
-from ..base import _core
+from ..base import core
 
 
 def apply_token_bitmask_inplace_cpu(
@@ -31,6 +31,6 @@ def apply_token_bitmask_inplace_cpu(
         (1, bitmask.shape[0]) if bitmask.dim() == 1 else (bitmask.shape[0], bitmask.shape[1])
     )
 
-    _core.kernels.apply_token_bitmask_inplace_cpu(
+    core().kernels.apply_token_bitmask_inplace_cpu(
         logits.data_ptr(), logits_shape, bitmask.data_ptr(), bitmask_shape, indices
     )

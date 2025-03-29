@@ -2,10 +2,15 @@
 
 import os
 
-if os.environ.get("XGRAMMAR_BUILD_DOCS") != "1":
-    from . import xgrammar_bindings as _core
-else:
-    _core = "dummy namespace"
+
+def core():
+    """Get the core module to avoid circular imports."""
+    if os.environ.get("XGRAMMAR_BUILD_DOCS") != "1":
+        from . import xgrammar_bindings
+
+        return xgrammar_bindings
+    else:
+        return "dummy namespace"
 
 
 class XGRObject:

@@ -8,7 +8,7 @@ import sentencepiece
 import tiktoken
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
-from .base import XGRObject, _core
+from .base import XGRObject, core
 from .support import logging
 
 logging.enable_logging()
@@ -88,7 +88,7 @@ class TokenizerInfo(XGRObject):
         if isinstance(stop_token_ids, int):
             stop_token_ids = [stop_token_ids]
         self._init_handle(
-            _core.TokenizerInfo(
+            core().TokenizerInfo(
                 encoded_vocab, vocab_type.value, vocab_size, stop_token_ids, add_prefix_space
             )
         )
@@ -351,7 +351,7 @@ class TokenizerInfo(XGRObject):
             The metadata string in json format.
         """
         return TokenizerInfo._create_from_handle(
-            _core.TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata)
+            core().TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata)
         )
 
     @staticmethod
@@ -362,7 +362,7 @@ class TokenizerInfo(XGRObject):
         It returns {"vocab_type": VocabType, "add_prefix_space": bool}.
         """
         # the metadata_str should in the format of {"vocab_type": int, "add_prefix_space": bool}
-        metadata_str = _core.TokenizerInfo._detect_metadata_from_hf(backend_str)
+        metadata_str = core().TokenizerInfo._detect_metadata_from_hf(backend_str)
         metadata = json.loads(metadata_str)
         return {
             "vocab_type": VocabType(metadata["vocab_type"]),

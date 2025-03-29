@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import torch
 from pydantic import BaseModel
 
-from .base import _core
+from .base import core
 from .compiler import CompiledGrammar, GrammarCompiler
 from .grammar import Grammar, _convert_schema_to_str
 from .matcher import GrammarMatcher, bitmask_dtype
@@ -50,7 +50,7 @@ def _json_schema_to_ebnf(
         The BNF grammar string.
     """
     schema_str = _convert_schema_to_str(schema)
-    return _core.testing._json_schema_to_ebnf(
+    return core().testing._json_schema_to_ebnf(
         schema_str, any_whitespace, indent, separators, strict_mode
     )
 
@@ -79,7 +79,7 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
     bnf_string : str
         The BNF grammar string converted from the input regex.
     """
-    return _core.testing._regex_to_ebnf(regex, with_rule_name)
+    return core().testing._regex_to_ebnf(regex, with_rule_name)
 
 
 def _is_grammar_accept_string(
@@ -151,7 +151,7 @@ def _get_masked_tokens_from_bitmask(
         raise ValueError("bitmask should be on CPU.")
     if bitmask.dtype != bitmask_dtype:
         raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
-    return _core.testing._get_masked_tokens_from_bitmask(
+    return core().testing._get_masked_tokens_from_bitmask(
         bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
     )
 
@@ -214,8 +214,8 @@ def _get_matcher_from_grammar_and_tokenizer_info(
 
 
 def _get_allow_empty_rule_ids(compiled_grammar: CompiledGrammar) -> List[int]:
-    return _core.testing._get_allow_empty_rule_ids(compiled_grammar._handle)
+    return core().testing._get_allow_empty_rule_ids(compiled_grammar._handle)
 
 
 def _generate_range_regex(start: Optional[int] = None, end: Optional[int] = None) -> str:
-    return _core.testing._generate_range_regex(start, end)
+    return core().testing._generate_range_regex(start, end)

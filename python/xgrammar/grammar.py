@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from pydantic import BaseModel, Field
 
-from .base import XGRObject, _core
+from .base import XGRObject, core
 
 
 class StructuralTagItem(BaseModel):
@@ -107,7 +107,7 @@ class Grammar(XGRObject):
         RuntimeError
             When converting the regex pattern fails, with details about the parsing error.
         """
-        return Grammar._create_from_handle(_core.Grammar.from_ebnf(ebnf_string, root_rule_name))
+        return Grammar._create_from_handle(core().Grammar.from_ebnf(ebnf_string, root_rule_name))
 
     @staticmethod
     def from_json_schema(
@@ -175,7 +175,7 @@ class Grammar(XGRObject):
         """
         schema_str = _convert_schema_to_str(schema)
         return Grammar._create_from_handle(
-            _core.Grammar.from_json_schema(
+            core().Grammar.from_json_schema(
                 schema_str, any_whitespace, indent, separators, strict_mode, print_converted_ebnf
             )
         )
@@ -204,7 +204,7 @@ class Grammar(XGRObject):
             When parsing the regex pattern fails, with details about the parsing error.
         """
         return Grammar._create_from_handle(
-            _core.Grammar.from_regex(regex_string, print_converted_ebnf)
+            core().Grammar.from_regex(regex_string, print_converted_ebnf)
         )
 
     @staticmethod
@@ -270,7 +270,7 @@ class Grammar(XGRObject):
         >>> grammar = Grammar.from_structural_tag(tags, triggers)
         """
         tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
-        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
+        return Grammar._create_from_handle(core().Grammar.from_structural_tag(tags_tuple, triggers))
 
     @staticmethod
     def builtin_json_grammar() -> "Grammar":
@@ -282,7 +282,7 @@ class Grammar(XGRObject):
         grammar : Grammar
             The JSON grammar.
         """
-        return Grammar._create_from_handle(_core.Grammar.builtin_json_grammar())
+        return Grammar._create_from_handle(core().Grammar.builtin_json_grammar())
 
     @staticmethod
     def concat(*grammars: "Grammar") -> "Grammar":
@@ -300,7 +300,7 @@ class Grammar(XGRObject):
             The concatenation of the grammars.
         """
         grammar_handles = [grammar._handle for grammar in grammars]
-        return Grammar._create_from_handle(_core.Grammar.concat(grammar_handles))
+        return Grammar._create_from_handle(core().Grammar.concat(grammar_handles))
 
     @staticmethod
     def union(*grammars: "Grammar") -> "Grammar":
@@ -318,4 +318,4 @@ class Grammar(XGRObject):
             The union of the grammars.
         """
         grammar_handles = [grammar._handle for grammar in grammars]
-        return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
+        return Grammar._create_from_handle(core().Grammar.union(grammar_handles))

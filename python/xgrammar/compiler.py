@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
 
-from .base import XGRObject, _core
+from .base import XGRObject, core
 from .grammar import Grammar, StructuralTagItem, _convert_schema_to_str
 from .tokenizer_info import TokenizerInfo
 
@@ -74,7 +74,7 @@ class GrammarCompiler(XGRObject):
             )
 
         self._init_handle(
-            _core.GrammarCompiler(
+            core().GrammarCompiler(
                 tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
             )
         )
