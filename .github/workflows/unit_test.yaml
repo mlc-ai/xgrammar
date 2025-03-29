@@ -58,6 +58,14 @@ jobs:
           key: huggingface-${{ matrix.os }}-python-${{ matrix.python }}
 
       - name: Build xgrammar from source
+        if: ${{ runner.os == 'macOS' && runner.arch == 'arm64' }}
+        run: |
+          echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
+          python -m pip install --upgrade pip
+          pip install -v ".[test,apple-silicon]"
+
+      - name: Build xgrammar from source
+        if: ${{ runner.os != 'macOS' || runner.arch != 'arm64' }}
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
           python -m pip install --upgrade pip
