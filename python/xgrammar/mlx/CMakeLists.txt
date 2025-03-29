@@ -2,22 +2,20 @@ cmake_minimum_required(VERSION 3.27)
 
 project(_ext LANGUAGES CXX)
 
-# ----------------------------- Setup -----------------------------
+# Setup like https://github.com/ml-explore/mlx/blob/main/examples/extensions/CMakeLists.txt
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
 option(BUILD_SHARED_LIBS "Build extensions as a shared library" ON)
 
-# Set output directories
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-
-# ----------------------------- Dependencies -----------------------------
 find_package(
   Python 3.8
   COMPONENTS Interpreter Development.Module
   REQUIRED
 )
+
+# Import CMake rule nanobind_add_module from nanobind installation directory. Also find the CMake
+# library target mlx, which is to be linked to our extension.
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
   OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -25,6 +23,7 @@ execute_process(
 )
 find_package(nanobind CONFIG REQUIRED)
 
+# Import CMake rule mlx_build_metallib from mlx installation directory.
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -m mlx --cmake-dir
   OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -32,24 +31,13 @@ execute_process(
 )
 find_package(MLX CONFIG REQUIRED)
 
-# ----------------------------- Extensions -----------------------------
-
-# Add library
+# Build extension library mlx_ext including MLX operation and primitive.
 add_library(mlx_ext)
-
-# Add sources
 target_sources(mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR}/apply_token_bitmask.cpp)
-
-# Add include headers
 target_include_directories(mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR})
-
-# Link to mlx
 target_link_libraries(mlx_ext PUBLIC mlx)
-
-# ----------------------------- Metal -----------------------------
-
-# Build metallib
 if(MLX_BUILD_METAL)
+  # Build GPU kernel only if MLX's CMake rule tells that MLX was built with Metal support.
   mlx_build_metallib(
     TARGET
     mlx_ext_metallib
@@ -61,13 +49,12 @@ if(MLX_BUILD_METAL)
     ${PROJECT_SOURCE_DIR}
     ${MLX_INCLUDE_DIRS}
     OUTPUT_DIRECTORY
-    ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+    ${CMAKE_CURRENT_BINARY_DIR}
   )
-
   add_dependencies(mlx_ext mlx_ext_metallib)
 endif()
 
-# ----------------------------- Python Bindings -----------------------------
+# Wrap the extension library mlx_ext in a Python module.
 nanobind_add_module(
   extension
   NB_STATIC
@@ -79,12 +66,11 @@ nanobind_add_module(
   ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
 )
 target_link_libraries(extension PRIVATE mlx_ext)
-
 if(BUILD_SHARED_LIBS)
   target_link_options(extension PRIVATE -Wl,-rpath,@loader_path)
 endif()
 
-# Add custom target to copy built files to source directory
+# Copy built results to source directory so they could be packed and imported.
 add_custom_target(
   copy_mlx_extensions ALL
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
