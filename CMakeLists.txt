@@ -21,7 +21,7 @@ option(XGRAMMAR_ENABLE_CPPTRACE
 )
 
 # Add MLX support for macOS
-if(APPLE)
+if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^arm64")
   add_subdirectory(${PROJECT_SOURCE_DIR}/python/xgrammar/mlx)
 endif()
 
