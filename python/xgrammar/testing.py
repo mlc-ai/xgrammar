@@ -1,19 +1,20 @@
 """Testing utilities."""
 
 import time
-from typing import List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import torch
+from pydantic import BaseModel
 
 from .base import _core
 from .compiler import CompiledGrammar, GrammarCompiler
-from .grammar import Grammar
+from .grammar import Grammar, _convert_schema_to_str
 from .matcher import GrammarMatcher, bitmask_dtype
 from .tokenizer_info import TokenizerInfo
 
 
 def _json_schema_to_ebnf(
-    schema: str,
+    schema: Union[str, Type[BaseModel], Dict[str, Any]],
     *,
     any_whitespace: bool = True,
     indent: Optional[int] = None,
@@ -24,8 +25,8 @@ def _json_schema_to_ebnf(
 
     Parameters
     ----------
-    schema : str
-        The schema string.
+    schema : Union[str, Type[BaseModel], Dict[str, Any]]
+        The schema string or Pydantic model or JSON schema dict.
 
     indent : Optional[int], default: None
         The number of spaces for indentation. If None, the output will be in one line.
@@ -48,8 +49,9 @@ def _json_schema_to_ebnf(
     bnf_string : str
         The BNF grammar string.
     """
+    schema_str = _convert_schema_to_str(schema)
     return _core.testing._json_schema_to_ebnf(
-        schema, any_whitespace, indent, separators, strict_mode
+        schema_str, any_whitespace, indent, separators, strict_mode
     )
 
 

@@ -54,10 +54,8 @@ def check_schema_with_instance(
     elif not isinstance(instance, str):
         instance = json.dumps(instance, indent=indent, separators=separators)
 
-    if is_accepted:
-        assert _is_grammar_accept_string(json_schema_grammar, instance)
-    else:
-        assert not _is_grammar_accept_string(json_schema_grammar, instance)
+    accepted = _is_grammar_accept_string(json_schema_grammar, instance)
+    assert accepted == is_accepted
 
 
 def test_basic():
@@ -144,17 +142,10 @@ root ::= "{" "\n  " "\"array_field\"" ": " root_prop_0 ",\n  " "\"tuple_field\""
     )
 
 
-def test_non_strict():
-    class Foo(BaseModel):
-        pass
-
-    class MainModel(BaseModel):
-        tuple_field: Tuple[str, Tuple[int, int]]
-        foo_field: Foo
-        list_field: List[str]
-        object_field: Dict[str, Any]
-
-    ebnf_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+schema__grammar__accepted_instances__rejected_instances__test_non_strict = [
+    (
+        {"type": "array", "prefixItems": [{"type": "integer"}, {"type": "integer"}]},
+        r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
@@ -162,41 +153,52 @@ basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[" "]"
-basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{" "}"
-root_prop_0_item_1 ::= "[" "\n      " basic_integer ",\n      " basic_integer (",\n      " basic_any)* "\n    " "]"
-root_prop_0 ::= "[" "\n    " basic_string ",\n    " root_prop_0_item_1 (",\n    " basic_any)* "\n  " "]"
-defs_Foo ::= ("{" "\n    " basic_string ": " basic_any (",\n    " basic_string ": " basic_any)* "\n  " "}") | "{" "}"
-root_prop_1 ::= defs_Foo
-root_prop_2 ::= ("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | "[" "]"
-root ::= "{" "\n  " "\"tuple_field\"" ": " root_prop_0 ",\n  " "\"foo_field\"" ": " root_prop_1 ",\n  " "\"list_field\"" ": " root_prop_2 ",\n  " "\"object_field\"" ": " basic_object (",\n  " basic_string ": " basic_any)* "\n" "}"
-"""
+basic_array ::= ("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+root ::= "[" [ \n\t]* basic_integer [ \n\t]* "," [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]"
+""",
+        [[1, 2], [1, 2, 3], [1, 2, 3, "123"]],
+        [[1]],
+    ),
+    (
+        {
+            "type": "object",
+            "properties": {"foo": {"type": "integer"}, "bar": {"type": "integer"}},
+            "required": ["foo", "bar"],
+        },
+        r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= ("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+root ::= "{" [ \n\t]* "\"foo\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "," [ \n\t]* "\"bar\"" [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}"
+""",
+        [{"foo": 1, "bar": 2}, {"foo": 1, "bar": 2, "baz": 3}],
+        [{"foo": 1}],
+    ),
+]
 
-    instance_json = r"""{
-  "tuple_field": [
-    "foo",
-    [
-      12,
-      13,
-      "ext"
-    ],
-    "extra"
-  ],
-  "foo_field": {
-    "tmp": "str"
-  },
-  "list_field": [],
-  "object_field": {},
-  "extra": "field"
-}"""
 
-    schema = MainModel.model_json_schema()
-    check_schema_with_grammar(
-        schema, ebnf_grammar, any_whitespace=False, indent=2, strict_mode=False
-    )
-    check_schema_with_instance(
-        schema, instance_json, any_whitespace=False, indent=2, strict_mode=False
-    )
+@pytest.mark.parametrize(
+    "schema, expected_grammar, accepted_instances, rejected_instances",
+    schema__grammar__accepted_instances__rejected_instances__test_non_strict,
+)
+def test_non_strict(
+    schema: Dict[str, Any],
+    expected_grammar: str,
+    accepted_instances: List[Any],
+    rejected_instances: List[Any],
+):
+    check_schema_with_grammar(schema, expected_grammar, strict_mode=False)
+    for instance in accepted_instances:
+        check_schema_with_instance(schema, instance, is_accepted=True, strict_mode=False)
+    for instance in rejected_instances:
+        check_schema_with_instance(schema, instance, is_accepted=False, strict_mode=False)
 
 
 def test_enum_const():

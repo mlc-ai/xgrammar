@@ -93,8 +93,8 @@ class GrammarCompiler(XGRObject):
 
         Parameters
         ----------
-        schema : Union[str, Type[BaseModel]]
-            The schema string or Pydantic model.
+        schema : Union[str, Type[BaseModel], Dict[str, Any]]
+            The schema string or Pydantic model or JSON schema dict.
 
         indent : Optional[int], default: None
             The number of spaces for indentation. If None, the output will be in one line.
