@@ -61,15 +61,7 @@ jobs:
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
           python -m pip install --upgrade pip
-          if [ "${{ matrix.os }}" = "macos-14" ] || [ "${{ matrix.os }}" = "macos-13" ]; then
-            if [ "${{ matrix.os }}" = "macos-14" ]; then
-              pip install -v ".[test,apple-silicon]"
-            else
-              pip install -v ".[test]"
-            fi
-          else
-            pip install -v ".[test]"
-          fi
+          pip install -v ".[test]"
 
       - name: Run C++ tests
         run: |
