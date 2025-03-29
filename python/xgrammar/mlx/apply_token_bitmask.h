@@ -29,9 +29,9 @@ mx::array apply_token_bitmask(
 // Primitive
 ///////////////////////////////////////////////////////////////////////////////
 
-class ApplyXGrammarTokenBitmask : public mx::Primitive {
+class ApplyTokenBitmask : public mx::Primitive {
  public:
-  explicit ApplyXGrammarTokenBitmask(mx::Stream stream) : mx::Primitive(stream) {};
+  explicit ApplyTokenBitmask(mx::Stream stream) : mx::Primitive(stream) {};
 
   void eval_cpu(const std::vector<mx::array>& inputs, std::vector<mx::array>& outputs) override;
   void eval_gpu(const std::vector<mx::array>& inputs, std::vector<mx::array>& outputs) override;
@@ -57,7 +57,7 @@ class ApplyXGrammarTokenBitmask : public mx::Primitive {
   ) override;
 
   /** Print the primitive. */
-  void print(std::ostream& os) override { os << "ApplyXGrammarTokenBitmask"; }
+  void print(std::ostream& os) override { os << "ApplyTokenBitmask"; }
 
   /** Equivalence check **/
   bool is_equivalent(const mx::Primitive& other) const override;

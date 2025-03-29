@@ -46,7 +46,7 @@ mx::array apply_token_bitmask(
   return mx::array(
       logits.shape(),
       logits.dtype(),
-      std::make_shared<ApplyXGrammarTokenBitmask>(to_stream(s)),
+      std::make_shared<ApplyTokenBitmask>(to_stream(s)),
       {bitmask, logits}
   );
 }
@@ -88,7 +88,7 @@ void apply_token_bitmask_cpu_impl(
   });
 }
 
-void ApplyXGrammarTokenBitmask::eval_cpu(
+void ApplyTokenBitmask::eval_cpu(
     const std::vector<mx::array>& inputs, std::vector<mx::array>& outputs
 ) {
   auto& bitmask = inputs[0];
@@ -101,7 +101,7 @@ void ApplyXGrammarTokenBitmask::eval_cpu(
   } else if (out.dtype() == mx::float16) {
     return apply_token_bitmask_cpu_impl<mx::float16_t>(bitmask, logits, out, stream());
   } else {
-    throw std::runtime_error("ApplyXGrammarTokenBitmask only supports float16 and float32 logits");
+    throw std::runtime_error("ApplyTokenBitmask only supports float16 and float32 logits");
   }
 }
 
@@ -111,7 +111,7 @@ void ApplyXGrammarTokenBitmask::eval_cpu(
 
 #ifdef _METAL_
 
-void ApplyXGrammarTokenBitmask::eval_gpu(
+void ApplyTokenBitmask::eval_gpu(
     const std::vector<mx::array>& inputs, std::vector<mx::array>& outputs
 ) {
   auto& bitmask = inputs[0];
@@ -156,10 +156,10 @@ void ApplyXGrammarTokenBitmask::eval_gpu(
 
 #else
 
-void ApplyXGrammarTokenBitmask::eval_gpu(
+void ApplyTokenBitmask::eval_gpu(
     const std::vector<mx::array>& inputs, std::vector<mx::array>& outputs
 ) {
-  throw std::runtime_error("ApplyXGrammarTokenBitmask has no GPU implementation.");
+  throw std::runtime_error("ApplyTokenBitmask has no GPU implementation.");
 }
 
 #endif
@@ -168,7 +168,7 @@ void ApplyXGrammarTokenBitmask::eval_gpu(
 // Primitive Transforms
 ///////////////////////////////////////////////////////////////////////////////
 
-std::vector<mx::array> ApplyXGrammarTokenBitmask::jvp(
+std::vector<mx::array> ApplyTokenBitmask::jvp(
     const std::vector<mx::array>& primals,
     const std::vector<mx::array>& tangents,
     const std::vector<int>& argnums
@@ -180,7 +180,7 @@ std::vector<mx::array> ApplyXGrammarTokenBitmask::jvp(
   return {mx::zeros_like(primals[1])};
 }
 
-std::vector<mx::array> ApplyXGrammarTokenBitmask::
+std::vector<mx::array> ApplyTokenBitmask::
     vjp(const std::vector<mx::array>& primals,
         const std::vector<mx::array>& cotangents,
         const std::vector<int>& argnums,
@@ -192,13 +192,13 @@ std::vector<mx::array> ApplyXGrammarTokenBitmask::
   return {mx::zeros_like(primals[0])};
 }
 
-std::pair<std::vector<mx::array>, std::vector<int>> ApplyXGrammarTokenBitmask::vmap(
+std::pair<std::vector<mx::array>, std::vector<int>> ApplyTokenBitmask::vmap(
     const std::vector<mx::array>& inputs, const std::vector<int>& axes
 ) {
-  throw std::runtime_error("ApplyXGrammarTokenBitmask has no vmap implementation.");
+  throw std::runtime_error("ApplyTokenBitmask has no vmap implementation.");
 }
 
-bool ApplyXGrammarTokenBitmask::is_equivalent(const Primitive& other) const {
+bool ApplyTokenBitmask::is_equivalent(const Primitive& other) const {
   return true;  // No parameters to compare
 }
 
