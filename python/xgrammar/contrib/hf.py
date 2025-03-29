@@ -49,7 +49,9 @@ class LogitsProcessor(transformers.LogitsProcessor):
             One or more grammars compiled according to the given grammar and the model's tokenizer_info.
         """
         self.matchers: List[xgr.GrammarMatcher] = []
-        self.compiled_grammars = compiled_grammar if isinstance(compiled_grammar, list) else [compiled_grammar]
+        self.compiled_grammars = (
+            compiled_grammar if isinstance(compiled_grammar, list) else [compiled_grammar]
+        )
         self.full_vocab_size = self.compiled_grammars[0].tokenizer_info.vocab_size
         self.token_bitmask = None
         self.prefilled = False
@@ -65,8 +67,14 @@ class LogitsProcessor(transformers.LogitsProcessor):
         # Lazily initialize GrammarMatchers and bitmask
         if len(self.matchers) == 0:
             self.batch_size = input_ids.shape[0]
-            self.compiled_grammars = self.compiled_grammars if len(self.compiled_grammars) > 1 else self.compiled_grammars * self.batch_size
-            assert len(self.compiled_grammars) == self.batch_size, "The number of compiled grammars must be equal to the batch size."
+            self.compiled_grammars = (
+                self.compiled_grammars
+                if len(self.compiled_grammars) > 1
+                else self.compiled_grammars * self.batch_size
+            )
+            assert (
+                len(self.compiled_grammars) == self.batch_size
+            ), "The number of compiled grammars must be equal to the batch size."
             self.matchers = [
                 xgr.GrammarMatcher(self.compiled_grammars[i]) for i in range(self.batch_size)
             ]
