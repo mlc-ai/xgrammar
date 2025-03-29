@@ -2,7 +2,7 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "apply_xgrammar_token_bitmask.h"
+#include "apply_token_bitmask.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -11,8 +11,8 @@ NB_MODULE(extension, m) {
   m.doc() = "XGrammar extension for MLX";
 
   m.def(
-      "apply_xgrammar_token_bitmask",
-      &my_ext::apply_xgrammar_token_bitmask,
+      "apply_token_bitmask",
+      &my_ext::apply_token_bitmask,
       "bitmask"_a,
       "logits"_a,
       nb::kw_only(),

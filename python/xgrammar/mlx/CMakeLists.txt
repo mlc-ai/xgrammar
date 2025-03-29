@@ -38,7 +38,7 @@ find_package(MLX CONFIG REQUIRED)
 add_library(mlx_ext)
 
 # Add sources
-target_sources(mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR}/apply_xgrammar_token_bitmask.cpp)
+target_sources(mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR}/apply_token_bitmask.cpp)
 
 # Add include headers
 target_include_directories(mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR})
@@ -56,7 +56,7 @@ if(MLX_BUILD_METAL)
     TITLE
     mlx_ext
     SOURCES
-    ${CMAKE_CURRENT_LIST_DIR}/apply_xgrammar_token_bitmask.metal
+    ${CMAKE_CURRENT_LIST_DIR}/apply_token_bitmask.metal
     INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}
     ${MLX_INCLUDE_DIRS}
