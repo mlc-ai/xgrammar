@@ -1,13 +1,14 @@
 import sys
 
-import mlx.core as mx
 import pytest
-
-import xgrammar.mlx.extension
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="MLX tests only run on macOS")
 def test_apply_token_bitmask():
+    import mlx.core as mx  # import mlx and extension only if running on macOS
+
+    import xgrammar.mlx.extension
+
     bitmask = mx.array([5], dtype=mx.uint32)  # 5 = 0b0101
     logits = mx.array([1.0, 2.0, 3.0, 4.0], dtype=mx.float16)
     result = xgrammar.mlx.extension.apply_token_bitmask(bitmask, logits)
