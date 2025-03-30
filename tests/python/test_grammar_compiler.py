@@ -262,6 +262,7 @@ def test_grammar_compiler_json_schema_concurrent():
         t.join()
 
 
+@pytest.mark.hf_token_required
 def test_grammar_compiler_cache_unlimited():
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
@@ -293,6 +294,7 @@ def test_grammar_compiler_cache_unlimited():
     assert grammar_compiler.get_cache_size_bytes() == old_size
 
 
+@pytest.mark.hf_token_required
 def test_grammar_compiler_cache_limited():
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
