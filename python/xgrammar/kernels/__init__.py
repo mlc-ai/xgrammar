@@ -32,9 +32,7 @@ except ImportError:
 
 try:
     from .apply_token_bitmask_inplace_metal import apply_token_bitmask_inplace_metal  # isort: skip
-    # Note: The MLX Metal implementation has reversed parameter order (bitmask, logits)
-    # and works with MLX arrays directly instead of PyTorch tensors.
-    # Both logits and indices parameters are expected to be MLX arrays.
+
     apply_token_bitmask_inplace_kernels["metal"] = apply_token_bitmask_inplace_metal
 except ImportError:
     # If MLX is not installed, we can still use the CPU, CUDA, and Triton implementations.
