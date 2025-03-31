@@ -27,6 +27,11 @@ def apply_token_bitmask_inplace_mlx(bitmask: torch.Tensor, logits: mx.array) -> 
     Returns:
         mx.array: The masked logits where invalid tokens have their logits set to -inf
     """
+    # If Metal implementation is available, use it
+    if "metal" in xgrammar.kernels.apply_token_bitmask_inplace_kernels:
+        return xgrammar.kernels.apply_token_bitmask_inplace_kernels["metal"](bitmask, logits)
+
+    # Otherwise, fall back to the naive implementation
     vocab_size = logits.shape[-1]
     # Create mask as torch tensor for mutability
     logits_mask = torch.zeros(logits.shape, dtype=torch.float32)
@@ -49,7 +54,6 @@ class XGrammarLogitsProcessor:
         self.bitmask = xgrammar.allocate_token_bitmask(1, self.vocab_size)
 
     def __call__(self, tokens: mx.array, logits: mx.array) -> mx.array:
-        assert tokens.size > 0  # In the first call, tokens.size == #tokens in prompt
         last_token = tokens[-1].item()
         acc = self.matcher.accept_token(last_token) if not self.matcher.is_terminated() else False
         if not acc:
