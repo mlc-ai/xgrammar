@@ -37,12 +37,14 @@ def test_get_masked_tokens_from_bitmask(token_mask_size: int, index: int):
     assert _get_masked_tokens_from_bitmask(bitmask, token_mask_size, index) == expected
 
 
-@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton"))
+@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton", "metal"))
 def test_apply_token_bitmask_inplace(impl: str):
     if impl == "cuda" and "cuda" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
         pytest.skip(reason="CUDA is not installed")
     if impl == "triton" and "triton" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
         pytest.skip(reason="Triton is not installed")
+    if impl == "metal" and "metal" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
+        pytest.skip(reason="MLX is not installed")
 
     neginf = float("-inf")
     bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
@@ -61,6 +63,17 @@ def test_apply_token_bitmask_inplace(impl: str):
             xgr.kernels.apply_token_bitmask_inplace_kernels["triton"](logits_gpu, bitmask)
         torch.cuda.synchronize()
         torch.testing.assert_close(logits_gpu, expected.to("cuda"))
+    elif impl == "metal":
+        # Import MLX only when needed for the Metal test
+        import mlx.core as mx
+
+        bitmask = mx.array([0b1010101010], dtype=mx.int32)
+        logits = mx.array(logits.numpy())
+        result = xgr.kernels.apply_token_bitmask_inplace_kernels["metal"](
+            bitmask, logits, vocab_size=10
+        )
+        expected = mx.array(expected.numpy())
+        assert mx.allclose(result, expected)
     else:
         bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
         xgr.apply_token_bitmask_inplace(logits, bitmask)
