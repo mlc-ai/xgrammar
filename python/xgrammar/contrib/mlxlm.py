@@ -6,7 +6,6 @@ Usage:
 import argparse
 
 import mlx.core as mx
-import torch
 from mlx_lm.generate import generate as mlx_generate
 from mlx_lm.utils import load as mlx_load
 from transformers import AutoTokenizer
