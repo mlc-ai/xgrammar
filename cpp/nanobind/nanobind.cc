@@ -219,7 +219,8 @@ NB_MODULE(xgrammar_bindings, m) {
   pyGrammarFunctorModule.def("structure_normalizer", &StructureNormalizer::Apply)
       .def("byte_string_fuser", &ByteStringFuser::Apply)
       .def("rule_inliner", &RuleInliner::Apply)
-      .def("dead_code_eliminator", &DeadCodeEliminator::Apply);
+      .def("dead_code_eliminator", &DeadCodeEliminator::Apply)
+      .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply);
 
   auto pyKernelsModule = m.def_submodule("kernels");
   pyKernelsModule.def(

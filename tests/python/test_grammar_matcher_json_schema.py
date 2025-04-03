@@ -320,70 +320,69 @@ def test_multiple_boundaries_schema(tokenizer_path: str):
 
 
 string_format_instances = [
-    # (r"long.email-address-with-hyphens@and.subdomains.example.com", "email"),
+    (r"long.email-address-with-hyphens@and.subdomains.example.com", "email"),
     (r'"very.(),:;<>[]\".VERY.\"very@\\ \"very\".unusual"@strange.example.com', "email"),
-    # (r"128.255.000.222", "ipv4"),
-    # (r"2001:db8:3:4::192.0.2.33", "ipv6"),
-    # (r"P1Y23M456DT9H87M654S", "duration"),
-    # (r"2025-01-01T12:34:56.7+08:09", "date-time"),
-    # (r"123--abc.efgh---789-xyz.rst-uvw", "hostname"),
-    # (r"01234567-89AB-CDEF-abcd-ef0123456789", "uuid"),
-    # (
-    #     r"http://azAZ09-._~%Ff!$&'()*+,;=:@xyz:987/-/./+/*?aA0-._~%Ff!$&'()@#zZ9-._~%Aa!$&,;=:",
-    #     "uri",
-    # ),
-    # (
-    #     r"//azAZ09-._~%Ff!$&'()*+,;=:@xyz:987/-/./+/*?aA0-._~%Ff!$&'()@#zZ9-._~%Aa!$&,;=:",
-    #     "uri-reference",
-    # ),
-    # (r"!#$&()*+,-./{+abc}{#def}{.ghi}{/jkl}{;mno:2468}", "uri-template"),
-    # (r"/a/bc/def/ghij/~0~1//", "json-pointer"),
-    # (r"1234/a/bc/def/ghij/~0~1//", "relative-json-pointer"),
+    (r"128.255.000.222", "ipv4"),
+    (r"2001:db8:3:4::192.0.2.33", "ipv6"),
+    (r"P1Y23M456DT9H87M654S", "duration"),
+    (r"2025-01-01T12:34:56.7+08:09", "date-time"),
+    (r"123--abc.efgh---789-xyz.rst-uvw", "hostname"),
+    (r"01234567-89AB-CDEF-abcd-ef0123456789", "uuid"),
+    (
+        r"http://azAZ09-._~%Ff!$&'()*+,;=:@xyz:987/-/./+/*?aA0-._~%Ff!$&'()@#zZ9-._~%Aa!$&,;=:",
+        "uri",
+    ),
+    (
+        r"//azAZ09-._~%Ff!$&'()*+,;=:@xyz:987/-/./+/*?aA0-._~%Ff!$&'()@#zZ9-._~%Aa!$&,;=:",
+        "uri-reference",
+    ),
+    (r"!#$&()*+,-./{+abc}{#def}{.ghi}{/jkl}{;mno:2468}", "uri-template"),
+    (r"/a/bc/def/ghij/~0~1//", "json-pointer"),
+    (r"1234/a/bc/def/ghij/~0~1//", "relative-json-pointer"),
 ]
 
 
-# @pytest.mark.hf_token_required
-# @pytest.mark.parametrize("value, format", string_format_instances)
-# def test_mask_generation_format(value: str, format: str):
-#     class MainModel(BaseModel):
-#         name: str = Field(json_schema_extra={"format": format})
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("value, format", string_format_instances)
+def test_mask_generation_format(value: str, format: str):
+    class MainModel(BaseModel):
+        name: str = Field(json_schema_extra={"format": format})
 
-#     instance = json.dumps(MainModel(name=value).model_dump(mode="json"))
+    instance = json.dumps(MainModel(name=value).model_dump(mode="json"))
 
-#     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-8B-Instruct")
-#     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
-#     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-8B-Instruct")
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False, max_threads=1)
 
-#     time_start = time.monotonic_ns()
-#     compiled_grammar = grammar_compiler.compile_json_schema(MainModel)
-#     time_end = time.monotonic_ns()
-#     print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
+    time_start = time.monotonic_ns()
+    compiled_grammar = grammar_compiler.compile_json_schema(MainModel)
+    time_end = time.monotonic_ns()
+    print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
 
-#     print(compiled_grammar.grammar)
-#     matcher = xgr.GrammarMatcher(compiled_grammar)
-#     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    print(compiled_grammar.grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
-#     for c in instance.encode("utf-8"):
-#         time_start = time.monotonic_ns()
-#         matcher.fill_next_token_bitmask(token_bitmask)
-#         time_end = time.monotonic_ns()
-#         delta_us = (time_end - time_start) / 1e3
-#         if delta_us > 1000:
-#             print(f"Time for fill_next_token_bitmask: {delta_us} us on char {bytes([c])}")
-#         accepted = matcher._debug_accept_string(bytes([c]))
-#         assert accepted
+    for c in instance.encode("utf-8"):
+        time_start = time.monotonic_ns()
+        matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        delta_us = (time_end - time_start) / 1e3
+        print(f"Time for fill_next_token_bitmask: {delta_us} us before accepting char {bytes([c])}")
+        accepted = matcher._debug_accept_string(bytes([c]))
+        assert accepted
 
-#     time_start = time.monotonic_ns()
-#     matcher.fill_next_token_bitmask(token_bitmask)
-#     time_end = time.monotonic_ns()
-#     print(f"Time for fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+    time_start = time.monotonic_ns()
+    matcher.fill_next_token_bitmask(token_bitmask)
+    time_end = time.monotonic_ns()
+    print(f"Time for fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
-#     assert matcher.accept_token(tokenizer.eos_token_id)
-#     assert matcher.is_terminated()
+    assert matcher.accept_token(tokenizer.eos_token_id)
+    assert matcher.is_terminated()
 
 
-# test_mask_generation_format(*string_format_instances[0])
-# exit()
+test_mask_generation_format(*string_format_instances[0])
+exit()
 
 
 if __name__ == "__main__":

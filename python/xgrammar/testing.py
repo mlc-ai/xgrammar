@@ -275,3 +275,10 @@ class GrammarFunctor:
         return Grammar._create_from_handle(
             _core.testing.grammar_functor.dead_code_eliminator(grammar._handle)
         )
+
+    @staticmethod
+    def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
+        """Analyze and add lookahead assertions in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
+        )

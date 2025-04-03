@@ -243,6 +243,49 @@ rule1 ::= ("")
     assert after == expected
 
 
+def test_lookahead_assertion_analyzer():
+    before = r"""root ::= "a" rule1 "b" rule3 rule5 rule2
+rule1 ::= "b"
+rule2 ::= "c"
+rule3 ::= "" | "d" rule3
+rule4 ::= "" | "e" rule4 "f"
+rule5 ::= "" | "g" rule5 "h"
+"""
+    expected = r"""root ::= (("a" rule1 "b" rule3 rule5 rule2))
+rule1 ::= (("b")) (=("b" rule3 rule5 rule2))
+rule2 ::= (("c"))
+rule3 ::= (("") | ("d" rule3)) (=(rule5 rule2))
+rule4 ::= (("") | ("e" rule4 "f")) (=("f"))
+rule5 ::= (("") | ("g" rule5 "h"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_lookahead_assertion_analyzer_tag_dispatch():
+    # tag dispatch disables lookahead assertion detection
+    before = r"""root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3), ("tag4", rule4), ("tag5", rule5))
+rule1 ::= "b"
+rule2 ::= "c"
+rule3 ::= "" | "d" rule3
+rule4 ::= "" | "e" rule4 "f"
+rule5 ::= "" | "g" rule5 "h"
+"""
+    expected = r"""root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3), ("tag4", rule4), ("tag5", rule5))
+rule1 ::= (("b"))
+rule2 ::= (("c"))
+rule3 ::= (("") | ("d" rule3))
+rule4 ::= (("") | ("e" rule4 "f"))
+rule5 ::= (("") | ("g" rule5 "h"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
+    after = str(grammar)
+    assert after == expected
+
+
 def test_tag_dispatch():
     before = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
 rule1 ::= "a"
@@ -478,7 +521,7 @@ def test_e2e_to_string_roundtrip():
 b ::= ((b_1 d))
 c ::= ((c_1))
 d ::= ((d_1))
-b_1 ::= ("" | ("b" b_1))
+b_1 ::= ("" | ("b" b_1)) (=(d))
 c_1 ::= (([acep-z] c_1) | ([acep-z])) (=("d"))
 d_1 ::= ("" | ("d"))
 """
