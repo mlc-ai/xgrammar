@@ -3,7 +3,7 @@ This file helps integrate xgrammar in HF transformers package by extending
 transformers.LogitsProcessor, which is to be fed to `model.generate()`.
 """
 
-from typing import List
+from typing import List, Union
 
 import torch
 import transformers
@@ -40,7 +40,7 @@ class LogitsProcessor(transformers.LogitsProcessor):
         - Note that this implementation may contain extra overhead.
     """
 
-    def __init__(self, compiled_grammar: xgr.CompiledGrammar | List[xgr.CompiledGrammar]):
+    def __init__(self, compiled_grammar: Union[xgr.CompiledGrammar, List[xgr.CompiledGrammar]]):
         """Initialize the LogitsProcessor.
 
         Parameters
