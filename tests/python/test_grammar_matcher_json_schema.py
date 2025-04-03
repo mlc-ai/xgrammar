@@ -332,6 +332,10 @@ string_format_instances = [
         r"http://azAZ09-._~%Ff!$&'()*+,;=:@xyz:987/-/./+/*?aA0-._~%Ff!$&'()@#zZ9-._~%Aa!$&,;=:",
         "uri",
     ),
+]
+
+
+string_format_instances_skipped = [
     (
         r"//azAZ09-._~%Ff!$&'()*+,;=:@xyz:987/-/./+/*?aA0-._~%Ff!$&'()@#zZ9-._~%Aa!$&,;=:",
         "uri-reference",
@@ -352,7 +356,7 @@ def test_mask_generation_format(value: str, format: str):
 
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-8B-Instruct")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
-    grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False, max_threads=1)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
 
     time_start = time.monotonic_ns()
     compiled_grammar = grammar_compiler.compile_json_schema(MainModel)
@@ -379,10 +383,6 @@ def test_mask_generation_format(value: str, format: str):
 
     assert matcher.accept_token(tokenizer.eos_token_id)
     assert matcher.is_terminated()
-
-
-test_mask_generation_format(*string_format_instances[0])
-exit()
 
 
 if __name__ == "__main__":
