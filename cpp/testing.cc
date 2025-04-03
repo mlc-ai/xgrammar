@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "grammar_parser.h"
 #include "support/encoding.h"
 
 namespace xgrammar {
@@ -31,6 +32,12 @@ std::string PrintTokenByIds(
   }
   ss << "]";
   return ss.str();
+}
+
+Grammar _EBNFToGrammarNoNormalization(
+    const std::string& ebnf_string, const std::string& root_rule_name
+) {
+  return ParseEBNF(ebnf_string, root_rule_name);
 }
 
 }  // namespace xgrammar

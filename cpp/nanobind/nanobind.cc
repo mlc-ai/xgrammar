@@ -12,8 +12,10 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
+#include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
+#include "../testing.h"
 #include "python_methods.h"
 
 namespace nb = nanobind;
@@ -189,6 +191,7 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("strict_mode")
       )
       .def("_regex_to_ebnf", &RegexToEBNF)
+      .def("_ebnf_to_grammar_no_normalization", &_EBNFToGrammarNoNormalization)
       .def("_get_masked_tokens_from_bitmask", &Matcher_DebugGetMaskedTokensFromBitmask)
       .def("_get_allow_empty_rule_ids", &GetAllowEmptyRuleIds)
       .def(
@@ -211,6 +214,12 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("start").none(),
           nb::arg("end").none()
       );
+
+  auto pyGrammarFunctorModule = pyTestingModule.def_submodule("grammar_functor");
+  pyGrammarFunctorModule.def("structure_normalizer", &StructureNormalizer::Apply)
+      .def("byte_string_fuser", &ByteStringFuser::Apply)
+      .def("rule_inliner", &RuleInliner::Apply)
+      .def("dead_code_eliminator", &DeadCodeEliminator::Apply);
 
   auto pyKernelsModule = m.def_submodule("kernels");
   pyKernelsModule.def(

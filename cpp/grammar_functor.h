@@ -277,6 +277,39 @@ class StructuralTagGrammarCreator {
   );
 };
 
+/*!
+ * \brief Normalize the structure of the grammar. It will ensure each rule is a choices of
+ * sequences of elements, or a tag dispatch. The expanded context will be a sequence of elements.
+ */
+class StructureNormalizer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Fuse the byte string elements in the grammar.
+ */
+class ByteStringFuser {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Inline the rule references in the grammar.
+ */
+class RuleInliner {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Eliminate the not referenced rules in the grammar.
+ */
+class DeadCodeEliminator {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_GRAMMAR_FUNCTOR_H_

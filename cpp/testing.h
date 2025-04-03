@@ -17,6 +17,10 @@ std::string PrintTokenByIds(
     const std::vector<int32_t>& token_ids, const TokenizerInfo& tokenizer_info, int max_print_num
 );
 
+Grammar _EBNFToGrammarNoNormalization(
+    const std::string& ebnf_string, const std::string& root_rule_name
+);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_TESTING_H_

@@ -157,10 +157,10 @@ grammar_expected_test_get_allow_empty_rule_ids = [
         [0, 1, 2],
     ),
     (
-        r"""root ::= rule1 rule2
+        r"""root ::= rule1 rule3
     rule1 ::= "abc" | ""
     rule2 ::= "def" | ""
-    rule3 ::= rule1 root
+    rule3 ::= rule1 rule2
     """,
         [0, 1, 2, 3],
     ),
