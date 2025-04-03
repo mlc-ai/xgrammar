@@ -19,39 +19,39 @@ using namespace xgrammar;
 
 namespace {
 
-static_assert(
-    sizeof(CompiledGrammar) >= sizeof(std::size_t),
-    "Our test requires that CompiledGrammar is at least as large as std::size_t"
-);
+// static_assert(
+//     sizeof(CompiledGrammar) >= sizeof(std::size_t),
+//     "Our test requires that CompiledGrammar is at least as large as std::size_t"
+// );
 
-// simulate a CompiledGrammar object
-struct MockGrammar {
-  std::size_t uuid;
-  std::byte padding[sizeof(CompiledGrammar) - sizeof(std::size_t)];
-  MockGrammar() = default;
-  MockGrammar(std::size_t uuid) : uuid(uuid) {}
-};
+// // simulate a CompiledGrammar object
+// struct MockGrammar {
+//   std::size_t uuid;
+//   std::byte padding[sizeof(CompiledGrammar) - sizeof(std::size_t)];
+//   MockGrammar() = default;
+//   MockGrammar(std::size_t uuid) : uuid(uuid) {}
+// };
 
-struct SizeEstimator {
-  template <typename T>
-  std::size_t operator()(const T&) const {
-    return 1;
-  }
-};
+// struct SizeEstimator {
+//   template <typename T>
+//   std::size_t operator()(const T&) const {
+//     return 1;
+//   }
+// };
 
-using namespace std::chrono_literals;
+// using namespace std::chrono_literals;
 
-struct Computer0 {
-  inline static auto counter = std::atomic_size_t{};
-  inline static constexpr auto kSleepTime = 1000ms;
-  MockGrammar operator()(std::size_t key) const {
-    std::this_thread::sleep_for(kSleepTime);  // simulate a slow operation
-    return MockGrammar{counter++};
-  }
-};
+// struct Computer0 {
+//   inline static auto counter = std::atomic_size_t{};
+//   inline static constexpr auto kSleepTime = 1000ms;
+//   MockGrammar operator()(std::size_t key) const {
+//     std::this_thread::sleep_for(kSleepTime);  // simulate a slow operation
+//     return MockGrammar{counter++};
+//   }
+// };
 
-constexpr auto kUnlimited = std::size_t(-1);
-constexpr auto kOverheadRatio = 0.1;
+// constexpr auto kUnlimited = std::size_t(-1);
+// constexpr auto kOverheadRatio = 0.1;
 
 // TEST(XGrammarParallelTest, CacheContention) {
 //   XGRAMMAR_LOG_INFO << "Testing the contention performance of the cache (no eviction)";
@@ -153,79 +153,79 @@ constexpr auto kOverheadRatio = 0.1;
 //   }
 // }
 
-// A hook to ensure that the object will not be accessed after its destruction
-struct LifeSpanHook {
- private:
-  inline static std::unordered_set<const void*> manager{};
-  inline static std::mutex mutex{};
+// // A hook to ensure that the object will not be accessed after its destruction
+// struct LifeSpanHook {
+//  private:
+//   inline static std::unordered_set<const void*> manager{};
+//   inline static std::mutex mutex{};
 
-  static void unsafe_construct(const LifeSpanHook* ptr) {
-    // insert will return a pair of iterator and bool
-    EXPECT_TRUE(manager.insert(ptr).second);
-  }
-  static void unsafe_destruct(const LifeSpanHook* ptr) {
-    // erase will return 1 if the element is found and removed
-    EXPECT_TRUE(manager.erase(ptr));
-  }
-  static void unsafe_confirm(const LifeSpanHook* ptr) {
-    // ensure that the object is still alive
-    EXPECT_TRUE(manager.find(ptr) != manager.end());
-  }
+//   static void unsafe_construct(const LifeSpanHook* ptr) {
+//     // insert will return a pair of iterator and bool
+//     EXPECT_TRUE(manager.insert(ptr).second);
+//   }
+//   static void unsafe_destruct(const LifeSpanHook* ptr) {
+//     // erase will return 1 if the element is found and removed
+//     EXPECT_TRUE(manager.erase(ptr));
+//   }
+//   static void unsafe_confirm(const LifeSpanHook* ptr) {
+//     // ensure that the object is still alive
+//     EXPECT_TRUE(manager.find(ptr) != manager.end());
+//   }
 
- public:
-  LifeSpanHook() {
-    const auto lock = std::lock_guard{mutex};
-    unsafe_construct(this);
-  }
-  LifeSpanHook(const LifeSpanHook& other) {
-    const auto lock = std::lock_guard{mutex};
-    unsafe_construct(this);
-    unsafe_confirm(&other);
-  }
-  LifeSpanHook& operator=(const LifeSpanHook& other) {
-    const auto lock = std::lock_guard{mutex};
-    unsafe_confirm(this);
-    unsafe_confirm(&other);
-    return *this;
-  }
-  ~LifeSpanHook() {
-    const auto lock = std::lock_guard{mutex};
-    unsafe_destruct(this);
-  }
-  void check() const {
-    const auto lock = std::lock_guard{mutex};
-    unsafe_confirm(this);
-  }
-};
+//  public:
+//   LifeSpanHook() {
+//     const auto lock = std::lock_guard{mutex};
+//     unsafe_construct(this);
+//   }
+//   LifeSpanHook(const LifeSpanHook& other) {
+//     const auto lock = std::lock_guard{mutex};
+//     unsafe_construct(this);
+//     unsafe_confirm(&other);
+//   }
+//   LifeSpanHook& operator=(const LifeSpanHook& other) {
+//     const auto lock = std::lock_guard{mutex};
+//     unsafe_confirm(this);
+//     unsafe_confirm(&other);
+//     return *this;
+//   }
+//   ~LifeSpanHook() {
+//     const auto lock = std::lock_guard{mutex};
+//     unsafe_destruct(this);
+//   }
+//   void check() const {
+//     const auto lock = std::lock_guard{mutex};
+//     unsafe_confirm(this);
+//   }
+// };
 
-struct TestObject : LifeSpanHook {
- private:
-  std::string name;
+// struct TestObject : LifeSpanHook {
+//  private:
+//   std::string name;
 
- public:
-  TestObject() = default;
-  TestObject(std::string name) : name(std::move(name)) {}
-  TestObject& operator=(std::string name) {
-    this->check();
-    this->name = std::move(name);
-    return *this;
-  }
-  std::string to_string() const {
-    this->check();
-    return this->name;
-  }
-  std::size_t MemorySize() const {
-    this->check();
-    return 1;
-  }
-};
+//  public:
+//   TestObject() = default;
+//   TestObject(std::string name) : name(std::move(name)) {}
+//   TestObject& operator=(std::string name) {
+//     this->check();
+//     this->name = std::move(name);
+//     return *this;
+//   }
+//   std::string to_string() const {
+//     this->check();
+//     return this->name;
+//   }
+//   std::size_t MemorySize() const {
+//     this->check();
+//     return 1;
+//   }
+// };
 
-struct Computer1 {
-  TestObject operator()(const TestObject& key) const {
-    std::this_thread::sleep_for(5s);  // simulate a slow operation
-    return TestObject{key};
-  }
-};
+// struct Computer1 {
+//   TestObject operator()(const TestObject& key) const {
+//     std::this_thread::sleep_for(5s);  // simulate a slow operation
+//     return TestObject{key};
+//   }
+// };
 
 // TEST(XGrammarParallelTest, CacheCorrectness) {
 //   auto cache = ThreadSafeLRUCache<std::string, TestObject, Computer1, SizeEstimator>{kUnlimited};
