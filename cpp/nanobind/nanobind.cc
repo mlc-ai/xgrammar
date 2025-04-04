@@ -200,6 +200,16 @@ NB_MODULE(xgrammar_bindings, m) {
           },
           nb::arg("start").none(),
           nb::arg("end").none()
+      )
+      .def(
+          "_generate_float_regex",
+          [](std::optional<double> start, std::optional<double> end) {
+            std::string result = GenerateFloatRangeRegex(start, end);
+            result.erase(std::remove(result.begin(), result.end(), '\0'), result.end());
+            return result;
+          },
+          nb::arg("start").none(),
+          nb::arg("end").none()
       );
 
   auto pyKernelsModule = m.def_submodule("kernels");

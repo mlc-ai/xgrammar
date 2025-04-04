@@ -64,12 +64,14 @@ std::string JSONSchemaToEBNF(
 );
 
 /*!
- * \brief Generate regex pattern for integer range.
+ * \brief Generate regex pattern for integer/float range.
  * \param start The start of the range (inclusive). If null assume negative infinity.
  * \param end The end of the range (inclusive). If null assume infinity.
- * \returns The regex pattern that matches integers in the given range.
+ * \returns The regex pattern that matches integers/floats in the given range.
  */
 std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end);
+
+std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<double> end);
 
 }  // namespace xgrammar
 

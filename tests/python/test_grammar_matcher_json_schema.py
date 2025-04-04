@@ -131,16 +131,38 @@ class LargeRangeSchema(BaseModel):
     value: int = Field(ge=-99999, le=99999)
 
 
+class FloatRangeSchema(BaseModel):
+    value: float = Field(ge=0.0, le=1.0)
+
+
+class NegativeFloatRangeSchema(BaseModel):
+    value: float = Field(ge=-10.0, le=-0.1)
+
+
+class ComplexFloatRangeSchema(BaseModel):
+    value: float = Field(ge=-12345.12345, le=56789.56789)
+
+
+class LargeFloatRangeSchema(BaseModel):
+    value: float = Field(ge=-1000.0, le=1000.0)
+
+
 class MultipleBoundariesSchema(BaseModel):
     small_value: int = Field(ge=-10, le=10)
     medium_value: int = Field(ge=-100, le=100)
     large_value: int = Field(ge=-1000, le=1000)
 
 
+class MixedTypeRangeSchema(BaseModel):
+    int_value: int = Field(ge=-100, le=100)
+    float_value: float = Field(ge=-10.0, le=10.0)
+
+
 @pytest.mark.parametrize("tokenizer_path", tokenizer_path)
 @pytest.mark.parametrize(
     "schema_class,test_value",
     [
+        # Integer test cases
         (RangeSchema, 42),
         (ExtendedRangeSchema, -128),
         (ExtendedRangeSchema, 0),
@@ -154,10 +176,25 @@ class MultipleBoundariesSchema(BaseModel):
         (LargeRangeSchema, 0),
         (LargeRangeSchema, 5678),
         (LargeRangeSchema, 99999),
+        # Float test cases
+        (FloatRangeSchema, 0.0),
+        (FloatRangeSchema, 0.5),
+        (FloatRangeSchema, 1.0),
+        (NegativeFloatRangeSchema, -10.0),
+        (NegativeFloatRangeSchema, -5.5),
+        (NegativeFloatRangeSchema, -0.1),
+        (LargeFloatRangeSchema, -1000.0),
+        (LargeFloatRangeSchema, -500.5),
+        (LargeFloatRangeSchema, 0.0),
+        (LargeFloatRangeSchema, 500.5),
+        (LargeFloatRangeSchema, 1000.0),
+        (ComplexFloatRangeSchema, (-1234.1234)),
+        (ComplexFloatRangeSchema, (0)),
+        (ComplexFloatRangeSchema, (5671.123456)),
     ],
 )
 @pytest.mark.hf_token_required
-def test_fill_next_token_bitmask_integer_range(tokenizer_path: str, schema_class, test_value):
+def test_fill_next_token_bitmask_intfloat_range(tokenizer_path: str, schema_class, test_value):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
@@ -191,6 +228,50 @@ def test_fill_next_token_bitmask_integer_range(tokenizer_path: str, schema_class
 
 @pytest.mark.parametrize("tokenizer_path", tokenizer_path)
 @pytest.mark.hf_token_required
+def test_mixed_type_range_schema(tokenizer_path: str):
+    """Test the MixedTypeRangeSchema with both integer and float fields"""
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    test_instances = [
+        MixedTypeRangeSchema(int_value=-100, float_value=-10.0),
+        MixedTypeRangeSchema(int_value=100, float_value=10.0),
+        MixedTypeRangeSchema(int_value=0, float_value=0.0),
+        MixedTypeRangeSchema(int_value=-50, float_value=5.5),
+    ]
+
+    for instance in test_instances:
+        instance_str = instance.model_dump_json()
+
+        print(f"Testing MixedTypeRangeSchema with values: {instance}")
+
+        time_start = time.monotonic_ns()
+        compiled_grammar = compiler.compile_json_schema(MixedTypeRangeSchema)
+        matcher = xgr.GrammarMatcher(compiled_grammar)
+        time_end = time.monotonic_ns()
+        print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+        token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+        input_bytes = instance_str.encode("utf-8")
+        for c in input_bytes:
+            time_start = time.monotonic_ns()
+            matcher.fill_next_token_bitmask(token_bitmask)
+            time_end = time.monotonic_ns()
+            print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+            assert matcher._debug_accept_string(bytes([c]))
+
+        matcher.fill_next_token_bitmask(token_bitmask)
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
+        assert tokenizer.eos_token_id not in rejected_token_ids
+
+
+@pytest.mark.parametrize("tokenizer_path", tokenizer_path)
+@pytest.mark.hf_token_required
 def test_multiple_boundaries_schema(tokenizer_path: str):
     """Test the complex MultipleBoundariesSchema with multiple integer fields"""
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
@@ -204,8 +285,8 @@ def test_multiple_boundaries_schema(tokenizer_path: str):
         MultipleBoundariesSchema(
             small_value=10, medium_value=100, large_value=1000
         ),  # All upper bounds
-        MultipleBoundariesSchema(small_value=0, medium_value=0, large_value=0),  # All zeros
-        MultipleBoundariesSchema(small_value=-5, medium_value=50, large_value=-500),  # Mixed values
+        MultipleBoundariesSchema(small_value=0, medium_value=0, large_value=0),
+        MultipleBoundariesSchema(small_value=-5, medium_value=50, large_value=-500),
     ]
 
     for instance in test_instances:

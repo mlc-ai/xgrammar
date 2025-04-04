@@ -20,7 +20,7 @@ jobs:
       - name: Configuring build Environment
         run: |
           sudo apt-get update
-          python -m pip install -U pip wheel
+          python -m pip install -U pip wheel setuptools
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1

@@ -6,6 +6,7 @@
 
 #include <picojson.h>
 
+#include <climits>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -129,6 +130,11 @@ class JSONSchemaConverter {
   /*! \brief Generate the regex for integer range. Public for testing. */
   static std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end);
 
+  /*! \brief Generate the regex for float range. Public for testing. */
+  static std::string GenerateFloatRangeRegex(
+      std::optional<double> start, std::optional<double> end, int precision
+  );
+
  private:
   // The name of the root rule
   inline static const std::string kRootRuleName = "root";
@@ -159,12 +165,14 @@ class JSONSchemaConverter {
    * will be ignored when finding the corresponding cache rule. */
   std::string GetSchemaCacheIndex(const picojson::value& schema);
 
-  /*! \brief Helpers for GenerateRangeRegex. */
+  /*! \brief Helpers for GenerateRangeRegex and GenerateFloatRangeRegex */
   static std::string MakePatternForDigitRange(char start, char end, int remainingDigits);
 
   static std::vector<std::string> GenerateNumberPatterns(int lower, int upper);
 
   static std::string GenerateSubRangeRegex(int lower, int upper);
+
+  static std::string FormatFloat(double value, int precision);
 
   /*!
    * \brief Create a rule with the given schema and rule name hint.
@@ -1154,6 +1162,391 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
   return result.str();
 }
 
+std::string JSONSchemaConverter::FormatFloat(double value, int precision = 6) {
+  std::ostringstream oss;
+  oss << std::fixed << std::setprecision(precision) << value;
+  std::string result = oss.str();
+
+  // Remove trailing zeros after decimal point
+  size_t decimalPos = result.find('.');
+  if (decimalPos != std::string::npos) {
+    size_t lastNonZero = result.find_last_not_of('0');
+    if (lastNonZero != std::string::npos && lastNonZero > decimalPos) {
+      result.erase(lastNonZero + 1);
+    } else if (lastNonZero == decimalPos) {
+      result.erase(decimalPos);
+    }
+  }
+
+  return result;
+}
+
+std::string JSONSchemaConverter::GenerateFloatRangeRegex(
+    std::optional<double> start, std::optional<double> end, int precision = 6
+) {
+  if ((start && end) && (start.value() > end.value())) {
+    return "^()$";  // Invalid input
+  }
+
+  if (!start && !end) {
+    return "^-?\\d+(\\.\\d{1," + std::to_string(precision) + "})?$";
+  }
+
+  std::vector<std::string> parts;
+
+  int startInt = 0;
+  int endInt = 0;
+  double startFrac = 0.0;
+  double endFrac = 0.0;
+  bool isStartNegative = false;
+  bool isEndNegative = false;
+
+  if (start) {
+    isStartNegative = start.value() < 0;
+    startInt = static_cast<int>(floor(start.value()));
+    startFrac = start.value() - startInt;
+  }
+
+  if (end) {
+    isEndNegative = end.value() < 0;
+    endInt = static_cast<int>(floor(end.value()));
+    endFrac = end.value() - endInt;
+  }
+
+  // Only start defined - match numbers >= start
+  if (start && !end) {
+    std::string startIntStr = FormatFloat(start.value(), precision);
+    parts.push_back(startIntStr);
+
+    // fractional parts > startFrac with same integer part (for positive)
+    // fractional parts < startFrac with same integer part (for negative)
+    if (startFrac > 0.0) {
+      size_t dotPos = startIntStr.find('.');
+      if (dotPos != std::string::npos) {
+        std::string intPartStr = startIntStr.substr(0, dotPos);
+        std::string fracPartStr = startIntStr.substr(dotPos + 1);
+
+        if (!fracPartStr.empty()) {
+          for (size_t i = 0; i < fracPartStr.length(); i++) {
+            if (i == 0) {
+              if (isStartNegative) {
+                for (char d = '0'; d < fracPartStr[0]; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                  );
+                }
+              } else {
+                for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                  );
+                }
+              }
+            } else {
+              std::string prefix = fracPartStr.substr(0, i);
+              if (isStartNegative) {
+                if (fracPartStr[i] > '0') {
+                  for (char d = '0'; d < fracPartStr[i]; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + prefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                }
+              } else {
+                for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + prefix + d + "\\d{0," +
+                      std::to_string(precision - i - 1) + "}"
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // For all integers > startInt
+    if (startInt < INT_MAX - 1) {
+      std::string intRangeRegex = GenerateRangeRegex(startInt + 1, std::nullopt);
+      intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
+      parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+    }
+  }
+
+  // Only end defined - match numbers <= end
+  else if (!start && end) {
+    std::string endIntStr = FormatFloat(end.value(), precision);
+    parts.push_back(endIntStr);
+
+    // fractional parts < endFrac with same integer part (for positive)
+    // fractional parts > endFrac with same integer part (for negative)
+    if (endFrac > 0.0) {
+      size_t dotPos = endIntStr.find('.');
+      if (dotPos != std::string::npos) {
+        std::string intPartStr = endIntStr.substr(0, dotPos);
+        std::string fracPartStr = endIntStr.substr(dotPos + 1);
+
+        if (!fracPartStr.empty()) {
+          for (size_t i = 0; i < fracPartStr.length(); i++) {
+            if (i == 0) {
+              if (isEndNegative) {
+                for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                  );
+                }
+              } else {
+                for (char d = '0'; d < fracPartStr[0]; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                  );
+                }
+              }
+            } else {
+              if (isEndNegative) {
+                std::string prefix = fracPartStr.substr(0, i);
+                for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + prefix + d + "\\d{0," +
+                      std::to_string(precision - i - 1) + "}"
+                  );
+                }
+              } else if (fracPartStr[i] > '0') {
+                std::string prefix = fracPartStr.substr(0, i);
+                for (char d = '0'; d < fracPartStr[i]; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + prefix + d + "\\d{0," +
+                      std::to_string(precision - i - 1) + "}"
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // For all integers < endInt
+    if (endInt > INT_MIN + 1) {
+      std::string intRangeRegex = GenerateRangeRegex(std::nullopt, endInt - 1);
+      intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
+      parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+    }
+  }
+
+  // start and end both defined
+  else if (start && end) {
+    // same integer part
+    if (startInt == endInt) {
+      if (startFrac == 0.0 && endFrac == 0.0) {
+        parts.push_back(std::to_string(startInt));
+      } else {
+        std::string startStr = FormatFloat(start.value(), precision);
+        parts.push_back(startStr);
+
+        std::string endStr = FormatFloat(end.value(), precision);
+        if (startStr != endStr) {
+          parts.push_back(endStr);
+        }
+
+        if (startFrac < endFrac) {
+          size_t startDotPos = startStr.find('.');
+          size_t endDotPos = endStr.find('.');
+
+          if (startDotPos != std::string::npos && endDotPos != std::string::npos) {
+            std::string intPart = startStr.substr(0, startDotPos);
+            std::string startFracPart = startStr.substr(startDotPos + 1);
+            std::string endFracPart = endStr.substr(endDotPos + 1);
+
+            size_t diffPos = 0;
+            size_t minLength = std::min(startFracPart.length(), endFracPart.length());
+
+            while (diffPos < minLength && startFracPart[diffPos] == endFracPart[diffPos]) {
+              diffPos++;
+            }
+
+            if (diffPos < minLength) {
+              char startDigit = startFracPart[diffPos];
+              char endDigit = endFracPart[diffPos];
+
+              if (endDigit > startDigit + 1) {
+                std::string prefix = startFracPart.substr(0, diffPos);
+                for (char d = startDigit + 1; d < endDigit; d++) {
+                  parts.push_back(
+                      intPart + "\\." + prefix + d + "\\d{0," +
+                      std::to_string(precision - diffPos - 1) + "}"
+                  );
+                }
+              }
+
+              if (diffPos + 1 < startFracPart.length()) {
+                std::string prefix = startFracPart.substr(0, diffPos + 1);
+
+                for (size_t i = diffPos + 1; i < startFracPart.length(); i++) {
+                  std::string currentPrefix = startFracPart.substr(0, i);
+                  char currentDigit = startFracPart[i];
+
+                  for (char d = currentDigit + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPart + "\\." + currentPrefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                }
+              }
+
+              if (diffPos + 1 < endFracPart.length()) {
+                std::string prefix = endFracPart.substr(0, diffPos + 1);
+
+                for (size_t i = diffPos + 1; i < endFracPart.length(); i++) {
+                  if (endFracPart[i] > '0') {
+                    std::string currentPrefix = endFracPart.substr(0, i);
+                    char currentDigit = endFracPart[i];
+
+                    for (char d = '0'; d < currentDigit; d++) {
+                      parts.push_back(
+                          intPart + "\\." + currentPrefix + d + "\\d{0," +
+                          std::to_string(precision - i - 1) + "}"
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    // Different integer parts
+    else {
+      std::string startStr = FormatFloat(start.value(), precision);
+      parts.push_back(startStr);
+
+      std::string endStr = FormatFloat(end.value(), precision);
+      if (startStr != endStr) {
+        parts.push_back(endStr);
+      }
+
+      if (endInt > startInt + 1) {
+        std::string intRangeRegex = GenerateRangeRegex(startInt + 1, endInt - 1);
+        intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
+        parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+      }
+
+      if (startFrac > 0.0) {
+        size_t dotPos = startStr.find('.');
+        if (dotPos != std::string::npos) {
+          std::string intPartStr = startStr.substr(0, dotPos);
+          std::string fracPartStr = startStr.substr(dotPos + 1);
+
+          if (!fracPartStr.empty()) {
+            for (size_t i = 0; i < fracPartStr.length(); i++) {
+              if (i == 0) {
+                if (isStartNegative) {
+                  for (char d = '0'; d < fracPartStr[0]; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                    );
+                  }
+                } else {
+                  for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                    );
+                  }
+                }
+              } else {
+                std::string prefix = fracPartStr.substr(0, i);
+                if (isStartNegative) {
+                  if (fracPartStr[i] > '0') {
+                    for (char d = '0'; d < fracPartStr[i]; d++) {
+                      parts.push_back(
+                          intPartStr + "\\." + prefix + d + "\\d{0," +
+                          std::to_string(precision - i - 1) + "}"
+                      );
+                    }
+                  }
+                } else {
+                  for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + prefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        parts.push_back(std::to_string(startInt) + "\\.\\d{1," + std::to_string(precision) + "}");
+      }
+
+      if (endFrac > 0.0) {
+        size_t dotPos = endStr.find('.');
+        if (dotPos != std::string::npos) {
+          std::string intPartStr = endStr.substr(0, dotPos);
+          std::string fracPartStr = endStr.substr(dotPos + 1);
+
+          if (!fracPartStr.empty()) {
+            for (size_t i = 0; i < fracPartStr.length(); i++) {
+              if (i == 0) {
+                if (isEndNegative) {
+                  for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                    );
+                  }
+                } else {
+                  for (char d = '0'; d < fracPartStr[0]; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                    );
+                  }
+                }
+              } else {
+                if (isEndNegative) {
+                  std::string prefix = fracPartStr.substr(0, i);
+                  for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + prefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                } else if (fracPartStr[i] > '0') {
+                  std::string prefix = fracPartStr.substr(0, i);
+                  for (char d = '0'; d < fracPartStr[i]; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + prefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        parts.push_back(std::to_string(endInt) + "\\.\\d{1," + std::to_string(precision) + "}");
+      }
+    }
+  }
+
+  std::ostringstream result;
+  result << "^(";
+  for (size_t i = 0; i < parts.size(); ++i) {
+    if (i > 0) {
+      result << "|";
+    }
+    result << parts[i];
+  }
+  result << ")$";
+
+  return result.str();
+}
+
 std::string JSONSchemaConverter::VisitInteger(
     const picojson::object& schema, const std::string& rule_name
 ) {
@@ -1222,12 +1615,45 @@ std::string JSONSchemaConverter::VisitNumber(
       schema,
       {
           "multipleOf",
-          "minimum",
-          "maximum",
-          "exclusiveMinimum",
-          "exclusiveMaximum",
       }
   );
+
+  std::string range_regex = "";
+  if (schema.count("minimum") || schema.count("maximum") || schema.count("exclusiveMinimum") ||
+      schema.count("exclusiveMaximum")) {
+    std::optional<double> start, end;
+    if (schema.count("minimum")) {
+      XGRAMMAR_CHECK(schema.at("minimum").is<double>() || schema.at("minimum").is<int64_t>())
+          << "minimum must be a number";
+      start = schema.at("minimum").get<double>();
+    }
+    if (schema.count("exclusiveMinimum")) {
+      XGRAMMAR_CHECK(
+          schema.at("exclusiveMinimum").is<double>() || schema.at("exclusiveMinimum").is<int64_t>()
+      ) << "exclusiveMinimum must be a number";
+      start = schema.at("exclusiveMinimum").get<double>();
+    }
+    if (schema.count("maximum")) {
+      XGRAMMAR_CHECK(schema.at("maximum").is<double>() || schema.at("maximum").is<int64_t>())
+          << "maximum must be a number";
+      end = schema.at("maximum").get<double>();
+    }
+    if (schema.count("exclusiveMaximum")) {
+      XGRAMMAR_CHECK(
+          schema.at("exclusiveMaximum").is<double>() || schema.at("exclusiveMaximum").is<int64_t>()
+      ) << "exclusiveMaximum must be a number";
+      end = schema.at("exclusiveMaximum").get<double>();
+    }
+    XGRAMMAR_CHECK(!(start && end) || *start <= *end)
+        << "Invalid range, start value greater than end value";
+    range_regex = GenerateFloatRangeRegex(start, end);
+  }
+
+  if (!range_regex.empty()) {
+    std::string converted_regex = RegexToEBNF(range_regex, false);
+    return converted_regex;
+  }
+
   return "(\"0\" | \"-\"? [1-9] [0-9]*) (\".\" [0-9]+)? ([eE] [+-]? [0-9]+)?";
 }
 
@@ -1660,6 +2086,10 @@ std::string JSONSchemaToEBNF(
 // Wrapper function for testing
 std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end) {
   return JSONSchemaConverter::GenerateRangeRegex(start, end);
+}
+
+std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<double> end) {
+  return JSONSchemaConverter::GenerateFloatRangeRegex(start, end, 6);
 }
 
 }  // namespace xgrammar

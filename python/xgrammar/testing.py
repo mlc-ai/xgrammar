@@ -219,3 +219,7 @@ def _get_allow_empty_rule_ids(compiled_grammar: CompiledGrammar) -> List[int]:
 
 def _generate_range_regex(start: Optional[int] = None, end: Optional[int] = None) -> str:
     return _core.testing._generate_range_regex(start, end)
+
+
+def _generate_float_regex(start: Optional[float] = None, end: Optional[float] = None) -> str:
+    return _core.testing._generate_float_regex(start, end)
