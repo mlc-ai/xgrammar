@@ -11,84 +11,13 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "tokenizer_internal.h"
 
 namespace xgrammar {
-
-class TokenizerInfo::Impl {
- public:
-  Impl(
-      const std::vector<std::string>& encoded_vocab,
-      VocabType vocab_type,
-      std::optional<int> vocab_size,
-      std::optional<std::vector<int32_t>> stop_token_ids,
-      bool add_prefix_space
-  );
-
-  VocabType GetVocabType() const { return vocab_type_; }
-  bool GetAddPrefixSpace() const { return add_prefix_space_; }
-  int GetVocabSize() const { return vocab_size_; }
-  const std::vector<std::string>& GetDecodedVocab() { return decoded_vocab_; }
-  const std::vector<int32_t>& GetStopTokenIds() const { return stop_token_ids_; }
-  const std::vector<int32_t>& GetSpecialTokenIds() const { return special_token_ids_; }
-  const std::vector<std::pair<int32_t, std::string>>& GetSortedDecodedVocab() const {
-    return sorted_decoded_vocab_;
-  }
-
-  std::string DumpMetadata() const;
-
-  static std::shared_ptr<Impl> FromVocabAndMetadata(
-      const std::vector<std::string>& encoded_vocab, const std::string& metadata
-  );
-
-  static std::string DetectMetadataFromHF(const std::string& backend_str);
-
- private:
-  static bool IsSpecialToken(const std::string& decoded_token);
-
-  /*! \brief The vocabulary type. */
-  VocabType vocab_type_;
-  /*! \brief The size of the vocabulary. */
-  int vocab_size_;
-  /*! \brief Whether to add prefix space. */
-  bool add_prefix_space_;
-
-  /*! \brief The vocabulary. Special tokens are included. */
-  std::vector<std::string> decoded_vocab_;
-  /*! \brief All (id, token) pairs sorted in lexicographic order. This sorting is done to
-   * maximize prefix reuse during matching. Special tokens and stop tokens are not included. */
-  std::vector<std::pair<int32_t, std::string>> sorted_decoded_vocab_;
-  /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
-   * stop tokens can be accepted. */
-  std::vector<int32_t> stop_token_ids_;
-  /*! \brief The special tokens. These tokens are ignored (masked out) during the grammar-guided
-   * generation. */
-  std::vector<int32_t> special_token_ids_;
-
-  /*!
-   * \brief The tokens used to detect stop tokens from the vocabulary.
-   *
-   * LLaMA2: </s>
-   * LLaMA3: <|end_of_text|>, <|eot_id|>
-   * Phi-2: <|endoftext|>
-   * Gemma: <eos>, <end_of_turn>
-   * DeepSeek-V2: <｜end▁of▁sentence｜>
-   */
-  inline static const std::unordered_set<std::string> DETECTION_STOP_TOKENS = {
-      "</s>",
-      "<|end_of_text|>",
-      "<|eot_id|>",
-      "<|endoftext|>",
-      "<eos>",
-      "<|eos|>",
-      "<end_of_turn>",
-      "<｜end▁of▁sentence｜>"
-  };
-};
 
 /************* Token decoders: ByteFallback and ByteLevel *************/
 
@@ -365,7 +294,33 @@ TokenizerInfo::Impl::Impl(
   std::sort(sorted_decoded_vocab_.begin(), sorted_decoded_vocab_.end(), f_compare_token);
 }
 
-std::string TokenizerInfo::Impl::DumpMetadata() const {
+std::string TokenizerInfo::Impl::DumpMetadata() const { return Serialize().serialize(false); }
+
+TokenizerInfo TokenizerInfo::Impl::FromVocabAndMetadata(
+    const std::vector<std::string>& encoded_vocab, const std::string& metadata
+) {
+  picojson::value v;
+  std::string err = picojson::parse(v, metadata);
+  XGRAMMAR_CHECK(err.empty()) << "Failed to parse metadata: " << err;
+  return Deserialize(v, encoded_vocab);
+}
+
+std::string TokenizerInfo::Impl::DetectMetadataFromHF(const std::string& backend_str) {
+  picojson::value v;
+  std::string err = picojson::parse(v, backend_str);
+  XGRAMMAR_CHECK(err.empty() && v.is<picojson::object>()) << "Failed to parse JSON object: " << err;
+  const picojson::object& obj = v.get<picojson::object>();
+  VocabType vocab_type = HFTokenizerAnalyzer::DetectVocabType(obj);
+  bool add_prefix_space = HFTokenizerAnalyzer::DetectAddPrefixSpace(obj);
+
+  // Serialize the metadata
+  picojson::object metadata_obj;
+  metadata_obj["vocab_type"] = picojson::value(static_cast<int64_t>(vocab_type));
+  metadata_obj["add_prefix_space"] = picojson::value(add_prefix_space);
+  return picojson::value(metadata_obj).serialize(false);
+}
+
+picojson::value TokenizerInfo::Impl::Serialize() const {
   picojson::object obj;
   obj["vocab_type"] = picojson::value(static_cast<int64_t>(vocab_type_));
   obj["vocab_size"] = picojson::value(static_cast<int64_t>(vocab_size_));
@@ -375,19 +330,13 @@ std::string TokenizerInfo::Impl::DumpMetadata() const {
     stop_token_ids_array.push_back(picojson::value(static_cast<int64_t>(id)));
   }
   obj["stop_token_ids"] = picojson::value(stop_token_ids_array);
-
-  return picojson::value(obj).serialize(false);
+  return picojson::value(std::move(obj));
 }
 
-std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
-    const std::vector<std::string>& encoded_vocab, const std::string& metadata
+TokenizerInfo TokenizerInfo::Impl::Deserialize(
+    const picojson::value& value, const std::vector<std::string>& encoded_vocab
 ) {
-  picojson::value v;
-  std::string err = picojson::parse(v, metadata);
-  XGRAMMAR_CHECK(err.empty()) << "Failed to parse metadata: " << err;
-
-  const picojson::object& obj = v.get<picojson::object>();
-
+  const picojson::object& obj = value.get<picojson::object>();
   XGRAMMAR_CHECK(obj.count("vocab_type") && obj["vocab_type"].is<std::int64_t>())
       << "Missing or invalid 'vocab_type' in metadata";
   int vocab_type_int = static_cast<int>(obj["vocab_type"].get<int64_t>());
@@ -410,24 +359,8 @@ std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
     XGRAMMAR_CHECK(id.is<int64_t>()) << "Stop token id is not an integer";
     stop_token_ids.push_back(static_cast<int32_t>(id.get<int64_t>()));
   }
-  return std::make_shared<Impl>(
-      encoded_vocab, vocab_type, vocab_size, stop_token_ids, add_prefix_space
-  );
-}
 
-std::string TokenizerInfo::Impl::DetectMetadataFromHF(const std::string& backend_str) {
-  picojson::value v;
-  std::string err = picojson::parse(v, backend_str);
-  XGRAMMAR_CHECK(err.empty() && v.is<picojson::object>()) << "Failed to parse JSON object: " << err;
-  const picojson::object& obj = v.get<picojson::object>();
-  VocabType vocab_type = HFTokenizerAnalyzer::DetectVocabType(obj);
-  bool add_prefix_space = HFTokenizerAnalyzer::DetectAddPrefixSpace(obj);
-
-  // Serialize the metadata
-  picojson::object metadata_obj;
-  metadata_obj["vocab_type"] = picojson::value(static_cast<int64_t>(vocab_type));
-  metadata_obj["add_prefix_space"] = picojson::value(add_prefix_space);
-  return picojson::value(metadata_obj).serialize(false);
+  return TokenizerInfo(encoded_vocab, vocab_type, vocab_size, stop_token_ids, add_prefix_space);
 }
 
 /************* TokenizerInfo *************/
@@ -464,7 +397,7 @@ std::string TokenizerInfo::DumpMetadata() const { return pimpl_->DumpMetadata();
 TokenizerInfo TokenizerInfo::FromVocabAndMetadata(
     const std::vector<std::string>& encoded_vocab, const std::string& metadata
 ) {
-  return TokenizerInfo(Impl::FromVocabAndMetadata(encoded_vocab, metadata));
+  return Impl::FromVocabAndMetadata(encoded_vocab, metadata);
 }
 
 std::string TokenizerInfo::DetectMetadataFromHF(const std::string& backend_str) {
