@@ -102,13 +102,18 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("indent").none(),
           nb::arg("separators").none(),
           nb::arg("strict_mode"),
-          nb::arg("print_converted_ebnf")
+          nb::arg("print_converted_ebnf"),
+          nb::call_guard<nb::gil_scoped_release>()
       )
-      .def_static("from_regex", &Grammar::FromRegex)
-      .def_static("from_structural_tag", &Grammar_FromStructuralTag)
+      .def_static("from_regex", &Grammar::FromRegex, nb::call_guard<nb::gil_scoped_release>())
+      .def_static(
+          "from_structural_tag",
+          &Grammar_FromStructuralTag,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)
-      .def_static("union", &Grammar::Union)
-      .def_static("concat", &Grammar::Concat);
+      .def_static("union", &Grammar::Union, nb::call_guard<nb::gil_scoped_release>())
+      .def_static("concat", &Grammar::Concat, nb::call_guard<nb::gil_scoped_release>());
 
   auto pyCompiledGrammar = nb::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_prop_ro("grammar", &CompiledGrammar::GetGrammar)
@@ -158,20 +163,33 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("terminate_without_stop_token"),
           nb::arg("max_rollback_tokens")
       )
-      .def("accept_token", &GrammarMatcher::AcceptToken)
-      .def("fill_next_token_bitmask", &GrammarMatcher_FillNextTokenBitmask)
-      .def("find_jump_forward_string", &GrammarMatcher::FindJumpForwardString)
-      .def("rollback", &GrammarMatcher::Rollback)
+      .def("accept_token", &GrammarMatcher::AcceptToken, nb::call_guard<nb::gil_scoped_release>())
+      .def(
+          "fill_next_token_bitmask",
+          &GrammarMatcher_FillNextTokenBitmask,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def(
+          "find_jump_forward_string",
+          &GrammarMatcher::FindJumpForwardString,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def("rollback", &GrammarMatcher::Rollback, nb::call_guard<nb::gil_scoped_release>())
       .def("is_terminated", &GrammarMatcher::IsTerminated)
-      .def("reset", &GrammarMatcher::Reset)
+      .def("reset", &GrammarMatcher::Reset, nb::call_guard<nb::gil_scoped_release>())
       .def_prop_ro("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens)
       .def_prop_ro("stop_token_ids", &GrammarMatcher::GetStopTokenIds)
-      .def("_debug_accept_string", &GrammarMatcher::_DebugAcceptString)
+      .def(
+          "_debug_accept_string",
+          &GrammarMatcher::_DebugAcceptString,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
       .def(
           "_debug_accept_string",
           [](GrammarMatcher& self, const nb::bytes& input_str, bool debug_print) {
             return self._DebugAcceptString(input_str.c_str(), debug_print);
-          }
+          },
+          nb::call_guard<nb::gil_scoped_release>()
       );
 
   auto pyTestingModule = m.def_submodule("testing");
@@ -230,6 +248,7 @@ NB_MODULE(xgrammar_bindings, m) {
       nb::arg("logits_shape"),
       nb::arg("bitmask_ptr"),
       nb::arg("bitmask_shape"),
-      nb::arg("indices").none()
+      nb::arg("indices").none(),
+      nb::call_guard<nb::gil_scoped_release>()
   );
 }
