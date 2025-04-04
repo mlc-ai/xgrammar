@@ -334,7 +334,7 @@ string_format_instances = [
     ),
 ]
 
-
+# not frequently used
 string_format_instances_skipped = [
     (
         r"//azAZ09-._~%Ff!$&'()*+,;=:@xyz:987/-/./+/*?aA0-._~%Ff!$&'()@#zZ9-._~%Aa!$&,;=:",
@@ -363,7 +363,6 @@ def test_mask_generation_format(value: str, format: str):
     time_end = time.monotonic_ns()
     print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
 
-    print(compiled_grammar.grammar)
     matcher = xgr.GrammarMatcher(compiled_grammar)
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
