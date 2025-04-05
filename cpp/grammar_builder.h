@@ -28,6 +28,15 @@ class GrammarBuilder {
   /*! \brief Default constructor. Creates a new grammar object. */
   GrammarBuilder() : grammar_(std::make_shared<Grammar::Impl>()) {}
 
+  /*! \brief Constructor. Creates a new grammar object from an existing grammar. */
+  GrammarBuilder(const Grammar& grammar)
+      : grammar_(std::make_shared<Grammar::Impl>(*grammar.operator->())) {
+    for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
+      auto rule = grammar->GetRule(i);
+      rule_name_to_id_[rule.name] = i;
+    }
+  }
+
   /*!
    * \brief Get the result grammar. This function will also set the root rule to the rule with the
    * specified name. The rule should be already added to the grammar.

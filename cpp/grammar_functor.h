@@ -38,6 +38,7 @@ class GrammarFunctor {
    * \return The transformed grammar, or the visiting result, or void.
    */
   virtual ReturnType Apply(const Grammar& grammar) {
+    // The initializer MUST be called at first when overriding the Apply() function.
     Init(grammar);
     if constexpr (std::is_same<T, void>::value) {
       for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
@@ -80,6 +81,11 @@ class GrammarFunctor {
   virtual void Init(const Grammar& grammar) {
     base_grammar_ = grammar;
     builder_ = GrammarBuilder();
+  }
+
+  virtual void InitWithCopy(const Grammar& grammar) {
+    base_grammar_ = grammar;
+    builder_ = GrammarBuilder(grammar);
   }
 
   /*! \brief Visit a lookahead assertion expr referred by id. */
@@ -275,6 +281,47 @@ class StructuralTagGrammarCreator {
       const std::vector<std::string>& triggers,
       const std::vector<std::vector<std::pair<StructuralTagItem, Grammar>>>& tag_groups
   );
+};
+
+/*!
+ * \brief Normalize the structure of the grammar. It will ensure each rule is a choices of
+ * sequences of elements, or a tag dispatch. The expanded context will be a sequence of elements.
+ */
+class StructureNormalizer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Fuse the byte string elements in the grammar.
+ */
+class ByteStringFuser {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Inline the rule references in the grammar.
+ */
+class RuleInliner {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Eliminate the not referenced rules in the grammar.
+ */
+class DeadCodeEliminator {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Analyze and add lookahead assertions in the grammar.
+ */
+class LookaheadAssertionAnalyzer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
 };
 
 }  // namespace xgrammar

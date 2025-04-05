@@ -6,40 +6,12 @@ Usage:
 import argparse
 
 import mlx.core as mx
-import torch
 from mlx_lm.generate import generate as mlx_generate
 from mlx_lm.utils import load as mlx_load
 from transformers import AutoTokenizer
 
 import xgrammar
-
-
-def apply_token_bitmask_inplace_mlx(bitmask: torch.Tensor, logits: mx.array) -> mx.array:
-    """This is an easy mimic of the apply_token_bitmask_inplace function.
-
-    NOTE: This function works with only the case of batch size is 1, which is common for on-device
-          applications.
-
-    Args:
-        bitmask (torch.Tensor): Created by calling xgrammar.allocate_token_bitmask.
-        logits (mx.array): Passed in from mlx_generate.
-
-    Returns:
-        mx.array: The masked logits where invalid tokens have their logits set to -inf
-    """
-    vocab_size = logits.shape[-1]
-    # Create mask as torch tensor for mutability
-    logits_mask = torch.zeros(logits.shape, dtype=torch.float32)
-    for i in range(bitmask.size(1)):
-        mask_int = bitmask[0][i].item()  # batch size is 1
-        for bit in range(32):
-            token_idx = i * 32 + bit
-            if token_idx >= vocab_size:
-                break
-            is_valid = (mask_int >> bit) & 1
-            logits_mask[0][token_idx] = 0.0 if is_valid else float("-inf")
-    # Convert to mx.array only so we can add it to logits
-    return logits + mx.array(logits_mask.numpy())
+from xgrammar.kernels import apply_token_bitmask_inplace_kernels
 
 
 class XGrammarLogitsProcessor:
@@ -57,7 +29,9 @@ class XGrammarLogitsProcessor:
             self.matcher.accept_token(last_token)
         if not self.matcher.is_terminated():
             self.matcher.fill_next_token_bitmask(self.bitmask)
-            return apply_token_bitmask_inplace_mlx(self.bitmask, logits)
+            return apply_token_bitmask_inplace_kernels["metal"](
+                mx.array(self.bitmask.numpy()), logits, self.vocab_size
+            )
         return logits
 
 
@@ -100,6 +74,7 @@ def main():
         verbose=False,
     )
     assert without_logits_processor == with_logits_processor
+    print(without_logits_processor)
 
 
 if __name__ == "__main__":

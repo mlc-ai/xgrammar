@@ -505,7 +505,15 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   // because in function calling cases, only the part within the tag is constrained
   bool have_tag_dispatch = false;
 
+  if (debug_print) {
+    XGRAMMAR_LOG(INFO) << "FillNextTokenBitmask: index=" << index
+                       << ", num of stacks=" << latest_stack_tops.size();
+  }
+
+  int stack_top_cnt = -1;
+
   for (auto top : latest_stack_tops) {
+    ++stack_top_cnt;
     auto cur_stack_element = persistent_stack_[top];
     auto cur_sequence = grammar_->GetRuleExpr(cur_stack_element.sequence_id);
     if (cur_sequence.type != RuleExprType::kTagDispatch &&
@@ -524,6 +532,13 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
         << persistent_stack_.PrintStackElement(cur_stack_element);
 
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+
+    if (debug_print) {
+      XGRAMMAR_LOG(INFO) << "FillNextTokenBitmask: Stack #" << stack_top_cnt
+                         << ", num_uncertain_tokens="
+                         << adaptive_token_mask.uncertain_indices.size() << ": "
+                         << persistent_stack_.PrintStackByTopId(top) << "\n";
+    }
 
     // For each stack, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -616,8 +631,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       have_tag_dispatch
   );
   if (debug_print) {
-    XGRAMMAR_LOG(INFO) << "Ended: " << can_reach_end
-                       << ", filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
+    XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
   return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
 }
@@ -814,6 +828,7 @@ GrammarMatcher::GrammarMatcher(
     : pimpl_(std::make_shared<GrammarMatcher::Impl>(
           compiled_grammar, override_stop_tokens, terminate_without_stop_token, max_rollback_tokens
       )) {}
+
 bool GrammarMatcher::AcceptToken(int32_t token_id, bool debug_print) {
   return pimpl_->AcceptToken(token_id, debug_print);
 }

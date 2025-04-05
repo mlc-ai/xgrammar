@@ -249,7 +249,7 @@ bool GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAssertion(
 
   // Find all positions that can come to and end. Then check if the suffix from that position
   // can be accepted by the lookahead assertion.
-  for (int i = static_cast<int>(can_reach_end_stack.size()); i >= 0; --i) {
+  for (int i = static_cast<int>(can_reach_end_stack.size()) - 1; i >= 0; --i) {
     if (!can_reach_end_stack[i]) {
       continue;
     }

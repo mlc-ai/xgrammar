@@ -82,6 +82,25 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
     return _core.testing._regex_to_ebnf(regex, with_rule_name)
 
 
+def _ebnf_to_grammar_no_normalization(ebnf_string: str, root_rule_name: str = "root") -> Grammar:
+    """Convert a BNF grammar string to a Grammar object without normalization. For test
+    purposes. The result grammar cannot be compiled / used in GrammarMatcher.
+
+    Parameters
+    ----------
+    ebnf_string : str
+        The BNF grammar string to be converted.
+
+    Returns
+    -------
+    grammar : Grammar
+        The unnormalized Grammar object converted from the input BNF grammar string.
+    """
+    return Grammar._create_from_handle(
+        _core.testing._ebnf_to_grammar_no_normalization(ebnf_string, root_rule_name)
+    )
+
+
 def _is_grammar_accept_string(
     grammar: Union[Grammar, str],
     input_str: str,
@@ -223,3 +242,43 @@ def _generate_range_regex(start: Optional[int] = None, end: Optional[int] = None
 
 def _generate_float_regex(start: Optional[float] = None, end: Optional[float] = None) -> str:
     return _core.testing._generate_float_regex(start, end)
+
+
+class GrammarFunctor:
+    """A utility class for transforming grammars. These methods are called during grammar parsing.
+    For test purposes."""
+
+    @staticmethod
+    def structure_normalizer(grammar: Grammar) -> Grammar:
+        """Normalize the structure of the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.structure_normalizer(grammar._handle)
+        )
+
+    @staticmethod
+    def rule_inliner(grammar: Grammar) -> Grammar:
+        """Inline some rule references in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.rule_inliner(grammar._handle)
+        )
+
+    @staticmethod
+    def byte_string_fuser(grammar: Grammar) -> Grammar:
+        """Fuse the byte string elements in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.byte_string_fuser(grammar._handle)
+        )
+
+    @staticmethod
+    def dead_code_eliminator(grammar: Grammar) -> Grammar:
+        """Eliminate the not referenced rules in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.dead_code_eliminator(grammar._handle)
+        )
+
+    @staticmethod
+    def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
+        """Analyze and add lookahead assertions in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
+        )

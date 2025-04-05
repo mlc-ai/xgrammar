@@ -29,3 +29,15 @@ try:
 except ImportError:
     # If triton is not installed, we can still use the CPU and CUDA implementations.
     pass
+
+try:
+    import mlx.core as mx
+
+    from .apply_token_bitmask_mlx import apply_token_bitmask_mlx
+
+    # Note: MLX arrays, like JAX arrays, are immutable.  Therefore, in-place operations are not
+    #       allowed. Here we reuse the variable apply_token_bitmask_inplace_kernels.
+    apply_token_bitmask_inplace_kernels["metal"] = apply_token_bitmask_mlx
+except ImportError:
+    # If MLX is not installed, we don't register the MLX implementation
+    pass
