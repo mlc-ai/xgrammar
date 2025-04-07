@@ -140,7 +140,7 @@ std::string IndentManager::EndSeparator() {
   if (!enable_newline_) {
     return "\"\"";
   }
-  return "\"" + separator_ + "\\n" + std::string(total_indent_ - indent_, ' ') + "\"";
+  return "\"\\n" + std::string(total_indent_ - indent_, ' ') + "\"";
 }
 
 std::string IndentManager::EmptySeparator() {
