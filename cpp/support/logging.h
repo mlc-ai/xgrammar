@@ -24,10 +24,32 @@
 namespace xgrammar {
 
 /*!
+ * \brief Base error class in XGrammar.
+ */
+class Error : public std::runtime_error {
+ public:
+  explicit Error(const std::string& msg, const std::string& type = "")
+      : std::runtime_error(msg), type_(type) {
+    if (!type_.empty()) {
+      full_message_ = type_ + ": " + std::runtime_error::what();
+    } else {
+      full_message_ = std::runtime_error::what();
+    }
+  }
+  virtual ~Error() = default;
+  virtual const std::string& type() const noexcept { return type_; }
+  virtual const char* what() const noexcept override { return full_message_.c_str(); }
+
+ protected:
+  std::string type_;
+  std::string full_message_;
+};
+
+/*!
  * \brief Error type for errors from XGRAMMAR_CHECK, XGRAMMAR_ICHECK, and XGRAMMAR_LOG(FATAL). This
  * error contains a backtrace of where it occurred.
  */
-class Error : public std::runtime_error {
+class LoggingError : public Error {
  public:
   /*! \brief Construct an error. Not recommended to use directly. Instead use XGRAMMAR_LOG(FATAL).
    *
@@ -36,8 +58,10 @@ class Error : public std::runtime_error {
    * \param message The error message to display.
    * \param time The time at which the error occurred. This should be in local time.
    */
-  Error(std::string file, int lineno, std::string message, std::time_t time = std::time(nullptr))
-      : std::runtime_error(""), file_(file), lineno_(lineno), message_(message), time_(time) {
+  LoggingError(
+      std::string file, int lineno, std::string message, std::time_t time = std::time(nullptr)
+  )
+      : Error("", "LoggingError"), file_(file), lineno_(lineno), time_(time) {
     std::ostringstream s;
     s << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] " << file << ":" << lineno
       << ": " << message << std::endl;
@@ -46,22 +70,15 @@ class Error : public std::runtime_error {
 
   /*! \return The file in which the error occurred. */
   const std::string& file() const { return file_; }
-  /*! \return The message associated with this error. */
-  const std::string& message() const { return message_; }
-  /*! \return Formatted error message including file, linenumber, backtrace, and message. */
-  const std::string& full_message() const { return full_message_; }
   /*! \return The time at which this error occurred. */
   const std::time_t& time() const { return time_; }
   /*! \return The line number at which this error occurred. */
   int lineno() const { return lineno_; }
-  virtual const char* what() const noexcept { return full_message_.c_str(); }
 
  private:
   std::string file_;
   int lineno_;
-  std::string message_;
   std::time_t time_;
-  std::string full_message_;  // holds the full error string
 };
 
 // Provide support for customized logging.
@@ -152,8 +169,8 @@ class LogFatal {
       this->file_ = file;
       this->lineno_ = lineno;
     }
-    [[noreturn]] Error Finalize() noexcept(false) {
-      Error error(file_, lineno_, stream_.str());
+    [[noreturn]] LoggingError Finalize() noexcept(false) {
+      LoggingError error(file_, lineno_, stream_.str());
       throw error;
     }
     std::ostringstream stream_;

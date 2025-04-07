@@ -10,9 +10,12 @@
 #include <cstdint>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <tuple>
 #include <type_traits>
+
+#include "logging.h"
 
 namespace xgrammar {
 
@@ -55,6 +58,90 @@ template <typename Tp>
 inline constexpr std::size_t MemorySize(const std::optional<Tp>& range) {
   return range.has_value() ? MemorySize(*range) : 0;
 }
+
+/*!
+ * \brief A Result type similar to Rust's Result, representing either success (Ok) or failure (Err).
+ * \tparam T The type of the success value
+ */
+template <typename T>
+class Result {
+ public:
+  /*! \brief Construct a success Result */
+  static Result Ok(T value) { return Result(std::move(value), nullptr); }
+
+  /*! \brief Construct an error Result */
+  static Result Err(std::shared_ptr<Error> error) { return Result(std::nullopt, std::move(error)); }
+
+  /*! \brief Check if Result contains success value */
+  bool IsOk() const { return value_.has_value(); }
+
+  /*! \brief Check if Result contains error */
+  bool IsErr() const { return error_ != nullptr; }
+
+  /*! \brief Get the success value, or terminate if this is an error */
+  const T& Unwrap() const& {
+    if (!IsOk()) {
+      XGRAMMAR_LOG(FATAL) << "Called Unwrap() on an Err value";
+      XGRAMMAR_UNREACHABLE();
+    }
+    return *value_;
+  }
+
+  /*! \brief Get the success value, or terminate if this is an error */
+  T&& Unwrap() && {
+    if (!IsOk()) {
+      XGRAMMAR_LOG(FATAL) << "Called Unwrap() on an Err value";
+      XGRAMMAR_UNREACHABLE();
+    }
+    return std::move(*value_);
+  }
+
+  /*! \brief Get the error value as a pointer, or terminate if this is not an error */
+  std::shared_ptr<Error> UnwrapErr() const& {
+    if (!IsErr()) {
+      XGRAMMAR_LOG(FATAL) << "Called UnwrapErr() on an Ok value";
+      XGRAMMAR_UNREACHABLE();
+    }
+    return error_;
+  }
+
+  /*! \brief Get the error value as a pointer, or terminate if this is not an error */
+  std::shared_ptr<Error> UnwrapErr() && {
+    if (!IsErr()) {
+      XGRAMMAR_LOG(FATAL) << "Called UnwrapErr() on an Ok value";
+      XGRAMMAR_UNREACHABLE();
+    }
+    return std::move(error_);
+  }
+
+  /*! \brief Get the success value if present, otherwise return the provided default */
+  T UnwrapOr(T default_value) const { return IsOk() ? *value_ : default_value; }
+
+  /*! \brief Map success value to new type using provided function */
+  template <typename U, typename F>
+  Result<U> Map(F&& f) const {
+    if (IsOk()) {
+      return Result<U>::Ok(f(*value_));
+    }
+    return Result<U>::Err(error_);
+  }
+
+  /*! \brief Map error value to new type using provided function */
+  template <typename F>
+  Result<T> MapErr(F&& f) const {
+    if (IsErr()) {
+      return Result<T>::Err(f(error_));
+    }
+    return Result<T>::Ok(*value_);
+  }
+
+ private:
+  Result(std::optional<T> value, std::shared_ptr<Error> error)
+      : value_(std::move(value)), error_(std::move(error)) {}
+
+  std::optional<T> value_;
+  std::shared_ptr<Error> error_;
+};
 
 }  // namespace xgrammar
 
