@@ -67,7 +67,10 @@ void _DebugGetMaskedTokensFromBitmask(
 }
 
 void ApplyTokenBitmaskInplaceCPU(
-    DLTensor* logits, const DLTensor& bitmask, std::optional<std::vector<int>> indices
+    DLTensor* logits,
+    const DLTensor& bitmask,
+    int vocab_size,
+    std::optional<std::vector<int>> indices
 ) {
   // Check device and dim
   XGRAMMAR_CHECK(
@@ -101,38 +104,36 @@ void ApplyTokenBitmaskInplaceCPU(
           ? std::make_pair(static_cast<int>(bitmask.shape[0]), static_cast<int>(bitmask.shape[1]))
           : std::make_pair(1, static_cast<int>(bitmask.shape[0]));
 
-  // logits may have extra paddings (in vLLM) so its vocab size can be larger than the bitmask's
-  // vocab size. So we are using >= instead of == here
-  XGRAMMAR_CHECK(GetBitmaskSize(logits_shape.second) >= bitmask_shape.second)
-      << "The provided logits's vocab size should be no less than the bitmask's vocab size "
-         "(converted from bitmask size). But got vocab size "
-      << logits_shape.second << " vs bitmask size " << bitmask_shape.second;
+  XGRAMMAR_CHECK(
+      vocab_size <= bitmask_shape.second * DynamicBitset::BITS_PER_BLOCK &&
+      vocab_size <= logits_shape.second
+  );
 
-  int vocab_size =
-      std::min(logits_shape.second, bitmask_shape.second * DynamicBitset::BITS_PER_BLOCK);
-
-  // Sort and deduplicate indices
-  std::vector<int> indices_value;
-  if (indices.has_value()) {
-    indices_value = indices.value();
-  } else {
+  if (!indices.has_value()) {
     XGRAMMAR_CHECK(logits_shape.first == bitmask_shape.first)
         << "When indices is not provided, the logits's batch size should be equal to the "
            "bitmask's batch size, but got "
         << logits_shape.first << " vs " << bitmask_shape.first;
-    indices_value.reserve(logits_shape.first);
-    for (int i = 0; i < logits_shape.first; ++i) {
-      indices_value.push_back(i);
-    }
   }
 
   // Apply mask
-  for (auto idx : indices_value) {
-    uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_shape.second;
-    DynamicBitset bitset(vocab_size, data_ptr);
-    auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_shape.second;
-    for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-      logits_ptr[i] = -std::numeric_limits<float>::infinity();
+  if (indices.has_value()) {
+    for (auto idx : indices.value()) {
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_shape.second;
+      DynamicBitset bitset(vocab_size, data_ptr);
+      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_shape.second;
+      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+        logits_ptr[i] = -std::numeric_limits<float>::infinity();
+      }
+    }
+  } else {
+    for (int idx = 0; idx < logits_shape.first; ++idx) {
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_shape.second;
+      DynamicBitset bitset(vocab_size, data_ptr);
+      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_shape.second;
+      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+        logits_ptr[i] = -std::numeric_limits<float>::infinity();
+      }
     }
   }
 }

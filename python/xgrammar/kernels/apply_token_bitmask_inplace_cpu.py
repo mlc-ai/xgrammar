@@ -10,6 +10,7 @@ from ..base import _core
 def apply_token_bitmask_inplace_cpu(
     logits: torch.Tensor,
     bitmask: torch.Tensor,
+    vocab_size: Optional[int] = None,
     indices: Optional[Union[List[int], torch.Tensor]] = None,
 ) -> None:
     """Apply token bitmask in-place on CPU."""
@@ -30,7 +31,8 @@ def apply_token_bitmask_inplace_cpu(
     bitmask_shape = (
         (1, bitmask.shape[0]) if bitmask.dim() == 1 else (bitmask.shape[0], bitmask.shape[1])
     )
+    vocab_size = min(logits.shape[-1], bitmask.shape[-1] * 32) if vocab_size is None else vocab_size
 
     _core.kernels.apply_token_bitmask_inplace_cpu(
-        logits.data_ptr(), logits_shape, bitmask.data_ptr(), bitmask_shape, indices
+        logits.data_ptr(), logits_shape, bitmask.data_ptr(), bitmask_shape, vocab_size, indices
     )

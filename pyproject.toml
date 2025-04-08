@@ -112,7 +112,7 @@ include = ["python/**/*.py", "tests/**/*.py"]
 
 [tool.ruff.lint]
 # Never enforce `E501` (line length violations).
-ignore = ["C901", "E501", "E741", "F402", "F823"]
+ignore = ["C901", "E501", "E741", "F402", "F823", "E731"]
 select = ["C", "E", "F", "W"]
 
 [tool.ruff.lint.per-file-ignores]

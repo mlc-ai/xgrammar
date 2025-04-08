@@ -85,6 +85,7 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
     std::pair<int64_t, int64_t> logits_shape,
     intptr_t bitmask_ptr,
     std::pair<int64_t, int64_t> bitmask_shape,
+    int vocab_size,
     std::optional<std::vector<int>> indices
 ) {
   std::array<int64_t, 2> logits_shape_arr = {logits_shape.first, logits_shape.second};
@@ -110,7 +111,7 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
       0
   };
 
-  ApplyTokenBitmaskInplaceCPU(&logits_dltensor, bitmask_dltensor, indices);
+  ApplyTokenBitmaskInplaceCPU(&logits_dltensor, bitmask_dltensor, vocab_size, indices);
 }
 
 std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_grammar) {

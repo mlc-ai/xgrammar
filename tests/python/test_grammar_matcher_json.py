@@ -5,6 +5,7 @@ import time
 from typing import List
 
 import pytest
+import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
@@ -281,6 +282,8 @@ def test_fill_next_token_bitmask(
     print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
 
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logits_gpu = torch.zeros(1, tokenizer_info.vocab_size, dtype=torch.float32, device=device)
 
     input_bytes = input_str.encode("utf-8")
 
@@ -297,7 +300,17 @@ def test_fill_next_token_bitmask(
         )
         assert len(rejected_token_ids) == expected_rejected_sizes[i]
 
-        # 3. accept_string
+        # 3. apply_token_bitmask_inplace
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_start = time.monotonic_ns()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_end = time.monotonic_ns()
+        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+
+        # 4. accept_string
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
         assert matcher._debug_accept_string(bytes([c]))

@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import torch
 
@@ -80,40 +80,26 @@ def apply_token_bitmask_inplace_kernel(
 def apply_token_bitmask_inplace_triton(
     logits: torch.Tensor,
     bitmask: torch.Tensor,
-    indices: Optional[Union[List[int], torch.Tensor]] = None,
+    vocab_size: Optional[int] = None,
+    indices: Optional[List[int]] = None,
 ):
     NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
     BLOCK_SIZE = 4096
-    BITS_PER_BLOCK = 32
 
-    # Check input dtype
     assert bitmask.dtype == torch.int32, "bitmask must be of type int32"
 
-    # Check input tensor shapes.
-    logits_shape = logits.shape
-    bitmask_shape = bitmask.shape
-    if logits.ndim == 1:
-        logits_shape = (1, logits_shape[0])
-    if bitmask.ndim == 1:
-        bitmask_shape = (1, bitmask_shape[0])
-
-    required_bitmask_width = (logits_shape[1] + BITS_PER_BLOCK - 1) // BITS_PER_BLOCK
-    assert required_bitmask_width >= bitmask_shape[1], (
-        f"Bitmask width too large: allow at most {required_bitmask_width} int32s for "
-        f"logits' width {logits_shape[1]}, but got {bitmask_shape[1]}"
-    )
-
-    vocab_size = min(logits_shape[1], bitmask_shape[1] * BITS_PER_BLOCK)
-
-    num_rows = None
-    if isinstance(indices, list) or isinstance(indices, torch.Tensor):
-        indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
-        num_rows = indices.shape[0]
+    detected_vocab_size = min(logits.shape[-1], bitmask.shape[-1] * 32)
+    if vocab_size is None:
+        vocab_size = detected_vocab_size
     else:
         assert (
-            logits_shape[0] == bitmask_shape[0]
-        ), f"batch size mismatch: logits {logits_shape[0]} vs bitmask {bitmask_shape[0]}"
-        num_rows = logits_shape[0]
+            vocab_size <= detected_vocab_size
+        ), f"vocab_size {vocab_size} is larger than the detected vocab_size {detected_vocab_size}"
+
+    num_rows = len(indices) if indices is not None else logits.shape[0] if logits.ndim == 2 else 1
+
+    if indices is not None:
+        indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
 
     grid = (NUM_SMS,)
 
@@ -123,8 +109,8 @@ def apply_token_bitmask_inplace_triton(
         indices,
         num_rows,
         vocab_size,
-        logits_shape[1],
-        bitmask_shape[1],
+        logits.shape[-1],
+        bitmask.shape[-1],
         NUM_SMS,
         BLOCK_SIZE,
         num_warps=BLOCK_SIZE // 32 // (16 // logits.element_size()),
