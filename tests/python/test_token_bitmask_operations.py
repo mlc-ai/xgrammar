@@ -50,11 +50,17 @@ def test_is_single_token_bitmask():
 
     bool_mask = torch.zeros(batch, vocab_size, dtype=torch.bool)
     bitmask = _bool_mask_to_bitmask(bool_mask)
-    print(_is_single_token_bitmask(bitmask, vocab_size, batch_index))
     assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (False, -1)
     bool_mask[batch_index, token_id] = True
     bitmask = _bool_mask_to_bitmask(bool_mask)
     assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (True, token_id)
+    bool_mask[batch_index, token_id + 1] = True
+    bitmask = _bool_mask_to_bitmask(bool_mask)
+    assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (False, -1)
+
+
+test_is_single_token_bitmask()
+exit()
 
 
 @pytest.mark.parametrize("device", ("cpu", "cuda"))
