@@ -66,6 +66,12 @@ void _DebugGetMaskedTokensFromBitmask(
   }
 }
 
+std::pair<bool, int> _IsSingleTokenBitmask(const DLTensor& bitmask, int vocab_size, int index) {
+  int32_t* data_ptr = CheckAndGetBitmaskPtr(bitmask, vocab_size, index);
+  DynamicBitset bitset(vocab_size, reinterpret_cast<uint32_t*>(data_ptr));
+  return std::make_pair(bitset.Count() == 1, bitset.FindFirstOne());
+}
+
 void ApplyTokenBitmaskInplaceCPU(
     DLTensor* logits,
     const DLTensor& bitmask,

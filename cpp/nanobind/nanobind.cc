@@ -210,7 +210,8 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def("_regex_to_ebnf", &RegexToEBNF)
       .def("_ebnf_to_grammar_no_normalization", &_EBNFToGrammarNoNormalization)
-      .def("_get_masked_tokens_from_bitmask", &Matcher_DebugGetMaskedTokensFromBitmask)
+      .def("_get_masked_tokens_from_bitmask", &Testing_DebugGetMaskedTokensFromBitmask)
+      .def("_is_single_token_bitmask", &Testing_IsSingleTokenBitmask)
       .def("_get_allow_empty_rule_ids", &GetAllowEmptyRuleIds)
       .def(
           "_generate_range_regex",

@@ -8,7 +8,11 @@ import pytest
 import torch
 
 import xgrammar as xgr
-from xgrammar.testing import _bool_mask_to_bitmask, _get_masked_tokens_from_bitmask
+from xgrammar.testing import (
+    _bool_mask_to_bitmask,
+    _get_masked_tokens_from_bitmask,
+    _is_single_token_bitmask,
+)
 
 _is_cuda_available = torch.cuda.is_available()
 _is_mps_available = torch.backends.mps.is_available()
@@ -36,6 +40,21 @@ def test_get_masked_tokens_from_bitmask(token_mask_size: int, index: int):
     bitmask = _bool_mask_to_bitmask(bool_mask)
     expected = torch.where(~bool_mask[index])[0].tolist()
     assert _get_masked_tokens_from_bitmask(bitmask, token_mask_size, index) == expected
+
+
+def test_is_single_token_bitmask():
+    batch = 2
+    batch_index = 1
+    vocab_size = 1024
+    token_id = 100
+
+    bool_mask = torch.zeros(batch, vocab_size, dtype=torch.bool)
+    bitmask = _bool_mask_to_bitmask(bool_mask)
+    print(_is_single_token_bitmask(bitmask, vocab_size, batch_index))
+    assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (False, -1)
+    bool_mask[batch_index, token_id] = True
+    bitmask = _bool_mask_to_bitmask(bool_mask)
+    assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (True, token_id)
 
 
 @pytest.mark.parametrize("device", ("cpu", "cuda"))
