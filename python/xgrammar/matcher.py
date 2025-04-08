@@ -3,7 +3,6 @@ token.
 """
 
 import math
-import os
 from typing import List, Optional, Tuple, Union
 
 import torch
