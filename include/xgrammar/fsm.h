@@ -16,12 +16,23 @@
 
 namespace xgrammar {
 
-struct FSMEdge {
+class FSMEdge {
+  /*
+    The min and max are used to represent the range of characters.
+    When min == -1 and max == -1, it means the edge is an epsilon transition.
+    When min == -1 and max >= 0, then max represents the rule id.
+    When min >= 0 and max >= 0, then it represents a range of characters.
+    target is the target state id.
+  */
+ private:
   short min, max;
   int target;
+
+ public:
+  FSMEdge(const short& _min, const short& _max, const int& target);
   bool IsEpsilon() const;
   bool IsRuleRef() const;
-  int GetRefRuleId() const;
+  short GetRefRuleId() const;
   bool IsCharRange() const;
 };
 class CompactFSM;
