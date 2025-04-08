@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <unordered_set>
 #include <vector>
 
 #include "../cpp/support/csr_array.h"
@@ -16,7 +17,7 @@
 
 namespace xgrammar {
 
-class FSMEdge {
+struct FSMEdge {
   /*
     The min and max are used to represent the range of characters.
     When min == -1 and max == -1, it means the edge is an epsilon transition.
@@ -24,11 +25,8 @@ class FSMEdge {
     When min >= 0 and max >= 0, then it represents a range of characters.
     target is the target state id.
   */
- private:
   short min, max;
   int target;
-
- public:
   FSMEdge(const short& _min, const short& _max, const int& target);
   bool IsEpsilon() const;
   bool IsRuleRef() const;
@@ -37,20 +35,18 @@ class FSMEdge {
 };
 class CompactFSM;
 class FSM {
+ private:
+  std::unordered_set<int> GetEpsilonClosure(int state) const;
+
  public:
   using Edge = FSMEdge;
-  static FSM Intersect(const FSM& lhs, const FSM& rhs);
-  static FSM Union(const std::vector<FSM>& fsms);
-  FSM Not();
-  FSM ToDFA();
-  FSM MinimizeDFA();
-
   CompactFSM ToCompact() const;
   void Advance(const std::vector<int>& from, int char_value, std::vector<int>* result) const;
   FSM Copy() const;
   std::string Print() const;
   // The interanl states are also public
   std::vector<std::vector<Edge>> edges;
+  friend class FSMWithStartEnd;
 };
 
 class FSMWithStartEnd {
@@ -58,6 +54,11 @@ class FSMWithStartEnd {
   FSM fsm;
   int start;
   std::vector<int> ends;
+  FSMWithStartEnd TODFA() const;
+  FSMWithStartEnd Not();
+  FSMWithStartEnd MinimizeDFA();
+  static FSMWithStartEnd Intersect(const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs);
+  static FSMWithStartEnd Union(const std::vector<FSMWithStartEnd>& fsms);
 };
 
 class CompactFSM {
