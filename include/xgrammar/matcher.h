@@ -29,6 +29,7 @@ void _DebugGetMaskedTokensFromBitmask(
 void ApplyTokenBitmaskInplaceCPU(
     DLTensor* logits,
     const DLTensor& bitmask,
+    int vocab_size = -1,
     std::optional<std::vector<int>> indices = std::nullopt
 );
 
