@@ -175,6 +175,32 @@ def _get_masked_tokens_from_bitmask(
     )
 
 
+def _is_single_token_bitmask(
+    bitmask: torch.Tensor, vocab_size: int, index: int = 0
+) -> Tuple[bool, int]:
+    """Check if the bitmask is a single token bitmask.
+
+    Parameters
+    ----------
+    bitmask : torch.Tensor
+        The bitmask to check. Should be on CPU.
+    vocab_size : int
+        The size of the vocabulary.
+    index : int, default: 0
+        The index of the bitmask.
+
+    Returns
+    -------
+    is_single_token : bool
+        True if the bitmask is a single token bitmask, False otherwise.
+    token_id : int
+        The id of the token if the bitmask is a single token bitmask, -1 otherwise.
+    """
+    return _core.testing._is_single_token_bitmask(
+        bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
+    )
+
+
 def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
     """Get the bitmask from bool mask. If the bool mask does not align with the 32-bit block
     size, it will add extra 1 paddings.

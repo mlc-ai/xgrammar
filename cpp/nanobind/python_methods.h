@@ -35,7 +35,11 @@ bool GrammarMatcher_FillNextTokenBitmask(
     bool debug_print
 );
 
-std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(
+std::vector<int> Testing_DebugGetMaskedTokensFromBitmask(
+    intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
+);
+
+std::pair<bool, int> Testing_IsSingleTokenBitmask(
     intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
 );
 

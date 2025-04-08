@@ -134,6 +134,18 @@ class DynamicBitset {
     return *this;
   }
 
+  int FindFirstOne() const { return DoFindOneFrom(0); }
+
+  int FindNextOne(int pos) const {
+    if (pos >= size_ - 1 || size_ == 0) return -1;
+    ++pos;
+    int blk = pos / BITS_PER_BLOCK;
+    int ind = pos % BITS_PER_BLOCK;
+    uint32_t fore = data_[blk] >> ind;
+    int result = fore ? pos + LowestBit(fore) : DoFindOneFrom(blk + 1);
+    return result < size_ ? result : -1;
+  }
+
   int FindFirstZero() const { return DoFindZeroFrom(0); }
 
   int FindNextZero(int pos) const {
@@ -208,6 +220,18 @@ class DynamicBitset {
     }
     if (position == -1) return -1;
     return position * BITS_PER_BLOCK + LowestBit(~data_[position]);
+  }
+
+  int DoFindOneFrom(int first_block) const {
+    int position = -1;
+    for (int i = first_block; i < buffer_size_; ++i) {
+      if (data_[i] != 0) {
+        position = i;
+        break;
+      }
+    }
+    if (position == -1) return -1;
+    return position * BITS_PER_BLOCK + LowestBit(data_[position]);
   }
 
   // The size of the bitset.
