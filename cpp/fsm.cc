@@ -153,4 +153,77 @@ FSMWithStartEnd FSMWithStartEnd::Not() {
   return result;
 }
 
+void FSM::Advance(const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule)
+    const {
+  result->clear();
+  std::queue<int> epsilon_queue = std::queue<int>();
+  std::unordered_set<int> visited;
+  std::unordered_set<int> in_result;
+
+  for (const auto& state : from) {
+    if (visited.find(state) != visited.end()) {
+      continue;
+    }
+    visited.insert(state);
+    for (const auto& edge : edges[state]) {
+      if (edge.IsEpsilon()) {
+        epsilon_queue.push(edge.target);
+        continue;
+      }
+      if (is_rule && edge.IsRuleRef()) {
+        if (edge.GetRefRuleId() == value) {
+          if (in_result.find(edge.target) == in_result.end()) {
+            result->push_back(edge.target);
+            in_result.insert(edge.target);
+          }
+        }
+        continue;
+      }
+      if ((!is_rule) && edge.IsCharRange()) {
+        if (value >= edge.min && value <= edge.max) {
+          if (in_result.find(edge.target) == in_result.end()) {
+            result->push_back(edge.target);
+            in_result.insert(edge.target);
+          }
+        }
+        continue;
+      }
+    }
+  }
+
+  while (!epsilon_queue.empty()) {
+    int current = epsilon_queue.front();
+    epsilon_queue.pop();
+    if (visited.find(current) != visited.end()) {
+      continue;
+    }
+    visited.insert(current);
+    for (const auto& edge : edges[current]) {
+      if (edge.IsEpsilon()) {
+        epsilon_queue.push(edge.target);
+        continue;
+      }
+      if (is_rule && edge.IsRuleRef()) {
+        if (edge.GetRefRuleId() == value) {
+          if (in_result.find(edge.target) == in_result.end()) {
+            result->push_back(edge.target);
+            in_result.insert(edge.target);
+          }
+        }
+        continue;
+      }
+      if ((!is_rule) && edge.IsCharRange()) {
+        if (value >= edge.min && value <= edge.max) {
+          if (in_result.find(edge.target) == in_result.end()) {
+            result->push_back(edge.target);
+            in_result.insert(edge.target);
+          }
+        }
+        continue;
+      }
+    }
+  }
+  return;
+}
+
 }  // namespace xgrammar

@@ -41,7 +41,9 @@ class FSM {
  public:
   using Edge = FSMEdge;
   CompactFSM ToCompact() const;
-  void Advance(const std::vector<int>& from, int char_value, std::vector<int>* result) const;
+  void Advance(
+      const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule = false
+  ) const;
   FSM Copy() const;
   std::string Print() const;
   // The interanl states are also public
