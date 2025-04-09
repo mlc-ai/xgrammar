@@ -1,6 +1,7 @@
 #include <xgrammar/fsm.h>
 
 #include <queue>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -77,7 +78,7 @@ FSMWithStartEnd FSMWithStartEnd::Union(const std::vector<FSMWithStartEnd>& fsms)
   return result;
 }
 
-FSMWithStartEnd FSMWithStartEnd::Not() {
+FSMWithStartEnd FSMWithStartEnd::Not() const {
   FSMWithStartEnd result;
 
   // Build the DFA.
@@ -237,6 +238,87 @@ FSMWithStartEnd FSMWithStartEnd::Copy() const {
   copy.ends = ends;
   copy.fsm = fsm.Copy();
   return copy;
+}
+
+std::string FSMWithStartEnd::Print() const {
+  std::string result;
+  result += "FSM(num_nodes=" + std::to_string(fsm.edges.size()) +
+            ", start=" + std::to_string(start) + ", end=[";
+  for (const auto& end : ends) {
+    result += std::to_string(end) + ", ";
+  }
+  result += "], edges=[\n";
+  for (int i = 0; i < int(fsm.edges.size()); ++i) {
+    result += std::to_string(i) + ": [";
+    const auto& edges = fsm.edges[i];
+    for (int j = 0; j < static_cast<int>(fsm.edges[i].size()); ++j) {
+      const auto& edge = edges[j];
+      if (edge.min == edge.max) {
+        result += "(" + std::to_string(edge.min) + ")->" + std::to_string(edge.target);
+      } else {
+        result += "(" + std::to_string(edge.min) + ", " + std::to_string(edge.max) + ")->" +
+                  std::to_string(edge.target);
+      }
+      if (j < static_cast<int>(fsm.edges[i].size()) - 1) {
+        result += ", ";
+      }
+    }
+    result += "]\n";
+  }
+  result += "])";
+  return result;
+}
+
+std::string CompactFSMWithStartEnd::Print() const {
+  std::string result;
+  result += "CompactFSM(num_nodes=" + std::to_string(fsm.edges.Size()) +
+            ", start=" + std::to_string(start) + ", end=[";
+  for (const auto& end : ends) {
+    result += std::to_string(end) + ", ";
+  }
+  result += "], edges=[\n";
+  for (int i = 0; i < int(fsm.edges.Size()); ++i) {
+    result += std::to_string(i) + ": [";
+    const auto& edges = fsm.edges[i];
+    for (int j = 0; j < static_cast<int>(fsm.edges[i].size()); ++j) {
+      const auto& edge = edges[j];
+      if (edge.min == edge.max) {
+        result += "(" + std::to_string(edge.min) + ")->" + std::to_string(edge.target);
+      } else {
+        result += "(" + std::to_string(edge.min) + ", " + std::to_string(edge.max) + ")->" +
+                  std::to_string(edge.target);
+      }
+      if (j < static_cast<int>(fsm.edges[i].size()) - 1) {
+        result += ", ";
+      }
+    }
+    result += "]\n";
+  }
+  result += "])";
+  return result;
+}
+
+CompactFSM FSM::ToCompact() {
+  CompactFSM result;
+  for (int i = 0; i < static_cast<int>(edges.size()); ++i) {
+    std::sort(edges[i].begin(), edges[i].end(), [](const FSMEdge& a, const FSMEdge& b) {
+      return a.min != b.min ? a.min < b.min : a.max < b.max;
+    });
+    result.edges.Insert(edges[i]);
+  }
+  return result;
+}
+
+FSM CompactFSM::ToFSM() {
+  FSM result;
+  for (int i = 0; i < edges.Size(); i++) {
+    const auto& row = edges[i];
+    result.edges.emplace_back(std::vector<FSMEdge>());
+    for (int j = 0; j < row.size(); i++) {
+      result.edges.back().push_back(row[j]);
+    }
+  }
+  return result;
 }
 
 }  // namespace xgrammar

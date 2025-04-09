@@ -40,12 +40,11 @@ class FSM {
 
  public:
   using Edge = FSMEdge;
-  CompactFSM ToCompact() const;
+  CompactFSM ToCompact();
   void Advance(
       const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule = false
   ) const;
   FSM Copy() const;
-  std::string Print() const;
   // The interanl states are also public
   std::vector<std::vector<Edge>> edges;
   friend class FSMWithStartEnd;
@@ -58,21 +57,30 @@ class FSMWithStartEnd {
   int start;
   std::unordered_set<int> ends;
   FSMWithStartEnd TODFA() const;
-  FSMWithStartEnd Not();
-  FSMWithStartEnd MinimizeDFA();
+  FSMWithStartEnd Not() const;
+  FSMWithStartEnd MinimizeDFA() const;
   FSMWithStartEnd Copy() const;
+  std::string Print() const;
   static FSMWithStartEnd Intersect(const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs);
   static FSMWithStartEnd Union(const std::vector<FSMWithStartEnd>& fsms);
 };
 
 class CompactFSM {
  public:
-  void Advance(const std::vector<int>& from, int char_value, std::vector<int>* result);
+  void Advance(const std::vector<int>& from, int char_value, std::vector<int>* result) const;
   FSM ToFSM();
-  std::string Print();
   // The interanl states are also public
   using Edge = FSMEdge;
   CSRArray<Edge> edges;
+};
+
+class CompactFSMWithStartEnd {
+ public:
+  bool is_dfa = false;
+  CompactFSM fsm;
+  int start;
+  std::unordered_set<int> ends;
+  std::string Print() const;
 };
 
 FSMWithStartEnd RegexToFSM(const std::string& regex);
