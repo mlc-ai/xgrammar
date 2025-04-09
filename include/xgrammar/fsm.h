@@ -53,7 +53,7 @@ class FSMWithStartEnd {
  public:
   FSM fsm;
   int start;
-  std::vector<int> ends;
+  std::unordered_set<int> ends;
   FSMWithStartEnd TODFA() const;
   FSMWithStartEnd Not();
   FSMWithStartEnd MinimizeDFA();
