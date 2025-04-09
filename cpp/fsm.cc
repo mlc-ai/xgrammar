@@ -3,7 +3,6 @@
 #include <queue>
 #include <string>
 #include <unordered_set>
-#include <vector>
 
 namespace xgrammar {
 
@@ -393,5 +392,87 @@ void CompactFSM::Advance(
     }
   }
   return;
+}
+
+FSMWithStartEnd FSMWithStartEnd::TODFA() const {
+  FSMWithStartEnd dfa;
+  dfa.is_dfa = true;
+  dfa.start = start;
+  std::vector<std::unordered_set<int>> closures;
+  std::unordered_set<int> rules;
+  for (const auto& edges : fsm.edges) {
+    for (const auto& edge : edges) {
+      if (edge.IsRuleRef()) {
+        rules.insert(edge.GetRefRuleId());
+      }
+    }
+  }
+  int now_process = 0;
+  closures.push_back(fsm.GetEpsilonClosure(start));
+  while (now_process < static_cast<int>(closures.size())) {
+    dfa.fsm.edges.push_back(std::vector<FSMEdge>());
+    // Check if the closure is a final state.
+    for (const auto& node : closures[now_process]) {
+      if (ends.find(node) != ends.end()) {
+        dfa.ends.insert(now_process);
+        break;
+      }
+    }
+
+    for (int i = 0; i < 0x100; i++) {
+      std::unordered_set<int> next_closure;
+      for (const auto& node : closures[now_process]) {
+        const auto& edges = fsm.edges[node];
+        for (const auto& edge : edges) {
+          if (edge.IsCharRange()) {
+            if (i >= edge.min && i <= edge.max) {
+              auto epsilon_closure = fsm.GetEpsilonClosure(edge.target);
+              next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
+            }
+          }
+        }
+      }
+      bool flag = false;
+      for (int j = 0; j < static_cast<int>(closures.size()); j++) {
+        if (closures[j] == next_closure) {
+          dfa.fsm.edges[now_process].emplace_back(i, i, j);
+          flag = true;
+          break;
+        }
+      }
+      if (!flag) {
+        dfa.fsm.edges[now_process].emplace_back(i, i, closures.size());
+        closures.push_back(next_closure);
+      }
+    }
+
+    for (auto rule : rules) {
+      std::unordered_set<int> next_closure;
+      for (const auto& node : closures[now_process]) {
+        const auto& edges = fsm.edges[node];
+        for (const auto& edge : edges) {
+          if (edge.IsRuleRef()) {
+            if (rule == edge.GetRefRuleId()) {
+              auto epsilon_closure = fsm.GetEpsilonClosure(edge.target);
+              next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
+            }
+          }
+        }
+      }
+      bool flag = false;
+      for (int j = 0; j < static_cast<int>(closures.size()); j++) {
+        if (closures[j] == next_closure) {
+          dfa.fsm.edges[now_process].emplace_back(-1, rule, j);
+          flag = true;
+          break;
+        }
+      }
+      if (!flag) {
+        dfa.fsm.edges[now_process].emplace_back(-1, rule, closures.size());
+        closures.push_back(next_closure);
+      }
+    }
+  }
+  return dfa;
 }
 }  // namespace xgrammar

@@ -5,15 +5,10 @@
 #ifndef XGRAMMAR_FSM_H_
 #define XGRAMMAR_FSM_H_
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <iostream>
 #include <unordered_set>
 #include <vector>
 
 #include "../cpp/support/csr_array.h"
-#include "../cpp/support/utils.h"
 
 namespace xgrammar {
 
@@ -50,6 +45,11 @@ struct FSMEdge {
 class CompactFSM;
 class FSM {
  private:
+  /*!
+    \brief Get the epsilon closure of a state.
+    \param state The current state id.
+    \return The epsilon closure of the state.
+  */
   std::unordered_set<int> GetEpsilonClosure(int state) const;
 
  public:
