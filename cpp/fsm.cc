@@ -81,7 +81,11 @@ FSMWithStartEnd FSMWithStartEnd::Not() {
   FSMWithStartEnd result;
 
   // Build the DFA.
-  result = TODFA();
+  if (!is_dfa) {
+    result = TODFA();
+  } else {
+    result = Copy();
+  }
   int node_cnt = result.fsm.edges.size();
 
   // Reverse all the final states.
@@ -224,6 +228,15 @@ void FSM::Advance(const std::vector<int>& from, int value, std::vector<int>* res
     }
   }
   return;
+}
+
+FSMWithStartEnd FSMWithStartEnd::Copy() const {
+  FSMWithStartEnd copy;
+  copy.is_dfa = is_dfa;
+  copy.start = start;
+  copy.ends = ends;
+  copy.fsm = fsm.Copy();
+  return copy;
 }
 
 }  // namespace xgrammar

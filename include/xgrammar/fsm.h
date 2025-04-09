@@ -53,12 +53,14 @@ class FSM {
 
 class FSMWithStartEnd {
  public:
+  bool is_dfa = false;
   FSM fsm;
   int start;
   std::unordered_set<int> ends;
   FSMWithStartEnd TODFA() const;
   FSMWithStartEnd Not();
   FSMWithStartEnd MinimizeDFA();
+  FSMWithStartEnd Copy() const;
   static FSMWithStartEnd Intersect(const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs);
   static FSMWithStartEnd Union(const std::vector<FSMWithStartEnd>& fsms);
 };
