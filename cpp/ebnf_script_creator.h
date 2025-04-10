@@ -136,8 +136,12 @@ class EBNFScriptCreator {
       ss << "*";
     } else if (min == 1 && max == -1) {
       ss << "+";
+    } else if (min == 0 && max == 0) {
+      return "";
     } else if (min == max) {
       ss << "{" << min << "}";
+    } else if (max == -1) {
+      ss << "{" << min << ",}";
     } else {
       ss << "{" << min << "," << max << "}";
     }

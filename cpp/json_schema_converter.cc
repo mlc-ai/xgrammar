@@ -2130,10 +2130,19 @@ std::string JSONSchemaConverter::VisitArray(
 
   // 3. Construct the result with given format
   // clang-format off
-  // prefix empty, additional items not allowed: [empty_separator]
-  // prefix empty, additional items allowed: ([start_separator additional_rule_name (mid_separator additional_rule_name)*) end_separator] | [empty_separator]
-  // prefix non-empty, additional items not allowed: [start_separator item0 mid_separator item1 end_separator]
-  // prefix non-empty, additional items allowed: [start_separator item0 mid_separator item1 (mid_separator additional_rule_name)* end_separator]
+  /*
+   * prefix empty, additional items not allowed: [empty_separator]
+   * prefix empty, additional items allowed:
+   *   if min == 0, max == 0:
+   *     [empty_separator]
+   *   if min == 0, max > 0:
+   *     ([start_separator additional_rule_name (mid_separator additional_rule_name){0, max - 1}) end_separator] | [empty_separator]
+   *   if min > 0:
+   *     ([start_separator additional_rule_name (mid_separator additional_rule_name){min - 1, max - 1}) end_separator]
+   * prefix non-empty, additional items not allowed: [start_separator item0 mid_separator item1 end_separator]
+   * prefix non-empty, additional items allowed:
+   *   [start_separator item0 mid_separator item1 (mid_separator additional_rule_name){max(0, min - len(prefix)), max - len(prefix)} end_separator]
+   */
   // clang-format on
   std::string result;
   const std::string& left_bracket = EBNFScriptCreator::Str("[");
@@ -2143,19 +2152,37 @@ std::string JSONSchemaConverter::VisitArray(
     auto empty_part = EBNFScriptCreator::Concat({left_bracket, empty_separator, right_bracket});
     if (!array_spec.allow_additional_items) {
       return empty_part;
-    } else {
+    } else if (array_spec.min_items == 0 && array_spec.max_items == 0) {
+      return empty_part;
+    } else if (array_spec.min_items == 0 && array_spec.max_items != 0) {
       return EBNFScriptCreator::Or(
           {EBNFScriptCreator::Concat(
                {left_bracket,
                 start_separator,
                 additional_rule_name,
                 EBNFScriptCreator::Repeat(
-                    EBNFScriptCreator::Concat({mid_separator, additional_rule_name}), 0, -1
+                    EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
+                    0,
+                    array_spec.max_items == -1 ? -1 : array_spec.max_items - 1
                 ),
                 end_separator,
                 right_bracket}
            ),
            empty_part}
+      );
+    } else {
+      XGRAMMAR_DCHECK(array_spec.min_items > 0);
+      return EBNFScriptCreator::Concat(
+          {left_bracket,
+           start_separator,
+           additional_rule_name,
+           EBNFScriptCreator::Repeat(
+               EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
+               array_spec.min_items - 1,
+               array_spec.max_items == -1 ? -1 : array_spec.max_items - 1
+           ),
+           end_separator,
+           right_bracket}
       );
     }
   } else {
@@ -2172,12 +2199,17 @@ std::string JSONSchemaConverter::VisitArray(
           {left_bracket, start_separator, prefix_part_str, end_separator, right_bracket}
       );
     } else {
+      int min_items = std::max(0, array_spec.min_items - static_cast<int>(item_rule_names.size()));
       return EBNFScriptCreator::Concat(
           {left_bracket,
            start_separator,
            prefix_part_str,
            EBNFScriptCreator::Repeat(
-               EBNFScriptCreator::Concat({mid_separator, additional_rule_name}), 0, -1
+               EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
+               min_items,
+               array_spec.max_items == -1
+                   ? -1
+                   : array_spec.max_items - static_cast<int>(item_rule_names.size())
            ),
            end_separator,
            right_bracket}

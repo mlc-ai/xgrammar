@@ -874,6 +874,116 @@ def test_array_schema(
         check_schema_with_instance(schema, instance, is_accepted=is_accepted)
 
 
+schema__expected_grammar__instances__test_array_schema_min_max = [
+    # prefix empty, additional items not allowed
+    (
+        {"type": "array", "items": False, "prefixItems": []},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* "]")
+"""
+        ),
+        [([], True), ([1], False), ([1, 2], False)],
+    ),
+    # prefix empty, additional items allowed, min=0 max=0
+    (
+        {"type": "array", "items": {"type": "integer"}, "minItems": 0, "maxItems": 0},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* "]")
+"""
+        ),
+        [([], True), ([1], False), ([1, 2], False)],
+    ),
+    # prefix empty, additional items allowed, min=0 max>0
+    (
+        {"type": "array", "items": {"type": "integer"}, "minItems": 0, "maxItems": 2},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)? [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+"""
+        ),
+        [([], True), ([1], True), ([1, 2], True), ([1, 2, 3], False)],
+    ),
+    # prefix empty, additional items allowed, min>0
+    (
+        {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 3},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer){1,2} [ \n\t]* "]")
+"""
+        ),
+        [([], False), ([1], False), ([1, 2], True), ([1, 2, 3], True), ([1, 2, 3, 4], False)],
+    ),
+    # prefix non-empty, additional items not allowed
+    (
+        {"type": "array", "items": False, "prefixItems": [{"type": "string"}, {"type": "integer"}]},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) [ \n\t]* "]")
+"""
+        ),
+        [(["foo", 42], True), (["foo", 42, "bar"], False), (["foo"], False), ([42, "foo"], False)],
+    ),
+    # prefix non-empty, additional items allowed
+    (
+        {
+            "type": "array",
+            "prefixItems": [{"type": "string"}, {"type": "integer"}],
+            "items": {"type": "boolean"},
+            "minItems": 3,
+            "maxItems": 4,
+        },
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* basic_boolean){1,2} [ \n\t]* "]")
+"""
+        ),
+        [
+            (["foo", 42, True], True),
+            (["foo", 42, True, False], True),
+            (["foo", 42], False),
+            (["foo", 42, True, False, True], False),
+            (["foo", 42, "bar"], False),
+        ],
+    ),
+    # prefix non-empty, additional items allowed, maxItems not set
+    (
+        {
+            "type": "array",
+            "prefixItems": [{"type": "string"}, {"type": "integer"}],
+            "items": {"type": "boolean"},
+            "minItems": 3,
+        },
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* basic_boolean)+ [ \n\t]* "]")
+"""
+        ),
+        [
+            (["foo", 42, True], True),
+            (["foo", 42, True, False], True),
+            (["foo", 42, True, False, True], True),
+            (["foo", 42], False),
+            (["foo", 42, "bar"], False),
+        ],
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "schema, expected_grammar, instances",
+    schema__expected_grammar__instances__test_array_schema_min_max,
+)
+def test_array_schema_min_max(
+    schema: Dict[str, Any], expected_grammar: str, instances: List[Tuple[Any, bool]]
+):
+    grammar_ebnf = _json_schema_to_ebnf(schema)
+    assert grammar_ebnf == expected_grammar
+    for instance, is_accepted in instances:
+        check_schema_with_instance(schema, instance, is_accepted=is_accepted)
+
+
 def test_array_with_only_items_keyword():
     schema = {
         "items": {
