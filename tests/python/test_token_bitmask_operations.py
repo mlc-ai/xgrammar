@@ -59,10 +59,6 @@ def test_is_single_token_bitmask():
     assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (False, -1)
 
 
-test_is_single_token_bitmask()
-exit()
-
-
 @pytest.mark.parametrize("device", ("cpu", "cuda"))
 def test_apply_token_bitmask_inplace(device: str):
     if device == "cuda" and not _is_cuda_available:

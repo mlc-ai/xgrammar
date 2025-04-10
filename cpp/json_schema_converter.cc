@@ -18,8 +18,23 @@
 #include "ebnf_script_creator.h"
 #include "regex_converter.h"
 #include "support/logging.h"
+#include "support/utils.h"
 
 namespace xgrammar {
+
+/**
+ * \brief Error for invalid schema: wrong type, invalid keyword, etc.
+ */
+struct InvalidSchemaError : public Error {
+  InvalidSchemaError(const std::string& msg) : Error(msg, "InvalidSchemaError") {}
+};
+
+/**
+ * \brief Error for unsatisfiable schema: conflict in constraints, the whole schema is false, etc.
+ */
+struct UnsatisfiableSchemaError : public Error {
+  UnsatisfiableSchemaError(const std::string& msg) : Error(msg, "UnsatisfiableSchemaError") {}
+};
 
 /*!
  * \brief Manage the indent and separator for the generation of EBNF grammar.
@@ -51,6 +66,27 @@ class IndentManager {
   }
 
   /*!
+   * \brief Get the next start separator in the current level. The next separator is escaped and
+   * quoted.
+   * \example
+   * \code
+   * IndentManager indent_manager(2, ", ");
+   * indent_manager.StartIndent();
+   * indent_manager.StartSeparator(); // get the start separator: "\"\n  \""
+   * indent_manager.MiddleSeparator(); // get the middle separator: "\",\n  \""
+   * indent_manager.EndSeparator(); // get the end separator: "\"\n\""
+   * indent_manager.EndIndent();
+   * \endcode
+   */
+  std::string StartSeparator();
+
+  std::string MiddleSeparator();
+
+  std::string EndSeparator();
+
+  std::string EmptySeparator();
+
+  /*!
    * \brief Get the next separator in the current level. When first called in the current
    * level, the starting separator will be returned. When called again, the middle separator will be
    * returned. When called with `is_end=True`, the ending separator will be returned.
@@ -76,6 +112,43 @@ class IndentManager {
   std::vector<bool> is_first_;
   friend class JSONSchemaConverter;
 };
+
+std::string IndentManager::StartSeparator() {
+  if (any_whitespace_) {
+    return "[ \\n\\t]*";
+  }
+  if (!enable_newline_) {
+    return "\"\"";
+  }
+  return "\"\\n" + std::string(total_indent_, ' ') + "\"";
+}
+
+std::string IndentManager::MiddleSeparator() {
+  if (any_whitespace_) {
+    return "[ \\n\\t]* \"" + separator_ + "\" [ \\n\\t]*";
+  }
+  if (!enable_newline_) {
+    return "\"" + separator_ + "\"";
+  }
+  return "\"" + separator_ + "\\n" + std::string(total_indent_, ' ') + "\"";
+}
+
+std::string IndentManager::EndSeparator() {
+  if (any_whitespace_) {
+    return "[ \\n\\t]*";
+  }
+  if (!enable_newline_) {
+    return "\"\"";
+  }
+  return "\"\\n" + std::string(total_indent_ - indent_, ' ') + "\"";
+}
+
+std::string IndentManager::EmptySeparator() {
+  if (any_whitespace_) {
+    return "[ \\n\\t]*";
+  }
+  return "\"\"";
+}
 
 std::string IndentManager::NextSeparator(bool is_end) {
   if (any_whitespace_) {
@@ -242,6 +315,16 @@ class JSONSchemaConverter {
   /*! \brief Visit a null schema. */
   std::string VisitNull(const picojson::object& schema, const std::string& rule_name);
 
+  struct ArraySpec {
+    std::vector<picojson::value> prefix_item_schemas;
+    bool allow_additional_items;
+    picojson::value additional_item_schema;
+    int min_items;
+    int max_items;
+  };
+
+  Result<ArraySpec> ParseArraySchema(const picojson::object& schema);
+
   /*!
    * \brief Visit an array schema.
    * \example
@@ -376,7 +459,7 @@ class JSONSchemaConverter {
   );
 
   // The EBNF script creator
-  EBNFScriptCreator ebnf_script_creator_{EmptyConstructorTag{}};
+  EBNFScriptCreator ebnf_script_creator_;
   // The indent manager to get separators
   std::optional<IndentManager> indentManager_;
   // The root JSON schema
@@ -1869,89 +1952,270 @@ std::string JSONSchemaConverter::VisitNull(
   return "\"null\"";
 }
 
+Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
+    const picojson::object& schema
+) {
+  XGRAMMAR_DCHECK(
+      (schema.count("type") && schema.at("type").get<std::string>() == "array") ||
+      schema.count("prefixItems") || schema.count("items") || schema.count("unevaluatedItems")
+  );
+  WarnUnsupportedKeywords(schema, {"uniqueItems", "contains", "minContains", "maxContains"});
+
+  std::vector<picojson::value> prefix_item_schemas;
+  bool allow_additional_items = true;
+  picojson::value additional_item_schema;
+  int min_items = 0;
+  int max_items = -1;
+
+  if (schema.count("prefixItems")) {
+    if (!schema.at("prefixItems").is<picojson::array>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("prefixItems must be an array")
+      );
+    }
+    prefix_item_schemas = schema.at("prefixItems").get<picojson::array>();
+    for (const auto& item : prefix_item_schemas) {
+      if (item.is<bool>()) {
+        if (!item.get<bool>()) {
+          return Result<ArraySpec>::Err(
+              std::make_shared<UnsatisfiableSchemaError>("prefixItems contains false")
+          );
+        }
+      } else if (!item.is<picojson::object>()) {
+        return Result<ArraySpec>::Err(std::make_shared<InvalidSchemaError>(
+            "prefixItems must be an array of objects or booleans"
+        ));
+      }
+    }
+  }
+
+  if (schema.count("items")) {
+    auto items_value = schema.at("items");
+    if (!items_value.is<bool>() && !items_value.is<picojson::object>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("items must be a boolean or an object")
+      );
+    }
+    if (items_value.is<bool>() && !items_value.get<bool>()) {
+      allow_additional_items = false;
+    } else {
+      allow_additional_items = true;
+      additional_item_schema = items_value;
+    }
+  } else if (schema.count("unevaluatedItems")) {
+    auto unevaluated_items_value = schema.at("unevaluatedItems");
+    if (!unevaluated_items_value.is<bool>() && !unevaluated_items_value.is<picojson::object>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("unevaluatedItems must be a boolean or an object")
+      );
+    }
+    if (unevaluated_items_value.is<bool>() && !unevaluated_items_value.get<bool>()) {
+      allow_additional_items = false;
+    } else {
+      allow_additional_items = true;
+      additional_item_schema = unevaluated_items_value;
+    }
+  } else if (!strict_mode_) {
+    allow_additional_items = true;
+    additional_item_schema = picojson::value(true);
+  } else {
+    allow_additional_items = false;
+  }
+
+  if (schema.count("minItems")) {
+    if (!schema.at("minItems").is<int64_t>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("minItems must be an integer")
+      );
+    }
+    min_items = std::max(0, static_cast<int>(schema.at("minItems").get<int64_t>()));
+  }
+
+  if (schema.count("minContains")) {
+    if (!schema.at("minContains").is<int64_t>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("minContains must be an integer")
+      );
+    }
+    min_items = std::max(min_items, static_cast<int>(schema.at("minContains").get<int64_t>()));
+  }
+
+  if (schema.count("maxItems")) {
+    if (!schema.at("maxItems").is<int64_t>() || schema.at("maxItems").get<int64_t>() < 0) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("maxItems must be a non-negative integer")
+      );
+    }
+    max_items = schema.at("maxItems").get<int64_t>();
+  }
+
+  // Check if the schema is unsatisfiable
+  if (max_items != -1 && min_items > max_items) {
+    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+        "minItems is greater than maxItems: " + std::to_string(min_items) + " > " +
+        std::to_string(max_items)
+    ));
+  }
+
+  if (max_items != -1 && max_items < static_cast<int>(prefix_item_schemas.size())) {
+    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+        "maxItems is less than the number of prefixItems: " + std::to_string(max_items) + " < " +
+        std::to_string(prefix_item_schemas.size())
+    ));
+  }
+
+  if (!allow_additional_items) {
+    // [len, len] must be in [min, max]
+    if (static_cast<int>(prefix_item_schemas.size()) < min_items) {
+      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+          "minItems is greater than the number of prefixItems, but additional items are not "
+          "allowed: " +
+          std::to_string(min_items) + " > " + std::to_string(prefix_item_schemas.size())
+      ));
+    }
+    if (max_items != -1 && static_cast<int>(prefix_item_schemas.size()) > max_items) {
+      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+          "maxItems is less than the number of prefixItems, but additional items are not "
+          "allowed: " +
+          std::to_string(max_items) + " < " + std::to_string(prefix_item_schemas.size())
+      ));
+    }
+  }
+
+  return Result<ArraySpec>::Ok(ArraySpec{
+      prefix_item_schemas, allow_additional_items, additional_item_schema, min_items, max_items
+  });
+}
+
 std::string JSONSchemaConverter::VisitArray(
     const picojson::object& schema, const std::string& rule_name
 ) {
-  XGRAMMAR_CHECK(
-      (schema.count("type") && schema.at("type").get<std::string>() == "array") ||
-      schema.count("items") || schema.count("prefixItems") || schema.count("unevaluatedItems")
-  );
-  WarnUnsupportedKeywords(
-      schema,
-      {
-          "uniqueItems",
-          "contains",
-          "minContains",
-          "maxContains",
-          "minItems",
-          "maxItems",
-      }
-  );
+  auto array_spec_result = ParseArraySchema(schema);
+  if (array_spec_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << array_spec_result.UnwrapErr()->what();
+  }
 
-  std::string result = "\"[\"";
+  auto array_spec = std::move(array_spec_result).Unwrap();
 
   indentManager_->StartIndent();
 
+  auto start_separator = indentManager_->StartSeparator();
+  auto mid_separator = indentManager_->MiddleSeparator();
+  auto end_separator = indentManager_->EndSeparator();
+  auto empty_separator = indentManager_->EmptySeparator();
+
+  std::vector<std::string> item_rule_names;
+  std::string additional_rule_name;
+
   // 1. Handle prefix items
-  if (schema.count("prefixItems")) {
-    XGRAMMAR_CHECK(schema.at("prefixItems").is<picojson::array>())
-        << "prefixItems must be an array";
-    const auto& prefix_items = schema.at("prefixItems").get<picojson::array>();
-    for (int i = 0; i < static_cast<int>(prefix_items.size()); ++i) {
-      XGRAMMAR_CHECK(prefix_items[i].is<picojson::object>());
-      result += " " + NextSeparator() + " ";
-      result += CreateRuleFromSchema(prefix_items[i], rule_name + "_item_" + std::to_string(i));
+  if (array_spec.prefix_item_schemas.size() > 0) {
+    for (int i = 0; i < static_cast<int>(array_spec.prefix_item_schemas.size()); ++i) {
+      XGRAMMAR_DCHECK(
+          array_spec.prefix_item_schemas[i].is<picojson::object>() ||
+          array_spec.prefix_item_schemas[i].is<bool>()
+      );
+      item_rule_names.push_back(CreateRuleFromSchema(
+          array_spec.prefix_item_schemas[i], rule_name + "_item_" + std::to_string(i)
+      ));
     }
   }
 
-  // 2. Find additional items
-  picojson::value additional_item = picojson::value(false);
-  std::string additional_suffix = "";
-
-  if (schema.count("items") && (!schema.at("items").is<bool>() || schema.at("items").get<bool>())) {
-    additional_item = schema.at("items");
-    additional_suffix = "items";
-  }
-
-  // If items is specified in the schema, we don't need to consider unevaluatedItems
-  if (schema.count("items") == 0) {
-    picojson::value unevaluated = schema.count("unevaluatedItems") ? schema.at("unevaluatedItems")
-                                                                   : picojson::value(!strict_mode_);
-    if (!unevaluated.is<bool>() || unevaluated.get<bool>()) {
-      additional_item = unevaluated;
-      additional_suffix = "uneval";
-    }
-  }
-
-  // 3. Handle additional items and the end separator
-  bool could_be_empty = false;
-  if (additional_item.is<bool>() && !additional_item.get<bool>()) {
-    result += " " + NextSeparator(true);
-  } else {
-    std::string additional_pattern =
-        CreateRuleFromSchema(additional_item, rule_name + "_" + additional_suffix);
-    if (schema.count("prefixItems")) {
-      result += " (" + NextSeparator() + " " + additional_pattern + ")* ";
-      result += NextSeparator(true);
-    } else {
-      result += " " + NextSeparator() + " " + additional_pattern + " (";
-      result += NextSeparator() + " " + additional_pattern + ")* ";
-      result += NextSeparator(true);
-      could_be_empty = true;
-    }
+  // 2. Handle additional items
+  if (array_spec.allow_additional_items) {
+    additional_rule_name =
+        CreateRuleFromSchema(array_spec.additional_item_schema, rule_name + "_additional");
   }
 
   indentManager_->EndIndent();
 
-  result += " \"]\"";
+  // 3. Construct the result with given format
+  // clang-format off
+  /*
+   * prefix empty, additional items not allowed: [empty_separator]
+   * prefix empty, additional items allowed:
+   *   if min == 0, max == 0:
+   *     [empty_separator]
+   *   if min == 0, max > 0:
+   *     ([start_separator additional_rule_name (mid_separator additional_rule_name){0, max - 1}) end_separator] | [empty_separator]
+   *   if min > 0:
+   *     ([start_separator additional_rule_name (mid_separator additional_rule_name){min - 1, max - 1}) end_separator]
+   * prefix non-empty, additional items not allowed: [start_separator item0 mid_separator item1 end_separator]
+   * prefix non-empty, additional items allowed:
+   *   [start_separator item0 mid_separator item1 (mid_separator additional_rule_name){max(0, min - len(prefix)), max - len(prefix)} end_separator]
+   */
+  // clang-format on
+  std::string result;
+  const std::string& left_bracket = EBNFScriptCreator::Str("[");
+  const std::string& right_bracket = EBNFScriptCreator::Str("]");
 
-  if (could_be_empty) {
-    // result = (result) | []
-    auto rest = "\"[\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"]\"";
-    result = "(" + result + ") | " + rest;
+  if (array_spec.prefix_item_schemas.empty()) {
+    auto empty_part = EBNFScriptCreator::Concat({left_bracket, empty_separator, right_bracket});
+    if (!array_spec.allow_additional_items) {
+      return empty_part;
+    } else if (array_spec.min_items == 0 && array_spec.max_items == 0) {
+      return empty_part;
+    } else if (array_spec.min_items == 0 && array_spec.max_items != 0) {
+      return EBNFScriptCreator::Or(
+          {EBNFScriptCreator::Concat(
+               {left_bracket,
+                start_separator,
+                additional_rule_name,
+                EBNFScriptCreator::Repeat(
+                    EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
+                    0,
+                    array_spec.max_items == -1 ? -1 : array_spec.max_items - 1
+                ),
+                end_separator,
+                right_bracket}
+           ),
+           empty_part}
+      );
+    } else {
+      XGRAMMAR_DCHECK(array_spec.min_items > 0);
+      return EBNFScriptCreator::Concat(
+          {left_bracket,
+           start_separator,
+           additional_rule_name,
+           EBNFScriptCreator::Repeat(
+               EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
+               array_spec.min_items - 1,
+               array_spec.max_items == -1 ? -1 : array_spec.max_items - 1
+           ),
+           end_separator,
+           right_bracket}
+      );
+    }
+  } else {
+    std::vector<std::string> prefix_part;
+    for (int i = 0; i < static_cast<int>(item_rule_names.size()); ++i) {
+      if (i > 0) {
+        prefix_part.push_back(mid_separator);
+      }
+      prefix_part.push_back(item_rule_names[i]);
+    }
+    auto prefix_part_str = EBNFScriptCreator::Concat(prefix_part);
+    if (!array_spec.allow_additional_items) {
+      return EBNFScriptCreator::Concat(
+          {left_bracket, start_separator, prefix_part_str, end_separator, right_bracket}
+      );
+    } else {
+      int min_items = std::max(0, array_spec.min_items - static_cast<int>(item_rule_names.size()));
+      return EBNFScriptCreator::Concat(
+          {left_bracket,
+           start_separator,
+           prefix_part_str,
+           EBNFScriptCreator::Repeat(
+               EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
+               min_items,
+               array_spec.max_items == -1
+                   ? -1
+                   : array_spec.max_items - static_cast<int>(item_rule_names.size())
+           ),
+           end_separator,
+           right_bracket}
+      );
+    }
   }
-
-  return result;
 }
 
 std::string JSONSchemaConverter::GetPropertyPattern(

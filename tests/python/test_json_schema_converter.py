@@ -22,7 +22,7 @@ basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= ("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 """
 
@@ -34,7 +34,7 @@ basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[" "]"
+basic_array ::= (("[" "" basic_any (", " basic_any)* "" "]") | ("[" "" "]"))
 basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{" "}"
 """
 
@@ -47,9 +47,8 @@ def check_schema_with_grammar(
     separators: Optional[Tuple[str, str]] = None,
     strict_mode: bool = True,
 ):
-    schema_str = json.dumps(schema)
     json_schema_ebnf = _json_schema_to_ebnf(
-        schema_str,
+        schema,
         any_whitespace=any_whitespace,
         indent=indent,
         separators=separators,
@@ -100,10 +99,10 @@ def test_basic():
         nested_object_field: Dict[str, Dict[str, int]]
 
     ebnf_grammar = basic_json_rules_ebnf_no_space + (
-        r"""root_prop_3 ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[" "]"
-root_prop_4 ::= ("[" "" basic_string (", " basic_string)* "" "]") | "[" "]"
-root_prop_5_item_2 ::= ("[" "" basic_string (", " basic_string)* "" "]") | "[" "]"
-root_prop_5 ::= "[" "" basic_string ", " basic_integer ", " root_prop_5_item_2 "" "]"
+        r"""root_prop_3 ::= (("[" "" basic_any (", " basic_any)* "" "]") | ("[" "" "]"))
+root_prop_4 ::= (("[" "" basic_string (", " basic_string)* "" "]") | ("[" "" "]"))
+root_prop_5_item_2 ::= (("[" "" basic_string (", " basic_string)* "" "]") | ("[" "" "]"))
+root_prop_5 ::= ("[" "" (basic_string ", " basic_integer ", " root_prop_5_item_2) "" "]")
 root_prop_6 ::= ("{" "" basic_string ": " basic_integer (", " basic_string ": " basic_integer)* "" "}") | "{" "}"
 root_prop_7_addl ::= ("{" "" basic_string ": " basic_integer (", " basic_string ": " basic_integer)* "" "}") | "{" "}"
 root_prop_7 ::= ("{" "" basic_string ": " root_prop_7_addl (", " basic_string ": " root_prop_7_addl)* "" "}") | "{" "}"
@@ -134,9 +133,9 @@ def test_indent():
         object_field: Dict[str, int]
 
     ebnf_grammar = basic_json_rules_ebnf_no_space + (
-        r"""root_prop_0 ::= ("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | "[" "]"
-root_prop_1_item_2 ::= ("[" "\n      " basic_string (",\n      " basic_string)* "\n    " "]") | "[" "]"
-root_prop_1 ::= "[" "\n    " basic_string ",\n    " basic_integer ",\n    " root_prop_1_item_2 "\n  " "]"
+        r"""root_prop_0 ::= (("[" "\n    " basic_string (",\n    " basic_string)* "\n  " "]") | ("[" "" "]"))
+root_prop_1_item_2 ::= (("[" "\n      " basic_string (",\n      " basic_string)* "\n    " "]") | ("[" "" "]"))
+root_prop_1 ::= ("[" "\n    " (basic_string ",\n    " basic_integer ",\n    " root_prop_1_item_2) "\n  " "]")
 root_prop_2 ::= ("{" "\n    " basic_string ": " basic_integer (",\n    " basic_string ": " basic_integer)* "\n  " "}") | "{" "}"
 root ::= "{" "\n  " "\"array_field\"" ": " root_prop_0 ",\n  " "\"tuple_field\"" ": " root_prop_1 ",\n  " "\"object_field\"" ": " root_prop_2 "\n" "}"
 """
@@ -160,7 +159,7 @@ schema__grammar__accepted_instances__rejected_instances__test_non_strict = [
     (
         {"type": "array", "prefixItems": [{"type": "integer"}, {"type": "integer"}]},
         basic_json_rules_ebnf
-        + r"""root ::= "[" [ \n\t]* basic_integer [ \n\t]* "," [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]"
+        + r"""root ::= ("[" [ \n\t]* (basic_integer [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]")
 """,
         [[1, 2], [1, 2, 3], [1, 2, 3, "123"]],
         [[1]],
@@ -345,8 +344,8 @@ defs_Foo ::= "{" "" "\"count\"" ": " basic_integer (", " "\"size\"" ": " defs_Fo
 root_prop_0 ::= defs_Foo
 defs_Bar_part_0 ::= "" | ", " "\"banana\"" ": " basic_string ""
 defs_Bar ::= ("{" "" (("\"apple\"" ": " basic_string defs_Bar_part_0) | ("\"banana\"" ": " basic_string "")) "" "}") | "{" "}"
-root_prop_1_items ::= defs_Bar
-root_prop_1 ::= ("[" "" root_prop_1_items (", " root_prop_1_items)* "" "]") | "[" "]"
+root_prop_1_additional ::= defs_Bar
+root_prop_1 ::= (("[" "" root_prop_1_additional (", " root_prop_1_additional)* "" "]") | ("[" "" "]"))
 root ::= "{" "" "\"foo\"" ": " root_prop_0 ", " "\"bars\"" ": " root_prop_1 "" "}"
 """
     )
@@ -718,7 +717,7 @@ def test_any_whitespace():
     schema = SimpleModel.model_json_schema()
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root_prop_1 ::= ("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+        r"""root_prop_1 ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 [ \n\t]* "}"
 """
@@ -727,7 +726,7 @@ root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* ",
     check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True, strict_mode=True)
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root_prop_1 ::= ("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+        r"""root_prop_1 ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}"
 """
@@ -744,6 +743,245 @@ root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* ",
     ]
     for instance in instances:
         check_schema_with_instance(schema, instance, any_whitespace=True)
+
+
+schema__err_message__test_array_schema_error_cases = [
+    ({"type": "array", "prefixItems": {"type": "string"}}, "prefixItems must be an array"),
+    (
+        {"type": "array", "prefixItems": ["not an object"]},
+        "prefixItems must be an array of objects or booleans",
+    ),
+    ({"type": "array", "prefixItems": [False]}, "prefixItems contains false"),
+    ({"type": "array", "items": "not an object"}, "items must be a boolean or an object"),
+    (
+        {"type": "array", "unevaluatedItems": "not an object"},
+        "unevaluatedItems must be a boolean or an object",
+    ),
+    ({"type": "array", "minItems": "not an integer"}, "minItems must be an integer"),
+    ({"type": "array", "maxItems": -1}, "maxItems must be a non-negative integer"),
+    ({"type": "array", "minItems": 5, "maxItems": 3}, "minItems is greater than maxItems: 5 > 3"),
+    (
+        {"type": "array", "prefixItems": [{}, {}, {}], "maxItems": 2},
+        "maxItems is less than the number of prefixItems: 2 < 3",
+    ),
+    (
+        {"type": "array", "prefixItems": [{}, {}], "minItems": 3, "items": False},
+        "minItems is greater than the number of prefixItems, but additional items are not "
+        "allowed: 3 > 2",
+    ),
+]
+
+
+@pytest.mark.parametrize("schema, err_message", schema__err_message__test_array_schema_error_cases)
+def test_array_schema_error_cases(schema: Dict[str, Any], err_message: str):
+    with pytest.raises(Exception) as e:
+        _json_schema_to_ebnf(schema)
+    assert err_message in str(e.value)
+
+
+schema__expected_grammar__instances__test_array_schema = [
+    (
+        {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                "required": ["name", "age"],
+            },
+        },
+        (
+            basic_json_rules_ebnf
+            + r"""root_additional ::= "{" [ \n\t]* "\"name\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "}"
+root ::= (("[" [ \n\t]* root_additional ([ \n\t]* "," [ \n\t]* root_additional)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+"""
+        ),
+        [
+            ([{"name": "John", "age": 30}, {"name": "Jane", "age": 25}], True),
+            ([{"name": "John"}], False),
+        ],
+    ),
+    (
+        {
+            "type": "array",
+            "prefixItems": [
+                {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                    "required": ["name", "age"],
+                },
+                {"type": "integer"},
+                {"type": "string"},
+            ],
+            "additionalItems": False,
+        },
+        (
+            basic_json_rules_ebnf
+            + r"""root_item_0 ::= "{" [ \n\t]* "\"name\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "}"
+root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer [ \n\t]* "," [ \n\t]* basic_string) [ \n\t]* "]")
+"""
+        ),
+        [
+            ([{"name": "John", "age": 30}, 42, "test"], True),
+            ([{"name": "John", "age": 30}, 42], False),
+            ([{"name": "John", "age": 30}, "test", 42], False),
+            ([{"name": "John"}, 42, "test"], False),
+        ],
+    ),
+    (
+        {
+            "type": "array",
+            "prefixItems": [
+                {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                    "required": ["name", "age"],
+                },
+                {"type": "integer"},
+            ],
+            "unevaluatedItems": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"],
+            },
+        },
+        (
+            basic_json_rules_ebnf
+            + r"""root_item_0 ::= "{" [ \n\t]* "\"name\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "}"
+root_additional ::= "{" [ \n\t]* "\"name\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}"
+root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* root_additional)* [ \n\t]* "]")
+"""
+        ),
+        [
+            ([{"name": "John", "age": 30}, 42, {"name": "Jane"}], True),
+            ([{"name": "John", "age": 30}, 42], True),
+            ([{"name": "John", "age": 30}, 42, 123], False),
+            ([{"name": "John", "age": 30}, {"name": "Jane"}], False),
+        ],
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "schema, expected_grammar, instances", schema__expected_grammar__instances__test_array_schema
+)
+def test_array_schema(
+    schema: Dict[str, Any], expected_grammar: str, instances: List[Tuple[Any, bool]]
+):
+    grammar_ebnf = _json_schema_to_ebnf(schema)
+    print(grammar_ebnf)
+    assert grammar_ebnf == expected_grammar
+    for instance, is_accepted in instances:
+        check_schema_with_instance(schema, instance, is_accepted=is_accepted)
+
+
+schema__expected_grammar__instances__test_array_schema_min_max = [
+    # prefix empty, additional items not allowed
+    (
+        {"type": "array", "items": False, "prefixItems": []},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* "]")
+"""
+        ),
+        [([], True), ([1], False), ([1, 2], False)],
+    ),
+    # prefix empty, additional items allowed, min=0 max=0
+    (
+        {"type": "array", "items": {"type": "integer"}, "minItems": 0, "maxItems": 0},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* "]")
+"""
+        ),
+        [([], True), ([1], False), ([1, 2], False)],
+    ),
+    # prefix empty, additional items allowed, min=0 max>0
+    (
+        {"type": "array", "items": {"type": "integer"}, "minItems": 0, "maxItems": 2},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)? [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+"""
+        ),
+        [([], True), ([1], True), ([1, 2], True), ([1, 2, 3], False)],
+    ),
+    # prefix empty, additional items allowed, min>0
+    (
+        {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 3},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer){1,2} [ \n\t]* "]")
+"""
+        ),
+        [([], False), ([1], False), ([1, 2], True), ([1, 2, 3], True), ([1, 2, 3, 4], False)],
+    ),
+    # prefix non-empty, additional items not allowed
+    (
+        {"type": "array", "items": False, "prefixItems": [{"type": "string"}, {"type": "integer"}]},
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) [ \n\t]* "]")
+"""
+        ),
+        [(["foo", 42], True), (["foo", 42, "bar"], False), (["foo"], False), ([42, "foo"], False)],
+    ),
+    # prefix non-empty, additional items allowed
+    (
+        {
+            "type": "array",
+            "prefixItems": [{"type": "string"}, {"type": "integer"}],
+            "items": {"type": "boolean"},
+            "minItems": 3,
+            "maxItems": 4,
+        },
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* basic_boolean){1,2} [ \n\t]* "]")
+"""
+        ),
+        [
+            (["foo", 42, True], True),
+            (["foo", 42, True, False], True),
+            (["foo", 42], False),
+            (["foo", 42, True, False, True], False),
+            (["foo", 42, "bar"], False),
+        ],
+    ),
+    # prefix non-empty, additional items allowed, maxItems not set
+    (
+        {
+            "type": "array",
+            "prefixItems": [{"type": "string"}, {"type": "integer"}],
+            "items": {"type": "boolean"},
+            "minItems": 3,
+        },
+        (
+            basic_json_rules_ebnf
+            + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* basic_boolean)+ [ \n\t]* "]")
+"""
+        ),
+        [
+            (["foo", 42, True], True),
+            (["foo", 42, True, False], True),
+            (["foo", 42, True, False, True], True),
+            (["foo", 42], False),
+            (["foo", 42, "bar"], False),
+        ],
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "schema, expected_grammar, instances",
+    schema__expected_grammar__instances__test_array_schema_min_max,
+)
+def test_array_schema_min_max(
+    schema: Dict[str, Any], expected_grammar: str, instances: List[Tuple[Any, bool]]
+):
+    grammar_ebnf = _json_schema_to_ebnf(schema)
+    assert grammar_ebnf == expected_grammar
+    for instance, is_accepted in instances:
+        check_schema_with_instance(schema, instance, is_accepted=is_accepted)
 
 
 def test_array_with_only_items_keyword():
@@ -1426,7 +1664,7 @@ def test_empty_array():
     schema = {"items": {"type": "string"}, "type": "array"}
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root ::= ("[" [ \n\t]* basic_string ([ \n\t]* "," [ \n\t]* basic_string)* [ \n\t]* "]") | "[" [ \n\t]* "]"
+        r"""root ::= (("[" [ \n\t]* basic_string ([ \n\t]* "," [ \n\t]* basic_string)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 """
     )
 
