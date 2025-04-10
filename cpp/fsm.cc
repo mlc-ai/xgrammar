@@ -10,6 +10,25 @@
 
 namespace xgrammar {
 
+std::unordered_set<int> CompactFSM::GetEpsilonClosure(int state) const {
+  std::queue<int> queue = std::queue<int>({state});
+  std::unordered_set<int> closure;
+  while (!queue.empty()) {
+    int current = queue.front();
+    queue.pop();
+    if (closure.find(current) != closure.end()) {
+      continue;
+    }
+    closure.insert(current);
+    for (const auto& edge : edges[current]) {
+      if (edge.IsEpsilon()) {
+        queue.push(edge.target);
+      }
+    }
+  }
+  return closure;
+}
+
 FSMEdge::FSMEdge(const short& _min, const short& _max, const int& target)
     : min(_min), max(_max), target(target) {
   if (IsCharRange() && min > max) {
@@ -164,72 +183,47 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
 void FSM::Advance(const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule)
     const {
   result->clear();
-  std::queue<int> epsilon_queue = std::queue<int>();
+  std::queue<int> queue = std::queue<int>();
   std::unordered_set<int> visited;
   std::unordered_set<int> in_result;
+  std::unordered_set<int> start_set;
 
   for (const auto& state : from) {
-    if (visited.find(state) != visited.end()) {
-      continue;
-    }
-    visited.insert(state);
-    for (const auto& edge : edges[state]) {
-      if (edge.IsEpsilon()) {
-        epsilon_queue.push(edge.target);
-        continue;
-      }
-      if (is_rule && edge.IsRuleRef()) {
-        if (edge.GetRefRuleId() == value) {
-          if (in_result.find(edge.target) == in_result.end()) {
-            result->push_back(edge.target);
-            in_result.insert(edge.target);
-          }
-        }
-        continue;
-      }
-      if ((!is_rule) && edge.IsCharRange()) {
-        if (value >= edge.min && value <= edge.max) {
-          if (in_result.find(edge.target) == in_result.end()) {
-            result->push_back(edge.target);
-            in_result.insert(edge.target);
-          }
-        }
-        continue;
-      }
-    }
+    queue.push(state);
   }
-
-  while (!epsilon_queue.empty()) {
-    int current = epsilon_queue.front();
-    epsilon_queue.pop();
+  while (!queue.empty()) {
+    int current = queue.front();
+    queue.pop();
     if (visited.find(current) != visited.end()) {
       continue;
     }
     visited.insert(current);
     for (const auto& edge : edges[current]) {
       if (edge.IsEpsilon()) {
-        epsilon_queue.push(edge.target);
+        queue.push(edge.target);
         continue;
       }
       if (is_rule && edge.IsRuleRef()) {
         if (edge.GetRefRuleId() == value) {
-          if (in_result.find(edge.target) == in_result.end()) {
-            result->push_back(edge.target);
-            in_result.insert(edge.target);
-          }
+          in_result.insert(edge.target);
         }
         continue;
       }
-      if ((!is_rule) && edge.IsCharRange()) {
+      if (!is_rule && edge.IsCharRange()) {
         if (value >= edge.min && value <= edge.max) {
-          if (in_result.find(edge.target) == in_result.end()) {
-            result->push_back(edge.target);
-            in_result.insert(edge.target);
-          }
+          in_result.insert(edge.target);
         }
         continue;
       }
     }
+  }
+  std::unordered_set<int> result_closure;
+  for (const auto& state : in_result) {
+    auto closure = GetEpsilonClosure(state);
+    result_closure.insert(closure.begin(), closure.end());
+  }
+  for (const auto& state : result_closure) {
+    result->push_back(state);
   }
   return;
 }
@@ -328,72 +322,47 @@ void CompactFSM::Advance(
     const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule
 ) const {
   result->clear();
-  std::queue<int> epsilon_queue = std::queue<int>();
+  std::queue<int> queue = std::queue<int>();
   std::unordered_set<int> visited;
   std::unordered_set<int> in_result;
+  std::unordered_set<int> start_set;
 
   for (const auto& state : from) {
-    if (visited.find(state) != visited.end()) {
-      continue;
-    }
-    visited.insert(state);
-    for (const auto& edge : edges[state]) {
-      if (edge.IsEpsilon()) {
-        epsilon_queue.push(edge.target);
-        continue;
-      }
-      if (is_rule && edge.IsRuleRef()) {
-        if (edge.GetRefRuleId() == value) {
-          if (in_result.find(edge.target) == in_result.end()) {
-            result->push_back(edge.target);
-            in_result.insert(edge.target);
-          }
-        }
-        continue;
-      }
-      if ((!is_rule) && edge.IsCharRange()) {
-        if (value >= edge.min && value <= edge.max) {
-          if (in_result.find(edge.target) == in_result.end()) {
-            result->push_back(edge.target);
-            in_result.insert(edge.target);
-          }
-        }
-        continue;
-      }
-    }
+    queue.push(state);
   }
-
-  while (!epsilon_queue.empty()) {
-    int current = epsilon_queue.front();
-    epsilon_queue.pop();
+  while (!queue.empty()) {
+    int current = queue.front();
+    queue.pop();
     if (visited.find(current) != visited.end()) {
       continue;
     }
     visited.insert(current);
     for (const auto& edge : edges[current]) {
       if (edge.IsEpsilon()) {
-        epsilon_queue.push(edge.target);
+        queue.push(edge.target);
         continue;
       }
       if (is_rule && edge.IsRuleRef()) {
         if (edge.GetRefRuleId() == value) {
-          if (in_result.find(edge.target) == in_result.end()) {
-            result->push_back(edge.target);
-            in_result.insert(edge.target);
-          }
+          in_result.insert(edge.target);
         }
         continue;
       }
-      if ((!is_rule) && edge.IsCharRange()) {
+      if (!is_rule && edge.IsCharRange()) {
         if (value >= edge.min && value <= edge.max) {
-          if (in_result.find(edge.target) == in_result.end()) {
-            result->push_back(edge.target);
-            in_result.insert(edge.target);
-          }
+          in_result.insert(edge.target);
         }
         continue;
       }
     }
+  }
+  std::unordered_set<int> result_closure;
+  for (const auto& state : in_result) {
+    auto closure = GetEpsilonClosure(state);
+    result_closure.insert(closure.begin(), closure.end());
+  }
+  for (const auto& state : result_closure) {
+    result->push_back(state);
   }
   return;
 }
@@ -575,6 +544,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
   bool set_mode = false;
   bool not_mode = false;
   int left_middle_bracket = -1;
+  int left_quote = -1;
   std::stack<int> bracket_stack;
   for (int i = start; i < end; i++) {
     // Skip the white spaces.
@@ -603,8 +573,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
     // Handle the strings like "...".
     if (regex[i] == '"' && !set_mode) {
       if (quotation_mode && bracket_stack.empty()) {
-        FSMWithStartEnd tmp_fsm;
-        // TODO: Build the FSM.
+        FSMWithStartEnd tmp_fsm(regex.substr(left_quote, i));
         if (i < end - 1) {
           switch (regex[i + 1]) {
             case '+': {
@@ -638,6 +607,11 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
           flag = true;
         }
       }
+      if (!quotation_mode) {
+        left_quote = i;
+      } else {
+        left_quote = -1;
+      }
       quotation_mode = !quotation_mode;
       continue;
     }
@@ -656,8 +630,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
         throw std::runtime_error("Invalid regex: unmatched ']'.");
       }
       if (bracket_stack.empty()) {
-        // TODO: Build the FSM.
-        FSMWithStartEnd tmp_fsm;
+        FSMWithStartEnd tmp_fsm(regex.substr(left_middle_bracket, i));
         if (i < end - 1) {
           switch (regex[i + 1]) {
             case '+': {
@@ -765,4 +738,57 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
   }
   return result;
 }
+
+FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
+  FSMWithStartEnd result;
+  result.is_dfa = true;
+  result.start = 0;
+  result.ends = std::unordered_set<int>();
+  if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
+    result.fsm.edges.push_back(std::vector<FSMEdge>());
+    result.fsm.edges.push_back(std::vector<FSMEdge>());
+    int last_char = -1;
+    result.ends.insert(1);
+    for (size_t i = 1; i < regex.size() - 1; i++) {
+      if (regex[i] == '-') {
+        if (last_char == -1) {
+          result.fsm.edges[0].emplace_back('-', '-', 1);
+        }
+        if (i + 1 >= regex.size() - 1) {
+          result.fsm.edges[0].emplace_back('-', '-', 1);
+        }
+        int next_char = regex[i + 1];
+        if (next_char != '\\') {
+          result.fsm.edges[0].emplace_back(last_char, next_char, 1);
+          last_char = -1;
+        } else {
+          if (i + 2 >= regex.size() - 1) {
+            throw std::runtime_error("Invalid regex: unmatched '\\'.");
+          }
+          char escaped_char = regex[i + 2];
+          switch (escaped_char) {
+            case 'n': {
+              result.fsm.edges[0].emplace_back(last_char, '\n', 1);
+              break;
+            }
+            case 't': {
+              result.fsm.edges[0].emplace_back(last_char, '\t', 1);
+              break;
+            }
+            case 'r': {
+              result.fsm.edges[0].emplace_back(last_char, '\r', 1);
+              break;
+            }
+            case '\\': {
+              result.fsm.edges[0].emplace_back(last_char, '\\', 1);
+              break;
+            }
+          }
+          last_char = -1;
+        }
+      }
+    }
+  }
+}
+
 }  // namespace xgrammar

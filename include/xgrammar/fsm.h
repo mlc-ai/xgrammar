@@ -75,6 +75,8 @@ class FSM {
   FSM Copy() const;
   // The interanl states are also public
   std::vector<std::vector<Edge>> edges;
+
+  FSM() = default;
   friend class FSMWithStartEnd;
 };
 
@@ -84,6 +86,16 @@ class FSMWithStartEnd {
   FSM fsm;
   int start;
   std::unordered_set<int> ends;
+
+  FSMWithStartEnd() = default;
+
+  /*!
+  \brief Construct a FSM from a regex string.
+  \details The regex string should only be the format like "abx" or [a-c0-9].
+  \details Any symbols like "a|b" or "a*b" are not supported.
+  \param regex The regex string.
+*/
+  FSMWithStartEnd(const std::string& regex);
 
   /*!
     \brief Assume the FSM accepts rule1, then the FSM will accept rule1*.
@@ -148,6 +160,14 @@ class FSMWithStartEnd {
 };
 
 class CompactFSM {
+ private:
+  /*!
+    \brief Get the epsilon closure of a state.
+    \param state The current state id.
+    \return The epsilon closure of the state.
+  */
+  std::unordered_set<int> GetEpsilonClosure(int state) const;
+
  public:
   /*!
    \brief Advance the FSM to the next state.
