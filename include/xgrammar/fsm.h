@@ -182,7 +182,14 @@ class CompactFSMWithStartEnd {
   std::string Print() const;
 };
 
-FSMWithStartEnd RegexToFSM(const std::string& regex);
+/*!
+  \brief Converts a regex string to a FSM. The parsing range is [start, end).
+  \param regex The regex string.
+  \param start The current processing character index in the regex string.
+  \param end The end character index in the regex string, -1 means the end of the string.
+  \return The FSM with start and end states.
+*/
+FSMWithStartEnd RegexToFSM(const std::string& regex, int start = 0, int end = -1);
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_FSM_H_

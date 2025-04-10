@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <queue>
 #include <set>
+#include <stack>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -561,6 +562,207 @@ FSMWithStartEnd FSMWithStartEnd::MakeOptional() const {
   result.ends = ends;
   result.start = start;
   result.fsm.edges[start].emplace_back(-1, -1, *ends.begin());
+  return result;
+}
+
+FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
+  bool flag = false;
+  if (end == -1) {
+    end = regex.size();
+  }
+  FSMWithStartEnd result;
+  bool quotation_mode = false;
+  bool set_mode = false;
+  bool not_mode = false;
+  int left_middle_bracket = -1;
+  std::stack<int> bracket_stack;
+  for (int i = start; i < end; i++) {
+    // Skip the white spaces.
+    if (regex[i] == ' ') {
+      continue;
+    }
+
+    // Handle the not operator.
+    if (regex[i] == '!') {
+      if (quotation_mode || set_mode) {
+        continue;
+      }
+      if (not_mode) {
+        throw std::runtime_error("Invalid regex: nested '!' operator.");
+      }
+      not_mode = true;
+      continue;
+    }
+
+    // Handle the escape character.
+    if (regex[i] == '\\') {
+      i = i + 1;
+      continue;
+    }
+
+    // Handle the strings like "...".
+    if (regex[i] == '"' && !set_mode) {
+      if (quotation_mode && bracket_stack.empty()) {
+        FSMWithStartEnd tmp_fsm;
+        // TODO: Build the FSM.
+        if (i < end - 1) {
+          switch (regex[i + 1]) {
+            case '+': {
+              tmp_fsm = tmp_fsm.MakePlus();
+              i = i + 1;
+              break;
+            }
+            case '*': {
+              tmp_fsm = tmp_fsm.MakeStar();
+              i = i + 1;
+              break;
+            }
+            case '?': {
+              tmp_fsm = tmp_fsm.MakeOptional();
+              i = i + 1;
+              break;
+            }
+            default: {
+              throw std::runtime_error("Invalid regex: invalid operator after '\"'.");
+            }
+          }
+        }
+        if (not_mode) {
+          tmp_fsm = tmp_fsm.Not();
+          not_mode = false;
+        }
+        if (flag) {
+          result = FSMWithStartEnd::Concatenate({result, tmp_fsm});
+        } else {
+          result = tmp_fsm;
+          flag = true;
+        }
+      }
+      quotation_mode = !quotation_mode;
+      continue;
+    }
+
+    // Handle the character class like [a-zA-Z].
+    if (regex[i] == '[' && !quotation_mode) {
+      if (set_mode) {
+        throw std::runtime_error("Invalid regex: nested set.");
+      }
+      left_middle_bracket = i;
+      set_mode = true;
+      continue;
+    }
+    if (regex[i] == ']' && set_mode) {
+      if (left_middle_bracket == -1) {
+        throw std::runtime_error("Invalid regex: unmatched ']'.");
+      }
+      if (bracket_stack.empty()) {
+        // TODO: Build the FSM.
+        FSMWithStartEnd tmp_fsm;
+        if (i < end - 1) {
+          switch (regex[i + 1]) {
+            case '+': {
+              tmp_fsm = tmp_fsm.MakePlus();
+              i = i + 1;
+              break;
+            }
+            case '*': {
+              tmp_fsm = tmp_fsm.MakeStar();
+              i = i + 1;
+              break;
+            }
+            case '?': {
+              tmp_fsm = tmp_fsm.MakeOptional();
+              i = i + 1;
+              break;
+            }
+            default: {
+              throw std::runtime_error("Invalid regex: invalid operator after '\"'.");
+            }
+          }
+        }
+        if (not_mode) {
+          tmp_fsm = tmp_fsm.Not();
+          not_mode = false;
+        }
+        if (flag) {
+          result = FSMWithStartEnd::Concatenate({result, tmp_fsm});
+        } else {
+          result = tmp_fsm;
+          flag = true;
+        }
+      }
+      set_mode = false;
+      left_middle_bracket = -1;
+      continue;
+    }
+
+    // Handle the small brackets like (a | b c*) | b.
+    if (regex[i] == '(' && !quotation_mode && !set_mode) {
+      bracket_stack.push(i);
+      continue;
+    }
+    if (regex[i] == ')' && !quotation_mode && !set_mode) {
+      if (bracket_stack.empty()) {
+        throw std::runtime_error("Invalid regex: unmatched ')'.");
+      }
+      int left_bracket = bracket_stack.top();
+      bracket_stack.pop();
+      if (bracket_stack.empty()) {
+        auto tmp_fsm = RegexToFSM(regex, left_bracket + 1, i - 1);
+        // TODO: DO something with fsm.
+        if (i < end - 1) {
+          switch (regex[i + 1]) {
+            case '+': {
+              tmp_fsm = tmp_fsm.MakePlus();
+              i = i + 1;
+              break;
+            }
+            case '*': {
+              tmp_fsm = tmp_fsm.MakeStar();
+              i = i + 1;
+              break;
+            }
+            case '?': {
+              tmp_fsm = tmp_fsm.MakeOptional();
+              i = i + 1;
+              break;
+            }
+            default: {
+              break;
+            }
+          }
+        }
+        if (not_mode) {
+          tmp_fsm = tmp_fsm.Not();
+          not_mode = false;
+        }
+        if (flag) {
+          result = FSMWithStartEnd::Concatenate({result, tmp_fsm});
+        } else {
+          result = tmp_fsm;
+          flag = true;
+        }
+      }
+      continue;
+    }
+
+    // Handle the alternation operator '|'.
+    if (regex[i] == '|' && !quotation_mode && !set_mode) {
+      if (bracket_stack.empty()) {
+        auto rhs = RegexToFSM(regex, i + 1, end);
+        if (!flag) {
+          throw(std::runtime_error("Invalid regex: unmatched '|'."));
+        }
+        result = FSMWithStartEnd::Union({result, rhs});
+      }
+    }
+  }
+  if (quotation_mode || set_mode || !bracket_stack.empty() || not_mode) {
+    throw std::runtime_error("Invalid regex: unmatched '\"' or '[' or '('. or '!'");
+  }
+  if (!flag) {
+    throw std::runtime_error("Invalid regex: empty regex.");
+  }
   return result;
 }
 }  // namespace xgrammar
