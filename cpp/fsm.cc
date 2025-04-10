@@ -529,4 +529,38 @@ FSMWithStartEnd FSMWithStartEnd::Concatenate(const std::vector<FSMWithStartEnd>&
   return result;
 }
 
+FSMWithStartEnd FSMWithStartEnd::MakeStar() const {
+  FSMWithStartEnd result;
+  result.is_dfa = false;
+  result.fsm = fsm.Copy();
+  result.ends = ends;
+  result.start = start;
+  for (const auto& end : ends) {
+    result.fsm.edges[end].emplace_back(-1, -1, start);
+  }
+  result.fsm.edges[start].emplace_back(-1, -1, *ends.begin());
+  return result;
+}
+
+FSMWithStartEnd FSMWithStartEnd::MakePlus() const {
+  FSMWithStartEnd result;
+  result.is_dfa = false;
+  result.fsm = fsm.Copy();
+  result.ends = ends;
+  result.start = start;
+  for (const auto& end : ends) {
+    result.fsm.edges[end].emplace_back(-1, -1, start);
+  }
+  return result;
+}
+
+FSMWithStartEnd FSMWithStartEnd::MakeOptional() const {
+  FSMWithStartEnd result;
+  result.is_dfa = false;
+  result.fsm = fsm.Copy();
+  result.ends = ends;
+  result.start = start;
+  result.fsm.edges[start].emplace_back(-1, -1, *ends.begin());
+  return result;
+}
 }  // namespace xgrammar

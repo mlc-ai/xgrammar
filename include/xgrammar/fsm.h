@@ -84,6 +84,22 @@ class FSMWithStartEnd {
   FSM fsm;
   int start;
   std::unordered_set<int> ends;
+
+  /*!
+    \brief Assume the FSM accepts rule1, then the FSM will accept rule1*.
+    \return The FSM that accepts rule1*.
+  */
+  FSMWithStartEnd MakeStar() const;
+  /*!
+    \brief Assume the FSM accepts rule1, then the FSM will accept rule1+.
+    \return The FSM that accepts rule1+.
+  */
+  FSMWithStartEnd MakePlus() const;
+  /*!
+    \brief Assume the FSM accepts rule1, then the FSM will accept rule1?.
+    \return The FSM that accepts rule1?.
+  */
+  FSMWithStartEnd MakeOptional() const;
   /*!
     \brief Transform the FSM to a DFA.
     \return The DFA.
