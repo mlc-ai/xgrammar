@@ -1,5 +1,6 @@
 #include <xgrammar/fsm.h>
 
+#include <cstddef>
 #include <queue>
 #include <set>
 #include <string>
@@ -498,4 +499,34 @@ FSMWithStartEnd FSMWithStartEnd::TODFA() const {
   }
   return dfa;
 }
+
+FSMWithStartEnd FSMWithStartEnd::Concatenate(const std::vector<FSMWithStartEnd>& fsms) {
+  FSMWithStartEnd result;
+  result.is_dfa = false;
+  int node_cnt = 0;
+  result.start = fsms[0].start;
+  for (size_t i = 0; i < fsms.size(); i++) {
+    const auto& fsm_with_se = fsms[i];
+    for (const auto& edges : fsm_with_se.fsm.edges) {
+      result.fsm.edges.push_back(std::vector<FSMEdge>());
+      for (const auto& edge : edges) {
+        result.fsm.edges.back().emplace_back(edge.min, edge.max, edge.target + node_cnt);
+      }
+      if (i == fsms.size() - 1) {
+        for (const auto& end : fsm_with_se.ends) {
+          result.ends.insert(end + node_cnt);
+        }
+        break;
+      }
+      for (const auto& end : fsm_with_se.ends) {
+        result.fsm.edges[end + node_cnt].emplace_back(
+            -1, -1, fsm_with_se.ends.size() + node_cnt + fsms[i + 1].start
+        );
+      }
+    }
+    node_cnt += fsm_with_se.fsm.edges.size();
+  }
+  return result;
+}
+
 }  // namespace xgrammar

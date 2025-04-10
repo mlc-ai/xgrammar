@@ -122,6 +122,13 @@ class FSMWithStartEnd {
     \return The union of the FSMs.
   */
   static FSMWithStartEnd Union(const std::vector<FSMWithStartEnd>& fsms);
+
+  /*!
+    \brief Concatenate the FSMs.
+    \param fsms The FSMs to be concatenated, which should be in order.
+    \return The concatenation of the FSMs.
+  */
+  static FSMWithStartEnd Concatenate(const std::vector<FSMWithStartEnd>& fsms);
 };
 
 class CompactFSM {
