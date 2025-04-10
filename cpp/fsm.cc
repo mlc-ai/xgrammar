@@ -1,8 +1,10 @@
 #include <xgrammar/fsm.h>
 
 #include <queue>
+#include <set>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
 namespace xgrammar {
 
@@ -410,22 +412,43 @@ FSMWithStartEnd FSMWithStartEnd::TODFA() const {
   int now_process = 0;
   closures.push_back(fsm.GetEpsilonClosure(start));
   while (now_process < static_cast<int>(closures.size())) {
+    std::set<int> interval_ends;
     dfa.fsm.edges.push_back(std::vector<FSMEdge>());
     // Check if the closure is a final state.
     for (const auto& node : closures[now_process]) {
       if (ends.find(node) != ends.end()) {
         dfa.ends.insert(now_process);
-        break;
+      }
+      const auto& edges = fsm.edges[node];
+      for (const auto& edge : edges) {
+        if (edge.IsCharRange()) {
+          interval_ends.insert(edge.min);
+          interval_ends.insert(edge.max + 1);
+        }
       }
     }
 
-    for (int i = 0; i < 0x100; i++) {
+    // This part is to get the all possible intervals.
+    // Which can help reduce the transitions.
+    using Interval = std::pair<int, int>;
+    std::vector<Interval> intervals;
+    intervals.reserve(interval_ends.size() - 1);
+    int last = -1;
+    for (const auto& end : interval_ends) {
+      if (last == -1) {
+        last = end;
+        continue;
+      }
+      intervals.emplace_back(last, end - 1);
+      last = end;
+    }
+    for (const auto& interval : intervals) {
       std::unordered_set<int> next_closure;
       for (const auto& node : closures[now_process]) {
         const auto& edges = fsm.edges[node];
         for (const auto& edge : edges) {
           if (edge.IsCharRange()) {
-            if (i >= edge.min && i <= edge.max) {
+            if (interval.first >= edge.min && interval.second <= edge.max) {
               auto epsilon_closure = fsm.GetEpsilonClosure(edge.target);
               next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
             }
@@ -435,17 +458,16 @@ FSMWithStartEnd FSMWithStartEnd::TODFA() const {
       bool flag = false;
       for (int j = 0; j < static_cast<int>(closures.size()); j++) {
         if (closures[j] == next_closure) {
-          dfa.fsm.edges[now_process].emplace_back(i, i, j);
+          dfa.fsm.edges[now_process].emplace_back(interval.first, interval.second, j);
           flag = true;
           break;
         }
       }
       if (!flag) {
-        dfa.fsm.edges[now_process].emplace_back(i, i, closures.size());
+        dfa.fsm.edges[now_process].emplace_back(interval.first, interval.second, closures.size());
         closures.push_back(next_closure);
       }
     }
-
     for (auto rule : rules) {
       std::unordered_set<int> next_closure;
       for (const auto& node : closures[now_process]) {
@@ -472,6 +494,7 @@ FSMWithStartEnd FSMWithStartEnd::TODFA() const {
         closures.push_back(next_closure);
       }
     }
+    now_process++;
   }
   return dfa;
 }
