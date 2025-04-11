@@ -1007,4 +1007,79 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   return now_fsm;
 }
 
+std::vector<std::pair<int, int>> HandleEscape(const std::string& regex, int start) {
+  if (regex[start] != '\\') {
+    throw std::runtime_error("Invalid regex: invalid escape character.");
+  }
+  if (int(regex.size()) <= start + 1) {
+    throw std::runtime_error("Invalid regex: invalid escape character.");
+  }
+  std::vector<std::pair<int, int>> result;
+  switch (regex[start + 1]) {
+    case 'n': {
+      result.emplace_back('\n', '\n');
+      break;
+    }
+    case 't': {
+      result.emplace_back('\t', '\t');
+      break;
+    }
+    case 'r': {
+      result.emplace_back('\r', '\r');
+      break;
+    }
+    case '\\': {
+      result.emplace_back('\\', '\\');
+      break;
+    }
+    case '\'': {
+      result.emplace_back('\'', '\'');
+      break;
+    }
+    case '\"': {
+      result.emplace_back('\"', '\"');
+      break;
+    }
+    case '0': {
+      result.emplace_back('\0', '\0');
+      break;
+    }
+    case 'd': {
+      result.emplace_back('0', '9');
+      break;
+    }
+    case 'D': {
+      result.emplace_back(0, '0' - 1);
+      result.emplace_back('9' + 1, 0x00FF);
+      break;
+    }
+    case 'w': {
+      result.emplace_back('0', '9');
+      result.emplace_back('a', 'z');
+      result.emplace_back('A', 'Z');
+      result.emplace_back('_', '_');
+      break;
+    }
+    case 'W': {
+      result.emplace_back(0, '0' - 1);
+      result.emplace_back('9' + 1, 'A' - 1);
+      result.emplace_back('Z' + 1, '_' - 1);
+      result.emplace_back('_' + 1, 'a' - 1);
+      result.emplace_back('z' + 1, 0x00FF);
+      break;
+    }
+    case 's': {
+      result.emplace_back(0, ' ');
+      break;
+    }
+    case 'S': {
+      result.emplace_back(' ' + 1, 0x00FF);
+      break;
+    }
+    default: {
+      throw std::runtime_error("Invalid regex: invalid escape character.");
+    }
+  }
+  return result;
+}
 }  // namespace xgrammar
