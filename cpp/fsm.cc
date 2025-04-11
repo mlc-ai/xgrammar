@@ -574,7 +574,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
     }
 
     // Handle the strings like "...".
-    if (regex[i] == '"' && !set_mode) {
+    if (regex[i] == '\"' && !set_mode) {
       if (quotation_mode && bracket_stack.empty()) {
         FSMWithStartEnd tmp_fsm(regex.substr(left_quote, i));
         if (i < end - 1) {
@@ -685,7 +685,6 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
       bracket_stack.pop();
       if (bracket_stack.empty()) {
         auto tmp_fsm = RegexToFSM(regex, left_bracket + 1, i - 1);
-        // TODO: DO something with fsm.
         if (i < end - 1) {
           switch (regex[i + 1]) {
             case '+': {
