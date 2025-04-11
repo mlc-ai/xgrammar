@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstring>
 #include <queue>
 #include <set>
 #include <stack>
@@ -767,7 +768,8 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     edges.push_back(std::vector<FSMEdge>());
     edges.push_back(std::vector<FSMEdge>());
     ends.insert(1);
-    for (size_t i = 1; i < regex.size() - 1; i++) {
+    bool reverse = regex[1] == '^';
+    for (size_t i = reverse ? 2 : 1; i < regex.size() - 1; i++) {
       if (regex[i] != '\\') {
         if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
           // A single char.
@@ -817,6 +819,29 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
       edges[0].emplace_back(escaped_edges[0].first, rhs_escaped_edges[0].first, 1);
       i = i + 3;
       continue;
+    }
+    if (reverse) {
+      bool has_edge[0x100];
+      memset(has_edge, 0, sizeof(has_edge));
+      for (const auto& edge : edges[0]) {
+        for (int i = edge.min; i <= edge.max; i++) {
+          has_edge[i] = true;
+        }
+      }
+      edges[0].clear();
+      int last = -1;
+      for (int i = 0; i < 0x100; i++) {
+        if (has_edge[i]) {
+          if (last == -1) {
+            last = i;
+          }
+          continue;
+        }
+        if (last != -1) {
+          edges[0].emplace_back(last, i - 1, 1);
+          last = -1;
+        }
+      }
     }
   }
   // TODO: The support for rules.
