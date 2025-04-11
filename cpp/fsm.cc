@@ -743,55 +743,85 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
 }
 
 FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
-  FSMWithStartEnd result;
-  result.is_dfa = true;
-  result.start = 0;
-  result.ends = std::unordered_set<int>();
-  if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
-    result.fsm.edges.push_back(std::vector<FSMEdge>());
-    result.fsm.edges.push_back(std::vector<FSMEdge>());
-    int last_char = -1;
-    result.ends.insert(1);
+  is_dfa = true;
+  start = 0;
+  auto& edges = fsm.edges;
+  // Handle the regex string.
+  if (regex[0] == '\"' && regex[regex.size() - 1] == '\"') {
+    edges.push_back(std::vector<FSMEdge>());
     for (size_t i = 1; i < regex.size() - 1; i++) {
-      if (regex[i] == '-') {
-        if (last_char == -1) {
-          result.fsm.edges[0].emplace_back('-', '-', 1);
-        }
-        if (i + 1 >= regex.size() - 1) {
-          result.fsm.edges[0].emplace_back('-', '-', 1);
-        }
-        int next_char = regex[i + 1];
-        if (next_char != '\\') {
-          result.fsm.edges[0].emplace_back(last_char, next_char, 1);
-          last_char = -1;
-        } else {
-          if (i + 2 >= regex.size() - 1) {
-            throw std::runtime_error("Invalid regex: unmatched '\\'.");
-          }
-          char escaped_char = regex[i + 2];
-          switch (escaped_char) {
-            case 'n': {
-              result.fsm.edges[0].emplace_back(last_char, '\n', 1);
-              break;
-            }
-            case 't': {
-              result.fsm.edges[0].emplace_back(last_char, '\t', 1);
-              break;
-            }
-            case 'r': {
-              result.fsm.edges[0].emplace_back(last_char, '\r', 1);
-              break;
-            }
-            case '\\': {
-              result.fsm.edges[0].emplace_back(last_char, '\\', 1);
-              break;
-            }
-          }
-          last_char = -1;
-        }
+      if (regex[i] != '\\') {
+        edges.back().emplace_back(regex[i], regex[i], edges.size());
+        edges.push_back(std::vector<FSMEdge>());
+        continue;
       }
+      char escape_char = HandleEscapeInString(regex, i);
+      edges.back().emplace_back(escape_char, escape_char, edges.size());
+      edges.push_back(std::vector<FSMEdge>());
+      i++;
+    }
+    ends.insert(edges.size() - 1);
+    return;
+  }
+  // Handle the character class.
+  if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
+    edges.push_back(std::vector<FSMEdge>());
+    edges.push_back(std::vector<FSMEdge>());
+    ends.insert(1);
+    for (size_t i = 1; i < regex.size() - 1; i++) {
+      if (regex[i] != '\\') {
+        if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
+          // A single char.
+          edges[0].emplace_back(regex[i], regex[i], 1);
+          continue;
+        }
+        // Handle the char range.
+        if (regex[i + 2] != '\\') {
+          edges[0].emplace_back(regex[i], regex[i + 2], 1);
+          i = i + 2;
+          continue;
+        }
+        auto escaped_edges = HandleEscapeInClass(regex, i + 2);
+        // Means it's not a range.
+        if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
+          edges[0].emplace_back(regex[i], regex[i], 1);
+          continue;
+        }
+        edges[0].emplace_back(regex[0], escaped_edges[0].first, 1);
+        i = i + 3;
+        continue;
+      }
+      auto escaped_edges = HandleEscapeInClass(regex, i);
+      i = i + 1;
+      if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
+        // It's a multi-match escape char.
+        for (const auto& edge : escaped_edges) {
+          edges[0].emplace_back(edge.first, edge.second, 1);
+        }
+        continue;
+      }
+      if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
+        edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
+        continue;
+      }
+      if (regex[i + 2] != '\\') {
+        edges[0].emplace_back(escaped_edges[0].first, regex[i + 2], 1);
+        i = i + 2;
+        continue;
+      }
+      auto rhs_escaped_edges = HandleEscapeInClass(regex, i + 2);
+      if (rhs_escaped_edges.size() != 1 ||
+          rhs_escaped_edges[0].first != rhs_escaped_edges[0].second) {
+        edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
+        continue;
+      }
+      edges[0].emplace_back(escaped_edges[0].first, rhs_escaped_edges[0].first, 1);
+      i = i + 3;
+      continue;
     }
   }
+  // TODO: The support for rules.
+  throw std::runtime_error("Rules are not supported yet.");
 }
 
 FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
@@ -1007,7 +1037,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   return now_fsm;
 }
 
-std::vector<std::pair<int, int>> HandleEscape(const std::string& regex, int start) {
+std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start) {
   if (regex[start] != '\\') {
     throw std::runtime_error("Invalid regex: invalid escape character.");
   }
@@ -1032,16 +1062,16 @@ std::vector<std::pair<int, int>> HandleEscape(const std::string& regex, int star
       result.emplace_back('\\', '\\');
       break;
     }
-    case '\'': {
-      result.emplace_back('\'', '\'');
-      break;
-    }
-    case '\"': {
-      result.emplace_back('\"', '\"');
+    case ']': {
+      result.emplace_back(']', ']');
       break;
     }
     case '0': {
       result.emplace_back('\0', '\0');
+      break;
+    }
+    case '-': {
+      result.emplace_back('-', '-');
       break;
     }
     case 'd': {
@@ -1081,5 +1111,38 @@ std::vector<std::pair<int, int>> HandleEscape(const std::string& regex, int star
     }
   }
   return result;
+}
+
+char HandleEscapeInString(const std::string& regex, int start) {
+  if (regex[start] != '\\') {
+    throw std::runtime_error("Invalid regex: invalid escape character.");
+  }
+  if (int(regex.size()) <= start + 1) {
+    throw std::runtime_error("Invalid regex: invalid escape character.");
+  }
+  std::vector<std::pair<int, int>> result;
+  switch (regex[start + 1]) {
+    case 'n': {
+      return '\n';
+    }
+    case 't': {
+      return '\t';
+    }
+    case 'r': {
+      return '\r';
+    }
+    case '\\': {
+      return '\\';
+    }
+    case '\"': {
+      return '\"';
+    }
+    case '0': {
+      return '\0';
+    }
+    default: {
+      throw std::runtime_error("Invalid regex: invalid escape character.");
+    }
+  }
 }
 }  // namespace xgrammar

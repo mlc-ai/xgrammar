@@ -213,11 +213,20 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start = 0, int end = -1
 }  // namespace xgrammar
 
 /*!
-  \brief Handle the escape sequence.
+  \brief Handle the escape sequence in [...].
   \param regex The regex string.
   \param start The start index of the escape sequence. i.e. regex[start] === '\\'.
   \param end The end index of the now handing string.
   \return The corresponding edges.
 */
-std::vector<std::pair<int, int>> HandleEscape(const std::string& regex, int start);
+std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start);
+
+/*!
+  \brief Handle the escape sequence in "...".
+  \param regex The regex string.
+  \param start The start index of the escape sequence. i.e. regex[start] === '\\'.
+  \param end The end index of the now handing string.
+  \return The corresponding edges.
+*/
+char HandleEscapeInString(const std::string& regex, int start);
 #endif  // XGRAMMAR_FSM_H_
