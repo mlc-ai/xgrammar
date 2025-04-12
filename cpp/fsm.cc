@@ -13,6 +13,8 @@
 #include <vector>
 
 namespace xgrammar {
+std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start);
+char HandleEscapeInString(const std::string& regex, int start);
 
 std::unordered_set<int> CompactFSM::GetEpsilonClosure(int state) const {
   std::queue<int> queue = std::queue<int>({state});
@@ -577,7 +579,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
     // Handle the strings like "...".
     if (regex[i] == '\"' && !set_mode) {
       if (quotation_mode && bracket_stack.empty()) {
-        FSMWithStartEnd tmp_fsm(regex.substr(left_quote, i));
+        FSMWithStartEnd tmp_fsm(regex.substr(left_quote, i + 1));
         if (i < end - 1) {
           switch (regex[i + 1]) {
             case '+': {
@@ -634,7 +636,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
         throw std::runtime_error("Invalid regex: unmatched ']'.");
       }
       if (bracket_stack.empty()) {
-        FSMWithStartEnd tmp_fsm(regex.substr(left_middle_bracket, i));
+        FSMWithStartEnd tmp_fsm(regex.substr(left_middle_bracket, i + 1));
         if (i < end - 1) {
           switch (regex[i + 1]) {
             case '+': {
@@ -831,7 +833,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
       edges[0].clear();
       int last = -1;
       for (int i = 0; i < 0x100; i++) {
-        if (has_edge[i]) {
+        if (!has_edge[i]) {
           if (last == -1) {
             last = i;
           }
@@ -842,7 +844,11 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
           last = -1;
         }
       }
+      if (last != -1) {
+        edges[0].emplace_back(last, 0xFF, 1);
+      }
     }
+    return;
   }
   // TODO: The support for rules.
   throw std::runtime_error("Rules are not supported yet.");
@@ -888,7 +894,8 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
           }
           auto transitions_i = now_fsm.fsm.edges[i];
           auto transitions_j = now_fsm.fsm.edges[j];
-          // First, check all the actions in transtions_i, and compare them with transition_j.
+          // First, check all the actions in transtions_i, and compare them with
+          // transition_j.
           for (const auto& transition_i : transitions_i) {
             if (mark_graph[i][j]) {
               break;
