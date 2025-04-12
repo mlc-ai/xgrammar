@@ -44,7 +44,7 @@ FSMEdge::FSMEdge(const short& _min, const short& _max, const int& target)
 
 bool FSMEdge::IsEpsilon() const { return min == -1 && max == -1; }
 
-bool FSMEdge::IsRuleRef() const { return min == -1; }
+bool FSMEdge::IsRuleRef() const { return min == -1 && max != -1; }
 
 bool FSMEdge::IsCharRange() const { return min >= 0 && max >= 0; }
 
@@ -144,7 +144,8 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
   result.fsm.edges.back().emplace_back(0, 0x00FF, node_cnt);
   result.ends.insert(node_cnt);
 
-  for (const auto& node_edges : fsm.edges) {
+  for (size_t i = 0; i < fsm.edges.size(); i++) {
+    const auto& node_edges = fsm.edges[i];
     std::vector<bool> char_has_edges(0x100, false);
     std::unordered_set<int> rule_has_edges;
     for (const auto& edge : node_edges) {
@@ -160,20 +161,23 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
 
     // Add the left characters to the new state.
     int interval_start = -1;
-    for (int i = 0; i < 0x100; ++i) {
-      if (!char_has_edges[i]) {
+    for (int j = 0; j < 0x100; ++j) {
+      if (!char_has_edges[j]) {
         // The char doesn't have any edges. Thus, we can accept it in the
         // complement FSM.
         if (interval_start == -1) {
-          interval_start = i;
+          interval_start = j;
         }
       } else {
         if (interval_start != -1) {
           // node_cnt is the node to accept all such characters.
-          result.fsm.edges.back().emplace_back(interval_start, i - 1, node_cnt);
+          result.fsm.edges[i].emplace_back(interval_start, i - 1, node_cnt);
           interval_start = -1;
         }
       }
+    }
+    if (interval_start != -1) {
+      result.fsm.edges[i].emplace_back(interval_start, 0xFF, node_cnt);
     }
 
     // Add the left rules to the new state.
@@ -317,7 +321,7 @@ FSM CompactFSM::ToFSM() {
   for (int i = 0; i < edges.Size(); i++) {
     const auto& row = edges[i];
     result.edges.emplace_back(std::vector<FSMEdge>());
-    for (int j = 0; j < row.size(); i++) {
+    for (int j = 0; j < row.size(); j++) {
       result.edges.back().push_back(row[j]);
     }
   }
@@ -401,15 +405,15 @@ FSMWithStartEnd FSMWithStartEnd::TODFA() const {
         if (edge.IsCharRange()) {
           interval_ends.insert(edge.min);
           interval_ends.insert(edge.max + 1);
+          continue;
         }
       }
     }
-
     // This part is to get the all possible intervals.
     // Which can help reduce the transitions.
     using Interval = std::pair<int, int>;
     std::vector<Interval> intervals;
-    intervals.reserve(interval_ends.size() - 1);
+    intervals.reserve(interval_ends.size());
     int last = -1;
     for (const auto& end : interval_ends) {
       if (last == -1) {
@@ -852,7 +856,6 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     return;
   }
   // TODO: The support for rules.
-  std::cout << regex << std::endl;
   throw std::runtime_error("Rules are not supported yet.");
 }
 
@@ -884,7 +887,6 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
         }
       }
     }
-
     // Check the equivalence of the states.
     bool changed = true;
     while (changed) {
@@ -908,12 +910,15 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
               for (const auto& transition_j : transitions_j) {
                 if (transition_j.IsRuleRef()) {
                   if (transition_j.GetRefRuleId() == rule_id) {
+                    is_blocked = false;
+                    if (transition_i.target == transition_j.target) {
+                      continue;
+                    }
                     if (mark_graph[std::max(transition_i.target, transition_j.target)]
                                   [std::min(transition_i.target, transition_j.target)]) {
                       mark_graph[i][j] = true;
                       changed = true;
                     }
-                    is_blocked = false;
                     break;
                   }
                 }
@@ -934,12 +939,15 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
                 // That means the intersection is not empty.
                 if ((char_min >= transition_j.min && char_min <= transition_j.max) ||
                     (char_max >= transition_j.min && char_max <= transition_j.max)) {
+                  is_blocked = false;
+                  if (transition_i.target == transition_j.target) {
+                    continue;
+                  }
                   if (mark_graph[std::max(transition_i.target, transition_j.target)]
                                 [std::min(transition_i.target, transition_j.target)]) {
                     mark_graph[i][j] = true;
                     changed = true;
                   }
-                  is_blocked = false;
                   break;
                 }
               }
@@ -963,12 +971,15 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
               for (const auto& transition_i : transitions_i) {
                 if (transition_i.IsRuleRef()) {
                   if (transition_j.GetRefRuleId() == rule_id) {
+                    is_blocked = false;
+                    if (transition_i.target == transition_j.target) {
+                      continue;
+                    }
                     if (mark_graph[std::max(transition_i.target, transition_j.target)]
                                   [std::min(transition_i.target, transition_j.target)]) {
                       mark_graph[i][j] = true;
                       changed = true;
                     }
-                    is_blocked = false;
                     break;
                   }
                 }
@@ -989,12 +1000,15 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
                 // That means the intersection is not empty.
                 if ((char_min >= transition_i.min && char_min <= transition_i.max) ||
                     (char_max >= transition_i.min && char_max <= transition_i.max)) {
+                  is_blocked = false;
+                  if (transition_i.target == transition_j.target) {
+                    continue;
+                  }
                   if (mark_graph[std::max(transition_i.target, transition_j.target)]
                                 [std::min(transition_i.target, transition_j.target)]) {
                     mark_graph[i][j] = true;
                     changed = true;
                   }
-                  is_blocked = false;
                   break;
                 }
               }
