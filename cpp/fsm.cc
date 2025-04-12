@@ -8,6 +8,7 @@
 #include <set>
 #include <stack>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -739,6 +740,16 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
         return result;
       }
     }
+    if (regex[i] == '&' && !quotation_mode && !set_mode) {
+      if (bracket_stack.empty()) {
+        auto rhs = RegexToFSM(regex, i + 1, end);
+        if (!flag) {
+          throw(std::runtime_error("Invalid regex: unmatched '&'."));
+        }
+        result = FSMWithStartEnd::Intersect(result, rhs);
+        return result;
+      }
+    }
   }
   if (quotation_mode || set_mode || !bracket_stack.empty() || not_mode) {
     throw std::runtime_error("Invalid regex: unmatched '\"' or '[' or '('. or '!'");
@@ -1191,5 +1202,134 @@ char HandleEscapeInString(const std::string& regex, int start) {
       throw std::runtime_error("Invalid regex: invalid escape character.");
     }
   }
+}
+FSMWithStartEnd FSMWithStartEnd::Intersect(const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs) {
+  auto lhs_dfa = lhs.TODFA();
+  auto rhs_dfa = rhs.TODFA();
+  std::unordered_set<int> rules_lhs;
+  std::unordered_set<int> rules;
+  std::set<int> interval_ends;
+  std::vector<std::pair<int, int>> intervals;
+  // This part is to build the equivalent alphabet.
+  for (const auto& edges : lhs.fsm.edges) {
+    for (const auto& edge : edges) {
+      if (edge.IsRuleRef()) {
+        rules_lhs.insert(edge.GetRefRuleId());
+      }
+    }
+  }
+  for (const auto& edges : rhs.fsm.edges) {
+    for (const auto& edge : edges) {
+      if (edge.IsRuleRef()) {
+        if (rules_lhs.find(edge.GetRefRuleId()) != rules_lhs.end()) {
+          rules.insert(edge.GetRefRuleId());
+        }
+      }
+    }
+  }
+  for (const auto& edges : lhs_dfa.fsm.edges) {
+    for (const auto& edge : edges) {
+      if (edge.IsCharRange()) {
+        interval_ends.insert(edge.min);
+        interval_ends.insert(edge.max + 1);
+      }
+    }
+  }
+  for (const auto& edges : rhs_dfa.fsm.edges) {
+    for (const auto& edge : edges) {
+      if (edge.IsCharRange()) {
+        interval_ends.insert(edge.min);
+        interval_ends.insert(edge.max + 1);
+      }
+    }
+  }
+  for (auto it = interval_ends.begin(); it != interval_ends.end(); ++it) {
+    auto next_it = std::next(it);
+    if (next_it != interval_ends.end()) {
+      intervals.emplace_back(*it, *next_it - 1);
+    }
+  }
+  FSMWithStartEnd result;
+  result.is_dfa = true;
+  result.start = 0;
+  std::unordered_map<std::pair<int, int>, int> state_map;
+  std::unordered_set<std::pair<int, int>> visited;
+  std::queue<std::pair<int, int>> queue;
+  queue.push({lhs.start, rhs.start});
+  result.fsm.edges.push_back(std::vector<FSMEdge>());
+  state_map[{lhs.start, rhs.start}] = 0;
+  while (!queue.empty()) {
+    auto state = queue.front();
+    queue.pop();
+    if (visited.find(state) != visited.end()) {
+      continue;
+    }
+    visited.insert(state);
+    int lhs_state = state.first;
+    int rhs_state = state.second;
+    for (const auto& interval : intervals) {
+      for (const auto& lhs_edge : lhs_dfa.fsm.edges[lhs_state]) {
+        if (!lhs_edge.IsCharRange()) {
+          continue;
+        }
+        if (lhs_edge.min > interval.first || lhs_edge.max < interval.second) {
+          continue;
+        }
+        for (const auto& rhs_edge : rhs_dfa.fsm.edges[rhs_state]) {
+          if (!rhs_edge.IsCharRange()) {
+            continue;
+          }
+          if (rhs_edge.min > interval.first || rhs_edge.max < interval.second) {
+            continue;
+          }
+          auto next_state = std::make_pair(lhs_edge.target, rhs_edge.target);
+          if (state_map.find(next_state) == state_map.end()) {
+            state_map[next_state] = state_map.size();
+            queue.push(next_state);
+            result.fsm.edges.push_back(std::vector<FSMEdge>());
+          }
+          result.fsm.edges[state_map[{lhs_state, rhs_state}]].emplace_back(
+              interval.first, interval.second, state_map[next_state]
+          );
+          break;
+        }
+      }
+    }
+    for (const auto& rule : rules) {
+      for (const auto& lhs_edge : lhs_dfa.fsm.edges[lhs_state]) {
+        if (!lhs_edge.IsRuleRef()) {
+          continue;
+        }
+        if (lhs_edge.GetRefRuleId() != rule) {
+          continue;
+        }
+        for (const auto& rhs_edge : rhs_dfa.fsm.edges[rhs_state]) {
+          if (!rhs_edge.IsRuleRef()) {
+            continue;
+          }
+          if (rhs_edge.GetRefRuleId() != rule) {
+            continue;
+          }
+          auto next_state = std::make_pair(lhs_edge.target, rhs_edge.target);
+          if (state_map.find(next_state) == state_map.end()) {
+            state_map[next_state] = state_map.size();
+            queue.push(next_state);
+            result.fsm.edges.push_back(std::vector<FSMEdge>());
+          }
+          result.fsm.edges[state_map[{lhs_state, rhs_state}]].emplace_back(
+              -1, rule, state_map[next_state]
+          );
+          break;
+        }
+      }
+    }
+  }
+  for (const auto& state : visited) {
+    if (lhs.ends.find(state.first) != lhs.ends.end() &&
+        rhs.ends.find(state.second) != rhs.ends.end()) {
+      result.ends.insert(state_map[state]);
+    }
+  }
+  return result;
 }
 }  // namespace xgrammar

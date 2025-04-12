@@ -184,7 +184,7 @@ class CompactFSM {
     \return The FSM.
   */
   FSM ToFSM();
-  // The interanl states are also public
+  // The internal states are also public
   using Edge = FSMEdge;
   CSRArray<Edge> edges;
 };
