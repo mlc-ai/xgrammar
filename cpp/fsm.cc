@@ -100,8 +100,8 @@ FSMWithStartEnd FSMWithStartEnd::Union(const std::vector<FSMWithStartEnd>& fsms)
       for (const auto& end : fsm_with_se.ends) {
         result.ends.insert(end + node_cnt);
       }
-      node_cnt += fsm_with_se.fsm.edges.size();
     }
+    node_cnt += fsm_with_se.fsm.edges.size();
   }
   return result;
 }
@@ -488,17 +488,17 @@ FSMWithStartEnd FSMWithStartEnd::Concatenate(const std::vector<FSMWithStartEnd>&
       for (const auto& edge : edges) {
         result.fsm.edges.back().emplace_back(edge.min, edge.max, edge.target + node_cnt);
       }
-      if (i == fsms.size() - 1) {
-        for (const auto& end : fsm_with_se.ends) {
-          result.ends.insert(end + node_cnt);
-        }
-        break;
-      }
+    }
+    if (i == fsms.size() - 1) {
       for (const auto& end : fsm_with_se.ends) {
-        result.fsm.edges[end + node_cnt].emplace_back(
-            -1, -1, fsm_with_se.ends.size() + node_cnt + fsms[i + 1].start
-        );
+        result.ends.insert(end + node_cnt);
       }
+      break;
+    }
+    for (const auto& end : fsm_with_se.ends) {
+      result.fsm.edges[end + node_cnt].emplace_back(
+          -1, -1, fsm_with_se.fsm.edges.size() + node_cnt + fsms[i + 1].start
+      );
     }
     node_cnt += fsm_with_se.fsm.edges.size();
   }
@@ -579,7 +579,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
     // Handle the strings like "...".
     if (regex[i] == '\"' && !set_mode) {
       if (quotation_mode && bracket_stack.empty()) {
-        FSMWithStartEnd tmp_fsm(regex.substr(left_quote, i + 1));
+        FSMWithStartEnd tmp_fsm(regex.substr(left_quote, i - left_quote + 1));
         if (i < end - 1) {
           switch (regex[i + 1]) {
             case '+': {
@@ -598,7 +598,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
               break;
             }
             default: {
-              throw std::runtime_error("Invalid regex: invalid operator after '\"'.");
+              break;
             }
           }
         }
@@ -636,7 +636,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
         throw std::runtime_error("Invalid regex: unmatched ']'.");
       }
       if (bracket_stack.empty()) {
-        FSMWithStartEnd tmp_fsm(regex.substr(left_middle_bracket, i + 1));
+        FSMWithStartEnd tmp_fsm(regex.substr(left_middle_bracket, i - left_middle_bracket + 1));
         if (i < end - 1) {
           switch (regex[i + 1]) {
             case '+': {
@@ -655,7 +655,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
               break;
             }
             default: {
-              throw std::runtime_error("Invalid regex: invalid operator after '\"'.");
+              break;
             }
           }
         }
@@ -687,7 +687,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
       int left_bracket = bracket_stack.top();
       bracket_stack.pop();
       if (bracket_stack.empty()) {
-        auto tmp_fsm = RegexToFSM(regex, left_bracket + 1, i - 1);
+        auto tmp_fsm = RegexToFSM(regex, left_bracket + 1, i);
         if (i < end - 1) {
           switch (regex[i + 1]) {
             case '+': {
@@ -732,6 +732,7 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
           throw(std::runtime_error("Invalid regex: unmatched '|'."));
         }
         result = FSMWithStartEnd::Union({result, rhs});
+        return result;
       }
     }
   }
@@ -851,6 +852,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     return;
   }
   // TODO: The support for rules.
+  std::cout << regex << std::endl;
   throw std::runtime_error("Rules are not supported yet.");
 }
 
