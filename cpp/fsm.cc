@@ -602,6 +602,88 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
               i = i + 1;
               break;
             }
+            case '{': {
+              int lower_times = 0;
+              int upper_times = 0;
+              i = i + 2;
+              while (regex[i] == ' ') {
+                if (i >= end) {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+                i = i + 1;
+              }
+              while (regex[i] >= '0' && regex[i] <= '9') {
+                lower_times = lower_times * 10 + regex[i] - '0';
+                i = i + 1;
+                if (i >= end) {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+              }
+              while (regex[i] == ' ') {
+                i = i + 1;
+                if (i >= end) {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+              }
+              switch (regex[i]) {
+                case '}': {
+                  upper_times = lower_times;
+                  break;
+                }
+                case ',': {
+                  i = i + 1;
+                  if (i >= end) {
+                    throw std::runtime_error("Invalid regex: unmatched '{'.");
+                  }
+                  while (regex[i] == ' ') {
+                    i = i + 1;
+                    if (i >= end) {
+                      throw std::runtime_error("Invalid regex: unmatched '{'.");
+                    }
+                  }
+                  while (regex[i] >= '0' && regex[i] <= '9') {
+                    upper_times = upper_times * 10 + regex[i] - '0';
+                    i = i + 1;
+                    if (i >= end) {
+                      throw std::runtime_error("Invalid regex: unmatched '{'.");
+                    }
+                  }
+                  while (regex[i] == ' ') {
+                    i = i + 1;
+                    if (i >= end) {
+                      throw std::runtime_error("Invalid regex: unmatched '{'.");
+                    }
+                  }
+                  if (regex[i] != '}') {
+                    throw std::runtime_error("Invalid regex: unmatched '{'.");
+                  }
+                  break;
+                }
+                default: {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+              }
+              std::unordered_set<int> new_ends;
+              const auto& copy_fsm = tmp_fsm.Copy();
+              if (lower_times == 0) {
+                new_ends.insert(tmp_fsm.start);
+              }
+              if (lower_times == 1) {
+                for (const auto& end : tmp_fsm.ends) {
+                  new_ends.insert(end);
+                }
+              }
+              for (int j = 2; j <= upper_times; j++) {
+                tmp_fsm = FSMWithStartEnd::Concatenate({tmp_fsm, copy_fsm});
+                if (j >= lower_times) {
+                  for (const auto& end : tmp_fsm.ends) {
+                    new_ends.insert(end);
+                  }
+                }
+              }
+              tmp_fsm.ends = new_ends;
+              break;
+            }
             default: {
               break;
             }
@@ -659,6 +741,88 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
               i = i + 1;
               break;
             }
+            case '{': {
+              int lower_times = 0;
+              int upper_times = 0;
+              i = i + 2;
+              while (regex[i] == ' ') {
+                if (i >= end) {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+                i = i + 1;
+              }
+              while (regex[i] >= '0' && regex[i] <= '9') {
+                lower_times = lower_times * 10 + regex[i] - '0';
+                i = i + 1;
+                if (i >= end) {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+              }
+              while (regex[i] == ' ') {
+                i = i + 1;
+                if (i >= end) {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+              }
+              switch (regex[i]) {
+                case '}': {
+                  upper_times = lower_times;
+                  break;
+                }
+                case ',': {
+                  i = i + 1;
+                  if (i >= end) {
+                    throw std::runtime_error("Invalid regex: unmatched '{'.");
+                  }
+                  while (regex[i] == ' ') {
+                    i = i + 1;
+                    if (i >= end) {
+                      throw std::runtime_error("Invalid regex: unmatched '{'.");
+                    }
+                  }
+                  while (regex[i] >= '0' && regex[i] <= '9') {
+                    upper_times = upper_times * 10 + regex[i] - '0';
+                    i = i + 1;
+                    if (i >= end) {
+                      throw std::runtime_error("Invalid regex: unmatched '{'.");
+                    }
+                  }
+                  while (regex[i] == ' ') {
+                    i = i + 1;
+                    if (i >= end) {
+                      throw std::runtime_error("Invalid regex: unmatched '{'.");
+                    }
+                  }
+                  if (regex[i] != '}') {
+                    throw std::runtime_error("Invalid regex: unmatched '{'.");
+                  }
+                  break;
+                }
+                default: {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+              }
+              std::unordered_set<int> new_ends;
+              const auto& copy_fsm = tmp_fsm.Copy();
+              if (lower_times == 0) {
+                new_ends.insert(tmp_fsm.start);
+              }
+              if (lower_times == 1) {
+                for (const auto& end : tmp_fsm.ends) {
+                  new_ends.insert(end);
+                }
+              }
+              for (int j = 2; j <= upper_times; j++) {
+                tmp_fsm = FSMWithStartEnd::Concatenate({tmp_fsm, copy_fsm});
+                if (j >= lower_times) {
+                  for (const auto& end : tmp_fsm.ends) {
+                    new_ends.insert(end);
+                  }
+                }
+              }
+              tmp_fsm.ends = new_ends;
+              break;
+            }
             default: {
               break;
             }
@@ -708,6 +872,88 @@ FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
             case '?': {
               tmp_fsm = tmp_fsm.MakeOptional();
               i = i + 1;
+              break;
+            }
+            case '{': {
+              int lower_times = 0;
+              int upper_times = 0;
+              i = i + 2;
+              while (regex[i] == ' ') {
+                if (i >= end) {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+                i = i + 1;
+              }
+              while (regex[i] >= '0' && regex[i] <= '9') {
+                lower_times = lower_times * 10 + regex[i] - '0';
+                i = i + 1;
+                if (i >= end) {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+              }
+              while (regex[i] == ' ') {
+                i = i + 1;
+                if (i >= end) {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+              }
+              switch (regex[i]) {
+                case '}': {
+                  upper_times = lower_times;
+                  break;
+                }
+                case ',': {
+                  i = i + 1;
+                  if (i >= end) {
+                    throw std::runtime_error("Invalid regex: unmatched '{'.");
+                  }
+                  while (regex[i] == ' ') {
+                    i = i + 1;
+                    if (i >= end) {
+                      throw std::runtime_error("Invalid regex: unmatched '{'.");
+                    }
+                  }
+                  while (regex[i] >= '0' && regex[i] <= '9') {
+                    upper_times = upper_times * 10 + regex[i] - '0';
+                    i = i + 1;
+                    if (i >= end) {
+                      throw std::runtime_error("Invalid regex: unmatched '{'.");
+                    }
+                  }
+                  while (regex[i] == ' ') {
+                    i = i + 1;
+                    if (i >= end) {
+                      throw std::runtime_error("Invalid regex: unmatched '{'.");
+                    }
+                  }
+                  if (regex[i] != '}') {
+                    throw std::runtime_error("Invalid regex: unmatched '{'.");
+                  }
+                  break;
+                }
+                default: {
+                  throw std::runtime_error("Invalid regex: unmatched '{'.");
+                }
+              }
+              std::unordered_set<int> new_ends;
+              const auto& copy_fsm = tmp_fsm.Copy();
+              if (lower_times == 0) {
+                new_ends.insert(tmp_fsm.start);
+              }
+              if (lower_times == 1) {
+                for (const auto& end : tmp_fsm.ends) {
+                  new_ends.insert(end);
+                }
+              }
+              for (int j = 2; j <= upper_times; j++) {
+                tmp_fsm = FSMWithStartEnd::Concatenate({tmp_fsm, copy_fsm});
+                if (j >= lower_times) {
+                  for (const auto& end : tmp_fsm.ends) {
+                    new_ends.insert(end);
+                  }
+                }
+              }
+              tmp_fsm.ends = new_ends;
               break;
             }
             default: {
