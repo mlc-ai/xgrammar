@@ -112,7 +112,7 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
 
   // Build the DFA.
   if (!is_dfa) {
-    result = TODFA();
+    result = ToDFA();
   } else {
     result = Copy();
   }
@@ -378,7 +378,7 @@ void CompactFSM::Advance(
   return;
 }
 
-FSMWithStartEnd FSMWithStartEnd::TODFA() const {
+FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
   FSMWithStartEnd dfa;
   dfa.is_dfa = true;
   dfa.start = start;
@@ -1124,7 +1124,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   // To perform the algorithm, we must make sure the FSM is
   // a DFA.
   if (!is_dfa) {
-    now_fsm = TODFA();
+    now_fsm = ToDFA();
   } else {
     now_fsm = Copy();
   }
@@ -1455,8 +1455,8 @@ char HandleEscapeInString(const std::string& regex, int start) {
   }
 }
 FSMWithStartEnd FSMWithStartEnd::Intersect(const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs) {
-  auto lhs_dfa = lhs.TODFA();
-  auto rhs_dfa = rhs.TODFA();
+  auto lhs_dfa = lhs.ToDFA();
+  auto rhs_dfa = rhs.ToDFA();
   std::unordered_set<int> rules_lhs;
   std::unordered_set<int> rules;
   std::set<int> interval_ends;
