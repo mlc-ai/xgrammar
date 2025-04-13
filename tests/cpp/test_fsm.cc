@@ -10,7 +10,7 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
   assert(fsm_wse.Check(test_str));
   std::cout << "--------- Basic Build Test2 -----------" << std::endl;
   try {
-    EXP fsm_wse = RegexToFSM("\"\\W\"");
+    fsm_wse = RegexToFSM("\"\\W\"");
     assert(false);
   } catch (const std::exception& e) {
     std::cout << e.what() << std::endl;
@@ -151,7 +151,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   auto fsm_wse = RegexToFSM("[\\d\\d\\d]+\"123\"");
   std::string test_str = "123456123";
   assert(fsm_wse.Check(test_str) == true);
-  auto compact_fsm = fsm_wse.fsm.ToCompactFSM();
+  auto compact_fsm = fsm_wse.fsm.ToCompact();
   CompactFSMWithStartEnd compact_fsm_wse;
   compact_fsm_wse.fsm = compact_fsm;
   compact_fsm_wse.start = fsm_wse.start;
