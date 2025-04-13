@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <xgrammar/fsm.h>
+#include <xgrammar/fsm.h>F
 using namespace xgrammar;
 TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test Starts! -----------" << std::endl;
@@ -150,7 +150,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   auto fsm_wse = RegexToFSM("[\\d\\d\\d]+\"123\"");
   std::string test_str = "123456123";
   assert(fsm_wse.Check(test_str) == true);
-  auto compact_fsm = fsm_wse.fsm.ToCompact();
+  auto compact_fsm = fsm_wse.fsm.ToCompactFSM();
   CompactFSMWithStartEnd compact_fsm_wse;
   compact_fsm_wse.fsm = compact_fsm;
   compact_fsm_wse.start = fsm_wse.start;

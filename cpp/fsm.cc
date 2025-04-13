@@ -306,7 +306,7 @@ std::string CompactFSMWithStartEnd::Print() const {
   return result;
 }
 
-CompactFSM FSM::ToCompact() {
+CompactFSM FSM::ToCompactFSM() {
   CompactFSM result;
   for (int i = 0; i < static_cast<int>(edges.size()); ++i) {
     std::sort(edges[i].begin(), edges[i].end(), [](const FSMEdge& a, const FSMEdge& b) {
