@@ -32,6 +32,7 @@ jobs:
         id: benchmark
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        if: env.HF_TOKEN != ''
         run: |
           python examples/benchmark/cibench_grammar_compile_mask_gen.py --num_iters 3 --num_warmup 2 --datasets all | tee benchmark_output.txt
 
