@@ -477,7 +477,12 @@ void GrammarCompiler::Impl::BuildTagDispatchFSM(
   }
 
   std::vector<int32_t> end_nodes;
-  grammar->root_tag_dispatch_fsm = BuildTrie(tags, &end_nodes).ToCompact();
+  FSMWithStartEnd trie = BuildTrie(tags, &end_nodes);
+  CompactFSMWithStartEnd compacted_fsm;
+  compacted_fsm.fsm = trie.fsm.ToCompact();
+  compacted_fsm.ends = trie.ends;
+  compacted_fsm.start = trie.start;
+  grammar->root_tag_dispatch_fsm = compacted_fsm;
   for (int i = 0; i < static_cast<int>(end_nodes.size()); ++i) {
     grammar->tag_dispatch_end_node_to_rule_id[end_nodes[i]] = rule_ids[i];
   }

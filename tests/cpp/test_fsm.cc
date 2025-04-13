@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
-#include <xgrammar/fsm.h>
+
+#include "fsm.h"
 using namespace xgrammar;
 TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test Starts! -----------" << std::endl;
@@ -9,7 +10,7 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
   assert(fsm_wse.Check(test_str));
   std::cout << "--------- Basic Build Test2 -----------" << std::endl;
   try {
-    fsm_wse = RegexToFSM("\"\\W\"");
+    EXP fsm_wse = RegexToFSM("\"\\W\"");
     assert(false);
   } catch (const std::exception& e) {
     std::cout << e.what() << std::endl;

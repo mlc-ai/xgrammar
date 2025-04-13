@@ -1,4 +1,4 @@
-#include <xgrammar/fsm.h>
+#include "fsm.h"
 
 #include <algorithm>
 #include <cassert>
@@ -306,7 +306,7 @@ std::string CompactFSMWithStartEnd::Print() const {
   return result;
 }
 
-CompactFSM FSM::ToCompactFSM() {
+CompactFSM FSM::ToCompact() {
   CompactFSM result;
   for (int i = 0; i < static_cast<int>(edges.size()); ++i) {
     std::sort(edges[i].begin(), edges[i].end(), [](const FSMEdge& a, const FSMEdge& b) {
@@ -1583,6 +1583,7 @@ FSMWithStartEnd FSMWithStartEnd::Intersect(const FSMWithStartEnd& lhs, const FSM
   }
   return result;
 }
+
 bool FSMWithStartEnd::Check(const std::string& str) const {
   auto start_states_set = fsm.GetEpsilonClosure(start);
   std::vector<int> from_states;
@@ -1602,6 +1603,7 @@ bool FSMWithStartEnd::Check(const std::string& str) const {
   }
   return false;
 }
+
 bool CompactFSMWithStartEnd::Check(const std::string& str) const {
   auto start_states_set = fsm.GetEpsilonClosure(start);
   std::vector<int> from_states;
