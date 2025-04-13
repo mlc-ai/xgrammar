@@ -1131,7 +1131,10 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
 
   while (true) {
     int node_cnt = now_fsm.fsm.edges.size();
-    bool mark_graph[node_cnt][node_cnt];
+    std::vector<std::vector<bool>> mark_graph;
+    for (int i = 0; i < node_cnt; i++) {
+      mark_graph.push_back(std::vector<bool>(node_cnt, false));
+    }
     std::vector<bool> is_end;
     // Initialize the mark graph.
     for (int i = 0; i < node_cnt; i++) {
