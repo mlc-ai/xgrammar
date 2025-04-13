@@ -115,7 +115,7 @@ class FSMWithStartEnd {
     \brief Transform the FSM to a DFA.
     \return The DFA.
   */
-  FSMWithStartEnd TODFA() const;
+  FSMWithStartEnd ToDFA() const;
   /*!
     \brief Transform the FSM to accept the complement of the language.
     \return The complement FSM.

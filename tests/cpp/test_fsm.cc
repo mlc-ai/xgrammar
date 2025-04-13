@@ -163,7 +163,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = RegexToFSM("([abc] | [\\d])+");
   test_str = "abc3";
   assert(fsm_wse.Check(test_str) == true);
-  fsm_wse = fsm_wse.TODFA();
+  fsm_wse = fsm_wse.ToDFA();
   assert(fsm_wse.Check(test_str) == true);
   assert([&]() -> bool {
     for (const auto& edges : fsm_wse.fsm.edges) {
