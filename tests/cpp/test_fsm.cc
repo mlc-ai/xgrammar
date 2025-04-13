@@ -6,7 +6,7 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test1 -----------" << std::endl;
   auto fsm_wse = RegexToFSM("\"abcd\\n\"");
   std::string test_str = "abcd\n";
-  assert(fsm_wse.Check(test_str) == true);
+  assert(fsm_wse.Check(test_str));
   std::cout << "--------- Basic Build Test2 -----------" << std::endl;
   try {
     fsm_wse = RegexToFSM("\"\\W\"");
@@ -17,45 +17,46 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test3 -----------" << std::endl;
   fsm_wse = RegexToFSM("[-a-z\\n]");
   test_str = "abcd-\n";
-  for (const auto& character : test_str) {
-    assert([&]() -> bool {
+  assert([&]() -> bool {
+    for (const auto& character : test_str) {
       for (const auto& edge : fsm_wse.fsm.edges[0]) {
         if (edge.min <= int(character) && edge.max >= int(character)) {
           return true;
         }
       }
       return false;
-    }());
-  }
+    }
+  }());
   std::cout << "--------- Basic Build Test4 -----------" << std::endl;
   fsm_wse = RegexToFSM("[\\d]");
   test_str = "1234567890";
-  for (const auto& character : test_str) {
-    assert([&]() -> bool {
+  assert([&]() -> bool {
+    for (const auto& character : test_str) {
       for (const auto& edge : fsm_wse.fsm.edges[0]) {
         if (edge.min <= int(character) && edge.max >= int(character)) {
           return true;
         }
       }
       return false;
-    }());
-  }
+    }
+  }());
   std::cout << "--------- Basic Build Test5 -----------" << std::endl;
   fsm_wse = RegexToFSM("[^\\d]");
   test_str = "1234567890";
-  for (const auto& character : test_str) {
-    assert([&]() -> bool {
+  assert([&]() -> bool {
+    for (const auto& character : test_str) {
       for (const auto& edge : fsm_wse.fsm.edges[0]) {
         if (edge.min <= int(character) && edge.max >= int(character)) {
           return false;
         }
       }
       return true;
-    }());
-  }
+    }
+  }());
+
   test_str = "abz";
-  for (const auto& character : test_str) {
-    assert([&]() -> bool {
+  assert([&]() -> bool {
+    for (const auto& character : test_str) {
       for (const auto& edge : fsm_wse.fsm.edges[0]) {
         if (edge.min <= int(character) && edge.max >= int(character)) {
           return true;
@@ -63,8 +64,9 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
       }
       std::cout << character << std::endl;
       return false;
-    }());
-  }
+    }
+  }());
+
   std::cout << "--------- Basic Build Test6 -----------" << std::endl;
   fsm_wse = RegexToFSM("\"你好a\"");
   test_str = "你好a";
@@ -122,8 +124,8 @@ TEST(XGrammarFSMTest, SymbolTest) {
   fsm_wse = RegexToFSM("\" \"*\" \"*\" \"+\" \"?\" \"*");
   test_str[0] = " ";
   test_str[1] = "      ";
-  for (const auto str : test_str) {
-    assert(fsm_wse.Check(str) == true);
+  for (const auto& str : test_str) {
+    EXPECT_TRUE(fsm_wse.Check(str));
   }
   std::cout << "Symbol Test Passed!" << std::endl;
 }
@@ -133,11 +135,11 @@ TEST(XGrammarFSMTest, IntegratedTest) {
   auto fsm_wse = RegexToFSM("((\"naive\" | \"bbb\" | [\\d]+)* [\\w]) | \"  \"+");
   std::string test_str[5] = {"naive1", "bbbnaive114514W", "    ", "123", "_"};
   for (const auto& str : test_str) {
-    assert(fsm_wse.Check(str) == true);
+    EXPECT_TRUE(fsm_wse.Check(str));
   }
   std::string test_str2[5] = {"naive", "bbbbbb", "naive   ", "123 ", "aaa"};
   for (const auto& str : test_str2) {
-    assert(fsm_wse.Check(str) == false);
+    EXPECT_FALSE(fsm_wse.Check(str));
   }
   std::cout << "--------- Integrated Test Passed! -----------" << std::endl;
 }
@@ -207,12 +209,12 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = RegexToFSM("[\\d]{1,  5}");
   std::string test_strs[2] = {"123", "12345"};
   for (const auto& str : test_strs) {
-    assert(fsm_wse.Check(str) == true);
+    EXPECT_TRUE(fsm_wse.Check(str));
   }
   test_strs[0] = "123456";
   test_strs[1] = "1234567";
   for (const auto& str : test_strs) {
-    assert(fsm_wse.Check(str) == false);
+    EXPECT_FALSE(fsm_wse.Check(str));
   }
 
   std::cout << "--------- Function Test Passed! -----------" << std::endl;
