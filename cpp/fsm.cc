@@ -1015,7 +1015,9 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     edges.push_back(std::vector<FSMEdge>());
     for (size_t i = 1; i < regex.size() - 1; i++) {
       if (regex[i] != '\\') {
-        edges.back().emplace_back(regex[i], regex[i], edges.size());
+        edges.back().emplace_back(
+            (unsigned char)(regex[i]), (unsigned char)(regex[i]), edges.size()
+        );
         edges.push_back(std::vector<FSMEdge>());
         continue;
       }
@@ -1577,5 +1579,43 @@ FSMWithStartEnd FSMWithStartEnd::Intersect(const FSMWithStartEnd& lhs, const FSM
     }
   }
   return result;
+}
+bool FSMWithStartEnd::Check(const std::string& str) const {
+  auto start_states_set = fsm.GetEpsilonClosure(start);
+  std::vector<int> from_states;
+  std::vector<int> result_states;
+  for (const auto& start_state : start_states_set) {
+    from_states.push_back(start_state);
+  }
+  for (const auto& character : str) {
+    result_states.clear();
+    fsm.Advance(from_states, (unsigned char)(character), &result_states);
+    from_states = result_states;
+  }
+  for (const auto& state : from_states) {
+    if (ends.find(state) != ends.end()) {
+      return true;
+    }
+  }
+  return false;
+}
+bool CompactFSMWithStartEnd::Check(const std::string& str) const {
+  auto start_states_set = fsm.GetEpsilonClosure(start);
+  std::vector<int> from_states;
+  std::vector<int> result_states;
+  for (const auto& start_state : start_states_set) {
+    from_states.push_back(start_state);
+  }
+  for (const auto& character : str) {
+    result_states.clear();
+    fsm.Advance(from_states, (unsigned char)(character), &result_states);
+    from_states = result_states;
+  }
+  for (const auto& state : from_states) {
+    if (ends.find(state) != ends.end()) {
+      return true;
+    }
+  }
+  return false;
 }
 }  // namespace xgrammar

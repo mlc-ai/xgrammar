@@ -157,6 +157,12 @@ class FSMWithStartEnd {
     \return The concatenation of the FSMs.
   */
   static FSMWithStartEnd Concatenate(const std::vector<FSMWithStartEnd>& fsms);
+  /*!
+    \brief Check if the FSM accepts the string.
+    \param str The input string.
+    \return True if the FSM accepts the string, false otherwise.
+  */
+  bool Check(const std::string& str) const;
 };
 
 class CompactFSM {
@@ -187,6 +193,7 @@ class CompactFSM {
   // The internal states are also public
   using Edge = FSMEdge;
   CSRArray<Edge> edges;
+  friend class CompactFSMWithStartEnd;
 };
 
 class CompactFSMWithStartEnd {
@@ -200,6 +207,12 @@ class CompactFSMWithStartEnd {
   \return The string representation of the FSM.
 */
   std::string Print() const;
+  /*!
+    \brief Check if the FSM accepts the string.
+    \param str The input string.
+    \return True if the FSM accepts the string, false otherwise.
+  */
+  bool Check(const std::string& str) const;
 };
 
 /*!
@@ -210,23 +223,7 @@ class CompactFSMWithStartEnd {
   \return The FSM with start and end states.
 */
 FSMWithStartEnd RegexToFSM(const std::string& regex, int start = 0, int end = -1);
+
 }  // namespace xgrammar
 
-/*!
-  \brief Handle the escape sequence in [...].
-  \param regex The regex string.
-  \param start The start index of the escape sequence. i.e. regex[start] === '\\'.
-  \param end The end index of the now handing string.
-  \return The corresponding edges.
-*/
-std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start);
-
-/*!
-  \brief Handle the escape sequence in "...".
-  \param regex The regex string.
-  \param start The start index of the escape sequence. i.e. regex[start] === '\\'.
-  \param end The end index of the now handing string.
-  \return The corresponding edges.
-*/
-char HandleEscapeInString(const std::string& regex, int start);
 #endif  // XGRAMMAR_FSM_H_
