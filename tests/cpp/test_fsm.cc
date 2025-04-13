@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
-
-#include "fsm.h"
+#include <xgrammar/fsm.h>
 using namespace xgrammar;
 TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test Starts! -----------" << std::endl;
