@@ -58,7 +58,7 @@ class FSM {
     \brief Transform a FSM to a compact FSM.
     \return The compact FSM.
   */
-  CompactFSM ToCompact();
+  inline CompactFSM ToCompact();
   /*!
     \brief Advance the FSM to the next state.
     \param from The current states.
