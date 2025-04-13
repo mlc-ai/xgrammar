@@ -98,7 +98,7 @@ class FSM {
   void AddEndNode(int node) { end_nodes_.push_back(node); }
 
   /*! \brief Converts this FSM to a more compact representation. */
-  CompactFSM ToCompact();
+  // CompactFSM ToCompact();
 
   friend std::ostream& operator<<(std::ostream& os, const FSM& fsm);
 
@@ -265,18 +265,18 @@ inline std::ostream& operator<<(std::ostream& os, const CompactFSM& fsm) {
  * \brief Converts an FSM to its compact representation.
  * \return A CompactFSM with the same transitions but more efficient memory usage.
  */
-inline CompactFSM FSM::ToCompact() {
-  CompactFSM compact_fsm;
-  compact_fsm.start_node_ = start_node_;
-  compact_fsm.end_nodes_ = end_nodes_;
-  for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
-    std::sort(edges_[i].begin(), edges_[i].end(), [](const Edge& a, const Edge& b) {
-      return a.min_ch < b.min_ch;
-    });
-    compact_fsm.edges_.Insert(edges_[i]);
-  }
-  return compact_fsm;
-}
+// inline CompactFSM FSM::ToCompact() {
+//   CompactFSM compact_fsm;
+//   compact_fsm.start_node_ = start_node_;
+//   compact_fsm.end_nodes_ = end_nodes_;
+//   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
+//     std::sort(edges_[i].begin(), edges_[i].end(), [](const Edge& a, const Edge& b) {
+//       return a.min_ch < b.min_ch;
+//     });
+//     compact_fsm.edges_.Insert(edges_[i]);
+//   }
+//   return compact_fsm;
+// }
 
 inline FSM BuildTrie(
     const std::vector<std::string>& patterns, std::vector<int32_t>* end_nodes = nullptr
