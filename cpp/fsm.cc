@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstring>
+#include <list>
 #include <queue>
 #include <set>
 #include <stack>
@@ -1136,222 +1137,196 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   } else {
     now_fsm = Copy();
   }
-
-  while (true) {
-    int node_cnt = now_fsm.fsm.edges.size();
-    std::vector<std::vector<bool>> mark_graph;
-    for (int i = 0; i < node_cnt; i++) {
-      mark_graph.push_back(std::vector<bool>(node_cnt, false));
+  // Initialize the set.
+  std::list<std::unordered_set<int>> blocks;
+  std::list<std::unordered_set<int>> queue;
+  std::unordered_set<int> not_end;
+  for (size_t i = 0; i < now_fsm.fsm.edges.size(); i++) {
+    if (now_fsm.ends.find(i) == now_fsm.ends.end()) {
+      not_end.insert(i);
     }
-    std::vector<bool> is_end;
-    // Initialize the mark graph.
-    for (int i = 0; i < node_cnt; i++) {
-      is_end.push_back(now_fsm.ends.find(i) != now_fsm.ends.end());
-    }
-    for (int i = 0; i < node_cnt; i++) {
-      for (int j = 0; j < i; j++) {
-        if (is_end[i] != is_end[j]) {
-          mark_graph[i][j] = true;
-        } else {
-          mark_graph[i][j] = false;
-        }
-      }
-    }
-    // Check the equivalence of the states.
-    bool changed = true;
-    while (changed) {
-      changed = false;
-      for (int i = 0; i < node_cnt; i++) {
-        for (int j = 0; j < i; j++) {
-          if (mark_graph[i][j]) {
-            continue;
-          }
-          auto transitions_i = now_fsm.fsm.edges[i];
-          auto transitions_j = now_fsm.fsm.edges[j];
-          // First, check all the actions in transtions_i, and compare them with
-          // transition_j.
-          for (const auto& transition_i : transitions_i) {
-            if (mark_graph[i][j]) {
-              break;
-            }
-            if (transition_i.IsRuleRef()) {
-              bool is_blocked = true;
-              int rule_id = transition_i.GetRefRuleId();
-              for (const auto& transition_j : transitions_j) {
-                if (transition_j.IsRuleRef()) {
-                  if (transition_j.GetRefRuleId() == rule_id) {
-                    is_blocked = false;
-                    if (transition_i.target == transition_j.target) {
-                      continue;
-                    }
-                    if (mark_graph[std::max(transition_i.target, transition_j.target)]
-                                  [std::min(transition_i.target, transition_j.target)]) {
-                      mark_graph[i][j] = true;
-                      changed = true;
-                    }
-                    break;
-                  }
-                }
-              }
-              if (is_blocked) {
-                mark_graph[i][j] = true;
-                changed = true;
-              }
-              continue;
-            }
-            // Since it's a DFA.
-            assert(!transition_i.IsEpsilon());
-            int char_min = transition_i.min;
-            int char_max = transition_i.max;
-            bool is_blocked = true;
-            for (const auto& transition_j : transitions_j) {
-              if (transition_j.IsCharRange()) {
-                // That means the intersection is not empty.
-                if ((char_min >= transition_j.min && char_min <= transition_j.max) ||
-                    (char_max >= transition_j.min && char_max <= transition_j.max)) {
-                  is_blocked = false;
-                  if (transition_i.target == transition_j.target) {
-                    continue;
-                  }
-                  if (mark_graph[std::max(transition_i.target, transition_j.target)]
-                                [std::min(transition_i.target, transition_j.target)]) {
-                    mark_graph[i][j] = true;
-                    changed = true;
-                  }
-                  break;
-                }
-              }
-            }
-            if (is_blocked) {
-              mark_graph[i][j] = true;
-              changed = true;
-            }
-          }
-          if (mark_graph[i][j]) {
-            continue;
-          }
-          // Now, do the same thing in reverse.
-          for (const auto& transition_j : transitions_j) {
-            if (mark_graph[i][j]) {
-              break;
-            }
-            if (transition_j.IsRuleRef()) {
-              bool is_blocked = true;
-              int rule_id = transition_j.GetRefRuleId();
-              for (const auto& transition_i : transitions_i) {
-                if (transition_i.IsRuleRef()) {
-                  if (transition_j.GetRefRuleId() == rule_id) {
-                    is_blocked = false;
-                    if (transition_i.target == transition_j.target) {
-                      continue;
-                    }
-                    if (mark_graph[std::max(transition_i.target, transition_j.target)]
-                                  [std::min(transition_i.target, transition_j.target)]) {
-                      mark_graph[i][j] = true;
-                      changed = true;
-                    }
-                    break;
-                  }
-                }
-              }
-              if (is_blocked) {
-                mark_graph[i][j] = true;
-                changed = true;
-              }
-              continue;
-            }
-            // Since it's a DFA.
-            assert(!transition_j.IsEpsilon());
-            int char_min = transition_j.min;
-            int char_max = transition_j.max;
-            bool is_blocked = true;
-            for (const auto& transition_i : transitions_i) {
-              if (transition_i.IsCharRange()) {
-                // That means the intersection is not empty.
-                if ((char_min >= transition_i.min && char_min <= transition_i.max) ||
-                    (char_max >= transition_i.min && char_max <= transition_i.max)) {
-                  is_blocked = false;
-                  if (transition_i.target == transition_j.target) {
-                    continue;
-                  }
-                  if (mark_graph[std::max(transition_i.target, transition_j.target)]
-                                [std::min(transition_i.target, transition_j.target)]) {
-                    mark_graph[i][j] = true;
-                    changed = true;
-                  }
-                  break;
-                }
-              }
-            }
-            if (is_blocked) {
-              mark_graph[i][j] = true;
-              changed = true;
-            }
-          }
-        }
-      }
-    }
-
-    // Get the equivalence classes.
-    std::vector<std::vector<int>> equivalence_classes;
-    std::unordered_set<int> visited;
-    for (int i = node_cnt - 1; i >= 0; i--) {
-      if (visited.find(i) != visited.end()) {
-        continue;
-      }
-      std::vector<int> equivalence_class;
-      equivalence_class.push_back(i);
-      for (int j = i - 1; j >= 0; j--) {
-        if (!mark_graph[i][j]) {
-          equivalence_class.push_back(j);
-          visited.insert(j);
-        }
-      }
-      if (equivalence_class.size() > 1) {
-        equivalence_classes.push_back(equivalence_class);
-      }
-    }
-    if (equivalence_classes.empty()) {
-      break;
-    }
-
-    // Number the new nodes.
-    std::unordered_map<int, int> old_to_new;
-    for (size_t i = 0; i < equivalence_classes.size(); i++) {
-      for (const auto& node_num : equivalence_classes[i]) {
-        old_to_new[node_num] = i;
-      }
-    }
-    int new_node_cnt = equivalence_classes.size();
-    for (int i = 0; i < node_cnt; i++) {
-      if (old_to_new.find(i) != old_to_new.end()) {
-        continue;
-      }
-      old_to_new[i] = new_node_cnt++;
-    }
-
-    FSMWithStartEnd new_fsm;
-    new_fsm.is_dfa = true;
-    new_fsm.start = old_to_new[start];
-    for (const auto& end : now_fsm.ends) {
-      new_fsm.ends.insert(old_to_new[end]);
-    }
-    for (int i = 0; i < new_node_cnt; i++) {
-      new_fsm.fsm.edges.push_back(std::vector<FSMEdge>());
-    }
-    std::unordered_set<int> been_built;
-    for (size_t i = 0; i < now_fsm.fsm.edges.size(); i++) {
-      if (been_built.find(old_to_new[i]) != been_built.end()) {
-        continue;
-      }
-      been_built.insert(old_to_new[i]);
-      for (const auto& edge : now_fsm.fsm.edges[i]) {
-        new_fsm.fsm.edges[old_to_new[i]].emplace_back(edge.min, edge.max, old_to_new[edge.target]);
-      }
-    }
-    now_fsm = new_fsm;
   }
-  return now_fsm;
+  queue.push_back(not_end);
+  queue.push_back(now_fsm.ends);
+  blocks.push_back(now_fsm.ends);
+  blocks.push_back(not_end);
+  std::set<int> interval_ends;
+  std::unordered_set<std::pair<int, int>> intervals;
+  std::unordered_set<int> rules;
+  std::unordered_map<int, std::unordered_set<int>> previous_mapping;
+  for (size_t i = 0; i < now_fsm.fsm.edges.size(); i++) {
+    const auto& edges = now_fsm.fsm.edges[i];
+    for (const auto& edge : edges) {
+      if (previous_mapping.find(edge.target) == previous_mapping.end()) {
+        previous_mapping[edge.target] = std::unordered_set<int>();
+      }
+      previous_mapping[edge.target].insert(i);
+      if (edge.IsCharRange()) {
+        interval_ends.insert(edge.min);
+        interval_ends.insert(edge.max + 1);
+        continue;
+      }
+      if (edge.IsRuleRef()) {
+        rules.insert(edge.GetRefRuleId());
+      }
+    }
+  }
+  for (auto it = interval_ends.begin(); it != interval_ends.end(); ++it) {
+    auto next_it = std::next(it);
+    if (next_it != interval_ends.end()) {
+      intervals.insert(std::make_pair(*it, *next_it - 1));
+    }
+  }
+
+  while (!queue.empty()) {
+    // Initial the alphabet.
+    auto block_x = *queue.begin();
+    queue.erase(queue.begin());
+    std::unordered_set<int> prev_nodes;
+    for (const auto& node : block_x) {
+      if (previous_mapping.find(node) != previous_mapping.end()) {
+        prev_nodes.insert(previous_mapping[node].begin(), previous_mapping[node].end());
+      }
+    }
+    // Check the intervals.
+    std::list<std::unordered_set<int>> blocks_copy = blocks;
+    for (const auto& interval : intervals) {
+      std::unordered_set<int> from_block;
+      for (const auto& node : prev_nodes) {
+        const auto& edges = now_fsm.fsm.edges[node];
+        for (const auto& edge : edges) {
+          if (block_x.find(edge.target) == block_x.end()) {
+            continue;
+          }
+          if (edge.IsCharRange()) {
+            if (interval.first >= edge.min && interval.second <= edge.max) {
+              from_block.insert(node);
+            }
+          }
+        }
+      }
+      for (const auto& block : blocks_copy) {
+        std::unordered_set<int> intersection;
+        for (const auto& prev : from_block) {
+          if (block.find(prev) != block.end()) {
+            intersection.insert(prev);
+          }
+        }
+        // The intersection is empty, or the intersection == block.
+        if (intersection.empty() || intersection.size() == block.size()) {
+          continue;
+        }
+        std::unordered_set<int> difference;
+        for (const auto& node : block) {
+          if (intersection.find(node) == intersection.end()) {
+            difference.insert(node);
+          }
+        }
+        blocks.remove(block);
+        blocks.remove(intersection);
+        blocks.remove(difference);
+        blocks.push_back(intersection);
+        blocks.push_back(difference);
+        bool found = false;
+        for (auto iter = queue.begin(); iter != queue.end(); ++iter) {
+          if (*iter == block) {
+            found = true;
+            break;
+          }
+        }
+        if (found) {
+          queue.remove(block);
+          queue.push_back(intersection);
+          queue.push_back(difference);
+        } else {
+          queue.push_back(intersection.size() < difference.size() ? intersection : difference);
+        }
+      }
+    }
+    // Do the same thing for the rules.
+    for (const auto& rule : rules) {
+      std::unordered_set<int> from_block;
+      for (const auto& node : prev_nodes) {
+        const auto& edges = now_fsm.fsm.edges[node];
+        for (const auto& edge : edges) {
+          if (block_x.find(edge.target) == block_x.end()) {
+            continue;
+          }
+          if (edge.IsRuleRef()) {
+            if (rule == edge.GetRefRuleId()) {
+              from_block.insert(node);
+            }
+          }
+        }
+      }
+      for (const auto& block : blocks_copy) {
+        std::unordered_set<int> intersection;
+        for (const auto& prev : from_block) {
+          if (block.find(prev) != block.end()) {
+            intersection.insert(prev);
+          }
+        }
+        // The intersection is empty, or the intersection == block.
+        if (intersection.empty() || intersection.size() == block.size()) {
+          continue;
+        }
+        std::unordered_set<int> difference;
+        for (const auto& node : from_block) {
+          if (intersection.find(node) == intersection.end()) {
+            difference.insert(node);
+          }
+        }
+        blocks.remove(block);
+        blocks.remove(intersection);
+        blocks.remove(difference);
+        blocks.push_back(intersection);
+        blocks.push_back(difference);
+        bool found = false;
+        for (auto iter = queue.begin(); iter != queue.end(); ++iter) {
+          if (*iter == block) {
+            found = true;
+            break;
+          }
+        }
+        if (found) {
+          queue.remove(block);
+          queue.push_back(intersection);
+          queue.push_back(difference);
+        } else {
+          queue.push_back(intersection.size() < difference.size() ? intersection : difference);
+        }
+      }
+    }
+  }
+
+  std::unordered_map<int, int> old_to_new;
+  int cnt = 0;
+  for (const auto& block : blocks) {
+    for (const auto& node : block) {
+      old_to_new[node] = cnt;
+    }
+    cnt++;
+  }
+  FSMWithStartEnd new_fsm;
+  new_fsm.is_dfa = true;
+  new_fsm.start = old_to_new[now_fsm.start];
+  for (const auto& end : now_fsm.ends) {
+    new_fsm.ends.insert(old_to_new[end]);
+  }
+  for (int i = 0; i < cnt; i++) {
+    new_fsm.fsm.edges.push_back(std::vector<FSMEdge>());
+  }
+  std::unordered_set<int> been_built;
+  for (size_t i = 0; i < now_fsm.fsm.edges.size(); i++) {
+    if (been_built.find(old_to_new[i]) != been_built.end()) {
+      continue;
+    }
+    been_built.insert(old_to_new[i]);
+    for (const auto& edge : now_fsm.fsm.edges[i]) {
+      new_fsm.fsm.edges[old_to_new[i]].emplace_back(edge.min, edge.max, old_to_new[edge.target]);
+    }
+  }
+  return new_fsm;
 }
 
 std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start) {

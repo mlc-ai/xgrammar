@@ -242,7 +242,7 @@ class FSMWithStartEnd {
   /*!
   \brief Check if the FSM is a DFA.
   \return True if the FSM is a DFA, false otherwise.
-*/
+  */
   bool IsDFA();
 
   /*!
