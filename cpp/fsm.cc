@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "support/logging.h"
+#include "support/union_find_set.h"
 
 namespace xgrammar {
 std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start);
