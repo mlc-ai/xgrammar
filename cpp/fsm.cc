@@ -1771,6 +1771,131 @@ void FSMWithStartEnd::SimplifyEpsilon() {
   return;
 }
 
+void FSMWithStartEnd::SimplifyTransition() {
+  bool changed = true;
+  UnionFindSet<int> union_find_set;
+  while (changed) {
+    std::unordered_map<int, std::unordered_set<int>> previous_nodes;
+    // Initialize the previous nodes.
+    for (size_t i = 0; i < fsm.edges.size(); i++) {
+      const auto& edges = fsm.edges[i];
+      for (const auto& edge : edges) {
+        if (previous_nodes.find(edge.target) == previous_nodes.end()) {
+          previous_nodes[edge.target] = std::unordered_set<int>();
+        }
+        previous_nodes[edge.target].insert(i);
+      }
+    }
+    // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
+    changed = false;
+    bool change_case1 = false;
+    for (const auto& edges : fsm.edges) {
+      for (size_t i = 0; i < edges.size(); i++) {
+        for (size_t j = i + 1; j < edges.size(); j++) {
+          if (IsEndNode(edges[i].target) != IsEndNode(edges[j].target)) {
+            continue;
+          }
+          if (edges[i].target == edges[j].target) {
+            continue;
+          }
+          if (edges[i].max != edges[j].max || edges[i].min != edges[j].min) {
+            continue;
+          }
+          if (previous_nodes[edges[i].target].size() != 1 ||
+              previous_nodes[edges[j].target].size() != 1) {
+            continue;
+          }
+          union_find_set.Make(edges[i].target);
+          union_find_set.Make(edges[j].target);
+          union_find_set.Union(edges[i].target, edges[j].target);
+          change_case1 = true;
+        }
+      }
+    }
+    if (change_case1) {
+      auto eq_classes = union_find_set.GetAllSets();
+      std::unordered_map<int, int> old_to_new;
+      for (size_t i = 0; i < eq_classes.size(); i++) {
+        for (const auto& node : eq_classes[i]) {
+          old_to_new[node] = i;
+        }
+      }
+      int cnt = eq_classes.size();
+      for (size_t i = 0; i < fsm.edges.size(); i++) {
+        if (old_to_new.find(i) == old_to_new.end()) {
+          old_to_new[i] = cnt;
+          cnt++;
+        }
+      }
+      RebuildFSM(old_to_new, cnt);
+    }
+    union_find_set.Clear();
+    // Case 2: Like ba | ca | da, then they can be merged into (b | c | d)a.
+    bool change_case2 = false;
+    for (size_t i = 0; i < fsm.edges.size(); i++) {
+      for (size_t j = i + 1; j < fsm.edges.size(); j++) {
+        bool equivalent = true;
+        for (const auto& edge_i : fsm.edges[i]) {
+          bool same = false;
+          for (const auto& edge_j : fsm.edges[j]) {
+            if (edge_i.min == edge_j.min && edge_i.max == edge_j.max &&
+                edge_i.target == edge_j.target) {
+              same = true;
+              break;
+            }
+          }
+          if (!same) {
+            equivalent = false;
+            break;
+          }
+        }
+        if (!equivalent) {
+          continue;
+        }
+        for (const auto& edge_j : fsm.edges[j]) {
+          bool same = false;
+          for (const auto& edge_i : fsm.edges[i]) {
+            if (edge_i.min == edge_j.min && edge_i.max == edge_j.max &&
+                edge_i.target == edge_j.target) {
+              same = true;
+              break;
+            }
+          }
+          if (!same) {
+            equivalent = false;
+            break;
+          }
+        }
+        if (equivalent) {
+          union_find_set.Make(i);
+          union_find_set.Make(j);
+          union_find_set.Union(i, j);
+          change_case2 = true;
+        }
+      }
+    }
+    if (change_case2) {
+      auto eq_classes = union_find_set.GetAllSets();
+      std::unordered_map<int, int> old_to_new;
+      for (size_t i = 0; i < eq_classes.size(); i++) {
+        for (const auto& node : eq_classes[i]) {
+          old_to_new[node] = i;
+        }
+      }
+      int cnt = eq_classes.size();
+      for (size_t i = 0; i < fsm.edges.size(); i++) {
+        if (old_to_new.find(i) == old_to_new.end()) {
+          old_to_new[i] = cnt;
+          cnt++;
+        }
+      }
+      RebuildFSM(old_to_new, cnt);
+    }
+    changed = change_case1 || change_case2;
+  }
+  return;
+}
+
 void FSMWithStartEnd::RebuildFSM(
     std::unordered_map<int, int>& old_to_new, const int& new_node_cnt
 ) {

@@ -224,5 +224,25 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse.SimplifyEpsilon();
   assert(fsm_wse.NumNodes() == 5);
   assert(fsm_wse.Check(test_str) == true);
+  std::cout << "--------- Function Test7 -----------" << std::endl;
+  fsm_wse = RegexToFSM("\"abc\" | \"abd\"");
+  test_str = "abc";
+  assert(fsm_wse.Check(test_str) == true);
+  fsm_wse.SimplifyTransition();
+  fsm_wse.SimplifyEpsilon();
+  assert(fsm_wse.Check(test_str) == true);
+  test_str = "abcd";
+  assert(fsm_wse.Check(test_str) == false);
+  assert(fsm_wse.NumNodes() == 4);
+  std::cout << "--------- Function Test8 -----------" << std::endl;
+  fsm_wse = RegexToFSM("\"acd\" | \"bcd\"");
+  test_str = "acd";
+  assert(fsm_wse.Check(test_str) == true);
+  fsm_wse.SimplifyTransition();
+  fsm_wse.SimplifyEpsilon();
+  assert(fsm_wse.Check(test_str) == true);
+  test_str = "abcd";
+  assert(fsm_wse.Check(test_str) == false);
+  assert(fsm_wse.NumNodes() == 4);
   std::cout << "--------- Function Test Passed! -----------" << std::endl;
 }

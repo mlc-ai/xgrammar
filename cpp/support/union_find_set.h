@@ -110,5 +110,10 @@ class UnionFindSet {
     }
     return result;
   }
+
+  void Clear() {
+    parent.clear();
+    rank.clear();
+  }
 };
 }  // namespace xgrammar
