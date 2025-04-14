@@ -1455,6 +1455,9 @@ char HandleEscapeInString(const std::string& regex, int start) {
   }
 }
 FSMWithStartEnd FSMWithStartEnd::Intersect(const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs) {
+  if (!lhs.IsLeaf() || !rhs.IsLeaf()) {
+    throw std::runtime_error("Invalid FSM: non-leaf FSM.");
+  }
   auto lhs_dfa = lhs.ToDFA();
   auto rhs_dfa = rhs.ToDFA();
   std::unordered_set<int> rules_lhs;
@@ -1622,5 +1625,79 @@ bool CompactFSMWithStartEnd::Check(const std::string& str) const {
     }
   }
   return false;
+}
+bool FSMWithStartEnd::IsDFA() {
+  if (is_dfa) {
+    return true;
+  }
+
+  std::set<int> interval_ends;
+  std::unordered_set<int> rules;
+  for (const auto& edges : fsm.edges) {
+    for (const auto& edge : edges) {
+      if (edge.IsEpsilon()) {
+        return false;
+      }
+      if (edge.IsCharRange()) {
+        interval_ends.insert(edge.min);
+        interval_ends.insert(edge.max + 1);
+        continue;
+      }
+      if (edge.IsRuleRef()) {
+        rules.insert(edge.GetRefRuleId());
+        continue;
+      }
+    }
+  }
+  using Interval = std::pair<int, int>;
+  std::unordered_set<Interval> intervals;
+  for (auto it = interval_ends.begin(); it != interval_ends.end(); ++it) {
+    auto next_it = std::next(it);
+    if (next_it != interval_ends.end()) {
+      intervals.emplace(*it, *next_it - 1);
+    }
+  }
+  for (const auto& edges : fsm.edges) {
+    for (const auto& rule : rules) {
+      bool find = false;
+      for (const auto& edge : edges) {
+        if (edge.IsRuleRef()) {
+          if (edge.GetRefRuleId() == rule) {
+            if (find) {
+              return false;
+            }
+            find = true;
+          }
+        }
+      }
+    }
+    for (const auto& interval : intervals) {
+      bool find = false;
+      for (const auto& edge : edges) {
+        if (edge.IsCharRange()) {
+          if (edge.min > interval.first || edge.max < interval.second) {
+            continue;
+          }
+          if (find) {
+            return false;
+          }
+          find = true;
+        }
+      }
+    }
+  }
+  is_dfa = true;
+  return true;
+}
+
+bool FSMWithStartEnd::IsLeaf() const {
+  for (const auto& edges : fsm.edges) {
+    for (const auto& edge : edges) {
+      if (edge.IsRuleRef()) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 }  // namespace xgrammar

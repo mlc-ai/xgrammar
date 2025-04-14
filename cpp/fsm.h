@@ -238,6 +238,19 @@ class FSMWithStartEnd {
    * \param node The node to add as an end node.
    */
   void AddEndNode(int node) { ends.insert(node); }
+
+  /*!
+  \brief Check if the FSM is a DFA.
+  \return True if the FSM is a DFA, false otherwise.
+*/
+  bool IsDFA();
+
+  /*!
+    \brief Check if the FSM is a leaf FSM.
+    \return True if the FSM is a leaf FSM, false otherwise.
+  */
+  bool IsLeaf() const;
+
   friend std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
 };
 
