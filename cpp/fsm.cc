@@ -13,33 +13,34 @@
 #include <utility>
 #include <vector>
 
+#include "support/logging.h"
+
 namespace xgrammar {
 std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start);
 char HandleEscapeInString(const std::string& regex, int start);
 
-std::unordered_set<int> CompactFSM::GetEpsilonClosure(int state) const {
+void CompactFSM::GetEpsilonClosure(int state, std::unordered_set<int>* result) const {
   std::queue<int> queue = std::queue<int>({state});
-  std::unordered_set<int> closure;
   while (!queue.empty()) {
     int current = queue.front();
     queue.pop();
-    if (closure.find(current) != closure.end()) {
+    if (result->find(current) != result->end()) {
       continue;
     }
-    closure.insert(current);
+    result->insert(current);
     for (const auto& edge : edges[current]) {
       if (edge.IsEpsilon()) {
         queue.push(edge.target);
       }
     }
   }
-  return closure;
+  return;
 }
 
 FSMEdge::FSMEdge(const short& _min, const short& _max, const int& target)
     : min(_min), max(_max), target(target) {
   if (IsCharRange() && min > max) {
-    throw std::runtime_error("Invalid char range: min > max");
+    XGRAMMAR_DCHECK(false) << "Invalid FSMEdge: min > max. min=" << min << ", max=" << max;
   }
 }
 
@@ -53,27 +54,28 @@ short FSMEdge::GetRefRuleId() const {
   if (IsRuleRef()) {
     return max;
   } else {
-    throw std::runtime_error("Not a rule reference!");
+    XGRAMMAR_DCHECK(false) << "Invalid FSMEdge: not a rule reference. min=" << min
+                           << ", max=" << max;
+    return -1;
   }
 }
 
-std::unordered_set<int> FSM::GetEpsilonClosure(int state) const {
+void FSM::GetEpsilonClosure(int state, std::unordered_set<int>* result) const {
   std::queue<int> queue = std::queue<int>({state});
-  std::unordered_set<int> closure;
   while (!queue.empty()) {
     int current = queue.front();
     queue.pop();
-    if (closure.find(current) != closure.end()) {
+    if (result->find(current) != result->end()) {
       continue;
     }
-    closure.insert(current);
+    result->insert(current);
     for (const auto& edge : edges[current]) {
       if (edge.IsEpsilon()) {
         queue.push(edge.target);
       }
     }
   }
-  return closure;
+  return;
 }
 
 FSM FSM::Copy() const {
@@ -230,7 +232,8 @@ void FSM::Advance(const std::vector<int>& from, int value, std::vector<int>* res
   }
   std::unordered_set<int> result_closure;
   for (const auto& state : in_result) {
-    auto closure = GetEpsilonClosure(state);
+    std::unordered_set<int> closure;
+    GetEpsilonClosure(state, &closure);
     result_closure.insert(closure.begin(), closure.end());
   }
   for (const auto& state : result_closure) {
@@ -369,7 +372,8 @@ void CompactFSM::Advance(
   }
   std::unordered_set<int> result_closure;
   for (const auto& state : in_result) {
-    auto closure = GetEpsilonClosure(state);
+    std::unordered_set<int> closure;
+    GetEpsilonClosure(state, &closure);
     result_closure.insert(closure.begin(), closure.end());
   }
   for (const auto& state : result_closure) {
@@ -392,7 +396,9 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
     }
   }
   int now_process = 0;
-  closures.push_back(fsm.GetEpsilonClosure(start));
+  std::unordered_set<int> closure;
+  fsm.GetEpsilonClosure(start, &closure);
+  closures.push_back(closure);
   while (now_process < static_cast<int>(closures.size())) {
     std::set<int> interval_ends;
     dfa.fsm.edges.push_back(std::vector<FSMEdge>());
@@ -431,7 +437,8 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
         for (const auto& edge : edges) {
           if (edge.IsCharRange()) {
             if (interval.first >= edge.min && interval.second <= edge.max) {
-              auto epsilon_closure = fsm.GetEpsilonClosure(edge.target);
+              std::unordered_set<int> epsilon_closure;
+              fsm.GetEpsilonClosure(edge.target, &epsilon_closure);
               next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
             }
           }
@@ -457,7 +464,8 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
         for (const auto& edge : edges) {
           if (edge.IsRuleRef()) {
             if (rule == edge.GetRefRuleId()) {
-              auto epsilon_closure = fsm.GetEpsilonClosure(edge.target);
+              std::unordered_set<int> epsilon_closure;
+              fsm.GetEpsilonClosure(edge.target, &closure);
               next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
             }
           }
@@ -1588,7 +1596,8 @@ FSMWithStartEnd FSMWithStartEnd::Intersect(const FSMWithStartEnd& lhs, const FSM
 }
 
 bool FSMWithStartEnd::Check(const std::string& str) const {
-  auto start_states_set = fsm.GetEpsilonClosure(start);
+  std::unordered_set<int> start_states_set;
+  fsm.GetEpsilonClosure(start, &start_states_set);
   std::vector<int> from_states;
   std::vector<int> result_states;
   for (const auto& start_state : start_states_set) {
@@ -1608,7 +1617,8 @@ bool FSMWithStartEnd::Check(const std::string& str) const {
 }
 
 bool CompactFSMWithStartEnd::Check(const std::string& str) const {
-  auto start_states_set = fsm.GetEpsilonClosure(start);
+  std::unordered_set<int> start_states_set;
+  fsm.GetEpsilonClosure(start, &start_states_set);
   std::vector<int> from_states;
   std::vector<int> result_states;
   for (const auto& start_state : start_states_set) {

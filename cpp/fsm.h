@@ -48,9 +48,9 @@ class FSM {
   /*!
     \brief Get the epsilon closure of a state.
     \param state The current state id.
-    \return The epsilon closure of the state.
+    \param result The epsilon closure of the state.
   */
-  std::unordered_set<int> GetEpsilonClosure(int state) const;
+  void GetEpsilonClosure(int state, std::unordered_set<int>* result) const;
 
  public:
   using Edge = FSMEdge;
@@ -259,9 +259,9 @@ class CompactFSM {
   /*!
     \brief Get the epsilon closure of a state.
     \param state The current state id.
-    \return The epsilon closure of the state.
+    \param result The epsilon closure of the state.
   */
-  std::unordered_set<int> GetEpsilonClosure(int state) const;
+  void GetEpsilonClosure(int state, std::unordered_set<int>* result) const;
 
  public:
   /*!
@@ -361,6 +361,7 @@ class CompactFSMWithStartEnd {
   \return The FSM with start and end states.
 */
 FSMWithStartEnd RegexToFSM(const std::string& regex, int start = 0, int end = -1);
+
 inline std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
   os << "FSM(num_nodes=" << fsm.NumNodes() << ", start=" << fsm.StartNode() << ", end=[";
   for (auto end = fsm.ends.begin(); end != fsm.ends.end(); ++end) {
