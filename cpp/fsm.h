@@ -89,6 +89,12 @@ class FSMWithStartEnd {
   std::unordered_set<int> ends;
 
   /*!
+  \brief Rebuild the FSM with the new state ids.
+  \param old_to_new The mapping from old state ids to new state ids.
+*/
+  void RebuildFSM(std::unordered_map<int, int>& old_to_new, const int& new_node_cnt);
+
+  /*!
   \brief Construct a FSM from a regex string.
   \details The regex string should only be the format like "abx" or [a-c0-9].
   \details Any symbols like "a|b" or "a*b" are not supported.
