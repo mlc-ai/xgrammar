@@ -1906,6 +1906,19 @@ void FSMWithStartEnd::RebuildFSM(
   }
   ends = new_ends;
   decltype(fsm.edges) new_edges;
+  struct Compare {
+    bool operator()(const FSMEdge& lhs, const FSMEdge& rhs) const {
+      if (lhs.min != rhs.min) {
+        return lhs.min < rhs.min;
+      }
+      if (lhs.max != rhs.max) {
+        return lhs.max < rhs.max;
+      }
+      return lhs.target < rhs.target;
+    }
+  };
+  std::vector<std::set<FSMEdge, Compare>> new_edges_set;
+  new_edges_set.resize(new_node_cnt);
   new_edges.resize(new_node_cnt);
   for (size_t i = 0; i < fsm.edges.size(); i++) {
     const auto& edges = fsm.edges[i];
@@ -1913,11 +1926,15 @@ void FSMWithStartEnd::RebuildFSM(
       if (edge.IsEpsilon() && old_to_new[i] == old_to_new[edge.target]) {
         continue;
       }
-      new_edges[old_to_new[i]].emplace_back(edge.min, edge.max, old_to_new[edge.target]);
+      new_edges_set[old_to_new[i]].insert({edge.min, edge.max, old_to_new[edge.target]});
+    }
+  }
+  for (size_t i = 0; i < new_edges_set.size(); i++) {
+    for (const auto& edge : new_edges_set[i]) {
+      new_edges[i].emplace_back(edge.min, edge.max, edge.target);
     }
   }
   fsm.edges = new_edges;
   return;
 }
-
 }  // namespace xgrammar
