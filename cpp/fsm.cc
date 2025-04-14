@@ -1685,4 +1685,97 @@ bool FSMWithStartEnd::IsLeaf() const {
   }
   return true;
 }
+
+void FSMWithStartEnd::SimplifyEpsilon() {
+  if (IsDFA()) {
+    return;
+  }
+  UnionFindSet<int> union_find_set;
+  std::unordered_map<int, std::unordered_set<int>> previous_nodes;
+  std::unordered_set<int> has_epsilon;
+
+  // Initialize the previous nodes, and find all the nodes that have
+  // epsilon edges.
+  for (size_t i = 0; i < fsm.edges.size(); i++) {
+    const auto& edges = fsm.edges[i];
+    for (const auto& edge : edges) {
+      if (previous_nodes.find(edge.target) == previous_nodes.end()) {
+        previous_nodes[edge.target] = std::unordered_set<int>();
+      }
+      previous_nodes[edge.target].insert(i);
+      if (edge.IsEpsilon()) {
+        has_epsilon.insert(i);
+      }
+    }
+  }
+
+  for (const auto& node : has_epsilon) {
+    const auto& edges = fsm.edges[node];
+    for (const auto& edge : edges) {
+      if (!edge.IsEpsilon()) {
+        continue;
+      }
+      // Have other inward nodes.
+      if (previous_nodes[node].size() != 1) {
+        continue;
+      }
+      bool has_other_edge = false;
+      for (const auto& second_edge : edges) {
+        if (second_edge.IsEpsilon()) {
+          continue;
+        }
+        if (second_edge.target == edge.target) {
+          has_other_edge = true;
+          break;
+        }
+      }
+      // The node can be merged.
+      if (!has_other_edge) {
+        union_find_set.Make(node);
+        union_find_set.Make(edge.target);
+        union_find_set.Union(node, edge.target);
+      }
+    }
+  }
+
+  // Merge the nodes.
+  auto eq_classes = union_find_set.GetAllSets();
+  if (eq_classes.empty()) {
+    return;
+  }
+  std::unordered_map<int, int> new_to_old;
+  for (size_t i = 0; i < eq_classes.size(); i++) {
+    for (const auto& node : eq_classes[i]) {
+      new_to_old[node] = i;
+    }
+  }
+  int cnt = eq_classes.size();
+  for (size_t i = 0; i < fsm.edges.size(); i++) {
+    if (new_to_old.find(i) == new_to_old.end()) {
+      new_to_old[i] = cnt;
+      cnt++;
+    }
+  }
+
+  start = new_to_old[start];
+  decltype(ends) new_ends;
+  for (const auto& end : ends) {
+    new_ends.insert(new_to_old[end]);
+  }
+  ends = new_ends;
+  decltype(fsm.edges) new_edges;
+  new_edges.resize(cnt);
+  for (size_t i = 0; i < fsm.edges.size(); i++) {
+    const auto& edges = fsm.edges[i];
+    for (const auto& edge : edges) {
+      if (edge.IsEpsilon() && new_to_old[i] == new_to_old[edge.target]) {
+        continue;
+      }
+      new_edges[new_to_old[i]].emplace_back(edge.min, edge.max, new_to_old[edge.target]);
+    }
+  }
+  fsm.edges = new_edges;
+  return;
+}
+
 }  // namespace xgrammar

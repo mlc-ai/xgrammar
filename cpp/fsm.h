@@ -251,6 +251,20 @@ class FSMWithStartEnd {
   */
   bool IsLeaf() const;
 
+  /*!
+  \brief Merge some nodes by removing some epsilon transitions.
+  \details For example, a -- \epsilon --> b, and b doesn't have
+  \details any other inward edges, then we can merge the two nodes.
+*/
+  void SimplifyEpsilon();
+
+  /*!
+   \brief Merge some nodes which are approximately the same.
+   \details Actually, if two nodes have the same outward edges,
+   \details or the same inward edges, then we can merge them.
+  */
+  void SimplifyTransition();
+
   friend std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
 };
 
