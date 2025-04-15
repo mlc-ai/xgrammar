@@ -123,7 +123,7 @@ TEST(XGrammarFSMTest, SymbolTest) {
   fsm_wse = RegexToFSM("\" \"*\" \"*\" \"+\" \"?\" \"*").Unwrap();
   test_str[0] = " ";
   test_str[1] = "      ";
-  for (const auto str : test_str) {
+  for (const auto& str : test_str) {
     assert(fsm_wse.Check(str) == true);
   }
   std::cout << "Symbol Test Passed!" << std::endl;

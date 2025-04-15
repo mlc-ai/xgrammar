@@ -5,11 +5,24 @@
 #ifndef XGRAMMAR_FSM_H_
 #define XGRAMMAR_FSM_H_
 
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <cstring>
+#include <list>
+#include <queue>
+#include <set>
+#include <stack>
+#include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
 #include "../cpp/support/csr_array.h"
+#include "support/logging.h"
+#include "support/union_find_set.h"
 
 namespace xgrammar {
 
