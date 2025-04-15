@@ -472,6 +472,11 @@ class RegexIR {
   struct Union {
     std::vector<Node> nodes;
   };
+  struct Repeat {
+    std::vector<Node> nodes;
+    int lower_bound = 0;
+    int upper_bound = 0;
+  };
   // This struct is used to represent a bracket in regex.
   std::vector<Node> nodes;
 
@@ -483,10 +488,11 @@ class RegexIR {
   /*!
     \brief the visit function for the variant.
   */
-  Result<FSMWithStartEnd> visit(Leaf node) const;
-  Result<FSMWithStartEnd> visit(Symbol node) const;
-  Result<FSMWithStartEnd> visit(Union node) const;
-  Result<FSMWithStartEnd> visit(Bracket node) const;
+  Result<FSMWithStartEnd> visit(const Leaf& node) const;
+  Result<FSMWithStartEnd> visit(const Symbol& node) const;
+  Result<FSMWithStartEnd> visit(const Union& node) const;
+  Result<FSMWithStartEnd> visit(const Bracket& node) const;
+  Result<FSMWithStartEnd> visit(const Repeat& node) const;
 };
 
 }  // namespace xgrammar

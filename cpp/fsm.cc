@@ -1930,12 +1930,12 @@ void FSMWithStartEnd::RebuildFSM(
   return;
 }
 
-Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Leaf node) const {
+Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Leaf& node) const {
   FSMWithStartEnd result(node.regex);
   return Result<FSMWithStartEnd>::Ok(result);
 }
 
-Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Union node) const {
+Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Union& node) const {
   std::vector<FSMWithStartEnd> fsm_list;
   for (const auto& child : node.nodes) {
     auto visited = std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, child);
@@ -1951,7 +1951,7 @@ Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Union node) const {
   return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Union(fsm_list));
 }
 
-Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Symbol node) const {
+Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& node) const {
   if (node.node.size() != 1) {
     return Result<FSMWithStartEnd>::Err(
         std::make_shared<Error>("fsm.cc", __LINE__, "Invalid symbol")
@@ -1980,7 +1980,7 @@ Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Symbol node) const {
   return Result<FSMWithStartEnd>::Ok(result);
 }
 
-Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Bracket node) const {
+Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Bracket& node) const {
   std::vector<FSMWithStartEnd> fsm_list;
   for (const auto& child : node.nodes) {
     auto visited = std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, child);
@@ -1995,5 +1995,41 @@ Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Bracket node) const {
     );
   }
   return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Concatenate(fsm_list));
+}
+
+Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
+  if (node.nodes.size() != 1) {
+    return Result<FSMWithStartEnd>::Err(
+        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid repeat")
+    );
+  }
+  if (node.lower_bound > node.upper_bound || node.lower_bound <= 0) {
+    return Result<FSMWithStartEnd>::Err(
+        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid repeat")
+    );
+  }
+  Result<FSMWithStartEnd> child =
+      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, node.nodes[0]);
+  if (child.IsErr()) {
+    return child;
+  }
+  FSMWithStartEnd result;
+  result = child.Unwrap();
+  std::unordered_set<int> new_ends;
+  if (node.lower_bound == 1) {
+    for (const auto& end : result.ends) {
+      new_ends.insert(end);
+    }
+  }
+  for (int i = 2; i <= node.upper_bound; i++) {
+    result = result.Concatenate(std::vector<FSMWithStartEnd>{child.Unwrap()});
+    if (i >= node.lower_bound) {
+      for (const auto& end : result.ends) {
+        new_ends.insert(end);
+      }
+    }
+  }
+  result.ends = new_ends;
+  return Result<FSMWithStartEnd>::Ok(result);
 }
 }  // namespace xgrammar
