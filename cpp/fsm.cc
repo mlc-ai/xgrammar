@@ -1799,4 +1799,21 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
   }
   return ir.Build();
 }
+
+Result<FSMWithStartEnd> RegexIR::Build() const {
+  if (nodes.empty()) {
+    return Result<FSMWithStartEnd>::Err(
+        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node!")
+    );
+  }
+  std::vector<FSMWithStartEnd> fsm_list;
+  for (const auto& node : nodes) {
+    auto visited = std::visit([&](auto&& arg) { return visit(arg); }, node);
+    if (visited.IsErr()) {
+      return visited;
+    }
+    fsm_list.push_back(visited.Unwrap());
+  }
+  return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Concatenate(fsm_list));
+}
 }  // namespace xgrammar
