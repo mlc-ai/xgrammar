@@ -557,467 +557,6 @@ FSMWithStartEnd FSMWithStartEnd::MakeOptional() const {
   return result;
 }
 
-FSMWithStartEnd RegexToFSM(const std::string& regex, int start, int end) {
-  bool flag = false;
-  if (end == -1) {
-    end = regex.size();
-  }
-  FSMWithStartEnd result;
-  bool quotation_mode = false;
-  bool set_mode = false;
-  bool not_mode = false;
-  int left_middle_bracket = -1;
-  int left_quote = -1;
-  std::stack<int> bracket_stack;
-  for (int i = start; i < end; i++) {
-    // Skip the white spaces.
-    if (regex[i] == ' ') {
-      continue;
-    }
-
-    // Handle the not operator.
-    if (regex[i] == '!') {
-      if (quotation_mode || set_mode) {
-        continue;
-      }
-      if (not_mode) {
-        throw std::runtime_error("Invalid regex: nested '!' operator.");
-      }
-      not_mode = true;
-      continue;
-    }
-
-    // Handle the escape character.
-    if (regex[i] == '\\') {
-      i = i + 1;
-      continue;
-    }
-
-    // Handle the strings like "...".
-    if (regex[i] == '\"' && !set_mode) {
-      if (quotation_mode && bracket_stack.empty()) {
-        FSMWithStartEnd tmp_fsm(regex.substr(left_quote, i - left_quote + 1));
-        if (i < end - 1) {
-          switch (regex[i + 1]) {
-            case '+': {
-              tmp_fsm = tmp_fsm.MakePlus();
-              i = i + 1;
-              break;
-            }
-            case '*': {
-              tmp_fsm = tmp_fsm.MakeStar();
-              i = i + 1;
-              break;
-            }
-            case '?': {
-              tmp_fsm = tmp_fsm.MakeOptional();
-              i = i + 1;
-              break;
-            }
-            case '{': {
-              int lower_times = 0;
-              int upper_times = 0;
-              i = i + 2;
-              while (regex[i] == ' ') {
-                if (i >= end) {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-                i = i + 1;
-              }
-              while (regex[i] >= '0' && regex[i] <= '9') {
-                lower_times = lower_times * 10 + regex[i] - '0';
-                i = i + 1;
-                if (i >= end) {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-              }
-              while (regex[i] == ' ') {
-                i = i + 1;
-                if (i >= end) {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-              }
-              switch (regex[i]) {
-                case '}': {
-                  upper_times = lower_times;
-                  break;
-                }
-                case ',': {
-                  i = i + 1;
-                  if (i >= end) {
-                    throw std::runtime_error("Invalid regex: unmatched '{'.");
-                  }
-                  while (regex[i] == ' ') {
-                    i = i + 1;
-                    if (i >= end) {
-                      throw std::runtime_error("Invalid regex: unmatched '{'.");
-                    }
-                  }
-                  while (regex[i] >= '0' && regex[i] <= '9') {
-                    upper_times = upper_times * 10 + regex[i] - '0';
-                    i = i + 1;
-                    if (i >= end) {
-                      throw std::runtime_error("Invalid regex: unmatched '{'.");
-                    }
-                  }
-                  while (regex[i] == ' ') {
-                    i = i + 1;
-                    if (i >= end) {
-                      throw std::runtime_error("Invalid regex: unmatched '{'.");
-                    }
-                  }
-                  if (regex[i] != '}') {
-                    throw std::runtime_error("Invalid regex: unmatched '{'.");
-                  }
-                  break;
-                }
-                default: {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-              }
-              std::unordered_set<int> new_ends;
-              const auto& copy_fsm = tmp_fsm.Copy();
-              if (lower_times == 0) {
-                new_ends.insert(tmp_fsm.start);
-              }
-              if (lower_times == 1) {
-                for (const auto& end : tmp_fsm.ends) {
-                  new_ends.insert(end);
-                }
-              }
-              for (int j = 2; j <= upper_times; j++) {
-                tmp_fsm = FSMWithStartEnd::Concatenate({tmp_fsm, copy_fsm});
-                if (j >= lower_times) {
-                  for (const auto& end : tmp_fsm.ends) {
-                    new_ends.insert(end);
-                  }
-                }
-              }
-              tmp_fsm.ends = new_ends;
-              break;
-            }
-            default: {
-              break;
-            }
-          }
-        }
-        if (not_mode) {
-          tmp_fsm = tmp_fsm.Not();
-          not_mode = false;
-        }
-        if (flag) {
-          result = FSMWithStartEnd::Concatenate({result, tmp_fsm});
-        } else {
-          result = tmp_fsm;
-          flag = true;
-        }
-      }
-      if (!quotation_mode) {
-        left_quote = i;
-      } else {
-        left_quote = -1;
-      }
-      quotation_mode = !quotation_mode;
-      continue;
-    }
-
-    // Handle the character class like [a-zA-Z].
-    if (regex[i] == '[' && !quotation_mode) {
-      if (set_mode) {
-        throw std::runtime_error("Invalid regex: nested set.");
-      }
-      left_middle_bracket = i;
-      set_mode = true;
-      continue;
-    }
-    if (regex[i] == ']' && set_mode) {
-      if (left_middle_bracket == -1) {
-        throw std::runtime_error("Invalid regex: unmatched ']'.");
-      }
-      if (bracket_stack.empty()) {
-        FSMWithStartEnd tmp_fsm(regex.substr(left_middle_bracket, i - left_middle_bracket + 1));
-        if (i < end - 1) {
-          switch (regex[i + 1]) {
-            case '+': {
-              tmp_fsm = tmp_fsm.MakePlus();
-              i = i + 1;
-              break;
-            }
-            case '*': {
-              tmp_fsm = tmp_fsm.MakeStar();
-              i = i + 1;
-              break;
-            }
-            case '?': {
-              tmp_fsm = tmp_fsm.MakeOptional();
-              i = i + 1;
-              break;
-            }
-            case '{': {
-              int lower_times = 0;
-              int upper_times = 0;
-              i = i + 2;
-              while (regex[i] == ' ') {
-                if (i >= end) {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-                i = i + 1;
-              }
-              while (regex[i] >= '0' && regex[i] <= '9') {
-                lower_times = lower_times * 10 + regex[i] - '0';
-                i = i + 1;
-                if (i >= end) {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-              }
-              while (regex[i] == ' ') {
-                i = i + 1;
-                if (i >= end) {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-              }
-              switch (regex[i]) {
-                case '}': {
-                  upper_times = lower_times;
-                  break;
-                }
-                case ',': {
-                  i = i + 1;
-                  if (i >= end) {
-                    throw std::runtime_error("Invalid regex: unmatched '{'.");
-                  }
-                  while (regex[i] == ' ') {
-                    i = i + 1;
-                    if (i >= end) {
-                      throw std::runtime_error("Invalid regex: unmatched '{'.");
-                    }
-                  }
-                  while (regex[i] >= '0' && regex[i] <= '9') {
-                    upper_times = upper_times * 10 + regex[i] - '0';
-                    i = i + 1;
-                    if (i >= end) {
-                      throw std::runtime_error("Invalid regex: unmatched '{'.");
-                    }
-                  }
-                  while (regex[i] == ' ') {
-                    i = i + 1;
-                    if (i >= end) {
-                      throw std::runtime_error("Invalid regex: unmatched '{'.");
-                    }
-                  }
-                  if (regex[i] != '}') {
-                    throw std::runtime_error("Invalid regex: unmatched '{'.");
-                  }
-                  break;
-                }
-                default: {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-              }
-              std::unordered_set<int> new_ends;
-              const auto& copy_fsm = tmp_fsm.Copy();
-              if (lower_times == 0) {
-                new_ends.insert(tmp_fsm.start);
-              }
-              if (lower_times == 1) {
-                for (const auto& end : tmp_fsm.ends) {
-                  new_ends.insert(end);
-                }
-              }
-              for (int j = 2; j <= upper_times; j++) {
-                tmp_fsm = FSMWithStartEnd::Concatenate({tmp_fsm, copy_fsm});
-                if (j >= lower_times) {
-                  for (const auto& end : tmp_fsm.ends) {
-                    new_ends.insert(end);
-                  }
-                }
-              }
-              tmp_fsm.ends = new_ends;
-              break;
-            }
-            default: {
-              break;
-            }
-          }
-        }
-        if (not_mode) {
-          tmp_fsm = tmp_fsm.Not();
-          not_mode = false;
-        }
-        if (flag) {
-          result = FSMWithStartEnd::Concatenate({result, tmp_fsm});
-        } else {
-          result = tmp_fsm;
-          flag = true;
-        }
-      }
-      set_mode = false;
-      left_middle_bracket = -1;
-      continue;
-    }
-
-    // Handle the small brackets like (a | b c*) | b.
-    if (regex[i] == '(' && !quotation_mode && !set_mode) {
-      bracket_stack.push(i);
-      continue;
-    }
-    if (regex[i] == ')' && !quotation_mode && !set_mode) {
-      if (bracket_stack.empty()) {
-        throw std::runtime_error("Invalid regex: unmatched ')'.");
-      }
-      int left_bracket = bracket_stack.top();
-      bracket_stack.pop();
-      if (bracket_stack.empty()) {
-        auto tmp_fsm = RegexToFSM(regex, left_bracket + 1, i);
-        if (i < end - 1) {
-          switch (regex[i + 1]) {
-            case '+': {
-              tmp_fsm = tmp_fsm.MakePlus();
-              i = i + 1;
-              break;
-            }
-            case '*': {
-              tmp_fsm = tmp_fsm.MakeStar();
-              i = i + 1;
-              break;
-            }
-            case '?': {
-              tmp_fsm = tmp_fsm.MakeOptional();
-              i = i + 1;
-              break;
-            }
-            case '{': {
-              int lower_times = 0;
-              int upper_times = 0;
-              i = i + 2;
-              while (regex[i] == ' ') {
-                if (i >= end) {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-                i = i + 1;
-              }
-              while (regex[i] >= '0' && regex[i] <= '9') {
-                lower_times = lower_times * 10 + regex[i] - '0';
-                i = i + 1;
-                if (i >= end) {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-              }
-              while (regex[i] == ' ') {
-                i = i + 1;
-                if (i >= end) {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-              }
-              switch (regex[i]) {
-                case '}': {
-                  upper_times = lower_times;
-                  break;
-                }
-                case ',': {
-                  i = i + 1;
-                  if (i >= end) {
-                    throw std::runtime_error("Invalid regex: unmatched '{'.");
-                  }
-                  while (regex[i] == ' ') {
-                    i = i + 1;
-                    if (i >= end) {
-                      throw std::runtime_error("Invalid regex: unmatched '{'.");
-                    }
-                  }
-                  while (regex[i] >= '0' && regex[i] <= '9') {
-                    upper_times = upper_times * 10 + regex[i] - '0';
-                    i = i + 1;
-                    if (i >= end) {
-                      throw std::runtime_error("Invalid regex: unmatched '{'.");
-                    }
-                  }
-                  while (regex[i] == ' ') {
-                    i = i + 1;
-                    if (i >= end) {
-                      throw std::runtime_error("Invalid regex: unmatched '{'.");
-                    }
-                  }
-                  if (regex[i] != '}') {
-                    throw std::runtime_error("Invalid regex: unmatched '{'.");
-                  }
-                  break;
-                }
-                default: {
-                  throw std::runtime_error("Invalid regex: unmatched '{'.");
-                }
-              }
-              std::unordered_set<int> new_ends;
-              const auto& copy_fsm = tmp_fsm.Copy();
-              if (lower_times == 0) {
-                new_ends.insert(tmp_fsm.start);
-              }
-              if (lower_times == 1) {
-                for (const auto& end : tmp_fsm.ends) {
-                  new_ends.insert(end);
-                }
-              }
-              for (int j = 2; j <= upper_times; j++) {
-                tmp_fsm = FSMWithStartEnd::Concatenate({tmp_fsm, copy_fsm});
-                if (j >= lower_times) {
-                  for (const auto& end : tmp_fsm.ends) {
-                    new_ends.insert(end);
-                  }
-                }
-              }
-              tmp_fsm.ends = new_ends;
-              break;
-            }
-            default: {
-              break;
-            }
-          }
-        }
-        if (not_mode) {
-          tmp_fsm = tmp_fsm.Not();
-          not_mode = false;
-        }
-        if (flag) {
-          result = FSMWithStartEnd::Concatenate({result, tmp_fsm});
-        } else {
-          result = tmp_fsm;
-          flag = true;
-        }
-      }
-      continue;
-    }
-
-    // Handle the alternation operator '|'.
-    if (regex[i] == '|' && !quotation_mode && !set_mode) {
-      if (bracket_stack.empty()) {
-        auto rhs = RegexToFSM(regex, i + 1, end);
-        if (!flag) {
-          throw(std::runtime_error("Invalid regex: unmatched '|'."));
-        }
-        result = FSMWithStartEnd::Union({result, rhs});
-        return result;
-      }
-    }
-    if (regex[i] == '&' && !quotation_mode && !set_mode) {
-      if (bracket_stack.empty()) {
-        auto rhs = RegexToFSM(regex, i + 1, end);
-        if (!flag) {
-          throw(std::runtime_error("Invalid regex: unmatched '&'."));
-        }
-        result = FSMWithStartEnd::Intersect(result, rhs);
-        return result;
-      }
-    }
-  }
-  if (quotation_mode || set_mode || !bracket_stack.empty() || not_mode) {
-    throw std::runtime_error("Invalid regex: unmatched '\"' or '[' or '('. or '!'");
-  }
-  if (!flag) {
-    throw std::runtime_error("Invalid regex: empty regex.");
-  }
-  return result;
-}
-
 FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
   is_dfa = true;
   start = 0;
@@ -1402,7 +941,8 @@ std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, i
       break;
     }
     default: {
-      throw std::runtime_error("Invalid regex: invalid escape character.");
+      result.emplace_back(regex[start + 1], regex[start + 1]);
+      break;
     }
   }
   return result;
@@ -1436,13 +976,17 @@ char HandleEscapeInString(const std::string& regex, int start) {
       return '\0';
     }
     default: {
-      throw std::runtime_error("Invalid regex: invalid escape character.");
+      return regex[start + 1];
     }
   }
 }
-FSMWithStartEnd FSMWithStartEnd::Intersect(const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs) {
+Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
+    const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, const int& num_of_nodes_limited
+) {
   if (!lhs.IsLeaf() || !rhs.IsLeaf()) {
-    throw std::runtime_error("Invalid FSM: non-leaf FSM.");
+    return Result<FSMWithStartEnd>::Err(
+        std::make_shared<Error>("fsm.cc", __LINE__, "Intersect only support leaf fsm!")
+    );
   }
   auto lhs_dfa = lhs.ToDFA();
   auto rhs_dfa = rhs.ToDFA();
@@ -1499,6 +1043,11 @@ FSMWithStartEnd FSMWithStartEnd::Intersect(const FSMWithStartEnd& lhs, const FSM
   result.fsm.edges.push_back(std::vector<FSMEdge>());
   state_map[{lhs.start, rhs.start}] = 0;
   while (!queue.empty()) {
+    if (state_map.size() > num_of_nodes_limited) {
+      return Result<FSMWithStartEnd>::Err(
+          std::make_shared<Error>("fsm.cc", __LINE__, "Intersection have too many nodes!")
+      );
+    }
     auto state = queue.front();
     queue.pop();
     if (visited.find(state) != visited.end()) {
@@ -1570,7 +1119,7 @@ FSMWithStartEnd FSMWithStartEnd::Intersect(const FSMWithStartEnd& lhs, const FSM
       result.ends.insert(state_map[state]);
     }
   }
-  return result;
+  return Result<FSMWithStartEnd>::Ok(result);
 }
 
 bool FSMWithStartEnd::Check(const std::string& str) const {
@@ -2031,5 +1580,222 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
   }
   result.ends = new_ends;
   return Result<FSMWithStartEnd>::Ok(result);
+}
+Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
+  RegexIR ir;
+  using IRNode = std::variant<RegexIR::Node, char>;
+  // We use a stack to store the nodes.
+  std::stack<IRNode> stack;
+  int left_middle_bracket = -1;
+  for (size_t i = 0; i < regex.size(); i++) {
+    // Handle The class.
+    if (regex[i] == '[') {
+      if (left_middle_bracket != -1) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("fsm.cc", __LINE__, "Nested middle bracket!")
+        );
+      }
+      left_middle_bracket = i;
+      continue;
+    }
+    if (regex[i] == ']') {
+      if (left_middle_bracket == -1) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid middle bracket!")
+        );
+      }
+      RegexIR::Leaf leaf;
+      leaf.regex = regex.substr(left_middle_bracket, i - left_middle_bracket + 1);
+      stack.push(leaf);
+      left_middle_bracket = -1;
+      continue;
+    }
+    if (left_middle_bracket != -1) {
+      if (regex[i] == '\\') {
+        i++;
+      }
+      continue;
+    }
+    if (regex[i] == '+' || regex[i] == '*' || regex[i] == '?') {
+      if (stack.empty()) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node before operator!")
+        );
+      }
+      auto node = stack.top();
+      if (std::holds_alternative<char>(node)) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node before operator!")
+        );
+      }
+      stack.pop();
+      auto child = std::get<RegexIR::Node>(node);
+      RegexIR::Symbol symbol;
+      symbol.node.push_back(child);
+      switch (regex[i]) {
+        case '+': {
+          symbol.symbol = RegexIR::RegexSymbol::plus;
+          break;
+        }
+        case '*': {
+          symbol.symbol = RegexIR::RegexSymbol::star;
+          break;
+        }
+        case '?': {
+          symbol.symbol = RegexIR::RegexSymbol::optional;
+          break;
+        }
+      }
+      stack.push(symbol);
+      continue;
+    }
+    if (regex[i] == '(' || regex[i] == '|') {
+      stack.push(regex[i]);
+      continue;
+    }
+    if (regex[i] == ')') {
+      std::stack<IRNode> nodes;
+      bool paired = false;
+      bool unioned = false;
+      while ((!stack.empty()) && (!paired)) {
+        auto node = stack.top();
+        stack.pop();
+        if (std::holds_alternative<char>(node)) {
+          char c = std::get<char>(node);
+          if (c == '(') {
+            paired = true;
+            break;
+          }
+          if (c == '|') {
+            unioned = true;
+          }
+          nodes.push(node);
+        } else {
+          nodes.push(node);
+        }
+      }
+      if (!paired) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no paired bracket!")
+        );
+      }
+      if (!unioned) {
+        RegexIR::Bracket bracket;
+        while (!nodes.empty()) {
+          auto node = nodes.top();
+          nodes.pop();
+          auto child = std::get<RegexIR::Node>(node);
+          bracket.nodes.push_back(child);
+        }
+        stack.push(bracket);
+      } else {
+        RegexIR::Union union_node;
+        RegexIR::Bracket bracket;
+        while (!nodes.empty()) {
+          auto node = nodes.top();
+          nodes.pop();
+          if (std::holds_alternative<char>(node)) {
+            char c = std::get<char>(node);
+            if (c == '|') {
+              union_node.nodes.push_back(bracket);
+              bracket.nodes.clear();
+              continue;
+            }
+            return Result<FSMWithStartEnd>::Err(
+                std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no paired bracket!")
+            );
+          }
+          if (std::holds_alternative<RegexIR::Node>(node)) {
+            auto child = std::get<RegexIR::Node>(node);
+            bracket.nodes.push_back(child);
+          }
+          return Result<FSMWithStartEnd>::Err(
+              std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no paired bracket!")
+          );
+        }
+        stack.push(union_node);
+      }
+      continue;
+    }
+    if (regex[i] == '{') {
+      i++;
+      int lower_bound = 0;
+      int upper_bound = 0;
+      while (i < regex.size() && regex[i] == ' ') {
+        i++;
+      }
+      while (i < regex.size() && regex[i] >= '0' && regex[i] <= '9') {
+        lower_bound = lower_bound * 10 + (regex[i] - '0');
+        i++;
+      }
+      while (i < regex.size() && regex[i] == ' ') {
+        i++;
+      }
+      if (i >= regex.size() || (regex[i] != ',' && regex[i] != '}')) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: invalid repeat!")
+        );
+      }
+      if (regex[i] == '}') {
+        upper_bound = lower_bound;
+      } else {
+        i++;
+        while (i < regex.size() && regex[i] == ' ') {
+          i++;
+        }
+        while (i < regex.size() && regex[i] >= '0' && regex[i] <= '9') {
+          upper_bound = upper_bound * 10 + (regex[i] - '0');
+          i++;
+        }
+        while (i < regex.size() && regex[i] == ' ') {
+          i++;
+        }
+        if (i >= regex.size() || regex[i] != '}') {
+          return Result<FSMWithStartEnd>::Err(
+              std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: invalid repeat!")
+          );
+        }
+      }
+      if (stack.empty()) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node before repeat!")
+        );
+      }
+      auto node = stack.top();
+      if (std::holds_alternative<char>(node)) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node before repeat!")
+        );
+      }
+      stack.pop();
+      auto child = std::get<RegexIR::Node>(node);
+      RegexIR::Repeat repeat;
+      repeat.lower_bound = lower_bound;
+      repeat.upper_bound = upper_bound;
+      repeat.nodes.push_back(child);
+      stack.push(repeat);
+      continue;
+    }
+    RegexIR::Leaf leaf;
+    leaf.regex = regex[i];
+    stack.push(leaf);
+    continue;
+  }
+  std::vector<RegexIR::Node> res_nodes;
+  while (!stack.empty()) {
+    if (std::holds_alternative<char>(stack.top())) {
+      return Result<FSMWithStartEnd>::Err(
+          std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no paired!")
+      );
+    }
+    auto node = stack.top();
+    stack.pop();
+    auto child = std::get<RegexIR::Node>(node);
+    res_nodes.push_back(child);
+  }
+  for (auto it = res_nodes.rbegin(); it != res_nodes.rend(); ++it) {
+    ir.nodes.push_back(*it);
+  }
+  return ir.Build();
 }
 }  // namespace xgrammar
