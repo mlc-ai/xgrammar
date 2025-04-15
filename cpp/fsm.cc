@@ -198,24 +198,21 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
 void FSM::Advance(const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule)
     const {
   result->clear();
-  std::queue<int> queue = std::queue<int>();
-  std::unordered_set<int> visited;
   std::unordered_set<int> in_result;
+  std::unordered_set<int> result_closure;
   std::unordered_set<int> start_set;
 
   for (const auto& state : from) {
-    queue.push(state);
-  }
-  while (!queue.empty()) {
-    int current = queue.front();
-    queue.pop();
-    if (visited.find(current) != visited.end()) {
-      continue;
+    if (start_set.find(state) == start_set.end()) {
+      std::unordered_set<int> closure;
+      GetEpsilonClosure(state, &closure);
+      start_set.insert(closure.begin(), closure.end());
     }
-    visited.insert(current);
-    for (const auto& edge : edges[current]) {
+  }
+  for (const auto& state : start_set) {
+    const auto& edge_list = edges[state];
+    for (const auto& edge : edge_list) {
       if (edge.IsEpsilon()) {
-        queue.push(edge.target);
         continue;
       }
       if (is_rule && edge.IsRuleRef()) {
@@ -232,7 +229,6 @@ void FSM::Advance(const std::vector<int>& from, int value, std::vector<int>* res
       }
     }
   }
-  std::unordered_set<int> result_closure;
   for (const auto& state : in_result) {
     if (result_closure.find(state) != result_closure.end()) {
       continue;
@@ -341,24 +337,21 @@ void CompactFSM::Advance(
     const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule
 ) const {
   result->clear();
-  std::queue<int> queue = std::queue<int>();
-  std::unordered_set<int> visited;
   std::unordered_set<int> in_result;
+  std::unordered_set<int> result_closure;
   std::unordered_set<int> start_set;
 
   for (const auto& state : from) {
-    queue.push(state);
-  }
-  while (!queue.empty()) {
-    int current = queue.front();
-    queue.pop();
-    if (visited.find(current) != visited.end()) {
-      continue;
+    if (start_set.find(state) == start_set.end()) {
+      std::unordered_set<int> closure;
+      GetEpsilonClosure(state, &closure);
+      start_set.insert(closure.begin(), closure.end());
     }
-    visited.insert(current);
-    for (const auto& edge : edges[current]) {
+  }
+  for (const auto& state : start_set) {
+    const auto& edge_list = edges[state];
+    for (const auto& edge : edge_list) {
       if (edge.IsEpsilon()) {
-        queue.push(edge.target);
         continue;
       }
       if (is_rule && edge.IsRuleRef()) {
@@ -375,7 +368,6 @@ void CompactFSM::Advance(
       }
     }
   }
-  std::unordered_set<int> result_closure;
   for (const auto& state : in_result) {
     if (result_closure.find(state) != result_closure.end()) {
       continue;
@@ -1727,7 +1719,7 @@ void FSMWithStartEnd::SimplifyEpsilon() {
         continue;
       }
       // Have other inward nodes.
-      if (previous_nodes[node].size() != 1) {
+      if (previous_nodes[edge.target].size() != 1) {
         continue;
       }
       bool has_other_edge = false;
