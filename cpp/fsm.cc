@@ -985,8 +985,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
     const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, const int& num_of_nodes_limited
 ) {
   if (!lhs.IsLeaf() || !rhs.IsLeaf()) {
-    return Result<FSMWithStartEnd>::Err(
-        std::make_shared<Error>("fsm.cc", __LINE__, "Intersect only support leaf fsm!")
+    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Intersect only support leaf fsm!")
     );
   }
   auto lhs_dfa = lhs.ToDFA();
@@ -1046,7 +1045,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   while (!queue.empty()) {
     if (int(state_map.size()) > num_of_nodes_limited) {
       return Result<FSMWithStartEnd>::Err(
-          std::make_shared<Error>("fsm.cc", __LINE__, "Intersection have too many nodes!")
+          std::make_shared<Error>("Intersection have too many nodes!")
       );
     }
     auto state = queue.front();
@@ -1495,17 +1494,14 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Union& node) const {
     fsm_list.push_back(visited.Unwrap());
   }
   if (fsm_list.size() <= 1) {
-    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("fsm.cc", __LINE__, "Invalid union")
-    );
+    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid union"));
   }
   return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Union(fsm_list));
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& node) const {
   if (node.node.size() != 1) {
-    return Result<FSMWithStartEnd>::Err(
-        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid symbol")
-    );
+    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid symbol"));
   }
   Result<FSMWithStartEnd> child =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, node.node[0]);
@@ -1540,23 +1536,17 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Bracket& node) const {
     fsm_list.push_back(visited.Unwrap());
   }
   if (fsm_list.empty()) {
-    return Result<FSMWithStartEnd>::Err(
-        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid bracket")
-    );
+    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid bracket"));
   }
   return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Concatenate(fsm_list));
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
   if (node.nodes.size() != 1) {
-    return Result<FSMWithStartEnd>::Err(
-        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid repeat")
-    );
+    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid repeat"));
   }
   if (node.lower_bound > node.upper_bound || node.lower_bound <= 0) {
-    return Result<FSMWithStartEnd>::Err(
-        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid repeat")
-    );
+    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid repeat"));
   }
   Result<FSMWithStartEnd> child =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, node.nodes[0]);
@@ -1592,18 +1582,14 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
     // Handle The class.
     if (regex[i] == '[') {
       if (left_middle_bracket != -1) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("fsm.cc", __LINE__, "Nested middle bracket!")
-        );
+        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Nested middle bracket!"));
       }
       left_middle_bracket = i;
       continue;
     }
     if (regex[i] == ']') {
       if (left_middle_bracket == -1) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid middle bracket!")
-        );
+        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid middle bracket!"));
       }
       RegexIR::Leaf leaf;
       leaf.regex = regex.substr(left_middle_bracket, i - left_middle_bracket + 1);
@@ -1620,13 +1606,13 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
     if (regex[i] == '+' || regex[i] == '*' || regex[i] == '?') {
       if (stack.empty()) {
         return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node before operator!")
+            std::make_shared<Error>("Invalid regex: no node before operator!")
         );
       }
       auto node = stack.top();
       if (std::holds_alternative<char>(node)) {
         return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node before operator!")
+            std::make_shared<Error>("Invalid regex: no node before operator!")
         );
       }
       stack.pop();
@@ -1677,7 +1663,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
       }
       if (!paired) {
         return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no paired bracket!")
+            std::make_shared<Error>("Invalid regex: no paired bracket!")
         );
       }
       if (!unioned) {
@@ -1703,7 +1689,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
               continue;
             }
             return Result<FSMWithStartEnd>::Err(
-                std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no paired bracket!")
+                std::make_shared<Error>("Invalid regex: no paired bracket!")
             );
           }
           if (std::holds_alternative<RegexIR::Node>(node)) {
@@ -1711,7 +1697,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
             bracket.nodes.push_back(child);
           }
           return Result<FSMWithStartEnd>::Err(
-              std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no paired bracket!")
+              std::make_shared<Error>("Invalid regex: no paired bracket!")
           );
         }
         stack.push(union_node);
@@ -1733,9 +1719,8 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
         i++;
       }
       if (i >= regex.size() || (regex[i] != ',' && regex[i] != '}')) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: invalid repeat!")
-        );
+        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid regex: invalid repeat!"
+        ));
       }
       if (regex[i] == '}') {
         upper_bound = lower_bound;
@@ -1753,19 +1738,19 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
         }
         if (i >= regex.size() || regex[i] != '}') {
           return Result<FSMWithStartEnd>::Err(
-              std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: invalid repeat!")
+              std::make_shared<Error>("Invalid regex: invalid repeat!")
           );
         }
       }
       if (stack.empty()) {
         return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node before repeat!")
+            std::make_shared<Error>("Invalid regex: no node before repeat!")
         );
       }
       auto node = stack.top();
       if (std::holds_alternative<char>(node)) {
         return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node before repeat!")
+            std::make_shared<Error>("Invalid regex: no node before repeat!")
         );
       }
       stack.pop();
@@ -1790,9 +1775,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
   std::vector<RegexIR::Node> res_nodes;
   while (!stack.empty()) {
     if (std::holds_alternative<char>(stack.top())) {
-      return Result<FSMWithStartEnd>::Err(
-          std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no paired!")
-      );
+      return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid regex: no paired!"));
     }
     auto node = stack.top();
     stack.pop();
@@ -1807,9 +1790,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
 
 Result<FSMWithStartEnd> RegexIR::Build() const {
   if (nodes.empty()) {
-    return Result<FSMWithStartEnd>::Err(
-        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid regex: no node!")
-    );
+    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid regex: no node!"));
   }
   std::vector<FSMWithStartEnd> fsm_list;
   for (const auto& node : nodes) {
