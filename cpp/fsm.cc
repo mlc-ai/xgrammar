@@ -563,9 +563,9 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
   start = 0;
   auto& edges = fsm.edges;
   // Handle the regex string.
-  if (regex[0] == '\"' && regex[regex.size() - 1] == '\"') {
+  if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
     edges.push_back(std::vector<FSMEdge>());
-    for (size_t i = 1; i < regex.size() - 1; i++) {
+    for (size_t i = 0; i < regex.size(); i++) {
       if (regex[i] != '\\') {
         edges.back().emplace_back(
             (unsigned char)(regex[i]), (unsigned char)(regex[i]), edges.size()
@@ -1778,7 +1778,12 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
       continue;
     }
     RegexIR::Leaf leaf;
-    leaf.regex = regex[i];
+    if (regex[i] != '\\') {
+      leaf.regex = regex[i];
+    } else {
+      leaf.regex = regex.substr(i, 2);
+      i++;
+    }
     stack.push(leaf);
     continue;
   }
