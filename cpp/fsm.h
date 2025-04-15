@@ -6,6 +6,7 @@
 #define XGRAMMAR_FSM_H_
 
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include "../cpp/support/csr_array.h"
@@ -63,8 +64,8 @@ class FSM {
     \brief Advance the FSM to the next state.
     \param from The current states.
     \param value The input value.
-    \param result The next states, which can be seen as the result of the transition.
-    \param is_rule Whether the input value is a rule id.
+    \param result The next states, which can be seen as the result of the
+    transition. \param is_rule Whether the input value is a rule id.
   */
   void Advance(
       const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule = false
@@ -82,6 +83,7 @@ class FSM {
 };
 
 class FSMWithStartEnd {
+ private:
  public:
   bool is_dfa = false;
   FSM fsm;
@@ -89,9 +91,9 @@ class FSMWithStartEnd {
   std::unordered_set<int> ends;
 
   /*!
-  \brief Rebuild the FSM with the new state ids.
-  \param old_to_new The mapping from old state ids to new state ids.
-*/
+    \brief Rebuild the FSM with the new state ids.
+    \param old_to_new The mapping from old state ids to new state ids.
+  */
   void RebuildFSM(std::unordered_map<int, int>& old_to_new, const int& new_node_cnt);
 
   /*!
@@ -258,10 +260,10 @@ class FSMWithStartEnd {
   bool IsLeaf() const;
 
   /*!
-  \brief Merge some nodes by removing some epsilon transitions.
-  \details For example, a -- \epsilon --> b, and b doesn't have
-  \details any other inward edges, then we can merge the two nodes.
-*/
+    \brief Merge some nodes by removing some epsilon transitions.
+    \details For example, a -- \epsilon --> b, and b doesn't have
+    \details any other inward edges, then we can merge the two nodes.
+  */
   void SimplifyEpsilon();
 
   /*!
@@ -288,8 +290,8 @@ class CompactFSM {
    \brief Advance the FSM to the next state.
    \param from The current states.
    \param value The input value.
-   \param result The next states, which can be seen as the result of the transition.
-   \param is_rule Whether the input value is a rule id.
+   \param result The next states, which can be seen as the result of the
+   transition. \param is_rule Whether the input value is a rule id.
   */
   void Advance(
       const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule = false
@@ -377,8 +379,8 @@ class CompactFSMWithStartEnd {
   \brief Converts a regex string to a FSM. The parsing range is [start, end).
   \param regex The regex string.
   \param start The current processing character index in the regex string.
-  \param end The end character index in the regex string, -1 means the end of the string.
-  \return The FSM with start and end states.
+  \param end The end character index in the regex string, -1 means the end of
+  the string. \return The FSM with start and end states.
 */
 FSMWithStartEnd RegexToFSM(const std::string& regex, int start = 0, int end = -1);
 
@@ -437,6 +439,56 @@ inline FSMWithStartEnd BuildTrie(
   }
   return fsm;
 }
+
+class RegexIR {
+ public:
+  struct Leaf;
+  struct Symbol;
+  struct Union;
+  struct Bracket;
+
+  using Node = std::variant<Leaf, Symbol, Union, Bracket>;
+  // This struct is used to store the string in regex, or
+  // the character class in regex.
+  struct Leaf {
+    std::string regex;
+  };
+  // This struct is used to store the symbol in regex, i.e.
+  // +, *, ?
+
+  enum class RegexSymbol {
+    star,
+    plus,
+    optional,
+  };
+  struct Bracket {
+    std::vector<Node> nodes;
+  };
+  struct Symbol {
+    RegexSymbol symbol;
+    std::vector<Node> node;
+  };
+  // This struct is used to represent a union symbol.
+  struct Union {
+    std::vector<Node> nodes;
+  };
+  // This struct is used to represent a bracket in regex.
+  std::vector<Node> nodes;
+
+  /*!
+    \brief Constructs a NFA from the regex IR.
+  */
+  Result<FSMWithStartEnd> Build() const;
+
+  /*!
+    \brief the visit function for the variant.
+  */
+  Result<FSMWithStartEnd> visit(Leaf node) const;
+  Result<FSMWithStartEnd> visit(Symbol node) const;
+  Result<FSMWithStartEnd> visit(Union node) const;
+  Result<FSMWithStartEnd> visit(Bracket node) const;
+};
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_FSM_H_

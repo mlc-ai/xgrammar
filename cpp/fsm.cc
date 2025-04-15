@@ -1127,7 +1127,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     return;
   }
   // TODO: The support for rules.
-  throw std::runtime_error("Rules are not supported yet.");
+  XGRAMMAR_LOG(WARNING) << "rule is not supported yet.";
 }
 
 FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
@@ -1928,5 +1928,72 @@ void FSMWithStartEnd::RebuildFSM(
   }
   fsm.edges = new_edges;
   return;
+}
+
+Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Leaf node) const {
+  FSMWithStartEnd result(node.regex);
+  return Result<FSMWithStartEnd>::Ok(result);
+}
+
+Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Union node) const {
+  std::vector<FSMWithStartEnd> fsm_list;
+  for (const auto& child : node.nodes) {
+    auto visited = std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, child);
+    if (visited.IsErr()) {
+      return visited;
+    }
+    fsm_list.push_back(visited.Unwrap());
+  }
+  if (fsm_list.size() <= 1) {
+    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("fsm.cc", __LINE__, "Invalid union")
+    );
+  }
+  return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Union(fsm_list));
+}
+
+Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Symbol node) const {
+  if (node.node.size() != 1) {
+    return Result<FSMWithStartEnd>::Err(
+        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid symbol")
+    );
+  }
+  Result<FSMWithStartEnd> child =
+      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, node.node[0]);
+  if (child.IsErr()) {
+    return child;
+  }
+  FSMWithStartEnd result;
+  switch (node.symbol) {
+    case RegexIR::RegexSymbol::plus: {
+      result = child.Unwrap().MakePlus();
+      break;
+    }
+    case RegexIR::RegexSymbol::star: {
+      result = child.Unwrap().MakeStar();
+      break;
+    }
+    case RegexIR::RegexSymbol::optional: {
+      result = child.Unwrap().MakeOptional();
+      break;
+    }
+  }
+  return Result<FSMWithStartEnd>::Ok(result);
+}
+
+Result<FSMWithStartEnd> RegexIR::visit(RegexIR::Bracket node) const {
+  std::vector<FSMWithStartEnd> fsm_list;
+  for (const auto& child : node.nodes) {
+    auto visited = std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, child);
+    if (visited.IsErr()) {
+      return visited;
+    }
+    fsm_list.push_back(visited.Unwrap());
+  }
+  if (fsm_list.empty()) {
+    return Result<FSMWithStartEnd>::Err(
+        std::make_shared<Error>("fsm.cc", __LINE__, "Invalid bracket")
+    );
+  }
+  return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Concatenate(fsm_list));
 }
 }  // namespace xgrammar
