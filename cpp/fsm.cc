@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "support/logging.h"
@@ -1043,7 +1044,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   result.fsm.edges.push_back(std::vector<FSMEdge>());
   state_map[{lhs.start, rhs.start}] = 0;
   while (!queue.empty()) {
-    if (state_map.size() > num_of_nodes_limited) {
+    if (int(state_map.size()) > num_of_nodes_limited) {
       return Result<FSMWithStartEnd>::Err(
           std::make_shared<Error>("fsm.cc", __LINE__, "Intersection have too many nodes!")
       );

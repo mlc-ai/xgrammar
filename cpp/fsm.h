@@ -148,9 +148,12 @@ class FSMWithStartEnd {
     \brief Intersect the FSMs.
     \param lhs The left FSM.
     \param rhs The right FSM.
+    \param num_of_nodes_limited The maximum number of nodes in the FSM.
     \return The intersection of the FSMs.
   */
-  static FSMWithStartEnd Intersect(const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs);
+  Result<FSMWithStartEnd> Intersect(
+      const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, const int& num_of_nodes_limited = 1e6
+  );
   /*!
     \brief Union the FSMs.
     \param fsms The FSMs to be unioned.
@@ -446,8 +449,9 @@ class RegexIR {
   struct Symbol;
   struct Union;
   struct Bracket;
+  struct Repeat;
 
-  using Node = std::variant<Leaf, Symbol, Union, Bracket>;
+  using Node = std::variant<Leaf, Symbol, Union, Bracket, Repeat>;
   // This struct is used to store the string in regex, or
   // the character class in regex.
   struct Leaf {
