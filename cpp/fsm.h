@@ -74,7 +74,7 @@ class FSM {
     \brief Return a copy of the FSM.
   */
   FSM Copy() const;
-  // The interanl states are also public
+  // The internal states are also public
   std::vector<std::vector<Edge>> edges;
 
   FSM() = default;
@@ -148,10 +148,9 @@ class FSMWithStartEnd {
     \brief Intersect the FSMs.
     \param lhs The left FSM.
     \param rhs The right FSM.
-    \param num_of_nodes_limited The maximum number of nodes in the FSM.
     \return The intersection of the FSMs.
   */
-  Result<FSMWithStartEnd> Intersect(
+  static Result<FSMWithStartEnd> Intersect(
       const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, const int& num_of_nodes_limited = 1e6
   );
   /*!
@@ -381,11 +380,9 @@ class CompactFSMWithStartEnd {
 /*!
   \brief Converts a regex string to a FSM. The parsing range is [start, end).
   \param regex The regex string.
-  \param start The current processing character index in the regex string.
-  \param end The end character index in the regex string, -1 means the end of
-  the string. \return The FSM with start and end states.
+  \return The FSM with start and end states.
 */
-FSMWithStartEnd RegexToFSM(const std::string& regex, int start = 0, int end = -1);
+Result<FSMWithStartEnd> RegexToFSM(const std::string& regex);
 
 inline std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
   os << "FSM(num_nodes=" << fsm.NumNodes() << ", start=" << fsm.StartNode() << ", end=[";
