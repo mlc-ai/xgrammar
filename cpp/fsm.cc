@@ -877,12 +877,6 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
 }
 
 std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start) {
-  if (regex[start] != '\\') {
-    throw std::runtime_error("Invalid regex: invalid escape character.");
-  }
-  if (int(regex.size()) <= start + 1) {
-    throw std::runtime_error("Invalid regex: invalid escape character.");
-  }
   std::vector<std::pair<int, int>> result;
   switch (regex[start + 1]) {
     case 'n': {
@@ -954,12 +948,6 @@ std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, i
 }
 
 char HandleEscapeInString(const std::string& regex, int start) {
-  if (regex[start] != '\\') {
-    throw std::runtime_error("Invalid regex: invalid escape character.");
-  }
-  if (int(regex.size()) <= start + 1) {
-    throw std::runtime_error("Invalid regex: invalid escape character.");
-  }
   std::vector<std::pair<int, int>> result;
   switch (regex[start + 1]) {
     case 'n': {
