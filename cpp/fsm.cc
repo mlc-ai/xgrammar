@@ -21,7 +21,7 @@
 namespace xgrammar {
 std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start);
 char HandleEscapeInString(const std::string& regex, int start);
-
+Result<std::pair<int, int>> CheckRepeat(const std::string& regex, int& start);
 void CompactFSM::GetEpsilonClosure(int state, std::unordered_set<int>* result) const {
   std::queue<int> queue = std::queue<int>({state});
   while (!queue.empty()) {
@@ -1705,43 +1705,6 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
       continue;
     }
     if (regex[i] == '{') {
-      i++;
-      int lower_bound = 0;
-      int upper_bound = 0;
-      while (i < regex.size() && regex[i] == ' ') {
-        i++;
-      }
-      while (i < regex.size() && regex[i] >= '0' && regex[i] <= '9') {
-        lower_bound = lower_bound * 10 + (regex[i] - '0');
-        i++;
-      }
-      while (i < regex.size() && regex[i] == ' ') {
-        i++;
-      }
-      if (i >= regex.size() || (regex[i] != ',' && regex[i] != '}')) {
-        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid regex: invalid repeat!"
-        ));
-      }
-      if (regex[i] == '}') {
-        upper_bound = lower_bound;
-      } else {
-        i++;
-        while (i < regex.size() && regex[i] == ' ') {
-          i++;
-        }
-        while (i < regex.size() && regex[i] >= '0' && regex[i] <= '9') {
-          upper_bound = upper_bound * 10 + (regex[i] - '0');
-          i++;
-        }
-        while (i < regex.size() && regex[i] == ' ') {
-          i++;
-        }
-        if (i >= regex.size() || regex[i] != '}') {
-          return Result<FSMWithStartEnd>::Err(
-              std::make_shared<Error>("Invalid regex: invalid repeat!")
-          );
-        }
-      }
       if (stack.empty()) {
         return Result<FSMWithStartEnd>::Err(
             std::make_shared<Error>("Invalid regex: no node before repeat!")
@@ -1754,10 +1717,14 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
         );
       }
       stack.pop();
+      auto bounds_result = CheckRepeat(regex, i);
+      if (bounds_result.IsErr()) {
+        return Result<FSMWithStartEnd>::Err(bounds_result.UnwrapErr());
+      }
       auto child = std::get<RegexIR::Node>(node);
       RegexIR::Repeat repeat;
-      repeat.lower_bound = lower_bound;
-      repeat.upper_bound = upper_bound;
+      repeat.lower_bound = bounds_result.Unwrap().first;
+      repeat.upper_bound = bounds_result.Unwrap().second;
       repeat.nodes.push_back(child);
       stack.push(repeat);
       continue;
@@ -1801,5 +1768,50 @@ Result<FSMWithStartEnd> RegexIR::Build() const {
     fsm_list.push_back(visited.Unwrap());
   }
   return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Concatenate(fsm_list));
+}
+
+Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start) {
+  if (regex[start] != '{') {
+    return Result<std::pair<int, int>>::Err(std::make_shared<Error>("Invalid regex: invalid repeat!"
+    ));
+  }
+  start++;
+  int lower_bound = 0;
+  int upper_bound = 0;
+  while (start < regex.size() && regex[start] == ' ') {
+    start++;
+  }
+  while (start < regex.size() && regex[start] >= '0' && regex[start] <= '9') {
+    lower_bound = lower_bound * 10 + (regex[start] - '0');
+    start++;
+  }
+  while (start < regex.size() && regex[start] == ' ') {
+    start++;
+  }
+  if (start >= regex.size() || (regex[start] != ',' && regex[start] != '}')) {
+    return Result<std::pair<int, int>>::Err(std::make_shared<Error>("Invalid regex: invalid repeat!"
+    ));
+  }
+  if (regex[start] == '}') {
+    upper_bound = lower_bound;
+  } else {
+    start++;
+    while (start < regex.size() && regex[start] == ' ') {
+      start++;
+    }
+    while (start < regex.size() && regex[start] >= '0' && regex[start] <= '9') {
+      upper_bound = upper_bound * 10 + (regex[start] - '0');
+      start++;
+    }
+    while (start < regex.size() && regex[start] == ' ') {
+      start++;
+    }
+    if (start >= regex.size() || regex[start] != '}') {
+      return Result<std::pair<int, int>>::Err(
+          std::make_shared<Error>("Invalid regex: invalid repeat!")
+      );
+    }
+  }
+  return Result<std::pair<int, int>>::Ok(std::make_pair(lower_bound, upper_bound));
 }
 }  // namespace xgrammar

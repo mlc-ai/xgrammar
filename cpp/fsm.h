@@ -9,20 +9,13 @@
 #include <cassert>
 #include <cstddef>
 #include <cstring>
-#include <list>
-#include <queue>
-#include <set>
-#include <stack>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include <variant>
 #include <vector>
 
 #include "../cpp/support/csr_array.h"
-#include "support/logging.h"
-#include "support/union_find_set.h"
 
 namespace xgrammar {
 
@@ -509,6 +502,14 @@ class RegexIR {
   Result<FSMWithStartEnd> visit(const Repeat& node) const;
 };
 
+/*!
+  \brief Check repeat in regex. i.e {...} and {...,...}
+  \param regex The regex string.
+  \param start The start position of the repeat. i.e. regex[start] == '{'.
+         After the function, start will be the position of '}'.
+  \return The repeat range.
+*/
+Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start);
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_FSM_H_
