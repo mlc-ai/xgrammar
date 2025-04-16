@@ -412,9 +412,12 @@ TEST(XGrammarFSMTest, BuildTrieTest) {
   EXPECT_EQ(fsm_str, fsm_str_expected);
 
   // Test2: The printed result of CompactFSM
-  auto compact_fsm = fsm.ToCompact();
+  CompactFSMWithStartEnd compact_fsm;
+  compact_fsm.start = fsm.StartNode();
+  compact_fsm.ends = fsm.ends;
+  compact_fsm.fsm = fsm.fsm.ToCompact();
   ss.str("");
-  ss << compact_fsm;
+  ss << compact_fsm.Print();
   std::string compact_fsm_str = ss.str();
   std::string compact_fsm_str_expected =
       R"(CompactFSM(num_nodes=19, start=0, end=[5, 6, 12, 9, 14, 18], edges=[

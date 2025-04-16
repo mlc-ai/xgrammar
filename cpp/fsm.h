@@ -186,7 +186,7 @@ class FSMWithStartEnd {
     }
   }
 
-  /********************** Accessors **********************/
+  /**********************  Legacy Accessors **********************/
 
   inline static constexpr int NO_TRANSITION = -1;
 
