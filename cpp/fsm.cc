@@ -791,6 +791,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
       }
     }
     // Do the same thing for the rules.
+    blocks_copy = blocks;
     for (const auto& rule : rules) {
       std::unordered_set<int> from_block;
       for (const auto& node : prev_nodes) {
@@ -1308,6 +1309,7 @@ void FSMWithStartEnd::SimplifyTransition() {
   bool changed = true;
   UnionFindSet<int> union_find_set;
   while (changed) {
+    union_find_set.Clear();
     std::unordered_map<int, std::unordered_set<int>> previous_nodes;
     // Initialize the previous nodes.
     for (size_t i = 0; i < fsm.edges.size(); i++) {
