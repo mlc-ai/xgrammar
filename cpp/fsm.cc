@@ -1640,6 +1640,13 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
       stack.push(regex[i]);
       if (i < regex.size() - 2 && regex[i] == '(' && regex[i + 1] == '?' && regex[i + 2] == ':') {
         i += 2;
+        continue;
+      }
+      if (i < regex.size() - 2 && regex[i] == '(' && regex[i + 1] == '?' &&
+          (regex[i + 2] == '!' || regex[i + 2] == '=')) {
+        i += 2;
+        // TODO(Linzhang Li): Handling the lookahead.
+        continue;
       }
       continue;
     }
