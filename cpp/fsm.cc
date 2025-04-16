@@ -567,9 +567,13 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     edges.push_back(std::vector<FSMEdge>());
     for (size_t i = 0; i < regex.size(); i++) {
       if (regex[i] != '\\') {
-        edges.back().emplace_back(
-            (unsigned char)(regex[i]), (unsigned char)(regex[i]), edges.size()
-        );
+        if (regex[i] == '.') {
+          edges.back().emplace_back(0, 0xFF, edges.size());
+        } else {
+          edges.back().emplace_back(
+              (unsigned char)(regex[i]), (unsigned char)(regex[i]), edges.size()
+          );
+        }
         edges.push_back(std::vector<FSMEdge>());
         continue;
       }
@@ -1579,6 +1583,12 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
   std::stack<IRNode> stack;
   int left_middle_bracket = -1;
   for (size_t i = 0; i < regex.size(); i++) {
+    if (i == 0 && regex[i] == '^') {
+      continue;
+    }
+    if (i == regex.size() - 1 && regex[i] == '$') {
+      continue;
+    }
     // Handle The class.
     if (regex[i] == '[') {
       if (left_middle_bracket != -1) {
@@ -1638,6 +1648,9 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
     }
     if (regex[i] == '(' || regex[i] == '|') {
       stack.push(regex[i]);
+      if (i < regex.size() - 2 && regex[i] == '(' && regex[i + 1] == '?' && regex[i + 2] == ':') {
+        i += 2;
+      }
       continue;
     }
     if (regex[i] == ')') {
