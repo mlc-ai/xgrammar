@@ -1562,7 +1562,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
     }
   }
   for (int i = 2; i <= node.upper_bound; i++) {
-    result = result.Concatenate(std::vector<FSMWithStartEnd>{child.Unwrap()});
+    result = FSMWithStartEnd::Concatenate(std::vector<FSMWithStartEnd>{result, child.Unwrap()});
     if (i >= node.lower_bound) {
       for (const auto& end : result.ends) {
         new_ends.insert(end);
@@ -1663,7 +1663,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
       }
       if (!paired) {
         return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("Invalid regex: no paired bracket!")
+            std::make_shared<Error>("Invalid regex: no paired bracket!" + std::to_string(__LINE__))
         );
       }
       if (!unioned) {
@@ -1688,18 +1688,20 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
               bracket.nodes.clear();
               continue;
             }
-            return Result<FSMWithStartEnd>::Err(
-                std::make_shared<Error>("Invalid regex: no paired bracket!")
-            );
+            return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+                "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
+            ));
           }
           if (std::holds_alternative<RegexIR::Node>(node)) {
             auto child = std::get<RegexIR::Node>(node);
             bracket.nodes.push_back(child);
+            continue;
           }
-          return Result<FSMWithStartEnd>::Err(
-              std::make_shared<Error>("Invalid regex: no paired bracket!")
-          );
+          return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+              "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
+          ));
         }
+        union_node.nodes.push_back(bracket);
         stack.push(union_node);
       }
       continue;
@@ -1740,17 +1742,40 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
     continue;
   }
   std::vector<RegexIR::Node> res_nodes;
+  std::vector<decltype(res_nodes)> union_node_list;
+  bool unioned = false;
   while (!stack.empty()) {
     if (std::holds_alternative<char>(stack.top())) {
+      char c = std::get<char>(stack.top());
+      if (c == '|') {
+        union_node_list.push_back(res_nodes);
+        res_nodes.clear();
+        unioned = true;
+        stack.pop();
+        continue;
+      }
       return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid regex: no paired!"));
     }
     auto node = stack.top();
     stack.pop();
     auto child = std::get<RegexIR::Node>(node);
-    res_nodes.push_back(child);
+    res_nodes.push_back(std::move(child));
   }
-  for (auto it = res_nodes.rbegin(); it != res_nodes.rend(); ++it) {
-    ir.nodes.push_back(*it);
+  if (!unioned) {
+    for (auto it = res_nodes.rbegin(); it != res_nodes.rend(); ++it) {
+      ir.nodes.push_back(std::move(*it));
+    }
+  } else {
+    union_node_list.push_back(res_nodes);
+    RegexIR::Union union_node;
+    for (auto it = union_node_list.begin(); it != union_node_list.end(); ++it) {
+      RegexIR::Bracket bracket;
+      for (auto node = it->rbegin(); node != it->rend(); ++node) {
+        bracket.nodes.push_back(std::move(*node));
+      }
+      union_node.nodes.push_back(std::move(bracket));
+    }
+    ir.nodes.push_back(std::move(union_node));
   }
   return ir.Build();
 }
