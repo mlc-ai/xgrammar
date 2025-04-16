@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
+
 #include "fsm.h"
 using namespace xgrammar;
 TEST(XGrammarFSMTest, BasicBuildTest) {
