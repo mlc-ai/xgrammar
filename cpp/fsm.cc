@@ -1669,6 +1669,9 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
             std::make_shared<Error>("Invalid regex: no paired bracket!" + std::to_string(__LINE__))
         );
       }
+      if (nodes.empty()) {
+        continue;
+      }
       if (!unioned) {
         RegexIR::Bracket bracket;
         while (!nodes.empty()) {
@@ -1785,7 +1788,11 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
 
 Result<FSMWithStartEnd> RegexIR::Build() const {
   if (nodes.empty()) {
-    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid regex: no node!"));
+    FSMWithStartEnd result;
+    result.is_dfa = false;
+    result.start = 0;
+    result.fsm.edges.push_back(std::vector<FSMEdge>());
+    return Result<FSMWithStartEnd>::Ok(result);
   }
   std::vector<FSMWithStartEnd> fsm_list;
   for (const auto& node : nodes) {
