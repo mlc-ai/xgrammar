@@ -186,7 +186,7 @@ class FSMWithStartEnd {
     }
   }
 
-  /**********************  Legacy Accessors **********************/
+  /********************** Legacy Accessors **********************/
 
   inline static constexpr int NO_TRANSITION = -1;
 
@@ -221,7 +221,7 @@ class FSMWithStartEnd {
   /*! \brief Returns the total number of nodes in the FSM. */
   int NumNodes() const { return fsm.edges.size(); }
 
-  /********************** Modifiers **********************/
+  /********************** Legacy Modifiers **********************/
 
   /*!
    * \brief Adds a transition edge between states with a character range.
@@ -255,6 +255,7 @@ class FSMWithStartEnd {
    */
   void AddEndNode(int node) { ends.insert(node); }
 
+  /********************** Functions **********************/
   /*!
   \brief Check if the FSM is a DFA.
   \return True if the FSM is a DFA, false otherwise.
@@ -281,6 +282,13 @@ class FSMWithStartEnd {
   */
   void SimplifyTransition();
 
+  /*!
+    \brief Get all the possible rule numbers for a given node.
+    \param node_num The node number.
+    \param rules The set of possible rule numbers.
+  */
+  void GetPossibleRules(const int& node_num, std::unordered_set<int>* rules) const;
+
   friend std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
 };
 
@@ -304,6 +312,7 @@ class CompactFSM {
   void Advance(
       const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule = false
   ) const;
+
   /*!
     \brief Transform the compact FSM to a FSM.
     \return The FSM.
@@ -334,7 +343,9 @@ class CompactFSMWithStartEnd {
     \return True if the FSM accepts the string, false otherwise.
   */
   bool Check(const std::string& str) const;
+
   inline static constexpr int NO_TRANSITION = -1;
+
   int Transition(int from, int16_t character) const {
     auto edges = fsm.edges[from];
     // TODO(yixin): test correctness for both cases
@@ -381,6 +392,13 @@ class CompactFSMWithStartEnd {
   friend std::size_t MemorySize(const CompactFSMWithStartEnd& self) {
     return MemorySize(self.fsm.edges) + MemorySize(self.ends);
   }
+
+  /*!
+    \brief Get all the possible rule numbers for a given node.
+    \param node_num The node number.
+    \param rules The set of possible rule numbers.s
+  */
+  void GetPossibleRules(const int& node_num, std::unordered_set<int>* rules) const;
 };
 
 /*!

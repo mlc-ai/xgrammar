@@ -1856,4 +1856,25 @@ Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start)
   }
   return Result<std::pair<int, int>>::Ok(std::make_pair(lower_bound, upper_bound));
 }
+
+void FSMWithStartEnd::GetPossibleRules(const int& state, std::unordered_set<int>* rules) const {
+  rules->clear();
+  for (const auto& edge : fsm.edges[state]) {
+    if (edge.IsRuleRef()) {
+      rules->insert(edge.GetRefRuleId());
+    }
+  }
+  return;
+}
+
+void CompactFSMWithStartEnd::GetPossibleRules(const int& state, std::unordered_set<int>* rules)
+    const {
+  rules->clear();
+  for (const auto& edge : fsm.edges[state]) {
+    if (edge.IsRuleRef()) {
+      rules->insert(edge.GetRefRuleId());
+    }
+  }
+  return;
+}
 }  // namespace xgrammar
