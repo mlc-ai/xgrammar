@@ -20,7 +20,7 @@
 
 namespace xgrammar {
 std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start);
-char HandleEscapeInString(const std::string& regex, int start);
+std::vector<std::pair<int, int>> HandleEscapeInString(const std::string& regex, int start);
 Result<std::pair<int, int>> CheckRepeat(const std::string& regex, int& start);
 void CompactFSM::GetEpsilonClosure(int state, std::unordered_set<int>* result) const {
   std::queue<int> queue = std::queue<int>({state});
@@ -577,8 +577,12 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
         edges.push_back(std::vector<FSMEdge>());
         continue;
       }
-      char escape_char = HandleEscapeInString(regex, i);
-      edges.back().emplace_back(escape_char, escape_char, edges.size());
+      std::vector<std::pair<int, int>> escape_vector = HandleEscapeInString(regex, i);
+      for (const auto& escape : escape_vector) {
+        edges.back().emplace_back(
+            (unsigned char)(escape.first), (unsigned char)(escape.second), edges.size()
+        );
+      }
       edges.push_back(std::vector<FSMEdge>());
       i++;
     }
@@ -892,20 +896,8 @@ std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, i
       result.emplace_back('\r', '\r');
       break;
     }
-    case '\\': {
-      result.emplace_back('\\', '\\');
-      break;
-    }
-    case ']': {
-      result.emplace_back(']', ']');
-      break;
-    }
     case '0': {
       result.emplace_back('\0', '\0');
-      break;
-    }
-    case '-': {
-      result.emplace_back('-', '-');
       break;
     }
     case 'd': {
@@ -948,29 +940,58 @@ std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, i
   return result;
 }
 
-char HandleEscapeInString(const std::string& regex, int start) {
+std::vector<std::pair<int, int>> HandleEscapeInString(const std::string& regex, int start) {
   std::vector<std::pair<int, int>> result;
   switch (regex[start + 1]) {
     case 'n': {
-      return '\n';
+      return std::vector<std::pair<int, int>>(1, std::make_pair('\n', '\n'));
     }
     case 't': {
-      return '\t';
+      return std::vector<std::pair<int, int>>(1, std::make_pair('\t', '\t'));
     }
     case 'r': {
-      return '\r';
+      return std::vector<std::pair<int, int>>(1, std::make_pair('\r', '\r'));
     }
-    case '\\': {
-      return '\\';
-    }
-    case '\"': {
-      return '\"';
-    }
+
     case '0': {
-      return '\0';
+      return std::vector<std::pair<int, int>>(1, std::make_pair('\0', '\0'));
+    }
+    case 's': {
+      return std::vector<std::pair<int, int>>(1, std::make_pair(0, ' '));
+    }
+    case 'S': {
+      return std::vector<std::pair<int, int>>(1, std::make_pair(' ' + 1, 0x00FF));
+    }
+    case 'd': {
+      return std::vector<std::pair<int, int>>(1, std::make_pair('0', '9'));
+    }
+    case 'D': {
+      std::vector<std::pair<int, int>> result;
+      result.emplace_back(0, '0' - 1);
+      result.emplace_back('9' + 1, 0x00FF);
+      return result;
+    }
+    case 'w': {
+      std::vector<std::pair<int, int>> result;
+      result.emplace_back('0', '9');
+      result.emplace_back('a', 'z');
+      result.emplace_back('A', 'Z');
+      result.emplace_back('_', '_');
+      return result;
+    }
+    case 'W': {
+      std::vector<std::pair<int, int>> result;
+      result.emplace_back(0, '0' - 1);
+      result.emplace_back('9' + 1, 'A' - 1);
+      result.emplace_back('Z' + 1, '_' - 1);
+      result.emplace_back('_' + 1, 'a' - 1);
+      result.emplace_back('z' + 1, 0x00FF);
+      return result;
     }
     default: {
-      return regex[start + 1];
+      return std::vector<std::pair<int, int>>(
+          1, std::make_pair(regex[start + 1], regex[start + 1])
+      );
     }
   }
 }
