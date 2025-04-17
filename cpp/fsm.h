@@ -533,6 +533,14 @@ class RegexIR {
   \return The repeat range.
 */
 Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start);
+
+/*!
+  \brief Handle escape characters.
+  \param regex the corresponding string.
+  \param start the pos escape characters start.
+*/
+std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_FSM_H_

@@ -19,8 +19,7 @@
 #include "support/union_find_set.h"
 
 namespace xgrammar {
-std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start);
-std::vector<std::pair<int, int>> HandleEscapeInString(const std::string& regex, int start);
+std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start);
 Result<std::pair<int, int>> CheckRepeat(const std::string& regex, int& start);
 void CompactFSM::GetEpsilonClosure(int state, std::unordered_set<int>* result) const {
   std::queue<int> queue = std::queue<int>({state});
@@ -577,7 +576,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
         edges.push_back(std::vector<FSMEdge>());
         continue;
       }
-      std::vector<std::pair<int, int>> escape_vector = HandleEscapeInString(regex, i);
+      std::vector<std::pair<int, int>> escape_vector = HandleEscapes(regex, i);
       for (const auto& escape : escape_vector) {
         edges.back().emplace_back(
             (unsigned char)(escape.first), (unsigned char)(escape.second), edges.size()
@@ -608,7 +607,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
           i = i + 2;
           continue;
         }
-        auto escaped_edges = HandleEscapeInClass(regex, i + 2);
+        auto escaped_edges = HandleEscapes(regex, i + 2);
         // Means it's not a range.
         if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
           edges[0].emplace_back(regex[i], regex[i], 1);
@@ -618,7 +617,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
         i = i + 3;
         continue;
       }
-      auto escaped_edges = HandleEscapeInClass(regex, i);
+      auto escaped_edges = HandleEscapes(regex, i);
       i = i + 1;
       if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
         // It's a multi-match escape char.
@@ -636,7 +635,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
         i = i + 2;
         continue;
       }
-      auto rhs_escaped_edges = HandleEscapeInClass(regex, i + 2);
+      auto rhs_escaped_edges = HandleEscapes(regex, i + 2);
       if (rhs_escaped_edges.size() != 1 ||
           rhs_escaped_edges[0].first != rhs_escaped_edges[0].second) {
         edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
@@ -881,66 +880,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   return new_fsm;
 }
 
-std::vector<std::pair<int, int>> HandleEscapeInClass(const std::string& regex, int start) {
-  std::vector<std::pair<int, int>> result;
-  switch (regex[start + 1]) {
-    case 'n': {
-      result.emplace_back('\n', '\n');
-      break;
-    }
-    case 't': {
-      result.emplace_back('\t', '\t');
-      break;
-    }
-    case 'r': {
-      result.emplace_back('\r', '\r');
-      break;
-    }
-    case '0': {
-      result.emplace_back('\0', '\0');
-      break;
-    }
-    case 'd': {
-      result.emplace_back('0', '9');
-      break;
-    }
-    case 'D': {
-      result.emplace_back(0, '0' - 1);
-      result.emplace_back('9' + 1, 0x00FF);
-      break;
-    }
-    case 'w': {
-      result.emplace_back('0', '9');
-      result.emplace_back('a', 'z');
-      result.emplace_back('A', 'Z');
-      result.emplace_back('_', '_');
-      break;
-    }
-    case 'W': {
-      result.emplace_back(0, '0' - 1);
-      result.emplace_back('9' + 1, 'A' - 1);
-      result.emplace_back('Z' + 1, '_' - 1);
-      result.emplace_back('_' + 1, 'a' - 1);
-      result.emplace_back('z' + 1, 0x00FF);
-      break;
-    }
-    case 's': {
-      result.emplace_back(0, ' ');
-      break;
-    }
-    case 'S': {
-      result.emplace_back(' ' + 1, 0x00FF);
-      break;
-    }
-    default: {
-      result.emplace_back(regex[start + 1], regex[start + 1]);
-      break;
-    }
-  }
-  return result;
-}
-
-std::vector<std::pair<int, int>> HandleEscapeInString(const std::string& regex, int start) {
+std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start) {
   std::vector<std::pair<int, int>> result;
   switch (regex[start + 1]) {
     case 'n': {
