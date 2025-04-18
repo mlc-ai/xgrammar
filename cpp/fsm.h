@@ -69,15 +69,22 @@ class FSM {
     \return The compact FSM.
   */
   CompactFSM ToCompact();
+
   /*!
     \brief Advance the FSM to the next state.
     \param from The current states.
     \param value The input value.
     \param result The next states, which can be seen as the result of the
-    transition. \param is_rule Whether the input value is a rule id.
+    transition.
+    \param is_closure Whether from is an epsilon closure.
+    \param is_rule Whether the input value is a rule id.
   */
   void Advance(
-      const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule = false
+      const std::vector<int>& from,
+      int value,
+      std::vector<int>* result,
+      bool is_closure = false,
+      bool is_rule = false
   ) const;
   /*!
     \brief Return a copy of the FSM.
@@ -312,10 +319,17 @@ class CompactFSM {
    \param from The current states.
    \param value The input value.
    \param result The next states, which can be seen as the result of the
-   transition. \param is_rule Whether the input value is a rule id.
+   transition.
+   \param is_closure Whether from is an epsilon closure.
+   \param is_rule Whether the input value is a rule id.
   */
+
   void Advance(
-      const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule = false
+      const std::vector<int>& from,
+      int value,
+      std::vector<int>* result,
+      bool is_closure = false,
+      bool is_rule = false
   ) const;
 
   /*!

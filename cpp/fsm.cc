@@ -210,20 +210,19 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
   return result;
 }
 
-void FSM::Advance(const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule)
-    const {
+void FSM::Advance(
+    const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule, bool is_closure
+) const {
   result->clear();
   std::unordered_set<int> in_result;
   std::unordered_set<int> result_closure;
   std::unordered_set<int> start_set;
 
   for (const auto& state : from) {
-    if (start_set.find(state) == start_set.end()) {
-      std::unordered_set<int> closure;
-      closure.insert(state);
-      GetEpsilonClosure(&closure);
-      start_set.insert(closure.begin(), closure.end());
-    }
+    start_set.insert(state);
+  }
+  if (!is_closure) {
+    GetEpsilonClosure(&start_set);
   }
   for (const auto& state : start_set) {
     const auto& edge_list = edges[state];
@@ -351,7 +350,7 @@ FSM CompactFSM::ToFSM() {
 }
 
 void CompactFSM::Advance(
-    const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule
+    const std::vector<int>& from, int value, std::vector<int>* result, bool is_rule, bool is_closure
 ) const {
   result->clear();
   std::unordered_set<int> in_result;
@@ -359,12 +358,10 @@ void CompactFSM::Advance(
   std::unordered_set<int> start_set;
 
   for (const auto& state : from) {
-    if (start_set.find(state) == start_set.end()) {
-      std::unordered_set<int> closure;
-      closure.insert(state);
-      GetEpsilonClosure(&closure);
-      start_set.insert(closure.begin(), closure.end());
-    }
+    start_set.insert(state);
+  }
+  if (!is_closure) {
+    GetEpsilonClosure(&start_set);
   }
   for (const auto& state : start_set) {
     const auto& edge_list = edges[state];
@@ -1109,7 +1106,7 @@ bool FSMWithStartEnd::Check(const std::string& str) const {
   }
   for (const auto& character : str) {
     result_states.clear();
-    fsm.Advance(from_states, (unsigned char)(character), &result_states);
+    fsm.Advance(from_states, (unsigned char)(character), &result_states, false);
     from_states = result_states;
   }
   for (const auto& state : from_states) {
@@ -1131,7 +1128,7 @@ bool CompactFSMWithStartEnd::Check(const std::string& str) const {
   }
   for (const auto& character : str) {
     result_states.clear();
-    fsm.Advance(from_states, (unsigned char)(character), &result_states);
+    fsm.Advance(from_states, (unsigned char)(character), &result_states, false);
     from_states = result_states;
   }
   for (const auto& state : from_states) {
