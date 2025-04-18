@@ -1,4 +1,9 @@
-#pragma once
+/*!
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/support/union_find_set.h
+ */
+#ifndef XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
+#define XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
@@ -117,3 +122,4 @@ class UnionFindSet {
   }
 };
 }  // namespace xgrammar
+#endif  // XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
