@@ -21,17 +21,25 @@
 namespace xgrammar {
 std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start);
 Result<std::pair<int, int>> CheckRepeat(const std::string& regex, int& start);
-void CompactFSM::GetEpsilonClosure(int state, std::unordered_set<int>* result) const {
-  std::queue<int> queue = std::queue<int>({state});
+void CompactFSM::GetEpsilonClosure(
+    std::unordered_set<int>* state_set, std::unordered_set<int>* result
+) const {
+  if (result == nullptr) {
+    result = state_set;
+  }
+  std::queue<int> queue;
+  for (const auto& state : *state_set) {
+    queue.push(state);
+  }
   while (!queue.empty()) {
     int current = queue.front();
     queue.pop();
-    if (result->find(current) != result->end()) {
-      continue;
-    }
     result->insert(current);
     for (const auto& edge : edges[current]) {
       if (edge.IsEpsilon()) {
+        if (result->find(edge.target) != result->end()) {
+          continue;
+        }
         queue.push(edge.target);
       }
     }
@@ -62,17 +70,24 @@ short FSMEdge::GetRefRuleId() const {
   }
 }
 
-void FSM::GetEpsilonClosure(int state, std::unordered_set<int>* result) const {
-  std::queue<int> queue = std::queue<int>({state});
+void FSM::GetEpsilonClosure(std::unordered_set<int>* state_set, std::unordered_set<int>* result)
+    const {
+  if (result == nullptr) {
+    result = state_set;
+  }
+  std::queue<int> queue;
+  for (const auto& state : *state_set) {
+    queue.push(state);
+  }
   while (!queue.empty()) {
     int current = queue.front();
     queue.pop();
-    if (result->find(current) != result->end()) {
-      continue;
-    }
     result->insert(current);
     for (const auto& edge : edges[current]) {
       if (edge.IsEpsilon()) {
+        if (result->find(edge.target) != result->end()) {
+          continue;
+        }
         queue.push(edge.target);
       }
     }
@@ -205,7 +220,8 @@ void FSM::Advance(const std::vector<int>& from, int value, std::vector<int>* res
   for (const auto& state : from) {
     if (start_set.find(state) == start_set.end()) {
       std::unordered_set<int> closure;
-      GetEpsilonClosure(state, &closure);
+      closure.insert(state);
+      GetEpsilonClosure(&closure);
       start_set.insert(closure.begin(), closure.end());
     }
   }
@@ -234,7 +250,8 @@ void FSM::Advance(const std::vector<int>& from, int value, std::vector<int>* res
       continue;
     }
     std::unordered_set<int> closure;
-    GetEpsilonClosure(state, &closure);
+    closure.insert(state);
+    GetEpsilonClosure(&closure);
     result_closure.insert(closure.begin(), closure.end());
   }
   for (const auto& state : result_closure) {
@@ -344,7 +361,8 @@ void CompactFSM::Advance(
   for (const auto& state : from) {
     if (start_set.find(state) == start_set.end()) {
       std::unordered_set<int> closure;
-      GetEpsilonClosure(state, &closure);
+      closure.insert(state);
+      GetEpsilonClosure(&closure);
       start_set.insert(closure.begin(), closure.end());
     }
   }
@@ -373,7 +391,8 @@ void CompactFSM::Advance(
       continue;
     }
     std::unordered_set<int> closure;
-    GetEpsilonClosure(state, &closure);
+    closure.insert(state);
+    GetEpsilonClosure(&closure);
     result_closure.insert(closure.begin(), closure.end());
   }
   for (const auto& state : result_closure) {
@@ -397,7 +416,8 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
   }
   int now_process = 0;
   std::unordered_set<int> closure;
-  fsm.GetEpsilonClosure(start, &closure);
+  closure.insert(start);
+  fsm.GetEpsilonClosure(&closure);
   closures.push_back(closure);
   while (now_process < static_cast<int>(closures.size())) {
     std::set<int> interval_ends;
@@ -439,7 +459,8 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
             if (interval.first >= edge.min && interval.second <= edge.max) {
               if (next_closure.find(edge.target) == next_closure.end()) {
                 std::unordered_set<int> epsilon_closure;
-                fsm.GetEpsilonClosure(edge.target, &epsilon_closure);
+                epsilon_closure.insert(edge.target);
+                fsm.GetEpsilonClosure(&epsilon_closure);
                 next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
               }
             }
@@ -468,7 +489,8 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
             if (rule == edge.GetRefRuleId()) {
               if (next_closure.find(edge.target) == next_closure.end()) {
                 std::unordered_set<int> epsilon_closure;
-                fsm.GetEpsilonClosure(edge.target, &epsilon_closure);
+                epsilon_closure.insert(edge.target);
+                fsm.GetEpsilonClosure(&epsilon_closure);
                 next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
               }
             }
@@ -1078,7 +1100,8 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
 
 bool FSMWithStartEnd::Check(const std::string& str) const {
   std::unordered_set<int> start_states_set;
-  fsm.GetEpsilonClosure(start, &start_states_set);
+  start_states_set.insert(start);
+  fsm.GetEpsilonClosure(&start_states_set);
   std::vector<int> from_states;
   std::vector<int> result_states;
   for (const auto& start_state : start_states_set) {
@@ -1099,7 +1122,8 @@ bool FSMWithStartEnd::Check(const std::string& str) const {
 
 bool CompactFSMWithStartEnd::Check(const std::string& str) const {
   std::unordered_set<int> start_states_set;
-  fsm.GetEpsilonClosure(start, &start_states_set);
+  start_states_set.insert(start);
+  fsm.GetEpsilonClosure(&start_states_set);
   std::vector<int> from_states;
   std::vector<int> result_states;
   for (const auto& start_state : start_states_set) {

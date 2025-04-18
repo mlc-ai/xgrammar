@@ -54,10 +54,13 @@ class FSM {
  private:
   /*!
     \brief Get the epsilon closure of a state.
-    \param state The current state id.
-    \param result The epsilon closure of the state.
+    \param state_set The current states.
+    \param result The epsilon closure of the state. If nullptr,
+           then the result will be stored in state_set.
   */
-  void GetEpsilonClosure(int state, std::unordered_set<int>* result) const;
+  void GetEpsilonClosure(
+      std::unordered_set<int>* state_set, std::unordered_set<int>* result = nullptr
+  ) const;
 
  public:
   using Edge = FSMEdge;
@@ -293,13 +296,15 @@ class FSMWithStartEnd {
 };
 
 class CompactFSM {
- private:
   /*!
     \brief Get the epsilon closure of a state.
-    \param state The current state id.
-    \param result The epsilon closure of the state.
+    \param state_set The current states.
+    \param result The epsilon closure of the state. If nullptr,
+           then the result will be stored in state_set.
   */
-  void GetEpsilonClosure(int state, std::unordered_set<int>* result) const;
+  void GetEpsilonClosure(
+      std::unordered_set<int>* state_set, std::unordered_set<int>* result = nullptr
+  ) const;
 
  public:
   /*!
