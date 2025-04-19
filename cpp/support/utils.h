@@ -6,6 +6,8 @@
 #ifndef XGRAMMAR_SUPPORT_UTILS_H_
 #define XGRAMMAR_SUPPORT_UTILS_H_
 
+#include <picojson.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -18,6 +20,30 @@
 #include "logging.h"
 
 namespace xgrammar {
+
+/*!
+ * \brief The version of the serialization format.
+ */
+inline constexpr int64_t SERIALIZE_VERSION = 0;
+
+inline void AddSerializeVersion(picojson::object& obj) {
+  if (auto [iter, success] = obj.emplace("version", SERIALIZE_VERSION); !success) {
+    XGRAMMAR_LOG(FATAL) << "Failed to add version field to serialized object because 'version' "
+                           "already exists with value "
+                        << iter->second.serialize();
+  }
+}
+
+inline void CheckSerializeVersion(const picojson::object& obj) {
+  if (auto it = obj.find("version"); it == obj.end()) {
+    XGRAMMAR_LOG(FATAL) << "Missing version field in serialized object";
+  } else if (const auto& value = it->second; !value.is<int64_t>()) {
+    XGRAMMAR_LOG(FATAL) << "Invalid version field type in serialized object " << value.serialize();
+  } else if (auto version = value.get<int64_t>(); version != SERIALIZE_VERSION) {
+    XGRAMMAR_LOG(FATAL) << "Unsupported version " << version << " in serialized object, expected "
+                        << SERIALIZE_VERSION;
+  }
+}
 
 /*!
  * \brief Hash and combine value into seed.

@@ -121,8 +121,8 @@ class CompiledGrammar::Impl {
 
   std::size_t MemorySize() const;
 
-  picojson::value Serialize() const;
-  static CompiledGrammar Deserialize(
+  picojson::value SerializeToJSON() const;
+  static CompiledGrammar DeserializeFromJSON(
       const picojson::value& value, const std::vector<std::string>& encoded_vocab = {}
   );
 };

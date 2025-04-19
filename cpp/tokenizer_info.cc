@@ -15,6 +15,7 @@
 
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/utils.h"
 #include "tokenizer_internal.h"
 
 namespace xgrammar {
@@ -294,7 +295,7 @@ TokenizerInfo::Impl::Impl(
   std::sort(sorted_decoded_vocab_.begin(), sorted_decoded_vocab_.end(), f_compare_token);
 }
 
-std::string TokenizerInfo::Impl::DumpMetadata() const { return Serialize().serialize(false); }
+std::string TokenizerInfo::Impl::DumpMetadata() const { return SerializeToJSON().serialize(false); }
 
 TokenizerInfo TokenizerInfo::Impl::FromVocabAndMetadata(
     const std::vector<std::string>& encoded_vocab, const std::string& metadata
@@ -302,7 +303,7 @@ TokenizerInfo TokenizerInfo::Impl::FromVocabAndMetadata(
   picojson::value v;
   std::string err = picojson::parse(v, metadata);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse metadata: " << err;
-  return Deserialize(v, encoded_vocab);
+  return DeserializeFromJSON(v, encoded_vocab);
 }
 
 std::string TokenizerInfo::Impl::DetectMetadataFromHF(const std::string& backend_str) {
@@ -320,7 +321,7 @@ std::string TokenizerInfo::Impl::DetectMetadataFromHF(const std::string& backend
   return picojson::value(metadata_obj).serialize(false);
 }
 
-picojson::value TokenizerInfo::Impl::Serialize() const {
+picojson::value TokenizerInfo::Impl::SerializeToJSON() const {
   picojson::object obj;
   obj["vocab_type"] = picojson::value(static_cast<int64_t>(vocab_type_));
   obj["vocab_size"] = picojson::value(static_cast<int64_t>(vocab_size_));
@@ -330,13 +331,15 @@ picojson::value TokenizerInfo::Impl::Serialize() const {
     stop_token_ids_array.push_back(picojson::value(static_cast<int64_t>(id)));
   }
   obj["stop_token_ids"] = picojson::value(stop_token_ids_array);
+  AddSerializeVersion(obj);
   return picojson::value(std::move(obj));
 }
 
-TokenizerInfo TokenizerInfo::Impl::Deserialize(
+TokenizerInfo TokenizerInfo::Impl::DeserializeFromJSON(
     const picojson::value& value, const std::vector<std::string>& encoded_vocab
 ) {
   const picojson::object& obj = value.get<picojson::object>();
+  CheckSerializeVersion(obj);
   XGRAMMAR_CHECK(obj.count("vocab_type") && obj["vocab_type"].is<std::int64_t>())
       << "Missing or invalid 'vocab_type' in metadata";
   int vocab_type_int = static_cast<int>(obj["vocab_type"].get<int64_t>());

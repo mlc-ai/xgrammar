@@ -181,8 +181,8 @@ class Grammar::Impl {
   std::size_t MemorySize() const;
   friend std::size_t MemorySize(const Impl& impl);
 
-  picojson::value Serialize() const;
-  static Grammar Deserialize(const picojson::value& value);
+  picojson::value SerializeToJSON() const;
+  static Grammar DeserializeFromJSON(const picojson::value& value);
 };
 
 }  // namespace xgrammar

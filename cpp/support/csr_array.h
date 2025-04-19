@@ -146,7 +146,7 @@ class CSRArray {
    * \brief Serialize the CSRArray to a JSON string.
    * \return A JSON value representation of the CSRArray.
    */
-  picojson::value Serialize() const;
+  picojson::value SerializeToJSON() const;
 
   /*!
    * \brief Deserialize a JSON string to create a CSRArray.
@@ -155,7 +155,7 @@ class CSRArray {
    * \throws xgrammar::InternalError if the JSON parsing fails or if the required fields are
    * missing.
    */
-  static CSRArray Deserialize(const picojson::value& v);
+  static CSRArray DeserializeFromJSON(const picojson::value& v);
 
   friend std::ostream& operator<<(std::ostream& os, const CSRArray& csr_array) {
     os << "CSRArray([";
@@ -222,7 +222,7 @@ inline int32_t CSRArray<DataType>::InsertNonContiguous(
 }
 
 template <typename DataType>
-inline picojson::value CSRArray<DataType>::Serialize() const {
+inline picojson::value CSRArray<DataType>::SerializeToJSON() const {
   // Serialize data_
   picojson::array data_json;
   for (const auto& item : data_) {
@@ -244,7 +244,7 @@ inline picojson::value CSRArray<DataType>::Serialize() const {
 }
 
 template <typename DataType>
-inline CSRArray<DataType> CSRArray<DataType>::Deserialize(const picojson::value& v) {
+inline CSRArray<DataType> CSRArray<DataType>::DeserializeFromJSON(const picojson::value& v) {
   XGRAMMAR_CHECK(v.is<picojson::object>())
       << "Failed to deserialize CSRArray: expected a JSON object";
 
