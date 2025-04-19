@@ -303,6 +303,13 @@ TokenizerInfo TokenizerInfo::Impl::FromVocabAndMetadata(
   picojson::value v;
   std::string err = picojson::parse(v, metadata);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse metadata: " << err;
+
+  // A workaround: we do not check the version of metadata here.
+  XGRAMMAR_CHECK(v.is<picojson::object>()) << "Metadata is not a JSON object: " << metadata;
+  if (auto& obj = v.get<picojson::object>(); obj.count("version") == 0) {
+    AddSerializeVersion(obj);
+  }
+
   return DeserializeFromJSON(v, encoded_vocab);
 }
 
