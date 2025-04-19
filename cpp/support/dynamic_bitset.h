@@ -287,18 +287,6 @@ class DynamicBitset {
     return position * BITS_PER_BLOCK + LowestBit(~data_[position]);
   }
 
-  int DoFindOneFrom(int first_block) const {
-    int position = -1;
-    for (int i = first_block; i < buffer_size_; ++i) {
-      if (data_[i] != 0) {
-        position = i;
-        break;
-      }
-    }
-    if (position == -1) return -1;
-    return position * BITS_PER_BLOCK + LowestBit(data_[position]);
-  }
-
   // The size of the bitset.
   int size_;
   // The size of the buffer.
