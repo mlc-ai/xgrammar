@@ -14,6 +14,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <string>
 #include <tuple>
 #include <type_traits>
 
@@ -24,7 +25,7 @@ namespace xgrammar {
 /*!
  * \brief The version of the serialization format.
  */
-inline constexpr int64_t SERIALIZE_VERSION = 0;
+inline constexpr const char SERIALIZE_VERSION[] = "v1";
 
 inline void AddSerializeVersion(picojson::object& obj) {
   if (auto [iter, success] = obj.emplace("version", SERIALIZE_VERSION); !success) {
@@ -37,9 +38,9 @@ inline void AddSerializeVersion(picojson::object& obj) {
 inline void CheckSerializeVersion(const picojson::object& obj) {
   if (auto it = obj.find("version"); it == obj.end()) {
     XGRAMMAR_LOG(FATAL) << "Missing version field in serialized object";
-  } else if (const auto& value = it->second; !value.is<int64_t>()) {
+  } else if (const auto& value = it->second; !value.is<std::string>()) {
     XGRAMMAR_LOG(FATAL) << "Invalid version field type in serialized object " << value.serialize();
-  } else if (auto version = value.get<int64_t>(); version != SERIALIZE_VERSION) {
+  } else if (const auto& version = value.get<std::string>(); version != SERIALIZE_VERSION) {
     XGRAMMAR_LOG(FATAL) << "Unsupported version " << version << " in serialized object, expected "
                         << SERIALIZE_VERSION;
   }
