@@ -159,7 +159,7 @@ std::string GrammarPrinter::ToString() {
   return result;
 }
 
-picojson::value Grammar::Impl::Serialize() const {
+picojson::value Grammar::Impl::SerializeToJSON() const {
   picojson::object grammar_json_obj;
 
   picojson::array rules_json;
@@ -183,10 +183,11 @@ picojson::value Grammar::Impl::Serialize() const {
   }
   grammar_json_obj["rule_expr_indptr"] = picojson::value(std::move(rule_expr_indptr_json));
 
+  AddSerializeVersion(grammar_json_obj);
   return picojson::value(std::move(grammar_json_obj));
 }
 
-Grammar Grammar::Impl::Deserialize(const picojson::value& serialized_value) {
+Grammar Grammar::Impl::DeserializeFromJSON(const picojson::value& serialized_value) {
   auto node = std::make_shared<Grammar::Impl>();
 
   auto checker = [&](bool condition) {
@@ -207,6 +208,7 @@ Grammar Grammar::Impl::Deserialize(const picojson::value& serialized_value) {
   };
 
   const auto& serialized_obj = as_type(serialized_value, picojson::object{});
+  CheckSerializeVersion(serialized_obj);
 
   // rules
   const auto& rules_array = as_type(get_key(serialized_obj, "rules"), picojson::array{});
@@ -245,7 +247,7 @@ enum class SerializeMaskStoreType {
 
 static constexpr std::size_t ENTRY_DATA_OFFSET = 10;
 
-picojson::value CompiledGrammar::Impl::Serialize() const {
+picojson::value CompiledGrammar::Impl::SerializeToJSON() const {
   static constexpr auto serialized_entry =
       [](const std::pair<const StackElement, AdaptiveTokenMask>& entry) -> picojson::value {
     picojson::array entry_json;
@@ -307,8 +309,8 @@ picojson::value CompiledGrammar::Impl::Serialize() const {
 
   picojson::object compiled_grammar_json_obj;
 
-  compiled_grammar_json_obj["grammar"] = grammar->Serialize();
-  compiled_grammar_json_obj["tokenizer_info"] = tokenizer_info->Serialize();
+  compiled_grammar_json_obj["grammar"] = grammar->SerializeToJSON();
+  compiled_grammar_json_obj["tokenizer_info"] = tokenizer_info->SerializeToJSON();
 
   picojson::array adaptive_token_mask_json;
   for (const auto& entry : adaptive_token_mask_cache)
@@ -317,10 +319,11 @@ picojson::value CompiledGrammar::Impl::Serialize() const {
   compiled_grammar_json_obj["adaptive_token_mask_cache"] =
       picojson::value(std::move(adaptive_token_mask_json));
 
+  AddSerializeVersion(compiled_grammar_json_obj);
   return picojson::value(std::move(compiled_grammar_json_obj));
 }
 
-CompiledGrammar CompiledGrammar::Impl::Deserialize(
+CompiledGrammar CompiledGrammar::Impl::DeserializeFromJSON(
     const picojson::value& value, const std::vector<std::string>& encoded_vocab
 ) {
   static constexpr auto deserialized_entry = [](auto& map,
@@ -412,11 +415,14 @@ CompiledGrammar CompiledGrammar::Impl::Deserialize(
   };
 
   const auto& serialized_obj = as_type(value, picojson::object{});
+  CheckSerializeVersion(serialized_obj);
+
   const auto& serialized_grammar = get_key(serialized_obj, "grammar");
-  node->grammar = Grammar::Impl::Deserialize(serialized_grammar);
+  node->grammar = Grammar::Impl::DeserializeFromJSON(serialized_grammar);
 
   const auto& serialized_tokenizer_info = get_key(serialized_obj, "tokenizer_info");
-  node->tokenizer_info = TokenizerInfo::Impl::Deserialize(serialized_tokenizer_info, encoded_vocab);
+  node->tokenizer_info =
+      TokenizerInfo::Impl::DeserializeFromJSON(serialized_tokenizer_info, encoded_vocab);
 
   const auto& serialized_adaptive_token_mask_cache_array =
       as_type(get_key(serialized_obj, "adaptive_token_mask_cache"), picojson::array{});

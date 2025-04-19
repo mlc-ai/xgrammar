@@ -41,8 +41,8 @@ class TokenizerInfo::Impl {
 
   static std::string DetectMetadataFromHF(const std::string& backend_str);
 
-  picojson::value Serialize() const;
-  static TokenizerInfo Deserialize(
+  picojson::value SerializeToJSON() const;
+  static TokenizerInfo DeserializeFromJSON(
       const picojson::value& value, const std::vector<std::string>& encoded_vocab = {}
   );
 

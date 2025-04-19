@@ -11,10 +11,13 @@
 
 namespace xgrammar {
 
+/**
+ * \brief A helper class which extract the serialize method from pimpl of the object.
+ */
 struct ImplSerializer {
   template <typename T>
   static std::string Serialize(const T& obj, [[maybe_unused]] bool prettify = false) {
-    auto value = obj->Serialize();
+    auto value = obj->SerializeToJSON();
     static_assert(std::is_same_v<decltype(value), picojson::value>, "Cannot serialize the object");
     return value.serialize(prettify);
   }
@@ -26,7 +29,7 @@ struct ImplSerializer {
     std::string err;
     picojson::parse(v, value.begin(), value.end(), &err);
     XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON in deserialization: " << err;
-    return Impl::Deserialize(std::move(v), std::forward<Args>(args)...);
+    return Impl::DeserializeFromJSON(std::move(v), std::forward<Args>(args)...);
   }
 };
 
