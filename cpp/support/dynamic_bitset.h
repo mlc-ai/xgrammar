@@ -240,6 +240,15 @@ class DynamicBitset {
     }
   }
 
+  bool operator==(const DynamicBitset& other) const {
+    if (this == &other) return true;
+    if (size_ != other.size_) return false;
+    for (int i = 0; i < buffer_size_; ++i) {
+      if (data_[i] != other.data_[i]) return false;
+    }
+    return true;
+  }
+
  private:
   static int LowestBit(uint32_t value) {
 #ifdef __GNUC__

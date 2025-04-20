@@ -131,6 +131,9 @@ class FSM {
       max_ch = static_cast<int16_t>((packed_uint >> 32) & 0xFFFF);
       target = static_cast<int32_t>(packed_uint & 0xFFFFFFFF);
     }
+    bool operator==(const Edge& other) const {
+      return min_ch == other.min_ch && max_ch == other.max_ch && target == other.target;
+    }
   };
 
   /*! \brief Adjacency list of edges for each node. */
@@ -232,6 +235,13 @@ class CompactFSM {
       fsm.end_nodes_.push_back(static_cast<int>(end_node.get<int64_t>()));
     }
     return fsm;
+  }
+
+  bool operator==(const CompactFSM& other) const {
+    auto ref = [](const CompactFSM& fsm) {
+      return std::tie(fsm.start_node_, fsm.end_nodes_, fsm.edges_);
+    };
+    return ref(*this) == ref(other);
   }
 
  private:

@@ -183,6 +183,8 @@ class Grammar::Impl {
 
   picojson::value SerializeToJSON() const;
   static Grammar DeserializeFromJSON(const picojson::value& value);
+
+  bool operator==(const Impl& other) const;
 };
 
 }  // namespace xgrammar
