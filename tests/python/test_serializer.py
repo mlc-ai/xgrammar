@@ -7,7 +7,6 @@ import pytest
 from transformers import AutoTokenizer  # type: ignore
 
 import xgrammar as xgr
-from xgrammar.testing import _get_masked_tokens_from_bitmask
 
 TOKENIZER_PATH = "meta-llama/Llama-3.1-8B-Instruct"
 
@@ -160,6 +159,8 @@ def test_serializer_correctness(
 
     # test serialization and deserialization in practice
     # copied from test_grammar_matcher.py
+
+    # from xgrammar.testing import _get_masked_tokens_from_bitmask
     # json_grammar = xgr.Grammar.builtin_json_grammar()
     # grammar = grammar_compiler.compile_grammar(json_grammar)
     # serialized = serializer.serialize_compiled_grammar(grammar)
