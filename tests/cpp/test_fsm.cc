@@ -211,6 +211,12 @@ TEST(XGrammarFSMTest, FunctionTest) {
   for (const auto& str : test_strs) {
     EXPECT_TRUE(fsm_wse.Check(str) == false);
   }
+  fsm_wse = RegexToFSM("[\\d]{6}").Unwrap();
+  EXPECT_TRUE(fsm_wse.Check("123456"));
+  EXPECT_FALSE(fsm_wse.Check("1234567"));
+  fsm_wse = RegexToFSM("[\\d]{6, }").Unwrap();
+  EXPECT_TRUE(fsm_wse.Check("123456"));
+  EXPECT_TRUE(fsm_wse.Check("1234567"));
   std::cout << "--------- Function Test6 -----------" << std::endl;
   fsm_wse = RegexToFSM("[a][b][c][d]").Unwrap();
   test_str = "abcd";

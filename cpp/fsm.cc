@@ -1541,6 +1541,19 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
       new_ends.insert(end);
     }
   }
+  // Handling {n,}
+  if (node.upper_bound == RegexIR::REPEATNOUPPERBOUND) {
+    for (int i = 2; i < node.lower_bound; i++) {
+      result = FSMWithStartEnd::Concatenate(std::vector<FSMWithStartEnd>{result, child.Unwrap()});
+    }
+    int one_of_end_node = *result.ends.begin();
+    result = FSMWithStartEnd::Concatenate(std::vector<FSMWithStartEnd>{result, child.Unwrap()});
+    for (const auto& end : result.ends) {
+      result.fsm.edges[end].emplace_back(-1, -1, one_of_end_node);
+    }
+    return Result<FSMWithStartEnd>::Ok(result);
+  }
+  // Handling {n, m} or {n}
   for (int i = 2; i <= node.upper_bound; i++) {
     result = FSMWithStartEnd::Concatenate(std::vector<FSMWithStartEnd>{result, child.Unwrap()});
     if (i >= node.lower_bound) {
@@ -1826,6 +1839,10 @@ Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start)
     start++;
     while (start < regex.size() && regex[start] == ' ') {
       start++;
+    }
+    if (start < regex.size() && regex[start] == '}') {
+      upper_bound = RegexIR::REPEATNOUPPERBOUND;
+      return Result<std::pair<int, int>>::Ok(std::make_pair(lower_bound, upper_bound));
     }
     while (start < regex.size() && regex[start] >= '0' && regex[start] <= '9') {
       upper_bound = upper_bound * 10 + (regex[start] - '0');

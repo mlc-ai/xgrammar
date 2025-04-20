@@ -490,7 +490,7 @@ class RegexIR {
   struct Union;
   struct Bracket;
   struct Repeat;
-
+  static constexpr int REPEATNOUPPERBOUND = -1;
   using Node = std::variant<Leaf, Symbol, Union, Bracket, Repeat>;
   // This struct is used to store the string in regex, or
   // the character class in regex.
