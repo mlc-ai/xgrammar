@@ -9,7 +9,7 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test1 -----------" << std::endl;
   auto fsm_wse = RegexToFSM("abcd\\n").Unwrap();
   std::string test_str = "abcd\n";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   std::cout << "--------- Basic Build Test2 -----------" << std::endl;
   fsm_wse = RegexToFSM("[-a-z\\n]").Unwrap();
   test_str = "abcd-\n";
@@ -64,11 +64,11 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test5 -----------" << std::endl;
   fsm_wse = RegexToFSM("你好a").Unwrap();
   test_str = "你好a";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   std::cout << "--------- Basic Build Test6 -----------" << std::endl;
   fsm_wse = RegexToFSM("(())()()").Unwrap();
   test_str = "";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == false);
+  EXPECT_FALSE(fsm_wse.Check(test_str));
   std::cout << "Basic Build Test Passed!" << std::endl;
 }
 
@@ -77,24 +77,24 @@ TEST(XGrammarFSMTest, ConnectionTest) {
   std::cout << "--------- Connection Test1 -----------" << std::endl;
   auto fsm_wse = RegexToFSM(" [a-zA-Z0-9]--").Unwrap();
   std::string test_str = " a--";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   std::cout << "--------- Connection Test2 -----------" << std::endl;
   fsm_wse = RegexToFSM("aaa|[\\d]").Unwrap();
   test_str = "aaa";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   test_str = "1";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   std::cout << "--------- Connection Test3 -----------" << std::endl;
   if (RegexToFSM("(([\\d]|[\\w])|aaa)").IsErr()) {
     std::cout << RegexToFSM("(([\\d]|[\\w])|aaa)").UnwrapErr()->what() << std::endl;
   }
   fsm_wse = RegexToFSM("(([\\d]|[\\w])|aaa)").Unwrap();
   test_str = "aaa";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   test_str = "1";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   test_str = "1a";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == false);
+  EXPECT_FALSE(fsm_wse.Check(test_str));
   std::cout << "Connection Test Passed!" << std::endl;
 }
 
@@ -103,24 +103,24 @@ TEST(XGrammarFSMTest, SymbolTest) {
   std::cout << "--------- Symbol Test1 -----------" << std::endl;
   auto fsm_wse = RegexToFSM("1[\\d]+").Unwrap();
   std::string test_str[2] = {"1111", "1"};
-  EXPECT_TRUE(fsm_wse.Check(test_str[0]) == true);
-  EXPECT_TRUE(fsm_wse.Check(test_str[1]) == false);
+  EXPECT_TRUE(fsm_wse.Check(test_str[0]));
+  EXPECT_FALSE(fsm_wse.Check(test_str[1]));
   std::cout << "--------- Symbol Test2 -----------" << std::endl;
   fsm_wse = RegexToFSM("1[1]*").Unwrap();
-  EXPECT_TRUE(fsm_wse.Check(test_str[0]) == true);
-  EXPECT_TRUE(fsm_wse.Check(test_str[1]) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str[0]));
+  EXPECT_TRUE(fsm_wse.Check(test_str[1]));
   std::cout << "--------- Symbol Test3 -----------" << std::endl;
   fsm_wse = RegexToFSM("1[\\d]?").Unwrap();
-  EXPECT_TRUE(fsm_wse.Check(test_str[0]) == false);
-  EXPECT_TRUE(fsm_wse.Check(test_str[1]) == true);
+  EXPECT_FALSE(fsm_wse.Check(test_str[0]));
+  EXPECT_TRUE(fsm_wse.Check(test_str[1]));
   std::string test3 = "11";
-  EXPECT_TRUE(fsm_wse.Check(test3) == true);
+  EXPECT_TRUE(fsm_wse.Check(test3));
   std::cout << "--------- Symbol Test4 -----------" << std::endl;
   fsm_wse = RegexToFSM(" * * + ? *").Unwrap();
   test_str[0] = " ";
   test_str[1] = "      ";
   for (const auto& str : test_str) {
-    EXPECT_TRUE(fsm_wse.Check(str) == true);
+    EXPECT_TRUE(fsm_wse.Check(str));
   }
   std::cout << "Symbol Test Passed!" << std::endl;
 }
@@ -130,11 +130,11 @@ TEST(XGrammarFSMTest, IntegratedTest) {
   auto fsm_wse = RegexToFSM("((naive|bbb|[\\d]+)*[\\w])|  +").Unwrap();
   std::string test_str[5] = {"naive1", "bbbnaive114514W", "    ", "123", "_"};
   for (const auto& str : test_str) {
-    EXPECT_TRUE(fsm_wse.Check(str) == true);
+    EXPECT_TRUE(fsm_wse.Check(str));
   }
   std::string test_str2[5] = {"naive", "bbbbbb", "naive   ", "123 ", "aaa"};
   for (const auto& str : test_str2) {
-    EXPECT_TRUE(fsm_wse.Check(str) == false);
+    EXPECT_FALSE(fsm_wse.Check(str));
   }
   std::cout << "--------- Integrated Test Passed! -----------" << std::endl;
 }
@@ -144,21 +144,21 @@ TEST(XGrammarFSMTest, FunctionTest) {
   std::cout << "--------- Function Test1 -----------" << std::endl;
   auto fsm_wse = RegexToFSM("[\\d\\d\\d]+123").Unwrap();
   std::string test_str = "123456123";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   auto compact_fsm = fsm_wse.fsm.ToCompact();
   CompactFSMWithStartEnd compact_fsm_wse;
   compact_fsm_wse.fsm = compact_fsm;
   compact_fsm_wse.start = fsm_wse.start;
   compact_fsm_wse.ends = fsm_wse.ends;
-  EXPECT_TRUE(compact_fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(compact_fsm_wse.Check(test_str));
   fsm_wse.fsm = compact_fsm_wse.fsm.ToFSM();
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   std::cout << "--------- Function Test2 -----------" << std::endl;
   fsm_wse = RegexToFSM("([abc]|[\\d])+").Unwrap();
   test_str = "abc3";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   fsm_wse = fsm_wse.ToDFA();
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   EXPECT_TRUE([&]() -> bool {
     for (const auto& edges : fsm_wse.fsm.edges) {
       for (const auto& edge : edges) {
@@ -193,23 +193,23 @@ TEST(XGrammarFSMTest, FunctionTest) {
   }());
   std::cout << "--------- Function Test3 -----------" << std::endl;
   fsm_wse = fsm_wse.MinimizeDFA();
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
-  EXPECT_TRUE(fsm_wse.fsm.edges.size() == 3);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
+  EXPECT_EQ(fsm_wse.fsm.edges.size(), 3);
   std::cout << "--------- Function Test4 -----------" << std::endl;
   fsm_wse = fsm_wse.Not();
-  EXPECT_TRUE(fsm_wse.Check(test_str) == false);
+  EXPECT_FALSE(fsm_wse.Check(test_str));
   test_str = "abcd";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   std::cout << "--------- Function Test5 -----------" << std::endl;
   fsm_wse = RegexToFSM("[\\d]{1,  5}").Unwrap();
   std::string test_strs[2] = {"123", "12345"};
   for (const auto& str : test_strs) {
-    EXPECT_TRUE(fsm_wse.Check(str) == true);
+    EXPECT_TRUE(fsm_wse.Check(str));
   }
   test_strs[0] = "123456";
   test_strs[1] = "1234567";
   for (const auto& str : test_strs) {
-    EXPECT_TRUE(fsm_wse.Check(str) == false);
+    EXPECT_FALSE(fsm_wse.Check(str));
   }
   fsm_wse = RegexToFSM("[\\d]{6}").Unwrap();
   EXPECT_TRUE(fsm_wse.Check("123456"));
@@ -220,30 +220,30 @@ TEST(XGrammarFSMTest, FunctionTest) {
   std::cout << "--------- Function Test6 -----------" << std::endl;
   fsm_wse = RegexToFSM("[a][b][c][d]").Unwrap();
   test_str = "abcd";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   fsm_wse.SimplifyEpsilon();
-  EXPECT_TRUE(fsm_wse.NumNodes() == 5);
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_EQ(fsm_wse.NumNodes(), 5);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   std::cout << "--------- Function Test7 -----------" << std::endl;
   fsm_wse = RegexToFSM("abc|abd").Unwrap();
   test_str = "abc";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   fsm_wse.SimplifyTransition();
   fsm_wse.SimplifyEpsilon();
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   test_str = "abcd";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == false);
-  EXPECT_TRUE(fsm_wse.NumNodes() == 4);
+  EXPECT_FALSE(fsm_wse.Check(test_str));
+  EXPECT_EQ(fsm_wse.NumNodes(), 4);
   std::cout << "--------- Function Test8 -----------" << std::endl;
   fsm_wse = RegexToFSM("acd|bcd").Unwrap();
   test_str = "acd";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   fsm_wse.SimplifyTransition();
   fsm_wse.SimplifyEpsilon();
-  EXPECT_TRUE(fsm_wse.Check(test_str) == true);
+  EXPECT_TRUE(fsm_wse.Check(test_str));
   test_str = "abcd";
-  EXPECT_TRUE(fsm_wse.Check(test_str) == false);
-  EXPECT_TRUE(fsm_wse.NumNodes() == 4);
+  EXPECT_FALSE(fsm_wse.Check(test_str));
+  EXPECT_EQ(fsm_wse.NumNodes(), 4);
   std::cout << "--------- Function Test Passed! -----------" << std::endl;
 }
 
@@ -381,7 +381,7 @@ TEST(XGrammarFSMTest, EfficiencyTest) {
   time_end = std::chrono::high_resolution_clock::now();
   duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start);
   std::cout << "Time taken to minimize DFA: " << duration.count() << " ms" << std::endl;
-  EXPECT_TRUE(fsm_wse.NumNodes() == 111);
+  EXPECT_EQ(fsm_wse.NumNodes(), 111);
   std::cout << "--------- Efficiency Test Passed! -----------" << std::endl;
 }
 
