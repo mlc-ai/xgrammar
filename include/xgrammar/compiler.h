@@ -27,6 +27,8 @@ class CompiledGrammar {
   TokenizerInfo GetTokenizerInfo() const;
   /*! \brief Return the approximate memory usage of the grammar in bytes. */
   std::size_t MemorySizeBytes() const;
+  /*! \brief Compare two compiled grammars. */
+  friend bool operator==(const CompiledGrammar& lhs, const CompiledGrammar& rhs);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);
 };

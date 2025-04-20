@@ -169,6 +169,10 @@ class CSRArray {
     return os;
   }
 
+  bool operator==(const CSRArray& other) const {
+    return indptr_ == other.indptr_ && data_ == other.data_;
+  }
+
  private:
   /*! \brief Vector storing all elements contiguously. */
   std::vector<DataType> data_;

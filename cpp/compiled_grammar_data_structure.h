@@ -74,6 +74,8 @@ struct AdaptiveTokenMask {
 
   std::size_t MemorySize() const;
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask);
+
+  bool operator==(const AdaptiveTokenMask& rhs) const;
 };
 
 /*!
@@ -129,6 +131,8 @@ class CompiledGrammar::Impl {
   static CompiledGrammar DeserializeFromJSON(
       const picojson::value& value, const TokenizerInfo& tokenizer_info
   );
+
+  bool operator==(const Impl& rhs) const;
 };
 
 }  // namespace xgrammar

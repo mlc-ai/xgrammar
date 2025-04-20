@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -187,10 +188,8 @@ picojson::value Grammar::Impl::SerializeToJSON() const {
   grammar_json_obj["rule_expr_indptr"] = picojson::value(std::move(rule_expr_indptr_json));
 
   if (root_tag_dispatch_fsm) {
-    XGRAMMAR_LOG(INFO) << "Serializing root_tag_dispatch_fsm";
     grammar_json_obj["root_tag_dispatch_fsm"] = root_tag_dispatch_fsm->SerializeToJSON();
   } else {
-    XGRAMMAR_LOG(INFO) << "No root_tag_dispatch_fsm";
     grammar_json_obj["root_tag_dispatch_fsm"] = picojson::value();
   }
 
@@ -265,7 +264,6 @@ Grammar Grammar::Impl::DeserializeFromJSON(const picojson::value& serialized_val
   // root_tag_dispatch_fsm
   const auto& fsm_json = get_key(serialized_obj, "root_tag_dispatch_fsm");
   if (!fsm_json.is<picojson::null>()) {
-    XGRAMMAR_LOG(INFO) << "Deserializing root_tag_dispatch_fsm";
     node->root_tag_dispatch_fsm.emplace(CompactFSM::DeserializeFromJSON(fsm_json));
   }
 
@@ -510,5 +508,51 @@ CompiledGrammar CompiledGrammar::Impl::DeserializeFromJSON(
 ) {
   return DeserializeFromJSONImpl(value, {}, &tokenizer_info);
 }
+
+bool AdaptiveTokenMask::operator==(const AdaptiveTokenMask& other) const {
+  auto ref = [](const AdaptiveTokenMask& mask) {
+    return std::tie(
+        mask.store_type,
+        mask.accepted_indices,
+        mask.rejected_indices,
+        mask.accepted_bitset,
+        mask.uncertain_indices
+    );
+  };
+  return ref(*this) == ref(other);
+}
+
+bool CompiledGrammar::Impl::operator==(const Impl& rhs) const {
+  const auto& lhs = *this;
+  if (&lhs == &rhs) return true;  // shortcut
+  return *lhs.grammar == *rhs.grammar && *lhs.tokenizer_info == *rhs.tokenizer_info &&
+         lhs.adaptive_token_mask_cache == rhs.adaptive_token_mask_cache;
+}
+
+[[maybe_unused]]
+static bool operator==(const Grammar::Impl::Rule& lhs, const Grammar::Impl::Rule& rhs) {
+  auto ref = [](const Grammar::Impl::Rule& rule) {
+    return std::tie(rule.name, rule.body_expr_id, rule.lookahead_assertion_id);
+  };
+  return ref(lhs) == ref(rhs);
+}
+
+bool Grammar::Impl::operator==(const Impl& rhs) const {
+  const auto& lhs = *this;
+  if (&lhs == &rhs) return true;  // shortcut
+  auto ref = [](const Impl& impl) {
+    return std::tie(
+        impl.rules_,
+        impl.rule_expr_data_,
+        impl.rule_expr_indptr_,
+        impl.root_tag_dispatch_fsm,
+        impl.tag_dispatch_end_node_to_rule_id,
+        impl.allow_empty_rule_ids
+    );
+  };
+  return ref(*this) == ref(rhs);
+}
+
+bool operator==(const CompiledGrammar& lhs, const CompiledGrammar& rhs) { return *lhs == *rhs; }
 
 }  // namespace xgrammar

@@ -37,6 +37,8 @@ struct EmptyConstructorTag {};
   /* Access the impl pointer. Useful in implementation. */                     \
   Impl* operator->() { return pimpl_.get(); }                                  \
   const Impl* operator->() const { return pimpl_.get(); }                      \
+  Impl& operator*() { return *pimpl_; }                                        \
+  const Impl& operator*() const { return *pimpl_; }                            \
                                                                                \
  private:                                                                      \
   std::shared_ptr<Impl> pimpl_

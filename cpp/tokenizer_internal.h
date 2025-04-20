@@ -46,6 +46,22 @@ class TokenizerInfo::Impl {
       const picojson::value& value, const std::vector<std::string>& encoded_vocab = {}
   );
 
+  bool operator==(const Impl& other) const {
+    if (this == &other) return true;
+    auto ref = [](const Impl& obj) {
+      return std::tie(
+          obj.vocab_type_,
+          obj.vocab_size_,
+          obj.add_prefix_space_,
+          obj.decoded_vocab_,
+          obj.sorted_decoded_vocab_,
+          obj.stop_token_ids_,
+          obj.special_token_ids_
+      );
+    };
+    return ref(*this) == ref(other);
+  }
+
  private:
   static bool IsSpecialToken(const std::string& decoded_token);
 
