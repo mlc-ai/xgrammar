@@ -1525,9 +1525,6 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
   if (node.nodes.size() != 1) {
     return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid repeat"));
   }
-  if (node.lower_bound > node.upper_bound || node.lower_bound <= 0) {
-    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid repeat"));
-  }
   Result<FSMWithStartEnd> child =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, node.nodes[0]);
   if (child.IsErr()) {
