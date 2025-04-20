@@ -5,6 +5,8 @@
 #ifndef XGRAMMAR_FSM_H_
 #define XGRAMMAR_FSM_H_
 
+#include <picojson.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -111,6 +113,24 @@ class FSM {
     int16_t max_ch;
     /*! \brief Target state. */
     int32_t target;
+    explicit operator int64_t() const {
+      auto min_ch_uint = static_cast<uint16_t>(min_ch);
+      auto max_ch_uint = static_cast<uint16_t>(max_ch);
+      auto target_uint = static_cast<uint32_t>(target);
+      auto result_uint = (static_cast<uint64_t>(min_ch_uint) << 48) |
+                         (static_cast<uint64_t>(max_ch_uint) << 32) |
+                         (static_cast<uint64_t>(target_uint));
+      return static_cast<int64_t>(result_uint);
+    }
+    Edge() = default;
+    Edge(int16_t min_ch, int16_t max_ch, int32_t target)
+        : min_ch(min_ch), max_ch(max_ch), target(target) {}
+    explicit Edge(int64_t packed) {
+      auto packed_uint = static_cast<uint64_t>(packed);
+      min_ch = static_cast<int16_t>((packed_uint >> 48) & 0xFFFF);
+      max_ch = static_cast<int16_t>((packed_uint >> 32) & 0xFFFF);
+      target = static_cast<int32_t>(packed_uint & 0xFFFFFFFF);
+    }
   };
 
   /*! \brief Adjacency list of edges for each node. */
@@ -188,6 +208,30 @@ class CompactFSM {
 
   friend std::size_t MemorySize(const CompactFSM& self) {
     return MemorySize(self.edges_) + MemorySize(self.end_nodes_);
+  }
+
+  picojson::value SerializeToJSON() const {
+    picojson::object obj;
+    obj["edges"] = edges_.SerializeToJSON();
+    obj["start_node"] = picojson::value(static_cast<int64_t>(start_node_));
+    picojson::array end_nodes_json;
+    for (const auto& end_node : end_nodes_) {
+      end_nodes_json.push_back(picojson::value(static_cast<int64_t>(end_node)));
+    }
+    obj["end_nodes"] = picojson::value(std::move(end_nodes_json));
+    return picojson::value(std::move(obj));
+  }
+
+  static CompactFSM DeserializeFromJSON(const picojson::value& json) {
+    CompactFSM fsm;
+    const auto& obj = json.get<picojson::object>();
+    fsm.edges_ = CSRArray<Edge>::DeserializeFromJSON(obj.at("edges"));
+    fsm.start_node_ = static_cast<int>(obj.at("start_node").get<int64_t>());
+    const auto& end_nodes_json = obj.at("end_nodes").get<picojson::array>();
+    for (const auto& end_node : end_nodes_json) {
+      fsm.end_nodes_.push_back(static_cast<int>(end_node.get<int64_t>()));
+    }
+    return fsm;
   }
 
  private:

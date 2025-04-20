@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "compiled_grammar_data_structure.h"
+#include "fsm.h"
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
@@ -163,10 +164,12 @@ picojson::value Grammar::Impl::SerializeToJSON() const {
   picojson::object grammar_json_obj;
 
   picojson::array rules_json;
-  for (const auto& rule : rules_) {
+  for (const auto& [name, body_expr_id, lookahead_assertion_id] : rules_) {
     picojson::object rule_json;
-    rule_json["name"] = picojson::value(rule.name);
-    rule_json["body_expr_id"] = picojson::value(static_cast<int64_t>(rule.body_expr_id));
+    rule_json["name"] = picojson::value(name);
+    rule_json["body_expr_id"] = picojson::value(static_cast<int64_t>(body_expr_id));
+    rule_json["lookahead_assertion_id"] =
+        picojson::value(static_cast<int64_t>(lookahead_assertion_id));
     rules_json.emplace_back(std::move(rule_json));
   }
   grammar_json_obj["rules"] = picojson::value(std::move(rules_json));
@@ -182,6 +185,27 @@ picojson::value Grammar::Impl::SerializeToJSON() const {
     rule_expr_indptr_json.emplace_back(static_cast<int64_t>(index_ptr));
   }
   grammar_json_obj["rule_expr_indptr"] = picojson::value(std::move(rule_expr_indptr_json));
+
+  if (root_tag_dispatch_fsm) {
+    XGRAMMAR_LOG(INFO) << "Serializing root_tag_dispatch_fsm";
+    grammar_json_obj["root_tag_dispatch_fsm"] = root_tag_dispatch_fsm->SerializeToJSON();
+  } else {
+    XGRAMMAR_LOG(INFO) << "No root_tag_dispatch_fsm";
+    grammar_json_obj["root_tag_dispatch_fsm"] = picojson::value();
+  }
+
+  picojson::array tag_dispatch_list;
+  for (const auto& [key, value] : tag_dispatch_end_node_to_rule_id) {
+    tag_dispatch_list.emplace_back(static_cast<int64_t>(key));
+    tag_dispatch_list.emplace_back(static_cast<int64_t>(value));
+  }
+  grammar_json_obj["tag_dispatch_list"] = picojson::value(std::move(tag_dispatch_list));
+
+  picojson::array allow_empty_list;
+  for (const auto& rule_id : allow_empty_rule_ids) {
+    allow_empty_list.emplace_back(static_cast<int64_t>(rule_id));
+  }
+  grammar_json_obj["allow_empty_rule_ids"] = picojson::value(std::move(allow_empty_list));
 
   AddSerializeVersion(grammar_json_obj);
   return picojson::value(std::move(grammar_json_obj));
@@ -217,7 +241,11 @@ Grammar Grammar::Impl::DeserializeFromJSON(const picojson::value& serialized_val
     const auto& rule_obj = as_type(rule_value, picojson::object{});
     const auto& name = as_type(get_key(rule_obj, "name"), std::string{});
     const auto& rule_expr = as_type(get_key(rule_obj, "body_expr_id"), int64_t{});
-    node->rules_.push_back(Grammar::Impl::Rule({name, static_cast<int32_t>(rule_expr)}));
+    const auto& lookahead_assertion_id =
+        as_type(get_key(rule_obj, "lookahead_assertion_id"), int64_t{});
+    node->rules_.push_back(Grammar::Impl::Rule(
+        {name, static_cast<int32_t>(rule_expr), static_cast<int32_t>(lookahead_assertion_id)}
+    ));
   }
 
   // rule_expr_data
@@ -234,6 +262,32 @@ Grammar Grammar::Impl::DeserializeFromJSON(const picojson::value& serialized_val
     node->rule_expr_indptr_.push_back(static_cast<int32_t>(index_ptr_json.get<int64_t>()));
   }
 
+  // root_tag_dispatch_fsm
+  const auto& fsm_json = get_key(serialized_obj, "root_tag_dispatch_fsm");
+  if (!fsm_json.is<picojson::null>()) {
+    XGRAMMAR_LOG(INFO) << "Deserializing root_tag_dispatch_fsm";
+    node->root_tag_dispatch_fsm.emplace(CompactFSM::DeserializeFromJSON(fsm_json));
+  }
+
+  // tag_dispatch_list
+  const auto& tag_dispatch_list =
+      as_type(get_key(serialized_obj, "tag_dispatch_list"), picojson::array{});
+  checker(tag_dispatch_list.size() % 2 == 0);
+  node->tag_dispatch_end_node_to_rule_id.reserve(tag_dispatch_list.size());
+  for (std::size_t i = 0; i < tag_dispatch_list.size(); ++i) {
+    const auto key = static_cast<int32_t>(tag_dispatch_list[i * 2 + 0].get<int64_t>());
+    const auto value = static_cast<int32_t>(tag_dispatch_list[i * 2 + 1].get<int64_t>());
+    node->tag_dispatch_end_node_to_rule_id.emplace(key, value);
+  }
+
+  // allow_empty_rule_ids
+  const auto& allow_empty_list =
+      as_type(get_key(serialized_obj, "allow_empty_rule_ids"), picojson::array{});
+  node->allow_empty_rule_ids.reserve(allow_empty_list.size());
+  for (const auto& rule_id_json : allow_empty_list) {
+    node->allow_empty_rule_ids.push_back(static_cast<int32_t>(rule_id_json.get<int64_t>()));
+  }
+
   return Grammar(node);
 }
 
@@ -245,7 +299,7 @@ enum class SerializeMaskStoreType {
   RejectedBitsetIndices = 4,
 };
 
-static constexpr std::size_t ENTRY_DATA_OFFSET = 10;
+static constexpr std::size_t ENTRY_DATA_OFFSET = 11;
 
 picojson::value CompiledGrammar::Impl::SerializeToJSON() const {
   static constexpr auto serialized_entry =
@@ -261,6 +315,7 @@ picojson::value CompiledGrammar::Impl::SerializeToJSON() const {
     entry_json.emplace_back(static_cast<int64_t>(elem.left_utf8_bytes));
     entry_json.emplace_back(static_cast<int64_t>(elem.element_in_string));
     entry_json.emplace_back(static_cast<int64_t>(elem.parent_id));
+    entry_json.emplace_back(static_cast<int64_t>(elem.reference_count));
 
     // serialize adaptive token mask
     std::vector<int32_t> indices;
@@ -342,11 +397,12 @@ static CompiledGrammar DeserializeFromJSONImpl(
     elem.left_utf8_bytes = static_cast<int32_t>(entry_array[3].get<int64_t>());
     elem.element_in_string = static_cast<int32_t>(entry_array[4].get<int64_t>());
     elem.parent_id = static_cast<int32_t>(entry_array[5].get<int64_t>());
+    elem.reference_count = static_cast<int32_t>(entry_array[6].get<int64_t>());
 
-    const auto store_type = static_cast<SerializeMaskStoreType>(entry_array[6].get<int64_t>());
-    const auto storage_indices_size = static_cast<std::size_t>(entry_array[7].get<int64_t>());
-    const auto mask_bitset_size = static_cast<std::size_t>(entry_array[8].get<int64_t>());
-    const auto uncertain_indices_size = static_cast<std::size_t>(entry_array[9].get<int64_t>());
+    const auto store_type = static_cast<SerializeMaskStoreType>(entry_array[7].get<int64_t>());
+    const auto storage_indices_size = static_cast<std::size_t>(entry_array[8].get<int64_t>());
+    const auto mask_bitset_size = static_cast<std::size_t>(entry_array[9].get<int64_t>());
+    const auto uncertain_indices_size = static_cast<std::size_t>(entry_array[10].get<int64_t>());
 
     XGRAMMAR_CHECK(
         entry_array.size() == ENTRY_DATA_OFFSET + storage_indices_size + uncertain_indices_size

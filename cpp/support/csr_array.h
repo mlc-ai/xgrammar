@@ -237,10 +237,10 @@ inline picojson::value CSRArray<DataType>::SerializeToJSON() const {
 
   // Serialize the object
   picojson::object obj;
-  obj["data"] = picojson::value(data_json);
-  obj["indptr"] = picojson::value(indptr_json);
+  obj["data"] = picojson::value(std::move(data_json));
+  obj["indptr"] = picojson::value(std::move(indptr_json));
 
-  return picojson::value(obj);
+  return picojson::value(std::move(obj));
 }
 
 template <typename DataType>
