@@ -69,6 +69,13 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
   fsm_wse = RegexToFSM("(())()()").Unwrap();
   test_str = "";
   EXPECT_FALSE(fsm_wse.Check(test_str));
+  std::cout << "--------- Basic Build Test7 -----------" << std::endl;
+  fsm_wse = RegexToFSM("[abcdabcdxyzxyz]").Unwrap();
+  test_str = "a";
+  EXPECT_TRUE(fsm_wse.Check(test_str));
+  EXPECT_FALSE(fsm_wse.Check("e"));
+  std::cout << fsm_wse << std::endl;
+  EXPECT_EQ(fsm_wse.fsm.edges[0].size(), 2);
   std::cout << "Basic Build Test Passed!" << std::endl;
 }
 

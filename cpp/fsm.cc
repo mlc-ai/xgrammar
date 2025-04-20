@@ -668,18 +668,36 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
       i = i + 3;
       continue;
     }
-    if (reverse) {
-      bool has_edge[0x100];
-      memset(has_edge, 0, sizeof(has_edge));
-      for (const auto& edge : edges[0]) {
-        for (int i = edge.min; i <= edge.max; i++) {
-          has_edge[i] = true;
-        }
+    bool has_edge[0x100];
+    memset(has_edge, 0, sizeof(has_edge));
+    for (const auto& edge : edges[0]) {
+      for (int i = edge.min; i <= edge.max; i++) {
+        has_edge[i] = true;
       }
-      edges[0].clear();
-      int last = -1;
+    }
+    edges[0].clear();
+
+    // Simplify the edges. e.g [abc] -> [a-c]
+    int last = -1;
+    if (reverse) {
       for (int i = 0; i < 0x100; i++) {
         if (!has_edge[i]) {
+          if (last == -1) {
+            last = i;
+          }
+          continue;
+        }
+        if (last != -1) {
+          edges[0].emplace_back(last, i - 1, 1);
+          last = -1;
+        }
+      }
+      if (last != -1) {
+        edges[0].emplace_back(last, 0xFF, 1);
+      }
+    } else {
+      for (int i = 0; i < 0x100; i++) {
+        if (has_edge[i]) {
           if (last == -1) {
             last = i;
           }
