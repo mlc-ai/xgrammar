@@ -21,6 +21,9 @@ struct JSONSerializer {
   static CompiledGrammar DeserializeCompiledGrammar(
       const std::string&, const std::vector<std::string>& encoded_vocab = {}
   );
+  static CompiledGrammar DeserializeCompiledGrammarWithTokenizer(
+      const std::string&, const TokenizerInfo& tokenizer_info
+  );
 };
 
 }  // namespace xgrammar

@@ -323,8 +323,10 @@ picojson::value CompiledGrammar::Impl::SerializeToJSON() const {
   return picojson::value(std::move(compiled_grammar_json_obj));
 }
 
-CompiledGrammar CompiledGrammar::Impl::DeserializeFromJSON(
-    const picojson::value& value, const std::vector<std::string>& encoded_vocab
+static CompiledGrammar DeserializeFromJSONImpl(
+    const picojson::value& value,
+    const std::vector<std::string>& encoded_vocab,
+    const TokenizerInfo* tokenizer_info_ptr  // nullptr if not provided
 ) {
   static constexpr auto deserialized_entry = [](auto& map,
                                                 const picojson::value& entry_value,
@@ -421,8 +423,15 @@ CompiledGrammar CompiledGrammar::Impl::DeserializeFromJSON(
   node->grammar = Grammar::Impl::DeserializeFromJSON(serialized_grammar);
 
   const auto& serialized_tokenizer_info = get_key(serialized_obj, "tokenizer_info");
-  node->tokenizer_info =
-      TokenizerInfo::Impl::DeserializeFromJSON(serialized_tokenizer_info, encoded_vocab);
+  if (tokenizer_info_ptr == nullptr) {
+    node->tokenizer_info =
+        TokenizerInfo::Impl::DeserializeFromJSON(serialized_tokenizer_info, encoded_vocab);
+  } else {
+    // verify the tokenizer information
+    const auto& tokenizer_info = *tokenizer_info_ptr;
+    checker(tokenizer_info->SerializeToJSON() == serialized_tokenizer_info);
+    node->tokenizer_info = tokenizer_info;
+  }
 
   const auto& serialized_adaptive_token_mask_cache_array =
       as_type(get_key(serialized_obj, "adaptive_token_mask_cache"), picojson::array{});
@@ -432,6 +441,18 @@ CompiledGrammar CompiledGrammar::Impl::DeserializeFromJSON(
   }
 
   return CompiledGrammar(node);
+}
+
+CompiledGrammar CompiledGrammar::Impl::DeserializeFromJSON(
+    const picojson::value& value, const std::vector<std::string>& encoded_vocab
+) {
+  return DeserializeFromJSONImpl(value, encoded_vocab, nullptr);
+}
+
+CompiledGrammar CompiledGrammar::Impl::DeserializeFromJSON(
+    const picojson::value& value, const TokenizerInfo& tokenizer_info
+) {
+  return DeserializeFromJSONImpl(value, {}, &tokenizer_info);
 }
 
 }  // namespace xgrammar

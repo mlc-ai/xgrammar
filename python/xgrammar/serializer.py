@@ -44,10 +44,18 @@ class JSONSerializer:
 
     @staticmethod
     def deserialize_compiled_grammar(
-        serialized_compiled_grammar: str, encoded_vocab: List[Union[bytes, str]]
+        serialized_compiled_grammar: str,
+        encoded_vocab_or_tokenizer: Union[List[Union[bytes, str]], TokenizerInfo],
     ) -> CompiledGrammar:
-        return CompiledGrammar._create_from_handle(
-            _core.JSONSerializer.deserialize_compiled_grammar(
-                serialized_compiled_grammar, encoded_vocab
+        if isinstance(encoded_vocab_or_tokenizer, TokenizerInfo):
+            return CompiledGrammar._create_from_handle(
+                _core.JSONSerializer.deserialize_compiled_grammar_with_tokenizer(
+                    serialized_compiled_grammar, encoded_vocab_or_tokenizer._handle
+                )
             )
-        )
+        else:
+            return CompiledGrammar._create_from_handle(
+                _core.JSONSerializer.deserialize_compiled_grammar(
+                    serialized_compiled_grammar, encoded_vocab_or_tokenizer
+                )
+            )

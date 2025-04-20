@@ -200,7 +200,11 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("serialize_tokenizer_info", &JSONSerializer::SerializeTokenizerInfo)
       .def("deserialize_tokenizer_info", &JSONSerializer::DeserializeTokenizerInfo)
       .def("serialize_compiled_grammar", &JSONSerializer::SerializeCompiledGrammar)
-      .def("deserialize_compiled_grammar", &JSONSerializer::DeserializeCompiledGrammar);
+      .def("deserialize_compiled_grammar", &JSONSerializer::DeserializeCompiledGrammar)
+      .def(
+          "deserialize_compiled_grammar_with_tokenizer",
+          &JSONSerializer::DeserializeCompiledGrammarWithTokenizer
+      );
 
   auto pyTestingModule = m.def_submodule("testing");
   pyTestingModule

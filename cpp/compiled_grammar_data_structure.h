@@ -20,6 +20,7 @@
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
 #include "support/utils.h"
+#include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
 
@@ -124,6 +125,9 @@ class CompiledGrammar::Impl {
   picojson::value SerializeToJSON() const;
   static CompiledGrammar DeserializeFromJSON(
       const picojson::value& value, const std::vector<std::string>& encoded_vocab = {}
+  );
+  static CompiledGrammar DeserializeFromJSON(
+      const picojson::value& value, const TokenizerInfo& tokenizer_info
   );
 };
 
