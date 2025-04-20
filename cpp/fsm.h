@@ -5,6 +5,8 @@
 #ifndef XGRAMMAR_FSM_H_
 #define XGRAMMAR_FSM_H_
 
+#include <picojson.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
