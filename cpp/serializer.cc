@@ -8,6 +8,7 @@
 #include "tokenizer_internal.h"  // IWYU pragma: keep
 #include "xgrammar/compiler.h"
 #include "xgrammar/grammar.h"
+#include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
 
@@ -63,6 +64,12 @@ CompiledGrammar JSONSerializer::DeserializeCompiledGrammar(
     const std::string& str, const std::vector<std::string>& encoded_vocab
 ) {
   return ImplSerializer::Deserialize<CompiledGrammar>(str, encoded_vocab);
+}
+
+CompiledGrammar JSONSerializer::DeserializeCompiledGrammarWithTokenizer(
+    const std::string& str, const TokenizerInfo& tokenizer_info
+) {
+  return ImplSerializer::Deserialize<CompiledGrammar>(str, tokenizer_info);
 }
 
 }  // namespace xgrammar
