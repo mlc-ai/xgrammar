@@ -251,6 +251,13 @@ TEST(XGrammarFSMTest, FunctionTest) {
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.Check(test_str));
   EXPECT_EQ(fsm_wse.NumNodes(), 4);
+  std::cout << "--------- Function Test9 -----------" << std::endl;
+  fsm_wse = RegexToFSM("ab*").Unwrap();
+  test_str = "abbb";
+  EXPECT_TRUE(fsm_wse.Check(test_str));
+  fsm_wse.SimplifyEpsilon();
+  EXPECT_TRUE(fsm_wse.Check(test_str));
+  EXPECT_EQ(fsm_wse.NumNodes(), 2);
   std::cout << "--------- Function Test Passed! -----------" << std::endl;
 }
 

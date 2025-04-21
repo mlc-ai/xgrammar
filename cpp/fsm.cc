@@ -1253,11 +1253,19 @@ void FSMWithStartEnd::SimplifyEpsilon() {
       }
       previous_nodes[edge.target].insert(i);
       if (edge.IsEpsilon()) {
-        has_epsilon.insert(i);
+        if (edges.size() != 1) {
+          has_epsilon.insert(i);
+        } else {
+          // a -- epsilon --> b, and a doesn't have other outward edges.
+          union_find_set.Make(i);
+          union_find_set.Make(edge.target);
+          union_find_set.Union(i, edge.target);
+        }
       }
     }
   }
 
+  // a --> epsilon --> b, and b doesn't have other inward edges.
   for (const auto& node : has_epsilon) {
     const auto& edges = fsm.edges[node];
     for (const auto& edge : edges) {
