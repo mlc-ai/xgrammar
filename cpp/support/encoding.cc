@@ -41,7 +41,7 @@ std::string PrintAsEscapedUTF8(
   static const std::unordered_map<TCodepoint, std::string> kCodepointToEscape = {
       {'\'', "\\\'"},
       {'\"', "\\\""},
-      {'\?', "\\\?"},
+      {'\?', "\\?"},
       {'\\', "\\\\"},
       {'\a', "\\a"},
       {'\b', "\\b"},
@@ -167,7 +167,7 @@ std::pair<TCodepoint, int32_t> ParseNextUTF8OrEscaped(
   static const std::unordered_map<char, TCodepoint> kEscapeToCodepoint = {
       {'\'', '\''},
       {'\"', '\"'},
-      {'\?', '\?'},
+      {'?', '\?'},
       {'\\', '\\'},
       {'a', '\a'},
       {'b', '\b'},
