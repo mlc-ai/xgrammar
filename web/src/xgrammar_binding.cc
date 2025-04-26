@@ -13,6 +13,7 @@
 #include <iostream>
 #include <memory>
 
+#include "../../cpp/json_schema_converter.h"
 #include "../../cpp/testing.h"
 
 // #include "../../cpp/support/logging.h"
@@ -144,8 +145,18 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   function("vecIntToView", &vecIntToView);
 
   // Testing methods
-  function("_JSONSchemaToEBNF", &_JSONSchemaToEBNF);
+  function("JSONSchemaToEBNF", 
+    // There are two JSONSchemaToEBNF, so we need to explicitly select the one with string input
+    select_overload<std::string(
+        const std::string&,
+        bool,
+        std::optional<int>,
+        std::optional<std::pair<std::string, std::string>>,
+        bool
+    )>(&JSONSchemaToEBNF)
+  );
   function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);
+  function("EBNFToGrammarNoNormalization", &_EBNFToGrammarNoNormalization);
 
   class_<Grammar>("Grammar")
       .function("ToString", &Grammar::ToString)

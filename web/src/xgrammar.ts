@@ -16,6 +16,8 @@ export class Testings {
    * Convert JSON schema string to EBNF grammar string. For test purposes.
    *
    * @param {string} schema The schema string.
+   * @param {boolean} [any_whitespace=true] Whether to ignore the indentation
+   * restrictions, and allow any whitespace.
    * @param {number} [indent=2] The number of spaces for indentation. If -1, the grammar will
    * enforce the output to be in one line.
    * @param {[string, string]} [separators] Two separators that will be enforced by the grammar:
@@ -27,8 +29,9 @@ export class Testings {
    * equivalent to setting unevaluatedProperties and unevaluatedItems to false.
    * @returns {string} The EBNF grammar string.
    */
-  static async _jsonSchemaToEBNF(
+  static async jsonSchemaToEBNF(
     schema: string,
+    any_whitespace = true,
     indent = 2,
     separators?: [string, string],
     strictMode = true
@@ -46,7 +49,7 @@ export class Testings {
     // This is a workaround to Typescript not being able to express Optional value like Python; if
     // user specifies indent to be undefined, it still becomes 2.
     let optionalIndent: number | undefined = indent == -1 ? undefined : indent;
-    return binding._JSONSchemaToEBNF(schema, optionalIndent, separators, strictMode);
+    return binding.JSONSchemaToEBNF(schema, any_whitespace, optionalIndent, separators, strictMode);
   }
 
   /**
@@ -73,6 +76,22 @@ export class Testings {
     const rejectedIDsInt32Array = binding.vecIntToView(rejectedIDsIntVector).slice();
     rejectedIDsIntVector.delete();
     return rejectedIDsInt32Array;
+  }
+
+  /**
+   * Convert a BNF grammar string to a Grammar object without normalization. For test
+   * purposes. The result grammar cannot be compiled / used in GrammarMatcher.
+   *
+   * @param {string} ebnfString The EBNF grammar string to be converted.
+   * @param {string} [rootRule="root"] The name of the root rule. Default: "root".
+   * @returns {Grammar} The unnormalized Grammar object converted from the input BNF grammar string.
+   */
+  static async ebnfToGrammarNoNormalization(
+    ebnfString: string,
+    rootRule: string = "root"
+  ): Promise<Grammar> {
+    await asyncInitBinding();
+    return new Grammar(new binding.EBNFToGrammarNoNormalization(ebnfString, rootRule));
   }
 }
 
@@ -137,6 +156,7 @@ export class Grammar {
    * format of the schema of a JSON file. We will parse the schema and generate a BNF grammar.
    *
    * @param {string} schema The schema string.
+   * @param {boolean} [any_whitespace=true] Whether to ignore the indentation
    * @param {number} [indent=2] The number of spaces for indentation. If -1, the grammar will
    * enforce the output to be in one line.
    * @param {[string, string]} [separators] Two separators that will be enforced by the grammar:
@@ -150,9 +170,10 @@ export class Grammar {
    */
   static async fromJSONSchema(
     schema: string,
+    any_whitespace = true,
     indent = 2,
     separators?: [string, string],
-    strictMode = true
+    strictMode = true,
   ): Promise<Grammar> {
     // TODO(Charlie): Add support for separators, which requires binding std::pair
     // in emscripten
@@ -167,8 +188,17 @@ export class Grammar {
     // This is a workaround to Typescript not being able to express Optional value like Python; if
     // user specifies indent to be undefined, it still becomes 2.
     let optionalIndent: number | undefined = indent == -1 ? undefined : indent;
+    // print_converted_ebnf is always false for the web version
+    const print_converted_ebnf = false;
     return new Grammar(
-      new binding.Grammar.FromJSONSchema(schema, optionalIndent, separators, strictMode));
+      new binding.Grammar.FromJSONSchema(
+        schema,
+        any_whitespace,
+        optionalIndent,
+        separators,
+        strictMode,
+        print_converted_ebnf,
+      ));
   }
 
   /**
@@ -334,6 +364,7 @@ export class GrammarCompiler {
    * format of the schema of a JSON file. We will parse the schema and generate a BNF grammar.
    *
    * @param {string} schema The schema string.
+   * @param {boolean} [any_whitespace=true] Whether to ignore the indentation
    * @param {number} [indent=2] The number of spaces for indentation. If -1, the grammar will
    * enforce the output to be in one line.
    * @param {[string, string]} [separators] Two separators that will be enforced by the grammar:
@@ -347,6 +378,7 @@ export class GrammarCompiler {
    */
   async compileJSONSchema(
     schema: string,
+    any_whitespace = true,
     indent = 2,
     separators?: [string, string],
     strictMode = true
@@ -365,7 +397,7 @@ export class GrammarCompiler {
     // user specifies indent to be undefined, it still becomes 2.
     let optionalIndent: number | undefined = indent == -1 ? undefined : indent;
     return new CompiledGrammar(
-      this.handle.CompileJSONSchema(schema, optionalIndent, separators, strictMode));
+      this.handle.CompileJSONSchema(schema, any_whitespace, optionalIndent, separators, strictMode));
   }
 
   /**
