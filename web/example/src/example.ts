@@ -1,4 +1,4 @@
-import { Grammar, GrammarMatcher, TokenizerInfo, GrammarCompiler, CompiledGrammar, Testings } from "@mlc-ai/web-xgrammar"
+import { Grammar, StructuralTagItem, GrammarMatcher, TokenizerInfo, GrammarCompiler, CompiledGrammar, Testings } from "@mlc-ai/web-xgrammar"
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 import { Type, Static } from "@sinclair/typebox";
 
@@ -164,10 +164,89 @@ async function jsonSchemaExample() {
   grammarMatcher.dispose();
 }
 
+async function structuralTagExample() {
+  console.log("Running Structural Tag Example");
+
+  // 1. Define the schema for our function using typebox
+  const weatherSchema = Type.Object({
+    city: Type.String(),
+    is_celsius: Type.Boolean()
+  });
+
+  // 2. Create the structural tag items for our function
+  const tags = [
+    new StructuralTagItem(
+      "<function=get_weather>",
+      weatherSchema,
+      "</function>"
+    )
+  ];
+
+  // 3. Define triggers that will activate our grammar
+  const triggers = ["<function="];
+
+  // 4. Load tokenizer
+  const tokenizerUrl = "https://huggingface.co/mlc-ai/Llama-3.1-8B-Instruct-q4f16_1-MLC/raw/main/tokenizer.json";
+  const jsonBuffer = await (await fetch(tokenizerUrl)).arrayBuffer();
+  const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
+  
+  // 5. Get encoded vocabulary
+  const encodedVocab = [];
+  const vocabSize = tokenizer.getVocabSize();
+  for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
+    encodedVocab.push(tokenizer.idToToken(tokenId));
+  }
+  
+  // 6. Create tokenizer info
+  const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+    encodedVocab, 
+    "byte_level", 
+    false
+  );
+  
+  // 7. Create compiler and compile the structural tag grammar
+  const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+  const compiledGrammar = await compiler.compileStructuralTag(tags, triggers);
+  
+  // 8. Create the grammar matcher
+  const matcher = await GrammarMatcher.createGrammarMatcher(compiledGrammar);
+  
+  // 9. Test with sample input
+  const testInput = `I need to check the weather.<function=get_weather>{"city": "New York", "is_celsius": false}</function> Thanks!`;
+  console.log("Testing with input:", testInput);
+  
+  // 10. Process the input character by character
+  const encodedTokens = tokenizer.encode(testInput);
+  for (let i = 0; i < encodedTokens.length; i++) {
+    const bitmask = await matcher.getNextTokenBitmask();
+    // For debugging, we can check the rejected token IDs from the mask
+    const rejectedIDs = await Testings.debugGetMaskedTokensFromBitmask(
+      bitmask,
+      tokenizerInfo.getVocabSize()
+    );
+
+    const curToken = encodedTokens[i];
+    const accepted = matcher.acceptToken(curToken);
+    if (!accepted) {
+      throw Error("Expect token to be accepted");
+    }
+  }
+  
+  console.log("Input processed successfully");
+  
+  // 11. Clean up
+  matcher.dispose();
+  compiledGrammar.dispose();
+  compiler.dispose();
+  tokenizerInfo.dispose();
+  
+  console.log("Structural Tag Example completed");
+}
 
 async function testAll() {
   await jsonExample();
   await jsonSchemaExample();
+  await structuralTagExample();
 }
 
 testAll();

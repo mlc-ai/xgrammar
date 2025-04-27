@@ -9,6 +9,35 @@ async function asyncInitBinding() {
 }
 
 /**
+ * A structural tag item used in structural tag grammar creation.
+ */
+export class StructuralTagItem {
+  /**
+   * @param {string} begin The begin tag.
+   * @param {string} schema The JSON schema string. Can be a stringified JSON schema or a JSON object.
+   * @param {string} end The end tag.
+   */
+  constructor(
+    public begin: string,
+    public schema: string | object,
+    public end: string
+  ) {}
+
+  /**
+   * Convert the schema to a string representation.
+   * 
+   * @returns {string} The schema as a JSON string.
+   */
+  getSchemaAsString(): string {
+    if (typeof this.schema === 'string') {
+      return this.schema;
+    } else {
+      return JSON.stringify(this.schema);
+    }
+  }
+}
+
+/**
  * Various testing methods that are not optimized for performance.
  */
 export class Testings {
@@ -92,6 +121,32 @@ export class Testings {
   ): Promise<Grammar> {
     await asyncInitBinding();
     return new Grammar(new binding.EBNFToGrammarNoNormalization(ebnfString, rootRule));
+  }
+
+  /**
+   * Given a grammar and an input string, check if the grammar accepts the input string.
+   * No tokenizer information is needed. Only for testing purposes.
+   */
+  static async isGrammarAcceptString(
+    grammar: Grammar,
+    inputString: string,
+    debugPrint: boolean = false,
+  ): Promise<boolean> {
+    await asyncInitBinding();
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo([]);
+    const grammarCompiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo, false);
+    const compiledGrammar = await grammarCompiler.compileGrammar(grammar);
+    const matcher = await GrammarMatcher.createGrammarMatcher(compiledGrammar, undefined, true);
+    const accepted = matcher._debugAcceptString(inputString, debugPrint);
+    const isTerminated = matcher.isTerminated();
+    matcher.dispose();
+    compiledGrammar.dispose();
+    grammarCompiler.dispose();
+    tokenizerInfo.dispose();
+    if (!accepted) {
+      return false;
+    }
+    return isTerminated;
   }
 }
 
@@ -208,6 +263,69 @@ export class Grammar {
   toString(): string {
     return this.handle.ToString();
   }
+
+  /**
+   * Create a grammar from structural tags. The structural tag handles the dispatching
+   * of different grammars based on the tags and triggers: it initially allows any output,
+   * until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
+   * is encountered, the grammar will allow any following output, until the next trigger is
+   * encountered.
+
+   * The tags parameter is used to specify the output pattern. It is especially useful for LLM
+   * function calling, where the pattern is:
+   * <function=func_name>{"arg1": ..., "arg2": ...}</function>.
+   * This pattern consists of three parts: a begin tag (<function=func_name>), a parameter list
+   * according to some schema ({"arg1": ..., "arg2": ...}), and an end tag (</function>). This
+   * pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag.
+   * The structural tag is able to handle multiple such patterns by passing them into multiple
+   * tags.
+
+   * The triggers parameter is used to trigger the dispatching of different grammars. The trigger
+   * should be a prefix of a provided begin tag. When the trigger is encountered, the
+   * corresponding tag should be used to constrain the following output. There can be multiple
+   * tags matching the same trigger. Then if the trigger is encountered, the following output
+   * should match one of the tags. For example, in function calling, the triggers can be
+   * ["<function="]. Then if "<function=" is encountered, the following output must match one
+   * of the tags (e.g. <function=get_weather>{"city": "Beijing"}</function>).
+
+   * The corrrespondence of tags and triggers is automatically determined: all tags with the
+   * same trigger will be grouped together. User should make sure any trigger is not a prefix
+   * of another trigger: then the corrrespondence of tags and triggers will be ambiguous.
+
+   * To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
+   * structural tag will generate a mask for each token. When the trigger is not encountered,
+   * the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
+   * False, meaning no token is masked). When a trigger is encountered, the mask should be
+   * enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
+   * output logits.
+
+   * The benefit of this method is the token boundary between tags and triggers is automatically
+   * handled. The user does not need to worry about the token boundary.
+   * 
+   * @param {StructuralTagItem[]} tags The structural tags containing begin/schema/end.
+   * @param {string[]} triggers The list of trigger strings to match against.
+   * @returns {Grammar} The grammar created from structural tags.
+   */
+  static async fromStructuralTag(tags: StructuralTagItem[], triggers: string[]): Promise<Grammar> {
+    await asyncInitBinding();
+    
+    // Convert tags to arrays of [begin, schema, end]
+    const tagArrays: string[][] = tags.map(tag => [
+      tag.begin, 
+      tag.getSchemaAsString(), 
+      tag.end
+    ]);
+    
+    const tagVec = binding.vecVectorStringFromJSArray(tagArrays);
+    const triggersVec = binding.vecStringFromJSArray(triggers);
+    
+    try {
+      return new Grammar(binding.Grammar.FromStructuralTag(tagVec, triggersVec));
+    } finally {
+      tagVec.delete();
+      triggersVec.delete();
+    }
+  }
 }
 
 /**
@@ -262,8 +380,8 @@ export class TokenizerInfo {
    */
   static async createTokenizerInfo(
     encodedVocab: string[],
-    vocabType: string,
-    prependSpaceInTokenization: boolean,
+    vocabType: string = "raw",
+    prependSpaceInTokenization: boolean = false,
     vocabSize?: number,
     stopTokenIds?: number[] | number,
   ): Promise<TokenizerInfo> {
@@ -434,6 +552,34 @@ export class GrammarCompiler {
       return new CompiledGrammar(this.handle.CompileGrammar(grammarObj.handle));
     } else {
       return new CompiledGrammar(this.handle.CompileGrammar(grammar.handle));
+    }
+  }
+
+  /**
+   * Compile a grammar from structural tags. See Grammar.fromStructuralTag() for more details.
+   * 
+   * @param {StructuralTagItem[]} tags The structural tags containing begin/schema/end.
+   * @param {string[]} triggers The list of trigger strings to match against.
+   * @returns {CompiledGrammar} The compiled grammar.
+   */
+  async compileStructuralTag(tags: StructuralTagItem[], triggers: string[]): Promise<CompiledGrammar> {
+    await asyncInitBinding();
+    
+    // Convert tags to arrays of [begin, schema, end]
+    const tagArrays: string[][] = tags.map(tag => [
+      tag.begin, 
+      tag.getSchemaAsString(), 
+      tag.end
+    ]);
+    
+    const tagVec = binding.vecVectorStringFromJSArray(tagArrays);
+    const triggersVec = binding.vecStringFromJSArray(triggers);
+    
+    try {
+      return new CompiledGrammar(this.handle.CompileStructuralTag(tagVec, triggersVec));
+    } finally {
+      tagVec.delete();
+      triggersVec.delete();
     }
   }
 }

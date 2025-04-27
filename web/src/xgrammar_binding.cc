@@ -34,6 +34,46 @@ void LogMessageImpl(const std::string& file, int lineno, int level, const std::s
   std::cout << level_strings_[level] << file << ":" << lineno << ": " << message << std::endl;
 }
 
+// Add new functions for structural tag support
+/*!
+ * \brief Convert vector-based tag representation to StructuralTagItem objects and call Grammar::FromStructuralTag.
+ */
+Grammar Grammar_FromStructuralTag(
+    const std::vector<std::vector<std::string>>& tags,
+    const std::vector<std::string>& triggers
+) {
+  std::vector<StructuralTagItem> tags_objects;
+  tags_objects.reserve(tags.size());
+  for (const auto& tag : tags) {
+    if (tag.size() >= 3) {
+      tags_objects.emplace_back(
+          StructuralTagItem{tag[0], tag[1], tag[2]}
+      );
+    }
+  }
+  return Grammar::FromStructuralTag(tags_objects, triggers);
+}
+
+/*!
+ * \brief Convert vector-based tag representation to StructuralTagItem objects and call compiler.CompileStructuralTag.
+ */
+CompiledGrammar GrammarCompiler_CompileStructuralTag(
+    GrammarCompiler& compiler,
+    const std::vector<std::vector<std::string>>& tags,
+    const std::vector<std::string>& triggers
+) {
+  std::vector<StructuralTagItem> tags_objects;
+  tags_objects.reserve(tags.size());
+  for (const auto& tag : tags) {
+    if (tag.size() >= 3) {
+      tags_objects.emplace_back(
+          StructuralTagItem{tag[0], tag[1], tag[2]}
+      );
+    }
+  }
+  return compiler.CompileStructuralTag(tags_objects, triggers);
+}
+
 }  // namespace xgrammar
 
 using namespace emscripten;
@@ -121,6 +161,25 @@ emscripten::val vecIntToView(const std::vector<int>& vec) {
   return emscripten::val(typed_memory_view(vec.size(), vec.data()));
 }
 
+// Specialized implementation for vector<vector<string>>
+std::vector<std::vector<std::string>> vecFromJSArray(
+    const emscripten::val& js_array) {
+  std::vector<std::vector<std::string>> vec;
+  const auto l = js_array["length"].as<unsigned>();
+  vec.reserve(l);
+  for (unsigned i = 0; i < l; ++i) {
+    auto inner_array = js_array[i];
+    const auto inner_l = inner_array["length"].as<unsigned>();
+    std::vector<std::string> inner_vec;
+    inner_vec.reserve(inner_l);
+    for (unsigned j = 0; j < inner_l; ++j) {
+      inner_vec.push_back(inner_array[j].as<std::string>());
+    }
+    vec.push_back(inner_vec);
+  }
+  return vec;
+}
+
 EMSCRIPTEN_BINDINGS(xgrammar) {
   // Register std::optional used in Grammar::FromJSONSchema
   register_optional<int>();
@@ -139,6 +198,13 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   function(
       "vecIntFromJSArray",
       select_overload<std::vector<int>(const emscripten::val&)>(&vecFromJSArray)
+  );
+
+  // Register std::vector<std::vector<std::string>> for structural tag support
+  register_vector<std::vector<std::string>>("VectorVectorString");
+  function(
+      "vecVectorStringFromJSArray",
+      select_overload<std::vector<std::vector<std::string>>(const emscripten::val&)>(&vecFromJSArray)
   );
 
   // Register view so we can read std::vector<int32_t> as Int32Array in JS without copying
@@ -162,7 +228,8 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("ToString", &Grammar::ToString)
       .class_function("FromEBNF", &Grammar::FromEBNF)
       .class_function("FromJSONSchema", &Grammar::FromJSONSchema)
-      .class_function("BuiltinJSONGrammar", &Grammar::BuiltinJSONGrammar);
+      .class_function("BuiltinJSONGrammar", &Grammar::BuiltinJSONGrammar)
+      .class_function("FromStructuralTag", &Grammar_FromStructuralTag);
 
   class_<TokenizerInfo>("TokenizerInfo")
       .constructor(&TokenizerInfo_Init)
@@ -178,6 +245,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("CompileJSONSchema", &GrammarCompiler::CompileJSONSchema)
       .function("CompileBuiltinJSONGrammar", &GrammarCompiler::CompileBuiltinJSONGrammar)
       .function("CompileGrammar", &GrammarCompiler::CompileGrammar)
+      .function("CompileStructuralTag", &GrammarCompiler_CompileStructuralTag)
       .function("ClearCache", &GrammarCompiler::ClearCache);
 
   class_<GrammarMatcher>("GrammarMatcher")

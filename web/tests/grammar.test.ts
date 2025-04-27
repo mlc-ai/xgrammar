@@ -4,7 +4,7 @@
  * thoroughly since that is done in `tests/python`.
  */
 import { describe, expect, test } from "@jest/globals";
-import { Grammar, GrammarCompiler, CompiledGrammar, TokenizerInfo, GrammarMatcher, Testings } from "..";
+import { Grammar, GrammarCompiler, CompiledGrammar, TokenizerInfo, GrammarMatcher, Testings, StructuralTagItem } from "..";
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 
 async function getTokenizerInfoFromUrl(tokenizerUrl: string, vocabType: string, prependSpace: boolean): Promise<TokenizerInfo> {
@@ -619,4 +619,199 @@ describe("Test json schema E2E", () => {
     expect(matcher.isTerminated()).toEqual(true);
     tokenizerInfo.dispose();
   })
+});
+
+// Identical to `test_grammar_matcher_structural_tag.py`
+describe("Test Structural Tag", () => {
+  // Define simple schemas for testing
+  const schema1 = {
+    properties: {
+      arg1: { type: "string" },
+      arg2: { type: "integer" }
+    },
+    required: ["arg1", "arg2"],
+    type: "object"
+  };
+
+  const schema2 = {
+    properties: {
+      arg3: { type: "number" },
+      arg4: { 
+        type: "array",
+        items: { type: "string" }
+      }
+    },
+    required: ["arg3", "arg4"],
+    type: "object"
+  };
+
+  const expected_grammar_test_structural_tag = String.raw`root ::= TagDispatch(("<function=f", trigger_rule_0), ("<function=g", trigger_rule_1))
+trigger_rule_0 ::= (("1>" root_1 "</function>") | ("2>" root_2 "</function>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
+basic_string_sub ::= (("\"") | ([^\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*)) (=([ \n\t]* "}"))
+basic_string ::= (("\"" basic_string_sub)) (=([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_1))
+basic_string_sub_1 ::= (("\"") | ([^\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*)) (=([ \n\t]* "}"))
+basic_string_1 ::= (("\"" basic_string_sub_1)) (=([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer_2 [ \n\t]* "}"))
+root_2 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer_2 [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
+trigger_rule_1 ::= ((">" root_3 "</function>"))
+basic_escape_2 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_2))
+basic_string_sub_2 ::= (("\"") | ([^\"\\\r\n] basic_string_sub_2) | ("\\" basic_escape_2 basic_string_sub_2)) (=([ \n\t]* [,}\]:]))
+basic_number ::= ((basic_number_choice basic_number_3 basic_number_6)) (=([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "}"))
+basic_string_2 ::= (("\"" basic_string_sub_2))
+root_prop_1 ::= (("[" [ \n\t]* basic_string_2 root_prop_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]")) (=([ \n\t]* "}"))
+root_3 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number [ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "}"))
+basic_number_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2)) (=(basic_number_6))
+basic_number_4 ::= ("" | ([+\-])) (=(basic_number_5))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1)) (=([ \n\t]* "]"))
+basic_number_choice ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
+`;
+  
+  // Identical to `test_simple()` in `test_grammar_matcher_structural_tag.py`
+  test("test_simple()", async () => {
+    const grammar_str = String.raw`root ::= TagDispatch(("tag1", rule1), ("tag2", rule2))
+rule1 ::= "abcd"
+rule2 ::= "efg"
+`;
+    const grammar = await Grammar.fromEBNF(grammar_str);
+    expect(await Testings.isGrammarAcceptString(grammar, "tag1abcd")).toEqual(true);
+    expect(await Testings.isGrammarAcceptString(grammar, "tag1abcdtag2efg")).toEqual(true);
+    expect(await Testings.isGrammarAcceptString(grammar, "tag1abcdqqqqtag2efg")).toEqual(true);
+    expect(await Testings.isGrammarAcceptString(grammar, "tag1abc")).toEqual(false);
+    expect(await Testings.isGrammarAcceptString(grammar, "tag1abce")).toEqual(false);
+    expect(await Testings.isGrammarAcceptString(grammar, "ttag1abd")).toEqual(false);
+  });
+
+  // Identical to `test_structural_tag()` in `test_grammar_matcher_structural_tag.py`
+  test("Test Grammar.fromStructuralTag", async () => {
+    // Create structural tags
+    const tags = [
+      new StructuralTagItem("<function=f1>", schema1, "</function>"),
+      new StructuralTagItem("<function=f2>", schema1, "</function>"),
+      new StructuralTagItem("<function=g>", schema2, "</function>")
+    ];
+    
+    // Define triggers. In real cases, we should use one trigger: "<function=", and dispatch to two
+    // tags. Here we use two triggers for testing.
+    const triggers = ["<function=f", "<function=g"];
+    
+    // Create grammar
+    const grammar = await Grammar.fromStructuralTag(tags, triggers);
+
+    const accepted_inputs = [
+      '<function=f1>{"arg1": "abc", "arg2": 1}</function>',
+      '<function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>',
+      '<function=f2>{"arg1": "abc", "arg2": 1}</function><function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>',
+      'hhhh<function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>haha<function=f1>{"arg1": "abc", "arg2": 1}</function>123',
+    ];
+
+    for (const input of accepted_inputs) {
+      expect(await Testings.isGrammarAcceptString(grammar, input)).toEqual(true);
+    }
+
+    grammar.dispose();
+  });
+
+  // Identical to `test_structural_tag_compiler()` in `test_grammar_matcher_structural_tag.py`
+  test("Test GrammarCompiler.compileStructuralTag", async () => {
+    // Create structural tags
+    const tags = [
+      new StructuralTagItem("<function=f1>", schema1, "</function>"),
+      new StructuralTagItem("<function=f2>", schema1, "</function>"),
+      new StructuralTagItem("<function=g>", schema2, "</function>")
+    ];
+
+    // Define triggers
+    const triggers = ["<function=f", "<function=g"];
+
+    // Create tokenizer info
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo([]);
+
+    // Create compiler
+    const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+
+    // Compile grammar
+    const compiledGrammar = await compiler.compileStructuralTag(tags, triggers);
+
+    // Check that the compiled grammar was created successfully
+    expect(compiledGrammar.grammar().toString()).toEqual(expected_grammar_test_structural_tag);
+
+    // Cleanup
+    tokenizerInfo.dispose();
+    compiledGrammar.dispose();
+    compiler.dispose();
+  });
+
+  // Identical to `test_structural_tag_mask_gen()` in `test_grammar_matcher_structural_tag.py`
+  test("E2E test of structural tag with GrammarMatcher", async () => {
+    // Create structural tags
+    const tags = [
+      new StructuralTagItem("<function=f>", schema1, "</function>"),
+      new StructuralTagItem("<function=g>", schema2, "</function>")
+    ];
+    const tokenizerUrl = "https://huggingface.co/mlc-ai/Llama-3.1-8B-Instruct-q4f16_1-MLC/raw/main/tokenizer.json";
+    
+    // Define triggers, both are fine
+    const triggers = ["<function="];
+    // const triggers = ["<function=f", "<function=g"];
+
+    const jsonBuffer = await (await fetch(tokenizerUrl)).arrayBuffer();
+    const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
+    const tokenizerInfo = await getTokenizerInfoFromUrl(
+      tokenizerUrl,
+      "byte_level",
+      false,
+    );
+
+    const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+    const compiledGrammar = await compiler.compileStructuralTag(tags, triggers);
+    const matcher = await GrammarMatcher.createGrammarMatcher(compiledGrammar);
+
+    // Test input string
+    const accepted_input = String.raw`hhhh<function=g>{"arg3": 1.23, "arg4": ["a", "b", "c"]}</function>
+haha<function=f>{"arg1": "abc", "arg2": 1}</function>123`;
+    // Convert string to Uint8Array for bytes
+    const input_bytes = new TextEncoder().encode(accepted_input);
+
+    for (let i = 0; i < input_bytes.length; i++) {
+      const char = input_bytes[i];
+
+      // Get bitmask for the next token
+      const bitmask = await matcher.getNextTokenBitmask();
+      const rejected_token_ids = (await Testings.debugGetMaskedTokensFromBitmask(
+        bitmask, tokenizerInfo.getVocabSize()
+      ));
+
+      // Check that the next token is not rejected
+      const token_id_for_next_char = tokenizer.encode(String.raw`${char}`);
+      expect(token_id_for_next_char.length).toEqual(1);
+      expect(rejected_token_ids.indexOf(token_id_for_next_char[0])).toEqual(-1);
+
+      // Accept the next token
+      const accepted = matcher.acceptToken(char);
+      expect(accepted).toEqual(true);
+    }
+
+    // Final verification - check that EOS token is allowed
+    const final_bitmask = await matcher.getNextTokenBitmask();
+    const final_rejected_tokens = (await Testings.debugGetMaskedTokensFromBitmask(
+      final_bitmask, tokenizerInfo.getVocabSize()
+    ));
+    expect(final_rejected_tokens.indexOf(128001)).toEqual(-1);  // stop token not rejected
+
+    // Cleanup
+    tokenizerInfo.dispose();
+    compiledGrammar.dispose();
+    compiler.dispose();
+    matcher.dispose();
+  });
 });
