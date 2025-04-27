@@ -189,32 +189,32 @@ async function structuralTagExample() {
   const tokenizerUrl = "https://huggingface.co/mlc-ai/Llama-3.1-8B-Instruct-q4f16_1-MLC/raw/main/tokenizer.json";
   const jsonBuffer = await (await fetch(tokenizerUrl)).arrayBuffer();
   const tokenizer = await Tokenizer.fromJSON(jsonBuffer);
-  
+
   // 5. Get encoded vocabulary
   const encodedVocab = [];
   const vocabSize = tokenizer.getVocabSize();
   for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
     encodedVocab.push(tokenizer.idToToken(tokenId));
   }
-  
+
   // 6. Create tokenizer info
   const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
-    encodedVocab, 
-    "byte_level", 
+    encodedVocab,
+    "byte_level",
     false
   );
-  
+
   // 7. Create compiler and compile the structural tag grammar
   const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
   const compiledGrammar = await compiler.compileStructuralTag(tags, triggers);
-  
+
   // 8. Create the grammar matcher
   const matcher = await GrammarMatcher.createGrammarMatcher(compiledGrammar);
-  
+
   // 9. Test with sample input
   const testInput = `I need to check the weather.<function=get_weather>{"city": "New York", "is_celsius": false}</function> Thanks!`;
   console.log("Testing with input:", testInput);
-  
+
   // 10. Process the input character by character
   const encodedTokens = tokenizer.encode(testInput);
   for (let i = 0; i < encodedTokens.length; i++) {
@@ -231,15 +231,15 @@ async function structuralTagExample() {
       throw Error("Expect token to be accepted");
     }
   }
-  
+
   console.log("Input processed successfully");
-  
+
   // 11. Clean up
   matcher.dispose();
   compiledGrammar.dispose();
   compiler.dispose();
   tokenizerInfo.dispose();
-  
+
   console.log("Structural Tag Example completed");
 }
 

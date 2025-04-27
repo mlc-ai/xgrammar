@@ -636,7 +636,7 @@ describe("Test Structural Tag", () => {
   const schema2 = {
     properties: {
       arg3: { type: "number" },
-      arg4: { 
+      arg4: {
         type: "array",
         items: { type: "string" }
       }
@@ -675,7 +675,7 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1)) (=([ \n\t]* "]"))
 basic_number_choice ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
 `;
-  
+
   // Identical to `test_simple()` in `test_grammar_matcher_structural_tag.py`
   test("test_simple()", async () => {
     const grammar_str = String.raw`root ::= TagDispatch(("tag1", rule1), ("tag2", rule2))
@@ -699,11 +699,11 @@ rule2 ::= "efg"
       new StructuralTagItem("<function=f2>", schema1, "</function>"),
       new StructuralTagItem("<function=g>", schema2, "</function>")
     ];
-    
+
     // Define triggers. In real cases, we should use one trigger: "<function=", and dispatch to two
     // tags. Here we use two triggers for testing.
     const triggers = ["<function=f", "<function=g"];
-    
+
     // Create grammar
     const grammar = await Grammar.fromStructuralTag(tags, triggers);
 
@@ -759,7 +759,7 @@ rule2 ::= "efg"
       new StructuralTagItem("<function=g>", schema2, "</function>")
     ];
     const tokenizerUrl = "https://huggingface.co/mlc-ai/Llama-3.1-8B-Instruct-q4f16_1-MLC/raw/main/tokenizer.json";
-    
+
     // Define triggers, both are fine
     const triggers = ["<function="];
     // const triggers = ["<function=f", "<function=g"];

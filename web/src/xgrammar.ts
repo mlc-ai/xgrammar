@@ -21,7 +21,7 @@ export class StructuralTagItem {
     public begin: string,
     public schema: string | object,
     public end: string
-  ) {}
+  ) { }
 
   /**
    * Convert the schema to a string representation.
@@ -308,17 +308,17 @@ export class Grammar {
    */
   static async fromStructuralTag(tags: StructuralTagItem[], triggers: string[]): Promise<Grammar> {
     await asyncInitBinding();
-    
+
     // Convert tags to arrays of [begin, schema, end]
     const tagArrays: string[][] = tags.map(tag => [
-      tag.begin, 
-      tag.getSchemaAsString(), 
+      tag.begin,
+      tag.getSchemaAsString(),
       tag.end
     ]);
-    
+
     const tagVec = binding.vecVectorStringFromJSArray(tagArrays);
     const triggersVec = binding.vecStringFromJSArray(triggers);
-    
+
     try {
       return new Grammar(binding.Grammar.FromStructuralTag(tagVec, triggersVec));
     } finally {
@@ -545,7 +545,7 @@ export class GrammarCompiler {
    */
   async compileGrammar(grammar: Grammar): Promise<CompiledGrammar>;
   async compileGrammar(grammar: string, rootRule?: string): Promise<CompiledGrammar>;
-  async compileGrammar(grammar: string | Grammar, rootRule: string="root"): Promise<CompiledGrammar> {
+  async compileGrammar(grammar: string | Grammar, rootRule: string = "root"): Promise<CompiledGrammar> {
     await asyncInitBinding();
     if (typeof grammar === "string") {
       const grammarObj = await Grammar.fromEBNF(grammar, rootRule);
@@ -564,17 +564,17 @@ export class GrammarCompiler {
    */
   async compileStructuralTag(tags: StructuralTagItem[], triggers: string[]): Promise<CompiledGrammar> {
     await asyncInitBinding();
-    
+
     // Convert tags to arrays of [begin, schema, end]
     const tagArrays: string[][] = tags.map(tag => [
-      tag.begin, 
-      tag.getSchemaAsString(), 
+      tag.begin,
+      tag.getSchemaAsString(),
       tag.end
     ]);
-    
+
     const tagVec = binding.vecVectorStringFromJSArray(tagArrays);
     const triggersVec = binding.vecStringFromJSArray(triggers);
-    
+
     try {
       return new CompiledGrammar(this.handle.CompileStructuralTag(tagVec, triggersVec));
     } finally {
