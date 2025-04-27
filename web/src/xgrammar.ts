@@ -25,7 +25,7 @@ export class StructuralTagItem {
 
   /**
    * Convert the schema to a string representation.
-   * 
+   *
    * @returns {string} The schema as a JSON string.
    */
   getSchemaAsString(): string {
@@ -279,7 +279,7 @@ export class Grammar {
    * pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag.
    * The structural tag is able to handle multiple such patterns by passing them into multiple
    * tags.
-
+   *
    * The triggers parameter is used to trigger the dispatching of different grammars. The trigger
    * should be a prefix of a provided begin tag. When the trigger is encountered, the
    * corresponding tag should be used to constrain the following output. There can be multiple
@@ -287,21 +287,21 @@ export class Grammar {
    * should match one of the tags. For example, in function calling, the triggers can be
    * ["<function="]. Then if "<function=" is encountered, the following output must match one
    * of the tags (e.g. <function=get_weather>{"city": "Beijing"}</function>).
-
+   *
    * The correspondence of tags and triggers is automatically determined: all tags with the
    * same trigger will be grouped together. User should make sure any trigger is not a prefix
    * of another trigger: then the correspondence of tags and triggers will be ambiguous.
-
+   *
    * To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
    * structural tag will generate a mask for each token. When the trigger is not encountered,
    * the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
    * False, meaning no token is masked). When a trigger is encountered, the mask should be
    * enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
    * output logits.
-
+   *
    * The benefit of this method is the token boundary between tags and triggers is automatically
    * handled. The user does not need to worry about the token boundary.
-   * 
+   *
    * @param {StructuralTagItem[]} tags The structural tags containing begin/schema/end.
    * @param {string[]} triggers The list of trigger strings to match against.
    * @returns {Grammar} The grammar created from structural tags.
@@ -557,7 +557,7 @@ export class GrammarCompiler {
 
   /**
    * Compile a grammar from structural tags. See Grammar.fromStructuralTag() for more details.
-   * 
+   *
    * @param {StructuralTagItem[]} tags The structural tags containing begin/schema/end.
    * @param {string[]} triggers The list of trigger strings to match against.
    * @returns {CompiledGrammar} The compiled grammar.
