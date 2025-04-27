@@ -36,26 +36,25 @@ void LogMessageImpl(const std::string& file, int lineno, int level, const std::s
 
 // Add new functions for structural tag support
 /*!
- * \brief Convert vector-based tag representation to StructuralTagItem objects and call Grammar::FromStructuralTag.
+ * \brief Convert vector-based tag representation to StructuralTagItem objects and call
+ * Grammar::FromStructuralTag.
  */
 Grammar Grammar_FromStructuralTag(
-    const std::vector<std::vector<std::string>>& tags,
-    const std::vector<std::string>& triggers
+    const std::vector<std::vector<std::string>>& tags, const std::vector<std::string>& triggers
 ) {
   std::vector<StructuralTagItem> tags_objects;
   tags_objects.reserve(tags.size());
   for (const auto& tag : tags) {
     if (tag.size() >= 3) {
-      tags_objects.emplace_back(
-          StructuralTagItem{tag[0], tag[1], tag[2]}
-      );
+      tags_objects.emplace_back(StructuralTagItem{tag[0], tag[1], tag[2]});
     }
   }
   return Grammar::FromStructuralTag(tags_objects, triggers);
 }
 
 /*!
- * \brief Convert vector-based tag representation to StructuralTagItem objects and call compiler.CompileStructuralTag.
+ * \brief Convert vector-based tag representation to StructuralTagItem objects and call
+ * compiler.CompileStructuralTag.
  */
 CompiledGrammar GrammarCompiler_CompileStructuralTag(
     GrammarCompiler& compiler,
@@ -66,9 +65,7 @@ CompiledGrammar GrammarCompiler_CompileStructuralTag(
   tags_objects.reserve(tags.size());
   for (const auto& tag : tags) {
     if (tag.size() >= 3) {
-      tags_objects.emplace_back(
-          StructuralTagItem{tag[0], tag[1], tag[2]}
-      );
+      tags_objects.emplace_back(StructuralTagItem{tag[0], tag[1], tag[2]});
     }
   }
   return compiler.CompileStructuralTag(tags_objects, triggers);
@@ -162,8 +159,7 @@ emscripten::val vecIntToView(const std::vector<int>& vec) {
 }
 
 // Specialized implementation for vector<vector<string>>
-std::vector<std::vector<std::string>> vecFromJSArray(
-    const emscripten::val& js_array) {
+std::vector<std::vector<std::string>> vecFromJSArray(const emscripten::val& js_array) {
   std::vector<std::vector<std::string>> vec;
   const auto l = js_array["length"].as<unsigned>();
   vec.reserve(l);
@@ -204,22 +200,24 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   register_vector<std::vector<std::string>>("VectorVectorString");
   function(
       "vecVectorStringFromJSArray",
-      select_overload<std::vector<std::vector<std::string>>(const emscripten::val&)>(&vecFromJSArray)
+      select_overload<std::vector<std::vector<std::string>>(const emscripten::val&)>(&vecFromJSArray
+      )
   );
 
   // Register view so we can read std::vector<int32_t> as Int32Array in JS without copying
   function("vecIntToView", &vecIntToView);
 
   // Testing methods
-  function("JSONSchemaToEBNF", 
-    // There are two JSONSchemaToEBNF, so we need to explicitly select the one with string input
-    select_overload<std::string(
-        const std::string&,
-        bool,
-        std::optional<int>,
-        std::optional<std::pair<std::string, std::string>>,
-        bool
-    )>(&JSONSchemaToEBNF)
+  function(
+      "JSONSchemaToEBNF",
+      // There are two JSONSchemaToEBNF, so we need to explicitly select the one with string input
+      select_overload<std::string(
+          const std::string&,
+          bool,
+          std::optional<int>,
+          std::optional<std::pair<std::string, std::string>>,
+          bool
+      )>(&JSONSchemaToEBNF)
   );
   function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);
   function("EBNFToGrammarNoNormalization", &_EBNFToGrammarNoNormalization);

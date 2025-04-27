@@ -232,9 +232,9 @@ class Grammar(XGRObject):
         ["<function="]. Then if "<function=" is encountered, the following output must match one
         of the tags (e.g. <function=get_weather>{"city": "Beijing"}</function>).
 
-        The corrrespondence of tags and triggers is automatically determined: all tags with the
+        The correspondence of tags and triggers is automatically determined: all tags with the
         same trigger will be grouped together. User should make sure any trigger is not a prefix
-        of another trigger: then the corrrespondence of tags and triggers will be ambiguous.
+        of another trigger: then the correspondence of tags and triggers will be ambiguous.
 
         To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
         structural tag will generate a mask for each token. When the trigger is not encountered,
