@@ -6,6 +6,7 @@
 #ifndef XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
 #define XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
 
+#include <picojson.h>
 #include <xgrammar/grammar.h>
 
 #include <cstddef>
@@ -19,6 +20,7 @@
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
 #include "support/utils.h"
+#include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
 
@@ -72,6 +74,8 @@ struct AdaptiveTokenMask {
 
   std::size_t MemorySize() const;
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask);
+
+  bool operator==(const AdaptiveTokenMask& rhs) const;
 };
 
 /*!
@@ -119,6 +123,16 @@ class CompiledGrammar::Impl {
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
 
   std::size_t MemorySize() const;
+
+  picojson::value SerializeToJSON() const;
+  static CompiledGrammar DeserializeFromJSON(
+      const picojson::value& value, const std::vector<std::string>& encoded_vocab = {}
+  );
+  static CompiledGrammar DeserializeFromJSON(
+      const picojson::value& value, const TokenizerInfo& tokenizer_info
+  );
+
+  bool operator==(const Impl& rhs) const;
 };
 
 }  // namespace xgrammar
