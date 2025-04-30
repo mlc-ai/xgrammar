@@ -1910,7 +1910,7 @@ void CompactFSMWithStartEnd::GetPossibleRules(const int& state, std::unordered_s
   return;
 }
 
-inline std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
+std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
   os << "FSM(num_nodes=" << fsm.NumNodes() << ", start=" << fsm.StartNode() << ", end=[";
   for (auto end = fsm.ends.begin(); end != fsm.ends.end(); ++end) {
     os << *end;
@@ -1939,7 +1939,7 @@ inline std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
   return os;
 }
 
-inline FSMWithStartEnd BuildTrie(
+FSMWithStartEnd BuildTrie(
     const std::vector<std::string>& patterns, std::vector<int32_t>* end_nodes
 ) {
   FSMWithStartEnd fsm(1);
