@@ -556,7 +556,7 @@ FSMWithStartEnd BuildTrie(
     const std::vector<std::string>& patterns, std::vector<int32_t>* end_nodes = nullptr
 );
 
-inline std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
+std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
 
 }  // namespace xgrammar
 
