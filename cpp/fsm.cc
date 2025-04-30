@@ -1910,6 +1910,35 @@ void CompactFSMWithStartEnd::GetPossibleRules(const int& state, std::unordered_s
   return;
 }
 
+std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
+  os << "FSM(num_nodes=" << fsm.NumNodes() << ", start=" << fsm.StartNode() << ", end=[";
+  for (auto end = fsm.ends.begin(); end != fsm.ends.end(); ++end) {
+    os << *end;
+    if (std::next(end) != fsm.ends.end()) {
+      os << ", ";
+    }
+  }
+  os << "], edges=[\n";
+  for (int i = 0; i < fsm.NumNodes(); ++i) {
+    os << i << ": [";
+    const auto& edges = fsm.fsm.edges[i];
+    for (int j = 0; j < static_cast<int>(edges.size()); ++j) {
+      const auto& edge = edges[j];
+      if (edge.min == edge.max) {
+        os << "(" << edge.min << ")->" << edge.target;
+      } else {
+        os << "(" << edge.min << ", " << edge.max << ")->" << edge.target;
+      }
+      if (j < static_cast<int>(edges.size()) - 1) {
+        os << ", ";
+      }
+    }
+    os << "]\n";
+  }
+  os << "])";
+  return os;
+}
+
 FSMWithStartEnd BuildTrie(
     const std::vector<std::string>& patterns, std::vector<int32_t>* end_nodes
 ) {
