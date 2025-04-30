@@ -23,8 +23,11 @@
 #include "support/union_find_set.h"
 
 namespace xgrammar {
+
 std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start);
+
 Result<std::pair<int, int>> CheckRepeat(const std::string& regex, int& start);
+
 void CompactFSM::GetEpsilonClosure(
     std::unordered_set<int>* state_set, std::unordered_set<int>* result
 ) const {
@@ -976,6 +979,7 @@ std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int sta
     }
   }
 }
+
 Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
     const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, const int& num_of_nodes_limited
 ) {
@@ -1160,6 +1164,7 @@ bool CompactFSMWithStartEnd::Check(const std::string& str) const {
   }
   return false;
 }
+
 bool FSMWithStartEnd::IsDFA() {
   if (is_dfa) {
     return true;
@@ -1588,6 +1593,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
   result.ends = new_ends;
   return Result<FSMWithStartEnd>::Ok(result);
 }
+
 Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
   RegexIR ir;
   using IRNode = std::variant<RegexIR::Node, char>;
@@ -1903,4 +1909,61 @@ void CompactFSMWithStartEnd::GetPossibleRules(const int& state, std::unordered_s
   }
   return;
 }
+
+inline std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
+  os << "FSM(num_nodes=" << fsm.NumNodes() << ", start=" << fsm.StartNode() << ", end=[";
+  for (auto end = fsm.ends.begin(); end != fsm.ends.end(); ++end) {
+    os << *end;
+    if (std::next(end) != fsm.ends.end()) {
+      os << ", ";
+    }
+  }
+  os << "], edges=[\n";
+  for (int i = 0; i < fsm.NumNodes(); ++i) {
+    os << i << ": [";
+    const auto& edges = fsm.fsm.edges[i];
+    for (int j = 0; j < static_cast<int>(edges.size()); ++j) {
+      const auto& edge = edges[j];
+      if (edge.min == edge.max) {
+        os << "(" << edge.min << ")->" << edge.target;
+      } else {
+        os << "(" << edge.min << ", " << edge.max << ")->" << edge.target;
+      }
+      if (j < static_cast<int>(edges.size()) - 1) {
+        os << ", ";
+      }
+    }
+    os << "]\n";
+  }
+  os << "])";
+  return os;
+}
+
+inline FSMWithStartEnd BuildTrie(
+    const std::vector<std::string>& patterns, std::vector<int32_t>* end_nodes = nullptr
+) {
+  FSMWithStartEnd fsm(1);
+  fsm.SetStartNode(0);
+  if (end_nodes) {
+    end_nodes->clear();
+  }
+  for (const auto& pattern : patterns) {
+    int current_node = 0;
+    for (const auto& ch : pattern) {
+      int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
+      int next_node = fsm.Transition(current_node, ch_int16);
+      if (next_node == FSMWithStartEnd::NO_TRANSITION) {
+        next_node = fsm.AddNode();
+        fsm.AddEdge(current_node, next_node, ch_int16, ch_int16);
+      }
+      current_node = next_node;
+    }
+    fsm.AddEndNode(current_node);
+    if (end_nodes) {
+      end_nodes->push_back(current_node);
+    }
+  }
+  return fsm;
+}
+
 }  // namespace xgrammar

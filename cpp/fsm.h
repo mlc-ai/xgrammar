@@ -28,28 +28,36 @@ struct FSMEdge {
     target is the target state id.
   */
   short min, max;
+
   int target;
+
   FSMEdge(const short& _min, const short& _max, const int& target);
+
   /*!
     \brief Check if the edge is an epsilon transition.
   */
   bool IsEpsilon() const;
+
   /*!
     \brief Check if the edge is a rule reference.
   */
   bool IsRuleRef() const;
+
   /*!
     \brief Get the rule id of the edge.
     \return The rule id of the edge.
     \throw std::runtime_error if the edge is not a rule reference.
   */
   short GetRefRuleId() const;
+
   /*!
     \brief Check if the edge is a character range.
   */
   bool IsCharRange() const;
 };
+
 class CompactFSM;
+
 class FSM {
  private:
   /*!
@@ -64,6 +72,7 @@ class FSM {
 
  public:
   using Edge = FSMEdge;
+
   /*!
     \brief Transform a FSM to a compact FSM.
     \return The compact FSM.
@@ -86,11 +95,12 @@ class FSM {
       bool is_closure = false,
       bool is_rule = false
   ) const;
+
   /*!
     \brief Return a copy of the FSM.
   */
   FSM Copy() const;
-  // The internal states are also public
+
   std::vector<std::vector<Edge>> edges;
 
   FSM() = default;
@@ -99,11 +109,13 @@ class FSM {
 };
 
 class FSMWithStartEnd {
- private:
  public:
   bool is_dfa = false;
+
   FSM fsm;
+
   int start;
+
   std::unordered_set<int> ends;
 
   /*!
@@ -125,41 +137,49 @@ class FSMWithStartEnd {
     \return The FSM that accepts rule1*.
   */
   FSMWithStartEnd MakeStar() const;
+
   /*!
     \brief Assume the FSM accepts rule1, then the FSM will accept rule1+.
     \return The FSM that accepts rule1+.
   */
   FSMWithStartEnd MakePlus() const;
+
   /*!
     \brief Assume the FSM accepts rule1, then the FSM will accept rule1?.
     \return The FSM that accepts rule1?.
   */
   FSMWithStartEnd MakeOptional() const;
+
   /*!
     \brief Transform the FSM to a DFA.
     \return The DFA.
   */
   FSMWithStartEnd ToDFA() const;
+
   /*!
     \brief Transform the FSM to accept the complement of the language.
     \return The complement FSM.
   */
   FSMWithStartEnd Not() const;
+
   /*!
     \brief Minimize the DFA.
     \return The minimized DFA.
   */
   FSMWithStartEnd MinimizeDFA() const;
+
   /*!
     \brief Return a copy of the FSM.
     \return The copy of the FSM.
   */
   FSMWithStartEnd Copy() const;
+
   /*!
     \brief Print the FSM.
     \return The string representation of the FSM.
   */
   std::string Print() const;
+
   /*!
     \brief Intersect the FSMs.
     \param lhs The left FSM.
@@ -169,6 +189,7 @@ class FSMWithStartEnd {
   static Result<FSMWithStartEnd> Intersect(
       const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, const int& num_of_nodes_limited = 1e6
   );
+
   /*!
     \brief Union the FSMs.
     \param fsms The FSMs to be unioned.
@@ -182,6 +203,7 @@ class FSMWithStartEnd {
     \return The concatenation of the FSMs.
   */
   static FSMWithStartEnd Concatenate(const std::vector<FSMWithStartEnd>& fsms);
+
   /*!
     \brief Check if the FSM accepts the string.
     \param str The input string.
@@ -195,8 +217,6 @@ class FSMWithStartEnd {
       fsm.edges.emplace_back();
     }
   }
-
-  /********************** Legacy Accessors **********************/
 
   inline static constexpr int NO_TRANSITION = -1;
 
@@ -231,8 +251,6 @@ class FSMWithStartEnd {
   /*! \brief Returns the total number of nodes in the FSM. */
   int NumNodes() const { return fsm.edges.size(); }
 
-  /********************** Legacy Modifiers **********************/
-
   /*!
    * \brief Adds a transition edge between states with a character range.
    * \param from The source state.
@@ -265,7 +283,6 @@ class FSMWithStartEnd {
    */
   void AddEndNode(int node) { ends.insert(node); }
 
-  /********************** Functions **********************/
   /*!
   \brief Check if the FSM is a DFA.
   \return True if the FSM is a DFA, false otherwise.
@@ -303,6 +320,7 @@ class FSMWithStartEnd {
 };
 
 class CompactFSM {
+ public:
   /*!
     \brief Get the epsilon closure of a state.
     \param state_set The current states.
@@ -313,7 +331,6 @@ class CompactFSM {
       std::unordered_set<int>* state_set, std::unordered_set<int>* result = nullptr
   ) const;
 
- public:
   /*!
    \brief Advance the FSM to the next state.
    \param from The current states.
@@ -323,7 +340,6 @@ class CompactFSM {
    \param is_closure Whether from is an epsilon closure.
    \param is_rule Whether the input value is a rule id.
   */
-
   void Advance(
       const std::vector<int>& from,
       int value,
@@ -337,25 +353,33 @@ class CompactFSM {
     \return The FSM.
   */
   FSM ToFSM();
+
   // The internal states are also public
   using Edge = FSMEdge;
 
   CSRArray<Edge> edges;
+
   friend class CompactFSMWithStartEnd;
 };
 
 class CompactFSMWithStartEnd {
  public:
   bool is_dfa = false;
+
   CompactFSM fsm;
+
   int start;
+
   std::unordered_set<int> ends;
+
   using Edge = FSMEdge;
+
   /*!
     \brief Print the FSM.
     \return The string representation of the FSM.
   */
   std::string Print() const;
+
   /*!
     \brief Check if the FSM accepts the string.
     \param str The input string.
@@ -427,104 +451,61 @@ class CompactFSMWithStartEnd {
 */
 Result<FSMWithStartEnd> RegexToFSM(const std::string& regex);
 
-inline std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
-  os << "FSM(num_nodes=" << fsm.NumNodes() << ", start=" << fsm.StartNode() << ", end=[";
-  for (auto end = fsm.ends.begin(); end != fsm.ends.end(); ++end) {
-    os << *end;
-    if (std::next(end) != fsm.ends.end()) {
-      os << ", ";
-    }
-  }
-  os << "], edges=[\n";
-  for (int i = 0; i < fsm.NumNodes(); ++i) {
-    os << i << ": [";
-    const auto& edges = fsm.fsm.edges[i];
-    for (int j = 0; j < static_cast<int>(edges.size()); ++j) {
-      const auto& edge = edges[j];
-      if (edge.min == edge.max) {
-        os << "(" << edge.min << ")->" << edge.target;
-      } else {
-        os << "(" << edge.min << ", " << edge.max << ")->" << edge.target;
-      }
-      if (j < static_cast<int>(edges.size()) - 1) {
-        os << ", ";
-      }
-    }
-    os << "]\n";
-  }
-  os << "])";
-  return os;
-}
-
-inline FSMWithStartEnd BuildTrie(
-    const std::vector<std::string>& patterns, std::vector<int32_t>* end_nodes = nullptr
-) {
-  FSMWithStartEnd fsm(1);
-  fsm.SetStartNode(0);
-  if (end_nodes) {
-    end_nodes->clear();
-  }
-  for (const auto& pattern : patterns) {
-    int current_node = 0;
-    for (const auto& ch : pattern) {
-      int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
-      int next_node = fsm.Transition(current_node, ch_int16);
-      if (next_node == FSMWithStartEnd::NO_TRANSITION) {
-        next_node = fsm.AddNode();
-        fsm.AddEdge(current_node, next_node, ch_int16, ch_int16);
-      }
-      current_node = next_node;
-    }
-    fsm.AddEndNode(current_node);
-    if (end_nodes) {
-      end_nodes->push_back(current_node);
-    }
-  }
-  return fsm;
-}
-
 class RegexIR {
  public:
   struct Leaf;
+
   struct Symbol;
+
   struct Union;
+
   struct Bracket;
+
   struct Repeat;
+
   static constexpr int REPEATNOUPPERBOUND = -1;
+
   using Node = std::variant<Leaf, Symbol, Union, Bracket, Repeat>;
+
   // This struct is used to store the string in regex, or
   // the character class in regex.
   struct Leaf {
     std::string regex;
   };
+
   // This struct is used to store the symbol in regex, i.e.
   // +, *, ?
-
   enum class RegexSymbol {
     star,
     plus,
     optional,
   };
+
   struct Bracket {
     std::vector<Node> nodes;
   };
+
   struct Symbol {
     RegexSymbol symbol;
     std::vector<Node> node;
   };
+
   // This struct is used to represent a union symbol.
   struct Union {
     std::vector<Node> nodes;
   };
+
   struct Repeat {
     std::vector<Node> nodes;
     int lower_bound = 0;
     int upper_bound = 0;
   };
+
   struct LookAhead {
     bool is_positive;
     std::vector<Node> nodes;
   };
+
   // This struct is used to represent a bracket in regex.
   std::vector<Node> nodes;
 
@@ -537,10 +518,15 @@ class RegexIR {
     \brief the visit function for the variant.
   */
   Result<FSMWithStartEnd> visit(const Leaf& node) const;
+
   Result<FSMWithStartEnd> visit(const Symbol& node) const;
+
   Result<FSMWithStartEnd> visit(const Union& node) const;
+
   Result<FSMWithStartEnd> visit(const Bracket& node) const;
+
   Result<FSMWithStartEnd> visit(const Repeat& node) const;
+
   Result<FSMWithStartEnd> visit(const LookAhead& node) const;
 };
 
