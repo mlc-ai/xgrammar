@@ -546,6 +546,16 @@ Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start)
 */
 std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start);
 
+/*!
+  \brief Build a FSM from a list of patterns.
+  \param patterns The patterns to be built.
+  \param end_nodes The end nodes of the FSM.
+  \return The FSM with start and end states.
+*/
+FSMWithStartEnd BuildTrie(
+    const std::vector<std::string>& patterns, std::vector<int32_t>* end_nodes = nullptr
+);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_FSM_H_

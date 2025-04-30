@@ -1940,7 +1940,7 @@ inline std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
 }
 
 inline FSMWithStartEnd BuildTrie(
-    const std::vector<std::string>& patterns, std::vector<int32_t>* end_nodes = nullptr
+    const std::vector<std::string>& patterns, std::vector<int32_t>* end_nodes
 ) {
   FSMWithStartEnd fsm(1);
   fsm.SetStartNode(0);
