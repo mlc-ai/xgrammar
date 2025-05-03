@@ -16,6 +16,7 @@
 from contextlib import suppress
 from typing import List, Optional, Union
 
+import platform
 import torch
 import torch.utils.cpp_extension
 
