@@ -166,7 +166,7 @@ class Grammar::Impl {
 
   /*! \brief The fsm for the root tag dispatch rule. If the grammar does not have a root tag
    * dispatch rule, it is not built. */
-  std::optional<CompactFSM> root_tag_dispatch_fsm = std::nullopt;
+  std::optional<CompactFSMWithStartEnd> root_tag_dispatch_fsm = std::nullopt;
 
   /*! \brief The map from the end nodes of the root tag dispatch fsm to the rule ids. */
   std::unordered_map<int32_t, int32_t> tag_dispatch_end_node_to_rule_id;

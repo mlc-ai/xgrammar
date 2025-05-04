@@ -91,13 +91,13 @@ StackElement GrammarMatcherBase::AdvanceStackElementWithChar(
     auto start_node = root_tag_dispatch_fsm->StartNode();
     auto next_node = root_tag_dispatch_fsm->Transition(stack_element.element_id, char_value);
     auto new_stack_element = stack_element;
-    if (next_node == CompactFSM::NO_TRANSITION) {
+    if (next_node == CompactFSMWithStartEnd::NO_TRANSITION) {
       // Case 1. The new char cannot continue to be accepted by the tag dispatch fsm.
       // We try to accept the new char from the start node. If accepted, we go to the target node.
       // If it still cannot be accepted, we stay at the start node.
       auto new_next_node = root_tag_dispatch_fsm->Transition(start_node, char_value);
       new_stack_element.element_id =
-          new_next_node == CompactFSM::NO_TRANSITION ? start_node : new_next_node;
+          new_next_node == CompactFSMWithStartEnd::NO_TRANSITION ? start_node : new_next_node;
     } else if (!root_tag_dispatch_fsm->IsEndNode(next_node)) {
       // Case 2. The new char can continue to be accepted by the tag dispatch fsm.
       // We need to update the element id to the next node.
