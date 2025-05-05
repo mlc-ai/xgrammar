@@ -53,13 +53,14 @@ bool GrammarMatcherBase::CheckIfAccepted(const StackElement& stack_element, uint
       return is_negative;
     }
     for (int i = 1; i < current_element.size(); i += 2) {
-      if (current_element[i] <= char_value && char_value <= current_element[i + 1]) {
+      if (static_cast<uint8_t>(current_element[i]) <= char_value &&
+          char_value <= static_cast<uint8_t>(current_element[i + 1])) {
         return !is_negative;
       }
     }
     return is_negative;
   } else if (current_element.type == RuleExprType::kByteString) {
-    return current_element[stack_element.element_in_string] == char_value;
+    return static_cast<uint8_t>(current_element[stack_element.element_in_string]) == char_value;
   } else {
     XGRAMMAR_LOG(FATAL) << "Unexpected RuleExprType in CheckIfAccepted: "
                         << static_cast<int>(current_element.type);
