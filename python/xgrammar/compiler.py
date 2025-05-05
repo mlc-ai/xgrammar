@@ -1,11 +1,11 @@
 """Compiling grammar for efficient token mask generation."""
 
-from typing import List, Optional, Tuple, Type, Union, overload
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
 
 from .base import XGRObject, _core
-from .grammar import Grammar, StructuralTagItem, _handle_pydantic_schema
+from .grammar import Grammar, StructuralTagItem, _convert_schema_to_str
 from .tokenizer_info import TokenizerInfo
 
 
@@ -31,6 +31,11 @@ class CompiledGrammar(XGRObject):
         """The tokenizer info associated with the compiled grammar."""
         return TokenizerInfo._create_from_handle(self._handle.tokenizer_info)
 
+    @property
+    def memory_size_bytes(self) -> int:
+        """The approximate memory usage of the compiled grammar in bytes."""
+        return self._handle.memory_size_bytes
+
 
 class GrammarCompiler(XGRObject):
     """The compiler for grammars. It is associated with a certain tokenizer info, and compiles
@@ -48,10 +53,19 @@ class GrammarCompiler(XGRObject):
 
     cache_enabled : bool, default: True
         Whether to enable the cache.
+
+    cache_limit_bytes : int, default: -1
+        The maximum memory usage for the cache in the specified unit.
+        Note that the actual memory usage may slightly exceed this value.
     """
 
     def __init__(
-        self, tokenizer_info: TokenizerInfo, *, max_threads: int = 8, cache_enabled: bool = True
+        self,
+        tokenizer_info: TokenizerInfo,
+        *,
+        max_threads: int = 8,
+        cache_enabled: bool = True,
+        cache_limit_bytes: int = -1,
     ):
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(
@@ -59,11 +73,15 @@ class GrammarCompiler(XGRObject):
                 "to GrammarCompiler."
             )
 
-        self._init_handle(_core.GrammarCompiler(tokenizer_info._handle, max_threads, cache_enabled))
+        self._init_handle(
+            _core.GrammarCompiler(
+                tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
+            )
+        )
 
     def compile_json_schema(
         self,
-        schema: Union[str, Type[BaseModel]],
+        schema: Union[str, Type[BaseModel], Dict[str, Any]],
         *,
         any_whitespace: bool = True,
         indent: Optional[int] = None,
@@ -75,8 +93,8 @@ class GrammarCompiler(XGRObject):
 
         Parameters
         ----------
-        schema : Union[str, Type[BaseModel]]
-            The schema string or Pydantic model.
+        schema : Union[str, Type[BaseModel], Dict[str, Any]]
+            The schema string or Pydantic model or JSON schema dict.
 
         indent : Optional[int], default: None
             The number of spaces for indentation. If None, the output will be in one line.
@@ -91,12 +109,15 @@ class GrammarCompiler(XGRObject):
             properties and items that is not specified in the schema. This is equivalent to
             setting unevaluatedProperties and unevaluatedItems to false.
 
+            This helps LLM to generate accurate output in the grammar-guided generation with JSON
+            schema.
+
         Returns
         -------
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        schema_str = _handle_pydantic_schema(schema)
+        schema_str = _convert_schema_to_str(schema)
         return CompiledGrammar._create_from_handle(
             self._handle.compile_json_schema(
                 schema_str, any_whitespace, indent, separators, strict_mode
@@ -147,7 +168,7 @@ class GrammarCompiler(XGRObject):
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        tags_tuple = [(tag.begin, _handle_pydantic_schema(tag.schema_), tag.end) for tag in tags]
+        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
         return CompiledGrammar._create_from_handle(
             self._handle.compile_structural_tag(tags_tuple, triggers)
         )
@@ -193,3 +214,15 @@ class GrammarCompiler(XGRObject):
     def clear_cache(self) -> None:
         """Clear all cached compiled grammars."""
         self._handle.clear_cache()
+
+    def get_cache_size_bytes(self) -> int:
+        """The approximate memory usage of the cache in bytes."""
+        return self._handle.get_cache_size_bytes()
+
+    @property
+    def cache_limit_bytes(self) -> int:
+        """
+        The maximum memory usage for the cache in bytes.
+        Returns -1 if the cache has no memory limit.
+        """
+        return self._handle.cache_limit_bytes

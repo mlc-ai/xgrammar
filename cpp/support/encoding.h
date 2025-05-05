@@ -114,7 +114,7 @@ std::pair<TCodepoint, int32_t> HandleEscape(
   static const std::unordered_map<char, TCodepoint> kEscapeToCodepoint = {
       {'\'', '\''},
       {'\"', '\"'},
-      {'\?', '\?'},
+      {'?', '\?'},
       {'\\', '\\'},
       {'a', '\a'},
       {'b', '\b'},

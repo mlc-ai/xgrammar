@@ -1,13 +1,12 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/pybind/python_methods.h
+ * \file xgrammar/nanobind/python_methods.h
  * \brief The header for the support of grammar-guided generation.
  */
 
-#ifndef XGRAMMAR_PYBIND_PYTHON_METHODS_H_
-#define XGRAMMAR_PYBIND_PYTHON_METHODS_H_
+#ifndef XGRAMMAR_NANOBIND_PYTHON_METHODS_H_
+#define XGRAMMAR_NANOBIND_PYTHON_METHODS_H_
 
-#include <pybind11/pybind11.h>
 #include <xgrammar/xgrammar.h>
 
 #include <optional>
@@ -28,8 +27,6 @@ TokenizerInfo TokenizerInfo_Init(
 
 int TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 
-std::vector<pybind11::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer);
-
 bool GrammarMatcher_FillNextTokenBitmask(
     GrammarMatcher& matcher,
     intptr_t token_bitmask_ptr,
@@ -38,7 +35,11 @@ bool GrammarMatcher_FillNextTokenBitmask(
     bool debug_print
 );
 
-std::vector<int> Matcher_DebugGetMaskedTokensFromBitmask(
+std::vector<int> Testing_DebugGetMaskedTokensFromBitmask(
+    intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
+);
+
+std::pair<bool, int> Testing_IsSingleTokenBitmask(
     intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
 );
 
@@ -47,6 +48,7 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
     std::pair<int64_t, int64_t> logits_shape,
     intptr_t bitmask_ptr,
     std::pair<int64_t, int64_t> bitmask_shape,
+    int vocab_size,
     std::optional<std::vector<int>> indices
 );
 
@@ -65,4 +67,4 @@ CompiledGrammar GrammarCompiler_CompileStructuralTag(
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_PYBIND_PYTHON_METHODS_H_
+#endif  // XGRAMMAR_NANOBIND_PYTHON_METHODS_H_

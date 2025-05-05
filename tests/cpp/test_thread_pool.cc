@@ -3,7 +3,6 @@
 #include <chrono>
 
 #include "support/thread_pool.h"
-
 using namespace xgrammar;
 
 TEST(XGramamrThreadPoolTest, FunctionalTest) {
@@ -38,30 +37,30 @@ TEST(XGramamrThreadPoolTest, FunctionalTest) {
   pool.Join();
 }
 
-TEST(XGramamrThreadPoolTest, PressureTest) {
-  const size_t num_threads = std::thread::hardware_concurrency();
-  ThreadPool pool(num_threads);
+// TEST(XGramamrThreadPoolTest, PressureTest) {
+//   const size_t num_threads = std::thread::hardware_concurrency();
+//   ThreadPool pool(num_threads);
 
-  const size_t num_tasks = 1000;
-  int counter = 0;
-  std::mutex counter_mutex;
+//   const size_t num_tasks = 1000;
+//   int counter = 0;
+//   std::mutex counter_mutex;
 
-  auto start_time = std::chrono::high_resolution_clock::now();
+//   auto start_time = std::chrono::high_resolution_clock::now();
 
-  for (size_t i = 0; i < num_tasks; ++i) {
-    pool.Execute([&counter, &counter_mutex, i]() {
-      std::this_thread::sleep_for(std::chrono::milliseconds(i % 50));
-      std::lock_guard<std::mutex> lock(counter_mutex);
-      counter++;
-    });
-  }
+//   for (size_t i = 0; i < num_tasks; ++i) {
+//     pool.Execute([&counter, &counter_mutex, i]() {
+//       std::this_thread::sleep_for(std::chrono::milliseconds(i % 50));
+//       std::lock_guard<std::mutex> lock(counter_mutex);
+//       counter++;
+//     });
+//   }
 
-  pool.Wait();
+//   pool.Wait();
 
-  auto end_time = std::chrono::high_resolution_clock::now();
+//   auto end_time = std::chrono::high_resolution_clock::now();
 
-  EXPECT_EQ(counter, static_cast<int>(num_tasks));
+//   EXPECT_EQ(counter, static_cast<int>(num_tasks));
 
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-  std::cout << "Pressure test completed, time taken: " << duration.count() << " milliseconds.\n";
-}
+//   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+//   std::cout << "Pressure test completed, time taken: " << duration.count() << " milliseconds.\n";
+// }

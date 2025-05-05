@@ -66,8 +66,21 @@ void _DebugGetMaskedTokensFromBitmask(
   }
 }
 
+std::pair<bool, int> _IsSingleTokenBitmask(const DLTensor& bitmask, int vocab_size, int index) {
+  int32_t* data_ptr = CheckAndGetBitmaskPtr(bitmask, vocab_size, index);
+  DynamicBitset bitset(vocab_size, reinterpret_cast<uint32_t*>(data_ptr));
+  if (bitset.Count() == 1) {
+    return std::make_pair(true, bitset.FindFirstOne());
+  } else {
+    return std::make_pair(false, -1);
+  }
+}
+
 void ApplyTokenBitmaskInplaceCPU(
-    DLTensor* logits, const DLTensor& bitmask, std::optional<std::vector<int>> indices
+    DLTensor* logits,
+    const DLTensor& bitmask,
+    int vocab_size,
+    std::optional<std::vector<int>> indices
 ) {
   // Check device and dim
   XGRAMMAR_CHECK(
@@ -101,38 +114,36 @@ void ApplyTokenBitmaskInplaceCPU(
           ? std::make_pair(static_cast<int>(bitmask.shape[0]), static_cast<int>(bitmask.shape[1]))
           : std::make_pair(1, static_cast<int>(bitmask.shape[0]));
 
-  // logits may have extra paddings (in vLLM) so its vocab size can be larger than the bitmask's
-  // vocab size. So we are using >= instead of == here
-  XGRAMMAR_CHECK(GetBitmaskSize(logits_shape.second) >= bitmask_shape.second)
-      << "The provided logits's vocab size should be no less than the bitmask's vocab size "
-         "(converted from bitmask size). But got vocab size "
-      << logits_shape.second << " vs bitmask size " << bitmask_shape.second;
+  XGRAMMAR_CHECK(
+      vocab_size <= bitmask_shape.second * DynamicBitset::BITS_PER_BLOCK &&
+      vocab_size <= logits_shape.second
+  );
 
-  int vocab_size =
-      std::min(logits_shape.second, bitmask_shape.second * DynamicBitset::BITS_PER_BLOCK);
-
-  // Sort and deduplicate indices
-  std::vector<int> indices_value;
-  if (indices.has_value()) {
-    indices_value = indices.value();
-  } else {
+  if (!indices.has_value()) {
     XGRAMMAR_CHECK(logits_shape.first == bitmask_shape.first)
         << "When indices is not provided, the logits's batch size should be equal to the "
            "bitmask's batch size, but got "
         << logits_shape.first << " vs " << bitmask_shape.first;
-    indices_value.reserve(logits_shape.first);
-    for (int i = 0; i < logits_shape.first; ++i) {
-      indices_value.push_back(i);
-    }
   }
 
   // Apply mask
-  for (auto idx : indices_value) {
-    uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_shape.second;
-    DynamicBitset bitset(vocab_size, data_ptr);
-    auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_shape.second;
-    for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-      logits_ptr[i] = -std::numeric_limits<float>::infinity();
+  if (indices.has_value()) {
+    for (auto idx : indices.value()) {
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_shape.second;
+      DynamicBitset bitset(vocab_size, data_ptr);
+      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_shape.second;
+      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+        logits_ptr[i] = -std::numeric_limits<float>::infinity();
+      }
+    }
+  } else {
+    for (int idx = 0; idx < logits_shape.first; ++idx) {
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_shape.second;
+      DynamicBitset bitset(vocab_size, data_ptr);
+      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_shape.second;
+      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+        logits_ptr[i] = -std::numeric_limits<float>::infinity();
+      }
     }
   }
 }
@@ -505,7 +516,15 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   // because in function calling cases, only the part within the tag is constrained
   bool have_tag_dispatch = false;
 
+  if (debug_print) {
+    XGRAMMAR_LOG(INFO) << "FillNextTokenBitmask: index=" << index
+                       << ", num of stacks=" << latest_stack_tops.size();
+  }
+
+  int stack_top_cnt = -1;
+
   for (auto top : latest_stack_tops) {
+    ++stack_top_cnt;
     auto cur_stack_element = persistent_stack_[top];
     auto cur_sequence = grammar_->GetRuleExpr(cur_stack_element.sequence_id);
     if (cur_sequence.type != RuleExprType::kTagDispatch &&
@@ -524,6 +543,13 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
         << persistent_stack_.PrintStackElement(cur_stack_element);
 
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+
+    if (debug_print) {
+      XGRAMMAR_LOG(INFO) << "FillNextTokenBitmask: Stack #" << stack_top_cnt
+                         << ", num_uncertain_tokens="
+                         << adaptive_token_mask.uncertain_indices.size() << ": "
+                         << persistent_stack_.PrintStackByTopId(top) << "\n";
+    }
 
     // For each stack, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -616,8 +642,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       have_tag_dispatch
   );
   if (debug_print) {
-    XGRAMMAR_LOG(INFO) << "Ended: " << can_reach_end
-                       << ", filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
+    XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
   return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
 }
@@ -814,6 +839,7 @@ GrammarMatcher::GrammarMatcher(
     : pimpl_(std::make_shared<GrammarMatcher::Impl>(
           compiled_grammar, override_stop_tokens, terminate_without_stop_token, max_rollback_tokens
       )) {}
+
 bool GrammarMatcher::AcceptToken(int32_t token_id, bool debug_print) {
   return pimpl_->AcceptToken(token_id, debug_print);
 }

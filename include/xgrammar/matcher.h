@@ -26,9 +26,12 @@ void _DebugGetMaskedTokensFromBitmask(
     std::vector<int>* rejected_tokens, const DLTensor& token_bitmask, int vocab_size, int index = 0
 );
 
+std::pair<bool, int> _IsSingleTokenBitmask(const DLTensor& bitmask, int vocab_size, int index);
+
 void ApplyTokenBitmaskInplaceCPU(
     DLTensor* logits,
     const DLTensor& bitmask,
+    int vocab_size = -1,
     std::optional<std::vector<int>> indices = std::nullopt
 );
 

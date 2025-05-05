@@ -3,6 +3,7 @@ import sys
 import pytest
 
 import xgrammar as xgr
+from xgrammar.testing import GrammarFunctor, _ebnf_to_grammar_no_normalization
 
 
 def test_bnf_simple():
@@ -14,7 +15,7 @@ c ::= "c"
 b ::= (("b"))
 c ::= (("c"))
 """
-    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
     assert after == expected
 
@@ -30,7 +31,7 @@ b ::= "b"
 a ::= (("a"))
 b ::= (("b"))
 """
-    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
     assert after == expected
 
@@ -46,10 +47,10 @@ b ::= ((b_1))
 c ::= ((c_1))
 d ::= ((d_1))
 b_1 ::= ("" | ("ab" b_1))
-c_1 ::= (([acep-z] c_1) | ([acep-z]))
-d_1 ::= ("" | ("d"))
+c_1 ::= (([acep-z] c_1) | [acep-z])
+d_1 ::= ("" | "d")
 """
-    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
     assert after == expected
 
@@ -61,6 +62,7 @@ c ::= "b"*
 d ::= ([b] [c] [d] | ([p] [q]))*
 e ::= [e]* [f]* | [g]*
 """
+
     expected = """root ::= ((b c d))
 b ::= (([b]*))
 c ::= ((c_1))
@@ -70,7 +72,10 @@ c_1 ::= ("" | ("b" c_1))
 d_1 ::= ("" | (d_1_choice d_1))
 d_1_choice ::= (("bcd") | ("pq"))
 """
-    grammar = xgr.Grammar.from_ebnf(before)
+
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.structure_normalizer(grammar)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -81,7 +86,9 @@ rule1 ::= [abc]* [def]*
     expected = """root ::= (([a]* [b]* rule1))
 rule1 ::= (([abc]* [def]*))
 """
-    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.structure_normalizer(grammar)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -146,7 +153,9 @@ b_2_choice ::= ((a) | ("b"))
 b_3_choice ::= ((a) | ("b"))
 """
 
-    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.structure_normalizer(grammar)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -164,7 +173,9 @@ c ::= (("a") | ("b")) (=([a-z] "b"))
 d ::= (("ac") | ("b" d_choice)) (=("abc"))
 d_choice ::= (("e") | ("d"))
 """
-    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.structure_normalizer(grammar)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -179,7 +190,9 @@ rest ::= (([a-zA-Z0-9\-] [\u0234-\u0345] [\u6d4b-\u8bd5] [\--\]] rest1))
 rest1 ::= (("\?\"\'\u6d4b\u8bd5\u3042c\U0001f440ab"))
 """
     # Disable unwrap_nesting_rules to expose the result before unwrapping.
-    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.structure_normalizer(grammar)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -230,6 +243,49 @@ rule1 ::= ("")
     assert after == expected
 
 
+def test_lookahead_assertion_analyzer():
+    before = r"""root ::= "a" rule1 "b" rule3 rule5 rule2
+rule1 ::= "b"
+rule2 ::= "c"
+rule3 ::= "" | "d" rule3
+rule4 ::= "" | "e" rule4 "f"
+rule5 ::= "" | "g" rule5 "h"
+"""
+    expected = r"""root ::= (("a" rule1 "b" rule3 rule5 rule2))
+rule1 ::= (("b")) (=("b" rule3 rule5 rule2))
+rule2 ::= (("c"))
+rule3 ::= (("") | ("d" rule3)) (=(rule5 rule2))
+rule4 ::= (("") | ("e" rule4 "f")) (=("f"))
+rule5 ::= (("") | ("g" rule5 "h"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_lookahead_assertion_analyzer_tag_dispatch():
+    # tag dispatch disables lookahead assertion detection
+    before = r"""root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3), ("tag4", rule4), ("tag5", rule5))
+rule1 ::= "b"
+rule2 ::= "c"
+rule3 ::= "" | "d" rule3
+rule4 ::= "" | "e" rule4 "f"
+rule5 ::= "" | "g" rule5 "h"
+"""
+    expected = r"""root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3), ("tag4", rule4), ("tag5", rule5))
+rule1 ::= (("b"))
+rule2 ::= (("c"))
+rule3 ::= (("") | ("d" rule3))
+rule4 ::= (("") | ("e" rule4 "f"))
+rule5 ::= (("") | ("g" rule5 "h"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
+    after = str(grammar)
+    assert after == expected
+
+
 def test_tag_dispatch():
     before = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
 rule1 ::= "a"
@@ -262,75 +318,211 @@ nested_rest ::= (("a") | ("bc") | ("d") | ("ef") | ("g"))
 empty_test ::= ("" | ("d") | ("a"))
 sequence_test_choice ::= (("c") | ("d"))
 """
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.structure_normalizer(grammar)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
+    after = str(grammar)
+    assert after == expected
+
+
+before__expected__test_rule_inliner = [
+    (
+        r"""root ::= rule1 | rule2
+rule1 ::= "a" | "b"
+rule2 ::= "b" | "c"
+""",
+        r"""root ::= (("a") | ("b") | ("b") | ("c"))
+rule1 ::= (("a") | ("b"))
+rule2 ::= (("b") | ("c"))
+""",
+    ),
+    (
+        r"""root ::= rule1 "a" [a-z]* | rule2 "b" "c"
+rule1 ::= "a" [a-z]* | "b"
+rule2 ::= "b" | "c" [b-c]
+""",
+        r"""root ::= (("a" [a-z]* "a" [a-z]*) | ("b" "a" [a-z]*) | ("b" "b" "c") | ("c" [b-c] "b" "c"))
+rule1 ::= (("a" [a-z]*) | ("b"))
+rule2 ::= (("b") | ("c" [b-c]))
+""",
+    ),
+]
+
+
+@pytest.mark.parametrize("before, expected", before__expected__test_rule_inliner)
+def test_rule_inliner(before: str, expected: str):
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.rule_inliner(grammar)
+    after = str(grammar)
+    assert after == expected
+
+
+before__expected__test_dead_code_eliminator = [
+    # Test basic dead code elimination
+    (
+        r"""root ::= rule1 | rule2
+rule1 ::= "a" | "b"
+rule2 ::= "b" | "c"
+unused ::= "x" | "y"
+""",
+        r"""root ::= ((rule1) | (rule2))
+rule1 ::= (("a") | ("b"))
+rule2 ::= (("b") | ("c"))
+""",
+    ),
+    # Test recursive rule references
+    (
+        r"""root ::= rule1 | rule2
+unused1 ::= unused2 | "x"
+unused2 ::= unused1 | "y"
+rule1 ::= "a" rule2 | "b"
+rule2 ::= "c" rule1 | "d"
+""",
+        r"""root ::= ((rule1) | (rule2))
+rule1 ::= (("a" rule2) | ("b"))
+rule2 ::= (("c" rule1) | ("d"))
+""",
+    ),
+    # Test complex nested rules with unused branches
+    (
+        r"""root ::= rule1 "x" | rule2
+rule1 ::= "a" rule3 | "b"
+rule2 ::= "c" | "d" rule4
+rule3 ::= "e" | "f"
+rule4 ::= "g" | "h"
+unused1 ::= "i" unused2
+unused2 ::= "j" unused3
+unused3 ::= "k" | "l"
+""",
+        r"""root ::= ((rule1 "x") | (rule2))
+rule1 ::= (("a" rule3) | ("b"))
+rule2 ::= (("c") | ("d" rule4))
+rule3 ::= (("e") | ("f"))
+rule4 ::= (("g") | ("h"))
+""",
+    ),
+]
+
+
+@pytest.mark.parametrize("before, expected", before__expected__test_dead_code_eliminator)
+def test_dead_code_eliminator(before: str, expected: str):
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = xgr.testing.GrammarFunctor.dead_code_eliminator(grammar)
+    assert str(after) == expected
+
+
+def test_e2e_json_grammar():
+    before = r"""root ::= (
+    "{" [ \n\t]* members_and_embrace |
+    "[" [ \n\t]* elements_or_embrace
+)
+value_non_str ::= (
+    "{" [ \n\t]* members_and_embrace |
+    "[" [ \n\t]* elements_or_embrace |
+    "0" fraction exponent |
+    [1-9] [0-9]* fraction exponent |
+    "-" [0-9] fraction exponent |
+    "-" [1-9] [0-9]* fraction exponent |
+    "true" |
+    "false" |
+    "null"
+) (= [ \n\t,}\]])
+members_and_embrace ::= ("\"" characters_and_colon [ \n\t]* members_suffix | "}") (= [ \n\t,}\]])
+members_suffix ::= (
+    value_non_str [ \n\t]* member_suffix_suffix |
+    "\"" characters_and_embrace |
+    "\"" characters_and_comma [ \n\t]* "\"" characters_and_colon [ \n\t]* members_suffix
+) (= [ \n\t,}\]])
+member_suffix_suffix ::= (
+    "}" |
+    "," [ \n\t]* "\"" characters_and_colon [ \n\t]* members_suffix
+) (= [ \n\t,}\]])
+elements_or_embrace ::= (
+    "{" [ \n\t]* members_and_embrace elements_rest [ \n\t]* "]" |
+    "[" [ \n\t]* elements_or_embrace elements_rest [ \n\t]* "]" |
+    "\"" characters_item elements_rest [ \n\t]* "]" |
+    "0" fraction exponent elements_rest [ \n\t]* "]" |
+    [1-9] [0-9]* fraction exponent elements_rest [ \n\t]* "]" |
+    "-" "0" fraction exponent elements_rest [ \n\t]* "]" |
+    "-" [1-9] [0-9]* fraction exponent elements_rest [ \n\t]* "]" |
+    "true" elements_rest [ \n\t]* "]" |
+    "false" elements_rest [ \n\t]* "]" |
+    "null" elements_rest [ \n\t]* "]" |
+    "]"
+)
+elements ::= (
+    "{" [ \n\t]* members_and_embrace elements_rest |
+    "[" [ \n\t]* elements_or_embrace elements_rest |
+    "\"" characters_item elements_rest |
+    "0" fraction exponent elements_rest |
+    [1-9] [0-9]* fraction exponent elements_rest |
+    "-" [0-9] fraction exponent elements_rest |
+    "-" [1-9] [0-9]* fraction exponent elements_rest |
+    "true" elements_rest |
+    "false" elements_rest |
+    "null" elements_rest
+)
+elements_rest ::= (
+    "" |
+    [ \n\t]* "," [ \n\t]* elements
+)
+characters_and_colon ::= (
+    "\"" [ \n\t]* ":" |
+    [^"\\\x00-\x1F] characters_and_colon |
+    "\\" escape characters_and_colon
+) (=[ \n\t]* [\"{[0-9tfn-])
+characters_and_comma ::= (
+    "\"" [ \n\t]* "," |
+    [^"\\\x00-\x1F] characters_and_comma |
+    "\\" escape characters_and_comma
+) (=[ \n\t]* "\"")
+characters_and_embrace ::= (
+    "\"" [ \n\t]* "}" |
+    [^"\\\x00-\x1F] characters_and_embrace |
+    "\\" escape characters_and_embrace
+) (=[ \n\t]* [},])
+characters_item ::= (
+    "\"" |
+    [^"\\\x00-\x1F] characters_item |
+    "\\" escape characters_item
+) (= [ \n\t]* [,\]])
+escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+fraction ::= "" | "." [0-9] [0-9]*
+exponent ::= "" |  "e" sign [0-9] [0-9]* | "E" sign [0-9] [0-9]*
+sign ::= "" | "+" | "-"
+"""
+
+    expected = r"""root ::= (("{" [ \n\t]* members_and_embrace) | ("[" [ \n\t]* elements_or_embrace))
+value_non_str ::= (("{" [ \n\t]* members_and_embrace) | ("[" [ \n\t]* elements_or_embrace) | ("0" fraction exponent) | ([1-9] [0-9]* fraction exponent) | ("-" [0-9] fraction exponent) | ("-" [1-9] [0-9]* fraction exponent) | ("true") | ("false") | ("null")) (=([ \n\t,}\]]))
+members_and_embrace ::= (("\"" characters_and_colon [ \n\t]* members_suffix) | ("}")) (=([ \n\t,}\]]))
+members_suffix ::= ((value_non_str [ \n\t]* member_suffix_suffix) | ("\"" characters_and_embrace) | ("\"" characters_and_comma [ \n\t]* "\"" characters_and_colon [ \n\t]* members_suffix)) (=([ \n\t,}\]]))
+member_suffix_suffix ::= (("}") | ("," [ \n\t]* "\"" characters_and_colon [ \n\t]* members_suffix)) (=([ \n\t,}\]]))
+elements_or_embrace ::= (("{" [ \n\t]* members_and_embrace elements_rest [ \n\t]* "]") | ("[" [ \n\t]* elements_or_embrace elements_rest [ \n\t]* "]") | ("\"" characters_item elements_rest [ \n\t]* "]") | ("0" fraction exponent elements_rest [ \n\t]* "]") | ([1-9] [0-9]* fraction exponent elements_rest [ \n\t]* "]") | ("-0" fraction exponent elements_rest [ \n\t]* "]") | ("-" [1-9] [0-9]* fraction exponent elements_rest [ \n\t]* "]") | ("true" elements_rest [ \n\t]* "]") | ("false" elements_rest [ \n\t]* "]") | ("null" elements_rest [ \n\t]* "]") | ("]"))
+elements ::= (("{" [ \n\t]* members_and_embrace elements_rest) | ("[" [ \n\t]* elements_or_embrace elements_rest) | ("\"" characters_item elements_rest) | ("0" fraction exponent elements_rest) | ([1-9] [0-9]* fraction exponent elements_rest) | ("-" [0-9] fraction exponent elements_rest) | ("-" [1-9] [0-9]* fraction exponent elements_rest) | ("true" elements_rest) | ("false" elements_rest) | ("null" elements_rest))
+elements_rest ::= ("" | ([ \n\t]* "," [ \n\t]* elements))
+characters_and_colon ::= (("\"" [ \n\t]* ":") | ([^\"\\\0-\x1f] characters_and_colon) | ("\\" escape characters_and_colon)) (=([ \n\t]* [\"{[0-9tfn\-]))
+characters_and_comma ::= (("\"" [ \n\t]* ",") | ([^\"\\\0-\x1f] characters_and_comma) | ("\\" escape characters_and_comma)) (=([ \n\t]* "\""))
+characters_and_embrace ::= (("\"" [ \n\t]* "}") | ([^\"\\\0-\x1f] characters_and_embrace) | ("\\" escape characters_and_embrace)) (=([ \n\t]* [},]))
+characters_item ::= (("\"") | ([^\"\\\0-\x1f] characters_item) | ("\\" escape characters_item)) (=([ \n\t]* [,\]]))
+escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+fraction ::= ("" | ("." [0-9] [0-9]*))
+exponent ::= ("" | ("e" sign [0-9] [0-9]*) | ("E" sign [0-9] [0-9]*))
+sign ::= ("" | ("+") | ("-"))
+"""
+
     grammar = xgr.Grammar.from_ebnf(before)
     after = str(grammar)
     assert after == expected
 
 
-def test_json_grammar():
-    # Adopted from https://www.crockford.com/mckeeman.html. Not optimized
-    before = r"""root ::= element
-value ::= object | array | string | number | "true" | "false" | "null"
-object ::= "{" ws "}" | "{" members "}"
-members ::= member | member "," members
-member ::= ws string ws ":" element
-array ::= "[" ws "]" | "[" elements "]"
-elements ::= element | element "," elements
-element ::= ws value ws
-string ::= "\"" characters "\""
-characters ::= "" | character characters
-character ::= [^"\\] | "\\" escape
-escape ::= "\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "u" hex hex hex hex
-hex ::= [A-Fa-f0-9]
-number ::= integer fraction exponent
-integer ::= digit | onenine digits | "-" digit | "-" onenine digits
-digits ::= digit | digit digits
-digit ::= [0-9]
-onenine ::= [1-9]
-fraction ::= "" | "." digits
-exponent ::= "" | ("e" | "E") ("" | "+" | "-") digits
-ws ::= "" | "\u0020" ws | "\u000A" ws | "\u000D" ws | "\u0009" ws
-"""
-
-    expected = r"""root ::= ((element))
-value ::= ((object) | (array) | (string) | (number) | ("true") | ("false") | ("null"))
-object ::= (("{" ws "}") | ("{" members "}"))
-members ::= ((member) | (member "," members))
-member ::= ((ws string ws ":" element))
-array ::= (("[" ws "]") | ("[" elements "]"))
-elements ::= ((element) | (element "," elements))
-element ::= ((ws value ws))
-string ::= (("\"" characters "\""))
-characters ::= ("" | (character characters))
-character ::= (([^\"\\]) | ("\\" escape))
-escape ::= (("\"") | ("\\") | ("/") | ("b") | ("f") | ("n") | ("r") | ("t") | ("u" hex hex hex hex))
-hex ::= (([A-Fa-f0-9]))
-number ::= ((integer fraction exponent))
-integer ::= ((digit) | (onenine digits) | ("-" digit) | ("-" onenine digits))
-digits ::= ((digit) | (digit digits))
-digit ::= (([0-9]))
-onenine ::= (([1-9]))
-fraction ::= ("" | ("." digits))
-exponent ::= ("" | (exponent_choice exponent_choice_1 digits))
-ws ::= ("" | (" " ws) | ("\n" ws) | ("\r" ws) | ("\t" ws))
-exponent_choice ::= (("e") | ("E"))
-exponent_choice_1 ::= ("" | ("+") | ("-"))
-"""
-
-    grammar = xgr.Grammar.from_ebnf(before)
-    after = str(grammar)
-    assert after == expected
-
-
-def test_to_string_roundtrip():
+def test_e2e_to_string_roundtrip():
     """Checks the printed result can be parsed, and the parsing-printing process is idempotent."""
     before = r"""root ::= ((b c) | (b root))
 b ::= ((b_1 d))
 c ::= ((c_1))
 d ::= ((d_1))
-b_1 ::= ("" | ("b" b_1))
-c_1 ::= ((c_2 c_1) | (c_2)) (=("abc" [a-z]))
-c_2 ::= (([acep-z]))
+b_1 ::= ("" | ("b" b_1)) (=(d))
+c_1 ::= (([acep-z] c_1) | ([acep-z])) (=("d"))
 d_1 ::= ("" | ("d"))
 """
     grammar_1 = xgr.Grammar.from_ebnf(before)
@@ -341,7 +533,7 @@ d_1 ::= ("" | ("d"))
     assert output_string_1 == output_string_2
 
 
-def test_tag_dispatch_roundtrip():
+def test_e2e_tag_dispatch_roundtrip():
     """Checks the printed result can be parsed, and the parsing-printing process is idempotent."""
     before = r"""root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
 rule1 ::= (("a"))

@@ -1,19 +1,20 @@
 """Testing utilities."""
 
 import time
-from typing import List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import torch
+from pydantic import BaseModel
 
 from .base import _core
 from .compiler import CompiledGrammar, GrammarCompiler
-from .grammar import Grammar
+from .grammar import Grammar, _convert_schema_to_str
 from .matcher import GrammarMatcher, bitmask_dtype
 from .tokenizer_info import TokenizerInfo
 
 
 def _json_schema_to_ebnf(
-    schema: str,
+    schema: Union[str, Type[BaseModel], Dict[str, Any]],
     *,
     any_whitespace: bool = True,
     indent: Optional[int] = None,
@@ -24,8 +25,8 @@ def _json_schema_to_ebnf(
 
     Parameters
     ----------
-    schema : str
-        The schema string.
+    schema : Union[str, Type[BaseModel], Dict[str, Any]]
+        The schema string or Pydantic model or JSON schema dict.
 
     indent : Optional[int], default: None
         The number of spaces for indentation. If None, the output will be in one line.
@@ -48,8 +49,9 @@ def _json_schema_to_ebnf(
     bnf_string : str
         The BNF grammar string.
     """
+    schema_str = _convert_schema_to_str(schema)
     return _core.testing._json_schema_to_ebnf(
-        schema, any_whitespace, indent, separators, strict_mode
+        schema_str, any_whitespace, indent, separators, strict_mode
     )
 
 
@@ -78,6 +80,25 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
         The BNF grammar string converted from the input regex.
     """
     return _core.testing._regex_to_ebnf(regex, with_rule_name)
+
+
+def _ebnf_to_grammar_no_normalization(ebnf_string: str, root_rule_name: str = "root") -> Grammar:
+    """Convert a BNF grammar string to a Grammar object without normalization. For test
+    purposes. The result grammar cannot be compiled / used in GrammarMatcher.
+
+    Parameters
+    ----------
+    ebnf_string : str
+        The BNF grammar string to be converted.
+
+    Returns
+    -------
+    grammar : Grammar
+        The unnormalized Grammar object converted from the input BNF grammar string.
+    """
+    return Grammar._create_from_handle(
+        _core.testing._ebnf_to_grammar_no_normalization(ebnf_string, root_rule_name)
+    )
 
 
 def _is_grammar_accept_string(
@@ -154,6 +175,32 @@ def _get_masked_tokens_from_bitmask(
     )
 
 
+def _is_single_token_bitmask(
+    bitmask: torch.Tensor, vocab_size: int, index: int = 0
+) -> Tuple[bool, int]:
+    """Check if the bitmask is a single token bitmask.
+
+    Parameters
+    ----------
+    bitmask : torch.Tensor
+        The bitmask to check. Should be on CPU.
+    vocab_size : int
+        The size of the vocabulary.
+    index : int, default: 0
+        The index of the bitmask.
+
+    Returns
+    -------
+    is_single_token : bool
+        True if the bitmask is a single token bitmask, False otherwise.
+    token_id : int
+        The id of the token if the bitmask is a single token bitmask, -1 otherwise.
+    """
+    return _core.testing._is_single_token_bitmask(
+        bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
+    )
+
+
 def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
     """Get the bitmask from bool mask. If the bool mask does not align with the 32-bit block
     size, it will add extra 1 paddings.
@@ -217,3 +264,47 @@ def _get_allow_empty_rule_ids(compiled_grammar: CompiledGrammar) -> List[int]:
 
 def _generate_range_regex(start: Optional[int] = None, end: Optional[int] = None) -> str:
     return _core.testing._generate_range_regex(start, end)
+
+
+def _generate_float_regex(start: Optional[float] = None, end: Optional[float] = None) -> str:
+    return _core.testing._generate_float_regex(start, end)
+
+
+class GrammarFunctor:
+    """A utility class for transforming grammars. These methods are called during grammar parsing.
+    For test purposes."""
+
+    @staticmethod
+    def structure_normalizer(grammar: Grammar) -> Grammar:
+        """Normalize the structure of the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.structure_normalizer(grammar._handle)
+        )
+
+    @staticmethod
+    def rule_inliner(grammar: Grammar) -> Grammar:
+        """Inline some rule references in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.rule_inliner(grammar._handle)
+        )
+
+    @staticmethod
+    def byte_string_fuser(grammar: Grammar) -> Grammar:
+        """Fuse the byte string elements in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.byte_string_fuser(grammar._handle)
+        )
+
+    @staticmethod
+    def dead_code_eliminator(grammar: Grammar) -> Grammar:
+        """Eliminate the not referenced rules in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.dead_code_eliminator(grammar._handle)
+        )
+
+    @staticmethod
+    def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
+        """Analyze and add lookahead assertions in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
+        )

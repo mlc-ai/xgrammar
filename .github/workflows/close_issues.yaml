@@ -1,0 +1,31 @@
+name: Close inactive issues
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  close-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-issue-stale: 60
+          days-before-issue-close: 14
+          stale-issue-label: "stale"
+          exempt-issue-labels: "pinned,important"
+          stale-issue-message: >
+            This issue has been inactive for 60 days and is marked as stale.
+
+            Please confirm if this issue is still relevant by commenting or removing the 'stale'
+            label within 14 days, otherwise it will be closed automatically.
+          close-issue-message: >
+            Closing this issue due to inactivity for 14 days since it was marked as stale.
+
+            Feel free to reopen if you believe it's still relevant.
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

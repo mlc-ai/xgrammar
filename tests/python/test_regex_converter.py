@@ -332,7 +332,6 @@ def test_unmatched_parentheses():
 def test_empty_parentheses():
     regex = "()"
     grammar_str = _regex_to_ebnf(regex)
-    print(grammar_str)
     expected_grammar = r"""root ::= ( )
 """
     assert grammar_str == expected_grammar
@@ -340,7 +339,6 @@ def test_empty_parentheses():
 
     regex = "a()b"
     grammar_str = _regex_to_ebnf(regex)
-    print(grammar_str)
     expected_grammar = r"""root ::= "a" ( ) "b"
 """
     assert grammar_str == expected_grammar
@@ -360,7 +358,6 @@ def test_empty_alternative():
     # Nested case
     regex = "ab(c|)"
     grammar_str = _regex_to_ebnf(regex)
-    print(grammar_str)
     expected_grammar = r"""root ::= "a" "b" ( "c" | "" )
 """
     assert grammar_str == expected_grammar

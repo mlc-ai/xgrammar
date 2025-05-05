@@ -6,6 +6,7 @@
 
 #include <picojson.h>
 
+#include <climits>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -17,8 +18,23 @@
 #include "ebnf_script_creator.h"
 #include "regex_converter.h"
 #include "support/logging.h"
+#include "support/utils.h"
 
 namespace xgrammar {
+
+/**
+ * \brief Error for invalid schema: wrong type, invalid keyword, etc.
+ */
+struct InvalidSchemaError : public Error {
+  InvalidSchemaError(const std::string& msg) : Error(msg, "InvalidSchemaError") {}
+};
+
+/**
+ * \brief Error for unsatisfiable schema: conflict in constraints, the whole schema is false, etc.
+ */
+struct UnsatisfiableSchemaError : public Error {
+  UnsatisfiableSchemaError(const std::string& msg) : Error(msg, "UnsatisfiableSchemaError") {}
+};
 
 /*!
  * \brief Manage the indent and separator for the generation of EBNF grammar.
@@ -50,6 +66,27 @@ class IndentManager {
   }
 
   /*!
+   * \brief Get the next start separator in the current level. The next separator is escaped and
+   * quoted.
+   * \example
+   * \code
+   * IndentManager indent_manager(2, ", ");
+   * indent_manager.StartIndent();
+   * indent_manager.StartSeparator(); // get the start separator: "\"\n  \""
+   * indent_manager.MiddleSeparator(); // get the middle separator: "\",\n  \""
+   * indent_manager.EndSeparator(); // get the end separator: "\"\n\""
+   * indent_manager.EndIndent();
+   * \endcode
+   */
+  std::string StartSeparator();
+
+  std::string MiddleSeparator();
+
+  std::string EndSeparator();
+
+  std::string EmptySeparator();
+
+  /*!
    * \brief Get the next separator in the current level. When first called in the current
    * level, the starting separator will be returned. When called again, the middle separator will be
    * returned. When called with `is_end=True`, the ending separator will be returned.
@@ -75,6 +112,43 @@ class IndentManager {
   std::vector<bool> is_first_;
   friend class JSONSchemaConverter;
 };
+
+std::string IndentManager::StartSeparator() {
+  if (any_whitespace_) {
+    return "[ \\n\\t]*";
+  }
+  if (!enable_newline_) {
+    return "\"\"";
+  }
+  return "\"\\n" + std::string(total_indent_, ' ') + "\"";
+}
+
+std::string IndentManager::MiddleSeparator() {
+  if (any_whitespace_) {
+    return "[ \\n\\t]* \"" + separator_ + "\" [ \\n\\t]*";
+  }
+  if (!enable_newline_) {
+    return "\"" + separator_ + "\"";
+  }
+  return "\"" + separator_ + "\\n" + std::string(total_indent_, ' ') + "\"";
+}
+
+std::string IndentManager::EndSeparator() {
+  if (any_whitespace_) {
+    return "[ \\n\\t]*";
+  }
+  if (!enable_newline_) {
+    return "\"\"";
+  }
+  return "\"\\n" + std::string(total_indent_ - indent_, ' ') + "\"";
+}
+
+std::string IndentManager::EmptySeparator() {
+  if (any_whitespace_) {
+    return "[ \\n\\t]*";
+  }
+  return "\"\"";
+}
 
 std::string IndentManager::NextSeparator(bool is_end) {
   if (any_whitespace_) {
@@ -129,6 +203,11 @@ class JSONSchemaConverter {
   /*! \brief Generate the regex for integer range. Public for testing. */
   static std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end);
 
+  /*! \brief Generate the regex for float range. Public for testing. */
+  static std::string GenerateFloatRangeRegex(
+      std::optional<double> start, std::optional<double> end, int precision
+  );
+
  private:
   // The name of the root rule
   inline static const std::string kRootRuleName = "root";
@@ -159,244 +238,14 @@ class JSONSchemaConverter {
    * will be ignored when finding the corresponding cache rule. */
   std::string GetSchemaCacheIndex(const picojson::value& schema);
 
-  /*! \brief Generate the regex for the range. */
+  /*! \brief Helpers for GenerateRangeRegex and GenerateFloatRangeRegex */
+  static std::string MakePatternForDigitRange(char start, char end, int remainingDigits);
 
-  // Helpers for GenerateRangeRegex
-  static std::string MakePatternForDigitRange(char start, char end, int remainingDigits) {
-    std::ostringstream oss;
-    if (start == end) {
-      oss << start;
-    } else {
-      oss << "[" << start << "-" << end << "]";
-    }
-    if (remainingDigits > 0) {
-      oss << "\\d{" << remainingDigits << "}";
-    }
-    return oss.str();
-  }
+  static std::vector<std::string> GenerateNumberPatterns(int lower, int upper);
 
-  static std::vector<std::string> GenerateNumberPatterns(int lower, int upper) {
-    std::vector<std::string> patterns;
+  static std::string GenerateSubRangeRegex(int lower, int upper);
 
-    int lower_len = static_cast<int>(std::to_string(lower).size());
-    int upper_len = static_cast<int>(std::to_string(upper).size());
-
-    for (int len = lower_len; len <= upper_len; ++len) {
-      const int digit_min = static_cast<int>(std::pow(10, len - 1));
-      const int digit_max = static_cast<int>(std::pow(10, len)) - 1;
-
-      int start = (len == lower_len) ? lower : digit_min;
-      int end = (len == upper_len) ? upper : digit_max;
-
-      std::string start_str = std::to_string(start);
-      std::string end_str = std::to_string(end);
-
-      if (len == 1) {
-        patterns.push_back(MakePatternForDigitRange(start_str[0], end_str[0], 0));
-        continue;
-      }
-
-      int prefix = 0;
-      while (prefix < len && start_str[prefix] == end_str[prefix]) {
-        prefix++;
-      }
-
-      if (prefix == len) {
-        patterns.push_back(start_str);
-        continue;
-      }
-
-      // Generate common prefix pattern if only last digit differs for start/end
-      if (prefix > 0 && prefix >= len - 2) {
-        std::string common_part = start_str.substr(0, prefix);
-        patterns.push_back(
-            common_part +
-            MakePatternForDigitRange(start_str[prefix], end_str[prefix], len - prefix - 1)
-        );
-        continue;
-      }
-
-      if (len == lower_len && len == upper_len) {
-        if (start == digit_max) {
-          XGRAMMAR_ICHECK(start == end);
-          patterns.push_back(start_str);
-        } else if (start == digit_min) {
-          if (end == digit_max) {
-            patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
-          } else {
-            for (size_t i = 0; i < end_str.size(); i++) {
-              if (i == 0) {
-                // First digit: range from 1 to end[0]-1
-                if (end_str[0] > '1') {
-                  patterns.push_back(
-                      MakePatternForDigitRange('1', static_cast<char>(end_str[0] - 1), len - 1)
-                  );
-                }
-              } else {
-                // Fix first i digits to end[0..i-1], then range from 0 to end[i]-1
-                std::string prefix = end_str.substr(0, i);
-                if (end_str[i] > '0') {
-                  patterns.push_back(
-                      prefix +
-                      MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
-                  );
-                }
-              }
-            }
-            patterns.push_back(end_str);
-          }
-        } else if (end == digit_max) {
-          for (size_t i = 0; i < start_str.size(); i++) {
-            if (i == 0) {
-              // First digit: range from start[0]+1 to 9
-              if (start_str[0] < '9') {
-                patterns.push_back(
-                    MakePatternForDigitRange(static_cast<char>(start_str[0] + 1), '9', len - 1)
-                );
-              }
-            } else {
-              // Fix first i digits to start[0..i-1], then range from start[i]+1 to 9
-              std::string prefix = start_str.substr(0, i);
-              if (start_str[i] < '9') {
-                patterns.push_back(
-                    prefix +
-                    MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
-                );
-              }
-            }
-          }
-          patterns.push_back(start_str);
-        } else {
-          // Handle middle range between first digits if they differ by more than 1
-          char start_first_digit = start_str[0];
-          char end_first_digit = end_str[0];
-
-          if (end_first_digit - start_first_digit > 1) {
-            patterns.push_back(MakePatternForDigitRange(
-                static_cast<char>(start_first_digit + 1),
-                static_cast<char>(end_first_digit - 1),
-                len - 1
-            ));
-          }
-
-          // Patterns starting from start
-          for (size_t i = 0; i < start_str.size(); i++) {
-            if (i == 0) {
-              std::string prefix = start_str.substr(0, 1);
-              if (start_str[1] < '9') {
-                patterns.push_back(
-                    prefix +
-                    MakePatternForDigitRange(static_cast<char>(start_str[1] + 1), '9', len - 2)
-                );
-              }
-            } else {
-              std::string prefix = start_str.substr(0, i);
-              if (start_str[i] < '9') {
-                patterns.push_back(
-                    prefix +
-                    MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
-                );
-              }
-            }
-          }
-          patterns.push_back(start_str);
-
-          // Patterns starting from end
-          for (size_t i = 0; i < end_str.size(); i++) {
-            if (i == 0) {
-              std::string prefix = end_str.substr(0, 1);
-              if (end_str[1] > '0') {
-                patterns.push_back(
-                    prefix +
-                    MakePatternForDigitRange('0', static_cast<char>(end_str[1] - 1), len - 2)
-                );
-              }
-            } else {
-              std::string prefix = end_str.substr(0, i);
-              if (end_str[i] > '0') {
-                patterns.push_back(
-                    prefix +
-                    MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
-                );
-              }
-            }
-          }
-          patterns.push_back(end_str);
-        }
-      }
-
-      else if (len == lower_len && len != upper_len) {
-        XGRAMMAR_ICHECK(end == digit_max);
-        if (start == digit_min) {
-          patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
-        } else {
-          for (size_t i = 0; i < start_str.size(); i++) {
-            if (i == 0) {
-              if (start_str[0] < '9') {
-                patterns.push_back(
-                    MakePatternForDigitRange(static_cast<char>(start_str[0] + 1), '9', len - 1)
-                );
-              }
-            } else {
-              std::string prefix = start_str.substr(0, i);
-              if (start_str[i] < '9') {
-                patterns.push_back(
-                    prefix +
-                    MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
-                );
-              }
-            }
-          }
-          patterns.push_back(start_str);
-        }
-      }
-
-      else if (len != lower_len && len == upper_len) {
-        XGRAMMAR_ICHECK(start == digit_min);
-        if (end == digit_max) {
-          patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
-        } else {
-          for (size_t i = 0; i < end_str.size(); i++) {
-            if (i == 0) {
-              if (end_str[0] > '1') {
-                patterns.push_back(
-                    MakePatternForDigitRange('1', static_cast<char>(end_str[0] - 1), len - 1)
-                );
-              }
-            } else {
-              std::string prefix = end_str.substr(0, i);
-              if (end_str[i] > '0') {
-                patterns.push_back(
-                    prefix +
-                    MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
-                );
-              }
-            }
-          }
-          patterns.push_back(end_str);
-        }
-      }
-
-      // len != lower_len && len != upper_len
-      else {
-        patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
-      }
-    }
-
-    return patterns;
-  }
-
-  static std::string GenerateSubRangeRegex(int lower, int upper) {
-    std::vector<std::string> patterns = GenerateNumberPatterns(lower, upper);
-    std::ostringstream oss;
-    for (size_t i = 0; i < patterns.size(); ++i) {
-      if (i > 0) {
-        oss << "|";
-      }
-      oss << patterns[i];
-    }
-    return "(" + oss.str() + ")";
-  }
+  static std::string FormatFloat(double value, int precision);
 
   /*!
    * \brief Create a rule with the given schema and rule name hint.
@@ -419,6 +268,8 @@ class JSONSchemaConverter {
   static void WarnUnsupportedKeywords(
       const picojson::object& schema, const std::vector<std::string>& keywords, bool verbose = false
   );
+
+  // NOTE: the visit functions should always return the rule body for later constructing the rule.
 
   /*! \brief Visit the schema and return the rule body for later constructing the rule. */
   std::string VisitSchema(const picojson::value& schema, const std::string& rule_name);
@@ -454,6 +305,7 @@ class JSONSchemaConverter {
 
   /*! \brief Visit a number schema. */
   std::string VisitNumber(const picojson::object& schema, const std::string& rule_name);
+
   /*! \brief Visit a string schema. */
   std::string VisitString(const picojson::object& schema, const std::string& rule_name);
 
@@ -462,6 +314,16 @@ class JSONSchemaConverter {
 
   /*! \brief Visit a null schema. */
   std::string VisitNull(const picojson::object& schema, const std::string& rule_name);
+
+  struct ArraySpec {
+    std::vector<picojson::value> prefix_item_schemas;
+    bool allow_additional_items;
+    picojson::value additional_item_schema;
+    int min_items;
+    int max_items;
+  };
+
+  Result<ArraySpec> ParseArraySchema(const picojson::object& schema);
 
   /*!
    * \brief Visit an array schema.
@@ -535,6 +397,22 @@ class JSONSchemaConverter {
    */
   std::string VisitObject(const picojson::object& schema, const std::string& rule_name);
 
+  /*!
+   * \brief Visit a type array schema:
+   * \example
+   * \code
+   * {
+   *     "type": ["integer", "string"]
+   * }
+   * \endcode
+   *
+   * Method:
+   * - Create a schema for each type in the type array. Copying all other properties.
+   * - Visit each schema and get the rule name.
+   * - Return "(" rule_name_1 | rule_name_2 | ... | rule_name_n ")"
+   */
+  std::string VisitTypeArray(const picojson::object& schema, const std::string& rule_name);
+
   /*! \brief Get the pattern for a property in the object schema. */
   std::string GetPropertyPattern(
       const std::string& prop_name,
@@ -581,15 +459,13 @@ class JSONSchemaConverter {
   );
 
   // The EBNF script creator
-  EBNFScriptCreator ebnf_script_creator_{EmptyConstructorTag{}};
+  EBNFScriptCreator ebnf_script_creator_;
   // The indent manager to get separators
   std::optional<IndentManager> indentManager_;
   // The root JSON schema
   picojson::value json_schema_;
   // Whether to use strict mode in conversion. See JSONSchemaToEBNF().
   bool strict_mode_;
-  // Whether to allow empty object/array
-  bool allow_empty_;
   // The colon separator
   std::string colon_pattern_;
   // The cache for basic rules. Mapping from the key of schema returned by GetSchemaCacheIndex()
@@ -625,7 +501,6 @@ JSONSchemaConverter::JSONSchemaConverter(
   } else {
     colon_pattern_ = "\"" + separators->second + "\"";
   }
-  allow_empty_ = !strict_mode_;
 
   AddBasicRules();
 }
@@ -723,6 +598,11 @@ std::string JSONSchemaConverter::CreateRuleFromSchema(
 ) {
   std::string idx = GetSchemaCacheIndex(schema);
   if (basic_rules_cache_.count(idx)) {
+    if (rule_name_hint == kRootRuleName) {
+      // If the rule name is root, we need to define the root rule instead of just using the
+      // cached rule.
+      return ebnf_script_creator_.AddRule(rule_name_hint, basic_rules_cache_[idx]);
+    }
     return basic_rules_cache_[idx];
   }
 
@@ -789,7 +669,8 @@ std::string JSONSchemaConverter::VisitSchema(
     XGRAMMAR_CHECK(schema.get<bool>()) << "Schema should not be false: it cannot accept any value";
     return VisitAny(schema, rule_name);
   }
-  XGRAMMAR_CHECK(schema.is<picojson::object>()) << "Schema should be an object or bool";
+  XGRAMMAR_CHECK(schema.is<picojson::object>())
+      << "Schema should be an object or bool, but got " << schema.serialize(false);
 
   WarnUnsupportedKeywords(
       schema,
@@ -816,6 +697,9 @@ std::string JSONSchemaConverter::VisitSchema(
   } else if (schema_obj.count("allOf")) {
     return VisitAllOf(schema_obj, rule_name);
   } else if (schema_obj.count("type")) {
+    if (schema_obj.at("type").is<picojson::array>()) {
+      return VisitTypeArray(schema_obj, rule_name);
+    }
     XGRAMMAR_CHECK(schema_obj.at("type").is<std::string>()) << "Type should be a string";
     const std::string& type = schema_obj.at("type").get<std::string>();
     if (type == "integer") {
@@ -833,8 +717,7 @@ std::string JSONSchemaConverter::VisitSchema(
     } else if (type == "object") {
       return VisitObject(schema_obj, rule_name);
     } else {
-      XGRAMMAR_LOG(FATAL) << "Unsupported type " << type << " in schema "
-                          << schema.serialize(false);
+      XGRAMMAR_LOG(FATAL) << "Unsupported type \"" << type << "\"";
     }
   } else if (schema_obj.count("properties") || schema_obj.count("additionalProperties") ||
              schema_obj.count("unevaluatedProperties")) {
@@ -993,6 +876,243 @@ std::string JSONSchemaConverter::VisitAny(
          kBasicArray + " | " + kBasicObject;
 }
 
+std::string JSONSchemaConverter::MakePatternForDigitRange(
+    char start, char end, int remainingDigits
+) {
+  std::ostringstream oss;
+  if (start == end) {
+    oss << start;
+  } else {
+    oss << "[" << start << "-" << end << "]";
+  }
+  if (remainingDigits > 0) {
+    oss << "\\d{" << remainingDigits << "}";
+  }
+  return oss.str();
+}
+
+std::vector<std::string> JSONSchemaConverter::GenerateNumberPatterns(int lower, int upper) {
+  std::vector<std::string> patterns;
+
+  int lower_len = static_cast<int>(std::to_string(lower).size());
+  int upper_len = static_cast<int>(std::to_string(upper).size());
+
+  for (int len = lower_len; len <= upper_len; ++len) {
+    const int digit_min = static_cast<int>(std::pow(10, len - 1));
+    const int digit_max = static_cast<int>(std::pow(10, len)) - 1;
+
+    int start = (len == lower_len) ? lower : digit_min;
+    int end = (len == upper_len) ? upper : digit_max;
+
+    std::string start_str = std::to_string(start);
+    std::string end_str = std::to_string(end);
+
+    if (len == 1) {
+      patterns.push_back(MakePatternForDigitRange(start_str[0], end_str[0], 0));
+      continue;
+    }
+
+    int prefix = 0;
+    while (prefix < len && start_str[prefix] == end_str[prefix]) {
+      prefix++;
+    }
+
+    if (prefix == len) {
+      patterns.push_back(start_str);
+      continue;
+    }
+
+    // Generate common prefix pattern if only last digit differs for start/end
+    if (prefix > 0 && prefix >= len - 2) {
+      std::string common_part = start_str.substr(0, prefix);
+      patterns.push_back(
+          common_part +
+          MakePatternForDigitRange(start_str[prefix], end_str[prefix], len - prefix - 1)
+      );
+      continue;
+    }
+
+    if (len == lower_len && len == upper_len) {
+      if (start == digit_max) {
+        XGRAMMAR_ICHECK(start == end);
+        patterns.push_back(start_str);
+      } else if (start == digit_min) {
+        if (end == digit_max) {
+          patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
+        } else {
+          for (size_t i = 0; i < end_str.size(); i++) {
+            if (i == 0) {
+              // First digit: range from 1 to end[0]-1
+              if (end_str[0] > '1') {
+                patterns.push_back(
+                    MakePatternForDigitRange('1', static_cast<char>(end_str[0] - 1), len - 1)
+                );
+              }
+            } else {
+              // Fix first i digits to end[0..i-1], then range from 0 to end[i]-1
+              std::string prefix = end_str.substr(0, i);
+              if (end_str[i] > '0') {
+                patterns.push_back(
+                    prefix +
+                    MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
+                );
+              }
+            }
+          }
+          patterns.push_back(end_str);
+        }
+      } else if (end == digit_max) {
+        for (size_t i = 0; i < start_str.size(); i++) {
+          if (i == 0) {
+            // First digit: range from start[0]+1 to 9
+            if (start_str[0] < '9') {
+              patterns.push_back(
+                  MakePatternForDigitRange(static_cast<char>(start_str[0] + 1), '9', len - 1)
+              );
+            }
+          } else {
+            // Fix first i digits to start[0..i-1], then range from start[i]+1 to 9
+            std::string prefix = start_str.substr(0, i);
+            if (start_str[i] < '9') {
+              patterns.push_back(
+                  prefix +
+                  MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
+              );
+            }
+          }
+        }
+        patterns.push_back(start_str);
+      } else {
+        // Handle middle range between first digits if they differ by more than 1
+        char start_first_digit = start_str[0];
+        char end_first_digit = end_str[0];
+
+        if (end_first_digit - start_first_digit > 1) {
+          patterns.push_back(MakePatternForDigitRange(
+              static_cast<char>(start_first_digit + 1),
+              static_cast<char>(end_first_digit - 1),
+              len - 1
+          ));
+        }
+
+        // Patterns starting from start
+        for (size_t i = 0; i < start_str.size(); i++) {
+          if (i == 0) {
+            std::string prefix = start_str.substr(0, 1);
+            if (start_str[1] < '9') {
+              patterns.push_back(
+                  prefix +
+                  MakePatternForDigitRange(static_cast<char>(start_str[1] + 1), '9', len - 2)
+              );
+            }
+          } else {
+            std::string prefix = start_str.substr(0, i);
+            if (start_str[i] < '9') {
+              patterns.push_back(
+                  prefix +
+                  MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
+              );
+            }
+          }
+        }
+        patterns.push_back(start_str);
+
+        // Patterns starting from end
+        for (size_t i = 0; i < end_str.size(); i++) {
+          if (i == 0) {
+            std::string prefix = end_str.substr(0, 1);
+            if (end_str[1] > '0') {
+              patterns.push_back(
+                  prefix + MakePatternForDigitRange('0', static_cast<char>(end_str[1] - 1), len - 2)
+              );
+            }
+          } else {
+            std::string prefix = end_str.substr(0, i);
+            if (end_str[i] > '0') {
+              patterns.push_back(
+                  prefix +
+                  MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
+              );
+            }
+          }
+        }
+        patterns.push_back(end_str);
+      }
+    }
+
+    else if (len == lower_len && len != upper_len) {
+      XGRAMMAR_ICHECK(end == digit_max);
+      if (start == digit_min) {
+        patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
+      } else {
+        for (size_t i = 0; i < start_str.size(); i++) {
+          if (i == 0) {
+            if (start_str[0] < '9') {
+              patterns.push_back(
+                  MakePatternForDigitRange(static_cast<char>(start_str[0] + 1), '9', len - 1)
+              );
+            }
+          } else {
+            std::string prefix = start_str.substr(0, i);
+            if (start_str[i] < '9') {
+              patterns.push_back(
+                  prefix +
+                  MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
+              );
+            }
+          }
+        }
+        patterns.push_back(start_str);
+      }
+    }
+
+    else if (len != lower_len && len == upper_len) {
+      XGRAMMAR_ICHECK(start == digit_min);
+      if (end == digit_max) {
+        patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
+      } else {
+        for (size_t i = 0; i < end_str.size(); i++) {
+          if (i == 0) {
+            if (end_str[0] > '1') {
+              patterns.push_back(
+                  MakePatternForDigitRange('1', static_cast<char>(end_str[0] - 1), len - 1)
+              );
+            }
+          } else {
+            std::string prefix = end_str.substr(0, i);
+            if (end_str[i] > '0') {
+              patterns.push_back(
+                  prefix +
+                  MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
+              );
+            }
+          }
+        }
+        patterns.push_back(end_str);
+      }
+    }
+
+    // len != lower_len && len != upper_len
+    else {
+      patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
+    }
+  }
+
+  return patterns;
+}
+
+std::string JSONSchemaConverter::GenerateSubRangeRegex(int lower, int upper) {
+  std::vector<std::string> patterns = GenerateNumberPatterns(lower, upper);
+  std::ostringstream oss;
+  for (size_t i = 0; i < patterns.size(); ++i) {
+    if (i > 0) {
+      oss << "|";
+    }
+    oss << patterns[i];
+  }
+  return "(" + oss.str() + ")";
+}
+
 std::string JSONSchemaConverter::GenerateRangeRegex(
     std::optional<int> start, std::optional<int> end
 ) {
@@ -1125,6 +1245,391 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
   return result.str();
 }
 
+std::string JSONSchemaConverter::FormatFloat(double value, int precision = 6) {
+  std::ostringstream oss;
+  oss << std::fixed << std::setprecision(precision) << value;
+  std::string result = oss.str();
+
+  // Remove trailing zeros after decimal point
+  size_t decimalPos = result.find('.');
+  if (decimalPos != std::string::npos) {
+    size_t lastNonZero = result.find_last_not_of('0');
+    if (lastNonZero != std::string::npos && lastNonZero > decimalPos) {
+      result.erase(lastNonZero + 1);
+    } else if (lastNonZero == decimalPos) {
+      result.erase(decimalPos);
+    }
+  }
+
+  return result;
+}
+
+std::string JSONSchemaConverter::GenerateFloatRangeRegex(
+    std::optional<double> start, std::optional<double> end, int precision = 6
+) {
+  if ((start && end) && (start.value() > end.value())) {
+    return "^()$";  // Invalid input
+  }
+
+  if (!start && !end) {
+    return "^-?\\d+(\\.\\d{1," + std::to_string(precision) + "})?$";
+  }
+
+  std::vector<std::string> parts;
+
+  int startInt = 0;
+  int endInt = 0;
+  double startFrac = 0.0;
+  double endFrac = 0.0;
+  bool isStartNegative = false;
+  bool isEndNegative = false;
+
+  if (start) {
+    isStartNegative = start.value() < 0;
+    startInt = static_cast<int>(floor(start.value()));
+    startFrac = start.value() - startInt;
+  }
+
+  if (end) {
+    isEndNegative = end.value() < 0;
+    endInt = static_cast<int>(floor(end.value()));
+    endFrac = end.value() - endInt;
+  }
+
+  // Only start defined - match numbers >= start
+  if (start && !end) {
+    std::string startIntStr = FormatFloat(start.value(), precision);
+    parts.push_back(startIntStr);
+
+    // fractional parts > startFrac with same integer part (for positive)
+    // fractional parts < startFrac with same integer part (for negative)
+    if (startFrac > 0.0) {
+      size_t dotPos = startIntStr.find('.');
+      if (dotPos != std::string::npos) {
+        std::string intPartStr = startIntStr.substr(0, dotPos);
+        std::string fracPartStr = startIntStr.substr(dotPos + 1);
+
+        if (!fracPartStr.empty()) {
+          for (size_t i = 0; i < fracPartStr.length(); i++) {
+            if (i == 0) {
+              if (isStartNegative) {
+                for (char d = '0'; d < fracPartStr[0]; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                  );
+                }
+              } else {
+                for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                  );
+                }
+              }
+            } else {
+              std::string prefix = fracPartStr.substr(0, i);
+              if (isStartNegative) {
+                if (fracPartStr[i] > '0') {
+                  for (char d = '0'; d < fracPartStr[i]; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + prefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                }
+              } else {
+                for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + prefix + d + "\\d{0," +
+                      std::to_string(precision - i - 1) + "}"
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // For all integers > startInt
+    if (startInt < INT_MAX - 1) {
+      std::string intRangeRegex = GenerateRangeRegex(startInt + 1, std::nullopt);
+      intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
+      parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+    }
+  }
+
+  // Only end defined - match numbers <= end
+  else if (!start && end) {
+    std::string endIntStr = FormatFloat(end.value(), precision);
+    parts.push_back(endIntStr);
+
+    // fractional parts < endFrac with same integer part (for positive)
+    // fractional parts > endFrac with same integer part (for negative)
+    if (endFrac > 0.0) {
+      size_t dotPos = endIntStr.find('.');
+      if (dotPos != std::string::npos) {
+        std::string intPartStr = endIntStr.substr(0, dotPos);
+        std::string fracPartStr = endIntStr.substr(dotPos + 1);
+
+        if (!fracPartStr.empty()) {
+          for (size_t i = 0; i < fracPartStr.length(); i++) {
+            if (i == 0) {
+              if (isEndNegative) {
+                for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                  );
+                }
+              } else {
+                for (char d = '0'; d < fracPartStr[0]; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                  );
+                }
+              }
+            } else {
+              if (isEndNegative) {
+                std::string prefix = fracPartStr.substr(0, i);
+                for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + prefix + d + "\\d{0," +
+                      std::to_string(precision - i - 1) + "}"
+                  );
+                }
+              } else if (fracPartStr[i] > '0') {
+                std::string prefix = fracPartStr.substr(0, i);
+                for (char d = '0'; d < fracPartStr[i]; d++) {
+                  parts.push_back(
+                      intPartStr + "\\." + prefix + d + "\\d{0," +
+                      std::to_string(precision - i - 1) + "}"
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // For all integers < endInt
+    if (endInt > INT_MIN + 1) {
+      std::string intRangeRegex = GenerateRangeRegex(std::nullopt, endInt - 1);
+      intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
+      parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+    }
+  }
+
+  // start and end both defined
+  else if (start && end) {
+    // same integer part
+    if (startInt == endInt) {
+      if (startFrac == 0.0 && endFrac == 0.0) {
+        parts.push_back(std::to_string(startInt));
+      } else {
+        std::string startStr = FormatFloat(start.value(), precision);
+        parts.push_back(startStr);
+
+        std::string endStr = FormatFloat(end.value(), precision);
+        if (startStr != endStr) {
+          parts.push_back(endStr);
+        }
+
+        if (startFrac < endFrac) {
+          size_t startDotPos = startStr.find('.');
+          size_t endDotPos = endStr.find('.');
+
+          if (startDotPos != std::string::npos && endDotPos != std::string::npos) {
+            std::string intPart = startStr.substr(0, startDotPos);
+            std::string startFracPart = startStr.substr(startDotPos + 1);
+            std::string endFracPart = endStr.substr(endDotPos + 1);
+
+            size_t diffPos = 0;
+            size_t minLength = std::min(startFracPart.length(), endFracPart.length());
+
+            while (diffPos < minLength && startFracPart[diffPos] == endFracPart[diffPos]) {
+              diffPos++;
+            }
+
+            if (diffPos < minLength) {
+              char startDigit = startFracPart[diffPos];
+              char endDigit = endFracPart[diffPos];
+
+              if (endDigit > startDigit + 1) {
+                std::string prefix = startFracPart.substr(0, diffPos);
+                for (char d = startDigit + 1; d < endDigit; d++) {
+                  parts.push_back(
+                      intPart + "\\." + prefix + d + "\\d{0," +
+                      std::to_string(precision - diffPos - 1) + "}"
+                  );
+                }
+              }
+
+              if (diffPos + 1 < startFracPart.length()) {
+                std::string prefix = startFracPart.substr(0, diffPos + 1);
+
+                for (size_t i = diffPos + 1; i < startFracPart.length(); i++) {
+                  std::string currentPrefix = startFracPart.substr(0, i);
+                  char currentDigit = startFracPart[i];
+
+                  for (char d = currentDigit + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPart + "\\." + currentPrefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                }
+              }
+
+              if (diffPos + 1 < endFracPart.length()) {
+                std::string prefix = endFracPart.substr(0, diffPos + 1);
+
+                for (size_t i = diffPos + 1; i < endFracPart.length(); i++) {
+                  if (endFracPart[i] > '0') {
+                    std::string currentPrefix = endFracPart.substr(0, i);
+                    char currentDigit = endFracPart[i];
+
+                    for (char d = '0'; d < currentDigit; d++) {
+                      parts.push_back(
+                          intPart + "\\." + currentPrefix + d + "\\d{0," +
+                          std::to_string(precision - i - 1) + "}"
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    // Different integer parts
+    else {
+      std::string startStr = FormatFloat(start.value(), precision);
+      parts.push_back(startStr);
+
+      std::string endStr = FormatFloat(end.value(), precision);
+      if (startStr != endStr) {
+        parts.push_back(endStr);
+      }
+
+      if (endInt > startInt + 1) {
+        std::string intRangeRegex = GenerateRangeRegex(startInt + 1, endInt - 1);
+        intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
+        parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+      }
+
+      if (startFrac > 0.0) {
+        size_t dotPos = startStr.find('.');
+        if (dotPos != std::string::npos) {
+          std::string intPartStr = startStr.substr(0, dotPos);
+          std::string fracPartStr = startStr.substr(dotPos + 1);
+
+          if (!fracPartStr.empty()) {
+            for (size_t i = 0; i < fracPartStr.length(); i++) {
+              if (i == 0) {
+                if (isStartNegative) {
+                  for (char d = '0'; d < fracPartStr[0]; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                    );
+                  }
+                } else {
+                  for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                    );
+                  }
+                }
+              } else {
+                std::string prefix = fracPartStr.substr(0, i);
+                if (isStartNegative) {
+                  if (fracPartStr[i] > '0') {
+                    for (char d = '0'; d < fracPartStr[i]; d++) {
+                      parts.push_back(
+                          intPartStr + "\\." + prefix + d + "\\d{0," +
+                          std::to_string(precision - i - 1) + "}"
+                      );
+                    }
+                  }
+                } else {
+                  for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + prefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        parts.push_back(std::to_string(startInt) + "\\.\\d{1," + std::to_string(precision) + "}");
+      }
+
+      if (endFrac > 0.0) {
+        size_t dotPos = endStr.find('.');
+        if (dotPos != std::string::npos) {
+          std::string intPartStr = endStr.substr(0, dotPos);
+          std::string fracPartStr = endStr.substr(dotPos + 1);
+
+          if (!fracPartStr.empty()) {
+            for (size_t i = 0; i < fracPartStr.length(); i++) {
+              if (i == 0) {
+                if (isEndNegative) {
+                  for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                    );
+                  }
+                } else {
+                  for (char d = '0'; d < fracPartStr[0]; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
+                    );
+                  }
+                }
+              } else {
+                if (isEndNegative) {
+                  std::string prefix = fracPartStr.substr(0, i);
+                  for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + prefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                } else if (fracPartStr[i] > '0') {
+                  std::string prefix = fracPartStr.substr(0, i);
+                  for (char d = '0'; d < fracPartStr[i]; d++) {
+                    parts.push_back(
+                        intPartStr + "\\." + prefix + d + "\\d{0," +
+                        std::to_string(precision - i - 1) + "}"
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        parts.push_back(std::to_string(endInt) + "\\.\\d{1," + std::to_string(precision) + "}");
+      }
+    }
+  }
+
+  std::ostringstream result;
+  result << "^(";
+  for (size_t i = 0; i < parts.size(); ++i) {
+    if (i > 0) {
+      result << "|";
+    }
+    result << parts[i];
+  }
+  result << ")$";
+
+  return result.str();
+}
+
 std::string JSONSchemaConverter::VisitInteger(
     const picojson::object& schema, const std::string& rule_name
 ) {
@@ -1173,6 +1678,8 @@ std::string JSONSchemaConverter::VisitInteger(
           << "exclusiveMaximum must be an integer";
       end = static_cast<int>(end_double);
     }
+    XGRAMMAR_CHECK(!(start && end) || *start <= *end)
+        << "Invalid range, start value greater than end value";
     range_regex = GenerateRangeRegex(start, end);
   }
   if (!range_regex.empty()) {
@@ -1191,12 +1698,45 @@ std::string JSONSchemaConverter::VisitNumber(
       schema,
       {
           "multipleOf",
-          "minimum",
-          "maximum",
-          "exclusiveMinimum",
-          "exclusiveMaximum",
       }
   );
+
+  std::string range_regex = "";
+  if (schema.count("minimum") || schema.count("maximum") || schema.count("exclusiveMinimum") ||
+      schema.count("exclusiveMaximum")) {
+    std::optional<double> start, end;
+    if (schema.count("minimum")) {
+      XGRAMMAR_CHECK(schema.at("minimum").is<double>() || schema.at("minimum").is<int64_t>())
+          << "minimum must be a number";
+      start = schema.at("minimum").get<double>();
+    }
+    if (schema.count("exclusiveMinimum")) {
+      XGRAMMAR_CHECK(
+          schema.at("exclusiveMinimum").is<double>() || schema.at("exclusiveMinimum").is<int64_t>()
+      ) << "exclusiveMinimum must be a number";
+      start = schema.at("exclusiveMinimum").get<double>();
+    }
+    if (schema.count("maximum")) {
+      XGRAMMAR_CHECK(schema.at("maximum").is<double>() || schema.at("maximum").is<int64_t>())
+          << "maximum must be a number";
+      end = schema.at("maximum").get<double>();
+    }
+    if (schema.count("exclusiveMaximum")) {
+      XGRAMMAR_CHECK(
+          schema.at("exclusiveMaximum").is<double>() || schema.at("exclusiveMaximum").is<int64_t>()
+      ) << "exclusiveMaximum must be a number";
+      end = schema.at("exclusiveMaximum").get<double>();
+    }
+    XGRAMMAR_CHECK(!(start && end) || *start <= *end)
+        << "Invalid range, start value greater than end value";
+    range_regex = GenerateFloatRangeRegex(start, end);
+  }
+
+  if (!range_regex.empty()) {
+    std::string converted_regex = RegexToEBNF(range_regex, false);
+    return converted_regex;
+  }
+
   return "(\"0\" | \"-\"? [1-9] [0-9]*) (\".\" [0-9]+)? ([eE] [+-]? [0-9]+)?";
 }
 
@@ -1205,18 +1745,193 @@ std::string JSONSchemaConverter::VisitString(
 ) {
   XGRAMMAR_CHECK(schema.count("type"));
   XGRAMMAR_CHECK(schema.at("type").get<std::string>() == "string");
-  WarnUnsupportedKeywords(
-      schema,
-      {
-          "minLength",
-          "maxLength",
-          "format",
-      }
-  );
+  if (schema.count("format")) {
+    std::string format = schema.at("format").get<std::string>();
+    if (format == "email") {
+      // refer to RFC 5321 and RFC 5322, but skipping `address-literal` at
+      // RFC 5321 section 4.1.2 currently
+      std::string atext = "[\\w!#$%&'*+/=?^`{|}~-]";
+      std::string dot_string = "(" + atext + "+(\\." + atext + "+)*)";
+      std::string quoted_string =
+          "\\\\\"(\\\\[\\x20-\\x7E]|[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E])*\\\\\"";
+      std::string domain =
+          "([A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)((\\.[A-Za-z0-9][\\-A-Za-z0-9]*[A-Za-z0-9])*)";
+      std::string email_regex_pattern =
+          "^(" + dot_string + "|" + quoted_string + ")@" + domain + "$";
+      std::string email_ebnf = RegexToEBNF(email_regex_pattern, false);
+      return "\"\\\"\" " + email_ebnf + " \"\\\"\"";
+    }
+    if (format == "date") {
+      // refer to RFC 3339, section 5.6
+      std::string date_regex_pattern = "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))$";
+      std::string date_ebnf = RegexToEBNF(date_regex_pattern, false);
+      return "\"\\\"\" " + date_ebnf + " \"\\\"\"";
+    }
+    if (format == "time") {
+      // refer to RFC 3339, section 5.6
+      std::string time_regex_pattern =
+          "^([01]\\d|2[0-3]):[0-5]\\d:([0-5]\\d|60)(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
+      std::string time_ebnf = RegexToEBNF(time_regex_pattern, false);
+      return "\"\\\"\" " + time_ebnf + " \"\\\"\"";
+    }
+    if (format == "date-time") {
+      // refer to RFC 3339, section 5.6
+      std::string date_time_regex_pattern =
+          "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))T([01]\\d|2[0-3]):([0-5]\\d|60):["
+          "0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
+      std::string date_time_ebnf = RegexToEBNF(date_time_regex_pattern, false);
+      return "\"\\\"\" " + date_time_ebnf + " \"\\\"\"";
+    }
+    if (format == "duration") {
+      // refer to RFC 3339, Appendix A
+      std::string duration_regex_pattern =
+          "^P((\\d+D|\\d+M(\\d+D)?|\\d+Y(\\d+M(\\d+D)?)?)(T(\\d+S|\\d+M(\\d+S)?|\\d+H(\\d+M(\\d+S)?"
+          ")?))?|T(\\d+S|\\d+M(\\d+S)?|\\d+H(\\d+M(\\d+S)?)?)|\\d+W)$";
+      std::string duration_ebnf = RegexToEBNF(duration_regex_pattern, false);
+      return "\"\\\"\" " + duration_ebnf + " \"\\\"\"";
+    }
+    if (format == "ipv4") {
+      // refer to RFC 2673, section 3.2
+      std::string decbyte = "(25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)";
+      std::string ipv4_regex_pattern = "^(" + decbyte + "\\.){3}" + decbyte + "$";
+      std::string ipv4_ebnf = RegexToEBNF(ipv4_regex_pattern, false);
+      return "\"\\\"\" " + ipv4_ebnf + " \"\\\"\"";
+    }
+    if (format == "ipv6") {
+      // refer to RFC 3986, section 3.3.2
+      std::string ipv6_regex_pattern =
+          "("
+          "([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|"  // 1:2:3:4:5:6:7:8
+          "([0-9a-fA-F]{1,4}:){1,7}:|"  // 1::                              1:2:3:4:5:6:7::
+          "([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|"         // 1::8             1:2:3:4:5:6::8
+                                                               // 1:2:3:4:5:6::8
+          "([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|"  // 1::7:8           1:2:3:4:5::7:8
+                                                               // 1:2:3:4:5::8
+          "([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|"  // 1::6:7:8         1:2:3:4::6:7:8
+                                                               // 1:2:3:4::8
+          "([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|"  // 1::5:6:7:8       1:2:3::5:6:7:8
+                                                               // 1:2:3::8
+          "([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|"  // 1::4:5:6:7:8     1:2::4:5:6:7:8
+                                                               // 1:2::8
+          "[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|"  // 1::3:4:5:6:7:8   1::3:4:5:6:7:8  1::8
+          ":((:[0-9a-fA-F]{1,4}){1,7}|:)|"  // ::2:3:4:5:6:7:8  ::2:3:4:5:6:7:8 ::8       ::
+          "::(ffff(:0{1,4}){0,1}:){0,1}"
+          "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}"
+          "(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|"  // ::255.255.255.255   ::ffff:255.255.255.255
+                                                       // ::ffff:0:255.255.255.255  (IPv4-mapped
+                                                       // IPv6 addresses and IPv4-translated
+                                                       // addresses)
+          "([0-9a-fA-F]{1,4}:){1,4}:"
+          "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}"
+          "(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])"  // 2001:db8:3:4::192.0.2.33
+                                                      // 64:ff9b::192.0.2.33 (IPv4-Embedded IPv6
+                                                      // Address)
+          ")";
+
+      std::string ipv6_ebnf = RegexToEBNF(ipv6_regex_pattern, false);
+      return "\"\\\"\" " + ipv6_ebnf + " \"\\\"\"";
+    }
+    if (format == "hostname") {
+      // refer to RFC 1123, section 2.1
+      std::string hostname_regex_pattern =
+          "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$";
+      std::string hostname_ebnf = RegexToEBNF(hostname_regex_pattern, false);
+      return "\"\\\"\" " + hostname_ebnf + " \"\\\"\"";
+    }
+    if (format == "uuid") {
+      // refer to RFC 4122, section 3
+      std::string uuid_regex_pattern =
+          "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$";
+      std::string uuid_ebnf = RegexToEBNF(uuid_regex_pattern, false);
+      return "\"\\\"\" " + uuid_ebnf + " \"\\\"\"";
+    }
+    if (format == "uri") {
+      // refer to RFC 3986, Appendix A, but skipping IP-literal and IPv4address currently
+      std::string schema = "[a-zA-Z][a-zA-Z+\\.-]*";
+      std::string pchar = "([\\w\\.~!$&'()*+,;=:@-]|%[0-9A-Fa-f][0-9A-Fa-f])";
+      std::string query_fragment_char = "([\\w\\.~!$&'()*+,;=:@/\\?-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+      std::string query = "(\\?" + query_fragment_char + ")?";
+      std::string fragment = "(#" + query_fragment_char + ")?";
+      std::string path_abempty = "(/" + pchar + "*)*";
+      std::string path_absolute_rootless_empty = "/?(" + pchar + "+(/" + pchar + "*)*)?";
+      std::string userinfo = "([\\w\\.~!$&'()*+,;=:-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+      std::string host = "([\\w\\.~!$&'()*+,;=-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+      std::string authority = "(" + userinfo + "@)?" + host + "(:\\d*)?";
+      std::string hier_part =
+          "(//" + authority + path_abempty + "|" + path_absolute_rootless_empty + ")";
+      std::string uri_regex_pattern = "^" + schema + ":" + hier_part + query + fragment + "$";
+      std::string uri_ebnf = RegexToEBNF(uri_regex_pattern, false);
+      return "\"\\\"\" " + uri_ebnf + " \"\\\"\"";
+    }
+
+    if (format == "uri-reference") {
+      // refer to RFC 3986, Appendix A, but skipping IP-literal and IPv4address currently
+      std::string pchar = "([\\w\\.~!$&'()*+,;=:@-]|%[0-9A-Fa-f][0-9A-Fa-f])";
+      std::string query_fragment_char = "([\\w\\.~!$&'()*+,;=:@/\\?-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+      std::string query = "(\\?" + query_fragment_char + ")?";
+      std::string fragment = "(#" + query_fragment_char + ")?";
+      std::string path_abempty = "(/" + pchar + "*)*";
+      std::string path_absolute = "/(" + pchar + "+(/" + pchar + "*)*)?";
+      std::string segment_nz_nc = "([\\w\\.~!$&'()*+,;=@-]|%[0-9A-Fa-f][0-9A-Fa-f])+";
+      std::string path_noscheme = segment_nz_nc + "(/" + pchar + "*)*";
+      std::string userinfo = "([\\w\\.~!$&'()*+,;=:-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+      std::string host = "([\\w\\.~!$&'()*+,;=-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+      std::string authority = "(" + userinfo + "@)?" + host + "(:\\d*)?";
+      std::string relative_part =
+          "(//" + authority + path_abempty + "|" + path_absolute + "|" + path_noscheme + ")?";
+      std::string uri_reference_regex_pattern = "^" + relative_part + query + fragment + "$";
+      std::string uri_reference_ebnf = RegexToEBNF(uri_reference_regex_pattern, false);
+      return "\"\\\"\" " + uri_reference_ebnf + " \"\\\"\"";
+    }
+    if (format == "uri-template") {
+      // refer to RFC 6570, section 2
+      std::string literals =
+          "([\\x21\\x23-\\x24\\x26\\x28-\\x3B\\x3D\\x3F-\\x5B\\x5D\\x5F\\x61-\\x7A\\x7E]"
+          "|%[0-9A-Fa-f][0-9A-Fa-f])";
+      std::string op = "[+#\\./;\\?&=,!@|]";
+      std::string varchar = "(\\w|%[0-9A-Fa-f][0-9A-Fa-f])";
+      std::string varname = varchar + "(\\.?" + varchar + ")*";
+      std::string varspec = varname + "(:[1-9]\\d?\\d?\\d?|\\*)?";
+      std::string variable_list = varspec + "(," + varspec + ")*";
+      std::string expression = "\\{(" + op + ")?" + variable_list + "\\}";
+      std::string uri_template_regex_pattern = "^(" + literals + "|" + expression + ")*$";
+      std::string uri_template_ebnf = RegexToEBNF(uri_template_regex_pattern, false);
+      return "\"\\\"\" " + uri_template_ebnf + " \"\\\"\"";
+    }
+    if (format == "json-pointer") {
+      // refer to RFC 6901, section 3
+      std::string json_pointer_regex_pattern =
+          "^(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*$";
+      std::string json_pointer_ebnf = RegexToEBNF(json_pointer_regex_pattern, false);
+      return "\"\\\"\" " + json_pointer_ebnf + " \"\\\"\"";
+    }
+    if (format == "relative-json-pointer") {
+      // refer to draft-handrews-relative-json-pointer-01, section 3
+      std::string relative_json_pointer_regex_pattern =
+          "^(0|[1-9][0-9]*)(#|(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*)$";
+      std::string relative_json_pointer_ebnf =
+          RegexToEBNF(relative_json_pointer_regex_pattern, false);
+      return "\"\\\"\" " + relative_json_pointer_ebnf + " \"\\\"\"";
+    }
+  }
   if (schema.count("pattern")) {
+    if (schema.count("minLength") || schema.count("maxLength") || schema.count("format")) {
+      XGRAMMAR_LOG(WARNING) << "Specifying pattern and minLength/maxLength/format is not "
+                            << "supported yet, ignoring minLength/maxLength/format";
+    }
     std::string regex_pattern = schema.at("pattern").get<std::string>();
     std::string converted_regex = RegexToEBNF(regex_pattern, false);
     return "\"\\\"\" " + converted_regex + " \"\\\"\"";
+  }
+  if (schema.count("minLength") || schema.count("maxLength")) {
+    int min_length = schema.count("minLength") ? schema.at("minLength").get<int64_t>() : 0;
+    int max_length = schema.count("maxLength") ? schema.at("maxLength").get<int64_t>() : -1;
+    XGRAMMAR_CHECK(max_length == -1 || min_length <= max_length)
+        << "In string schema, minLength " << min_length << " is greater than " << "maxLength "
+        << max_length;
+    std::string range_part = "{" + std::to_string(min_length) + "," +
+                             (max_length == -1 ? "" : std::to_string(max_length)) + "}";
+    return "\"\\\"\" " + std::string("[^\"\\\\\\r\\n]") + range_part + " \"\\\"\"";
   }
   return "[\"] " + kBasicStringSub;
 }
@@ -1237,89 +1952,270 @@ std::string JSONSchemaConverter::VisitNull(
   return "\"null\"";
 }
 
+Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
+    const picojson::object& schema
+) {
+  XGRAMMAR_DCHECK(
+      (schema.count("type") && schema.at("type").get<std::string>() == "array") ||
+      schema.count("prefixItems") || schema.count("items") || schema.count("unevaluatedItems")
+  );
+  WarnUnsupportedKeywords(schema, {"uniqueItems", "contains", "minContains", "maxContains"});
+
+  std::vector<picojson::value> prefix_item_schemas;
+  bool allow_additional_items = true;
+  picojson::value additional_item_schema;
+  int min_items = 0;
+  int max_items = -1;
+
+  if (schema.count("prefixItems")) {
+    if (!schema.at("prefixItems").is<picojson::array>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("prefixItems must be an array")
+      );
+    }
+    prefix_item_schemas = schema.at("prefixItems").get<picojson::array>();
+    for (const auto& item : prefix_item_schemas) {
+      if (item.is<bool>()) {
+        if (!item.get<bool>()) {
+          return Result<ArraySpec>::Err(
+              std::make_shared<UnsatisfiableSchemaError>("prefixItems contains false")
+          );
+        }
+      } else if (!item.is<picojson::object>()) {
+        return Result<ArraySpec>::Err(std::make_shared<InvalidSchemaError>(
+            "prefixItems must be an array of objects or booleans"
+        ));
+      }
+    }
+  }
+
+  if (schema.count("items")) {
+    auto items_value = schema.at("items");
+    if (!items_value.is<bool>() && !items_value.is<picojson::object>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("items must be a boolean or an object")
+      );
+    }
+    if (items_value.is<bool>() && !items_value.get<bool>()) {
+      allow_additional_items = false;
+    } else {
+      allow_additional_items = true;
+      additional_item_schema = items_value;
+    }
+  } else if (schema.count("unevaluatedItems")) {
+    auto unevaluated_items_value = schema.at("unevaluatedItems");
+    if (!unevaluated_items_value.is<bool>() && !unevaluated_items_value.is<picojson::object>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("unevaluatedItems must be a boolean or an object")
+      );
+    }
+    if (unevaluated_items_value.is<bool>() && !unevaluated_items_value.get<bool>()) {
+      allow_additional_items = false;
+    } else {
+      allow_additional_items = true;
+      additional_item_schema = unevaluated_items_value;
+    }
+  } else if (!strict_mode_) {
+    allow_additional_items = true;
+    additional_item_schema = picojson::value(true);
+  } else {
+    allow_additional_items = false;
+  }
+
+  if (schema.count("minItems")) {
+    if (!schema.at("minItems").is<int64_t>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("minItems must be an integer")
+      );
+    }
+    min_items = std::max(0, static_cast<int>(schema.at("minItems").get<int64_t>()));
+  }
+
+  if (schema.count("minContains")) {
+    if (!schema.at("minContains").is<int64_t>()) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("minContains must be an integer")
+      );
+    }
+    min_items = std::max(min_items, static_cast<int>(schema.at("minContains").get<int64_t>()));
+  }
+
+  if (schema.count("maxItems")) {
+    if (!schema.at("maxItems").is<int64_t>() || schema.at("maxItems").get<int64_t>() < 0) {
+      return Result<ArraySpec>::Err(
+          std::make_shared<InvalidSchemaError>("maxItems must be a non-negative integer")
+      );
+    }
+    max_items = schema.at("maxItems").get<int64_t>();
+  }
+
+  // Check if the schema is unsatisfiable
+  if (max_items != -1 && min_items > max_items) {
+    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+        "minItems is greater than maxItems: " + std::to_string(min_items) + " > " +
+        std::to_string(max_items)
+    ));
+  }
+
+  if (max_items != -1 && max_items < static_cast<int>(prefix_item_schemas.size())) {
+    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+        "maxItems is less than the number of prefixItems: " + std::to_string(max_items) + " < " +
+        std::to_string(prefix_item_schemas.size())
+    ));
+  }
+
+  if (!allow_additional_items) {
+    // [len, len] must be in [min, max]
+    if (static_cast<int>(prefix_item_schemas.size()) < min_items) {
+      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+          "minItems is greater than the number of prefixItems, but additional items are not "
+          "allowed: " +
+          std::to_string(min_items) + " > " + std::to_string(prefix_item_schemas.size())
+      ));
+    }
+    if (max_items != -1 && static_cast<int>(prefix_item_schemas.size()) > max_items) {
+      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+          "maxItems is less than the number of prefixItems, but additional items are not "
+          "allowed: " +
+          std::to_string(max_items) + " < " + std::to_string(prefix_item_schemas.size())
+      ));
+    }
+  }
+
+  return Result<ArraySpec>::Ok(ArraySpec{
+      prefix_item_schemas, allow_additional_items, additional_item_schema, min_items, max_items
+  });
+}
+
 std::string JSONSchemaConverter::VisitArray(
     const picojson::object& schema, const std::string& rule_name
 ) {
-  XGRAMMAR_CHECK(
-      (schema.count("type") && schema.at("type").get<std::string>() == "array") ||
-      schema.count("items") || schema.count("prefixItems") || schema.count("unevaluatedItems")
-  );
-  WarnUnsupportedKeywords(
-      schema,
-      {
-          "uniqueItems",
-          "contains",
-          "minContains",
-          "maxContains",
-          "minItems",
-          "maxItems",
-      }
-  );
+  auto array_spec_result = ParseArraySchema(schema);
+  if (array_spec_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << array_spec_result.UnwrapErr()->what();
+  }
 
-  std::string result = "\"[\"";
+  auto array_spec = std::move(array_spec_result).Unwrap();
 
   indentManager_->StartIndent();
 
+  auto start_separator = indentManager_->StartSeparator();
+  auto mid_separator = indentManager_->MiddleSeparator();
+  auto end_separator = indentManager_->EndSeparator();
+  auto empty_separator = indentManager_->EmptySeparator();
+
+  std::vector<std::string> item_rule_names;
+  std::string additional_rule_name;
+
   // 1. Handle prefix items
-  if (schema.count("prefixItems")) {
-    XGRAMMAR_CHECK(schema.at("prefixItems").is<picojson::array>())
-        << "prefixItems must be an array";
-    const auto& prefix_items = schema.at("prefixItems").get<picojson::array>();
-    for (int i = 0; i < static_cast<int>(prefix_items.size()); ++i) {
-      XGRAMMAR_CHECK(prefix_items[i].is<picojson::object>());
-      result += " " + NextSeparator() + " ";
-      result += CreateRuleFromSchema(prefix_items[i], rule_name + "_item_" + std::to_string(i));
+  if (array_spec.prefix_item_schemas.size() > 0) {
+    for (int i = 0; i < static_cast<int>(array_spec.prefix_item_schemas.size()); ++i) {
+      XGRAMMAR_DCHECK(
+          array_spec.prefix_item_schemas[i].is<picojson::object>() ||
+          array_spec.prefix_item_schemas[i].is<bool>()
+      );
+      item_rule_names.push_back(CreateRuleFromSchema(
+          array_spec.prefix_item_schemas[i], rule_name + "_item_" + std::to_string(i)
+      ));
     }
   }
 
-  // 2. Find additional items
-  picojson::value additional_item = picojson::value(false);
-  std::string additional_suffix = "";
-
-  if (schema.count("items") && (!schema.at("items").is<bool>() || schema.at("items").get<bool>())) {
-    additional_item = schema.at("items");
-    additional_suffix = "items";
-  }
-
-  // If items is specified in the schema, we don't need to consider unevaluatedItems
-  if (schema.count("items") == 0) {
-    picojson::value unevaluated = schema.count("unevaluatedItems") ? schema.at("unevaluatedItems")
-                                                                   : picojson::value(!strict_mode_);
-    if (!unevaluated.is<bool>() || unevaluated.get<bool>()) {
-      additional_item = unevaluated;
-      additional_suffix = "uneval";
-    }
-  }
-
-  // 3. Handle additional items and the end separator
-  bool could_be_empty = false;
-  if (additional_item.is<bool>() && !additional_item.get<bool>()) {
-    result += " " + NextSeparator(true);
-  } else {
-    std::string additional_pattern =
-        CreateRuleFromSchema(additional_item, rule_name + "_" + additional_suffix);
-    if (schema.count("prefixItems")) {
-      result += " (" + NextSeparator() + " " + additional_pattern + ")* ";
-      result += NextSeparator(true);
-    } else {
-      result += " " + NextSeparator() + " " + additional_pattern + " (";
-      result += NextSeparator() + " " + additional_pattern + ")* ";
-      result += NextSeparator(true);
-      could_be_empty = true;
-    }
+  // 2. Handle additional items
+  if (array_spec.allow_additional_items) {
+    additional_rule_name =
+        CreateRuleFromSchema(array_spec.additional_item_schema, rule_name + "_additional");
   }
 
   indentManager_->EndIndent();
 
-  result += " \"]\"";
+  // 3. Construct the result with given format
+  // clang-format off
+  /*
+   * prefix empty, additional items not allowed: [empty_separator]
+   * prefix empty, additional items allowed:
+   *   if min == 0, max == 0:
+   *     [empty_separator]
+   *   if min == 0, max > 0:
+   *     ([start_separator additional_rule_name (mid_separator additional_rule_name){0, max - 1}) end_separator] | [empty_separator]
+   *   if min > 0:
+   *     ([start_separator additional_rule_name (mid_separator additional_rule_name){min - 1, max - 1}) end_separator]
+   * prefix non-empty, additional items not allowed: [start_separator item0 mid_separator item1 end_separator]
+   * prefix non-empty, additional items allowed:
+   *   [start_separator item0 mid_separator item1 (mid_separator additional_rule_name){max(0, min - len(prefix)), max - len(prefix)} end_separator]
+   */
+  // clang-format on
+  std::string result;
+  const std::string& left_bracket = EBNFScriptCreator::Str("[");
+  const std::string& right_bracket = EBNFScriptCreator::Str("]");
 
-  if (allow_empty_ && could_be_empty) {
-    // result = (result) | []
-    auto rest = "\"[\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"]\"";
-    result = "(" + result + ") | " + rest;
+  if (array_spec.prefix_item_schemas.empty()) {
+    auto empty_part = EBNFScriptCreator::Concat({left_bracket, empty_separator, right_bracket});
+    if (!array_spec.allow_additional_items) {
+      return empty_part;
+    } else if (array_spec.min_items == 0 && array_spec.max_items == 0) {
+      return empty_part;
+    } else if (array_spec.min_items == 0 && array_spec.max_items != 0) {
+      return EBNFScriptCreator::Or(
+          {EBNFScriptCreator::Concat(
+               {left_bracket,
+                start_separator,
+                additional_rule_name,
+                EBNFScriptCreator::Repeat(
+                    EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
+                    0,
+                    array_spec.max_items == -1 ? -1 : array_spec.max_items - 1
+                ),
+                end_separator,
+                right_bracket}
+           ),
+           empty_part}
+      );
+    } else {
+      XGRAMMAR_DCHECK(array_spec.min_items > 0);
+      return EBNFScriptCreator::Concat(
+          {left_bracket,
+           start_separator,
+           additional_rule_name,
+           EBNFScriptCreator::Repeat(
+               EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
+               array_spec.min_items - 1,
+               array_spec.max_items == -1 ? -1 : array_spec.max_items - 1
+           ),
+           end_separator,
+           right_bracket}
+      );
+    }
+  } else {
+    std::vector<std::string> prefix_part;
+    for (int i = 0; i < static_cast<int>(item_rule_names.size()); ++i) {
+      if (i > 0) {
+        prefix_part.push_back(mid_separator);
+      }
+      prefix_part.push_back(item_rule_names[i]);
+    }
+    auto prefix_part_str = EBNFScriptCreator::Concat(prefix_part);
+    if (!array_spec.allow_additional_items) {
+      return EBNFScriptCreator::Concat(
+          {left_bracket, start_separator, prefix_part_str, end_separator, right_bracket}
+      );
+    } else {
+      int min_items = std::max(0, array_spec.min_items - static_cast<int>(item_rule_names.size()));
+      return EBNFScriptCreator::Concat(
+          {left_bracket,
+           start_separator,
+           prefix_part_str,
+           EBNFScriptCreator::Repeat(
+               EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
+               min_items,
+               array_spec.max_items == -1
+                   ? -1
+                   : array_spec.max_items - static_cast<int>(item_rule_names.size())
+           ),
+           end_separator,
+           right_bracket}
+      );
+    }
   }
-
-  return result;
 }
 
 std::string JSONSchemaConverter::GetPropertyPattern(
@@ -1554,12 +2450,38 @@ std::string JSONSchemaConverter::VisitObject(
   indentManager_->EndIndent();
 
   result += " \"}\"";
-  if (allow_empty_ && could_be_empty) {
+  if (could_be_empty) {
     // result = (result) | {}
     auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"}\"";
     result = "(" + result + ") | " + rest;
   }
 
+  return result;
+}
+
+std::string JSONSchemaConverter::VisitTypeArray(
+    const picojson::object& schema, const std::string& rule_name
+) {
+  XGRAMMAR_CHECK(schema.at("type").is<picojson::array>());
+  auto type_array = schema.at("type").get<picojson::array>();
+
+  picojson::object schema_copy = schema;
+  if (type_array.size() == 0) {
+    schema_copy.erase("type");
+    return VisitSchema(picojson::value(schema_copy), rule_name);
+  }
+  std::string result;
+  for (const auto& type : type_array) {
+    XGRAMMAR_CHECK(type.is<std::string>())
+        << "type must be a string or an array of strings, but got " << type;
+    if (!result.empty()) {
+      result += " | ";
+    }
+    schema_copy["type"] = type;
+    result += CreateRuleFromSchema(
+        picojson::value(schema_copy), rule_name + "_" + type.get<std::string>()
+    );
+  }
   return result;
 }
 
@@ -1591,6 +2513,10 @@ std::string JSONSchemaToEBNF(
 // Wrapper function for testing
 std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end) {
   return JSONSchemaConverter::GenerateRangeRegex(start, end);
+}
+
+std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<double> end) {
+  return JSONSchemaConverter::GenerateFloatRangeRegex(start, end, 6);
 }
 
 }  // namespace xgrammar

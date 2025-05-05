@@ -27,9 +27,13 @@ Grammar Grammar::FromJSONSchema(
     bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
-    bool strict_mode
+    bool strict_mode,
+    bool print_converted_ebnf
 ) {
   auto ebnf_string = JSONSchemaToEBNF(schema, any_whitespace, indent, separators, strict_mode);
+  if (print_converted_ebnf) {
+    XGRAMMAR_LOG(INFO) << "Converted EBNF: " << ebnf_string << std::endl;
+  }
   return FromEBNF(ebnf_string);
 }
 

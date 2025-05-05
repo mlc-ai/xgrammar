@@ -2,15 +2,20 @@
 
 import sys
 import time
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import pytest
 import torch
 
 import xgrammar as xgr
-from xgrammar.testing import _bool_mask_to_bitmask, _get_masked_tokens_from_bitmask
+from xgrammar.testing import (
+    _bool_mask_to_bitmask,
+    _get_masked_tokens_from_bitmask,
+    _is_single_token_bitmask,
+)
 
 _is_cuda_available = torch.cuda.is_available()
+_is_mps_available = torch.backends.mps.is_available()
 
 
 def test_allocate_reset_token_bitmask():
@@ -37,33 +42,104 @@ def test_get_masked_tokens_from_bitmask(token_mask_size: int, index: int):
     assert _get_masked_tokens_from_bitmask(bitmask, token_mask_size, index) == expected
 
 
-@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton"))
-def test_apply_token_bitmask_inplace(impl: str):
-    if impl == "cuda" and "cuda" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
+def test_is_single_token_bitmask():
+    batch = 2
+    batch_index = 1
+    vocab_size = 1024
+    token_id = 100
+
+    bool_mask = torch.zeros(batch, vocab_size, dtype=torch.bool)
+    bitmask = _bool_mask_to_bitmask(bool_mask)
+    assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (False, -1)
+    bool_mask[batch_index, token_id] = True
+    bitmask = _bool_mask_to_bitmask(bool_mask)
+    assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (True, token_id)
+    bool_mask[batch_index, token_id + 1] = True
+    bitmask = _bool_mask_to_bitmask(bool_mask)
+    assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (False, -1)
+
+
+@pytest.mark.parametrize("device", ("cpu", "cuda"))
+def test_apply_token_bitmask_inplace(device: str):
+    if device == "cuda" and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
-    if impl == "triton" and "triton" not in xgr.kernels.apply_token_bitmask_inplace_kernels:
-        pytest.skip(reason="Triton is not installed")
+
+    neginf = float("-inf")
+    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool, device=device)
+    bitmask = torch.tensor([0b1010101010], dtype=torch.int32, device=device)
+    logits = torch.tensor(
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], dtype=torch.float32, device=device
+    )
+    expected = torch.where(bool_mask, logits, neginf)
+
+    xgr.apply_token_bitmask_inplace(logits, bitmask)
+    torch.testing.assert_close(logits, expected)
+
+
+def get_apply_token_bitmask_kernel(impl: str) -> Callable:
+    if impl == "cpu":
+        from xgrammar.kernels.apply_token_bitmask_inplace_cpu import apply_token_bitmask_inplace_cpu
+
+        return apply_token_bitmask_inplace_cpu
+    elif impl == "cuda":
+        from xgrammar.kernels.apply_token_bitmask_inplace_cuda import (
+            apply_token_bitmask_inplace_cuda,
+        )
+
+        return apply_token_bitmask_inplace_cuda
+    elif impl == "triton":
+        from xgrammar.kernels.apply_token_bitmask_inplace_triton import (
+            apply_token_bitmask_inplace_triton,
+        )
+
+        return apply_token_bitmask_inplace_triton
+    elif impl == "metal":
+        from xgrammar.kernels.apply_token_bitmask_mlx import apply_token_bitmask_mlx
+
+        return apply_token_bitmask_mlx
+    elif impl == "torch_compile":
+        from xgrammar.kernels.apply_token_bitmask_inplace_torch_compile import (
+            apply_token_bitmask_inplace_torch_compile,
+        )
+
+        return apply_token_bitmask_inplace_torch_compile
+    else:
+        raise ValueError(f"Invalid implementation: {impl}")
+
+
+@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton", "metal", "torch_compile"))
+def test_apply_token_bitmask_inplace_kernel(impl: str):
+    if impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
+        pytest.skip(reason="CUDA is not installed")
+    elif impl == "metal" and not _is_mps_available:
+        pytest.skip(reason="MLX is not installed")
+
+    kernel = get_apply_token_bitmask_kernel(impl)
 
     neginf = float("-inf")
     bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
     logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], dtype=torch.float32)
     expected = torch.where(bool_mask, logits, neginf)
 
-    if impl in ["cuda", "triton"]:
-        if not torch.cuda.is_available():
-            pytest.skip(reason="CUDA is not installed")
-
+    if impl in ["cuda", "triton", "torch_compile"]:
         logits_gpu = logits.to("cuda")
         bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
-        if impl == "cuda":
-            xgr.kernels.apply_token_bitmask_inplace_kernels["cuda"](logits_gpu, bitmask)
-        else:
-            xgr.kernels.apply_token_bitmask_inplace_kernels["triton"](logits_gpu, bitmask)
+        kernel(logits_gpu, bitmask)
         torch.cuda.synchronize()
         torch.testing.assert_close(logits_gpu, expected.to("cuda"))
+    elif impl == "metal":
+        # Import MLX only when needed for the Metal test
+        import mlx.core as mx
+
+        bitmask = mx.array([0b1010101010], dtype=mx.int32)
+        logits = mx.array(logits.numpy())
+        result = kernel(bitmask, logits, vocab_size=10)
+        expected = mx.array(expected.numpy())
+        assert mx.allclose(result, expected)
     else:
+        assert impl == "cpu"
         bitmask = torch.tensor([0b1010101010], dtype=torch.int32)
-        xgr.apply_token_bitmask_inplace(logits, bitmask)
+        kernel(logits, bitmask)
         torch.testing.assert_close(logits, expected)
 
 
@@ -87,14 +163,16 @@ batch_size__vocab_size__masked_cnt__stride__logits_dtype = [
     "batch_size, vocab_size, masked_cnt, stride, logits_dtype",
     batch_size__vocab_size__masked_cnt__stride__logits_dtype,
 )
-@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton"))
-def test_apply_token_bitmask_inplace_large(
+@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton", "torch_compile"))
+def test_apply_token_bitmask_inplace_kernel_large(
     batch_size: int, vocab_size: int, masked_cnt: int, stride: int, logits_dtype: str, impl: str
 ):
     if impl == "cpu" and logits_dtype != "float32":
-        pytest.skip(reason="cpu implementation supports float32 only")
-    if impl in ["cuda", "triton"] and not _is_cuda_available:
+        pytest.skip(reason="CPU implementation supports float32 only")
+    elif impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
+
+    kernel = get_apply_token_bitmask_kernel(impl)
 
     logits_dtype = getattr(torch, logits_dtype)
     logits = torch.randn(batch_size, vocab_size, dtype=logits_dtype)
@@ -120,26 +198,11 @@ def test_apply_token_bitmask_inplace_large(
     )
 
     bitmask = _bool_mask_to_bitmask(bool_mask)
-    if impl in ["cuda", "triton"]:
-        if not torch.cuda.is_available():
-            pytest.skip(reason="CUDA is not installed")
-
+    if impl in ["cuda", "triton", "torch_compile"]:
         logits_gpu = logits.to("cuda")
         bitmask_gpu = bitmask.to("cuda")
         indices = batch_indices.to("cuda") if stride != 1 else None
-        if impl == "cuda":
-
-            def f():
-                return xgr.kernels.apply_token_bitmask_inplace_kernels["cuda"](
-                    logits_gpu, bitmask_gpu, indices=indices
-                )
-
-        else:
-
-            def f():
-                return xgr.kernels.apply_token_bitmask_inplace_kernels["triton"](
-                    logits_gpu, bitmask_gpu, indices=indices
-                )
+        f = lambda: kernel(logits_gpu, bitmask_gpu, indices=indices)
 
         torch.cuda.synchronize()
         f()
@@ -154,9 +217,10 @@ def test_apply_token_bitmask_inplace_large(
         except ImportError:
             pytest.skip(reason="Triton is not installed")
     else:
+        assert impl == "cpu"
         indices = batch_indices.tolist() if stride != 1 else None
         time_start = time.monotonic_ns()
-        xgr.apply_token_bitmask_inplace(logits, bitmask, indices=indices)
+        kernel(logits, bitmask, indices=indices)
         time_end = time.monotonic_ns()
         exec_time = (time_end - time_start) / 1e3
         torch.testing.assert_close(logits, logits_expected)
@@ -168,48 +232,48 @@ def test_apply_token_bitmask_inplace_large(
     )
 
 
-batch_size__logits_strides__vocab_size = [
-    # logits's vocab has extra paddings (vLLM)
-    (2, 161, 128),
-    (2, 161, 120),
-    # bitmask's vocab sizes do not align with the 32-bit block size
-    (2, 130, 130),
+logits_shape__bitmask_shape__vocab_size = [
+    # logits is larger
+    ((2, 130), (2, 4), None),
+    # bitmask is larger
+    ((2, 120), (2, 4), None),
+    # vocab size is specified
+    ((2, 130), (2, 4), 120),
 ]
 
 
 @pytest.mark.parametrize(
-    "batch_size, logits_strides, vocab_size", batch_size__logits_strides__vocab_size
+    "logits_shape, bitmask_shape, vocab_size", logits_shape__bitmask_shape__vocab_size
 )
-@pytest.mark.parametrize("logits_dtype", ("float32", "float16", "bfloat16"))
-@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton"))
-def test_apply_token_bitmask_inplace_special_shape(
-    batch_size: int, logits_strides: int, vocab_size: int, logits_dtype: str, impl: str
+@pytest.mark.parametrize("impl", ("cpu", "triton", "torch_compile"))
+def test_apply_token_bitmask_inplace_vocab_size(
+    logits_shape: Tuple[int, int],
+    bitmask_shape: Tuple[int, int],
+    vocab_size: Optional[int],
+    impl: str,
 ):
-    if impl == "cpu" and logits_dtype != "float32":
-        pytest.skip(reason="cpu implementation supports float32 only")
-    if impl in ["cuda", "triton"] and not _is_cuda_available:
+    if impl in ["triton", "torch_compile"] and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
 
-    logits_dtype = getattr(torch, logits_dtype)
-    logits = torch.ones(batch_size, logits_strides, dtype=logits_dtype)
+    kernel = get_apply_token_bitmask_kernel(impl)
 
-    bool_mask = torch.zeros(batch_size, vocab_size, dtype=torch.bool)
-    bitmask = _bool_mask_to_bitmask(bool_mask)
+    logits_dtype = torch.float32
+    logits = torch.ones(logits_shape, dtype=logits_dtype)
 
-    bool_mask_padded = torch.nn.functional.pad(bool_mask, (0, logits_strides - vocab_size), value=1)
+    bitmask = torch.zeros(bitmask_shape, dtype=torch.int32)
+
+    vocab_size = min(logits_shape[1], bitmask_shape[1] * 32) if vocab_size is None else vocab_size
     logits_expected = logits.clone()
-    logits_expected[~bool_mask_padded] = float("-inf")
+    logits_expected[..., :vocab_size] = float("-inf")
 
-    if impl in ["cuda", "triton"]:
+    if impl in ["triton", "torch_compile"]:
         logits_gpu = logits.to("cuda")
         bitmask_gpu = bitmask.to("cuda")
-        if impl == "cuda":
-            xgr.kernels.apply_token_bitmask_inplace_kernels["cuda"](logits_gpu, bitmask_gpu)
-        else:
-            xgr.kernels.apply_token_bitmask_inplace_kernels["triton"](logits_gpu, bitmask_gpu)
+        kernel(logits_gpu, bitmask_gpu, vocab_size=vocab_size)
         torch.testing.assert_close(logits_gpu, logits_expected.to("cuda"))
     else:
-        xgr.apply_token_bitmask_inplace(logits, bitmask)
+        assert impl == "cpu"
+        kernel(logits, bitmask, vocab_size=vocab_size)
         torch.testing.assert_close(logits, logits_expected)
 
 
@@ -224,12 +288,14 @@ logits_batch_size__bitmask_batch_size__vocab_size__indices = [
     "logits_batch_size, bitmask_batch_size, vocab_size, indices",
     logits_batch_size__bitmask_batch_size__vocab_size__indices,
 )
-@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton"))
-def test_apply_token_bitmask_inplace_select_indices(
+@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton", "torch_compile"))
+def test_apply_token_bitmask_inplace_indices(
     logits_batch_size: int, bitmask_batch_size: int, vocab_size: int, indices: List[int], impl: str
 ):
-    if impl in ["cuda", "triton"] and not _is_cuda_available:
+    if impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
+
+    kernel = get_apply_token_bitmask_kernel(impl)
 
     logits = torch.ones(logits_batch_size, vocab_size, dtype=torch.float32)
     bool_mask = torch.zeros(bitmask_batch_size, vocab_size, dtype=torch.bool)
@@ -240,47 +306,15 @@ def test_apply_token_bitmask_inplace_select_indices(
         logits_expected[indices], ~bool_mask[indices], float("-inf")
     )
 
-    if impl in ["cuda", "triton"]:
+    if impl in ["cuda", "triton", "torch_compile"]:
         logits_gpu = logits.to("cuda")
         bitmask_gpu = bitmask.to("cuda")
-        if impl == "cuda":
-            xgr.kernels.apply_token_bitmask_inplace_kernels["cuda"](
-                logits_gpu, bitmask_gpu, indices
-            )
-        else:
-            xgr.kernels.apply_token_bitmask_inplace_kernels["triton"](
-                logits_gpu, bitmask_gpu, indices
-            )
+        kernel(logits_gpu, bitmask_gpu, indices=indices)
         torch.testing.assert_close(logits_gpu, logits_expected.to("cuda"))
     else:
-        xgr.apply_token_bitmask_inplace(logits, bitmask, indices=indices)
+        assert impl == "cpu"
+        kernel(logits, bitmask, indices=indices)
         torch.testing.assert_close(logits, logits_expected)
-
-
-logits_shape__bitmask_shape__indices = [((2, 128), (1, 4), None), ((2, 128), (2, 5), None)]
-
-
-@pytest.mark.parametrize(
-    "logits_shape, bitmask_shape, indices", logits_shape__bitmask_shape__indices
-)
-@pytest.mark.parametrize("impl", ("cpu", "cuda", "triton"))
-def test_apply_token_bitmask_inplace_invalid_shape(
-    logits_shape: Tuple[int], bitmask_shape: Tuple[int], indices: Optional[List[int]], impl: str
-):
-    if impl in ["cuda", "triton"] and not _is_cuda_available:
-        pytest.skip(reason="CUDA is not installed")
-
-    device = "cpu" if impl == "cpu" else "cuda"
-    logits = torch.ones(logits_shape, dtype=torch.float32, device=device)
-    bitmask = torch.zeros(bitmask_shape, dtype=torch.int32, device=device)
-
-    with pytest.raises((RuntimeError, AssertionError)):
-        if impl == "cuda":
-            xgr.kernels.apply_token_bitmask_inplace_kernels["cuda"](logits, bitmask, indices)
-        elif impl == "triton":
-            xgr.kernels.apply_token_bitmask_inplace_kernels["triton"](logits, bitmask, indices)
-        else:
-            xgr.apply_token_bitmask_inplace(logits, bitmask, indices=indices)
 
 
 if __name__ == "__main__":

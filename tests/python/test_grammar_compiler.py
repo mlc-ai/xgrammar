@@ -157,10 +157,10 @@ grammar_expected_test_get_allow_empty_rule_ids = [
         [0, 1, 2],
     ),
     (
-        r"""root ::= rule1 rule2
+        r"""root ::= rule1 rule3
     rule1 ::= "abc" | ""
     rule2 ::= "def" | ""
-    rule3 ::= rule1 root
+    rule3 ::= rule1 rule2
     """,
         [0, 1, 2, 3],
     ),
@@ -260,6 +260,73 @@ def test_grammar_compiler_json_schema_concurrent():
 
     for t in threads:
         t.join()
+
+
+@pytest.mark.hf_token_required
+def test_grammar_compiler_cache_unlimited():
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+
+    def make_schema(name_str: str):
+        return {
+            "properties": {name_str: {"type": "string"}},
+            "required": [name_str],
+            "type": "object",
+        }
+
+    MB = 1024 * 1024
+
+    # Default no limit
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+    assert grammar_compiler.cache_limit_bytes == -1  # No limit (default, -1)
+    assert grammar_compiler.get_cache_size_bytes() == 0  # No memory usage
+    sum_single = 0
+    for i in range(10):
+        schema = make_schema(f"name_{i}")
+        compiled_grammar = grammar_compiler.compile_json_schema(schema, strict_mode=True)
+        sum_single += compiled_grammar.memory_size_bytes
+        memory_usage = grammar_compiler.get_cache_size_bytes()
+        assert memory_usage == sum_single
+        print(f"Cache memory usage after {i + 1} schemas: {memory_usage / MB:.3f} MB / unlimited")
+
+    old_size = grammar_compiler.get_cache_size_bytes()
+    grammar_compiler.compile_json_schema(make_schema("name_0"), strict_mode=True)
+    assert grammar_compiler.get_cache_size_bytes() == old_size
+
+
+@pytest.mark.hf_token_required
+def test_grammar_compiler_cache_limited():
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+
+    def make_schema(name_str: str):
+        return {
+            "properties": {name_str: {"type": "string"}},
+            "required": [name_str],
+            "type": "object",
+        }
+
+    MB = 1024 * 1024
+
+    # with a 2MB limit
+    limit = int(2 * MB)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_limit_bytes=limit)
+    assert grammar_compiler.cache_limit_bytes == limit
+    assert grammar_compiler.get_cache_size_bytes() == 0
+    sum_single = 0
+    for i in range(10):
+        schema = make_schema(f"name_{i}")
+        compiled_grammar = grammar_compiler.compile_json_schema(schema, strict_mode=True)
+        sum_single += compiled_grammar.memory_size_bytes
+        memory_usage = grammar_compiler.get_cache_size_bytes()
+        assert 0 <= memory_usage <= min(sum_single, limit * 2)  # this is a rough estimate
+        print(
+            f"Cache memory usage after {i + 1} schemas: {memory_usage / MB:.3f} MB / {limit / MB:.3f} MB"
+        )
+
+    # Test clear_cache
+    grammar_compiler.clear_cache()
+    assert grammar_compiler.get_cache_size_bytes() == 0
 
 
 if __name__ == "__main__":

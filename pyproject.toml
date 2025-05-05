@@ -12,14 +12,15 @@ classifiers = [
   "Intended Audience :: Science/Research",
 ]
 keywords = ["machine learning", "inference"]
-requires-python = ">=3.9, <4"
+requires-python = ">=3.8, <4"
 dependencies = [
   "pydantic",
   "sentencepiece",
   "tiktoken",
   "torch>=1.10.0",
   "transformers>=4.38.0",
-  "triton; platform_system == 'linux' and platform_machine == 'x86_64'",
+  "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
+  "mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'",
   "ninja",
 ]
 dynamic = ["version"]
@@ -29,14 +30,21 @@ Homepage = "https://xgrammar.mlc.ai/"
 GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
-test = ["pytest", "protobuf", "huggingface-hub[cli]"]
+test = [
+  "pytest",
+  "protobuf",
+  "huggingface-hub[cli]",
+  # transformers==4.50.0 has error on MacOS.
+  # https://github.com/huggingface/transformers/issues/36906
+  "transformers<4.50.0; platform_system == 'Darwin'",
+]
 
 [tool.scikit-build.metadata.version]
 provider = "scikit_build_core.metadata.regex"
 input = "python/xgrammar/version.py"
 
 [build-system]
-requires = ["scikit-build-core>=0.10.0", "pybind11>=2.11.0"]
+requires = ["scikit-build-core>=0.10.0", "nanobind==2.5.0"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
@@ -89,9 +97,8 @@ sdist.include = [
 sdist.exclude = ["**/.git", "**/.github", "**/__pycache__", "**/*.pyc", "build", "dist"]
 
 # Editable install settings
-# Editables are fairly buggy
-# editable.rebuild = true
-# editable.verbose = true
+editable.rebuild = true
+editable.verbose = true
 
 [tool.pytest.ini_options]
 addopts = "-rA --durations=0 --ignore=3rdparty"
@@ -105,7 +112,7 @@ include = ["python/**/*.py", "tests/**/*.py"]
 
 [tool.ruff.lint]
 # Never enforce `E501` (line length violations).
-ignore = ["C901", "E501", "E741", "F402", "F823"]
+ignore = ["C901", "E501", "E741", "F402", "F823", "E731"]
 select = ["C", "E", "F", "W"]
 
 [tool.ruff.lint.per-file-ignores]
