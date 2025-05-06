@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import platform
 from contextlib import suppress
 from typing import List, Optional, Union
 
-import platform
 import torch
 import torch.utils.cpp_extension
 
