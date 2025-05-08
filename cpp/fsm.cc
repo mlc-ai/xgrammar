@@ -2048,6 +2048,13 @@ bool FSMGroup::BuildNameIdMap(
   return rule_name_to_id_.find(root_rule) != rule_name_to_id_.end();
 }
 
+Result<FSMWithStartEnd> RuleToFSM(
+    const std::string& rule, const std::unordered_map<std::string, int>& rule_name_to_id
+) {
+  // TODO(Linzhang): Build the fsm.
+  return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd());
+}
+
 Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule) {
   FSMGroup fsm_group;
   std::vector<std::string> lhs;
@@ -2059,7 +2066,25 @@ Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule
     return Result<FSMGroup>::Err(std::make_shared<Error>("Root rule isn't found in the grammar!"));
   }
   fsm_group.root_rule_id_ = fsm_group.rule_name_to_id_[root_rule];
-  // TODO(Linzhang): Build the fsms.
+  XGRAMMAR_DCHECK(lhs.size() == rhs.size());
+  fsm_group.fsms_.reserve(rhs.size());
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    const auto& rule_expr = rhs[i];
+    const auto& rule_name = lhs[i];
+    // Build the fsm for the rule.
+    auto fsm = RuleToFSM(rule_expr, fsm_group.rule_name_to_id_);
+    if (fsm.IsErr()) {
+      return Result<FSMGroup>::Err(fsm.UnwrapErr());
+    }
+    // Since we number the rules in order, if the id is larger than the size of the fsms, we need to
+    // add it. Otherwise, it has been added, then we just need to union it.
+    int id = fsm_group.rule_name_to_id_[rule_name];
+    if (fsm_group.fsms_.size() <= static_cast<size_t>(id)) {
+      fsm_group.fsms_.push_back(fsm.Unwrap());
+    } else {
+      fsm_group.fsms_[id] = FSMWithStartEnd::Union({fsm_group.fsms_[id], fsm.Unwrap()});
+    }
+  }
   return Result<FSMGroup>::Ok(fsm_group);
 }
 
