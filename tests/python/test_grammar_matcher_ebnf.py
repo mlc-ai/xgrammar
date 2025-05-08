@@ -47,6 +47,18 @@ def test_repetition(input: str, accepted: bool):
     assert _is_grammar_accept_string(grammar, input) == accepted
 
 
+def test_utf8():
+
+    # Test utf8-encoded string with EBNF grammar
+    ebnf_grammar_str = "root ::= [，]+"
+
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    accepted_inputs = ["，", "，，，", "，，，，，，，，，，，，，，，，，，，，，，"]
+    for input_str in accepted_inputs:
+        assert _is_grammar_accept_string(grammar, input_str, print_time=True)
+
+
 def test_custom_root_rule():
     json_grammar_simple_ebnf = r"""
 root ::= basic_object

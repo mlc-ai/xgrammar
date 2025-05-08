@@ -38,6 +38,33 @@ rule2 ::= "efg" [t]*
     assert _is_grammar_accept_string(grammar, "tag2efgtttttag1abc")
 
 
+def test_utf8():
+
+    # Test utf8-encoded string with structural tags
+    class Schema(BaseModel):
+        arg1: str
+        arg2: int
+
+    tags = [
+        xgr.StructuralTagItem(begin="，，", schema=Schema, end="。"),
+        xgr.StructuralTagItem(begin="，！", schema=Schema, end="。。"),
+        xgr.StructuralTagItem(begin="，，？", schema=Schema, end="。。。"),
+        xgr.StructuralTagItem(begin="｜｜？", schema=Schema, end="｜？｜"),
+    ]
+    triggers = ["，", "｜｜"]
+
+    grammar = xgr.Grammar.from_structural_tag(tags, triggers)
+
+    accepted_inputs = [
+        '这是无用的内容，，{"arg1": "你好，世界！", "arg2": 0}。这是无用的内容',
+        '这是无用的内容，！{"arg1": "こんにちは！", "arg2": 1}。。这是无用的内容',
+        '这是无用的内容，，？{"arg1": "안녕하세요！", "arg2": 2}。。。这是无用的内容，！{"arg1": "안녕하세요！", "arg2": 3}。。',
+        '这是无用的内容｜｜？{"arg1": "။စ်န, ်ပြ！", "arg2": 0}｜？｜｜｜？{"arg1": "။စ်န, ်ပြ", "arg2": 0}｜？｜',
+    ]
+    for input_str in accepted_inputs:
+        assert _is_grammar_accept_string(grammar, input_str, print_time=True)
+
+
 def test_tag_dispatch_mask_generation_correctness():
     grammar_str = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2))
 rule1 ::= "abc"
