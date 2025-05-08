@@ -568,7 +568,7 @@ struct FSMState {
   int32_t node_id = 0;
 };
 
-class FSMGroups {
+class FSMGroup {
  private:
   /*! \brief It's a mapping from the rule_name to the fsm_id. */
   std::unordered_map<std::string, int32_t> rule_name_to_id_;
@@ -583,8 +583,14 @@ class FSMGroups {
   /*! \brief The id of the root rule. */
   int32_t root_rule_id_;
 
+  /*! \brief Build the mapping from the rule_name to the rule_id.
+      \param rule_names A series of names of the rules, repeatation is allowed.
+      \param root_rule The name of the root rule.
+      \return If the mapping is built successfully, return true; false otherwise. */
+  bool BuildNameIdMap(const std::vector<std::string>& rule_names, const std::string& root_rule);
+
  public:
-  FSMGroups() = default;
+  FSMGroup() = default;
 
   /*! \brief Advance the states, with accepting a new character.
       \param from The vector stores the start states.
@@ -595,7 +601,7 @@ class FSMGroups {
     // TODO(linzhang): implement this function.
   }
 
-  friend Result<FSMGroups> GrammarToFSMs(const std::string& grammar);
+  friend Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
 };
 
 /*! \brief The function is used to get FSMs from a given grammar.
@@ -605,11 +611,11 @@ class FSMGroups {
     i.e. the lhs is the name of the rule, '::=' means 'is defined as'.
     Between the '/', is a regex; In other cases, they are composed of
     rules and strings. If some characters are Between the '"', then it's a string.
-    \param root_grammar The root grammar.
+    \param root_rule The root grammar.
     \return If everthing is OK, then a FSMGroups will be returned. Otherwise, it will return an
    error.
       */
-Result<FSMGroups> GrammarToFSMs(const std::string& grammar, const std::string& root_grammar);
+Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
 
 }  // namespace xgrammar
 

@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstring>
 #include <list>
+#include <memory>
 #include <queue>
 #include <set>
 #include <stack>
@@ -21,6 +22,7 @@
 
 #include "support/logging.h"
 #include "support/union_find_set.h"
+#include "support/utils.h"
 
 namespace xgrammar {
 
@@ -1964,6 +1966,101 @@ FSMWithStartEnd BuildTrie(
     }
   }
   return fsm;
+}
+
+void ConsumeWhiteSpaces(std::string& str) {
+  size_t start = str.find_first_not_of(' ');
+  size_t end = str.find_last_not_of(' ');
+  str = str.substr(start, end - start + 1);
+}
+
+void SplitRules(
+    const std::string& grammar,
+    std::vector<std::string>& lhs_group,
+    std::vector<std::string>& rhs_group
+) {
+  size_t last_end_of_the_line = 0;
+  size_t end_of_the_line = 0;
+  end_of_the_line = grammar.find('\n');
+  while (end_of_the_line != std::string::npos) {
+    // Check if the line has a defination.
+    size_t define_symbol =
+        grammar.find("::=", last_end_of_the_line, end_of_the_line - last_end_of_the_line);
+    if (define_symbol == std::string::npos) {
+      // The line should be empty.
+      if (end_of_the_line - last_end_of_the_line != 1) {
+        // This line contains something surprising.
+        XGRAMMAR_LOG(WARNING
+        ) << "There's something surprising in the grammar: "
+          << grammar.substr(last_end_of_the_line + 1, end_of_the_line - last_end_of_the_line);
+      }
+    } else {
+      // This line is splitted successfully.
+      std::string lhs =
+          grammar.substr(last_end_of_the_line + 1, define_symbol - last_end_of_the_line - 1);
+      std::string rhs = grammar.substr(define_symbol + 3, end_of_the_line - define_symbol - 3);
+      ConsumeWhiteSpaces(lhs);
+      ConsumeWhiteSpaces(rhs);
+      lhs_group.push_back(lhs);
+      rhs_group.push_back(rhs);
+    }
+    // Search for the next '\n'.
+    last_end_of_the_line = end_of_the_line;
+    end_of_the_line = grammar.find('\n', end_of_the_line + 1);
+  }
+
+  // Handle the last rule.
+  size_t define_symbol =
+      grammar.find("::=", last_end_of_the_line, end_of_the_line - last_end_of_the_line);
+  if (define_symbol == std::string::npos) {
+    // The line should be empty.
+    if (end_of_the_line - last_end_of_the_line != 1) {
+      // This line contains something surprising.
+      XGRAMMAR_LOG(WARNING
+      ) << "There's something surprising in the grammar: "
+        << grammar.substr(last_end_of_the_line + 1, end_of_the_line - last_end_of_the_line);
+    }
+  } else {
+    // This line is splitted successfully.
+    std::string lhs =
+        grammar.substr(last_end_of_the_line + 1, define_symbol - last_end_of_the_line - 1);
+    std::string rhs = grammar.substr(define_symbol + 3, end_of_the_line - define_symbol - 3);
+    ConsumeWhiteSpaces(lhs);
+    ConsumeWhiteSpaces(rhs);
+    lhs_group.push_back(lhs);
+    rhs_group.push_back(rhs);
+  }
+}
+
+bool FSMGroup::BuildNameIdMap(
+    const std::vector<std::string>& rule_names, const std::string& root_rule
+) {
+  // The mapping should be built before the fsms are built.
+  XGRAMMAR_DCHECK(fsms_.size() == 0);
+  XGRAMMAR_DCHECK(rule_names_.empty());
+  XGRAMMAR_DCHECK(rule_name_to_id_.empty());
+  for (const auto& rule_name : rule_names) {
+    if (rule_name_to_id_.find(rule_name) == rule_name_to_id_.end()) {
+      rule_name_to_id_[rule_name] = rule_names.size();
+      rule_names_.push_back(rule_name);
+    }
+  }
+  return rule_name_to_id_.find(root_rule) != rule_name_to_id_.end();
+}
+
+Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule) {
+  FSMGroup fsm_group;
+  std::vector<std::string> lhs;
+  std::vector<std::string> rhs;
+  SplitRules(grammar, lhs, rhs);
+  ConsumeWhiteSpaces(root_rule);
+  bool has_root = fsm_group.BuildNameIdMap(lhs, root_rule);
+  if (!has_root) {
+    return Result<FSMGroup>::Err(std::make_shared<Error>("Root rule isn't found in the grammar!"));
+  }
+  fsm_group.root_rule_id_ = fsm_group.rule_name_to_id_[root_rule];
+  // TODO(Linzhang): Build the fsms.
+  return Result<FSMGroup>::Ok(fsm_group);
 }
 
 }  // namespace xgrammar
