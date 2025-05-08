@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -16,6 +17,7 @@
 #include <vector>
 
 #include "../cpp/support/csr_array.h"
+#include "support/utils.h"
 
 namespace xgrammar {
 
@@ -557,6 +559,57 @@ FSMWithStartEnd BuildTrie(
 );
 
 std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
+
+struct FSMState {
+  /*! \brief The id of the fsm. */
+  int32_t fsm_id = 0;
+
+  /*! \brief The id of the node in the corresponding fsm. */
+  int32_t node_id = 0;
+};
+
+class FSMGroups {
+ private:
+  /*! \brief It's a mapping from the rule_name to the fsm_id. */
+  std::unordered_map<std::string, int32_t> rule_name_to_id_;
+
+  /*! \brief The vector stores the rule names. rule_names[i] stores the name
+  of the rule with the fsm_id = i. */
+  std::vector<std::string> rule_names_;
+
+  /*! \brief The vector stores the FSMs. */
+  std::vector<FSMWithStartEnd> fsms_;
+
+  /*! \brief The id of the root rule. */
+  int32_t root_rule_id_;
+
+ public:
+  FSMGroups() = default;
+
+  /*! \brief Advance the states, with accepting a new character.
+      \param from The vector stores the start states.
+      \param result The vector stores the destination states.
+      \param ch The input character.
+      \details The algorithm is supposed to be the earley parser. */
+  void Advance(const std::vector<FSMState>& from, std::vector<FSMState>& result, uint8_t ch) const {
+    // TODO(linzhang): implement this function.
+  }
+
+  friend Result<FSMGroups> GrammarToFSMs(const std::string& grammar);
+};
+
+/*! \brief The function is used to get FSMs from a given grammar.
+    \param grammar The given grammar.
+    The grammar should be in the such format:
+    rule1 ::= (rule2 | (rule3)+)? /[0-9]abc/ "abc"
+    i.e. the lhs is the name of the rule, '::=' means 'is defined as'.
+    Between the '/', is a regex; In other cases, they are composed of
+    rules and strings. If some characters are Between the '"', then it's a string.
+    \param root_grammar The root grammar.
+    \return If everthing is OK, then a FSMGroups will be returned. Otherwise, it will return an
+   error.
+      */
+Result<FSMGroups> GrammarToFSMs(const std::string& grammar, const std::string& root_grammar);
 
 }  // namespace xgrammar
 
