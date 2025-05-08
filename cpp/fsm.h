@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -215,9 +216,7 @@ class FSMWithStartEnd {
 
   /*! \brief Constructs an FSM with the specified number of nodes. */
   FSMWithStartEnd(int num_nodes = 0, bool is_dfa = false) : is_dfa(is_dfa) {
-    for (int i = 0; i < num_nodes; ++i) {
-      fsm.edges.emplace_back();
-    }
+    fsm.edges.resize(num_nodes);
   }
 
   inline static constexpr int NO_TRANSITION = -1;
@@ -465,9 +464,11 @@ class RegexIR {
 
   struct Repeat;
 
+  struct RuleRef;
+
   static constexpr int REPEATNOUPPERBOUND = -1;
 
-  using Node = std::variant<Leaf, Symbol, Union, Bracket, Repeat>;
+  using Node = std::variant<Leaf, Symbol, Union, Bracket, Repeat, RuleRef>;
 
   // This struct is used to store the string in regex, or
   // the character class in regex.
@@ -489,7 +490,7 @@ class RegexIR {
 
   struct Symbol {
     RegexSymbol symbol;
-    std::vector<Node> node;
+    std::shared_ptr<Node> node = nullptr;
   };
 
   // This struct is used to represent a union symbol.
@@ -498,7 +499,7 @@ class RegexIR {
   };
 
   struct Repeat {
-    std::vector<Node> nodes;
+    std::shared_ptr<Node> node = nullptr;
     int lower_bound = 0;
     int upper_bound = 0;
   };
@@ -506,6 +507,10 @@ class RegexIR {
   struct LookAhead {
     bool is_positive;
     std::vector<Node> nodes;
+  };
+
+  struct RuleRef {
+    int rule_id;
   };
 
   // This struct is used to represent a bracket in regex.
@@ -530,6 +535,8 @@ class RegexIR {
   Result<FSMWithStartEnd> visit(const Repeat& node) const;
 
   Result<FSMWithStartEnd> visit(const LookAhead& node) const;
+
+  Result<FSMWithStartEnd> visit(const RuleRef& node) const;
 };
 
 /*!
@@ -611,6 +618,7 @@ class FSMGroup {
     i.e. the lhs is the name of the rule, '::=' means 'is defined as'.
     Between the '/', is a regex; In other cases, they are composed of
     rules and strings. If some characters are Between the '"', then it's a string.
+    Moreover, to denote a '/' in regex, please use '\/' in the grammar.
     \param root_rule The root grammar.
     \return If everthing is OK, then a FSMGroups will be returned. Otherwise, it will return an
    error.

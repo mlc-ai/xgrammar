@@ -719,8 +719,6 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     }
     return;
   }
-  // TODO: The support for rules.
-  XGRAMMAR_LOG(WARNING) << "rule is not supported yet.";
 }
 
 FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
@@ -1512,12 +1510,17 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Union& node) const {
   return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Union(fsm_list));
 }
 
+Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::RuleRef& node) const {
+  FSMWithStartEnd result{2};
+  result.SetStartNode(0);
+  result.fsm.edges[0].push_back(FSMEdge{-1, static_cast<short>(node.rule_id), 1});
+  result.AddEndNode(1);
+  return Result<FSMWithStartEnd>::Ok(result);
+}
+
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& node) const {
-  if (node.node.size() != 1) {
-    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid symbol"));
-  }
   Result<FSMWithStartEnd> child =
-      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, node.node[0]);
+      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, *node.node);
   if (child.IsErr()) {
     return child;
   }
@@ -1555,11 +1558,8 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Bracket& node) const {
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
-  if (node.nodes.size() != 1) {
-    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid repeat"));
-  }
   Result<FSMWithStartEnd> child =
-      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, node.nodes[0]);
+      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, *node.node);
   if (child.IsErr()) {
     return child;
   }
@@ -1648,7 +1648,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
       stack.pop();
       auto child = std::get<RegexIR::Node>(node);
       RegexIR::Symbol symbol;
-      symbol.node.push_back(child);
+      symbol.node = std::make_shared<RegexIR::Node>(child);
       switch (regex[i]) {
         case '+': {
           symbol.symbol = RegexIR::RegexSymbol::plus;
@@ -1661,6 +1661,11 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
         case '?': {
           symbol.symbol = RegexIR::RegexSymbol::optional;
           break;
+        }
+        default: {
+          return Result<FSMWithStartEnd>::Err(
+              std::make_shared<Error>("Invalid regex: invalid operator!")
+          );
         }
       }
       stack.push(symbol);
@@ -1770,7 +1775,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
       RegexIR::Repeat repeat;
       repeat.lower_bound = bounds_result.Unwrap().first;
       repeat.upper_bound = bounds_result.Unwrap().second;
-      repeat.nodes.push_back(child);
+      repeat.node = std::make_shared<RegexIR::Node>(child);
       stack.push(repeat);
       continue;
     }
@@ -2051,6 +2056,102 @@ bool FSMGroup::BuildNameIdMap(
 Result<FSMWithStartEnd> RuleToFSM(
     const std::string& rule, const std::unordered_map<std::string, int>& rule_name_to_id
 ) {
+  RegexIR ir;
+  // It's used to store the nodes/brackets/union.
+  using IRNode = std::variant<RegexIR::Node, char>;
+  // We use a stack to store the nodes.
+  std::stack<IRNode> stack;
+  std::string now_ref_rule_name;
+  for (size_t i = 0; i < rule.size(); i++) {
+    char ch = rule[i];
+    // Handle the space. Build the rules.
+    if (ch == ' ') {
+      if (!now_ref_rule_name.empty()) {
+        if (rule_name_to_id.find(now_ref_rule_name) == rule_name_to_id.end()) {
+          return Result<FSMWithStartEnd>::Err(
+              std::make_shared<Error>("Rule " + now_ref_rule_name + " isn't found in the grammar!")
+          );
+        }
+        stack.push(RegexIR::RuleRef{rule_name_to_id.at(now_ref_rule_name)});
+        now_ref_rule_name.clear();
+      }
+      continue;
+    }
+    switch (ch) {
+      case '(':
+      case '|': {
+        stack.push(ch);
+        break;
+      }
+      case ')': {
+        // TODO(Linzhang): Handle the bracket.
+        break;
+      }
+      case '\"': {
+        size_t next_quote = rule.find('\"', i + 1);
+        while (next_quote != std::string::npos && rule[next_quote - 1] == '\\') {
+          next_quote = rule.find('\"', next_quote + 1);
+        }
+        if (next_quote == std::string::npos) {
+          return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Unpaired quote!"));
+        }
+        stack.push(RegexIR::Leaf{rule.substr(i + 1, next_quote - i - 1)});
+        i = next_quote;
+        break;
+      }
+      case '+': {
+        if (stack.empty()) {
+          return Result<FSMWithStartEnd>::Err(
+              std::make_shared<Error>("Invalid grammar: no node before plus!")
+          );
+        }
+        if (std::holds_alternative<char>(stack.top())) {
+          return Result<FSMWithStartEnd>::Err(
+              std::make_shared<Error>("Invalid grammar: no node before plus!")
+          );
+        }
+        auto node = std::get<RegexIR::Node>(stack.top());
+        stack.pop();
+        RegexIR::Symbol symbol;
+        symbol.symbol = RegexIR::RegexSymbol::plus;
+        symbol.node = std::make_shared<RegexIR::Node>(node);
+        stack.push(symbol);
+        break;
+      }
+      case '?': {
+        if (stack.empty()) {
+          return Result<FSMWithStartEnd>::Err(
+              std::make_shared<Error>("Invalid grammar: no node before optional!")
+          );
+        }
+        auto node = std::get<RegexIR::Node>(stack.top());
+        stack.pop();
+        RegexIR::Symbol symbol;
+        symbol.symbol = RegexIR::RegexSymbol::optional;
+        symbol.node = std::make_shared<RegexIR::Node>(node);
+        stack.push(symbol);
+        break;
+      }
+      case '*': {
+        if (stack.empty()) {
+          return Result<FSMWithStartEnd>::Err(
+              std::make_shared<Error>("Invalid grammar: no node before star!")
+          );
+        }
+        auto node = std::get<RegexIR::Node>(stack.top());
+        stack.pop();
+        RegexIR::Symbol symbol;
+        symbol.symbol = RegexIR::RegexSymbol::star;
+        symbol.node = std::make_shared<RegexIR::Node>(node);
+        stack.push(symbol);
+        break;
+      }
+      default: {
+        now_ref_rule_name += ch;
+        break;
+      }
+    }
+  }
   // TODO(Linzhang): Build the fsm.
   return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd());
 }
