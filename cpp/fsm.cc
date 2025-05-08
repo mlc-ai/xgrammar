@@ -2080,14 +2080,120 @@ Result<FSMWithStartEnd> RuleToFSM(
     switch (ch) {
       case '(':
       case '|': {
+        if (!now_ref_rule_name.empty()) {
+          RegexIR::RuleRef rule_ref;
+          if (rule_name_to_id.find(now_ref_rule_name) == rule_name_to_id.end()) {
+            return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+                "Rule " + now_ref_rule_name + " isn't found in the grammar!"
+            ));
+          }
+          rule_ref.rule_id = rule_name_to_id.at(now_ref_rule_name);
+          stack.push(rule_ref);
+          now_ref_rule_name.clear();
+        }
         stack.push(ch);
         break;
       }
       case ')': {
-        // TODO(Linzhang): Handle the bracket.
+        if (!now_ref_rule_name.empty()) {
+          RegexIR::RuleRef rule_ref;
+          if (rule_name_to_id.find(now_ref_rule_name) == rule_name_to_id.end()) {
+            return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+                "Rule " + now_ref_rule_name + " isn't found in the grammar!"
+            ));
+          }
+          rule_ref.rule_id = rule_name_to_id.at(now_ref_rule_name);
+          stack.push(rule_ref);
+          now_ref_rule_name.clear();
+        }
+        std::stack<IRNode> nodes;
+        bool paired = false;
+        bool unioned = false;
+
+        // Reverse the stack, and check if it's paired and unioned.
+        // '(' and ')' won't be pushed into the nodes stack.
+        while ((!stack.empty()) && (!paired)) {
+          auto node = stack.top();
+          stack.pop();
+          if (std::holds_alternative<char>(node)) {
+            char c = std::get<char>(node);
+            if (c == '(') {
+              paired = true;
+              break;
+            }
+            if (c == '|') {
+              unioned = true;
+            }
+            nodes.push(node);
+          } else {
+            nodes.push(node);
+          }
+        }
+
+        if (!paired) {
+          return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+              "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
+          ));
+        }
+        // A empty bracket, just ignore it.
+        if (nodes.empty()) {
+          break;
+        }
+
+        // If it's not unioned, then it's a bracket. Only need to concatenate the nodes.
+        if (!unioned) {
+          RegexIR::Bracket bracket;
+          while (!nodes.empty()) {
+            auto node = nodes.top();
+            nodes.pop();
+            auto child = std::get<RegexIR::Node>(node);
+            bracket.nodes.push_back(child);
+          }
+          stack.push(bracket);
+        } else {
+          RegexIR::Union union_node;
+          RegexIR::Bracket bracket;
+          while (!nodes.empty()) {
+            auto node = nodes.top();
+            nodes.pop();
+            if (std::holds_alternative<char>(node)) {
+              char c = std::get<char>(node);
+              if (c == '|') {
+                union_node.nodes.push_back(bracket);
+                bracket.nodes.clear();
+                continue;
+              }
+              return Result<FSMWithStartEnd>::Err(
+                  std::make_shared<Error>("Invalid regex: no paired bracket!")
+              );
+            }
+            if (std::holds_alternative<RegexIR::Node>(node)) {
+              auto child = std::get<RegexIR::Node>(node);
+              bracket.nodes.push_back(child);
+              continue;
+            }
+            return Result<FSMWithStartEnd>::Err(
+                std::make_shared<Error>("Invalid regex: no paired bracket!")
+            );
+          }
+          union_node.nodes.push_back(bracket);
+          stack.push(union_node);
+        }
+
         break;
       }
       case '\"': {
+        if (!now_ref_rule_name.empty()) {
+          RegexIR::RuleRef rule_ref;
+          if (rule_name_to_id.find(now_ref_rule_name) == rule_name_to_id.end()) {
+            return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+                "Rule " + now_ref_rule_name + " isn't found in the grammar!"
+            ));
+          }
+          rule_ref.rule_id = rule_name_to_id.at(now_ref_rule_name);
+          stack.push(rule_ref);
+          now_ref_rule_name.clear();
+        }
         size_t next_quote = rule.find('\"', i + 1);
         while (next_quote != std::string::npos && rule[next_quote - 1] == '\\') {
           next_quote = rule.find('\"', next_quote + 1);
@@ -2100,6 +2206,17 @@ Result<FSMWithStartEnd> RuleToFSM(
         break;
       }
       case '+': {
+        if (!now_ref_rule_name.empty()) {
+          RegexIR::RuleRef rule_ref;
+          if (rule_name_to_id.find(now_ref_rule_name) == rule_name_to_id.end()) {
+            return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+                "Rule " + now_ref_rule_name + " isn't found in the grammar!"
+            ));
+          }
+          rule_ref.rule_id = rule_name_to_id.at(now_ref_rule_name);
+          stack.push(rule_ref);
+          now_ref_rule_name.clear();
+        }
         if (stack.empty()) {
           return Result<FSMWithStartEnd>::Err(
               std::make_shared<Error>("Invalid grammar: no node before plus!")
@@ -2119,6 +2236,17 @@ Result<FSMWithStartEnd> RuleToFSM(
         break;
       }
       case '?': {
+        if (!now_ref_rule_name.empty()) {
+          RegexIR::RuleRef rule_ref;
+          if (rule_name_to_id.find(now_ref_rule_name) == rule_name_to_id.end()) {
+            return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+                "Rule " + now_ref_rule_name + " isn't found in the grammar!"
+            ));
+          }
+          rule_ref.rule_id = rule_name_to_id.at(now_ref_rule_name);
+          stack.push(rule_ref);
+          now_ref_rule_name.clear();
+        }
         if (stack.empty()) {
           return Result<FSMWithStartEnd>::Err(
               std::make_shared<Error>("Invalid grammar: no node before optional!")
@@ -2133,6 +2261,17 @@ Result<FSMWithStartEnd> RuleToFSM(
         break;
       }
       case '*': {
+        if (!now_ref_rule_name.empty()) {
+          RegexIR::RuleRef rule_ref;
+          if (rule_name_to_id.find(now_ref_rule_name) == rule_name_to_id.end()) {
+            return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+                "Rule " + now_ref_rule_name + " isn't found in the grammar!"
+            ));
+          }
+          rule_ref.rule_id = rule_name_to_id.at(now_ref_rule_name);
+          stack.push(rule_ref);
+          now_ref_rule_name.clear();
+        }
         if (stack.empty()) {
           return Result<FSMWithStartEnd>::Err(
               std::make_shared<Error>("Invalid grammar: no node before star!")
@@ -2152,8 +2291,60 @@ Result<FSMWithStartEnd> RuleToFSM(
       }
     }
   }
-  // TODO(Linzhang): Build the fsm.
-  return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd());
+
+  if (!now_ref_rule_name.empty()) {
+    RegexIR::RuleRef rule_ref;
+    if (rule_name_to_id.find(now_ref_rule_name) == rule_name_to_id.end()) {
+      return Result<FSMWithStartEnd>::Err(
+          std::make_shared<Error>("Rule " + now_ref_rule_name + " isn't found in the grammar!")
+      );
+    }
+    rule_ref.rule_id = rule_name_to_id.at(now_ref_rule_name);
+    stack.push(rule_ref);
+    now_ref_rule_name.clear();
+  }
+
+  // Process the stack.
+  if (stack.empty()) {
+    return Result<FSMWithStartEnd>::Err(
+        std::make_shared<Error>("Invalid grammar: no node before end!")
+    );
+  }
+
+  std::stack<IRNode> reverse_stack;
+  bool is_union = false;
+  while (!stack.empty()) {
+    reverse_stack.push(stack.top());
+    if (std::holds_alternative<char>(stack.top())) {
+      if (std::get<char>(stack.top()) == '|') {
+        is_union = true;
+      }
+    }
+    stack.pop();
+  }
+  if (is_union) {
+    RegexIR::Union union_node;
+    RegexIR::Bracket bracket;
+    while (!reverse_stack.empty()) {
+      auto node = reverse_stack.top();
+      reverse_stack.pop();
+      if (std::holds_alternative<char>(node)) {
+        if (std::get<char>(node) == '|') {
+          union_node.nodes.push_back(bracket);
+          bracket.nodes.clear();
+        }
+      }
+    }
+    ir.nodes.push_back(union_node);
+  } else {
+    while (!reverse_stack.empty()) {
+      auto node = reverse_stack.top();
+      reverse_stack.pop();
+      ir.nodes.push_back(std::get<RegexIR::Node>(node));
+    }
+  }
+
+  return ir.Build();
 }
 
 Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule) {
@@ -2177,8 +2368,8 @@ Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule
     if (fsm.IsErr()) {
       return Result<FSMGroup>::Err(fsm.UnwrapErr());
     }
-    // Since we number the rules in order, if the id is larger than the size of the fsms, we need to
-    // add it. Otherwise, it has been added, then we just need to union it.
+    // Since we number the rules in order, if the id is larger than the size of the fsms, we need
+    // to add it. Otherwise, it has been added, then we just need to union it.
     int id = fsm_group.rule_name_to_id_[rule_name];
     if (fsm_group.fsms_.size() <= static_cast<size_t>(id)) {
       fsm_group.fsms_.push_back(fsm.Unwrap());
