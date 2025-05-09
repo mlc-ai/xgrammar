@@ -2438,4 +2438,23 @@ void FSMWithStartEnd::Transition(
   }
   fsm.GetEpsilonClosure(result);
 }
+
+void FSMGroup::Simplify() {
+  for (auto& fsm : fsms_) {
+    fsm.SimplifyEpsilon();
+    fsm.SimplifyTransition();
+  }
+}
+
+void FSMGroup::ToMinimizedDFA(int32_t maximum_nodes) {
+  for (auto& fsm : fsms_) {
+    if (fsm.NumNodes() > maximum_nodes) {
+      continue;
+    }
+    auto dfa = fsm.ToDFA();
+    auto minimized_dfa = dfa.MinimizeDFA();
+    fsm = minimized_dfa;
+  }
+}
+
 }  // namespace xgrammar

@@ -589,4 +589,16 @@ TEST(XGrammarFSMTest, RuleToFSMTest) {
   EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
                 return fsm_rule1.IsEndNode(state);
               }) != current_states.end());
+
+  std::string repeated_grammar = R"(
+    main ::= "a" | "b"
+    main ::= "c" | "d"
+    main ::= /[h-z]/ | ("e" | ("f" | "g"))
+    main ::= /[a-z]/
+  )";
+  fsm_group = GrammarToFSMs(repeated_grammar, "main").Unwrap();
+  fsm_group.Simplify();
+  fsm_group.ToMinimizedDFA(50);
+  fsm_main = fsm_group.GetFSM(0);
+  EXPECT_EQ(fsm_main.NumNodes(), 2);
 }

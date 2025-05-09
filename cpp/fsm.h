@@ -633,6 +633,20 @@ class FSMGroup {
   /*! \brief Get the FSM from the rule id. */
   const FSMWithStartEnd& GetFSM(int32_t rule_id) const { return fsms_[rule_id]; }
 
+  /*! \brief Simplify the FSMGroup. */
+  void Simplify();
+
+  /*! \brief Convert the FSMGroup to a minimized DFA.
+      \param maximum_nodes The maximum number of nodes in the current NFA.
+      \details If the number of nodes of a FSM exceeds the maximum number,
+      the function won't do anything, otherwise, the function will convert the NFA
+      to a DFA, and then minimize the DFA. */
+  void ToMinimizedDFA(int32_t maximum_nodes = 50);
+
+  /*! \brief Get the FSMGroup from the grammar.
+      \param grammar The given grammar.
+      \param root_rule The root rule.
+      \return The FSMGroup. */
   friend Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
   friend std::ostream& operator<<(std::ostream& os, const FSMGroup& fsm_group) {
     os << "FSMGroup: " << std::endl;
@@ -659,6 +673,7 @@ class FSMGroup {
    error.
       */
 Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_FSM_H_
