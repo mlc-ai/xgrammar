@@ -1958,7 +1958,7 @@ FSMWithStartEnd BuildTrie(
     int current_node = 0;
     for (const auto& ch : pattern) {
       int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
-      int next_node = fsm.Transition(current_node, ch_int16);
+      int next_node = fsm.LegacyTransitionOnDFA(current_node, ch_int16);
       if (next_node == FSMWithStartEnd::NO_TRANSITION) {
         next_node = fsm.AddNode();
         fsm.AddEdge(current_node, next_node, ch_int16, ch_int16);
@@ -2048,7 +2048,7 @@ bool FSMGroup::BuildNameIdMap(
   XGRAMMAR_DCHECK(rule_name_to_id_.empty());
   for (const auto& rule_name : rule_names) {
     if (rule_name_to_id_.find(rule_name) == rule_name_to_id_.end()) {
-      rule_name_to_id_[rule_name] = rule_names.size();
+      rule_name_to_id_[rule_name] = rule_names_.size();
       rule_names_.push_back(rule_name);
     }
   }
@@ -2335,8 +2335,11 @@ Result<FSMWithStartEnd> RuleToFSM(
           union_node.nodes.push_back(bracket);
           bracket.nodes.clear();
         }
+      } else {
+        bracket.nodes.push_back(std::get<RegexIR::Node>(node));
       }
     }
+    union_node.nodes.push_back(bracket);
     ir.nodes.push_back(union_node);
   } else {
     while (!reverse_stack.empty()) {
@@ -2382,4 +2385,32 @@ Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule
   return Result<FSMGroup>::Ok(fsm_group);
 }
 
+void FSMWithStartEnd::Transition(
+    const std::unordered_set<int>& from,
+    int16_t input,
+    std::unordered_set<int>* result,
+    bool is_rule
+) const {
+  result->clear();
+  if (is_rule) {
+    for (const auto& node : from) {
+      const auto& edges = fsm.edges[node];
+      for (const auto& edge : edges) {
+        if (edge.IsRuleRef() && edge.GetRefRuleId() == input) {
+          result->insert(edge.target);
+        }
+      }
+    }
+  } else {
+    for (const auto& node : from) {
+      const auto& edges = fsm.edges[node];
+      for (const auto& edge : edges) {
+        if (edge.IsCharRange() && edge.min <= input && edge.max >= input) {
+          result->insert(edge.target);
+        }
+      }
+    }
+  }
+  fsm.GetEpsilonClosure(result);
+}
 }  // namespace xgrammar

@@ -1,9 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 
 #include "fsm.h"
+#include "support/logging.h"
 using namespace xgrammar;
 TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test Starts! -----------" << std::endl;
@@ -418,32 +421,106 @@ TEST(XGrammarFSMTest, BuildTrieTest) {
 
   // Test "hello"
   state = fsm.StartNode();
-  EXPECT_EQ(fsm.Transition(state, 'h'), 1);
-  EXPECT_EQ(fsm.Transition(1, 'e'), 2);
-  EXPECT_EQ(fsm.Transition(2, 'l'), 3);
-  EXPECT_EQ(fsm.Transition(3, 'l'), 4);
-  EXPECT_EQ(fsm.Transition(4, 'o'), 5);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(state, 'h'), 1);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(1, 'e'), 2);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(2, 'l'), 3);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(3, 'l'), 4);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(4, 'o'), 5);
   EXPECT_TRUE(fsm.IsEndNode(5));
 
   // Test "hil"
   state = fsm.StartNode();
-  EXPECT_EQ(fsm.Transition(state, 'h'), 1);
-  EXPECT_EQ(fsm.Transition(1, 'i'), 6);
-  EXPECT_EQ(fsm.Transition(6, 'l'), 13);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(state, 'h'), 1);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(1, 'i'), 6);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(6, 'l'), 13);
   EXPECT_FALSE(fsm.IsEndNode(13));
 
   // Test walk failure
   state = fsm.StartNode();
-  EXPECT_EQ(fsm.Transition(state, 'g'), 15);
-  EXPECT_EQ(fsm.Transition(15, 'o'), 16);
-  EXPECT_EQ(fsm.Transition(16, 'e'), -1);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(state, 'g'), 15);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(15, 'o'), 16);
+  EXPECT_EQ(fsm.LegacyTransitionOnDFA(16, 'e'), -1);
 }
 
 TEST(XGrammarFSMTest, RuleToFSMTest) {
   std::string simple_grammar = R"(
   main::="hello"|((rule1)+rule2)
   rule1::= ("a"|"b")+rule2
-  rule2::= "c")";
+  rule2::= "c"
+  rule2::= "abcd")";
   FSMGroup fsm_group = GrammarToFSMs(simple_grammar, "main").Unwrap();
-  std::cout << fsm_group << std::endl;
+  EXPECT_EQ(fsm_group.Size(), 3);
+  EXPECT_EQ(fsm_group.GetRootRuleName(), "main");
+
+  int32_t main_id = fsm_group.GetRuleID("main");
+  int32_t rule1_id = fsm_group.GetRuleID("rule1");
+  int32_t rule2_id = fsm_group.GetRuleID("rule2");
+  FSMWithStartEnd fsm_main = fsm_group.GetFSM(main_id);
+  FSMWithStartEnd fsm_rule1 = fsm_group.GetFSM(rule1_id);
+  FSMWithStartEnd fsm_rule2 = fsm_group.GetFSM(rule2_id);
+
+  // Test "hello"
+  int32_t main_start = fsm_main.StartNode();
+  std::unordered_set<int> current_states = {main_start};
+  std::unordered_set<int> next_states;
+  fsm_main.fsm.GetEpsilonClosure(&current_states);
+  fsm_main.Transition(current_states, 'h', &next_states);
+  current_states = next_states;
+  fsm_main.Transition(current_states, 'e', &next_states);
+  current_states = next_states;
+  fsm_main.Transition(current_states, 'l', &next_states);
+  current_states = next_states;
+  fsm_main.Transition(current_states, 'l', &next_states);
+  current_states = next_states;
+  fsm_main.Transition(current_states, 'o', &next_states);
+  current_states = next_states;
+  EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                return fsm_main.IsEndNode(state);
+              }) != current_states.end());
+
+  // Test "(rule1)+rule2"
+  current_states = {main_start};
+  fsm_main.fsm.GetEpsilonClosure(&current_states);
+  fsm_main.Transition(current_states, rule1_id, &next_states, true);
+  current_states = next_states;
+  fsm_main.Transition(current_states, rule1_id, &next_states, true);
+  current_states = next_states;
+  fsm_main.Transition(current_states, rule2_id, &next_states, true);
+  current_states = next_states;
+  EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                return fsm_main.IsEndNode(state);
+              }) != current_states.end());
+
+  current_states = {main_start};
+  fsm_main.fsm.GetEpsilonClosure(&current_states);
+  fsm_main.Transition(current_states, rule1_id, &next_states, true);
+  current_states = next_states;
+  fsm_main.Transition(current_states, rule1_id, &next_states, true);
+  current_states = next_states;
+  EXPECT_FALSE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                 return fsm_main.IsEndNode(state);
+               }) != current_states.end());
+
+  // Test multiple definitions of the same rule
+  int16_t rule2_start = fsm_rule2.StartNode();
+  current_states = {rule2_start};
+  fsm_rule2.fsm.GetEpsilonClosure(&current_states);
+  fsm_rule2.Transition(current_states, 'c', &next_states);
+  current_states = next_states;
+  EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                return fsm_rule2.IsEndNode(state);
+              }) != current_states.end());
+  current_states = {rule2_start};
+  fsm_rule2.fsm.GetEpsilonClosure(&current_states);
+  fsm_rule2.Transition(current_states, 'a', &next_states);
+  current_states = next_states;
+  fsm_rule2.Transition(current_states, 'b', &next_states);
+  current_states = next_states;
+  fsm_rule2.Transition(current_states, 'c', &next_states);
+  current_states = next_states;
+  fsm_rule2.Transition(current_states, 'd', &next_states);
+  current_states = next_states;
+  EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                return fsm_rule2.IsEndNode(state);
+              }) != current_states.end());
 }

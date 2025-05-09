@@ -62,17 +62,6 @@ struct FSMEdge {
 class CompactFSM;
 
 class FSM {
- private:
-  /*!
-    \brief Get the epsilon closure of a state.
-    \param state_set The current states.
-    \param result The epsilon closure of the state. If nullptr,
-           then the result will be stored in state_set.
-  */
-  void GetEpsilonClosure(
-      std::unordered_set<int>* state_set, std::unordered_set<int>* result = nullptr
-  ) const;
-
  public:
   using Edge = FSMEdge;
 
@@ -97,6 +86,16 @@ class FSM {
       std::vector<int>* result,
       bool is_closure = false,
       bool is_rule = false
+  ) const;
+
+  /*!
+    \brief Get the epsilon closure of a state.
+    \param state_set The current states.
+    \param result The epsilon closure of the state. If nullptr,
+           then the result will be stored in state_set.
+  */
+  void GetEpsilonClosure(
+      std::unordered_set<int>* state_set, std::unordered_set<int>* result = nullptr
   ) const;
 
   /*!
@@ -227,7 +226,7 @@ class FSMWithStartEnd {
    * \param character The input character.
    * \return The target state if a valid transition exists, -1 otherwise.
    */
-  int Transition(int from, int16_t character) const {
+  int LegacyTransitionOnDFA(int from, int16_t character) const {
     auto& edges = fsm.edges[from];
     for (const auto& edge : edges) {
       if (edge.min <= character && edge.max >= character) {
@@ -236,6 +235,20 @@ class FSMWithStartEnd {
     }
     return NO_TRANSITION;
   }
+
+  /*!
+  \brief Transition the FSM.
+  \param from The current states. It should be a epsilon closure.
+  \param character The input character, or the rule id.
+  \param result The next states set. It will return an epsilon closure.
+  \param is_rule Whether the input character is a rule id.
+  */
+  void Transition(
+      const std::unordered_set<int>& from,
+      int16_t character,
+      std::unordered_set<int>* result,
+      bool is_rule = false
+  ) const;
 
   /*! \brief Returns the start node of the FSM. */
   int StartNode() const { return start; }
@@ -607,6 +620,18 @@ class FSMGroup {
   void Advance(const std::vector<FSMState>& from, std::vector<FSMState>& result, uint8_t ch) const {
     // TODO(linzhang): implement this function.
   }
+
+  /*! \brief Get the size of the FSMGroup. i.e. How many rules are there in the FSMGroup. */
+  size_t Size() const { return fsms_.size(); }
+
+  /*! \brief Get the root rule name. */
+  const std::string& GetRootRuleName() const { return rule_names_[root_rule_id_]; }
+
+  /*! \brief Get the rule name from the rule id. */
+  int32_t GetRuleID(const std::string& rule_name) const { return rule_name_to_id_.at(rule_name); }
+
+  /*! \brief Get the FSM from the rule id. */
+  const FSMWithStartEnd& GetFSM(int32_t rule_id) const { return fsms_[rule_id]; }
 
   friend Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
   friend std::ostream& operator<<(std::ostream& os, const FSMGroup& fsm_group) {
