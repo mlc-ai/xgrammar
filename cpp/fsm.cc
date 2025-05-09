@@ -1596,7 +1596,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
   return Result<FSMWithStartEnd>::Ok(result);
 }
 
-Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
+Result<RegexIR> RegexToFSMIR(const std::string& regex) {
   RegexIR ir;
   using IRNode = std::variant<RegexIR::Node, char>;
   // We use a stack to store the nodes.
@@ -1612,14 +1612,14 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
     // Handle The class.
     if (regex[i] == '[') {
       if (left_middle_bracket != -1) {
-        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Nested middle bracket!"));
+        return Result<RegexIR>::Err(std::make_shared<Error>("Nested middle bracket!"));
       }
       left_middle_bracket = i;
       continue;
     }
     if (regex[i] == ']') {
       if (left_middle_bracket == -1) {
-        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid middle bracket!"));
+        return Result<RegexIR>::Err(std::make_shared<Error>("Invalid middle bracket!"));
       }
       RegexIR::Leaf leaf;
       leaf.regex = regex.substr(left_middle_bracket, i - left_middle_bracket + 1);
@@ -1635,13 +1635,13 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
     }
     if (regex[i] == '+' || regex[i] == '*' || regex[i] == '?') {
       if (stack.empty()) {
-        return Result<FSMWithStartEnd>::Err(
+        return Result<RegexIR>::Err(
             std::make_shared<Error>("Invalid regex: no node before operator!")
         );
       }
       auto node = stack.top();
       if (std::holds_alternative<char>(node)) {
-        return Result<FSMWithStartEnd>::Err(
+        return Result<RegexIR>::Err(
             std::make_shared<Error>("Invalid regex: no node before operator!")
         );
       }
@@ -1663,9 +1663,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
           break;
         }
         default: {
-          return Result<FSMWithStartEnd>::Err(
-              std::make_shared<Error>("Invalid regex: invalid operator!")
-          );
+          return Result<RegexIR>::Err(std::make_shared<Error>("Invalid regex: invalid operator!"));
         }
       }
       stack.push(symbol);
@@ -1707,7 +1705,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
         }
       }
       if (!paired) {
-        return Result<FSMWithStartEnd>::Err(
+        return Result<RegexIR>::Err(
             std::make_shared<Error>("Invalid regex: no paired bracket!" + std::to_string(__LINE__))
         );
       }
@@ -1736,7 +1734,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
               bracket.nodes.clear();
               continue;
             }
-            return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+            return Result<RegexIR>::Err(std::make_shared<Error>(
                 "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
             ));
           }
@@ -1745,7 +1743,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
             bracket.nodes.push_back(child);
             continue;
           }
-          return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
+          return Result<RegexIR>::Err(std::make_shared<Error>(
               "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
           ));
         }
@@ -1756,20 +1754,18 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
     }
     if (regex[i] == '{') {
       if (stack.empty()) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("Invalid regex: no node before repeat!")
+        return Result<RegexIR>::Err(std::make_shared<Error>("Invalid regex: no node before repeat!")
         );
       }
       auto node = stack.top();
       if (std::holds_alternative<char>(node)) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("Invalid regex: no node before repeat!")
+        return Result<RegexIR>::Err(std::make_shared<Error>("Invalid regex: no node before repeat!")
         );
       }
       stack.pop();
       auto bounds_result = CheckRepeat(regex, i);
       if (bounds_result.IsErr()) {
-        return Result<FSMWithStartEnd>::Err(bounds_result.UnwrapErr());
+        return Result<RegexIR>::Err(bounds_result.UnwrapErr());
       }
       auto child = std::get<RegexIR::Node>(node);
       RegexIR::Repeat repeat;
@@ -1802,7 +1798,7 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
         stack.pop();
         continue;
       }
-      return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid regex: no paired!"));
+      return Result<RegexIR>::Err(std::make_shared<Error>("Invalid regex: no paired!"));
     }
     auto node = stack.top();
     stack.pop();
@@ -1825,7 +1821,15 @@ Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
     }
     ir.nodes.push_back(std::move(union_node));
   }
-  return ir.Build();
+  return Result<RegexIR>::Ok(ir);
+}
+
+Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
+  auto ir = RegexToFSMIR(regex);
+  if (ir.IsErr()) {
+    return Result<FSMWithStartEnd>::Err(ir.UnwrapErr());
+  }
+  return ir.Unwrap().Build();
 }
 
 Result<FSMWithStartEnd> RegexIR::Build() const {
@@ -2094,6 +2098,25 @@ Result<FSMWithStartEnd> RuleToFSM(
           now_ref_rule_name.clear();
         }
         stack.push(ch);
+        break;
+      }
+      case '/': {
+        // Regex Mode.
+        size_t next_slash = rule.find('/', i + 1);
+        while (next_slash != std::string::npos && rule[next_slash - 1] == '\\') {
+          next_slash = rule.find('/', next_slash + 1);
+        }
+        if (next_slash == std::string::npos) {
+          return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Unpaired slash!"));
+        }
+        auto ir = RegexToFSMIR(rule.substr(i + 1, next_slash - i - 1));
+        if (ir.IsErr()) {
+          return Result<FSMWithStartEnd>::Err(ir.UnwrapErr());
+        }
+        for (const auto& node : ir.Unwrap().nodes) {
+          stack.push(node);
+        }
+        i = next_slash;
         break;
       }
       case ')': {
@@ -2371,6 +2394,8 @@ Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule
     // Build the fsm for the rule.
     auto fsm = RuleToFSM(rule_expr, fsm_group.rule_name_to_id_);
     if (fsm.IsErr()) {
+      XGRAMMAR_LOG(INFO) << "Error building fsm for rule " << rule_name << ": "
+                         << fsm.UnwrapErr()->what();
       return Result<FSMGroup>::Err(fsm.UnwrapErr());
     }
     // Since we number the rules in order, if the id is larger than the size of the fsms, we need

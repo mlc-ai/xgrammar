@@ -2,11 +2,9 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstddef>
 #include <cstdint>
 
 #include "fsm.h"
-#include "support/logging.h"
 using namespace xgrammar;
 TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test Starts! -----------" << std::endl;
@@ -447,7 +445,7 @@ TEST(XGrammarFSMTest, RuleToFSMTest) {
   main::="hello"|((rule1)+rule2)
   rule1::= ("a"|"b")+rule2
   rule2::= "c"
-  rule2::= "abcd")";
+  rule2::= "abc\"\"d")";
   FSMGroup fsm_group = GrammarToFSMs(simple_grammar, "main").Unwrap();
   EXPECT_EQ(fsm_group.Size(), 3);
   EXPECT_EQ(fsm_group.GetRootRuleName(), "main");
@@ -518,9 +516,77 @@ TEST(XGrammarFSMTest, RuleToFSMTest) {
   current_states = next_states;
   fsm_rule2.Transition(current_states, 'c', &next_states);
   current_states = next_states;
+  fsm_rule2.Transition(current_states, '\"', &next_states);
+  current_states = next_states;
+  fsm_rule2.Transition(current_states, '\"', &next_states);
+  current_states = next_states;
   fsm_rule2.Transition(current_states, 'd', &next_states);
   current_states = next_states;
   EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
                 return fsm_rule2.IsEndNode(state);
+              }) != current_states.end());
+
+  std::string regex_grammar = R"(
+  main::= rule1+ /a/?
+  rule1 ::= /[\d]/+
+  rule1 ::= /abc/"abc")";
+  fsm_group = GrammarToFSMs(regex_grammar, "main").Unwrap();
+
+  main_id = fsm_group.GetRuleID("main");
+  rule1_id = fsm_group.GetRuleID("rule1");
+  fsm_main = fsm_group.GetFSM(main_id);
+  fsm_rule1 = fsm_group.GetFSM(rule1_id);
+
+  // Test "123"
+  main_start = fsm_main.StartNode();
+  int32_t rule1_start = fsm_rule1.StartNode();
+  current_states = {main_start};
+  fsm_main.fsm.GetEpsilonClosure(&current_states);
+  fsm_main.Transition(current_states, rule1_id, &next_states, true);
+  current_states = next_states;
+  fsm_main.Transition(current_states, rule1_id, &next_states, true);
+  current_states = next_states;
+  EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                return fsm_main.IsEndNode(state);
+              }) != current_states.end());
+  fsm_main.Transition(current_states, 'a', &next_states);
+  current_states = next_states;
+  EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                return fsm_main.IsEndNode(state);
+              }) != current_states.end());
+
+  // Test rule1
+  current_states = {rule1_start};
+  fsm_rule1.fsm.GetEpsilonClosure(&current_states);
+  fsm_rule1.Transition(current_states, '1', &next_states);
+  current_states = next_states;
+  fsm_rule1.Transition(current_states, '2', &next_states);
+  current_states = next_states;
+  fsm_rule1.Transition(current_states, '3', &next_states);
+  current_states = next_states;
+  EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                return fsm_rule1.IsEndNode(state);
+              }) != current_states.end());
+
+  current_states = {rule1_start};
+  fsm_rule1.fsm.GetEpsilonClosure(&current_states);
+  fsm_rule1.Transition(current_states, 'a', &next_states);
+  current_states = next_states;
+  fsm_rule1.Transition(current_states, 'b', &next_states);
+  current_states = next_states;
+  fsm_rule1.Transition(current_states, 'c', &next_states);
+  current_states = next_states;
+  EXPECT_FALSE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                 return fsm_rule1.IsEndNode(state);
+               }) != current_states.end());
+
+  fsm_rule1.Transition(current_states, 'a', &next_states);
+  current_states = next_states;
+  fsm_rule1.Transition(current_states, 'b', &next_states);
+  current_states = next_states;
+  fsm_rule1.Transition(current_states, 'c', &next_states);
+  current_states = next_states;
+  EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
+                return fsm_rule1.IsEndNode(state);
               }) != current_states.end());
 }
