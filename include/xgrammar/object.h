@@ -13,20 +13,16 @@
 namespace xgrammar {
 
 /*!
- * \brief A tag type for empty constructor.
- *
- * Since XGRAMMAR_DEFINE_PIMPL_METHODS already occupies the default constructor to
- * construct a null object, this tag is used to define an empty constructor for
- * the object.
+ * \brief A tag type for creating a null object.
  */
-struct EmptyConstructorTag {};
+struct NullObj {};
 
 #define XGRAMMAR_DEFINE_PIMPL_METHODS(TypeName)                                \
  public:                                                                       \
   class Impl;                                                                  \
   /* The default constructor constructs a null object. Note operating on a */  \
   /* null object will fail. */                                                 \
-  explicit TypeName() : pimpl_(nullptr) {}                                     \
+  explicit TypeName(NullObj) : pimpl_(nullptr) {}                              \
   /* Construct object with a shared pointer to impl. The object just stores */ \
   /* a pointer. */                                                             \
   explicit TypeName(std::shared_ptr<Impl> pimpl) : pimpl_(std::move(pimpl)) {} \

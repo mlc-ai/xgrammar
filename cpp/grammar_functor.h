@@ -206,7 +206,7 @@ class GrammarFunctor {
   virtual T VisitRuleRef(const RuleExpr& rule_expr) { return VisitElement(rule_expr); }
 
   /*! \brief The grammar to visit or mutate. */
-  Grammar base_grammar_;
+  Grammar base_grammar_{NullObj{}};
 
   /*!
    * \brief The builder to build the new grammar. It is empty when the mutator is constructed, and

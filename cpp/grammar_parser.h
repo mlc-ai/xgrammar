@@ -15,7 +15,8 @@ class EBNFLexer {
  public:
   // Token types
   enum class TokenType {
-    Identifier,      // e.g.: root, rule1, TagDispatch
+    RuleName,        // the name of a rule definition, e.g.: root, rule1
+    Identifier,      // reference to a rule, or a Macro name, e.g.: root, rule1, TagDispatch
     StringLiteral,   // e.g.: "tag1", "hello"
     IntegerLiteral,  // 123
     CharClass,       // Character class, e.g.: [a-z], [0-9], [^a-z]
@@ -50,8 +51,8 @@ class EBNFLexer {
     int column;
   };
 
-  explicit EBNFLexer(const std::string& input);
-  std::vector<Token> Tokenize();
+  EBNFLexer();
+  std::vector<Token> Tokenize(const std::string& input);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(EBNFLexer);
 };

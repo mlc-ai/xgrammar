@@ -2,6 +2,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include "grammar_parser.h"
+#include "test_utils.h"
 
 using namespace xgrammar;
 
@@ -10,13 +11,13 @@ TEST(XGrammarLexerTest, BasicTokenization) {
   // Test basic token types
   std::string input =
       "rule1 ::= \"string\" | [a-z] | 123 | (expr) | {1,3} | * | + | ? | true | false";
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   ASSERT_EQ(tokens.size(), 28);  // 27 tokens + EOF
 
   // Check token types
-  EXPECT_EQ(tokens[0].type, EBNFLexer::TokenType::Identifier);
+  EXPECT_EQ(tokens[0].type, EBNFLexer::TokenType::RuleName);
   EXPECT_EQ(tokens[0].lexeme, "rule1");
 
   EXPECT_EQ(tokens[1].type, EBNFLexer::TokenType::Assign);
@@ -74,11 +75,11 @@ TEST(XGrammarLexerTest, BasicTokenization) {
 
 TEST(XGrammarLexerTest, CommentsAndWhitespace) {
   std::string input = "rule1 ::= expr1 # This is a comment\n  | expr2 # Another comment";
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   ASSERT_EQ(tokens.size(), 6);  // 5 tokens + EOF
-  EXPECT_EQ(tokens[0].type, EBNFLexer::TokenType::Identifier);
+  EXPECT_EQ(tokens[0].type, EBNFLexer::TokenType::RuleName);
   EXPECT_EQ(tokens[0].lexeme, "rule1");
   EXPECT_EQ(tokens[1].type, EBNFLexer::TokenType::Assign);
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::Identifier);
@@ -91,8 +92,8 @@ TEST(XGrammarLexerTest, CommentsAndWhitespace) {
 TEST(XGrammarLexerTest, StringLiterals) {
   // Test string literals with escape sequences
   std::string input = "rule ::= \"normal string\" | \"escaped \\\"quotes\\\"\" | \"\\n\\r\\t\\\\\"";
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   ASSERT_EQ(tokens.size(), 8);  // 7 tokens + EOF
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::StringLiteral);
@@ -109,8 +110,8 @@ TEST(XGrammarLexerTest, CharacterClasses) {
   std::string input =
       "rule ::= [a-z] | [0-9] | [^a-z] | [\\-\\]\\\\] | [\\u0041-\\u005A] | [测试] | [\\t\\r\\n] | "
       "[\\b\\f]";
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   ASSERT_EQ(tokens.size(), 18);  // 17 tokens + EOF
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::CharClass);
@@ -144,8 +145,8 @@ TEST(XGrammarLexerTest, CharacterClasses) {
 
 TEST(XGrammarLexerTest, BooleanValues) {
   std::string input = "rule ::= true | false";
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   ASSERT_EQ(tokens.size(), 6);  // 5 tokens + EOF
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::Boolean);
@@ -159,8 +160,8 @@ TEST(XGrammarLexerTest, BooleanValues) {
 
 TEST(XGrammarLexerTest, LookaheadAssertion) {
   std::string input = "rule ::= \"a\" (= lookahead)";
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   ASSERT_EQ(tokens.size(), 7);  // 6 tokens + EOF
   EXPECT_EQ(tokens[3].type, EBNFLexer::TokenType::LookaheadLParen);
@@ -170,8 +171,8 @@ TEST(XGrammarLexerTest, LookaheadAssertion) {
 
 TEST(XGrammarLexerTest, LineAndColumnTracking) {
   std::string input = "rule1 ::= expr1\nrule2 ::= expr2";
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   ASSERT_EQ(tokens.size(), 7);  // 6 tokens + EOF
 
@@ -203,8 +204,8 @@ TEST(XGrammarLexerTest, ComplexGrammar) {
       "frac ::= \".\" [0-9]+\n"
       "exp ::= [eE] [+\\-]? [0-9]+";
 
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   // Just verify we have a reasonable number of tokens and no crashes
   EXPECT_GT(tokens.size(), 50);
@@ -215,8 +216,8 @@ TEST(XGrammarLexerTest, EdgeCases) {
   // Empty input
   {
     std::string input = "";
-    EBNFLexer lexer(input);
-    auto tokens = lexer.Tokenize();
+    EBNFLexer lexer;
+    auto tokens = lexer.Tokenize(input);
     ASSERT_EQ(tokens.size(), 1);
     EXPECT_EQ(tokens[0].type, EBNFLexer::TokenType::EndOfFile);
   }
@@ -224,8 +225,8 @@ TEST(XGrammarLexerTest, EdgeCases) {
   // Only whitespace and comments
   {
     std::string input = "  \t\n # Comment\n  # Another comment";
-    EBNFLexer lexer(input);
-    auto tokens = lexer.Tokenize();
+    EBNFLexer lexer;
+    auto tokens = lexer.Tokenize(input);
     ASSERT_EQ(tokens.size(), 1);
     EXPECT_EQ(tokens[0].type, EBNFLexer::TokenType::EndOfFile);
   }
@@ -233,16 +234,16 @@ TEST(XGrammarLexerTest, EdgeCases) {
   // Various newline formats
   {
     std::string input = "rule1 ::= expr1\nrule2 ::= expr2\r\nrule3 ::= expr3\rrule4 ::= expr4";
-    EBNFLexer lexer(input);
-    auto tokens = lexer.Tokenize();
+    EBNFLexer lexer;
+    auto tokens = lexer.Tokenize(input);
     ASSERT_EQ(tokens.size(), 13);  // 12 tokens + EOF
   }
 
   // Integer boundary
   {
     std::string input = "rule ::= 999999999999999";  // 15 digits (max allowed)
-    EBNFLexer lexer(input);
-    auto tokens = lexer.Tokenize();
+    EBNFLexer lexer;
+    auto tokens = lexer.Tokenize(input);
     ASSERT_EQ(tokens.size(), 4);  // 3 tokens + EOF
     EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::IntegerLiteral);
     EXPECT_EQ(tokens[2].lexeme, "999999999999999");
@@ -251,10 +252,10 @@ TEST(XGrammarLexerTest, EdgeCases) {
   // Special identifiers
   {
     std::string input = "rule-name ::= _special.identifier-123";
-    EBNFLexer lexer(input);
-    auto tokens = lexer.Tokenize();
+    EBNFLexer lexer;
+    auto tokens = lexer.Tokenize(input);
     ASSERT_EQ(tokens.size(), 4);  // 3 tokens + EOF
-    EXPECT_EQ(tokens[0].type, EBNFLexer::TokenType::Identifier);
+    EXPECT_EQ(tokens[0].type, EBNFLexer::TokenType::RuleName);
     EXPECT_EQ(tokens[0].lexeme, "rule-name");
     EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::Identifier);
     EXPECT_EQ(tokens[2].lexeme, "_special.identifier-123");
@@ -263,8 +264,8 @@ TEST(XGrammarLexerTest, EdgeCases) {
 
 TEST(XGrammarLexerTest, QuantifierTokens) {
   std::string input = "rule ::= expr? | expr* | expr+ | expr{1} | expr{1,} | expr{1,5}";
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   // Verify question mark, star, plus, and brace tokens
   EXPECT_EQ(tokens[3].type, EBNFLexer::TokenType::Question);
@@ -282,11 +283,105 @@ TEST(XGrammarLexerTest, QuantifierTokens) {
 // Test for UTF-8 handling in string literals
 TEST(XGrammarLexerTest, UTF8Handling) {
   std::string input = "rule ::= \"UTF-8: \\u00A9 \\u2603 \\U0001F600\"";
-  EBNFLexer lexer(input);
-  auto tokens = lexer.Tokenize();
+  EBNFLexer lexer;
+  auto tokens = lexer.Tokenize(input);
 
   ASSERT_EQ(tokens.size(), 4);  // 3 tokens + EOF
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::StringLiteral);
   // The value should contain the actual UTF-8 characters
   EXPECT_EQ(tokens[2].value, "UTF-8: © ☃ 😀");
+}
+
+TEST(XGrammarLexerTest, LexerErrorCases) {
+  // Test for unterminated string
+  {
+    std::string input = "rule ::= \"unterminated string";
+    XGRAMMAR_EXPECT_THROW(
+        EBNFLexer().Tokenize(input), std::exception, "Expect \" in string literal"
+    );
+  }
+
+  // Test for unterminated character class
+  {
+    std::string input = "rule ::= [a-z";
+    XGRAMMAR_EXPECT_THROW(
+        EBNFLexer().Tokenize(input), std::exception, "Unterminated character class"
+    );
+  }
+
+  // Test for invalid UTF-8 sequence in string
+  {
+    std::string input = "rule ::= \"\xC2\x20\"";  // Invalid UTF-8 sequence
+    XGRAMMAR_EXPECT_THROW(EBNFLexer().Tokenize(input), std::exception, "Invalid UTF8 sequence");
+  }
+
+  // Test for invalid escape sequence in string
+  {
+    std::string input = "rule ::= \"\\z\"";  // Invalid escape sequence
+    XGRAMMAR_EXPECT_THROW(EBNFLexer().Tokenize(input), std::exception, "Invalid escape sequence");
+  }
+
+  // Test for newline in character class
+  {
+    std::string input = "rule ::= [a-z\n]";
+    XGRAMMAR_EXPECT_THROW(
+        EBNFLexer().Tokenize(input), std::exception, "Character class should not contain newline"
+    );
+  }
+
+  // Test for invalid UTF-8 sequence in character class
+  {
+    std::string input = "rule ::= [\xC2\x20]";  // Invalid UTF-8 sequence
+    XGRAMMAR_EXPECT_THROW(EBNFLexer().Tokenize(input), std::exception, "Invalid UTF8 sequence");
+  }
+
+  // Test for invalid escape sequence in character class
+  {
+    std::string input = "rule ::= [\\z]";  // Invalid escape sequence
+    XGRAMMAR_EXPECT_THROW(EBNFLexer().Tokenize(input), std::exception, "Invalid escape sequence");
+  }
+
+  // Test for integer too large
+  {
+    std::string input = "rule ::= expr{1000000000000000000}";  // Integer > 1e15
+    XGRAMMAR_EXPECT_THROW(EBNFLexer().Tokenize(input), std::exception, "Integer is too large");
+  }
+
+  // Test for unexpected character
+  {
+    std::string input = "rule ::= @";
+    XGRAMMAR_EXPECT_THROW(EBNFLexer().Tokenize(input), std::exception, "Unexpected character");
+  }
+
+  // Test for unexpected colon
+  {
+    std::string input = "rule : expr";
+    XGRAMMAR_EXPECT_THROW(EBNFLexer().Tokenize(input), std::exception, "Unexpected character: ':'");
+  }
+
+  // Test for assign preceded by non-identifier
+  {
+    std::string input = "\"string\" ::= expr";
+    XGRAMMAR_EXPECT_THROW(
+        EBNFLexer().Tokenize(input), std::exception, "Assign should be preceded by an identifier"
+    );
+  }
+
+  // Test for assign as first token
+  {
+    std::string input = "::= expr";
+    XGRAMMAR_EXPECT_THROW(
+        EBNFLexer().Tokenize(input), std::exception, "Assign should not be the first token"
+    );
+  }
+
+  // Test for rule name not at beginning of line
+  {
+    std::string input = "token token ::= expr";
+    XGRAMMAR_EXPECT_THROW(
+        EBNFLexer().Tokenize(input),
+        std::exception,
+        "The rule name should be at the beginning of the line"
+    );
+  }
 }
