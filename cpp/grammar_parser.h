@@ -11,6 +11,51 @@
 
 namespace xgrammar {
 
+class EBNFLexer {
+ public:
+  // Token types
+  enum class TokenType {
+    Identifier,      // e.g.: root, rule1, TagDispatch
+    StringLiteral,   // e.g.: "tag1", "hello"
+    IntegerLiteral,  // 123
+    CharClass,       // Character class, e.g.: [a-z], [0-9], [^a-z]
+    LParen,          // (
+    RParen,          // )
+    LBrace,          // {
+    RBrace,          // }
+    Pipe,            // |
+    Comma,           // ,
+    EndOfFile,       // End of file
+
+    // Boolean type
+    Boolean,  // true, false
+
+    // Symbols and quantifiers
+    Assign,    // ::=
+    Equal,     // =
+    Star,      // *
+    Plus,      // +
+    Question,  // ?
+
+    // Special structures
+    LookaheadLParen,  // (=
+  };
+
+  // Token structure
+  struct Token {
+    TokenType type;
+    std::string lexeme;  // original text
+    std::string value;   // processed value
+    int line;
+    int column;
+  };
+
+  explicit EBNFLexer(const std::string& input);
+  std::vector<Token> Tokenize();
+
+  XGRAMMAR_DEFINE_PIMPL_METHODS(EBNFLexer);
+};
+
 /*!
  * \brief This class parses a BNF/EBNF grammar string into an BNF abstract syntax tree (AST).
  * \details This function accepts the EBNF notation defined in the W3C XML Specification
