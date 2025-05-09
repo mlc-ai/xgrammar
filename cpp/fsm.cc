@@ -1984,14 +1984,17 @@ void SplitRules(
     std::vector<std::string>& lhs_group,
     std::vector<std::string>& rhs_group
 ) {
+  // The two variables should be indexes of new lines.
   size_t last_end_of_the_line = 0;
-  size_t end_of_the_line = 0;
-  end_of_the_line = grammar.find('\n');
+  while (last_end_of_the_line < grammar.size() && grammar[last_end_of_the_line] == '\n') {
+    last_end_of_the_line++;
+  }
+  size_t end_of_the_line = grammar.find('\n', last_end_of_the_line);
+  last_end_of_the_line--;
   while (end_of_the_line != std::string::npos) {
     // Check if the line has a defination.
-    size_t define_symbol =
-        grammar.find("::=", last_end_of_the_line, end_of_the_line - last_end_of_the_line);
-    if (define_symbol == std::string::npos) {
+    size_t define_symbol = grammar.find("::=", last_end_of_the_line);
+    if (define_symbol == std::string::npos || define_symbol > end_of_the_line) {
       // The line should be empty.
       if (end_of_the_line - last_end_of_the_line != 1) {
         // This line contains something surprising.
@@ -2015,9 +2018,8 @@ void SplitRules(
   }
 
   // Handle the last rule.
-  size_t define_symbol =
-      grammar.find("::=", last_end_of_the_line, end_of_the_line - last_end_of_the_line);
-  if (define_symbol == std::string::npos) {
+  size_t define_symbol = grammar.find("::=", last_end_of_the_line);
+  if (define_symbol == std::string::npos || define_symbol > end_of_the_line) {
     // The line should be empty.
     if (end_of_the_line - last_end_of_the_line != 1) {
       // This line contains something surprising.

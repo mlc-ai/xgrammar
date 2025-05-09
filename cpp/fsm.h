@@ -609,6 +609,16 @@ class FSMGroup {
   }
 
   friend Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
+  friend std::ostream& operator<<(std::ostream& os, const FSMGroup& fsm_group) {
+    os << "FSMGroup: " << std::endl;
+    os << "size: " << fsm_group.fsms_.size() << std::endl;
+    os << "root_rule_id: " << fsm_group.root_rule_id_ << std::endl;
+    for (size_t i = 0; i < fsm_group.fsms_.size(); ++i) {
+      os << "FSM " << i << ":" << std::endl;
+      os << fsm_group.fsms_[i] << std::endl;
+    }
+    return os;
+  }
 };
 
 /*! \brief The function is used to get FSMs from a given grammar.
@@ -624,7 +634,6 @@ class FSMGroup {
    error.
       */
 Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
-
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_FSM_H_

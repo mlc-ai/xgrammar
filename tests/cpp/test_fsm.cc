@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstddef>
 
 #include "fsm.h"
 using namespace xgrammar;
@@ -436,4 +437,13 @@ TEST(XGrammarFSMTest, BuildTrieTest) {
   EXPECT_EQ(fsm.Transition(state, 'g'), 15);
   EXPECT_EQ(fsm.Transition(15, 'o'), 16);
   EXPECT_EQ(fsm.Transition(16, 'e'), -1);
+}
+
+TEST(XGrammarFSMTest, RuleToFSMTest) {
+  std::string simple_grammar = R"(
+  main::="hello"|((rule1)+rule2)
+  rule1::= ("a"|"b")+rule2
+  rule2::= "c")";
+  FSMGroup fsm_group = GrammarToFSMs(simple_grammar, "main").Unwrap();
+  std::cout << fsm_group << std::endl;
 }
