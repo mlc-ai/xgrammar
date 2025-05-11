@@ -114,7 +114,7 @@ class NestedRuleUnwrapper : public GrammarMutator {
       cur_rule_name_ = rule.name;
       auto new_body_expr_id = VisitRuleBody(rule_expr);
       builder_.UpdateRuleBody(i, new_body_expr_id);
-      builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+      builder_.UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
     }
     return builder_.Get(base_grammar_->GetRootRule().name);
   }
@@ -469,7 +469,7 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
       auto rule = grammar->GetRule(rule_id);
       auto new_body_expr_id = VisitExpr(rule.body_expr_id);
       builder_.UpdateRuleBody(rule_id_map_[rule_id], new_body_expr_id);
-      builder_.AddLookaheadAssertion(
+      builder_.UpdateLookaheadAssertion(
           rule_id_map_[rule_id], VisitLookaheadAssertion(rule.lookahead_assertion_id)
       );
     }
@@ -515,7 +515,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       }
       auto look_head_assertion_id = DetectLookaheadAssertion(i);
       if (look_head_assertion_id != -1) {
-        builder_.AddLookaheadAssertion(i, look_head_assertion_id);
+        builder_.UpdateLookaheadAssertion(i, look_head_assertion_id);
       }
     }
     return builder_.Get(grammar->GetRootRuleId());
@@ -635,7 +635,7 @@ class SubGrammarAdder : public GrammarMutator {
       auto new_body_expr_id = VisitExpr(rule.body_expr_id);
       builder_.UpdateRuleBody(new_rule_ids_names[i].first, new_body_expr_id);
       auto new_lookahead_assertion_id = VisitLookaheadAssertion(rule.lookahead_assertion_id);
-      builder_.AddLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
+      builder_.UpdateLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
     }
     return new_rule_ids_names[grammar->GetRootRuleId()].first;
   }

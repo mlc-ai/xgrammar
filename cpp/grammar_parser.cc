@@ -119,7 +119,11 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
   // Check if it's a boolean value
   if (identifier == "true" || identifier == "false") {
     return {
-        TokenType::Boolean, identifier, identifier == "true" ? "1" : "0", start_line, start_column
+        TokenType::Boolean,
+        identifier,
+        identifier == "true" ? true : false,
+        start_line,
+        start_column
     };
   }
 
@@ -136,7 +140,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseStringToken() {
   Consume();  // Skip opening quote
 
   std::vector<int32_t> codepoints;
-  while (*cur_ && *cur_ != '"' && *cur_ != '\n' && *cur_ != '\r') {
+  while (Peek() && Peek() != '"' && Peek() != '\n' && Peek() != '\r') {
     auto [codepoint, len] = ParseNextUTF8OrEscaped(cur_);
     if (codepoint == CharHandlingError::kInvalidUTF8) {
       ReportLexerError("Invalid UTF8 sequence");
@@ -148,7 +152,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseStringToken() {
     codepoints.push_back(codepoint);
   }
 
-  if (*cur_ != '"') {
+  if (Peek() != '"') {
     ReportLexerError("Expect \" in string literal");
   }
   Consume();  // Skip closing quote
@@ -173,15 +177,18 @@ EBNFLexer::Token EBNFLexer::Impl::ParseCharClassToken() {
 
   Consume();  // Skip '['
 
-  if (*cur_ == '^') {
+  std::vector<TCodepoint> codepoints;
+
+  if (Peek() == '^') {
+    codepoints.push_back(static_cast<TCodepoint>(static_cast<uint8_t>('^')));
     Consume();
   }
 
   // Parse character class content
   static const std::unordered_map<char, TCodepoint> CUSTOM_ESCAPE_MAP = {{'-', '-'}, {']', ']'}};
 
-  while (*cur_ && *cur_ != ']') {
-    if (*cur_ == '\r' || *cur_ == '\n') {
+  while (Peek() && Peek() != ']') {
+    if (Peek() == '\r' || Peek() == '\n') {
       ReportLexerError("Character class should not contain newline");
     }
 
@@ -194,9 +201,10 @@ EBNFLexer::Token EBNFLexer::Impl::ParseCharClassToken() {
     }
 
     Consume(len);
+    codepoints.push_back(codepoint);
   }
 
-  if (!*cur_) {
+  if (!Peek()) {
     ReportLexerError("Unterminated character class");
   }
 
@@ -204,7 +212,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseCharClassToken() {
 
   // Extract original lexeme
   std::string lexeme(start_pos, cur_ - start_pos);
-  return {TokenType::CharClass, lexeme, lexeme, start_line, start_column};
+  return {TokenType::CharClass, lexeme, codepoints, start_line, start_column};
 }
 
 // Parse integer
@@ -212,10 +220,18 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIntegerToken() {
   int start_line = cur_line_;
   int start_column = cur_column_;
   const char* start_pos = cur_;
+  bool is_negative = false;
+
+  if (Peek() == '-') {
+    is_negative = true;
+    Consume();
+  } else if (Peek() == '+') {
+    Consume();
+  }
 
   int64_t num = 0;
-  while (*cur_ && isdigit(*cur_)) {
-    num = num * 10 + (*cur_ - '0');
+  while (Peek() && isdigit(Peek())) {
+    num = num * 10 + (Peek() - '0');
     Consume();
     if (num > kMaxIntegerInGrammar) {
       ReportLexerError(
@@ -226,16 +242,14 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIntegerToken() {
   }
 
   std::string lexeme(start_pos, cur_ - start_pos);
-  std::string value = std::to_string(num);
-
-  return {TokenType::IntegerLiteral, lexeme, value, start_line, start_column};
+  return {TokenType::IntegerLiteral, lexeme, is_negative ? -num : num, start_line, start_column};
 }
 
 // Get the next token
 EBNFLexer::Token EBNFLexer::Impl::NextToken() {
   ConsumeSpace();  // Skip whitespace and comments
 
-  if (!*cur_) {
+  if (!Peek()) {
     return {TokenType::EndOfFile, "", "", cur_line_, cur_column_};
   }
 
@@ -243,7 +257,7 @@ EBNFLexer::Token EBNFLexer::Impl::NextToken() {
   int start_column = cur_column_;
 
   // Determine token type based on current character
-  switch (*cur_) {
+  switch (Peek()) {
     case '(':
       if (Peek(1) == '=') {
         Consume(2);
@@ -293,7 +307,7 @@ EBNFLexer::Token EBNFLexer::Impl::NextToken() {
     default:
       if (IsNameChar(*cur_, true)) {
         return ParseIdentifierOrBooleanToken();
-      } else if (isdigit(*cur_)) {
+      } else if (isdigit(*cur_) || *cur_ == '-' || *cur_ == '+') {
         return ParseIntegerToken();
       }
 
@@ -375,6 +389,36 @@ class EBNFParser {
   using Token = EBNFLexer::Token;
   using TokenType = EBNFLexer::TokenType;
 
+  // Parser for macro
+  class MacroIR {
+   public:
+    struct StringNode;
+    struct IntegerNode;
+    struct BooleanNode;
+    struct TupleNode;
+
+    using Node = std::variant<StringNode, IntegerNode, BooleanNode, TupleNode>;
+    using NodePtr = std::unique_ptr<Node>;
+
+    struct StringNode {
+      std::string str;
+    };
+    struct IntegerNode {
+      int64_t value;
+    };
+    struct BooleanNode {
+      bool value;
+    };
+    struct TupleNode {
+      std::vector<NodePtr> elements;
+    };
+
+    struct Arguments {
+      std::vector<NodePtr> arguments;
+      std::unordered_map<std::string, NodePtr> named_arguments;
+    };
+  };
+
   // Parsing different parts of the grammar
   std::string ParseIdentifier(bool allow_empty = false);
   int32_t ParseCharacterClass();
@@ -387,9 +431,13 @@ class EBNFParser {
   int32_t ParseLookaheadAssertion();
   int32_t ParseSequence();
   int32_t ParseChoices();
+  Rule ParseRule();
+
+  // Parser for macro
+  MacroIR::Arguments ParseMacroArguments();
+  MacroIR::NodePtr ParseMacroValue();
   std::pair<int32_t, int32_t> ParseTagDispatchElement();
   int32_t ParseTagDispatchOrChoices();
-  Rule ParseRule();
 
   // Helper functions
 
@@ -409,7 +457,7 @@ class EBNFParser {
   const Token& Peek(int delta = 0) const;
 
   // Consume token if it matches expected type, otherwise report error
-  void ExpectAndConsume(TokenType type, const std::string& message);
+  void PeekAndConsume(TokenType type, const std::string& message);
 
   // Report a parsing error with the given message
   [[noreturn]] void ReportParseError(const std::string& msg);
@@ -434,13 +482,20 @@ class EBNFParser {
   std::string root_rule_name_;
 
   inline static constexpr int64_t MAX_INTEGER_IN_GRAMMAR = 1e10;
+
+  static const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>> kMacroFunctions;
+};
+
+const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
+    EBNFParser::kMacroFunctions = {
+        {"TagDispatch", [](EBNFParser* parser) { return parser->ParseTagDispatchOrChoices(); }},
 };
 
 const EBNFParser::Token& EBNFParser::Peek(int delta) const { return *(current_token_ + delta); }
 
 void EBNFParser::Consume(int cnt) { current_token_ += cnt; }
 
-void EBNFParser::ExpectAndConsume(TokenType type, const std::string& message) {
+void EBNFParser::PeekAndConsume(TokenType type, const std::string& message) {
   if (Peek().type != type) {
     ReportParseError(message);
   }
@@ -449,8 +504,8 @@ void EBNFParser::ExpectAndConsume(TokenType type, const std::string& message) {
 
 void EBNFParser::ReportParseError(const std::string& msg) {
   XGRAMMAR_DCHECK(current_token_ < tokens_.data() + tokens_.size());
-  int line = current_token_->line;
-  int column = current_token_->column;
+  int line = Peek().line;
+  int column = Peek().column;
   XGRAMMAR_LOG(FATAL) << "EBNF parse error at line " + std::to_string(line) + ", column " +
                              std::to_string(column) + ": " + msg;
 }
@@ -462,7 +517,7 @@ std::string EBNFParser::ParseIdentifier(bool allow_empty) {
     }
     ReportParseError("Expect identifier");
   }
-  std::string identifier = current_token_->lexeme;
+  std::string identifier = Peek().lexeme;
   Consume();
   return identifier;
 }
@@ -472,53 +527,36 @@ int32_t EBNFParser::ParseCharacterClass() {
     ReportParseError("Expect character class");
   }
 
-  std::string char_class_str = current_token_->lexeme;
+  std::vector<TCodepoint> codepoints = std::any_cast<std::vector<TCodepoint>>(Peek().value);
   Consume();
-
-  // Parse character class from lexeme
-  static constexpr TCodepoint kUnknownUpperBound = -4;
-  static const std::unordered_map<char, TCodepoint> CUSTOM_ESCAPE_MAP = {{'-', '-'}, {']', ']'}};
 
   std::vector<GrammarBuilder::CharacterClassElement> elements;
 
+  // Check if the character class is negated (first codepoint is '^')
   bool is_negated = false;
-  size_t pos = 1;  // Skip '['
-
-  if (char_class_str[pos] == '^') {
+  int start_idx = 0;
+  if (!codepoints.empty() && codepoints[0] == static_cast<TCodepoint>(static_cast<uint8_t>('^'))) {
     is_negated = true;
-    pos++;
+    start_idx = 1;
   }
 
-  bool past_is_hyphen = false;
-  bool past_is_single_char = false;
-  while (pos < char_class_str.size() && char_class_str[pos] != ']') {
-    if (char_class_str[pos] == '-' && pos + 1 < char_class_str.size() &&
-        char_class_str[pos + 1] != ']' && !past_is_hyphen && past_is_single_char) {
-      pos++;
-      past_is_hyphen = true;
-      past_is_single_char = false;
-      continue;
-    }
+  // Process the codepoints to build character class elements
+  for (int i = start_idx; i < static_cast<int>(codepoints.size()); i++) {
+    // Check for range expression (a-z)
+    if (i + 2 < static_cast<int>(codepoints.size()) &&
+        codepoints[i + 1] == static_cast<TCodepoint>(static_cast<uint8_t>('-'))) {
+      TCodepoint lower = codepoints[i];
+      TCodepoint upper = codepoints[i + 2];
 
-    auto [codepoint, len] = ParseNextUTF8OrEscaped(char_class_str.c_str() + pos, CUSTOM_ESCAPE_MAP);
-    pos += len;
-
-    if (past_is_hyphen) {
-      XGRAMMAR_ICHECK(!elements.empty());
-      if (elements.back().lower > codepoint) {
+      if (lower > upper) {
         ReportParseError("Invalid character class: lower bound is larger than upper bound");
       }
-      elements.back().upper = codepoint;
-      past_is_hyphen = false;
-    } else {
-      elements.push_back({codepoint, kUnknownUpperBound});
-      past_is_single_char = true;
-    }
-  }
 
-  for (auto& element : elements) {
-    if (element.upper == kUnknownUpperBound) {
-      element.upper = element.lower;
+      elements.push_back({lower, upper});
+      i += 2;  // Skip the hyphen and upper bound
+    } else {
+      // Single character
+      elements.push_back({codepoints[i], codepoints[i]});
     }
   }
 
@@ -530,7 +568,7 @@ int32_t EBNFParser::ParseString() {
     ReportParseError("Expect string literal");
   }
 
-  std::string str_value = current_token_->value;
+  std::string str_value = std::any_cast<std::string>(Peek().value);
   Consume();
 
   if (str_value.empty()) {
@@ -558,22 +596,21 @@ int32_t EBNFParser::ParseElement() {
   if (Peek().type == TokenType::LParen) {
     Consume();
     if (Peek().type == TokenType::RParen) {
-      // Special case: ( )
-      Consume();
-      return builder_.AddEmptyStr();
+      ReportParseError("Empty parentheses are not allowed");
     }
-    auto prev_in_parentheses = in_parentheses_;
-    in_parentheses_ = true;
     auto rule_expr_id = ParseChoices();
-    ExpectAndConsume(TokenType::RParen, "Expect )");
-    in_parentheses_ = prev_in_parentheses;
+    PeekAndConsume(TokenType::RParen, "Expect )");
     return rule_expr_id;
   } else if (Peek().type == TokenType::CharClass) {
     return ParseCharacterClass();
   } else if (Peek().type == TokenType::StringLiteral) {
     return ParseString();
   } else if (Peek().type == TokenType::Identifier) {
-    return ParseRuleRef();
+    if (kMacroFunctions.count(Peek().lexeme)) {
+      return kMacroFunctions.at(Peek().lexeme)(this);
+    } else {
+      return ParseRuleRef();
+    }
   } else {
     ReportParseError("Expect element");
   }
@@ -583,21 +620,19 @@ int64_t EBNFParser::ParseInteger() {
   if (Peek().type != TokenType::IntegerLiteral) {
     ReportParseError("Expect integer");
   }
-  int64_t num = std::stoll(current_token_->value);
+  int64_t num = std::any_cast<int64_t>(Peek().value);
   Consume();
-  if (num > MAX_INTEGER_IN_GRAMMAR) {
-    ReportParseError(
-        "Integer is too large: " + std::to_string(num) + ", max allowed is " +
-        std::to_string(MAX_INTEGER_IN_GRAMMAR)
-    );
-  }
   return num;
 }
 
 std::pair<int64_t, int64_t> EBNFParser::ParseRepetitionRange() {
-  ExpectAndConsume(TokenType::LBrace, "Expect {");
+  PeekAndConsume(TokenType::LBrace, "Expect {");
 
   int64_t lower = ParseInteger();
+
+  if (lower < 0) {
+    ReportParseError("Lower bound cannot be negative");
+  }
 
   if (Peek().type == TokenType::Comma) {
     Consume();
@@ -612,7 +647,7 @@ std::pair<int64_t, int64_t> EBNFParser::ParseRepetitionRange() {
           std::to_string(upper)
       );
     }
-    ExpectAndConsume(TokenType::RBrace, "Expect }");
+    PeekAndConsume(TokenType::RBrace, "Expect }");
     return {lower, upper};
   } else if (Peek().type == TokenType::RBrace) {
     Consume();
@@ -748,7 +783,8 @@ int32_t EBNFParser::ParseSequence() {
   do {
     elements.push_back(ParseElementWithQuantifier());
   } while (Peek().type != TokenType::Pipe && Peek().type != TokenType::RParen &&
-           Peek().type != TokenType::LookaheadLParen && Peek().type != TokenType::EndOfFile);
+           Peek().type != TokenType::LookaheadLParen && Peek().type != TokenType::RuleName &&
+           Peek().type != TokenType::EndOfFile);
 
   return builder_.AddSequence(elements);
 }
@@ -766,75 +802,92 @@ int32_t EBNFParser::ParseChoices() {
   return builder_.AddChoices(choices);
 }
 
-// class MacroIR {
-//  public:
-//   struct Node;
-//   using NodePtr = std::unique_ptr<Node>;
-//   struct StringNode {
-//     std::string str;
-//   };
-//   struct IntegerNode {
-//     int64_t value;
-//   };
-//   struct BooleanNode {
-//     bool value;
-//   };
-//   struct TupleNode {
-//     std::vector<NodePtr> elements;
-//   };
-//   struct ArrayNode {
-//     std::vector<NodePtr> elements;
-//   };
-//   using Node = std::variant<StringNode, IntegerNode, BooleanNode, TupleNode, ArrayNode>;
+// Parse macro arguments and return a MacroIR::Arguments structure
+EBNFParser::MacroIR::Arguments EBNFParser::ParseMacroArguments() {
+  MacroIR::Arguments args;
 
-//   struct Arguments {
-//     std::vector<NodePtr> arguments;
-//     std::unordered_map<std::string, NodePtr> named_arguments;
-//   };
-// };
+  PeekAndConsume(TokenType::LParen, "Expect ( after macro function name");
 
-// std::pair<std::string, MacroIR::NodePtr> EBNFParser::ParseMacroArgument() {
-//   if (Peek() == '[') {
-//     ParseMacroArgumentArray();
-//   }
-// }
+  // Parse arguments
+  if (Peek().type != TokenType::RParen) {
+    while (true) {
+      // Check if it's a named argument (identifier = value)
+      if (Peek().type == TokenType::Identifier && Peek(1).type == TokenType::Equal) {
+        std::string name = Peek().lexeme;
+        Consume();  // Consume identifier
+        Consume();  // Consume =
 
-// MacroIR::Arguments EBNFParser::ParseMacro() {
-//   ConsumeSpace();
-//   if (Peek() != '(') {
-//     ReportParseError("Expect ( in macro");
-//   }
-//   Consume();
-//   ConsumeSpace();
-//   MacroIR::Arguments args;
-//   if (Peek() == ')') {
-//     Consume();
-//     return args;
-//   }
+        // Parse the value
+        args.named_arguments[name] = ParseMacroValue();
+      } else {
+        // Regular positional argument
+        args.arguments.push_back(ParseMacroValue());
+      }
 
-//   while (true) {
-//     auto& [name, value] = ParseMacroArgument();
-//     if (name.empty()) {
-//       args.arguments.push_back(value);
-//     } else {
-//       args.named_arguments[name] = value;
-//     }
-//     ConsumeSpace();
-//     if (Peek() == ',') {
-//       Consume();
-//       ConsumeSpace();
-//     } else if (Peek() == ')') {
-//       Consume();
-//       break;
-//     } else {
-//       ReportParseError("Expect , or ) in macro");
-//     }
-//   }
-//   return args;
-// }
+      // Check for comma or end of arguments
+      if (Peek().type == TokenType::Comma) {
+        Consume();
+      } else if (Peek().type == TokenType::RParen) {
+        break;
+      } else {
+        ReportParseError("Expect , or ) in macro arguments");
+      }
+    }
+  }
+
+  PeekAndConsume(TokenType::RParen, "Expect ) after macro arguments");
+  return args;
+}
+
+// Parse a single macro value (string, integer, boolean, or tuple)
+EBNFParser::MacroIR::NodePtr EBNFParser::ParseMacroValue() {
+  if (Peek().type == TokenType::StringLiteral) {
+    // String value
+    std::string value = std::any_cast<std::string>(Peek().value);
+    Consume();
+    return std::make_unique<MacroIR::Node>(MacroIR::StringNode{value});
+  } else if (Peek().type == TokenType::IntegerLiteral) {
+    // Integer value
+    int64_t value = std::any_cast<int64_t>(Peek().value);
+    Consume();
+    return std::make_unique<MacroIR::Node>(MacroIR::IntegerNode{value});
+  } else if (Peek().type == TokenType::Boolean) {
+    // Boolean value
+    bool value = std::any_cast<bool>(Peek().value);
+    Consume();
+    return std::make_unique<MacroIR::Node>(MacroIR::BooleanNode{value});
+  } else if (Peek().type == TokenType::LParen) {
+    // Tuple value
+    Consume();  // Consume (
+
+    MacroIR::TupleNode tuple;
+
+    // Parse tuple elements
+    if (Peek().type != TokenType::RParen) {
+      while (true) {
+        tuple.elements.push_back(ParseMacroValue());
+
+        if (Peek().type == TokenType::Comma) {
+          Consume();
+        } else if (Peek().type == TokenType::RParen) {
+          break;
+        } else {
+          ReportParseError("Expect , or ) in tuple");
+        }
+      }
+    }
+
+    Consume();  // Consume )
+    return std::make_unique<MacroIR::Node>(std::move(tuple));
+  } else {
+    ReportParseError("Expect string, integer, boolean, or tuple in macro argument");
+    // This is unreachable due to ReportParseError, but needed for compilation
+    return nullptr;
+  }
+}
 
 std::pair<int32_t, int32_t> EBNFParser::ParseTagDispatchElement() {
-  ExpectAndConsume(TokenType::LParen, "Expect ( in tag dispatch element");
+  PeekAndConsume(TokenType::LParen, "Expect ( in tag dispatch element");
 
   // Parse tag (a string literal)
   if (Peek().type != TokenType::StringLiteral) {
@@ -845,7 +898,7 @@ std::pair<int32_t, int32_t> EBNFParser::ParseTagDispatchElement() {
     ReportParseError("Tag cannot be empty");
   }
 
-  ExpectAndConsume(TokenType::Comma, "Expect , in tag dispatch element");
+  PeekAndConsume(TokenType::Comma, "Expect , in tag dispatch element");
 
   // Parse rule name (should refer to a rule in the grammar)
   std::string rule_name = ParseIdentifier(false);
@@ -859,7 +912,7 @@ std::pair<int32_t, int32_t> EBNFParser::ParseTagDispatchElement() {
     ReportParseError("Rule \"" + rule_name + "\" is not defined");
   }
 
-  ExpectAndConsume(TokenType::RParen, "Expect ) in tag dispatch element");
+  PeekAndConsume(TokenType::RParen, "Expect ) in tag dispatch element");
 
   return {tag_id, rule_id};
 }
@@ -867,7 +920,7 @@ std::pair<int32_t, int32_t> EBNFParser::ParseTagDispatchElement() {
 int32_t EBNFParser::ParseTagDispatchOrChoices() {
   const Token* saved_token = current_token_;
 
-  if (Peek().type == TokenType::Identifier && current_token_->lexeme == "TagDispatch") {
+  if (Peek().type == TokenType::Identifier && Peek().lexeme == "TagDispatch") {
     Consume();
 
     // TODO(yixin): Make tagdispatch general
@@ -875,7 +928,7 @@ int32_t EBNFParser::ParseTagDispatchOrChoices() {
       ReportParseError("TagDispatch should only be used in the root rule");
     }
 
-    ExpectAndConsume(TokenType::LParen, "Expect ( after TagDispatch");
+    PeekAndConsume(TokenType::LParen, "Expect ( after TagDispatch");
 
     std::vector<std::pair<int32_t, int32_t>> tag_dispatch_list;
     while (true) {
@@ -901,34 +954,29 @@ int32_t EBNFParser::ParseTagDispatchOrChoices() {
 }
 
 int32_t EBNFParser::ParseLookaheadAssertion() {
-  if (Peek().type != TokenType::LookaheadLParen) {
-    return -1;
-  }
-
-  Consume();
-
-  auto prev_in_parentheses = in_parentheses_;
-  in_parentheses_ = true;
-
+  PeekAndConsume(TokenType::LookaheadLParen, "Expect (= in lookahead assertion");
   auto result = ParseSequence();
-
-  ExpectAndConsume(TokenType::RParen, "Expect )");
-
-  in_parentheses_ = prev_in_parentheses;
+  PeekAndConsume(TokenType::RParen, "Expect )");
   return result;
 }
 
 EBNFParser::Rule EBNFParser::ParseRule() {
-  std::string name = ParseIdentifier();
-  cur_rule_name_ = name;
+  if (Peek().type != TokenType::RuleName) {
+    ReportParseError("Expect rule name");
+  }
+  cur_rule_name_ = Peek().lexeme;
+  Consume();
 
-  ExpectAndConsume(TokenType::Assign, "Expect ::=");
+  PeekAndConsume(TokenType::Assign, "Expect ::=");
 
-  auto body_id = ParseTagDispatchOrChoices();
+  auto body_id = ParseChoices();
 
-  auto lookahead_id = ParseLookaheadAssertion();
+  int32_t lookahead_id = -1;
+  if (Peek().type == TokenType::LookaheadLParen) {
+    lookahead_id = ParseLookaheadAssertion();
+  }
 
-  return {name, body_id, lookahead_id};
+  return {cur_rule_name_, body_id, lookahead_id};
 }
 
 void EBNFParser::InitRuleNames() {
@@ -957,20 +1005,10 @@ Grammar EBNFParser::Parse(
 
   // Then parse all the rules
   current_token_ = tokens_.data();
-  while (current_token_ < tokens_.data() + tokens_.size() && Peek().type != TokenType::EndOfFile) {
-    // Throw error when there are unexpected lookahead assertions
-    if (Peek().type == TokenType::LookaheadLParen) {
-      ReportParseError("Unexpected lookahead assertion");
-    }
-
-    if (Peek().type == TokenType::Identifier) {
-      auto new_rule = ParseRule();
-      builder_.UpdateRuleBody(new_rule.name, new_rule.body_expr_id);
-      // Update the lookahead assertion
-      builder_.AddLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
-    } else {
-      Consume();  // Skip non-rule tokens
-    }
+  while (Peek().type != TokenType::EndOfFile) {
+    auto new_rule = ParseRule();
+    builder_.UpdateRuleBody(new_rule.name, new_rule.body_expr_id);
+    builder_.UpdateLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
   }
 
   return builder_.Get(root_rule_name);

@@ -2,6 +2,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include "grammar_parser.h"
+#include "support/encoding.h"
 #include "test_utils.h"
 
 using namespace xgrammar;
@@ -25,18 +26,21 @@ TEST(XGrammarLexerTest, BasicTokenization) {
 
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::StringLiteral);
   EXPECT_EQ(tokens[2].lexeme, "\"string\"");
-  EXPECT_EQ(tokens[2].value, "string");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[2].value, std::string, "string");
 
   EXPECT_EQ(tokens[3].type, EBNFLexer::TokenType::Pipe);
 
   EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::CharClass);
   EXPECT_EQ(tokens[4].lexeme, "[a-z]");
+  XGRAMMAR_EXPECT_ANY_EQ(
+      tokens[4].value, std::vector<TCodepoint>, std::vector<TCodepoint>({{'a', '-', 'z'}})
+  );
 
   EXPECT_EQ(tokens[5].type, EBNFLexer::TokenType::Pipe);
 
   EXPECT_EQ(tokens[6].type, EBNFLexer::TokenType::IntegerLiteral);
   EXPECT_EQ(tokens[6].lexeme, "123");
-  EXPECT_EQ(tokens[6].value, "123");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[6].value, int64_t, 123);
 
   EXPECT_EQ(tokens[7].type, EBNFLexer::TokenType::Pipe);
 
@@ -62,13 +66,13 @@ TEST(XGrammarLexerTest, BasicTokenization) {
 
   EXPECT_EQ(tokens[24].type, EBNFLexer::TokenType::Boolean);
   EXPECT_EQ(tokens[24].lexeme, "true");
-  EXPECT_EQ(tokens[24].value, "1");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[24].value, bool, true);
 
   EXPECT_EQ(tokens[25].type, EBNFLexer::TokenType::Pipe);
 
   EXPECT_EQ(tokens[26].type, EBNFLexer::TokenType::Boolean);
   EXPECT_EQ(tokens[26].lexeme, "false");
-  EXPECT_EQ(tokens[26].value, "0");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[26].value, bool, false);
 
   EXPECT_EQ(tokens[27].type, EBNFLexer::TokenType::EndOfFile);
 }
@@ -97,13 +101,13 @@ TEST(XGrammarLexerTest, StringLiterals) {
 
   ASSERT_EQ(tokens.size(), 8);  // 7 tokens + EOF
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::StringLiteral);
-  EXPECT_EQ(tokens[2].value, "normal string");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[2].value, std::string, "normal string");
 
   EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::StringLiteral);
-  EXPECT_EQ(tokens[4].value, "escaped \"quotes\"");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[4].value, std::string, "escaped \"quotes\"");
 
   EXPECT_EQ(tokens[6].type, EBNFLexer::TokenType::StringLiteral);
-  EXPECT_EQ(tokens[6].value, "\n\r\t\\");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[6].value, std::string, "\n\r\t\\");
 }
 
 TEST(XGrammarLexerTest, CharacterClasses) {
@@ -116,31 +120,55 @@ TEST(XGrammarLexerTest, CharacterClasses) {
   ASSERT_EQ(tokens.size(), 18);  // 17 tokens + EOF
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::CharClass);
   EXPECT_EQ(tokens[2].lexeme, "[a-z]");
+  XGRAMMAR_EXPECT_ANY_EQ(
+      tokens[2].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'a', '-', 'z'})
+  );
 
   EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::CharClass);
   EXPECT_EQ(tokens[4].lexeme, "[0-9]");
+  XGRAMMAR_EXPECT_ANY_EQ(
+      tokens[4].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'0', '-', '9'})
+  );
 
   EXPECT_EQ(tokens[6].type, EBNFLexer::TokenType::CharClass);
   EXPECT_EQ(tokens[6].lexeme, "[^a-z]");
+  XGRAMMAR_EXPECT_ANY_EQ(
+      tokens[6].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'^', 'a', '-', 'z'})
+  );
 
   EXPECT_EQ(tokens[8].type, EBNFLexer::TokenType::CharClass);
   EXPECT_EQ(tokens[8].lexeme, "[\\-\\]\\\\]");
+  XGRAMMAR_EXPECT_ANY_EQ(
+      tokens[8].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'-', ']', '\\'})
+  );
 
   // Unicode escape sequences (A-Z in Unicode code points)
   EXPECT_EQ(tokens[10].type, EBNFLexer::TokenType::CharClass);
   EXPECT_EQ(tokens[10].lexeme, "[\\u0041-\\u005A]");
+  XGRAMMAR_EXPECT_ANY_EQ(
+      tokens[10].value, std::vector<TCodepoint>, std::vector<TCodepoint>({0x41, '-', 0x5A})
+  );
 
   // UTF-8 characters directly in the character class
   EXPECT_EQ(tokens[12].type, EBNFLexer::TokenType::CharClass);
   EXPECT_EQ(tokens[12].lexeme, "[测试]");
+  XGRAMMAR_EXPECT_ANY_EQ(
+      tokens[12].value, std::vector<TCodepoint>, std::vector<TCodepoint>({0x6D4B, 0x8BD5})
+  );
 
   // Common escape sequences: tab, carriage return, newline
   EXPECT_EQ(tokens[14].type, EBNFLexer::TokenType::CharClass);
   EXPECT_EQ(tokens[14].lexeme, "[\\t\\r\\n]");
+  XGRAMMAR_EXPECT_ANY_EQ(
+      tokens[14].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'\t', '\r', '\n'})
+  );
 
   // Additional escape sequences: backspace, form feed
   EXPECT_EQ(tokens[16].type, EBNFLexer::TokenType::CharClass);
   EXPECT_EQ(tokens[16].lexeme, "[\\b\\f]");
+  XGRAMMAR_EXPECT_ANY_EQ(
+      tokens[16].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'\b', '\f'})
+  );
 }
 
 TEST(XGrammarLexerTest, BooleanValues) {
@@ -151,11 +179,11 @@ TEST(XGrammarLexerTest, BooleanValues) {
   ASSERT_EQ(tokens.size(), 6);  // 5 tokens + EOF
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::Boolean);
   EXPECT_EQ(tokens[2].lexeme, "true");
-  EXPECT_EQ(tokens[2].value, "1");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[2].value, bool, true);
 
   EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::Boolean);
   EXPECT_EQ(tokens[4].lexeme, "false");
-  EXPECT_EQ(tokens[4].value, "0");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[4].value, bool, false);
 }
 
 TEST(XGrammarLexerTest, LookaheadAssertion) {
@@ -289,7 +317,7 @@ TEST(XGrammarLexerTest, UTF8Handling) {
   ASSERT_EQ(tokens.size(), 4);  // 3 tokens + EOF
   EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::StringLiteral);
   // The value should contain the actual UTF-8 characters
-  EXPECT_EQ(tokens[2].value, "UTF-8: © ☃ 😀");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[2].value, std::string, "UTF-8: © ☃ 😀");
 }
 
 TEST(XGrammarLexerTest, LexerErrorCases) {
@@ -304,6 +332,14 @@ TEST(XGrammarLexerTest, LexerErrorCases) {
   // Test for unterminated character class
   {
     std::string input = "rule ::= [a-z";
+    XGRAMMAR_EXPECT_THROW(
+        EBNFLexer().Tokenize(input), std::exception, "Unterminated character class"
+    );
+  }
+
+  // Test for unterminated character class with escaped bracket
+  {
+    std::string input = "rule ::= [a-z\\-\\\\\\]";
     XGRAMMAR_EXPECT_THROW(
         EBNFLexer().Tokenize(input), std::exception, "Unterminated character class"
     );

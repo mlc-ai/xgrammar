@@ -61,7 +61,7 @@ class GrammarFunctor {
         auto new_body_expr_id = VisitExpr(rule.body_expr_id);
         builder_.UpdateRuleBody(i, new_body_expr_id);
         // Handle lookahead assertion
-        builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+        builder_.UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       }
       return builder_.Get(base_grammar_->GetRootRule().name);
     } else {

@@ -26,4 +26,18 @@
       },                                                                \
       expected_exception                                                \
   )
+
+/**
+ * @brief Macro to test that an std::any value equals an expected value of a specific type.
+ * @param any_val The std::any value to test.
+ * @param type The expected type of the value stored in std::any.
+ * @param val2 The expected value to compare against.
+ */
+#define XGRAMMAR_EXPECT_ANY_EQ(any_val, type_name, val2) \
+  do {                                                   \
+    EXPECT_TRUE(any_val.has_value());                    \
+    EXPECT_TRUE(any_val.type() == typeid(type_name));    \
+    EXPECT_EQ(std::any_cast<type_name>(any_val), val2);  \
+  } while (0)
+
 #endif  // XGRAMMAR_TESTS_CPP_TEST_UTILS_H_

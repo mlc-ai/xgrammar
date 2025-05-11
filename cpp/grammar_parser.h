@@ -9,6 +9,8 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <any>
+
 namespace xgrammar {
 
 class EBNFLexer {
@@ -46,7 +48,8 @@ class EBNFLexer {
   struct Token {
     TokenType type;
     std::string lexeme;  // original text
-    std::string value;   // processed value
+    std::any value;  // The processed value. Can be a int for integer literal, a string for string
+                     // literal, etc.
     int line;
     int column;
   };
