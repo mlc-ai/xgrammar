@@ -138,7 +138,7 @@ std::string GrammarPrinter::PrintTagDispatch(const RuleExpr& rule_expr) {
 
 std::string GrammarPrinter::ToString() {
   std::string result;
-  result += PrintAttributes() + "\n";
+  result += PrintAttributes();
   int num_rules = grammar_->NumRules();
   for (auto i = 0; i < num_rules; ++i) {
     result += PrintRule(grammar_->GetRule(i)) + "\n";
@@ -149,7 +149,7 @@ std::string GrammarPrinter::ToString() {
 std::string GrammarPrinter::PrintAttributes() {
   std::string result;
   if (grammar_.utf8_is_abandoned) {
-    result += "@NO_UTF8";
+    result += "@NO_UTF8\n";
   }
   return result;
 }
