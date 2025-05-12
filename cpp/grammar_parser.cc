@@ -7,6 +7,8 @@
 
 #include <picojson.h>
 
+#include <variant>
+
 #include "grammar_builder.h"
 #include "grammar_data_structure.h"
 #include "support/encoding.h"
@@ -87,6 +89,7 @@ void EBNFLexer::Impl::ReportLexerError(const std::string& msg, int line, int col
   int column_to_print = column == -1 ? cur_column_ : column;
   XGRAMMAR_LOG(FATAL) << "EBNF lexer error at line " + std::to_string(line_to_print) + ", column " +
                              std::to_string(column_to_print) + ": " + msg;
+  XGRAMMAR_UNREACHABLE();
 }
 
 // Check if a character can be part of an identifier
@@ -389,36 +392,6 @@ class EBNFParser {
   using Token = EBNFLexer::Token;
   using TokenType = EBNFLexer::TokenType;
 
-  // Parser for macro
-  class MacroIR {
-   public:
-    struct StringNode;
-    struct IntegerNode;
-    struct BooleanNode;
-    struct TupleNode;
-
-    using Node = std::variant<StringNode, IntegerNode, BooleanNode, TupleNode>;
-    using NodePtr = std::unique_ptr<Node>;
-
-    struct StringNode {
-      std::string str;
-    };
-    struct IntegerNode {
-      int64_t value;
-    };
-    struct BooleanNode {
-      bool value;
-    };
-    struct TupleNode {
-      std::vector<NodePtr> elements;
-    };
-
-    struct Arguments {
-      std::vector<NodePtr> arguments;
-      std::unordered_map<std::string, NodePtr> named_arguments;
-    };
-  };
-
   // Parsing different parts of the grammar
   std::string ParseIdentifier(bool allow_empty = false);
   int32_t ParseCharacterClass();
@@ -434,10 +407,42 @@ class EBNFParser {
   Rule ParseRule();
 
   // Parser for macro
+  class MacroIR {
+   public:
+    struct StringNode;
+    struct IntegerNode;
+    struct BooleanNode;
+    struct IdentifierNode;
+    struct TupleNode;
+
+    using Node = std::variant<StringNode, IntegerNode, BooleanNode, IdentifierNode, TupleNode>;
+    using NodePtr = std::unique_ptr<Node>;
+
+    struct StringNode {
+      std::string value;
+    };
+    struct IntegerNode {
+      int64_t value;
+    };
+    struct BooleanNode {
+      bool value;
+    };
+    struct IdentifierNode {
+      std::string name;
+    };
+    struct TupleNode {
+      std::vector<NodePtr> elements;
+    };
+
+    struct Arguments {
+      std::vector<NodePtr> arguments;
+      std::unordered_map<std::string, NodePtr> named_arguments;
+    };
+  };
   MacroIR::Arguments ParseMacroArguments();
   MacroIR::NodePtr ParseMacroValue();
-  std::pair<int32_t, int32_t> ParseTagDispatchElement();
-  int32_t ParseTagDispatchOrChoices();
+
+  int32_t ParseTagDispatch();
 
   // Helper functions
 
@@ -488,7 +493,7 @@ class EBNFParser {
 
 const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
     EBNFParser::kMacroFunctions = {
-        {"TagDispatch", [](EBNFParser* parser) { return parser->ParseTagDispatchOrChoices(); }},
+        {"TagDispatch", [](EBNFParser* parser) { return parser->ParseTagDispatch(); }},
 };
 
 const EBNFParser::Token& EBNFParser::Peek(int delta) const { return *(current_token_ + delta); }
@@ -508,6 +513,7 @@ void EBNFParser::ReportParseError(const std::string& msg) {
   int column = Peek().column;
   XGRAMMAR_LOG(FATAL) << "EBNF parse error at line " + std::to_string(line) + ", column " +
                              std::to_string(column) + ": " + msg;
+  XGRAMMAR_UNREACHABLE();
 }
 
 std::string EBNFParser::ParseIdentifier(bool allow_empty) {
@@ -856,6 +862,11 @@ EBNFParser::MacroIR::NodePtr EBNFParser::ParseMacroValue() {
     bool value = std::any_cast<bool>(Peek().value);
     Consume();
     return std::make_unique<MacroIR::Node>(MacroIR::BooleanNode{value});
+  } else if (Peek().type == TokenType::Identifier) {
+    // Identifier value
+    std::string name = Peek().lexeme;
+    Consume();
+    return std::make_unique<MacroIR::Node>(MacroIR::IdentifierNode{name});
   } else if (Peek().type == TokenType::LParen) {
     // Tuple value
     Consume();  // Consume (
@@ -881,77 +892,116 @@ EBNFParser::MacroIR::NodePtr EBNFParser::ParseMacroValue() {
     return std::make_unique<MacroIR::Node>(std::move(tuple));
   } else {
     ReportParseError("Expect string, integer, boolean, or tuple in macro argument");
-    // This is unreachable due to ReportParseError, but needed for compilation
-    return nullptr;
   }
 }
 
-std::pair<int32_t, int32_t> EBNFParser::ParseTagDispatchElement() {
-  PeekAndConsume(TokenType::LParen, "Expect ( in tag dispatch element");
+int32_t EBNFParser::ParseTagDispatch() {
+  Consume();  // Consume TagDispatch operator
+  auto args = ParseMacroArguments();
+  // Process the arguments for TagDispatch
+  std::vector<std::pair<int32_t, int32_t>> tag_rule_pairs;
 
-  // Parse tag (a string literal)
-  if (Peek().type != TokenType::StringLiteral) {
-    ReportParseError("Expect string literal for tag");
-  }
-  auto tag_id = ParseString();
-  if (builder_.GetRuleExpr(tag_id).type == RuleExprType::kEmptyStr) {
-    ReportParseError("Tag cannot be empty");
-  }
-
-  PeekAndConsume(TokenType::Comma, "Expect , in tag dispatch element");
-
-  // Parse rule name (should refer to a rule in the grammar)
-  std::string rule_name = ParseIdentifier(false);
-
-  // The rule cannot be the root rule and should be defined in the grammar
-  if (rule_name == root_rule_name_) {
-    ReportParseError("The root rule \"" + rule_name + "\" cannot be used as a tag");
-  }
-  auto rule_id = builder_.GetRuleId(rule_name);
-  if (rule_id == -1) {
-    ReportParseError("Rule \"" + rule_name + "\" is not defined");
-  }
-
-  PeekAndConsume(TokenType::RParen, "Expect ) in tag dispatch element");
-
-  return {tag_id, rule_id};
-}
-
-int32_t EBNFParser::ParseTagDispatchOrChoices() {
-  const Token* saved_token = current_token_;
-
-  if (Peek().type == TokenType::Identifier && Peek().lexeme == "TagDispatch") {
-    Consume();
-
-    // TODO(yixin): Make tagdispatch general
-    if (cur_rule_name_ != root_rule_name_) {
-      ReportParseError("TagDispatch should only be used in the root rule");
+  // Process each argument in the form of ("tag", rule_name)
+  for (const auto& arg : args.arguments) {
+    auto tuple_node = std::get_if<MacroIR::TupleNode>(arg.get());
+    if (tuple_node == nullptr) {
+      ReportParseError("Each tag dispatch element must be a tuple");
     }
 
-    PeekAndConsume(TokenType::LParen, "Expect ( after TagDispatch");
-
-    std::vector<std::pair<int32_t, int32_t>> tag_dispatch_list;
-    while (true) {
-      auto tag_dispatch = ParseTagDispatchElement();
-      tag_dispatch_list.push_back(tag_dispatch);
-
-      if (Peek().type == TokenType::Comma) {
-        Consume();
-      } else if (Peek().type == TokenType::RParen) {
-        Consume();
-        break;
-      } else {
-        ReportParseError("Expect , or ) in macro function TagDispatch");
-      }
+    if (tuple_node->elements.size() != 2) {
+      ReportParseError("Each tag dispatch element must be a pair (tag, rule)");
     }
 
-    return builder_.AddTagDispatch(tag_dispatch_list);
+    // First element should be a string (tag)
+    auto tag_str_node = std::get_if<MacroIR::StringNode>(tuple_node->elements[0].get());
+    if (tag_str_node == nullptr) {
+      ReportParseError("Tag must be a string literal");
+    }
+    auto tag_id = builder_.AddByteString(tag_str_node->value);
+
+    // Second element should be an identifier (rule name)
+    auto rule_name_node = std::get_if<MacroIR::IdentifierNode>(tuple_node->elements[1].get());
+    if (rule_name_node == nullptr) {
+      ReportParseError("Rule reference must be an identifier");
+    }
+
+    auto rule_id = builder_.GetRuleId(rule_name_node->name);
+    if (rule_id == -1) {
+      ReportParseError("Rule \"" + rule_name_node->name + "\" is not defined");
+    }
+
+    tag_rule_pairs.push_back({tag_id, rule_id});
   }
 
-  // Reset token position if not TagDispatch
-  current_token_ = saved_token;
-  return ParseChoices();
+  return builder_.AddTagDispatch(tag_rule_pairs);
 }
+
+// std::pair<int32_t, int32_t> EBNFParser::ParseTagDispatchElement() {
+//   PeekAndConsume(TokenType::LParen, "Expect ( in tag dispatch element");
+
+//   // Parse tag (a string literal)
+//   if (Peek().type != TokenType::StringLiteral) {
+//     ReportParseError("Expect string literal for tag");
+//   }
+//   auto tag_id = ParseString();
+//   if (builder_.GetRuleExpr(tag_id).type == RuleExprType::kEmptyStr) {
+//     ReportParseError("Tag cannot be empty");
+//   }
+
+//   PeekAndConsume(TokenType::Comma, "Expect , in tag dispatch element");
+
+//   // Parse rule name (should refer to a rule in the grammar)
+//   std::string rule_name = ParseIdentifier(false);
+
+//   // The rule cannot be the root rule and should be defined in the grammar
+//   if (rule_name == root_rule_name_) {
+//     ReportParseError("The root rule \"" + rule_name + "\" cannot be used as a tag");
+//   }
+//   auto rule_id = builder_.GetRuleId(rule_name);
+//   if (rule_id == -1) {
+//     ReportParseError("Rule \"" + rule_name + "\" is not defined");
+//   }
+
+//   PeekAndConsume(TokenType::RParen, "Expect ) in tag dispatch element");
+
+//   return {tag_id, rule_id};
+// }
+
+// int32_t EBNFParser::ParseTagDispatchOrChoices() {
+//   const Token* saved_token = current_token_;
+
+//   if (Peek().type == TokenType::Identifier && Peek().lexeme == "TagDispatch") {
+//     Consume();
+
+//     // TODO(yixin): Make tagdispatch general
+//     if (cur_rule_name_ != root_rule_name_) {
+//       ReportParseError("TagDispatch should only be used in the root rule");
+//     }
+
+//     PeekAndConsume(TokenType::LParen, "Expect ( after TagDispatch");
+
+//     std::vector<std::pair<int32_t, int32_t>> tag_dispatch_list;
+//     while (true) {
+//       auto tag_dispatch = ParseTagDispatchElement();
+//       tag_dispatch_list.push_back(tag_dispatch);
+
+//       if (Peek().type == TokenType::Comma) {
+//         Consume();
+//       } else if (Peek().type == TokenType::RParen) {
+//         Consume();
+//         break;
+//       } else {
+//         ReportParseError("Expect , or ) in macro function TagDispatch");
+//       }
+//     }
+
+//     return builder_.AddTagDispatch(tag_dispatch_list);
+//   }
+
+//   // Reset token position if not TagDispatch
+//   current_token_ = saved_token;
+//   return ParseChoices();
+// }
 
 int32_t EBNFParser::ParseLookaheadAssertion() {
   PeekAndConsume(TokenType::LookaheadLParen, "Expect (= in lookahead assertion");

@@ -92,11 +92,7 @@ class GrammarBuilder {
    * \param str The string to be added.
    */
   int32_t AddByteString(const std::string& str) {
-    std::vector<int32_t> bytes;
-    bytes.reserve(str.size());
-    for (char c : str) {
-      bytes.push_back(static_cast<int32_t>(c));
-    }
+    std::vector<int32_t> bytes(str.begin(), str.end());
     return AddRuleExpr({RuleExprType::kByteString, bytes.data(), static_cast<int32_t>(bytes.size())}
     );
   }
