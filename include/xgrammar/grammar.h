@@ -78,6 +78,11 @@ class Grammar {
   std::string ToString() const;
 
   /*!
+   * \brief Whether to abandon the output of utf8 characters.
+   */
+  bool utf8_is_abandoned = false;
+
+  /*!
    * \brief Construct a BNF grammar with a EBNF-formatted string. The grammar will be normalized
    * (simplified) by default.
    * \param ebnf_string The EBNF-formatted string.

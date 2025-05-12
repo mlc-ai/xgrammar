@@ -14,6 +14,14 @@
 
 namespace xgrammar {
 
+enum class AdditionalAttribute : int {
+  kNoUTF8 = 0,
+};
+
+const std::map<std::string, AdditionalAttribute> str_to_additional_attribute = {
+    {"NO_UTF8", AdditionalAttribute::kNoUTF8},
+};
+
 class EBNFParser {
  public:
   /*! \brief The logic of parsing the grammar string. */
@@ -40,6 +48,10 @@ class EBNFParser {
   Rule ParseRule();
 
   // Helper functions
+
+  // Parse additional attributes. The return pointer is the next position after all the additional.
+  // The attributes are stored in the vector.
+  const char* ParseAdditionalAttributes(std::vector<AdditionalAttribute>* attributes);
 
   // Helper for ParseElementWithQuantifier
   int32_t HandleStarQuantifier(int32_t rule_expr_id);
@@ -641,10 +653,15 @@ void EBNFParser::ResetStringIterator(const char* cur) {
 
 Grammar EBNFParser::Parse(const std::string& ebnf_string, const std::string& root_rule_name) {
   root_rule_name_ = root_rule_name;
-  ResetStringIterator(ebnf_string.c_str());
-  BuildRuleNameToId();
 
   ResetStringIterator(ebnf_string.c_str());
+  std::vector<AdditionalAttribute> attributes;
+  const auto& after_attributes = ParseAdditionalAttributes(&attributes);
+
+  ResetStringIterator(after_attributes);
+  BuildRuleNameToId();
+
+  ResetStringIterator(after_attributes);
   ConsumeSpace();
   while (Peek()) {
     // Throw error when there are multiple lookahead assertions
@@ -664,12 +681,35 @@ Grammar EBNFParser::Parse(const std::string& ebnf_string, const std::string& roo
     ReportParseError("The root rule with name \"" + root_rule_name + "\" is not found.");
   }
 
-  return builder_.Get(root_rule_name);
+  Grammar grammar = builder_.Get(root_rule_name);
+
+  for (const auto& attr : attributes) {
+    switch (attr) {
+      case AdditionalAttribute::kNoUTF8:
+        grammar.utf8_is_abandoned = true;
+        break;
+    }
+  }
+
+  return grammar;
 }
 
 Grammar ParseEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
   EBNFParser parser;
   return parser.Parse(ebnf_string, root_rule_name);
+}
+
+const char* EBNFParser::ParseAdditionalAttributes(std::vector<AdditionalAttribute>* attributes) {
+  while (Peek() == '@') {
+    ConsumeSpace();
+    Consume();
+    auto attr_name = ParseIdentifier(false);
+    if (str_to_additional_attribute.find(attr_name) == str_to_additional_attribute.end()) {
+      ReportParseError("Unknown additional attribute: " + attr_name);
+    }
+    attributes->push_back(str_to_additional_attribute.at(attr_name));
+  }
+  return cur_;
 }
 
 }  // namespace xgrammar
