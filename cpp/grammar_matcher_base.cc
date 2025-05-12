@@ -25,6 +25,9 @@ constexpr int32_t kDispatchedTagDispatchElementId = -1;
 /*! \brief Check the codepoint is contained in the character class. */
 bool GrammarMatcherBase::CheckIfAccepted(const StackElement& stack_element, uint8_t char_value)
     const {
+  if (grammar_.utf8_is_abandoned && !isascii(char_value)) {
+    return false;
+  }
   auto current_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
   if (current_sequence.type == Grammar::Impl::RuleExprType::kTagDispatch) {
     XGRAMMAR_DCHECK(stack_element.element_id != -1);

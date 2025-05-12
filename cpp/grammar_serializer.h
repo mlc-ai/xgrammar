@@ -42,6 +42,8 @@ class GrammarPrinter {
   std::string PrintRuleExpr(const RuleExpr& rule_expr);
   /*! \brief Print a RuleExpr corresponding to the given id. */
   std::string PrintRuleExpr(int32_t rule_expr_id);
+  /*! \brief Print the attributes.*/
+  std::string PrintAttributes();
 
  private:
   /*! \brief Print a RuleExpr for byte string. */

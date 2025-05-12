@@ -18,8 +18,11 @@ std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString();
 
 Grammar Grammar::FromEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
   auto grammar = ParseEBNF(ebnf_string, root_rule_name);
-  grammar = GrammarNormalizer().Apply(grammar);
-  return grammar;
+  auto result_grammar = GrammarNormalizer().Apply(grammar);
+  if (grammar.utf8_is_abandoned) {
+    result_grammar.utf8_is_abandoned = true;
+  }
+  return result_grammar;
 }
 
 Grammar Grammar::FromJSONSchema(

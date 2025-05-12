@@ -709,6 +709,10 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
 
     if (next_char == -1) {
       can_find_next_char = false;
+    } else {
+      if (grammar_.utf8_is_abandoned && !isascii(next_char)) {
+        can_find_next_char = false;
+      }
     }
 
     // 2. If found, accept the char and iterate to the next position
