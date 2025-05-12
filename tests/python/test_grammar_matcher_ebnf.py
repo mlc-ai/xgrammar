@@ -400,5 +400,72 @@ def test_fill_next_token_bitmask(
     assert len(rejected_token_ids) == expected_rejected_sizes[-1]
 
 
+pressure_ebnf = """root ::= en-char+ ([ \\t\\n] en-char+)*
+en-char ::= [0-9a-zA-Z!"#$%&'()*+,./:;<=>?@[\\\\\\]^_`{|}~]
+"""
+
+pressure_test_cases = [
+    (
+        # short test
+        "meta-llama/Llama-2-7b-chat-hf",
+        """iieqojd90jf92jf02j`okpdewopfj29g120=i10ek=2`12 opofpjigojoi42j1o2`>=2` =0ofii09i9
+f9q0uef0qijfqej9301r>1ir019i0i#shuhwuihefi==dhuhqidhqudhqwihduwqi++jidoqwjdiqoj19823
+ji3owf10>1e0`k131fvef jeijfqojo1qjdfjeoijfj03293100==`ir03i=r`=3kogjierojopjofp2\\ 1
+jif9194uuuuuuuuuuuuuur3mc 03>2jirokvlcpqld[ l2 2\\` 12344jiofj3ofj 29>3i242 22> 32]2
+fjweiofjopkfj32o\tqdo ijiqoq pjqiopjdwqopkdkqwopd\ndkpowop 10>394 20r4u2o x ~oiewfj3
+iogw jeiowfiqjfiowjifwe902>12=0`=`rk fjekljfiwofjiowjfiojwifojowefjiwojfiowjfiwofjoi
+foj1kpdjewijfoiwejfie101ue9102u308r294hguijfpdo`a 32kigjigop4j290g2j0 kokfopskfpwkfe
+jigqk>w391>i01>jf4t294j2jti4otj2iotj4oi2jo2itj42oitij2otj2otj2ojtio2tjiotjgr9sdm q>=
+""",
+    )
+]
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("tokenizer_path, input_str", pressure_test_cases)
+def test_pressure(tokenizer_path: str, input_str: str):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    time_start = time.monotonic_ns()
+    matcher = xgr.GrammarMatcher(compiler.compile_grammar(pressure_ebnf))
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device=device)
+
+    input_bytes = input_str.encode("utf-8")
+
+    for i, c in enumerate(input_bytes):
+        # 1. fill_next_token_bitmask
+        time_start = time.monotonic_ns()
+        matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+        # 3. apply_token_bitmask_inplace
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_start = time.monotonic_ns()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_end = time.monotonic_ns()
+        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+
+        # 4. accept_string
+        print("Accepting char:", bytes([c]))
+        time_start = time.monotonic_ns()
+        assert matcher._debug_accept_string(bytes([c]))
+        time_end = time.monotonic_ns()
+        print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
+
+    # 5. Final correctness verification
+    matcher.fill_next_token_bitmask(token_bitmask)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
