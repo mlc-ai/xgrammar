@@ -400,5 +400,59 @@ def test_fill_next_token_bitmask(
     assert len(rejected_token_ids) == expected_rejected_sizes[-1]
 
 
+utf8_abandon_string = """@NO_UTF8
+root ::= "你好" | "こんにちは"
+"""
+
+utf8_abandon_character_class = """@NO_UTF8
+root ::= [^q123]+
+"""
+
+utf8_tests = [
+    ("meta-llama/Llama-2-7b-chat-hf", """你好"""),
+    ("meta-llama/Llama-2-7b-chat-hf", """こんにちは"""),
+]
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("tokenizer_path, input_str", utf8_tests)
+def test_utf8_with_string(tokenizer_path: str, input_str: str):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    time_start = time.monotonic_ns()
+    matcher = xgr.GrammarMatcher(compiler.compile_grammar(utf8_abandon_string))
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    input_bytes = input_str.encode("utf-8")
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    for i, c in enumerate(input_bytes):
+        matcher.fill_next_token_bitmask(token_bitmask)
+        reject = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+        assert len(reject) == tokenizer_info.vocab_size
+        assert not matcher._debug_accept_string(bytes([c]))
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("tokenizer_path, input_str", utf8_tests)
+def test_utf8_with_character_class(tokenizer_path: str, input_str: str):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    time_start = time.monotonic_ns()
+    matcher = xgr.GrammarMatcher(compiler.compile_grammar(utf8_abandon_character_class))
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    input_bytes = input_str.encode("utf-8")
+
+    for i, c in enumerate(input_bytes):
+        assert not matcher._debug_accept_string(bytes([c]))
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
