@@ -170,7 +170,6 @@ def test_structural_tag():
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
 
     print("grammar: ", str(grammar))
-    print("expected_grammar: ", expected_grammar_test_structural_tag)
 
     assert str(grammar) == expected_grammar_test_structural_tag
 
