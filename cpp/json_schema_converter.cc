@@ -555,8 +555,8 @@ void JSONSchemaConverter::AddHelperRules() {
   );
   ebnf_script_creator_.AddRule(
       kBasicStringSub,
-      "(\"\\\"\" | [^\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " + kBasicEscape + " " +
-          kBasicStringSub + ") (= [ \\n\\t]* [,}\\]:])"
+      "(\"\\\"\" | [^\\0-\\x1f\\\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " + kBasicEscape +
+          " " + kBasicStringSub + ") (= [ \\n\\t]* [,}\\]:])"
   );
 }
 
