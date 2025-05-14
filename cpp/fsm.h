@@ -69,7 +69,7 @@ class FSM {
     \brief Transform a FSM to a compact FSM.
     \return The compact FSM.
   */
-  CompactFSM ToCompact();
+  CompactFSM ToCompact() const;
 
   /*!
     \brief Advance the FSM to the next state.
@@ -658,6 +658,7 @@ class FSMGroup {
     }
     return os;
   }
+  friend class CompactFSMGroup;
 };
 
 /*! \brief The function is used to get FSMs from a given grammar.
@@ -673,6 +674,44 @@ class FSMGroup {
    error.
       */
 Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
+
+class CompactFSMGroup {
+ private:
+  /*! \brief It's a mapping from the rule_name to the fsm_id. */
+  std::unordered_map<std::string, int32_t> rule_name_to_id_;
+
+  /*! \brief The vector stores the rule names. rule_names[i] stores the name
+  of the rule with the fsm_id = i. */
+  std::vector<std::string> rule_names_;
+
+  /*! \brief The vector stores the FSMs. */
+  std::vector<CompactFSMWithStartEnd> fsms_;
+
+  /*! \brief The id of the root rule. */
+  int32_t root_rule_id_;
+
+ public:
+  CompactFSMGroup(const FSMGroup& fsm_group) {
+    rule_name_to_id_ = fsm_group.rule_name_to_id_;
+    rule_names_ = fsm_group.rule_names_;
+    fsms_.reserve(fsm_group.fsms_.size());
+    for (const auto& fsm : fsm_group.fsms_) {
+      CompactFSMWithStartEnd compact_fsm;
+      compact_fsm.fsm = fsm.fsm.ToCompact();
+      compact_fsm.start = fsm.start;
+      compact_fsm.ends = fsm.ends;
+      compact_fsm.is_dfa = fsm.is_dfa;
+      fsms_.emplace_back(std::move(compact_fsm));
+    }
+    root_rule_id_ = fsm_group.root_rule_id_;
+  }
+
+  /*! \brief Get the size of the FSMGroup. i.e. How many rules are there in the FSMGroup. */
+  size_t Size() const { return fsms_.size(); }
+
+  /*! \brief Get the root rule name. */
+  const std::string& GetRootRuleName() const { return rule_names_[root_rule_id_]; }
+};
 
 }  // namespace xgrammar
 
