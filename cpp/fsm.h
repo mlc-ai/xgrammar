@@ -586,10 +586,23 @@ struct FSMState {
 
   /*! \brief The id of the node in the corresponding fsm. */
   int32_t node_id = 0;
+
+  /*! \brief The input position. */
+  int32_t input_pos = 0;
+
+  bool operator<(const FSMState& other) const {
+    if (fsm_id != other.fsm_id) {
+      return fsm_id < other.fsm_id;
+    }
+    if (node_id != other.node_id) {
+      return node_id < other.node_id;
+    }
+    return input_pos < other.input_pos;
+  }
 };
 
 class FSMGroup {
- private:
+ protected:
   /*! \brief It's a mapping from the rule_name to the fsm_id. */
   std::unordered_map<std::string, int32_t> rule_name_to_id_;
 
@@ -611,15 +624,6 @@ class FSMGroup {
 
  public:
   FSMGroup() = default;
-
-  /*! \brief Advance the states, with accepting a new character.
-      \param from The vector stores the start states.
-      \param result The vector stores the destination states.
-      \param ch The input character.
-      \details The algorithm is supposed to be the earley parser. */
-  void Advance(const std::vector<FSMState>& from, std::vector<FSMState>& result, uint8_t ch) const {
-    // TODO(linzhang): implement this function.
-  }
 
   /*! \brief Get the size of the FSMGroup. i.e. How many rules are there in the FSMGroup. */
   size_t Size() const { return fsms_.size(); }
