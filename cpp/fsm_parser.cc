@@ -18,12 +18,32 @@ bool EarleyParserWithFSM::Advance(uint8_t ch) {
   // Scan the current states.
   Scan(latest_states, ch);
 
+  // Check if there are feasible states in the queue.
   if (tmp_process_state_queue_.empty()) {
     return false;
   }
 
-  XGRAMMAR_LOG(FATAL) << "Not implemented yet";
-  // TODO(linzhang): implement the rest of the Earley parser
+  // Add a new map for the current processed states.
+  rule_id_to_completeable_states_.emplace_back();
+
+  // Predict and complete the current states until the queue is empty.
+  while (!tmp_process_state_queue_.empty()) {
+    FSMState current_state = tmp_process_state_queue_.front();
+    tmp_process_state_queue_.pop();
+    bool scanable = Predict(current_state);
+    if (scanable) {
+      tmp_states_to_be_added_.push_back(current_state);
+    }
+    const auto& current_fsm = fsms_[current_state.fsm_id];
+    if (current_fsm.IsEndNode(current_state.node_id)) {
+      Complete(current_state);
+    }
+  }
+
+  // Update the acceptance and the new states.
+  can_accept_stop_token_.push_back(tmp_accept_stop_token_);
+  scanable_state_history_.Insert(tmp_states_to_be_added_);
+  return true;
 }
 
 void EarleyParserWithFSM::Scan(const CSRArray<FSMState>::Row& current_states, uint8_t ch) {
