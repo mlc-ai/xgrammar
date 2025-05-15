@@ -1,6 +1,7 @@
 #include "fsm_parser.h"
 
 #include <cstdint>
+#include <unordered_set>
 #include <vector>
 
 #include "fsm.h"
@@ -142,6 +143,42 @@ void EarleyParserWithFSM::Complete(const FSMState& state) {
       Enque(new_state);
     }
   }
+}
+
+void EarleyParserWithFSM::PushInitialState(const FSMState& state) {
+  rule_id_to_completeable_states_.emplace_back();
+  tmp_accept_stop_token_ = false;
+  tmp_states_visited_in_queue_.clear();
+  tmp_states_to_be_added_.clear();
+
+  // Get the epsilon closure of the start state.
+  std::unordered_set<int> from_nodes;
+  std::unordered_set<int> closure;
+  from_nodes.insert(state.node_id);
+  const auto& fsm = fsms_[state.fsm_id].fsm;
+  fsm.GetEpsilonClosure(&from_nodes, &closure);
+  for (const auto& node : closure) {
+    FSMState new_state(state.fsm_id, node, state.input_pos);
+    Enque(new_state);
+  }
+
+  // Predict and complete the current states until the queue is empty.
+  while (!tmp_process_state_queue_.empty()) {
+    FSMState current_state = tmp_process_state_queue_.front();
+    tmp_process_state_queue_.pop();
+    bool scanable = Predict(current_state);
+    if (scanable) {
+      tmp_states_to_be_added_.push_back(current_state);
+    }
+    const auto& current_fsm = fsms_[current_state.fsm_id];
+    if (current_fsm.IsEndNode(current_state.node_id)) {
+      Complete(current_state);
+    }
+  }
+
+  // Update the acceptance and the new states.
+  can_accept_stop_token_.push_back(tmp_accept_stop_token_);
+  scanable_state_history_.Insert(tmp_states_to_be_added_);
 }
 
 }  // namespace xgrammar

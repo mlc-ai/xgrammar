@@ -33,6 +33,7 @@ class EarleyParserWithFSM : public FSMGroup {
       }
       start_epsilon_closure_.Insert(tmp_add_csrarray_elements);
     }
+    PushInitialState(FSMState(root_rule_id_, fsms_[root_rule_id_].StartNode(), -1));
   }
 
   EarleyParserWithFSM(const std::string& grammar, const std::string& root_rule) {
@@ -54,6 +55,7 @@ class EarleyParserWithFSM : public FSMGroup {
       }
       start_epsilon_closure_.Insert(tmp_add_csrarray_elements);
     }
+    PushInitialState(FSMState(root_rule_id_, fsms_[root_rule_id_].StartNode(), -1));
   }
 
   EarleyParserWithFSM() = delete;
@@ -62,6 +64,20 @@ class EarleyParserWithFSM : public FSMGroup {
       \param ch the input character.
     */
   bool Advance(uint8_t ch);
+
+  /*! \brief Check if the stop token can be accepted. */
+  bool IsAcceptStopToken() const { return can_accept_stop_token_.back(); }
+
+  /*! \brief Push a new state as the initial state. */
+  void PushInitialState(const FSMState& state);
+
+  /*! \brief Reset the parser.*/
+  void Reset() {
+    scanable_state_history_ = CSRArray<FSMState>();
+    rule_id_to_completeable_states_.clear();
+    can_accept_stop_token_.clear();
+    PushInitialState(FSMState(root_rule_id_, fsms_[root_rule_id_].StartNode(), -1));
+  }
 
  private:
   /*!
