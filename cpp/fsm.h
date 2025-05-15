@@ -601,8 +601,11 @@ struct FSMState {
   }
 
   FSMState() = default;
+
   FSMState(int32_t fsm_id, int32_t node_id, int32_t input_pos)
       : fsm_id(fsm_id), node_id(node_id), input_pos(input_pos) {}
+
+  static FSMState RuleState(int32_t fsm_id) { return FSMState(fsm_id, -1, -1); }
 };
 
 class FSMGroup {

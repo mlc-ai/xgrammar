@@ -5,20 +5,35 @@
 #ifndef XGRAMMAR_FSM_PARSER_H_
 #define XGRAMMAR_FSM_PARSER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <queue>
 #include <set>
+#include <unordered_set>
+#include <vector>
 
 #include "fsm.h"
-#include "grammar_data_structure.h"
 #include "support/csr_array.h"
 
 namespace xgrammar {
 
 class EarleyParserWithFSM : public FSMGroup {
  public:
-  EarleyParserWithFSM(FSMGroup fsm_group) : FSMGroup(std::move(fsm_group)) {}
+  EarleyParserWithFSM(FSMGroup fsm_group) : FSMGroup(std::move(fsm_group)) {
+    std::unordered_set<int> start_node;
+    std::unordered_set<int> closure;
+    std::vector<int> tmp_add_csrarray_elements;
+    for (size_t i = 0; i < fsms_.size(); ++i) {
+      start_node.clear();
+      start_node.insert(fsms_[i].StartNode());
+      fsms_[i].fsm.GetEpsilonClosure(&start_node, &closure);
+      for (const auto& node : closure) {
+        tmp_add_csrarray_elements.push_back(node);
+      }
+      start_epsilon_closure_.Insert(tmp_add_csrarray_elements);
+    }
+  }
 
   EarleyParserWithFSM(const std::string& grammar, const std::string& root_rule) {
     auto result = GrammarToFSMs(grammar, root_rule);
@@ -26,6 +41,18 @@ class EarleyParserWithFSM : public FSMGroup {
       *this = EarleyParserWithFSM(std::move(result.Unwrap()));
     } else {
       XGRAMMAR_LOG(FATAL) << "Failed to parse the grammar: " << result.UnwrapErr()->what();
+    }
+    std::unordered_set<int> start_node;
+    std::unordered_set<int> closure;
+    std::vector<int> tmp_add_csrarray_elements;
+    for (size_t i = 0; i < fsms_.size(); ++i) {
+      start_node.clear();
+      start_node.insert(fsms_[i].StartNode());
+      fsms_[i].fsm.GetEpsilonClosure(&start_node, &closure);
+      for (const auto& node : closure) {
+        tmp_add_csrarray_elements.push_back(node);
+      }
+      start_epsilon_closure_.Insert(tmp_add_csrarray_elements);
     }
   }
 
@@ -48,9 +75,6 @@ class EarleyParserWithFSM : public FSMGroup {
  One state can be in multiple categories, and thus can be stored in multiple places.
  */
  protected:
-  /*! \brief The grammar to be parsed. */
-  Grammar grammar_;
-
   /*! \brief In this round of advancing, check if the stop token can be accepted.*/
   bool tmp_accept_stop_token_ = false;
 
@@ -81,7 +105,6 @@ class EarleyParserWithFSM : public FSMGroup {
     \brief The scanning operation of the Earley parser.
     \param current_states The state to be scanned.
     \param ch The input character.
-    \param input_container The container to store the input character.
   */
   void Scan(const CSRArray<FSMState>::Row& current_states, uint8_t ch);
 
@@ -92,15 +115,14 @@ class EarleyParserWithFSM : public FSMGroup {
       of the grammar is used to check if the grammar is completed,
       so it should be added into the next states.
   */
-  void Complete(const FSMState& state, const Grammar::Impl::RuleExpr& rule_expr);
+  void Complete(const FSMState& state);
 
   /*!
       \brief The prediction operation of the Earley parser.
-      \return Fitst: If the state scanable, or the state is the end of the grammar,
+      \return If the state scanable, or the state is the end of the grammar,
       then return true, otherwise return false.
-      \return Second: If the state is completable, then return true, otherwise return false.
   */
-  std::pair<bool, bool> Predict(const FSMState& state, Grammar::Impl::RuleExpr* rule_expr);
+  bool Predict(const FSMState& state);
 
   /*! \brief Push a state into the processing queue.*/
   void Enque(const FSMState& state) {
@@ -109,6 +131,17 @@ class EarleyParserWithFSM : public FSMGroup {
       tmp_states_visited_in_queue_.insert(state);
     }
   }
+
+  /*!
+    \brief The vector is used to store all the fsms that can accept an empty rules.
+    True means the fsm can be empty, false otherwise. */
+  std::vector<bool> can_be_empty_fsm_;
+
+  /*!
+    \brief The csr_array is used to store the start epsilon closure of each fsms, which
+    is useful for prediction.
+    */
+  CSRArray<int> start_epsilon_closure_;
 };
 
 }  // namespace xgrammar

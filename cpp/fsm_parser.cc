@@ -47,4 +47,27 @@ void EarleyParserWithFSM::Scan(const CSRArray<FSMState>::Row& current_states, ui
   }
 }
 
+bool EarleyParserWithFSM::Predict(const FSMState& state) {
+  bool scanable = false;
+  XGRAMMAR_DCHECK(state.fsm_id >= 0 && state.fsm_id < fsms_.size())
+      << "The fsm id is out of bound. The fsm id is " << state.fsm_id;
+  XGRAMMAR_DCHECK(state.node_id >= 0 && state.node_id < fsms_[state.fsm_id].fsm.edges.size())
+      << "The node id is out of bound. The node id is " << state.node_id;
+  const auto& state_edges = fsms_[state.fsm_id].fsm.edges[state.node_id];
+  for (const auto& edge : state_edges) {
+    // Check if the state can predict a new rule.
+    if (!edge.IsRuleRef()) {
+      if (edge.IsCharRange()) {
+        scanable = true;
+      }
+      continue;
+    }
+    // The state can predict a new rule. Thus, we need to check if the rule has
+    // been predicted before. If not, then we need to expand the rule, i.e. get the
+    // epsilon closure of the start state.
+    // TODO(linzhang): implement the next predict.
+  }
+  return scanable;
+}
+
 }  // namespace xgrammar
