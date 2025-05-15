@@ -82,7 +82,6 @@ class EarleyParserWithFSM : public FSMGroup {
     PushInitialState(FSMState(root_rule_id_, fsms_[root_rule_id_].StartNode(), -1));
   }
 
- private:
   /*!
  \brief Here is an article about Earley
  Parser.https://en.wikipedia.org/wiki/Earley_parser#Pseudocode We divide the parser states into

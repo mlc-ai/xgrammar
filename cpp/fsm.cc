@@ -2038,9 +2038,14 @@ void SplitRules(
     // The line should be empty.
     if (end_of_the_line - last_end_of_the_line != 1) {
       // This line contains something surprising.
-      XGRAMMAR_LOG(WARNING
-      ) << "There's something surprising in the grammar: "
-        << grammar.substr(last_end_of_the_line + 1, end_of_the_line - last_end_of_the_line);
+      size_t no_white_space =
+          grammar.substr(last_end_of_the_line + 1, end_of_the_line - last_end_of_the_line)
+              .find_first_not_of(' ');
+      if (no_white_space != std::string::npos) {
+        XGRAMMAR_LOG(WARNING
+        ) << "There's something surprising in the grammar: "
+          << grammar.substr(last_end_of_the_line + 1, end_of_the_line - last_end_of_the_line);
+      }
     }
   } else {
     // This line is splitted successfully.
@@ -2230,11 +2235,14 @@ Result<FSMWithStartEnd> RuleToFSM(
           stack.push(rule_ref);
           now_ref_rule_name.clear();
         }
-        size_t next_quote = rule.find('\"', i + 1);
-        while (next_quote != std::string::npos && rule[next_quote - 1] == '\\') {
-          next_quote = rule.find('\"', next_quote + 1);
+        size_t next_quote = i + 1;
+        while (next_quote < rule.size() && rule[next_quote] != '\"') {
+          if (rule[next_quote] == '\\') {
+            next_quote++;
+          }
+          next_quote++;
         }
-        if (next_quote == std::string::npos) {
+        if (next_quote == rule.size()) {
           return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Unpaired quote!"));
         }
         stack.push(RegexIR::Leaf{rule.substr(i + 1, next_quote - i - 1)});

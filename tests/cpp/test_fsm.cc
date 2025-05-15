@@ -607,20 +607,19 @@ TEST(XGrammarFSMTest, RuleToFSMTest) {
 }
 
 TEST(XGrammarFSMTest, FSMAdvanceTest) {
-  // std::string simple_grammar = R"(
-  //   root ::= rule1+
-  //   rule1 ::= /[a-z]/ rule1*
-  // )";
+  std::string simple_grammar = R"(
+    root ::= rule1+
+    rule1 ::= /[a-z]/ rule1*
+  )";
 
-  // EarleyParserWithFSM parser(simple_grammar, "root");
-  // EXPECT_TRUE(parser.Advance('a'));
-  // EXPECT_TRUE(parser.IsAcceptStopToken());
-  // EXPECT_TRUE(parser.Advance('b'));
-  // EXPECT_TRUE(parser.IsAcceptStopToken());
-  // EXPECT_TRUE(parser.Advance('c'));
-  // EXPECT_TRUE(parser.IsAcceptStopToken());
+  EarleyParserWithFSM parser(simple_grammar, "root");
+  EXPECT_TRUE(parser.Advance('a'));
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  EXPECT_TRUE(parser.Advance('b'));
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  EXPECT_TRUE(parser.Advance('c'));
+  EXPECT_TRUE(parser.IsAcceptStopToken());
 
-  // XGRAMMAR_LOG(INFO) << "accepted1";
   std::string basic_float_grammar = R"(
     root ::= "-"? int ("." int)?
     int ::= /[0-9]+/
@@ -636,4 +635,33 @@ TEST(XGrammarFSMTest, FSMAdvanceTest) {
   EXPECT_FALSE(parser2.IsAcceptStopToken());
   EXPECT_TRUE(parser2.Advance('3'));
   EXPECT_TRUE(parser2.IsAcceptStopToken());
+
+  std::string basic_ascii_string_grammar = R"(
+    string ::= "\"" chars "\""
+    chars ::= char*
+    char ::= /[!-\[\]-~]/ | escape
+    escape ::= "\\" /[!-~]/
+  )";
+
+  EarleyParserWithFSM parser3(basic_ascii_string_grammar, "string");
+  EXPECT_FALSE(parser3.Advance(' '));
+  EXPECT_TRUE(parser3.Advance('"'));
+  EXPECT_FALSE(parser3.IsAcceptStopToken());
+  EXPECT_TRUE(parser3.Advance('a'));
+  EXPECT_FALSE(parser3.IsAcceptStopToken());
+  EXPECT_TRUE(parser3.Advance('"'));
+  EXPECT_TRUE(parser3.IsAcceptStopToken());
+  parser3.Reset();
+  EXPECT_TRUE(parser3.Advance('"'));
+  EXPECT_FALSE(parser3.IsAcceptStopToken());
+  EXPECT_TRUE(parser3.Advance('\\'));
+  EXPECT_FALSE(parser3.IsAcceptStopToken());
+  EXPECT_TRUE(parser3.Advance('\"'));
+  EXPECT_FALSE(parser3.IsAcceptStopToken());
+  EXPECT_TRUE(parser3.Advance('\\'));
+  EXPECT_FALSE(parser3.IsAcceptStopToken());
+  EXPECT_TRUE(parser3.Advance('n'));
+  EXPECT_FALSE(parser3.IsAcceptStopToken());
+  EXPECT_TRUE(parser3.Advance('"'));
+  EXPECT_TRUE(parser3.IsAcceptStopToken());
 }
