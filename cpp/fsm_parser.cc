@@ -65,7 +65,32 @@ bool EarleyParserWithFSM::Predict(const FSMState& state) {
     // The state can predict a new rule. Thus, we need to check if the rule has
     // been predicted before. If not, then we need to expand the rule, i.e. get the
     // epsilon closure of the start state.
-    // TODO(linzhang): implement the next predict.
+
+    // Add the information into the mapping.
+    rule_id_to_completeable_states_.back().insert({edge.GetRefRuleId(), state});
+
+    // Checking if the rule has been predicted in the current state.
+    FSMState rule_reprent_state = FSMState::RuleState(edge.GetRefRuleId());
+    if (tmp_states_visited_in_queue_.find(rule_reprent_state) !=
+        tmp_states_visited_in_queue_.end()) {
+      // The rule has been predicted before. We need to check if the reference rule
+      // can be empty.
+      if (can_be_empty_fsm_[edge.GetRefRuleId()]) {
+        // The rule can be empty. We advance the state.
+        FSMState new_state(state.fsm_id, edge.target, state.input_pos);
+        Enque(new_state);
+      }
+      continue;
+    }
+
+    // Add the start epsilon closure into the processing queue.
+    const auto& start_closure = start_epsilon_closure_[edge.GetRefRuleId()];
+    for (const auto& start_node_id : start_closure) {
+      FSMState new_state(
+          edge.GetRefRuleId(), start_node_id, rule_id_to_completeable_states_.size() - 1
+      );
+      Enque(new_state);
+    }
   }
   return scanable;
 }
