@@ -95,4 +95,33 @@ bool EarleyParserWithFSM::Predict(const FSMState& state) {
   return scanable;
 }
 
+void EarleyParserWithFSM::Complete(const FSMState& state) {
+  const auto& current_fsm = fsms_[state.fsm_id];
+  XGRAMMAR_DCHECK(current_fsm.IsEndNode(state.node_id))
+      << "The state is not an end node. The state is " << state.ToString();
+
+  // Check if the state is part of the root rule.
+  if (state.input_pos == -1) {
+    tmp_accept_stop_token_ = true;
+    return;
+  }
+
+  const auto& mapping = rule_id_to_completeable_states_[state.input_pos];
+  const auto& range = mapping.equal_range(state.fsm_id);
+  std::vector<int> parent_state_node_id{0};
+  std::vector<int> tmp_result;
+
+  // Add the parent states into the queue.
+  for (auto state_iter = range.first; state_iter != range.second; state_iter++) {
+    const auto& parent_state = state_iter->second;
+    parent_state_node_id[0] = parent_state.node_id;
+    const auto& fsm = fsms_[parent_state.fsm_id];
+    fsm.fsm.Advance(parent_state_node_id, state.fsm_id, &tmp_result, true, true);
+    for (const auto& next_node_id : tmp_result) {
+      FSMState new_state(parent_state.fsm_id, next_node_id, parent_state.input_pos);
+      Enque(new_state);
+    }
+  }
+}
+
 }  // namespace xgrammar

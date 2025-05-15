@@ -606,6 +606,11 @@ struct FSMState {
       : fsm_id(fsm_id), node_id(node_id), input_pos(input_pos) {}
 
   static FSMState RuleState(int32_t fsm_id) { return FSMState(fsm_id, -1, -1); }
+
+  std::string ToString() const {
+    return "FSMState(fsm_id=" + std::to_string(fsm_id) + ", node_id=" + std::to_string(node_id) +
+           ", input_pos=" + std::to_string(input_pos) + ")";
+  }
 };
 
 class FSMGroup {
