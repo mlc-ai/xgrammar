@@ -1,10 +1,13 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <cstdint>
 
 #include "fsm.h"
+#include "fsm_parser.h"
+#include "support/logging.h"
 using namespace xgrammar;
 TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test Starts! -----------" << std::endl;
@@ -601,4 +604,36 @@ TEST(XGrammarFSMTest, RuleToFSMTest) {
   fsm_group.ToMinimizedDFA(50);
   fsm_main = fsm_group.GetFSM(0);
   EXPECT_EQ(fsm_main.NumNodes(), 2);
+}
+
+TEST(XGrammarFSMTest, FSMAdvanceTest) {
+  // std::string simple_grammar = R"(
+  //   root ::= rule1+
+  //   rule1 ::= /[a-z]/ rule1*
+  // )";
+
+  // EarleyParserWithFSM parser(simple_grammar, "root");
+  // EXPECT_TRUE(parser.Advance('a'));
+  // EXPECT_TRUE(parser.IsAcceptStopToken());
+  // EXPECT_TRUE(parser.Advance('b'));
+  // EXPECT_TRUE(parser.IsAcceptStopToken());
+  // EXPECT_TRUE(parser.Advance('c'));
+  // EXPECT_TRUE(parser.IsAcceptStopToken());
+
+  // XGRAMMAR_LOG(INFO) << "accepted1";
+  std::string basic_float_grammar = R"(
+    root ::= "-"? int ("." int)?
+    int ::= /[0-9]+/
+  )";
+  EarleyParserWithFSM parser2(basic_float_grammar, "root");
+  EXPECT_TRUE(parser2.Advance('-'));
+  EXPECT_FALSE(parser2.IsAcceptStopToken());
+  EXPECT_TRUE(parser2.Advance('1'));
+  EXPECT_TRUE(parser2.IsAcceptStopToken());
+  EXPECT_TRUE(parser2.Advance('2'));
+  EXPECT_TRUE(parser2.IsAcceptStopToken());
+  EXPECT_TRUE(parser2.Advance('.'));
+  EXPECT_FALSE(parser2.IsAcceptStopToken());
+  EXPECT_TRUE(parser2.Advance('3'));
+  EXPECT_TRUE(parser2.IsAcceptStopToken());
 }

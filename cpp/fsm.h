@@ -84,8 +84,8 @@ class FSM {
       const std::vector<int>& from,
       int value,
       std::vector<int>* result,
-      bool is_closure = false,
-      bool is_rule = false
+      bool is_rule = false,
+      bool is_closure = false
   ) const;
 
   /*!

@@ -73,9 +73,7 @@ short FSMEdge::GetRefRuleId() const {
   if (IsRuleRef()) {
     return max;
   } else {
-    XGRAMMAR_DCHECK(false) << "Invalid FSMEdge: not a rule reference. min=" << min
-                           << ", max=" << max;
-    return -1;
+    XGRAMMAR_LOG(FATAL) << "Invalid FSMEdge: not a rule reference. min=" << min << ", max=" << max;
   }
 }
 
@@ -83,6 +81,8 @@ void FSM::GetEpsilonClosure(std::unordered_set<int>* state_set, std::unordered_s
     const {
   if (result == nullptr) {
     result = state_set;
+  } else {
+    result->clear();
   }
   std::queue<int> queue;
   for (const auto& state : *state_set) {
@@ -335,13 +335,25 @@ std::string CompactFSMWithStartEnd::Print() const {
   return result;
 }
 
+class EdgeCompare {
+ public:
+  bool operator()(const FSMEdge& a, const FSMEdge& b) const {
+    if (a.min != b.min) {
+      return a.min < b.min;
+    }
+    if (a.max != b.max) {
+      return a.max < b.max;
+    }
+    return a.target < b.target;
+  }
+};
+
 CompactFSM FSM::ToCompact() const {
+  std::vector<std::vector<FSMEdge>> new_edges = edges;
   CompactFSM result;
-  for (int i = 0; i < static_cast<int>(edges.size()); ++i) {
-    std::sort(edges[i].begin(), edges[i].end(), [](const FSMEdge& a, const FSMEdge& b) {
-      return a.min != b.min ? a.min < b.min : a.max < b.max;
-    });
-    result.edges.Insert(edges[i]);
+  for (int i = 0; i < static_cast<int>(new_edges.size()); ++i) {
+    std::sort(new_edges[i].begin(), new_edges[i].end(), EdgeCompare());
+    result.edges.Insert(new_edges[i]);
   }
   return result;
 }
@@ -2020,7 +2032,6 @@ void SplitRules(
     last_end_of_the_line = end_of_the_line;
     end_of_the_line = grammar.find('\n', end_of_the_line + 1);
   }
-
   // Handle the last rule.
   size_t define_symbol = grammar.find("::=", last_end_of_the_line);
   if (define_symbol == std::string::npos || define_symbol > end_of_the_line) {
@@ -2261,6 +2272,7 @@ Result<FSMWithStartEnd> RuleToFSM(
         break;
       }
       case '?': {
+        // It's a part like rule1?.
         if (!now_ref_rule_name.empty()) {
           RegexIR::RuleRef rule_ref;
           if (rule_name_to_id.find(now_ref_rule_name) == rule_name_to_id.end()) {
@@ -2271,6 +2283,7 @@ Result<FSMWithStartEnd> RuleToFSM(
           rule_ref.rule_id = rule_name_to_id.at(now_ref_rule_name);
           stack.push(rule_ref);
           now_ref_rule_name.clear();
+          break;
         }
         if (stack.empty()) {
           return Result<FSMWithStartEnd>::Err(

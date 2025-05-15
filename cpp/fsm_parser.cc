@@ -1,5 +1,6 @@
 #include "fsm_parser.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <unordered_set>
 #include <vector>
@@ -11,6 +12,9 @@
 namespace xgrammar {
 
 bool EarleyParserWithFSM::Advance(uint8_t ch) {
+  for (size_t i = 0; i < fsms_.size(); i++) {
+    XGRAMMAR_LOG(INFO) << fsms_[i];
+  }
   tmp_states_visited_in_queue_.clear();
   tmp_states_to_be_added_.clear();
   tmp_accept_stop_token_ = false;
@@ -33,6 +37,7 @@ bool EarleyParserWithFSM::Advance(uint8_t ch) {
     tmp_process_state_queue_.pop();
     bool scanable = Predict(current_state);
     if (scanable) {
+      XGRAMMAR_LOG(INFO) << "Scanable state: " << current_state.ToString();
       tmp_states_to_be_added_.push_back(current_state);
     }
     const auto& current_fsm = fsms_[current_state.fsm_id];
@@ -54,13 +59,14 @@ void EarleyParserWithFSM::Scan(const CSRArray<FSMState>::Row& current_states, ui
 
   for (const auto& state : current_states) {
     // Check the fsm_id is valid.
-    XGRAMMAR_DCHECK(state.fsm_id >= 0 && state.fsm_id < fsms_.size())
+    XGRAMMAR_DCHECK(state.fsm_id >= 0 && size_t(state.fsm_id) < fsms_.size())
         << "The fsm id is out of bound. The fsm id is " << state.fsm_id;
 
     // Advance the FSM. The current states are an epsilon closure, which is guaranteed by the
     // last step.
+    tmp_input_container[0] = state.node_id;
     const auto& fsm = fsms_[state.fsm_id];
-    fsm.fsm.Advance(tmp_input_container, ch, &tmp_next_states, true, false);
+    fsm.fsm.Advance(tmp_input_container, ch, &tmp_next_states, false, true);
     for (const auto& next_node : tmp_next_states) {
       FSMState new_state(state.fsm_id, next_node, state.input_pos);
       Enque(new_state);
@@ -70,10 +76,12 @@ void EarleyParserWithFSM::Scan(const CSRArray<FSMState>::Row& current_states, ui
 
 bool EarleyParserWithFSM::Predict(const FSMState& state) {
   bool scanable = false;
-  XGRAMMAR_DCHECK(state.fsm_id >= 0 && state.fsm_id < fsms_.size())
+  XGRAMMAR_DCHECK(state.fsm_id >= 0 && size_t(state.fsm_id) < fsms_.size())
       << "The fsm id is out of bound. The fsm id is " << state.fsm_id;
-  XGRAMMAR_DCHECK(state.node_id >= 0 && state.node_id < fsms_[state.fsm_id].fsm.edges.size())
-      << "The node id is out of bound. The node id is " << state.node_id;
+  XGRAMMAR_DCHECK(
+      state.node_id >= 0 && size_t(state.node_id) < fsms_[state.fsm_id].fsm.edges.size()
+  ) << "The node id is out of bound. The node id is "
+    << state.node_id;
   const auto& state_edges = fsms_[state.fsm_id].fsm.edges[state.node_id];
   for (const auto& edge : state_edges) {
     // Check if the state can predict a new rule.
@@ -170,11 +178,15 @@ void EarleyParserWithFSM::PushInitialState(const FSMState& state) {
     if (scanable) {
       tmp_states_to_be_added_.push_back(current_state);
     }
+    XGRAMMAR_DCHECK(current_state.fsm_id >= 0 && size_t(current_state.fsm_id) < fsms_.size())
+        << "The fsm id is out of bound. The fsm id is " << current_state.fsm_id;
     const auto& current_fsm = fsms_[current_state.fsm_id];
     if (current_fsm.IsEndNode(current_state.node_id)) {
       Complete(current_state);
     }
   }
+
+  XGRAMMAR_LOG(INFO) << "Here is passed.";
 
   // Update the acceptance and the new states.
   can_accept_stop_token_.push_back(tmp_accept_stop_token_);
