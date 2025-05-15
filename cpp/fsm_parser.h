@@ -12,6 +12,7 @@
 
 #include "fsm.h"
 #include "grammar_data_structure.h"
+#include "support/csr_array.h"
 
 namespace xgrammar {
 
@@ -78,8 +79,11 @@ class EarleyParserWithFSM : public FSMGroup {
 
   /*!
     \brief The scanning operation of the Earley parser.
+    \param current_states The state to be scanned.
+    \param ch The input character.
+    \param input_container The container to store the input character.
   */
-  void Scan(const FSMState& state, const uint8_t& ch);
+  void Scan(const CSRArray<FSMState>::Row& current_states, uint8_t ch);
 
   /*!
       \brief The completion operation of the Earley parser.
@@ -97,6 +101,14 @@ class EarleyParserWithFSM : public FSMGroup {
       \return Second: If the state is completable, then return true, otherwise return false.
   */
   std::pair<bool, bool> Predict(const FSMState& state, Grammar::Impl::RuleExpr* rule_expr);
+
+  /*! \brief Push a state into the processing queue.*/
+  void Enque(const FSMState& state) {
+    if (tmp_states_visited_in_queue_.find(state) == tmp_states_visited_in_queue_.end()) {
+      tmp_process_state_queue_.push(state);
+      tmp_states_visited_in_queue_.insert(state);
+    }
+  }
 };
 
 }  // namespace xgrammar

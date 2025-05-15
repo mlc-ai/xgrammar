@@ -599,6 +599,10 @@ struct FSMState {
     }
     return input_pos < other.input_pos;
   }
+
+  FSMState() = default;
+  FSMState(int32_t fsm_id, int32_t node_id, int32_t input_pos)
+      : fsm_id(fsm_id), node_id(node_id), input_pos(input_pos) {}
 };
 
 class FSMGroup {
