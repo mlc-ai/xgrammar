@@ -654,7 +654,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
           edges[0].emplace_back(regex[i], regex[i], 1);
           continue;
         }
-        edges[0].emplace_back(regex[0], escaped_edges[0].first, 1);
+        edges[0].emplace_back(regex[i], escaped_edges[0].first, 1);
         i = i + 3;
         continue;
       }

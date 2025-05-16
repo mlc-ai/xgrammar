@@ -671,10 +671,45 @@ TEST(XGrammarFSMTest, FSMNullableTest) {
     root ::= rule1+ rule2?
     rule1 ::= ("" | /[a-z]/)+
     rule2 ::= /[0-9]/
+    rule3 ::= rule3*
+    rule4 ::= /[a-z]/?
   )";
   EarleyParserWithFSM parser(test_empty_grammar, "root");
   std::cout << parser;
   EXPECT_TRUE(parser.IsFsmNullable(0));
   EXPECT_TRUE(parser.IsFsmNullable(1));
   EXPECT_FALSE(parser.IsFsmNullable(2));
+  EXPECT_TRUE(parser.IsFsmNullable(3));
+  EXPECT_TRUE(parser.IsFsmNullable(4));
+}
+
+TEST(XGrammarFSMTest, BasicJsonGrammarTest) {
+  std::string test_empty_grammar = R"(
+    root ::= Json
+    Json ::= Array | Object
+    Array ::= "[" Element "]"
+    Object ::= "{" ObjectElement "}"
+    ObjectElement ::= String ":" Value ("," ObjectElement)?
+    Element ::= Value "," Element | Value
+    Value ::= String | Int | Float | Object | Array | Bool | "Null"
+    Float ::= sign? Int "." Int
+    Int ::= sign? /[0-9]/+
+    String ::= "\"" (char | escaped)* "\""
+    char ::= /[!#-\[\]-~]/
+    sign ::= "+" | "-"
+    escaped ::= "\""  | "\/"  | "\n"  | "\b"  | "\f"  | "\r" | "\t" | "\u" HEX
+    HEX ::= /[0-9a-fA-F]{4}/
+    Bool ::= "true" | "false"
+    Null ::= "null"
+  )";
+
+  EarleyParserWithFSM parser(test_empty_grammar, "root");
+  std::cout << parser;
+  std::string test_str = R"({"key1": "value1", "key2": 123, "key3": [1, 2, 3]})";
+  for (const auto& ch : test_str) {
+    std::cout << "Now parsing: " << ch << std::endl;
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
 }
