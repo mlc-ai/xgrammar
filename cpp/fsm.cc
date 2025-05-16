@@ -2007,8 +2007,14 @@ FSMWithStartEnd BuildTrie(
 }
 
 void ConsumeWhiteSpaces(std::string& str) {
-  size_t start = str.find_first_not_of(' ');
-  size_t end = str.find_last_not_of(' ');
+  size_t start = 0;
+  while (start < str.size() && (str[start] == ' ' || str[start] == '\t' || str[start] == '\n')) {
+    start++;
+  }
+  size_t end = str.size() - 1;
+  while (end > start && (str[end] == ' ' || str[end] == '\t' || str[end] == '\n')) {
+    end--;
+  }
   str = str.substr(start, end - start + 1);
 }
 
