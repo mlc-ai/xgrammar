@@ -745,7 +745,6 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   } else {
     now_fsm = Copy();
   }
-  std::cout << "Now FSM: " << now_fsm.Print() << std::endl;
   // Initialize the set.
   std::list<std::unordered_set<int>> blocks;
   std::list<std::unordered_set<int>> queue;
@@ -915,9 +914,15 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   int cnt = 0;
   for (const auto& block : blocks) {
     for (const auto& node : block) {
+      std::cout << "Node: " << node << " -> " << cnt << std::endl;
       old_to_new[node] = cnt;
     }
     cnt++;
+  }
+  for (int i = 0; i < now_fsm.NumNodes(); i++) {
+    if (old_to_new.find(i) == old_to_new.end()) {
+      old_to_new[i] = cnt++;
+    }
   }
   FSMWithStartEnd new_fsm;
   new_fsm.is_dfa = true;
