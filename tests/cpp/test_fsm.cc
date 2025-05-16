@@ -205,7 +205,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   std::cout << "--------- Function Test3 -----------" << std::endl;
   fsm_wse = fsm_wse.MinimizeDFA();
   EXPECT_TRUE(fsm_wse.Check(test_str));
-  EXPECT_EQ(fsm_wse.fsm.edges.size(), 3);
+  EXPECT_EQ(fsm_wse.fsm.edges.size(), 2);
   std::cout << "--------- Function Test4 -----------" << std::endl;
   fsm_wse = fsm_wse.Not();
   EXPECT_FALSE(fsm_wse.Check(test_str));
@@ -683,31 +683,155 @@ TEST(XGrammarFSMTest, FSMNullableTest) {
   EXPECT_TRUE(parser.IsFsmNullable(4));
 }
 
+TEST(XGrammarFSMTest, FSMToDFA) {
+  std::string test_grammar = R"(
+    root ::= "[" rule1? "]"
+    rule1 ::= /[0-9]/
+  )";
+  EarleyParserWithFSM parser(test_grammar, "root");
+  std::cout << parser;
+}
+
 TEST(XGrammarFSMTest, BasicJsonGrammarTest) {
   std::string test_empty_grammar = R"(
-    root ::= Json
+    root ::= Empty* Json Empty*
     Json ::= Array | Object
-    Array ::= "[" Element "]"
-    Object ::= "{" ObjectElement "}"
-    ObjectElement ::= String ":" Value ("," ObjectElement)?
-    Element ::= Value "," Element | Value
+    Array ::= "[" Element? "]"
+    Object ::= "{" ObjectElement? "}"
+    ObjectElement ::=  Empty* String Empty* ":" Empty* Value Empty* ( "," ObjectElement)?
+    Element ::= Empty* Value Empty* ("," Element)?
     Value ::= String | Int | Float | Object | Array | Bool | "Null"
     Float ::= sign? Int "." Int
     Int ::= sign? /[0-9]/+
     String ::= "\"" (char | escaped)* "\""
-    char ::= /[!#-\[\]-~]/
+    char ::= /[ !#-\[\]-~]/
     sign ::= "+" | "-"
-    escaped ::= "\""  | "\/"  | "\n"  | "\b"  | "\f"  | "\r" | "\t" | "\u" HEX
+    escaped ::= "\\\""  | "\\\/"  | "\\n"  | "\\b"  | "\\f"  | "\\r" | "\\t" | "\\u" HEX
     HEX ::= /[0-9a-fA-F]{4}/
     Bool ::= "true" | "false"
     Null ::= "null"
+    Empty ::= " " | "\n" | "\r" | "\t"
   )";
 
   EarleyParserWithFSM parser(test_empty_grammar, "root");
   std::cout << parser;
   std::string test_str = R"({"key1": "value1", "key2": 123, "key3": [1, 2, 3]})";
   for (const auto& ch : test_str) {
-    std::cout << "Now parsing: " << ch << std::endl;
+    std::cout << ch;
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  parser.Reset();
+  for (const auto& ch : test_str) {
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  parser.Reset();
+  test_str = R"(
+{
+    "web-app": {
+    "servlet": [
+        {
+        "servlet-name": "cofaxCDS",
+        "servlet-class": "org.cofax.cds.CDSServlet",
+        "init-param": {
+            "configGlossary:installationAt": "Philadelphia, PA",
+            "configGlossary:adminEmail": "ksm@pobox.com",
+            "configGlossary:poweredBy": "Cofax",
+            "configGlossary:poweredByIcon": "/images/cofax.gif",
+            "configGlossary:staticPath": "/content/static",
+            "templateProcessorClass": "org.cofax.WysiwygTemplate",
+            "templateLoaderClass": "org.cofax.FilesTemplateLoader",
+            "templatePath": "templates",
+            "templateOverridePath": "",
+            "defaultListTemplate": "listTemplate.htm",
+            "defaultFileTemplate": "articleTemplate.htm",
+            "useJSP": false,
+            "jspListTemplate": "listTemplate.jsp",
+            "jspFileTemplate": "articleTemplate.jsp",
+            "cachePackageTagsTrack": 200,
+            "cachePackageTagsStore": 200,
+            "cachePackageTagsRefresh": 60,
+            "cacheTemplatesTrack": 100,
+            "cacheTemplatesStore": 50,
+            "cacheTemplatesRefresh": 15,
+            "cachePagesTrack": 200,
+            "cachePagesStore": 100,
+            "cachePagesRefresh": 10,
+            "cachePagesDirtyRead": 10,
+            "searchEngineListTemplate": "forSearchEnginesList.htm",
+            "searchEngineFileTemplate": "forSearchEngines.htm",
+            "searchEngineRobotsDb": "WEB-INF/robots.db",
+            "useDataStore": true,
+            "dataStoreClass": "org.cofax.SqlDataStore",
+            "redirectionClass": "org.cofax.SqlRedirection",
+            "dataStoreName": "cofax",
+            "dataStoreDriver": "com.microsoft.jdbc.sqlserver.SQLServerDriver",
+            "dataStoreUrl": "jdbc:microsoft:sqlserver://LOCALHOST:1433;DatabaseName=goon",
+            "dataStoreUser": "sa",
+            "dataStorePassword": "dataStoreTestQuery",
+            "dataStoreTestQuery": "SET NOCOUNT ON;select test='test';",
+            "dataStoreLogFile": "/usr/local/tomcat/logs/datastore.log",
+            "dataStoreInitConns": 10,
+            "dataStoreMaxConns": 100,
+            "dataStoreConnUsageLimit": 100,
+            "dataStoreLogLevel": "debug",
+            "maxUrlLength": 500
+        }
+        },
+        {
+        "servlet-name": "cofaxEmail",
+        "servlet-class": "org.cofax.cds.EmailServlet",
+        "init-param": {
+            "mailHost": "mail1",
+            "mailHostOverride": "mail2"
+        }
+        },
+        {
+        "servlet-name": "cofaxAdmin",
+        "servlet-class": "org.cofax.cds.AdminServlet"
+        },
+        {
+        "servlet-name": "fileServlet",
+        "servlet-class": "org.cofax.cds.FileServlet"
+        },
+        {
+        "servlet-name": "cofaxTools",
+        "servlet-class": "org.cofax.cms.CofaxToolsServlet",
+        "init-param": {
+            "templatePath": "toolstemplates/",
+            "log": 1,
+            "logLocation": "/usr/local/tomcat/logs/CofaxTools.log",
+            "logMaxSize": "",
+            "dataLog": 1,
+            "dataLogLocation": "/usr/local/tomcat/logs/dataLog.log",
+            "dataLogMaxSize": "",
+            "removePageCache": "/content/admin/remove?cache=pages&id=",
+            "removeTemplateCache": "/content/admin/remove?cache=templates&id=",
+            "fileTransferFolder": "/usr/local/tomcat/webapps/content/fileTransferFolder",
+            "lookInContext": 1,
+            "adminGroupID": 4,
+            "betaServer": true
+        }
+        }
+    ],
+    "servlet-mapping": {
+        "cofaxCDS": "/",
+        "cofaxEmail": "/cofaxutil/aemail/*",
+        "cofaxAdmin": "/admin/*",
+        "fileServlet": "/static/*",
+        "cofaxTools": "/tools/*"
+    },
+    "taglib": {
+        "taglib-uri": "cofax.tld",
+        "taglib-location": "/WEB-INF/tlds/cofax.tld"
+    }
+    }
+})";
+  for (const auto& ch : test_str) {
+    std::cout << ch;
     EXPECT_FALSE(parser.IsAcceptStopToken());
     EXPECT_TRUE(parser.Advance(ch));
   }

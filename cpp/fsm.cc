@@ -486,6 +486,9 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
           }
         }
       }
+      if (next_closure.empty()) {
+        continue;
+      }
       bool flag = false;
       for (int j = 0; j < static_cast<int>(closures.size()); j++) {
         if (closures[j] == next_closure) {
@@ -515,6 +518,9 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
             }
           }
         }
+      }
+      if (next_closure.empty()) {
+        continue;
       }
       bool flag = false;
       for (int j = 0; j < static_cast<int>(closures.size()); j++) {

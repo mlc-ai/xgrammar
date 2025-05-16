@@ -124,7 +124,6 @@ void EarleyParserWithFSM::Complete(const FSMState& state) {
   const auto& current_fsm = fsms_[state.fsm_id];
   XGRAMMAR_DCHECK(current_fsm.IsEndNode(state.node_id))
       << "The state is not an end node. The state is " << state.ToString();
-
   // Check if the state is part of the root rule.
   if (state.input_pos == kNoInputPos) {
     tmp_accept_stop_token_ = true;
