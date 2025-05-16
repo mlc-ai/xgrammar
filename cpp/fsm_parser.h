@@ -21,12 +21,14 @@ namespace xgrammar {
 
 class EarleyParserWithFSM : public FSMGroup {
  public:
-  EarleyParserWithFSM(FSMGroup fsm_group) : FSMGroup(fsm_group) {
+  static const int kNoInputPos = -1;
+
+  EarleyParserWithFSM(FSMGroup fsm_group_) : FSMGroup(fsm_group_) {
     std::unordered_set<int> start_node;
     std::unordered_set<int> closure;
     std::vector<int> tmp_add_csrarray_elements;
-    fsm_group.Simplify();
-    fsm_group.ToMinimizedDFA();
+    Simplify();
+    // ToMinimizedDFA();
     for (size_t i = 0; i < fsms_.size(); ++i) {
       start_node.clear();
       start_node.insert(fsms_[i].StartNode());
@@ -37,8 +39,7 @@ class EarleyParserWithFSM : public FSMGroup {
       }
       start_epsilon_closure_.Insert(tmp_add_csrarray_elements);
     }
-    // TODO(Linzhang): This should be replaced with a true one.
-    can_be_empty_fsm_.resize(fsms_.size(), false);
+    BuildNullableSet();
     PushInitialState(FSMState(root_rule_id_, fsms_[root_rule_id_].StartNode(), -1));
   }
 
@@ -82,6 +83,14 @@ class EarleyParserWithFSM : public FSMGroup {
     rule_id_to_completeable_states_.clear();
     can_accept_stop_token_.clear();
     PushInitialState(FSMState(root_rule_id_, fsms_[root_rule_id_].StartNode(), -1));
+  }
+
+  /*! \brief Check if a fsm is nullable, used for testing. */
+  bool IsFsmNullable(int fsm_id) const {
+    if (fsm_id < 0 || static_cast<size_t>(fsm_id) >= can_be_empty_fsm_.size()) {
+      XGRAMMAR_LOG(FATAL) << "The fsm id is out of bound. The fsm id is " << fsm_id;
+    }
+    return can_be_empty_fsm_[fsm_id];
   }
 
   /*!
@@ -162,6 +171,9 @@ class EarleyParserWithFSM : public FSMGroup {
     is useful for prediction.
     */
   CSRArray<int> start_epsilon_closure_;
+
+  /*! \brief Check if a rule is nullable. */
+  void BuildNullableSet();
 };
 
 }  // namespace xgrammar

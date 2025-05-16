@@ -2314,7 +2314,6 @@ Result<FSMWithStartEnd> RuleToFSM(
           rule_ref.rule_id = rule_name_to_id.at(now_ref_rule_name);
           stack.push(rule_ref);
           now_ref_rule_name.clear();
-          break;
         }
         if (stack.empty()) {
           return Result<FSMWithStartEnd>::Err(

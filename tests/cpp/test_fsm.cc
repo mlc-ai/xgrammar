@@ -7,7 +7,6 @@
 
 #include "fsm.h"
 #include "fsm_parser.h"
-#include "support/logging.h"
 using namespace xgrammar;
 TEST(XGrammarFSMTest, BasicBuildTest) {
   std::cout << "--------- Basic Build Test Starts! -----------" << std::endl;
@@ -664,4 +663,17 @@ TEST(XGrammarFSMTest, FSMAdvanceTest) {
   EXPECT_FALSE(parser3.IsAcceptStopToken());
   EXPECT_TRUE(parser3.Advance('"'));
   EXPECT_TRUE(parser3.IsAcceptStopToken());
+}
+
+TEST(XGrammarFSMTest, FSMNullableTest) {
+  std::string test_empty_grammar = R"(
+    root ::= rule1+ rule2?
+    rule1 ::= ("" | /[a-z]/)+
+    rule2 ::= /[0-9]/
+  )";
+  EarleyParserWithFSM parser(test_empty_grammar, "root");
+  std::cout << parser;
+  EXPECT_TRUE(parser.IsFsmNullable(0));
+  EXPECT_TRUE(parser.IsFsmNullable(1));
+  EXPECT_FALSE(parser.IsFsmNullable(2));
 }

@@ -126,7 +126,7 @@ void EarleyParserWithFSM::Complete(const FSMState& state) {
       << "The state is not an end node. The state is " << state.ToString();
 
   // Check if the state is part of the root rule.
-  if (state.input_pos == -1) {
+  if (state.input_pos == kNoInputPos) {
     tmp_accept_stop_token_ = true;
     return;
   }
@@ -182,11 +182,19 @@ void EarleyParserWithFSM::PushInitialState(const FSMState& state) {
     }
   }
 
-  XGRAMMAR_LOG(INFO) << "Here is passed.";
-
   // Update the acceptance and the new states.
   can_accept_stop_token_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.Insert(tmp_states_to_be_added_);
+}
+
+void EarleyParserWithFSM::BuildNullableSet() {
+  can_be_empty_fsm_.resize(fsms_.size());
+  for (size_t i = 0; i < fsms_.size(); ++i) {
+    FSMState start_state(i, fsms_[i].StartNode(), -1);
+    PushInitialState(start_state);
+    can_be_empty_fsm_[i] = IsAcceptStopToken();
+    Reset();
+  }
 }
 
 }  // namespace xgrammar
