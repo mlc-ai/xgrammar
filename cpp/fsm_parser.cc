@@ -12,9 +12,6 @@
 namespace xgrammar {
 
 bool EarleyParserWithFSM::Advance(uint8_t ch) {
-  for (size_t i = 0; i < fsms_.size(); i++) {
-    XGRAMMAR_LOG(INFO) << fsms_[i];
-  }
   tmp_states_visited_in_queue_.clear();
   tmp_states_to_be_added_.clear();
   tmp_accept_stop_token_ = false;
@@ -37,7 +34,6 @@ bool EarleyParserWithFSM::Advance(uint8_t ch) {
     tmp_process_state_queue_.pop();
     bool scanable = Predict(current_state);
     if (scanable) {
-      XGRAMMAR_LOG(INFO) << "Scanable state: " << current_state.ToString();
       tmp_states_to_be_added_.push_back(current_state);
     }
     const auto& current_fsm = fsms_[current_state.fsm_id];
