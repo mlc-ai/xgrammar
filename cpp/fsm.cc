@@ -913,7 +913,6 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   int cnt = 0;
   for (const auto& block : blocks) {
     for (const auto& node : block) {
-      std::cout << "Node: " << node << " -> " << cnt << std::endl;
       old_to_new[node] = cnt;
     }
     cnt++;
@@ -1279,7 +1278,7 @@ void FSMWithStartEnd::SimplifyEpsilon() {
       }
       previous_nodes[edge.target].insert(i);
       if (edge.IsEpsilon()) {
-        if (edges.size() != 1) {
+        if (edges.size() != 1 || (IsEndNode(i) != IsEndNode(edge.target))) {
           has_epsilon.insert(i);
         } else {
           // a -- epsilon --> b, and a doesn't have other outward edges.
@@ -1305,6 +1304,9 @@ void FSMWithStartEnd::SimplifyEpsilon() {
       }
       // The target node is the start node.
       if (edge.target == start) {
+        continue;
+      }
+      if (IsEndNode(edge.target) != IsEndNode(node)) {
         continue;
       }
       bool has_other_edge = false;
@@ -2282,7 +2284,13 @@ Result<FSMWithStartEnd> RuleToFSM(
         if (next_quote == rule.size()) {
           return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Unpaired quote!"));
         }
-        stack.push(RegexIR::Leaf{rule.substr(i + 1, next_quote - i - 1)});
+        std::string new_str = rule.substr(i + 1, next_quote - i - 1);
+        for (int j = new_str.size() - 1; j >= 0; j--) {
+          if (new_str[j] == '.') {
+            new_str.insert(j, 1, '\\');
+          }
+        }
+        stack.push(RegexIR::Leaf{new_str});
         i = next_quote;
         break;
       }

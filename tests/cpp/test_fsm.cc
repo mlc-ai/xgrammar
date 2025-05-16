@@ -624,6 +624,7 @@ TEST(XGrammarFSMTest, FSMAdvanceTest) {
     int ::= /[0-9]+/
   )";
   EarleyParserWithFSM parser2(basic_float_grammar, "root");
+  std::cout << parser2;
   EXPECT_TRUE(parser2.Advance('-'));
   EXPECT_FALSE(parser2.IsAcceptStopToken());
   EXPECT_TRUE(parser2.Advance('1'));
