@@ -421,8 +421,10 @@ void CompactFSM::Advance(
 
 FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
   FSMWithStartEnd dfa;
+  std::cout << *this;
   dfa.is_dfa = true;
-  dfa.start = start;
+  // The first epsilon closure is the new start state.
+  dfa.start = 0;
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
   for (const auto& edges : fsm.edges) {
