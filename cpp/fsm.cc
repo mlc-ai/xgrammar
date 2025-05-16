@@ -743,6 +743,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   } else {
     now_fsm = Copy();
   }
+  std::cout << "Now FSM: " << now_fsm.Print() << std::endl;
   // Initialize the set.
   std::list<std::unordered_set<int>> blocks;
   std::list<std::unordered_set<int>> queue;
@@ -777,6 +778,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
       }
     }
   }
+
   for (auto it = interval_ends.begin(); it != interval_ends.end(); ++it) {
     auto next_it = std::next(it);
     if (next_it != interval_ends.end()) {
@@ -796,6 +798,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
     }
     // Check the intervals.
     std::list<std::unordered_set<int>> blocks_copy = blocks;
+
     for (const auto& interval : intervals) {
       std::unordered_set<int> from_block;
       for (const auto& node : prev_nodes) {
@@ -1283,6 +1286,7 @@ void FSMWithStartEnd::SimplifyEpsilon() {
   }
 
   // a --> epsilon --> b, and b doesn't have other inward edges.
+  // Moreover, a b isn't the start node.
   for (const auto& node : has_epsilon) {
     const auto& edges = fsm.edges[node];
     for (const auto& edge : edges) {
@@ -1291,6 +1295,10 @@ void FSMWithStartEnd::SimplifyEpsilon() {
       }
       // Have other inward nodes.
       if (previous_nodes[edge.target].size() != 1) {
+        continue;
+      }
+      // The target node is the start node.
+      if (edge.target == start) {
         continue;
       }
       bool has_other_edge = false;
@@ -2494,8 +2502,7 @@ void FSMGroup::ToMinimizedDFA(int32_t maximum_nodes) {
     if (fsm.NumNodes() > maximum_nodes) {
       continue;
     }
-    auto dfa = fsm.ToDFA();
-    auto minimized_dfa = dfa.MinimizeDFA();
+    auto minimized_dfa = fsm.MinimizeDFA();
     fsm = minimized_dfa;
   }
 }

@@ -28,7 +28,7 @@ class EarleyParserWithFSM : public FSMGroup {
     std::unordered_set<int> closure;
     std::vector<int> tmp_add_csrarray_elements;
     Simplify();
-    // ToMinimizedDFA();
+    ToMinimizedDFA();
     for (size_t i = 0; i < fsms_.size(); ++i) {
       start_node.clear();
       start_node.insert(fsms_[i].StartNode());
