@@ -1615,13 +1615,16 @@ Result<RegexIR> RegexToFSMIR(const std::string& regex) {
   std::stack<IRNode> stack;
   int left_middle_bracket = -1;
   for (size_t i = 0; i < regex.size(); i++) {
+    // Handle the beginning and the end of the regex.
+    // These parts will be ignored.
     if (i == 0 && regex[i] == '^') {
       continue;
     }
     if (i == regex.size() - 1 && regex[i] == '$') {
       continue;
     }
-    // Handle The class.
+
+    // Handle The character class.
     if (regex[i] == '[') {
       if (left_middle_bracket != -1) {
         return Result<RegexIR>::Err(std::make_shared<Error>("Nested middle bracket!"));
@@ -1639,12 +1642,17 @@ Result<RegexIR> RegexToFSMIR(const std::string& regex) {
       left_middle_bracket = -1;
       continue;
     }
+
+    // Current is in the character class. the symbols like '+'
+    // are recognized as normal characters.
     if (left_middle_bracket != -1) {
       if (regex[i] == '\\') {
         i++;
       }
       continue;
     }
+
+    // Handle the quantifier.
     if (regex[i] == '+' || regex[i] == '*' || regex[i] == '?') {
       if (stack.empty()) {
         return Result<RegexIR>::Err(
@@ -1681,6 +1689,8 @@ Result<RegexIR> RegexToFSMIR(const std::string& regex) {
       stack.push(symbol);
       continue;
     }
+
+    // Handling (...) ,... | ... and lookahead.
     if (regex[i] == '(' || regex[i] == '|') {
       stack.push(regex[i]);
       if (i < regex.size() - 2 && regex[i] == '(' && regex[i + 1] == '?' && regex[i + 2] == ':') {
@@ -1691,10 +1701,13 @@ Result<RegexIR> RegexToFSMIR(const std::string& regex) {
           (regex[i + 2] == '!' || regex[i + 2] == '=')) {
         i += 2;
         // TODO(Linzhang Li): Handling the lookahead.
+        XGRAMMAR_LOG(FATAL) << "Lookahead is not supported yet!";
         continue;
       }
       continue;
     }
+
+    // Handle the (). We need to pop the stack until we find the paired bracket.
     if (regex[i] == ')') {
       std::stack<IRNode> nodes;
       bool paired = false;
@@ -1764,6 +1777,8 @@ Result<RegexIR> RegexToFSMIR(const std::string& regex) {
       }
       continue;
     }
+
+    // Handling ...{n,m}, ...{n} and ...{n,}
     if (regex[i] == '{') {
       if (stack.empty()) {
         return Result<RegexIR>::Err(std::make_shared<Error>("Invalid regex: no node before repeat!")
@@ -1797,6 +1812,8 @@ Result<RegexIR> RegexToFSMIR(const std::string& regex) {
     stack.push(leaf);
     continue;
   }
+
+  // The post-processing of the stack.
   std::vector<RegexIR::Node> res_nodes;
   std::vector<decltype(res_nodes)> union_node_list;
   bool unioned = false;
