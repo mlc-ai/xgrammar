@@ -421,7 +421,6 @@ void CompactFSM::Advance(
 
 FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
   FSMWithStartEnd dfa;
-  std::cout << *this;
   dfa.is_dfa = true;
   // The first epsilon closure is the new start state.
   dfa.start = 0;
