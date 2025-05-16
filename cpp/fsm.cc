@@ -1278,7 +1278,7 @@ void FSMWithStartEnd::SimplifyEpsilon() {
       }
       previous_nodes[edge.target].insert(i);
       if (edge.IsEpsilon()) {
-        if (edges.size() != 1 || (IsEndNode(i) != IsEndNode(edge.target))) {
+        if (edges.size() != 1 || StartNode() == edge.target) {
           has_epsilon.insert(i);
         } else {
           // a -- epsilon --> b, and a doesn't have other outward edges.
@@ -1304,9 +1304,6 @@ void FSMWithStartEnd::SimplifyEpsilon() {
       }
       // The target node is the start node.
       if (edge.target == start) {
-        continue;
-      }
-      if (IsEndNode(edge.target) != IsEndNode(node)) {
         continue;
       }
       bool has_other_edge = false;
