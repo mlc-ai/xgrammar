@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <stack>
 #include <variant>
 
 #include "fsm.h"
@@ -36,6 +37,7 @@ Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
 
     if (Peek() == '(' || Peek() == '|') {
       stack_.push(Peek());
+      current_parsing_index_++;
       continue;
     }
 
@@ -54,10 +56,15 @@ Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
             "Parsing failure: there's no elements before a repeat quantifier!"
         ));
       }
+      XGRAMMAR_DCHECK(repeat_status_code == kIsNotRepeat);
+      // It's just a character.
     }
 
     if (Peek() == ')') {
-      HandleBracket();
+      bool successful = HandleBracket();
+      if (!successful) {
+        return Result<RegexIR>::Err(std::make_shared<Error>("Unmatched ')'"));
+      }
       continue;
     }
     // It's matching characters at present.
@@ -65,6 +72,7 @@ Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
   }
 
   // TODO(Linzhang): Build the RegexIR.
+  return Result<RegexIR>::Ok(result_ir);
 }
 
 void FSMBuilder::CheckStartEndOfRegex() {
@@ -94,6 +102,8 @@ void FSMBuilder::HandleString() {
 }
 
 bool FSMBuilder::HandleCharacterClass() {
+  XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
+  XGRAMMAR_DCHECK(grammar_[current_parsing_index_] == '[');
   int left_bracket_index = current_parsing_index_;
   while (current_parsing_index_ < grammar_.size() && grammar_[current_parsing_index_] != ']') {
     if (grammar_[current_parsing_index_] == '\\') {
@@ -214,6 +224,82 @@ int8_t FSMBuilder::TryHandleRepeat() {
   stack_.push(repeat_node);
   current_parsing_index_++;
   return kIsRepeat;
+}
+
+bool FSMBuilder::HandleBracket() {
+  XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
+  XGRAMMAR_DCHECK(grammar_[current_parsing_index_] == ')');
+  std::stack<IRNode> element_in_bracket;
+  bool paired = false;
+  bool unioned = false;
+
+  while ((!stack_.empty()) && (!paired)) {
+    auto node = stack_.top();
+    stack_.pop();
+    if (std::holds_alternative<char>(node)) {
+      char c = std::get<char>(node);
+      if (c == '(') {
+        // The bracket is paired. Stop popping.
+        paired = true;
+        break;
+      }
+      if (c == '|') {
+        // It's a bracket like (a|b|c).
+        unioned = true;
+      }
+      element_in_bracket.push(node);
+    } else {
+      // It's a node, i.e. some regex.
+      element_in_bracket.push(node);
+    }
+  }
+
+  if (!paired) {
+    return false;
+  }
+
+  // It's a empty bracket, just ignore it.
+  if (element_in_bracket.empty()) {
+    current_parsing_index_++;
+    return true;
+  }
+
+  // In the bracket, there's no union operator.
+  if (!unioned) {
+    RegexIR::Bracket bracket;
+    while (!element_in_bracket.empty()) {
+      auto node = element_in_bracket.top();
+      element_in_bracket.pop();
+      auto child = std::get<RegexIR::Node>(node);
+      bracket.nodes.push_back(child);
+    }
+    stack_.push(bracket);
+    current_parsing_index_++;
+    return true;
+  }
+
+  RegexIR::Union union_node;
+  RegexIR::Bracket bracket;
+  while (!element_in_bracket.empty()) {
+    auto node = element_in_bracket.top();
+    element_in_bracket.pop();
+    if (std::holds_alternative<char>(node)) {
+      char c = std::get<char>(node);
+      XGRAMMAR_DCHECK(c == '|');
+      union_node.nodes.push_back(bracket);
+      bracket.nodes.clear();
+      continue;
+    }
+    XGRAMMAR_DCHECK(std::holds_alternative<RegexIR::Node>(node));
+    auto child = std::get<RegexIR::Node>(node);
+    bracket.nodes.push_back(child);
+  }
+
+  // Add the last bracket.
+  union_node.nodes.push_back(bracket);
+  stack_.push(union_node);
+  current_parsing_index_++;
+  return true;
 }
 
 }  // namespace xgrammar
