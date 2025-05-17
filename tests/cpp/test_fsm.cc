@@ -462,7 +462,6 @@ TEST(XGrammarFSMTest, RuleToFSMTest) {
   FSMWithStartEnd fsm_main = fsm_group.GetFSM(main_id);
   FSMWithStartEnd fsm_rule1 = fsm_group.GetFSM(rule1_id);
   FSMWithStartEnd fsm_rule2 = fsm_group.GetFSM(rule2_id);
-
   // Test "hello"
   int32_t main_start = fsm_main.StartNode();
   std::unordered_set<int> current_states = {main_start};
@@ -481,7 +480,6 @@ TEST(XGrammarFSMTest, RuleToFSMTest) {
   EXPECT_TRUE(std::find_if(current_states.begin(), current_states.end(), [&](int state) {
                 return fsm_main.IsEndNode(state);
               }) != current_states.end());
-
   // Test "(rule1)+rule2"
   current_states = {main_start};
   fsm_main.fsm.GetEpsilonClosure(&current_states);
@@ -537,7 +535,6 @@ TEST(XGrammarFSMTest, RuleToFSMTest) {
   rule1 ::= /[\d]/+
   rule1 ::= /abc/"abc")";
   fsm_group = GrammarToFSMs(regex_grammar, "main").Unwrap();
-
   main_id = fsm_group.GetRuleID("main");
   rule1_id = fsm_group.GetRuleID("rule1");
   fsm_main = fsm_group.GetFSM(main_id);

@@ -480,6 +480,7 @@ class RegexIR {
   // the character class in regex.
   struct Leaf {
     std::string regex;
+    bool is_literal = false;
   };
 
   // This struct is used to store the symbol in regex, i.e.
@@ -669,20 +670,6 @@ class FSMGroup {
   }
   friend class CompactFSMGroup;
 };
-
-/*! \brief The function is used to get FSMs from a given grammar.
-    \param grammar The given grammar.
-    The grammar should be in the such format:
-    rule1 ::= (rule2 | (rule3)+)? /[0-9]abc/ "abc"
-    i.e. the lhs is the name of the rule, '::=' means 'is defined as'.
-    Between the '/', is a regex; In other cases, they are composed of
-    rules and strings. If some characters are Between the '"', then it's a string.
-    Moreover, to denote a '/' in regex, please use '\/' in the grammar.
-    \param root_rule The root grammar.
-    \return If everthing is OK, then a FSMGroups will be returned. Otherwise, it will return an
-   error.
-      */
-Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
 
 class CompactFSMGroup {
  private:

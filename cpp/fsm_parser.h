@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "fsm.h"
+#include "fsm_builder.h"
 #include "support/csr_array.h"
 #include "support/logging.h"
 

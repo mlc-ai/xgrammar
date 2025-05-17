@@ -36,8 +36,11 @@ class FSMBuilder {
   bool HandleCharacterClass();
   bool HandleBracket();
   bool HandleSymbol();
-  void HandleString();
+  void HandleStringInRegex();
   void CheckStartEndOfRegex();
+  bool HandleRuleRef(const std::unordered_map<std::string, int>& rule_name_to_id);
+  bool HandleString();
+  bool HandleRegex();
   const char& Peek() {
     XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
     return grammar_[current_parsing_index_];
@@ -76,8 +79,11 @@ class FSMBuilder {
 
   /*! \brief Build a finite state machine with a given expression.
       \param rule_expr the expression of the rule.
+      \param rule_name_to_id the mapping from the rule name to the rule id.
       \return the corresponding fsm if successful, err otherwise. */
-  Result<FSMWithStartEnd> BuildFSMFromRule(const std::string& rule_expr);
+  Result<FSMWithStartEnd> BuildFSMFromRule(
+      const std::string& rule_expr, const std::unordered_map<std::string, int>& rule_name_to_id
+  );
 
   /*! \brief Build a finite state machine with a given regex.
       \param regex the expression of the regex.
@@ -94,6 +100,20 @@ class FSMBuilder {
   /*! \brief build the regex IR from the given regex. */
   Result<RegexIR> BuildRegexIR(const std::string& regex);
 };
+
+/*! \brief The function is used to get FSMs from a given grammar.
+    \param grammar The given grammar.
+    The grammar should be in the such format:
+    rule1 ::= (rule2 | (rule3)+)? /[0-9]abc/ "abc"
+    i.e. the lhs is the name of the rule, '::=' means 'is defined as'.
+    Between the '/', is a regex; In other cases, they are composed of
+    rules and strings. If some characters are Between the '"', then it's a string.
+    Moreover, to denote a '/' in regex, please use '\/' in the grammar.
+    \param root_rule The root grammar.
+    \return If everthing is OK, then a FSMGroups will be returned. Otherwise, it will return an
+   error.
+      */
+Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule);
 
 }  // namespace xgrammar
 

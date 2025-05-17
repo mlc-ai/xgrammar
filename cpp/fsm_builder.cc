@@ -41,7 +41,12 @@ Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
     }
 
     if (Peek() == '+' || Peek() == '?' || Peek() == '*') {
-      HandleSymbol();
+      bool successful = HandleSymbol();
+      if (!successful) {
+        return Result<RegexIR>::Err(
+            std::make_shared<Error>("Parsing failure: there's no elements before a quantifier!")
+        );
+      }
       continue;
     }
 
@@ -67,7 +72,7 @@ Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
       continue;
     }
     // It's matching characters at present.
-    HandleString();
+    HandleStringInRegex();
   }
 
   return BuildRegexIRFromStack();
@@ -91,7 +96,7 @@ void FSMBuilder::ConsumeWhiteSpace() {
   }
 }
 
-void FSMBuilder::HandleString() {
+void FSMBuilder::HandleStringInRegex() {
   XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
   RegexIR::Leaf character_node;
   if (Peek() == '\\') {
@@ -345,6 +350,299 @@ Result<RegexIR> FSMBuilder::BuildRegexIRFromStack() {
     ir.nodes.push_back(std::move(union_node));
   }
   return Result<RegexIR>::Ok(ir);
+}
+
+void ConsumeWhiteSpaces(std::string& str) {
+  size_t start = 0;
+  while (start < str.size() && (str[start] == ' ' || str[start] == '\t' || str[start] == '\n')) {
+    start++;
+  }
+  size_t end = str.size() - 1;
+  while (end > start && (str[end] == ' ' || str[end] == '\t' || str[end] == '\n')) {
+    end--;
+  }
+  str = str.substr(start, end - start + 1);
+}
+
+void SplitRules(
+    const std::string& grammar,
+    std::vector<std::string>& lhs_group,
+    std::vector<std::string>& rhs_group
+) {
+  // The two variables should be indexes of new lines.
+  size_t last_end_of_the_line = 0;
+  while (last_end_of_the_line < grammar.size() && grammar[last_end_of_the_line] == '\n') {
+    last_end_of_the_line++;
+  }
+  size_t end_of_the_line = grammar.find('\n', last_end_of_the_line);
+  last_end_of_the_line--;
+  while (end_of_the_line != std::string::npos) {
+    // Check if the line has a defination.
+    size_t define_symbol = grammar.find("::=", last_end_of_the_line);
+    if (define_symbol == std::string::npos || define_symbol > end_of_the_line) {
+      // The line should be empty.
+      if (end_of_the_line - last_end_of_the_line != 1) {
+        // This line contains something surprising.
+        XGRAMMAR_LOG(WARNING
+        ) << "There's something surprising in the grammar: "
+          << grammar.substr(last_end_of_the_line + 1, end_of_the_line - last_end_of_the_line);
+      }
+    } else {
+      // This line is splitted successfully.
+      std::string lhs =
+          grammar.substr(last_end_of_the_line + 1, define_symbol - last_end_of_the_line - 1);
+      std::string rhs = grammar.substr(define_symbol + 3, end_of_the_line - define_symbol - 3);
+      ConsumeWhiteSpaces(lhs);
+      ConsumeWhiteSpaces(rhs);
+      lhs_group.push_back(lhs);
+      rhs_group.push_back(rhs);
+    }
+    // Search for the next '\n'.
+    last_end_of_the_line = end_of_the_line;
+    end_of_the_line = grammar.find('\n', end_of_the_line + 1);
+  }
+  // Handle the last rule.
+  size_t define_symbol = grammar.find("::=", last_end_of_the_line);
+  if (define_symbol == std::string::npos || define_symbol > end_of_the_line) {
+    // The line should be empty.
+    if (end_of_the_line - last_end_of_the_line != 1) {
+      // This line contains something surprising.
+      size_t no_white_space =
+          grammar.substr(last_end_of_the_line + 1, end_of_the_line - last_end_of_the_line)
+              .find_first_not_of(' ');
+      if (no_white_space != std::string::npos) {
+        XGRAMMAR_LOG(WARNING
+        ) << "There's something surprising in the grammar: "
+          << grammar.substr(last_end_of_the_line + 1, end_of_the_line - last_end_of_the_line);
+      }
+    }
+  } else {
+    // This line is splitted successfully.
+    std::string lhs =
+        grammar.substr(last_end_of_the_line + 1, define_symbol - last_end_of_the_line - 1);
+    std::string rhs = grammar.substr(define_symbol + 3, end_of_the_line - define_symbol - 3);
+    ConsumeWhiteSpaces(lhs);
+    ConsumeWhiteSpaces(rhs);
+    lhs_group.push_back(lhs);
+    rhs_group.push_back(rhs);
+  }
+}
+
+bool FSMGroup::BuildNameIdMap(
+    const std::vector<std::string>& rule_names, const std::string& root_rule
+) {
+  // The mapping should be built before the fsms are built.
+  XGRAMMAR_DCHECK(fsms_.size() == 0);
+  XGRAMMAR_DCHECK(rule_names_.empty());
+  XGRAMMAR_DCHECK(rule_name_to_id_.empty());
+  for (const auto& rule_name : rule_names) {
+    if (rule_name_to_id_.find(rule_name) == rule_name_to_id_.end()) {
+      rule_name_to_id_[rule_name] = rule_names_.size();
+      rule_names_.push_back(rule_name);
+    }
+  }
+  return rule_name_to_id_.find(root_rule) != rule_name_to_id_.end();
+}
+
+Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule) {
+  FSMGroup fsm_group;
+  std::vector<std::string> lhs;
+  std::vector<std::string> rhs;
+  SplitRules(grammar, lhs, rhs);
+  ConsumeWhiteSpaces(root_rule);
+  bool has_root = fsm_group.BuildNameIdMap(lhs, root_rule);
+  if (!has_root) {
+    return Result<FSMGroup>::Err(std::make_shared<Error>("Root rule isn't found in the grammar!"));
+  }
+  fsm_group.root_rule_id_ = fsm_group.rule_name_to_id_[root_rule];
+  XGRAMMAR_DCHECK(lhs.size() == rhs.size());
+  fsm_group.fsms_.reserve(rhs.size());
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    const auto& rule_expr = rhs[i];
+    const auto& rule_name = lhs[i];
+    // Build the fsm for the rule.
+    FSMBuilder builder;
+    auto fsm = builder.BuildFSMFromRule(rule_expr, fsm_group.rule_name_to_id_);
+    if (fsm.IsErr()) {
+      XGRAMMAR_LOG(INFO) << "Error building fsm for rule " << rule_name << ": "
+                         << fsm.UnwrapErr()->what();
+      return Result<FSMGroup>::Err(fsm.UnwrapErr());
+    }
+    // Since we number the rules in order, if the id is larger than the size of the fsms, we need
+    // to add it. Otherwise, it has been added, then we just need to union it.
+    int id = fsm_group.rule_name_to_id_[rule_name];
+    if (fsm_group.fsms_.size() <= static_cast<size_t>(id)) {
+      fsm_group.fsms_.push_back(fsm.Unwrap());
+    } else {
+      fsm_group.fsms_[id] = FSMWithStartEnd::Union({fsm_group.fsms_[id], fsm.Unwrap()});
+    }
+  }
+  return Result<FSMGroup>::Ok(fsm_group);
+}
+
+Result<FSMWithStartEnd> FSMBuilder::BuildFSMFromRule(
+    const std::string& rule_expr, const std::unordered_map<std::string, int>& rule_name_to_id
+) {
+  // Initialization.
+  grammar_ = rule_expr;
+  current_parsing_index_ = 0;
+  while (!stack_.empty()) {
+    stack_.pop();
+  }
+
+  while (current_parsing_index_ < grammar_.size()) {
+    ConsumeWhiteSpace();
+    if (current_parsing_index_ >= grammar_.size()) {
+      break;
+    }
+
+    if (Peek() == '[') {
+      bool successful = HandleCharacterClass();
+      if (!successful) {
+        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Unmatched '['"));
+      }
+      continue;
+    }
+
+    if (Peek() == '(' || Peek() == '|') {
+      stack_.push(Peek());
+      current_parsing_index_++;
+      continue;
+    }
+
+    if (Peek() == '+' || Peek() == '?' || Peek() == '*') {
+      bool successful = HandleSymbol();
+      if (!successful) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("Invalid grammar: no node before operator!")
+        );
+      }
+      continue;
+    }
+
+    if (Peek() == '{') {
+      int8_t repeat_status_code = TryHandleRepeat();
+      if (repeat_status_code == kIsRepeat) {
+        continue;
+      }
+      if (repeat_status_code == kParsingFailure) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("Invalid grammar: no node before repeat quantifier!")
+        );
+      }
+      XGRAMMAR_DCHECK(repeat_status_code == kIsNotRepeat);
+    }
+
+    if (Peek() == ')') {
+      bool successful = HandleBracket();
+      if (!successful) {
+        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Unmatched ')'"));
+      }
+      continue;
+    }
+
+    if (Peek() == '"') {
+      bool successful = HandleString();
+      if (!successful) {
+        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Unmatched '\"'"));
+      }
+      continue;
+    }
+
+    if (Peek() == '/') {
+      bool successful = HandleRegex();
+      if (!successful) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("Unmatched '/' or invalid regex!")
+        );
+      }
+      continue;
+    }
+
+    bool successful = HandleRuleRef(rule_name_to_id);
+    if (!successful) {
+      return Result<FSMWithStartEnd>::Err(
+          std::make_shared<Error>("Invalid grammar: the rule doesn't exist!")
+      );
+    }
+  }
+  const auto& ir_result = BuildRegexIRFromStack();
+  if (ir_result.IsErr()) {
+    return Result<FSMWithStartEnd>::Err(ir_result.UnwrapErr());
+  }
+  XGRAMMAR_DCHECK(ir_result.IsOk());
+  const auto& ir = ir_result.Unwrap();
+  return ir.Build();
+}
+
+bool FSMBuilder::HandleRuleRef(const std::unordered_map<std::string, int>& rule_name_to_id) {
+  XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
+  int start_index = current_parsing_index_;
+  while (current_parsing_index_ < grammar_.size() &&
+         (Peek() == '_' || (Peek() >= 'a' && Peek() <= 'z') || (Peek() >= 'A' && Peek() <= 'Z') ||
+          (Peek() >= '0' && Peek() <= '9'))) {
+    current_parsing_index_++;
+  }
+  std::string rule_name = grammar_.substr(start_index, current_parsing_index_ - start_index);
+  if (rule_name_to_id.find(rule_name) == rule_name_to_id.end()) {
+    // The rule doesn't exist.
+    return false;
+  }
+  RegexIR::RuleRef rule_ref;
+  rule_ref.rule_id = rule_name_to_id.at(rule_name);
+  stack_.push(rule_ref);
+  return true;
+}
+
+bool FSMBuilder::HandleString() {
+  XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
+  XGRAMMAR_DCHECK(grammar_[current_parsing_index_] == '"');
+  int start_index = current_parsing_index_;
+  current_parsing_index_++;
+  while (current_parsing_index_ < grammar_.size() && grammar_[current_parsing_index_] != '"') {
+    if (grammar_[current_parsing_index_] == '\\') {
+      current_parsing_index_++;
+    }
+    current_parsing_index_++;
+  }
+  if (current_parsing_index_ >= grammar_.size()) {
+    return false;  // Error: unmatched '"'
+  }
+  RegexIR::Leaf string_node;
+  string_node.regex = grammar_.substr(start_index + 1, current_parsing_index_ - start_index - 1);
+  string_node.is_literal = true;
+  stack_.push(string_node);
+  current_parsing_index_++;
+  return true;
+}
+
+bool FSMBuilder::HandleRegex() {
+  XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
+  XGRAMMAR_DCHECK(grammar_[current_parsing_index_] == '/');
+  int start_index = current_parsing_index_;
+  current_parsing_index_++;
+  while (current_parsing_index_ < grammar_.size() && grammar_[current_parsing_index_] != '/') {
+    if (grammar_[current_parsing_index_] == '\\') {
+      current_parsing_index_++;
+    }
+    current_parsing_index_++;
+  }
+  if (current_parsing_index_ >= grammar_.size()) {
+    return false;  // Error: unmatched '/'
+  }
+  std::string regex = grammar_.substr(start_index + 1, current_parsing_index_ - start_index - 1);
+  FSMBuilder regex_builder;
+  auto fsm_result = regex_builder.BuildRegexIR(regex);
+  if (fsm_result.IsErr()) {
+    std::cout << regex << std::endl;
+    return false;  // Error: invalid regex
+  }
+  XGRAMMAR_DCHECK(fsm_result.IsOk());
+  for (const auto& node : fsm_result.Unwrap().nodes) {
+    stack_.push(node);
+  }
+  current_parsing_index_++;
+  return true;
 }
 
 }  // namespace xgrammar
