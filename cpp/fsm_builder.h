@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stack>
 #include <string>
 
@@ -34,10 +35,11 @@ class FSMBuilder {
 
   void ConsumeWhiteSpace();
   bool HandleCharacterClass();
-  bool HandleBracket();
+  bool HandleBracket(std::optional<Result<RegexIR>>& lookahead_fsm);
   bool HandleSymbol();
   void HandleStringInRegex();
   void CheckStartEndOfRegex();
+  bool HandleLookAhead();
   bool HandleRuleRef(const std::unordered_map<std::string, int>& rule_name_to_id);
   bool HandleString();
   bool HandleRegex();
@@ -71,7 +73,9 @@ class FSMBuilder {
       \param rule_name_to_id the mapping from the rule name to the rule id.
       \return the corresponding fsm if successful, err otherwise. */
   Result<FSMWithStartEnd> BuildFSMFromRule(
-      const std::string& rule_expr, const std::unordered_map<std::string, int>& rule_name_to_id
+      const std::string& rule_expr,
+      const std::unordered_map<std::string, int>& rule_name_to_id,
+      std::optional<Result<RegexIR>>& lookahead_fsm
   );
 
   /*! \brief Build a finite state machine with a given regex.

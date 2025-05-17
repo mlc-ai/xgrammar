@@ -612,6 +612,9 @@ class FSMGroup {
   /*! \brief It's a mapping from the rule_name to the fsm_id. */
   std::unordered_map<std::string, int32_t> rule_name_to_id_;
 
+  /*! \brief The mapping stores the lookahead fsms. */
+  std::unordered_map<int, FSMWithStartEnd> lookahead_fsms_;
+
   /*! \brief The vector stores the rule names. rule_names[i] stores the name
   of the rule with the fsm_id = i. */
   std::vector<std::string> rule_names_;

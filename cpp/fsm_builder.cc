@@ -11,6 +11,7 @@
 #include <variant>
 
 #include "fsm.h"
+#include "fsm_parser.h"
 #include "support/logging.h"
 #include "support/utils.h"
 
@@ -18,6 +19,7 @@ namespace xgrammar {
 
 Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
   // initialization.
+  std::optional<Result<RegexIR>> lookahead_fsm = std::nullopt;
   grammar_ = regex;
   current_parsing_index_ = 0;
   while (!stack_.empty()) {
@@ -65,7 +67,7 @@ Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
     }
 
     if (Peek() == ')') {
-      bool successful = HandleBracket();
+      bool successful = HandleBracket(lookahead_fsm);
       if (!successful) {
         return Result<RegexIR>::Err(std::make_shared<Error>("Unmatched ')'"));
       }
@@ -74,7 +76,11 @@ Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
     // It's matching characters at present.
     HandleStringInRegex();
   }
-
+  if (lookahead_fsm.has_value()) {
+    return Result<RegexIR>::Err(
+        std::make_shared<Error>("There should be no lookahead fsm in the regex!")
+    );
+  }
   return BuildRegexIRFromStack();
 }
 
@@ -236,21 +242,25 @@ int8_t FSMBuilder::TryHandleRepeat() {
   return kIsRepeat;
 }
 
-bool FSMBuilder::HandleBracket() {
+bool FSMBuilder::HandleBracket(std::optional<Result<RegexIR>>& lookahead_fsm) {
   XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
   XGRAMMAR_DCHECK(grammar_[current_parsing_index_] == ')');
   std::stack<IRNode> element_in_bracket;
   bool paired = false;
   bool unioned = false;
+  bool is_lookahead = false;
 
   while ((!stack_.empty()) && (!paired)) {
     auto node = stack_.top();
     stack_.pop();
     if (std::holds_alternative<char>(node)) {
       char c = std::get<char>(node);
-      if (c == '(') {
+      if (c == '(' || c == '=') {
         // The bracket is paired. Stop popping.
         paired = true;
+        if (c == '=') {
+          is_lookahead = true;
+        }
         break;
       }
       if (c == '|') {
@@ -283,7 +293,16 @@ bool FSMBuilder::HandleBracket() {
       auto child = std::get<RegexIR::Node>(node);
       bracket.nodes.push_back(child);
     }
-    stack_.push(bracket);
+    if (is_lookahead) {
+      if (lookahead_fsm.has_value()) {
+        return false;  // Error: there's a lookahead fsm before.
+      }
+      RegexIR lookahead_ir;
+      lookahead_ir.nodes.push_back(bracket);
+      lookahead_fsm = Result<RegexIR>::Ok(lookahead_ir);
+    } else {
+      stack_.push(bracket);
+    }
     current_parsing_index_++;
     return true;
   }
@@ -306,8 +325,17 @@ bool FSMBuilder::HandleBracket() {
   }
 
   // Add the last bracket.
-  union_node.nodes.push_back(bracket);
-  stack_.push(union_node);
+  if (is_lookahead) {
+    if (lookahead_fsm.has_value()) {
+      return false;  // Error: there's a lookahead fsm before.
+    }
+    RegexIR lookahead_ir;
+    lookahead_ir.nodes.push_back(bracket);
+    lookahead_fsm = Result<RegexIR>::Ok(lookahead_ir);
+  } else {
+    union_node.nodes.push_back(bracket);
+    stack_.push(union_node);
+  }
   current_parsing_index_++;
   return true;
 }
@@ -462,11 +490,27 @@ Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule
     const auto& rule_name = lhs[i];
     // Build the fsm for the rule.
     FSMBuilder builder;
-    auto fsm = builder.BuildFSMFromRule(rule_expr, fsm_group.rule_name_to_id_);
+    std::optional<Result<RegexIR>> lookahead_fsm = std::nullopt;
+    auto fsm = builder.BuildFSMFromRule(rule_expr, fsm_group.rule_name_to_id_, lookahead_fsm);
     if (fsm.IsErr()) {
       XGRAMMAR_LOG(INFO) << "Error building fsm for rule " << rule_name << ": "
                          << fsm.UnwrapErr()->what();
       return Result<FSMGroup>::Err(fsm.UnwrapErr());
+    }
+    if (lookahead_fsm.has_value()) {
+      const auto& ir_result = lookahead_fsm.value();
+      if (ir_result.IsErr()) {
+        return Result<FSMGroup>::Err(ir_result.UnwrapErr());
+      }
+      XGRAMMAR_DCHECK(ir_result.IsOk());
+      const auto& ir = ir_result.Unwrap();
+      auto lookahead_fsm_result = ir.Build();
+      if (lookahead_fsm_result.IsErr()) {
+        return Result<FSMGroup>::Err(lookahead_fsm_result.UnwrapErr());
+      }
+      XGRAMMAR_DCHECK(lookahead_fsm_result.IsOk());
+      const auto& lookahead_fsm = lookahead_fsm_result.Unwrap();
+      fsm_group.lookahead_fsms_[i] = lookahead_fsm;
     }
     // Since we number the rules in order, if the id is larger than the size of the fsms, we need
     // to add it. Otherwise, it has been added, then we just need to union it.
@@ -481,7 +525,9 @@ Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule
 }
 
 Result<FSMWithStartEnd> FSMBuilder::BuildFSMFromRule(
-    const std::string& rule_expr, const std::unordered_map<std::string, int>& rule_name_to_id
+    const std::string& rule_expr,
+    const std::unordered_map<std::string, int>& rule_name_to_id,
+    std::optional<Result<RegexIR>>& lookahead_fsm
 ) {
   // Initialization.
   grammar_ = rule_expr;
@@ -510,6 +556,16 @@ Result<FSMWithStartEnd> FSMBuilder::BuildFSMFromRule(
       continue;
     }
 
+    if (Peek() == '=') {
+      bool successful = HandleLookAhead();
+      if (!successful) {
+        return Result<FSMWithStartEnd>::Err(
+            std::make_shared<Error>("Invalid grammar: lookahead '=' is invalid!")
+        );
+      }
+      continue;
+    }
+
     if (Peek() == '+' || Peek() == '?' || Peek() == '*') {
       bool successful = HandleSymbol();
       if (!successful) {
@@ -534,7 +590,7 @@ Result<FSMWithStartEnd> FSMBuilder::BuildFSMFromRule(
     }
 
     if (Peek() == ')') {
-      bool successful = HandleBracket();
+      bool successful = HandleBracket(lookahead_fsm);
       if (!successful) {
         return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Unmatched ')'"));
       }
@@ -660,4 +716,24 @@ int FSMBuilder::ParsingPositveInteger() {
   return result;
 }
 
+bool FSMBuilder::HandleLookAhead() {
+  if (stack_.empty()) {
+    return false;
+  }
+
+  const auto& node = stack_.top();
+  if (!std::holds_alternative<char>(node)) {
+    return false;
+  }
+
+  char c = std::get<char>(node);
+  if (c != '(') {
+    return false;
+  }
+  // It'a valid lookahead.
+  stack_.pop();
+  stack_.push('=');  // Push the lookahead operator.
+  current_parsing_index_++;
+  return true;
+}
 }  // namespace xgrammar
