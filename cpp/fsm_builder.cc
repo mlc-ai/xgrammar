@@ -645,4 +645,19 @@ bool FSMBuilder::HandleRegex() {
   return true;
 }
 
+int FSMBuilder::ParsingPositveInteger() {
+  int32_t result = 0;
+  bool is_number = false;
+  while (current_parsing_index_ < grammar_.size() && grammar_[current_parsing_index_] >= '0' &&
+         grammar_[current_parsing_index_] <= '9') {
+    is_number = true;
+    result = result * 10 + (grammar_[current_parsing_index_] - '0');
+    current_parsing_index_++;
+  }
+  if (!is_number) {
+    return kNotNumber;
+  }
+  return result;
+}
+
 }  // namespace xgrammar

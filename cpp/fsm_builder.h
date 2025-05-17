@@ -41,6 +41,7 @@ class FSMBuilder {
   bool HandleRuleRef(const std::unordered_map<std::string, int>& rule_name_to_id);
   bool HandleString();
   bool HandleRegex();
+
   const char& Peek() {
     XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
     return grammar_[current_parsing_index_];
@@ -57,20 +58,8 @@ class FSMBuilder {
   /*! \brief Try to handle {n (,(m)?)?}.
       \return 0 if parsing successfully, 1 if it's not a repeat, 2 if parsing failure.*/
   int8_t TryHandleRepeat();
-  int32_t ParsingPositveInteger() {
-    int32_t result = 0;
-    bool is_number = false;
-    while (current_parsing_index_ < grammar_.size() && grammar_[current_parsing_index_] >= '0' &&
-           grammar_[current_parsing_index_] <= '9') {
-      is_number = true;
-      result = result * 10 + (grammar_[current_parsing_index_] - '0');
-      current_parsing_index_++;
-    }
-    if (!is_number) {
-      return kNotNumber;
-    }
-    return result;
-  }
+
+  int32_t ParsingPositveInteger();
 
   Result<RegexIR> BuildRegexIRFromStack();
 

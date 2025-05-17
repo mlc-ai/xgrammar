@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "fsm.h"
+#include "fsm_builder.h"
 #include "support/csr_array.h"
 #include "support/logging.h"
 
@@ -193,6 +194,47 @@ void EarleyParserWithFSM::BuildNullableSet() {
     PushInitialState(start_state);
     can_be_empty_fsm_[i] = IsAcceptStopToken();
     Reset();
+  }
+}
+
+EarleyParserWithFSM::EarleyParserWithFSM(FSMGroup fsm_group_) : FSMGroup(fsm_group_) {
+  std::unordered_set<int> start_node;
+  std::unordered_set<int> closure;
+  std::vector<int> tmp_add_csrarray_elements;
+  Simplify();
+  ToMinimizedDFA();
+  for (size_t i = 0; i < fsms_.size(); ++i) {
+    start_node.clear();
+    start_node.insert(fsms_[i].StartNode());
+    tmp_add_csrarray_elements.clear();
+    fsms_[i].fsm.GetEpsilonClosure(&start_node, &closure);
+    for (const auto& node : closure) {
+      tmp_add_csrarray_elements.push_back(node);
+    }
+    start_epsilon_closure_.Insert(tmp_add_csrarray_elements);
+  }
+  BuildNullableSet();
+  PushInitialState(FSMState(root_rule_id_, fsms_[root_rule_id_].StartNode(), -1));
+}
+
+EarleyParserWithFSM::EarleyParserWithFSM(const std::string& grammar, const std::string& root_rule) {
+  auto result = GrammarToFSMs(grammar, root_rule);
+  if (result.IsOk()) {
+    *this = EarleyParserWithFSM(result.Unwrap());
+  } else {
+    XGRAMMAR_LOG(FATAL) << "Failed to parse the grammar: " << result.UnwrapErr()->what();
+  }
+  std::unordered_set<int> start_node;
+  std::unordered_set<int> closure;
+  std::vector<int> tmp_add_csrarray_elements;
+  for (size_t i = 0; i < fsms_.size(); ++i) {
+    start_node.clear();
+    start_node.insert(fsms_[i].StartNode());
+    fsms_[i].fsm.GetEpsilonClosure(&start_node, &closure);
+    for (const auto& node : closure) {
+      tmp_add_csrarray_elements.push_back(node);
+    }
+    start_epsilon_closure_.Insert(tmp_add_csrarray_elements);
   }
 }
 
