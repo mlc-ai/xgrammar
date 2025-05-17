@@ -72,6 +72,8 @@ class FSMBuilder {
     return result;
   }
 
+  Result<RegexIR> BuildRegexIRFromStack();
+
  public:
   FSMBuilder() = default;
 

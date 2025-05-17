@@ -18,7 +18,6 @@ namespace xgrammar {
 
 Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
   // initialization.
-  RegexIR result_ir;
   grammar_ = regex;
   current_parsing_index_ = 0;
   while (!stack_.empty()) {
@@ -71,8 +70,7 @@ Result<RegexIR> FSMBuilder::BuildRegexIR(const std::string& regex) {
     HandleString();
   }
 
-  // TODO(Linzhang): Build the RegexIR.
-  return Result<RegexIR>::Ok(result_ir);
+  return BuildRegexIRFromStack();
 }
 
 void FSMBuilder::CheckStartEndOfRegex() {
@@ -300,6 +298,46 @@ bool FSMBuilder::HandleBracket() {
   stack_.push(union_node);
   current_parsing_index_++;
   return true;
+}
+
+Result<RegexIR> FSMBuilder::BuildRegexIRFromStack() {
+  // The post-processing of the stack.
+  RegexIR ir;
+  std::vector<RegexIR::Node> res_nodes;
+  std::vector<decltype(res_nodes)> union_node_list;
+  bool unioned = false;
+  while (!stack_.empty()) {
+    if (std::holds_alternative<char>(stack_.top())) {
+      char c = std::get<char>(stack_.top());
+      XGRAMMAR_DCHECK(c == '|');
+      union_node_list.push_back(res_nodes);
+      res_nodes.clear();
+      unioned = true;
+      stack_.pop();
+      continue;
+    }
+    auto node = stack_.top();
+    stack_.pop();
+    auto child = std::get<RegexIR::Node>(node);
+    res_nodes.push_back(std::move(child));
+  }
+  if (!unioned) {
+    for (auto it = res_nodes.rbegin(); it != res_nodes.rend(); ++it) {
+      ir.nodes.push_back(std::move(*it));
+    }
+  } else {
+    union_node_list.push_back(res_nodes);
+    RegexIR::Union union_node;
+    for (auto it = union_node_list.begin(); it != union_node_list.end(); ++it) {
+      RegexIR::Bracket bracket;
+      for (auto node = it->rbegin(); node != it->rend(); ++node) {
+        bracket.nodes.push_back(std::move(*node));
+      }
+      union_node.nodes.push_back(std::move(bracket));
+    }
+    ir.nodes.push_back(std::move(union_node));
+  }
+  return Result<RegexIR>::Ok(ir);
 }
 
 }  // namespace xgrammar
