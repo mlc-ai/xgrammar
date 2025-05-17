@@ -5,10 +5,12 @@
 #ifndef XGRAMMAR_FSM_BUILDER_H_
 #define XGRAMMAR_FSM_BUILDER_H_
 
+#include <cstddef>
 #include <stack>
 #include <string>
 
 #include "fsm.h"
+#include "support/logging.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -26,13 +28,25 @@ class FSMBuilder {
   /*! \brief build the regex IR from the given regex. */
   Result<RegexIR> BuildRegexIR(const std::string& regex);
 
-  int current_parsing_index_ = 0;
+  size_t current_parsing_index_ = 0;
 
   /************* Parsing Helper functions *************/
 
-  void ConsumeWhitespace();
+  void ConsumeWhiteSpace();
   void HandleCharacterClass();
   void HandleBracket();
+  void HandleSymbol();
+  void HandleRepeat();
+  void HandleString();
+  void CheckStartEndOfRegex();
+  const char& Peek() {
+    XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
+    return grammar_[current_parsing_index_];
+  }
+
+  /*! \brief Try to handle {n (,(m)?)?}.
+      \return True if parsing successfully, False otherwise.*/
+  bool TryHandleRepeat();
 
  public:
   FSMBuilder() = default;
