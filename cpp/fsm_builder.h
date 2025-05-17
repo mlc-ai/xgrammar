@@ -5,7 +5,10 @@
 #ifndef XGRAMMAR_FSM_BUILDER_H_
 #define XGRAMMAR_FSM_BUILDER_H_
 
+#include <sys/types.h>
+
 #include <cstddef>
+#include <cstdint>
 #include <stack>
 #include <string>
 
@@ -33,10 +36,9 @@ class FSMBuilder {
   /************* Parsing Helper functions *************/
 
   void ConsumeWhiteSpace();
-  void HandleCharacterClass();
-  void HandleBracket();
-  void HandleSymbol();
-  void HandleRepeat();
+  bool HandleCharacterClass();
+  bool HandleBracket();
+  bool HandleSymbol();
   void HandleString();
   void CheckStartEndOfRegex();
   const char& Peek() {
@@ -44,9 +46,31 @@ class FSMBuilder {
     return grammar_[current_parsing_index_];
   }
 
+  static const int8_t kIsRepeat = 0;
+
+  static const int8_t kIsNotRepeat = 1;
+
+  static const int8_t kParsingFailure = 2;
+
+  static const int32_t kNotNumber = -1;
+
   /*! \brief Try to handle {n (,(m)?)?}.
-      \return True if parsing successfully, False otherwise.*/
-  bool TryHandleRepeat();
+      \return 0 if parsing successfully, 1 if it's not a repeat, 2 if parsing failure.*/
+  int8_t TryHandleRepeat();
+  int32_t ParsingPositveInteger() {
+    int32_t result = 0;
+    bool is_number = false;
+    while (current_parsing_index_ < grammar_.size() && grammar_[current_parsing_index_] >= '0' &&
+           grammar_[current_parsing_index_] <= '9') {
+      is_number = true;
+      result = result * 10 + (grammar_[current_parsing_index_] - '0');
+      current_parsing_index_++;
+    }
+    if (!is_number) {
+      return kNotNumber;
+    }
+    return result;
+  }
 
  public:
   FSMBuilder() = default;

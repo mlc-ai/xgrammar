@@ -479,7 +479,7 @@ class RegexIR {
 
   struct RuleRef;
 
-  static constexpr int REPEATNOUPPERBOUND = -1;
+  static constexpr int KRepeatNoUpperBound = -1;
 
   using Node = std::variant<Leaf, Symbol, Union, Bracket, Repeat, RuleRef>;
 

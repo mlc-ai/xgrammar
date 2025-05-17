@@ -1603,7 +1603,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
     }
   }
   // Handling {n,}
-  if (node.upper_bound == RegexIR::REPEATNOUPPERBOUND) {
+  if (node.upper_bound == RegexIR::KRepeatNoUpperBound) {
     for (int i = 2; i < node.lower_bound; i++) {
       result = FSMWithStartEnd::Concatenate(std::vector<FSMWithStartEnd>{result, child.Unwrap()});
     }
@@ -1929,7 +1929,7 @@ Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start)
       start++;
     }
     if (start < regex.size() && regex[start] == '}') {
-      upper_bound = RegexIR::REPEATNOUPPERBOUND;
+      upper_bound = RegexIR::KRepeatNoUpperBound;
       return Result<std::pair<int, int>>::Ok(std::make_pair(lower_bound, upper_bound));
     }
     while (start < regex.size() && regex[start] >= '0' && regex[start] <= '9') {
