@@ -1628,15 +1628,6 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
   return Result<FSMWithStartEnd>::Ok(result);
 }
 
-Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
-  FSMBuilder test;
-  auto ir = test.BuildRegexIR(regex);
-  if (ir.IsErr()) {
-    return Result<FSMWithStartEnd>::Err(ir.UnwrapErr());
-  }
-  return ir.Unwrap().Build();
-}
-
 Result<FSMWithStartEnd> RegexIR::Build() const {
   if (nodes.empty()) {
     FSMWithStartEnd result;

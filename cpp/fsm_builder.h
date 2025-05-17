@@ -82,7 +82,14 @@ class FSMBuilder {
   /*! \brief Build a finite state machine with a given regex.
       \param regex the expression of the regex.
       \return the corresponding fsm if successful, err otherwise. */
-  Result<FSMWithStartEnd> BuildFSMFromRegex(const std::string& regex);
+  Result<FSMWithStartEnd> BuildFSMFromRegex(const std::string& regex) {
+    const auto& ir_result = BuildRegexIR(regex);
+    if (ir_result.IsErr()) {
+      return Result<FSMWithStartEnd>::Err(ir_result.UnwrapErr());
+    }
+    XGRAMMAR_DCHECK(ir_result.IsOk());
+    return ir_result.Unwrap().Build();
+  }
 
   /*! \brief build the regex IR from the given regex. */
   Result<RegexIR> BuildRegexIR(const std::string& regex);

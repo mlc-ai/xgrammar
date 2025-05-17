@@ -458,13 +458,6 @@ class CompactFSMWithStartEnd {
   void GetPossibleRules(const int& node_num, std::unordered_set<int>* rules) const;
 };
 
-/*!
-  \brief Converts a regex string to a FSM. The parsing range is [start, end).
-  \param regex The regex string.
-  \return The FSM with start and end states.
-*/
-Result<FSMWithStartEnd> RegexToFSM(const std::string& regex);
-
 class RegexIR {
  public:
   struct Leaf;
