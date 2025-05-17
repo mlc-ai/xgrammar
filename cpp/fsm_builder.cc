@@ -541,7 +541,9 @@ Result<FSMWithStartEnd> FSMBuilder::BuildFSMFromRule(
     if (current_parsing_index_ >= grammar_.size()) {
       break;
     }
-
+    if (lookahead_fsm.has_value()) {
+      XGRAMMAR_LOG(WARNING) << "The lookahead fsm will be recognized as the last element!";
+    }
     if (Peek() == '[') {
       bool successful = HandleCharacterClass();
       if (!successful) {

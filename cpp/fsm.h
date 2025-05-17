@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -646,6 +647,14 @@ class FSMGroup {
   /*! \brief Get the FSM from the rule id. */
   const FSMWithStartEnd& GetFSM(int32_t rule_id) const { return fsms_[rule_id]; }
 
+  std::optional<FSMWithStartEnd> GetLookaheadFSM(int32_t rule_id) const {
+    auto it = lookahead_fsms_.find(rule_id);
+    if (it != lookahead_fsms_.end()) {
+      return it->second;
+    }
+    return std::nullopt;
+  }
+
   /*! \brief Simplify the FSMGroup. */
   void Simplify();
 
@@ -668,6 +677,13 @@ class FSMGroup {
     for (size_t i = 0; i < fsm_group.fsms_.size(); ++i) {
       os << "FSM " << i << ":" << std::endl;
       os << fsm_group.fsms_[i] << std::endl;
+    }
+    if (!fsm_group.lookahead_fsms_.empty()) {
+      os << "lookahead_fsms: " << std::endl;
+      for (const auto& [id, fsm] : fsm_group.lookahead_fsms_) {
+        os << "lookahed FSM " << id << ":" << std::endl;
+        os << fsm << std::endl;
+      }
     }
     return os;
   }

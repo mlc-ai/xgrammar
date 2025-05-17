@@ -4,6 +4,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <optional>
 
 #include "fsm.h"
 #include "fsm_builder.h"
@@ -837,4 +838,23 @@ TEST(XGrammarFSMTest, BasicJsonGrammarTest) {
     EXPECT_TRUE(parser.Advance(ch));
   }
   EXPECT_TRUE(parser.IsAcceptStopToken());
+}
+
+TEST(XGrammarFSMTest, LookAheadTest) {
+  std::string test_grammar = R"(
+    root ::= rule1? ((rule2))(=((((("abc"))))))
+    rule1 ::= "a" | ("b")(=/[a-z]/)
+    rule2 ::= "c" | "d"(=rule1)
+    rule3 ::= "e" | "f"
+  )";
+  EarleyParserWithFSM parser(test_grammar, "root");
+  std::cout << parser;
+  EXPECT_TRUE(parser.GetLookaheadFSM(3) == std::nullopt);
+  const auto& lookahead_fsm_optional = parser.GetLookaheadFSM(1);
+  EXPECT_TRUE(lookahead_fsm_optional.has_value());
+  const auto& lookahead_fsm = lookahead_fsm_optional.value();
+  EXPECT_EQ(lookahead_fsm.Print(), R"(FSM(num_nodes=2, start=0, end=[1, ], edges=[
+0: [(97, 122)->1]
+1: []
+]))");
 }
