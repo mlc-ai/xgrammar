@@ -28,9 +28,6 @@ class FSMBuilder {
   /*! \brief The parsing stack. */
   std::stack<IRNode> stack_;
 
-  /*! \brief build the regex IR from the given regex. */
-  Result<RegexIR> BuildRegexIR(const std::string& regex);
-
   size_t current_parsing_index_ = 0;
 
   /************* Parsing Helper functions *************/
@@ -86,6 +83,9 @@ class FSMBuilder {
       \param regex the expression of the regex.
       \return the corresponding fsm if successful, err otherwise. */
   Result<FSMWithStartEnd> BuildFSMFromRegex(const std::string& regex);
+
+  /*! \brief build the regex IR from the given regex. */
+  Result<RegexIR> BuildRegexIR(const std::string& regex);
 };
 
 }  // namespace xgrammar

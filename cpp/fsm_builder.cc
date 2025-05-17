@@ -94,9 +94,16 @@ void FSMBuilder::ConsumeWhiteSpace() {
 void FSMBuilder::HandleString() {
   XGRAMMAR_DCHECK(current_parsing_index_ < grammar_.size());
   RegexIR::Leaf character_node;
-  character_node.regex = grammar_[current_parsing_index_];
+  if (Peek() == '\\') {
+    character_node.regex = Peek();
+    current_parsing_index_++;
+    character_node.regex += Peek();
+    current_parsing_index_++;
+  } else {
+    character_node.regex = grammar_[current_parsing_index_];
+    current_parsing_index_++;
+  }
   stack_.push(character_node);
-  current_parsing_index_++;
 }
 
 bool FSMBuilder::HandleCharacterClass() {
