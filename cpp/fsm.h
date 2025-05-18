@@ -331,6 +331,13 @@ class FSMWithStartEnd {
   */
   void GetPossibleRules(const int& node_num, std::unordered_set<int>* rules) const;
 
+  /*!
+    \brief Accept all the unicode characters in the FSM.
+    \param from The start node of the fsm.
+    \param to The destination node of the fsm.
+  */
+  void AcceptAllUnicodeCharacters(const int& from_node, const int& to_node);
+
   friend std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
 };
 

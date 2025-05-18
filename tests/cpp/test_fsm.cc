@@ -858,3 +858,18 @@ TEST(XGrammarFSMTest, LookAheadTest) {
 1: []
 ]))");
 }
+
+TEST(XGrammarFSMTest, UTF8Test) {
+  std::string test_grammar = R"(
+    root ::= [^0-9] | "1"
+  )";
+  EarleyParserWithFSM parser(test_grammar, "root");
+  std::cout << parser;
+  std::string test_str = "你";
+  for (const auto& ch : test_str) {
+    std::cout << static_cast<int32_t>(static_cast<uint8_t>(ch)) << std::endl;
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+}

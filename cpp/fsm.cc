@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <list>
 #include <memory>
@@ -613,7 +615,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     for (size_t i = 0; i < regex.size(); i++) {
       if (regex[i] != '\\') {
         if (regex[i] == '.') {
-          edges.back().emplace_back(0, 0xFF, edges.size());
+          edges.back().emplace_back(0, 0x7f, edges.size());
         } else {
           edges.back().emplace_back(
               (unsigned char)(regex[i]), (unsigned char)(regex[i]), edges.size()
@@ -634,13 +636,18 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     ends.insert(edges.size() - 1);
     return;
   }
+
   // Handle the character class.
   if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
     edges.push_back(std::vector<FSMEdge>());
     edges.push_back(std::vector<FSMEdge>());
     ends.insert(1);
-    bool reverse = regex[1] == '^';
-    for (size_t i = reverse ? 2 : 1; i < regex.size() - 1; i++) {
+    bool negative = regex[1] == '^';
+    for (size_t i = negative ? 2 : 1; i < regex.size() - 1; i++) {
+      if (!isascii(regex[i])) {
+        XGRAMMAR_LOG(FATAL) << "The unicode characters in the character class are not supported."
+                            << regex[i];
+      }
       if (regex[i] != '\\') {
         if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
           // A single char.
@@ -691,7 +698,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
       i = i + 3;
       continue;
     }
-    bool has_edge[0x100];
+    bool has_edge[0x80];
     memset(has_edge, 0, sizeof(has_edge));
     for (const auto& edge : edges[0]) {
       for (int i = edge.min; i <= edge.max; i++) {
@@ -702,8 +709,8 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
 
     // Simplify the edges. e.g [abc] -> [a-c]
     int last = -1;
-    if (reverse) {
-      for (int i = 0; i < 0x100; i++) {
+    if (negative) {
+      for (int i = 0; i < 0x80; i++) {
         if (!has_edge[i]) {
           if (last == -1) {
             last = i;
@@ -716,11 +723,16 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
         }
       }
       if (last != -1) {
-        edges[0].emplace_back(last, 0xFF, 1);
+        edges[0].emplace_back(last, 0x7F, 1);
       }
     } else {
-      for (int i = 0; i < 0x100; i++) {
+      for (int i = 0; i < 0x80; i++) {
         if (has_edge[i]) {
+          if (i >= 0x80) {
+            XGRAMMAR_LOG(WARNING
+            ) << "The unicode characters in the character class are not supported."
+              << i;
+          }
           if (last == -1) {
             last = i;
           }
@@ -735,8 +747,71 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
         edges[0].emplace_back(last, 0xFF, 1);
       }
     }
+
+    // If the character class is negative, then we need to
+    // accept UTF-8 characters.
+    if (!negative) {
+      return;
+    }
+    XGRAMMAR_DCHECK(negative);
+    AcceptAllUnicodeCharacters(0, 1);
     return;
   }
+}
+
+void FSMWithStartEnd::AcceptAllUnicodeCharacters(const int& from_node, const int& to_node) {
+  static const uint8_t& utf8_successor_character_min = 0x80;
+  static const uint8_t& utf8_start_character_max = 0xbF;
+  static const uint8_t& min_start_character_of_2_byte = 0xc2;
+  static const uint8_t& max_start_character_of_2_byte = 0xdf;
+  static const uint8_t& min_start_character_of_3_byte = 0xe0;
+  static const uint8_t& max_start_character_of_3_byte = 0xef;
+  static const uint8_t& min_start_character_of_4_byte = 0xf0;
+  static const uint8_t& max_start_character_of_4_byte = 0xf4;
+  // First, Handle the 2-byte characters.
+  fsm.edges.emplace_back();
+  fsm.edges[from_node].push_back(FSMEdge{
+      min_start_character_of_2_byte,
+      max_start_character_of_2_byte,
+      static_cast<int>(fsm.edges.size() - 1)
+  });
+  fsm.edges.back().push_back(
+      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
+  );
+
+  // Handle the 3-byte characters.
+  fsm.edges.emplace_back();
+  fsm.edges.emplace_back();
+  fsm.edges[from_node].push_back(FSMEdge{
+      min_start_character_of_3_byte,
+      max_start_character_of_3_byte,
+      static_cast<int>(fsm.edges.size() - 2)
+  });
+  fsm.edges[fsm.edges.size() - 2].push_back(FSMEdge{
+      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 1)
+  });
+  fsm.edges[fsm.edges.size() - 1].push_back(
+      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
+  );
+
+  // Handle the 4-byte characters.
+  fsm.edges.emplace_back();
+  fsm.edges.emplace_back();
+  fsm.edges.emplace_back();
+  fsm.edges[from_node].push_back(FSMEdge{
+      min_start_character_of_4_byte,
+      max_start_character_of_4_byte,
+      static_cast<int>(fsm.edges.size() - 3)
+  });
+  fsm.edges[fsm.edges.size() - 3].push_back(FSMEdge{
+      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 2)
+  });
+  fsm.edges[fsm.edges.size() - 2].push_back(FSMEdge{
+      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 1)
+  });
+  fsm.edges[fsm.edges.size() - 1].push_back(
+      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
+  );
 }
 
 FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
