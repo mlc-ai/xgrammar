@@ -615,7 +615,9 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     for (size_t i = 0; i < regex.size(); i++) {
       if (regex[i] != '\\') {
         if (regex[i] == '.') {
-          edges.back().emplace_back(0, 0x7f, edges.size());
+          // Accept all unicode characters will add 6 new states.
+          edges.back().emplace_back(0, 0x7f, edges.size() + 6);
+          AcceptAllUnicodeCharacters(edges.size() - 1, edges.size() + 6);
         } else {
           edges.back().emplace_back(
               (unsigned char)(regex[i]), (unsigned char)(regex[i]), edges.size()

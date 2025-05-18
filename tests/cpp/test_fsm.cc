@@ -867,7 +867,20 @@ TEST(XGrammarFSMTest, UTF8Test) {
   std::cout << parser;
   std::string test_str = "你";
   for (const auto& ch : test_str) {
-    std::cout << static_cast<int32_t>(static_cast<uint8_t>(ch)) << std::endl;
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  std::string universe_grammar = "root ::= /./";
+  parser = EarleyParserWithFSM(universe_grammar, "root");
+  for (const auto& ch : test_str) {
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  parser.Reset();
+  test_str = "1";
+  for (const auto& ch : test_str) {
     EXPECT_FALSE(parser.IsAcceptStopToken());
     EXPECT_TRUE(parser.Advance(ch));
   }

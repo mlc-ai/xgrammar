@@ -5,7 +5,10 @@
 
 #include "fsm_builder.h"
 
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <stack>
 #include <variant>
@@ -398,11 +401,23 @@ void SplitRules(
 ) {
   // The two variables should be indexes of new lines.
   size_t last_end_of_the_line = 0;
-  while (last_end_of_the_line < grammar.size() && grammar[last_end_of_the_line] == '\n') {
-    last_end_of_the_line++;
+  last_end_of_the_line = grammar.find('\n');
+  if (last_end_of_the_line == std::string::npos) {
+    // The grammar is a single line.
+    size_t define_symbol = grammar.find("::=");
+    if (define_symbol == std::string::npos) {
+      XGRAMMAR_LOG(WARNING) << "There's something surprising in the grammar: " << grammar;
+      return;
+    }
+    std::string lhs = grammar.substr(0, define_symbol - last_end_of_the_line - 1);
+    std::string rhs = grammar.substr(define_symbol + 3, grammar.size() - define_symbol - 3);
+    ConsumeWhiteSpaces(lhs);
+    ConsumeWhiteSpaces(rhs);
+    lhs_group.push_back(lhs);
+    rhs_group.push_back(rhs);
+    return;
   }
-  size_t end_of_the_line = grammar.find('\n', last_end_of_the_line);
-  last_end_of_the_line--;
+  size_t end_of_the_line = grammar.find('\n', last_end_of_the_line + 1);
   while (end_of_the_line != std::string::npos) {
     // Check if the line has a defination.
     size_t define_symbol = grammar.find("::=", last_end_of_the_line);
@@ -477,6 +492,10 @@ Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule
   std::vector<std::string> rhs;
   SplitRules(grammar, lhs, rhs);
   ConsumeWhiteSpaces(root_rule);
+  std::cout << lhs.size();
+  for (auto& rule : lhs) {
+    std::cout << "Rule: " << rule << std::endl;
+  }
   bool has_root = fsm_group.BuildNameIdMap(lhs, root_rule);
   if (!has_root) {
     return Result<FSMGroup>::Err(std::make_shared<Error>("Root rule isn't found in the grammar!"));
