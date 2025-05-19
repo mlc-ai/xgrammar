@@ -21,13 +21,12 @@
 #include <variant>
 #include <vector>
 
+#include "support/encoding.h"
 #include "support/logging.h"
 #include "support/union_find_set.h"
 #include "support/utils.h"
 
 namespace xgrammar {
-
-std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start);
 
 Result<std::pair<int, int>> CheckRepeat(const std::string& regex, int& start);
 
@@ -605,217 +604,6 @@ FSMWithStartEnd FSMWithStartEnd::MakeOptional() const {
   return result;
 }
 
-FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
-  is_dfa = true;
-  start = 0;
-  auto& edges = fsm.edges;
-  // Handle the regex string.
-  if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
-    edges.push_back(std::vector<FSMEdge>());
-    for (size_t i = 0; i < regex.size(); i++) {
-      if (regex[i] != '\\') {
-        if (regex[i] == '.') {
-          // Accept all unicode characters will add 6 new states.
-          edges.back().emplace_back(0, 0x7f, edges.size() + 6);
-          AcceptAllUnicodeCharacters(edges.size() - 1, edges.size() + 6);
-        } else {
-          edges.back().emplace_back(
-              (unsigned char)(regex[i]), (unsigned char)(regex[i]), edges.size()
-          );
-        }
-        edges.push_back(std::vector<FSMEdge>());
-        continue;
-      }
-      std::vector<std::pair<int, int>> escape_vector = HandleEscapes(regex, i);
-      for (const auto& escape : escape_vector) {
-        edges.back().emplace_back(
-            (unsigned char)(escape.first), (unsigned char)(escape.second), edges.size()
-        );
-      }
-      edges.push_back(std::vector<FSMEdge>());
-      i++;
-    }
-    ends.insert(edges.size() - 1);
-    return;
-  }
-
-  // Handle the character class.
-  if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
-    edges.push_back(std::vector<FSMEdge>());
-    edges.push_back(std::vector<FSMEdge>());
-    ends.insert(1);
-    bool negative = regex[1] == '^';
-    for (size_t i = negative ? 2 : 1; i < regex.size() - 1; i++) {
-      if (!isascii(regex[i])) {
-        XGRAMMAR_LOG(FATAL) << "The unicode characters in the character class are not supported."
-                            << regex[i];
-      }
-      if (regex[i] != '\\') {
-        if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
-          // A single char.
-          edges[0].emplace_back(regex[i], regex[i], 1);
-          continue;
-        }
-        // Handle the char range.
-        if (regex[i + 2] != '\\') {
-          edges[0].emplace_back(regex[i], regex[i + 2], 1);
-          i = i + 2;
-          continue;
-        }
-        auto escaped_edges = HandleEscapes(regex, i + 2);
-        // Means it's not a range.
-        if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
-          edges[0].emplace_back(regex[i], regex[i], 1);
-          continue;
-        }
-        edges[0].emplace_back(regex[i], escaped_edges[0].first, 1);
-        i = i + 3;
-        continue;
-      }
-      auto escaped_edges = HandleEscapes(regex, i);
-      i = i + 1;
-      if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
-        // It's a multi-match escape char.
-        for (const auto& edge : escaped_edges) {
-          edges[0].emplace_back(edge.first, edge.second, 1);
-        }
-        continue;
-      }
-      if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
-        edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
-        continue;
-      }
-      if (regex[i + 2] != '\\') {
-        edges[0].emplace_back(escaped_edges[0].first, regex[i + 2], 1);
-        i = i + 2;
-        continue;
-      }
-      auto rhs_escaped_edges = HandleEscapes(regex, i + 2);
-      if (rhs_escaped_edges.size() != 1 ||
-          rhs_escaped_edges[0].first != rhs_escaped_edges[0].second) {
-        edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
-        continue;
-      }
-      edges[0].emplace_back(escaped_edges[0].first, rhs_escaped_edges[0].first, 1);
-      i = i + 3;
-      continue;
-    }
-    bool has_edge[0x80];
-    memset(has_edge, 0, sizeof(has_edge));
-    for (const auto& edge : edges[0]) {
-      for (int i = edge.min; i <= edge.max; i++) {
-        has_edge[i] = true;
-      }
-    }
-    edges[0].clear();
-
-    // Simplify the edges. e.g [abc] -> [a-c]
-    int last = -1;
-    if (negative) {
-      for (int i = 0; i < 0x80; i++) {
-        if (!has_edge[i]) {
-          if (last == -1) {
-            last = i;
-          }
-          continue;
-        }
-        if (last != -1) {
-          edges[0].emplace_back(last, i - 1, 1);
-          last = -1;
-        }
-      }
-      if (last != -1) {
-        edges[0].emplace_back(last, 0x7F, 1);
-      }
-    } else {
-      for (int i = 0; i < 0x80; i++) {
-        if (has_edge[i]) {
-          if (i >= 0x80) {
-            XGRAMMAR_LOG(WARNING
-            ) << "The unicode characters in the character class are not supported."
-              << i;
-          }
-          if (last == -1) {
-            last = i;
-          }
-          continue;
-        }
-        if (last != -1) {
-          edges[0].emplace_back(last, i - 1, 1);
-          last = -1;
-        }
-      }
-      if (last != -1) {
-        edges[0].emplace_back(last, 0xFF, 1);
-      }
-    }
-
-    // If the character class is negative, then we need to
-    // accept UTF-8 characters.
-    if (!negative) {
-      return;
-    }
-    XGRAMMAR_DCHECK(negative);
-    AcceptAllUnicodeCharacters(0, 1);
-    return;
-  }
-}
-
-void FSMWithStartEnd::AcceptAllUnicodeCharacters(const int& from_node, const int& to_node) {
-  static const uint8_t& utf8_successor_character_min = 0x80;
-  static const uint8_t& utf8_start_character_max = 0xbF;
-  static const uint8_t& min_start_character_of_2_byte = 0xc2;
-  static const uint8_t& max_start_character_of_2_byte = 0xdf;
-  static const uint8_t& min_start_character_of_3_byte = 0xe0;
-  static const uint8_t& max_start_character_of_3_byte = 0xef;
-  static const uint8_t& min_start_character_of_4_byte = 0xf0;
-  static const uint8_t& max_start_character_of_4_byte = 0xf4;
-  // First, Handle the 2-byte characters.
-  fsm.edges.emplace_back();
-  fsm.edges[from_node].push_back(FSMEdge{
-      min_start_character_of_2_byte,
-      max_start_character_of_2_byte,
-      static_cast<int>(fsm.edges.size() - 1)
-  });
-  fsm.edges.back().push_back(
-      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
-  );
-
-  // Handle the 3-byte characters.
-  fsm.edges.emplace_back();
-  fsm.edges.emplace_back();
-  fsm.edges[from_node].push_back(FSMEdge{
-      min_start_character_of_3_byte,
-      max_start_character_of_3_byte,
-      static_cast<int>(fsm.edges.size() - 2)
-  });
-  fsm.edges[fsm.edges.size() - 2].push_back(FSMEdge{
-      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 1)
-  });
-  fsm.edges[fsm.edges.size() - 1].push_back(
-      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
-  );
-
-  // Handle the 4-byte characters.
-  fsm.edges.emplace_back();
-  fsm.edges.emplace_back();
-  fsm.edges.emplace_back();
-  fsm.edges[from_node].push_back(FSMEdge{
-      min_start_character_of_4_byte,
-      max_start_character_of_4_byte,
-      static_cast<int>(fsm.edges.size() - 3)
-  });
-  fsm.edges[fsm.edges.size() - 3].push_back(FSMEdge{
-      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 2)
-  });
-  fsm.edges[fsm.edges.size() - 2].push_back(FSMEdge{
-      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 1)
-  });
-  fsm.edges[fsm.edges.size() - 1].push_back(
-      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
-  );
-}
-
 FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   FSMWithStartEnd now_fsm;
 
@@ -1026,60 +814,91 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   return new_fsm;
 }
 
-std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start) {
-  std::vector<std::pair<int, int>> result;
-  switch (regex[start + 1]) {
-    case 'n': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\n', '\n'));
-    }
-    case 't': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\t', '\t'));
-    }
-    case 'r': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\r', '\r'));
-    }
-
-    case '0': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\0', '\0'));
-    }
-    case 's': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair(0, ' '));
-    }
-    case 'S': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair(' ' + 1, 0x00FF));
-    }
-    case 'd': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('0', '9'));
-    }
-    case 'D': {
-      std::vector<std::pair<int, int>> result;
-      result.emplace_back(0, '0' - 1);
-      result.emplace_back('9' + 1, 0x00FF);
-      return result;
-    }
-    case 'w': {
-      std::vector<std::pair<int, int>> result;
-      result.emplace_back('0', '9');
-      result.emplace_back('a', 'z');
-      result.emplace_back('A', 'Z');
-      result.emplace_back('_', '_');
-      return result;
-    }
-    case 'W': {
-      std::vector<std::pair<int, int>> result;
-      result.emplace_back(0, '0' - 1);
-      result.emplace_back('9' + 1, 'A' - 1);
-      result.emplace_back('Z' + 1, '_' - 1);
-      result.emplace_back('_' + 1, 'a' - 1);
-      result.emplace_back('z' + 1, 0x00FF);
-      return result;
-    }
-    default: {
-      return std::vector<std::pair<int, int>>(
-          1, std::make_pair(regex[start + 1], regex[start + 1])
-      );
-    }
+std::pair<int, std::vector<std::pair<int, int>>> HandleEscapes(
+    const std::string& regex, int start
+) {
+  XGRAMMAR_DCHECK(regex[start] == '\\') << "Invalid regex: " << regex;
+  std::pair<int, std::vector<std::pair<int, int>>> result_pair;
+  static const std::unordered_map<char, std::vector<std::pair<int, int>>> escape_map = {
+      {'n', {{'\n', '\n'}}},
+      {'t', {{'\t', '\t'}}},
+      {'r', {{'\r', '\r'}}},
+      {'0', {{'\0', '\0'}}},
+      {'?', {{'\?', '\?'}}},
+      {'a', {{'\a', '\a'}}},
+      {'b', {{'\b', '\b'}}},
+      {'f', {{'\f', '\f'}}},
+      {'v', {{'\v', '\v'}}},
+      {'e', {{'\x1b', '\x1b'}}},
+      {'s', {{0, ' '}}},
+      {'S', {{' ' + 1, 0x00FF}}},
+      {'d', {{'0', '9'}}},
+      {'D', {{0, '0' - 1}, {'9' + 1, 0x00FF}}},
+      {'w', {{'0', '9'}, {'a', 'z'}, {'A', 'Z'}, {'_', '_'}}},
+      {'W',
+       {{0, '0' - 1}, {'9' + 1, 'A' - 1}, {'Z' + 1, '_' - 1}, {'_' + 1, 'a' - 1}, {'z' + 1, 0x00FF}}
+      }
+  };
+  if (escape_map.find(regex[start + 1]) != escape_map.end()) {
+    result_pair.first = 2;
+    result_pair.second = escape_map.at(regex[start + 1]);
+    return result_pair;
   }
+
+  // Handle unicode escape.
+  if (regex[start + 1] == 'x') {
+    int len = 0;
+    int codepoint = 0;
+    int32_t digit;
+    while ((digit = HexCharToInt(regex[start + 2 + len])) != -1) {
+      codepoint = codepoint * 16 + digit;
+      ++len;
+    }
+    if (len == 0) {
+      XGRAMMAR_DCHECK(false) << "Invalid regex: " << regex;
+    }
+    result_pair.first = len + 2;
+    result_pair.second.push_back({codepoint, codepoint});
+    return result_pair;
+  }
+
+  if (regex[start + 1] == 'u') {
+    int len = 0;
+    int codepoint = 0;
+    int32_t digit;
+    while ((digit = HexCharToInt(regex[start + 2 + len])) != -1) {
+      codepoint = codepoint * 16 + digit;
+      ++len;
+    }
+    if (len != 4) {
+      XGRAMMAR_DCHECK(false) << "Invalid regex: " << regex;
+    }
+    result_pair.first = len + 2;
+    result_pair.second.push_back({codepoint, codepoint});
+    return result_pair;
+  }
+
+  if (regex[start + 1] == 'U') {
+    int len = 0;
+    int codepoint = 0;
+    int32_t digit;
+    while ((digit = HexCharToInt(regex[start + 2 + len])) != -1) {
+      codepoint = codepoint * 16 + digit;
+      ++len;
+    }
+    if (len != 8) {
+      XGRAMMAR_DCHECK(false) << "Invalid regex: " << regex;
+    }
+    result_pair.first = len + 2;
+    result_pair.second.push_back({codepoint, codepoint});
+    return result_pair;
+  }
+
+  // In other cases, we just return the char itself, like '\\\\', '\\1'
+  // represent '\\' and '1'.
+  result_pair.first = 2;
+  result_pair.second.push_back({regex[start + 1], regex[start + 1]});
+  return result_pair;
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
@@ -1609,13 +1428,13 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Leaf& node) const {
   for (size_t i = 0; i < node.regex.size(); i++) {
     result.fsm.edges.push_back(std::vector<FSMEdge>());
     if (node.regex[i] == '\\') {
-      const auto& escapes = HandleEscapes(node.regex, i);
+      const auto& [length, escapes] = HandleEscapes(node.regex, i);
       for (const auto& escape : escapes) {
         result.fsm.edges[result.NumNodes() - 1].emplace_back(
             escape.first, escape.second, result.NumNodes()
         );
       }
-      i++;
+      i = i + length - 1;
       continue;
     }
     XGRAMMAR_DCHECK(node.regex[i] != '\\');

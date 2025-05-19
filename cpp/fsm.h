@@ -15,6 +15,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -567,8 +568,10 @@ Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start)
   \brief Handle escape characters.
   \param regex the corresponding string.
   \param start the pos escape characters start.
+  \return int: the length of the escape characters.
+  \return std::vector<std::pair<int, int>>: the stored escape character ranges.
 */
-std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start);
+std::pair<int, std::vector<std::pair<int, int>>> HandleEscapes(const std::string& regex, int start);
 
 /*!
   \brief Build a FSM from a list of patterns.

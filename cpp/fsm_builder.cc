@@ -14,6 +14,7 @@
 #include <variant>
 
 #include "fsm.h"
+#include "support/encoding.h"
 #include "support/logging.h"
 #include "support/utils.h"
 
@@ -756,4 +757,218 @@ bool FSMBuilder::HandleLookAhead() {
   current_parsing_index_++;
   return true;
 }
+
+FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
+  is_dfa = true;
+  start = 0;
+  auto& edges = fsm.edges;
+  // Handle the regex string.
+  if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
+    edges.push_back(std::vector<FSMEdge>());
+    for (size_t i = 0; i < regex.size(); i++) {
+      if (regex[i] != '\\') {
+        if (regex[i] == '.') {
+          // Accept all unicode characters will add 6 new states.
+          edges.back().emplace_back(0, 0x7f, edges.size() + 6);
+          AcceptAllUnicodeCharacters(edges.size() - 1, edges.size() + 6);
+        } else {
+          edges.back().emplace_back(
+              (unsigned char)(regex[i]), (unsigned char)(regex[i]), edges.size()
+          );
+        }
+        edges.push_back(std::vector<FSMEdge>());
+        continue;
+      }
+      auto [length, escape_vector] = HandleEscapes(regex, i);
+      for (const auto& escape : escape_vector) {
+        edges.back().emplace_back(
+            (unsigned char)(escape.first), (unsigned char)(escape.second), edges.size()
+        );
+      }
+      edges.push_back(std::vector<FSMEdge>());
+      i = i + length - 1;
+    }
+    ends.insert(edges.size() - 1);
+    return;
+  }
+
+  // Handle the character class.
+  XGRAMMAR_DCHECK((regex[0] == '[' && regex[regex.size() - 1] == ']'));
+  edges.push_back(std::vector<FSMEdge>());
+  edges.push_back(std::vector<FSMEdge>());
+  ends.insert(1);
+  bool negative = regex[1] == '^';
+  for (size_t i = negative ? 2 : 1; i < regex.size() - 1; i++) {
+    if (!isascii(regex[i])) {
+      const auto [accept, num_byte, _] = HandleUTF8FirstByte(regex[i]);
+      if (!accept) {
+        XGRAMMAR_LOG(FATAL) << "There's some invalid unicode characters in the regex!";
+      }
+    }
+    // A single char.
+    if (regex[i] != '\\') {
+      if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
+        // A single char.
+        edges[0].emplace_back(regex[i], regex[i], 1);
+        continue;
+      }
+      // Handle the char range.
+      if (regex[i + 2] != '\\') {
+        edges[0].emplace_back(regex[i], regex[i + 2], 1);
+        i = i + 2;
+        continue;
+      }
+      auto [length, escaped_edges] = HandleEscapes(regex, i + 2);
+      // Means it's not a range.
+      if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
+        edges[0].emplace_back(regex[i], regex[i], 1);
+        continue;
+      }
+      edges[0].emplace_back(regex[i], escaped_edges[0].first, 1);
+      i = i + 1 + length;
+      continue;
+    }
+    auto [length, escaped_edges] = HandleEscapes(regex, i);
+    i = i + length - 1;
+    if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
+      // It's a multi-match escape char.
+      for (const auto& edge : escaped_edges) {
+        edges[0].emplace_back(edge.first, edge.second, 1);
+      }
+      continue;
+    }
+    if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
+      edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
+      continue;
+    }
+    if (regex[i + 2] != '\\') {
+      edges[0].emplace_back(escaped_edges[0].first, regex[i + 2], 1);
+      i = i + 2;
+      continue;
+    }
+
+    auto [rhs_length, rhs_escaped_edges] = HandleEscapes(regex, i + 2);
+    if (rhs_escaped_edges.size() != 1 ||
+        rhs_escaped_edges[0].first != rhs_escaped_edges[0].second) {
+      edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
+      continue;
+    }
+    edges[0].emplace_back(escaped_edges[0].first, rhs_escaped_edges[0].first, 1);
+    i = i + 1 + rhs_length;
+    continue;
+  }
+  bool has_edge[0x80];
+  memset(has_edge, 0, sizeof(has_edge));
+  for (const auto& edge : edges[0]) {
+    for (int i = edge.min; i <= edge.max; i++) {
+      has_edge[i] = true;
+    }
+  }
+  edges[0].clear();
+
+  // Simplify the edges. e.g [abc] -> [a-c]
+  int last = -1;
+  if (negative) {
+    for (int i = 0; i < 0x80; i++) {
+      if (!has_edge[i]) {
+        if (last == -1) {
+          last = i;
+        }
+        continue;
+      }
+      if (last != -1) {
+        edges[0].emplace_back(last, i - 1, 1);
+        last = -1;
+      }
+    }
+    if (last != -1) {
+      edges[0].emplace_back(last, 0x7F, 1);
+    }
+  } else {
+    for (int i = 0; i < 0x80; i++) {
+      if (has_edge[i]) {
+        if (i >= 0x80) {
+          XGRAMMAR_LOG(WARNING
+          ) << "The unicode characters in the character class are not supported."
+            << i;
+        }
+        if (last == -1) {
+          last = i;
+        }
+        continue;
+      }
+      if (last != -1) {
+        edges[0].emplace_back(last, i - 1, 1);
+        last = -1;
+      }
+    }
+    if (last != -1) {
+      edges[0].emplace_back(last, 0xFF, 1);
+    }
+  }
+
+  // If the character class is negative, then we need to
+  // accept UTF-8 characters.
+  if (!negative) {
+    return;
+  }
+  XGRAMMAR_DCHECK(negative);
+  AcceptAllUnicodeCharacters(0, 1);
+}
+
+void FSMWithStartEnd::AcceptAllUnicodeCharacters(const int& from_node, const int& to_node) {
+  static const uint8_t& utf8_successor_character_min = 0x80;
+  static const uint8_t& utf8_start_character_max = 0xbF;
+  static const uint8_t& min_start_character_of_2_byte = 0xc2;
+  static const uint8_t& max_start_character_of_2_byte = 0xdf;
+  static const uint8_t& min_start_character_of_3_byte = 0xe0;
+  static const uint8_t& max_start_character_of_3_byte = 0xef;
+  static const uint8_t& min_start_character_of_4_byte = 0xf0;
+  static const uint8_t& max_start_character_of_4_byte = 0xf4;
+  // First, Handle the 2-byte characters.
+  fsm.edges.emplace_back();
+  fsm.edges[from_node].push_back(FSMEdge{
+      min_start_character_of_2_byte,
+      max_start_character_of_2_byte,
+      static_cast<int>(fsm.edges.size() - 1)
+  });
+  fsm.edges.back().push_back(
+      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
+  );
+
+  // Handle the 3-byte characters.
+  fsm.edges.emplace_back();
+  fsm.edges.emplace_back();
+  fsm.edges[from_node].push_back(FSMEdge{
+      min_start_character_of_3_byte,
+      max_start_character_of_3_byte,
+      static_cast<int>(fsm.edges.size() - 2)
+  });
+  fsm.edges[fsm.edges.size() - 2].push_back(FSMEdge{
+      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 1)
+  });
+  fsm.edges[fsm.edges.size() - 1].push_back(
+      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
+  );
+
+  // Handle the 4-byte characters.
+  fsm.edges.emplace_back();
+  fsm.edges.emplace_back();
+  fsm.edges.emplace_back();
+  fsm.edges[from_node].push_back(FSMEdge{
+      min_start_character_of_4_byte,
+      max_start_character_of_4_byte,
+      static_cast<int>(fsm.edges.size() - 3)
+  });
+  fsm.edges[fsm.edges.size() - 3].push_back(FSMEdge{
+      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 2)
+  });
+  fsm.edges[fsm.edges.size() - 2].push_back(FSMEdge{
+      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 1)
+  });
+  fsm.edges[fsm.edges.size() - 1].push_back(
+      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
+  );
+}
+
 }  // namespace xgrammar
