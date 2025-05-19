@@ -820,7 +820,7 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
 
   // Handle the character class.
   XGRAMMAR_DCHECK((regex[0] == '[' && regex[regex.size() - 1] == ']'));
-  std::vector<std::pair<int, int>> char_class_edges;
+  std::vector<std::pair<uint32_t, uint32_t>> char_class_edges;
   edges.resize(2);
   AddEndNode(1);
   bool negative = regex[1] == '^';
@@ -907,10 +907,20 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
       }
     }
   }
-  if (negative) {
+  BuildCharacterClass(char_class_edges, negative, 0, 1);
+}
+
+void FSMWithStartEnd::BuildCharacterClass(
+    std::vector<std::pair<uint32_t, uint32_t>>& char_class_edges,
+    bool is_negative,
+    int start_node,
+    int end_node
+) {
+  auto& edges = fsm.edges[start_node];
+  if (is_negative) {
     std::vector<bool> is_accepted(0x80, true);
     for (const auto& edge : char_class_edges) {
-      for (int i = edge.first; i <= edge.second; i++) {
+      for (int i = edge.first; i <= int(edge.second); i++) {
         is_accepted[i] = false;
       }
     }
@@ -920,24 +930,27 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
         for (int j = i + 1; j < 0x80; j++) {
           if (!is_accepted[j]) {
             has_end = true;
-            edges[0].emplace_back(i, j - 1, 1);
+            edges.emplace_back(i, j - 1, end_node);
             i = j;
             break;
           }
         }
         if (!has_end) {
-          edges[0].emplace_back(i, 0x7f, 1);
+          edges.emplace_back(i, 0x7f, end_node);
           break;
         }
       }
     }
-    AcceptAllUnicodeCharacters(0, 1);
+    AcceptAllUnicodeCharacters(start_node, end_node);
     return;
   }
-
   for (const auto& edge : char_class_edges) {
     // TODO(Linzhang): support the unicode range here.
-    edges[0].emplace_back(edge.first, edge.second, 1);
+    if (edge.second < 0x80) {
+      edges.emplace_back(edge.first, edge.second, end_node);
+    } else {
+      AddUnicodeEdge(edge.first, edge.second, start_node, end_node);
+    }
   }
 }
 

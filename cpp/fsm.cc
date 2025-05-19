@@ -4,6 +4,8 @@
  */
 #include "fsm.h"
 
+#include <sys/types.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -814,12 +816,12 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   return new_fsm;
 }
 
-std::pair<int, std::vector<std::pair<int, int>>> HandleEscapes(
+std::pair<int, std::vector<std::pair<uint32_t, uint32_t>>> HandleEscapes(
     const std::string& regex, int start
 ) {
   XGRAMMAR_DCHECK(regex[start] == '\\') << "Invalid regex: " << regex;
-  std::pair<int, std::vector<std::pair<int, int>>> result_pair;
-  static const std::unordered_map<char, std::vector<std::pair<int, int>>> escape_map = {
+  std::pair<int, std::vector<std::pair<uint32_t, uint32_t>>> result_pair;
+  static const std::unordered_map<char, std::vector<std::pair<uint32_t, uint32_t>>> escape_map = {
       {'n', {{'\n', '\n'}}},
       {'t', {{'\t', '\t'}}},
       {'r', {{'\r', '\r'}}},

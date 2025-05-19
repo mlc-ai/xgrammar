@@ -339,6 +339,30 @@ class FSMWithStartEnd {
   */
   void AcceptAllUnicodeCharacters(const int& from_node, const int& to_node);
 
+ private:
+  /*!
+     \brief Build the character class for the FSM.
+     \param char_class_edges The character class edges.
+     \param is_negative Whether the character class is negative.
+     \param start_node The start node of the character class.
+     \param end_node The end node of the character class.
+  */
+  void BuildCharacterClass(
+      std::vector<std::pair<uint32_t, uint32_t>>& char_class_edges,
+      bool is_negative,
+      int start_node = 0,
+      int end_node = 1
+  );
+
+  /*!
+    \brief Add a unicode character edge in the FSM.
+    \param min_ch The minimum unicode character.
+    \param max_ch The maximum unicode character.
+    \param start_node The start node of the edge.
+    \param end_node The end node of the edge.
+  */
+  void AddUnicodeEdge(uint32_t min_ch, uint32_t max_ch, int start_node, int end_node);
+
   friend std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
 };
 
@@ -571,7 +595,9 @@ Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start)
   \return int: the length of the escape characters.
   \return std::vector<std::pair<int, int>>: the stored escape character ranges.
 */
-std::pair<int, std::vector<std::pair<int, int>>> HandleEscapes(const std::string& regex, int start);
+std::pair<int, std::vector<std::pair<uint32_t, uint32_t>>> HandleEscapes(
+    const std::string& regex, int start
+);
 
 /*!
   \brief Build a FSM from a list of patterns.
