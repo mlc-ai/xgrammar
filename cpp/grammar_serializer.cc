@@ -187,6 +187,8 @@ picojson::value Grammar::Impl::SerializeToJSON() const {
   }
   grammar_json_obj["rule_expr_indptr"] = picojson::value(std::move(rule_expr_indptr_json));
 
+  grammar_json_obj["root_rule_id_"] = picojson::value(static_cast<int64_t>(root_rule_id_));
+
   if (root_tag_dispatch_fsm) {
     grammar_json_obj["root_tag_dispatch_fsm"] = root_tag_dispatch_fsm->SerializeToJSON();
   } else {
@@ -261,10 +263,14 @@ Grammar Grammar::Impl::DeserializeFromJSON(const picojson::value& serialized_val
     node->rule_expr_indptr_.push_back(static_cast<int32_t>(index_ptr_json.get<int64_t>()));
   }
 
+  // root_rule_id
+  node->root_rule_id_ =
+      static_cast<int32_t>(get_key(serialized_obj, "root_rule_id_").get<int64_t>());
+
   // root_tag_dispatch_fsm
   const auto& fsm_json = get_key(serialized_obj, "root_tag_dispatch_fsm");
   if (!fsm_json.is<picojson::null>()) {
-    node->root_tag_dispatch_fsm.emplace(CompactFSM::DeserializeFromJSON(fsm_json));
+    node->root_tag_dispatch_fsm.emplace(CompactFSMWithStartEnd::DeserializeFromJSON(fsm_json));
   }
 
   // tag_dispatch_list
@@ -525,8 +531,10 @@ bool AdaptiveTokenMask::operator==(const AdaptiveTokenMask& other) const {
 bool CompiledGrammar::Impl::operator==(const Impl& rhs) const {
   const auto& lhs = *this;
   if (&lhs == &rhs) return true;  // shortcut
-  return *lhs.grammar == *rhs.grammar && *lhs.tokenizer_info == *rhs.tokenizer_info &&
-         lhs.adaptive_token_mask_cache == rhs.adaptive_token_mask_cache;
+  auto ref = [](const Impl& impl) {
+    return std::tie(*impl.grammar, *impl.tokenizer_info, impl.adaptive_token_mask_cache);
+  };
+  return ref(*this) == ref(rhs);
 }
 
 [[maybe_unused]]
@@ -545,6 +553,7 @@ bool Grammar::Impl::operator==(const Impl& rhs) const {
         impl.rules_,
         impl.rule_expr_data_,
         impl.rule_expr_indptr_,
+        impl.root_rule_id_,
         impl.root_tag_dispatch_fsm,
         impl.tag_dispatch_end_node_to_rule_id,
         impl.allow_empty_rule_ids
