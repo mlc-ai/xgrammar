@@ -5,13 +5,20 @@
 
 #include "fsm_builder.h"
 
+#include <sys/types.h>
+
+#include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <stack>
+#include <utility>
 #include <variant>
+#include <vector>
 
 #include "fsm.h"
 #include "support/encoding.h"
@@ -758,6 +765,21 @@ bool FSMBuilder::HandleLookAhead() {
   return true;
 }
 
+const uint32_t kParseFailure = -1;
+
+std::pair<uint32_t, uint32_t> NextUnicode(const std::string& str, size_t& index) {
+  const auto [accept, num_byte, _] = HandleUTF8FirstByte(str[index]);
+  if (!accept) {
+    return std::make_pair(kParseFailure, 0);
+  }
+  uint32_t unicode = 0;
+  for (int i = 0; i < num_byte; i++) {
+    unicode <<= 8;
+    unicode += static_cast<int>(str[index + i]);
+  }
+  return std::make_pair(num_byte, unicode);
+}
+
 FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
   is_dfa = true;
   start = 0;
@@ -786,6 +808,10 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
         );
       }
       edges.push_back(std::vector<FSMEdge>());
+      if (length > 3) {
+        XGRAMMAR_LOG(WARNING) << "Such a long escape sequence is not supported: "
+                              << regex.substr(i, length);
+      }
       i = i + length - 1;
     }
     ends.insert(edges.size() - 1);
@@ -794,126 +820,125 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
 
   // Handle the character class.
   XGRAMMAR_DCHECK((regex[0] == '[' && regex[regex.size() - 1] == ']'));
-  edges.push_back(std::vector<FSMEdge>());
-  edges.push_back(std::vector<FSMEdge>());
-  ends.insert(1);
+  std::vector<std::pair<int, int>> char_class_edges;
+  edges.resize(2);
+  AddEndNode(1);
   bool negative = regex[1] == '^';
-  for (size_t i = negative ? 2 : 1; i < regex.size() - 1; i++) {
-    if (!isascii(regex[i])) {
-      const auto [accept, num_byte, _] = HandleUTF8FirstByte(regex[i]);
-      if (!accept) {
-        XGRAMMAR_LOG(FATAL) << "There's some invalid unicode characters in the regex!";
+  uint32_t last_character = kParseFailure;
+  bool is_possible_range = false;
+  size_t index = negative ? 2 : 1;
+  while (index < regex.size() - 1) {
+    if (regex[index] == '-') {
+      index++;
+      if (is_possible_range) {
+        XGRAMMAR_LOG(FATAL) << "Invalid regex: " << regex;
       }
-    }
-    // A single char.
-    if (regex[i] != '\\') {
-      if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
-        // A single char.
-        edges[0].emplace_back(regex[i], regex[i], 1);
+      if (last_character == kParseFailure) {
+        // It's a '-' at the beginning of the character class.
+        char_class_edges.emplace_back('-', '-');
         continue;
       }
-      // Handle the char range.
-      if (regex[i + 2] != '\\') {
-        edges[0].emplace_back(regex[i], regex[i + 2], 1);
-        i = i + 2;
-        continue;
-      }
-      auto [length, escaped_edges] = HandleEscapes(regex, i + 2);
-      // Means it's not a range.
-      if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
-        edges[0].emplace_back(regex[i], regex[i], 1);
-        continue;
-      }
-      edges[0].emplace_back(regex[i], escaped_edges[0].first, 1);
-      i = i + 1 + length;
-      continue;
-    }
-    auto [length, escaped_edges] = HandleEscapes(regex, i);
-    i = i + length - 1;
-    if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
-      // It's a multi-match escape char.
-      for (const auto& edge : escaped_edges) {
-        edges[0].emplace_back(edge.first, edge.second, 1);
-      }
-      continue;
-    }
-    if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
-      edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
-      continue;
-    }
-    if (regex[i + 2] != '\\') {
-      edges[0].emplace_back(escaped_edges[0].first, regex[i + 2], 1);
-      i = i + 2;
+      is_possible_range = true;
       continue;
     }
 
-    auto [rhs_length, rhs_escaped_edges] = HandleEscapes(regex, i + 2);
-    if (rhs_escaped_edges.size() != 1 ||
-        rhs_escaped_edges[0].first != rhs_escaped_edges[0].second) {
-      edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
+    if (regex[index] == '\\') {
+      const auto& [length, escape_vector] = HandleEscapes(regex, index);
+      index += length;
+      if (escape_vector.size() != 1 || escape_vector[0].first != escape_vector[0].second) {
+        // It's a multi-match escape sequence.
+        char_class_edges.insert(char_class_edges.end(), escape_vector.begin(), escape_vector.end());
+        if (is_possible_range) {
+          char_class_edges.emplace_back('-', '-');
+          is_possible_range = false;
+        }
+        if (last_character != kParseFailure) {
+          char_class_edges.emplace_back(last_character, last_character);
+        }
+        last_character = kParseFailure;
+        continue;
+      }
+      // It's just a single unicode character.
+      if (is_possible_range) {
+        char_class_edges.emplace_back(last_character, escape_vector[0].first);
+        last_character = kParseFailure;
+        is_possible_range = false;
+        continue;
+      }
+
+      if (last_character != kParseFailure) {
+        char_class_edges.emplace_back(last_character, last_character);
+      }
+      last_character = escape_vector[0].first;
       continue;
     }
-    edges[0].emplace_back(escaped_edges[0].first, rhs_escaped_edges[0].first, 1);
-    i = i + 1 + rhs_length;
-    continue;
+
+    auto [length, unicode] = NextUnicode(regex, index);
+    if (length == kParseFailure) {
+      XGRAMMAR_LOG(FATAL) << "Invalid regex: " << regex;
+    }
+    if (is_possible_range) {
+      char_class_edges.emplace_back(last_character, unicode);
+      last_character = kParseFailure;
+      is_possible_range = false;
+      index += length;
+      continue;
+    }
+
+    if (last_character != kParseFailure) {
+      char_class_edges.emplace_back(last_character, last_character);
+    }
+    last_character = unicode;
+    index += length;
   }
-  bool has_edge[0x80];
-  memset(has_edge, 0, sizeof(has_edge));
-  for (const auto& edge : edges[0]) {
-    for (int i = edge.min; i <= edge.max; i++) {
-      has_edge[i] = true;
+  // Handle the last character.
+  if (last_character != kParseFailure) {
+    char_class_edges.emplace_back(last_character, last_character);
+  }
+  // The last character is '-'.
+  if (is_possible_range) {
+    char_class_edges.emplace_back('-', '-');
+  }
+
+  for (const auto& edge : char_class_edges) {
+    if (edge.second > 0x7f) {
+      if (negative) {
+        XGRAMMAR_LOG(FATAL) << "In a negative character class, the range should be in [0, 0x7f].";
+      }
     }
   }
-  edges[0].clear();
-
-  // Simplify the edges. e.g [abc] -> [a-c]
-  int last = -1;
   if (negative) {
+    std::vector<bool> is_accepted(0x80, true);
+    for (const auto& edge : char_class_edges) {
+      for (int i = edge.first; i <= edge.second; i++) {
+        is_accepted[i] = false;
+      }
+    }
     for (int i = 0; i < 0x80; i++) {
-      if (!has_edge[i]) {
-        if (last == -1) {
-          last = i;
+      if (is_accepted[i]) {
+        bool has_end = false;
+        for (int j = i + 1; j < 0x80; j++) {
+          if (!is_accepted[j]) {
+            has_end = true;
+            edges[0].emplace_back(i, j - 1, 1);
+            i = j;
+            break;
+          }
         }
-        continue;
-      }
-      if (last != -1) {
-        edges[0].emplace_back(last, i - 1, 1);
-        last = -1;
-      }
-    }
-    if (last != -1) {
-      edges[0].emplace_back(last, 0x7F, 1);
-    }
-  } else {
-    for (int i = 0; i < 0x80; i++) {
-      if (has_edge[i]) {
-        if (i >= 0x80) {
-          XGRAMMAR_LOG(WARNING
-          ) << "The unicode characters in the character class are not supported."
-            << i;
+        if (!has_end) {
+          edges[0].emplace_back(i, 0x7f, 1);
+          break;
         }
-        if (last == -1) {
-          last = i;
-        }
-        continue;
-      }
-      if (last != -1) {
-        edges[0].emplace_back(last, i - 1, 1);
-        last = -1;
       }
     }
-    if (last != -1) {
-      edges[0].emplace_back(last, 0xFF, 1);
-    }
-  }
-
-  // If the character class is negative, then we need to
-  // accept UTF-8 characters.
-  if (!negative) {
+    AcceptAllUnicodeCharacters(0, 1);
     return;
   }
-  XGRAMMAR_DCHECK(negative);
-  AcceptAllUnicodeCharacters(0, 1);
+
+  for (const auto& edge : char_class_edges) {
+    // TODO(Linzhang): support the unicode range here.
+    edges[0].emplace_back(edge.first, edge.second, 1);
+  }
 }
 
 void FSMWithStartEnd::AcceptAllUnicodeCharacters(const int& from_node, const int& to_node) {

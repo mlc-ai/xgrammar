@@ -46,6 +46,7 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
   }
   std::cout << "--------- Basic Build Test4 -----------" << std::endl;
   fsm_wse = builder.BuildFSMFromRegex("[^\\d]").Unwrap();
+  std::cout << fsm_wse << std::endl;
   test_str = "1234567890";
   for (const auto& character : test_str) {
     EXPECT_TRUE([&]() -> bool {
@@ -82,8 +83,6 @@ TEST(XGrammarFSMTest, BasicBuildTest) {
   test_str = "a";
   EXPECT_TRUE(fsm_wse.Check(test_str));
   EXPECT_FALSE(fsm_wse.Check("e"));
-  std::cout << fsm_wse << std::endl;
-  EXPECT_EQ(fsm_wse.fsm.edges[0].size(), 2);
   std::cout << "Basic Build Test Passed!" << std::endl;
 }
 
