@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -56,7 +57,21 @@ struct FSMEdge {
     \brief Check if the edge is a character range.
   */
   bool IsCharRange() const;
+
+  bool operator==(const FSMEdge& other) const {
+    return min == other.min && max == other.max && target == other.target;
+  }
+
+  explicit operator int64_t() const {
+    int64_t result = 0;
+    std::memcpy(&result, this, sizeof(FSMEdge));
+    return result;
+  }
+
+  explicit FSMEdge(int64_t value) { std::memcpy(this, &value, sizeof(FSMEdge)); }
 };
+
+static_assert(sizeof(FSMEdge) == sizeof(int64_t), "FSMEdge should be 8 bytes");
 
 class CompactFSM;
 
@@ -444,6 +459,11 @@ class CompactFSMWithStartEnd {
     \param rules The set of possible rule numbers.s
   */
   void GetPossibleRules(const int& node_num, std::unordered_set<int>* rules) const;
+
+  picojson::value SerializeToJSON() const;
+  static CompactFSMWithStartEnd DeserializeFromJSON(const picojson::value& json);
+
+  bool operator==(const CompactFSMWithStartEnd& other) const;
 };
 
 /*!
