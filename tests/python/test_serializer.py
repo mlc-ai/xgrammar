@@ -160,30 +160,31 @@ def test_serializer_correctness(
     # test serialization and deserialization in practice
     # copied from test_grammar_matcher.py
 
-    # from xgrammar.testing import _get_masked_tokens_from_bitmask
-    # json_grammar = xgr.Grammar.builtin_json_grammar()
-    # grammar = grammar_compiler.compile_grammar(json_grammar)
-    # serialized = serializer.serialize_compiled_grammar(grammar)
-    # deserialized = serializer.deserialize_compiled_grammar(serialized, tokenizer_info)
-    # matcher = xgr.GrammarMatcher(deserialized)
-    # token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-    # input_bytes = input_str.encode("utf-8")
-    # rejected_sizes = []
-    # for i, c in enumerate(input_bytes):
-    #     matcher.fill_next_token_bitmask(token_bitmask)
-    #     rejected_token_ids = _get_masked_tokens_from_bitmask(
-    #         token_bitmask, tokenizer_info.vocab_size
-    #     )
-    #     rejected_sizes.append(len(rejected_token_ids))
-    #     if expected_rejected_sizes is not None:
-    #         assert rejected_sizes[-1] == expected_rejected_sizes[i], (
-    #             rejected_sizes[-1],
-    #             expected_rejected_sizes[i],
-    #         )
-    #     assert matcher._debug_accept_string(bytes([c]))
+    from xgrammar.testing import _get_masked_tokens_from_bitmask
 
-    # matcher.fill_next_token_bitmask(token_bitmask)
-    # rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
-    # rejected_sizes.append(len(rejected_token_ids))
-    # if expected_rejected_sizes is not None:
-    #     assert rejected_sizes[-1] == expected_rejected_sizes[-1]
+    json_grammar = xgr.Grammar.builtin_json_grammar()
+    grammar = grammar_compiler.compile_grammar(json_grammar)
+    serialized = serializer.serialize_compiled_grammar(grammar)
+    deserialized = serializer.deserialize_compiled_grammar(serialized, tokenizer_info)
+    matcher = xgr.GrammarMatcher(deserialized)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    input_bytes = input_str.encode("utf-8")
+    rejected_sizes = []
+    for i, c in enumerate(input_bytes):
+        matcher.fill_next_token_bitmask(token_bitmask)
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
+        rejected_sizes.append(len(rejected_token_ids))
+        if expected_rejected_sizes is not None:
+            assert rejected_sizes[-1] == expected_rejected_sizes[i], (
+                rejected_sizes[-1],
+                expected_rejected_sizes[i],
+            )
+        assert matcher._debug_accept_string(bytes([c]))
+
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    rejected_sizes.append(len(rejected_token_ids))
+    if expected_rejected_sizes is not None:
+        assert rejected_sizes[-1] == expected_rejected_sizes[-1]
