@@ -863,7 +863,6 @@ TEST(XGrammarFSMTest, UTF8Test) {
     root ::= [^0-9] | "1"
   )";
   EarleyParserWithFSM parser(test_grammar, "root");
-  std::cout << parser;
   std::string test_str = "你";
   for (const auto& ch : test_str) {
     EXPECT_FALSE(parser.IsAcceptStopToken());
@@ -879,6 +878,40 @@ TEST(XGrammarFSMTest, UTF8Test) {
   EXPECT_TRUE(parser.IsAcceptStopToken());
   parser.Reset();
   test_str = "1";
+  for (const auto& ch : test_str) {
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  std::string unicode_in_character_class = "root ::= [𰻝]";
+  parser = EarleyParserWithFSM(unicode_in_character_class, "root");
+  test_str = "𰻝";
+  for (const auto& ch : test_str) {
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  std::string unicode_in_character_class2 = "root ::= [a-𰻝]";
+  test_str = "你";
+  parser = EarleyParserWithFSM(unicode_in_character_class2, "root");
+  std::cout << parser;
+  for (const auto& ch : test_str) {
+    std::cout << static_cast<uint32_t>(static_cast<uint8_t>(ch)) << std::endl;
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  std::string escape_grammar = R"(
+    root ::= [^\u001f-\x7f]
+  )";
+  parser = EarleyParserWithFSM(escape_grammar, "root");
+  for (const auto& ch : test_str) {
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  parser.Reset();
+  test_str = "\x01";
   for (const auto& ch : test_str) {
     EXPECT_FALSE(parser.IsAcceptStopToken());
     EXPECT_TRUE(parser.Advance(ch));

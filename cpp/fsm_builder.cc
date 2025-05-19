@@ -498,10 +498,6 @@ Result<FSMGroup> GrammarToFSMs(const std::string& grammar, std::string root_rule
   std::vector<std::string> rhs;
   SplitRules(grammar, lhs, rhs);
   ConsumeWhiteSpaces(root_rule);
-  std::cout << lhs.size();
-  for (auto& rule : lhs) {
-    std::cout << "Rule: " << rule << std::endl;
-  }
   bool has_root = fsm_group.BuildNameIdMap(lhs, root_rule);
   if (!has_root) {
     return Result<FSMGroup>::Err(std::make_shared<Error>("Root rule isn't found in the grammar!"));
@@ -773,7 +769,7 @@ std::pair<uint32_t, uint32_t> NextUnicode(const std::string& str, size_t& index)
   uint32_t unicode = 0;
   for (int i = 0; i < num_byte; i++) {
     unicode <<= 8;
-    unicode += static_cast<int>(str[index + i]);
+    unicode += static_cast<uint8_t>(str[index + i]);
   }
   return std::make_pair(num_byte, unicode);
 }
@@ -965,14 +961,16 @@ void FSMWithStartEnd::AddUnicodeEdge(
   uint8_t min_char[4] = {0};
   uint8_t max_char[4] = {0};
   int min_length = 0;
-  while (min_ch > 0) {
-    min_char[min_length++] = min_ch & 0xff;
-    min_ch >>= 8;
+  uint32_t tmp_min_ch = min_ch;
+  uint32_t tmp_max_ch = max_ch;
+  while (tmp_min_ch > 0) {
+    min_char[min_length++] = tmp_min_ch & 0xff;
+    tmp_min_ch >>= 8;
   }
   int max_length = 0;
-  while (max_ch > 0) {
-    max_char[max_length++] = max_ch & 0xff;
-    max_ch >>= 8;
+  while (tmp_max_ch > 0) {
+    max_char[max_length++] = tmp_max_ch & 0xff;
+    tmp_max_ch >>= 8;
   }
   XGRAMMAR_DCHECK(max_length > 1);
   if (min_length != max_length) {
@@ -1031,7 +1029,7 @@ void FSMWithStartEnd::AddUnicodeEdge(
       fsm.edges[current_node_index].emplace_back(
           utf8_successor_character_min, max_char[0], end_node
       );
-
+      current_node_index = start_node;
       // 3. (min_char[1], max_char[1]).
       if (min_char[1] + 1 < max_char[1]) {
         fsm.edges.emplace_back();
