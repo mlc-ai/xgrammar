@@ -7,13 +7,11 @@
 
 #include <sys/types.h>
 
-#include <algorithm>
 #include <cassert>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
-#include <map>
 #include <memory>
 #include <stack>
 #include <utility>
@@ -954,9 +952,217 @@ void FSMWithStartEnd::BuildCharacterClass(
   }
 }
 
+void FSMWithStartEnd::AddUnicodeEdge(
+    uint32_t min_ch, uint32_t max_ch, int start_node, int end_node
+) {
+  static const uint8_t& utf8_successor_character_min = 0x80;
+  static const uint8_t& utf8_successor_character_max = 0xbF;
+  static const uint32_t& min_2_byte_character = 0xc280;
+  static const uint32_t& max_2_byte_character = 0xdfbf;
+  static const uint32_t& min_3_byte_character = 0xe08080;
+  static const uint32_t& max_3_byte_character = 0xefbfbf;
+  static const uint32_t& min_4_byte_character = 0xf0808080;
+  uint8_t min_char[4] = {0};
+  uint8_t max_char[4] = {0};
+  int min_length = 0;
+  while (min_ch > 0) {
+    min_char[min_length++] = min_ch & 0xff;
+    min_ch >>= 8;
+  }
+  int max_length = 0;
+  while (max_ch > 0) {
+    max_char[max_length++] = max_ch & 0xff;
+    max_ch >>= 8;
+  }
+  XGRAMMAR_DCHECK(max_length > 1);
+  if (min_length != max_length) {
+    switch (min_length) {
+      case (1): {
+        AddUnicodeEdge(min_ch, 0x7f, start_node, end_node);
+        AddUnicodeEdge(min_2_byte_character, max_ch, start_node, end_node);
+        break;
+      }
+      case (2): {
+        AddUnicodeEdge(min_ch, max_2_byte_character, start_node, end_node);
+        AddUnicodeEdge(min_3_byte_character, max_ch, start_node, end_node);
+        break;
+      }
+      case (3): {
+        AddUnicodeEdge(min_ch, max_3_byte_character, start_node, end_node);
+        AddUnicodeEdge(min_4_byte_character, max_ch, start_node, end_node);
+        break;
+      }
+      default: {
+        XGRAMMAR_LOG(FATAL) << "Invalid unicode character: " << min_ch;
+      }
+    }
+    return;
+  }
+  XGRAMMAR_DCHECK(min_length == max_length);
+  size_t current_node_index = start_node;
+  switch (min_length) {
+    case (1): {
+      fsm.edges[current_node_index].emplace_back(min_char[0], max_char[0], end_node);
+      break;
+    }
+    case (2): {
+      if (min_char[1] == max_char[1]) {
+        fsm.edges.emplace_back();
+        fsm.edges[current_node_index].emplace_back(min_char[1], max_char[1], fsm.edges.size() - 1);
+        current_node_index = fsm.edges.size() - 1;
+        fsm.edges[current_node_index].emplace_back(min_char[0], max_char[0], end_node);
+        return;
+      }
+      XGRAMMAR_DCHECK(min_char[1] < max_char[1]);
+      // Consider 3 situations:
+      // 1. min_char[1].
+      fsm.edges.emplace_back();
+      fsm.edges[current_node_index].emplace_back(min_char[1], min_char[1], fsm.edges.size() - 1);
+      current_node_index = fsm.edges.size() - 1;
+      fsm.edges[current_node_index].emplace_back(
+          min_char[0], utf8_successor_character_max, end_node
+      );
+      current_node_index = start_node;
+
+      // 2. max_char[1].
+      fsm.edges.emplace_back();
+      fsm.edges[current_node_index].emplace_back(max_char[1], max_char[1], fsm.edges.size() - 1);
+      current_node_index = fsm.edges.size() - 1;
+      fsm.edges[current_node_index].emplace_back(
+          utf8_successor_character_min, max_char[0], end_node
+      );
+
+      // 3. (min_char[1], max_char[1]).
+      if (min_char[1] + 1 < max_char[1]) {
+        fsm.edges.emplace_back();
+        fsm.edges[current_node_index].emplace_back(
+            min_char[1] + 1, max_char[1] - 1, fsm.edges.size() - 1
+        );
+        current_node_index = fsm.edges.size() - 1;
+        fsm.edges[current_node_index].emplace_back(
+            utf8_successor_character_min, utf8_successor_character_max, end_node
+        );
+      }
+      break;
+    }
+    case (3): {
+      if (min_char[2] == max_char[2]) {
+        fsm.edges.emplace_back();
+        fsm.edges[current_node_index].emplace_back(min_char[2], max_char[2], fsm.edges.size() - 1);
+        current_node_index = fsm.edges.size() - 1;
+        min_ch &= 0x0000ffff;
+        max_ch &= 0x0000ffff;
+        AddUnicodeEdge(min_ch, max_ch, current_node_index, end_node);
+        return;
+      }
+      XGRAMMAR_DCHECK(min_char[2] < max_char[2]);
+      // Consider 3 situations:
+      // 1. min_char[2].
+      fsm.edges.emplace_back();
+      fsm.edges[current_node_index].emplace_back(min_char[2], min_char[2], fsm.edges.size() - 1);
+      current_node_index = fsm.edges.size() - 1;
+      uint32_t largest_left_2_byte = utf8_successor_character_max;
+      largest_left_2_byte <<= 8;
+      largest_left_2_byte += utf8_successor_character_max;
+      AddUnicodeEdge(min_ch & 0x0000ffff, largest_left_2_byte, current_node_index, end_node);
+      current_node_index = start_node;
+
+      // 2. max_char[2].
+      fsm.edges.emplace_back();
+      fsm.edges[current_node_index].emplace_back(max_char[2], max_char[2], fsm.edges.size() - 1);
+      current_node_index = fsm.edges.size() - 1;
+      uint32_t smallest_right_2_byte = utf8_successor_character_min;
+      smallest_right_2_byte <<= 8;
+      smallest_right_2_byte += utf8_successor_character_min;
+      AddUnicodeEdge(smallest_right_2_byte, max_ch & 0x0000ffff, current_node_index, end_node);
+      current_node_index = start_node;
+
+      // 3. (min_char[2], max_char[2]).
+      if (min_char[2] + 1 < max_char[2]) {
+        fsm.edges.emplace_back();
+        fsm.edges[current_node_index].emplace_back(
+            min_char[2] + 1, max_char[2] - 1, fsm.edges.size() - 1
+        );
+        current_node_index = fsm.edges.size() - 1;
+        fsm.edges.emplace_back();
+        fsm.edges[current_node_index].emplace_back(
+            utf8_successor_character_min, utf8_successor_character_max, fsm.edges.size() - 1
+        );
+        current_node_index = fsm.edges.size() - 1;
+        fsm.edges[current_node_index].emplace_back(
+            utf8_successor_character_min, utf8_successor_character_max, end_node
+        );
+      }
+      break;
+    }
+    case (4): {
+      if (min_char[3] == max_char[3]) {
+        fsm.edges.emplace_back();
+        fsm.edges[current_node_index].emplace_back(min_char[3], max_char[3], fsm.edges.size() - 1);
+        current_node_index = fsm.edges.size() - 1;
+        min_ch &= 0x00ffffff;
+        max_ch &= 0x00ffffff;
+        AddUnicodeEdge(min_ch, max_ch, current_node_index, end_node);
+        return;
+      }
+      XGRAMMAR_DCHECK(min_char[3] < max_char[3]);
+      // Consider 3 situations:
+      // 1. min_char[3].
+      fsm.edges.emplace_back();
+      fsm.edges[current_node_index].emplace_back(min_char[3], min_char[3], fsm.edges.size() - 1);
+      current_node_index = fsm.edges.size() - 1;
+      uint32_t largest_left_3_byte = utf8_successor_character_max;
+      largest_left_3_byte <<= 8;
+      largest_left_3_byte += utf8_successor_character_max;
+      largest_left_3_byte <<= 8;
+      largest_left_3_byte += utf8_successor_character_max;
+      AddUnicodeEdge(min_ch & 0x00ffffff, largest_left_3_byte, current_node_index, end_node);
+      current_node_index = start_node;
+
+      // 2. max_char[3].
+      fsm.edges.emplace_back();
+      fsm.edges[current_node_index].emplace_back(max_char[3], max_char[3], fsm.edges.size() - 1);
+      current_node_index = fsm.edges.size() - 1;
+      uint32_t smallest_right_3_byte = utf8_successor_character_min;
+      smallest_right_3_byte <<= 8;
+      smallest_right_3_byte += utf8_successor_character_min;
+      smallest_right_3_byte <<= 8;
+      smallest_right_3_byte += utf8_successor_character_min;
+      AddUnicodeEdge(smallest_right_3_byte, max_ch & 0x00ffffff, current_node_index, end_node);
+      current_node_index = start_node;
+
+      // 3. (min_char[3], max_char[3]).
+      if (min_char[3] + 1 < max_char[3]) {
+        fsm.edges.emplace_back();
+        fsm.edges[current_node_index].emplace_back(
+            min_char[3] + 1, max_char[3] - 1, fsm.edges.size() - 1
+        );
+        current_node_index = fsm.edges.size() - 1;
+        fsm.edges.emplace_back();
+        fsm.edges[current_node_index].emplace_back(
+            utf8_successor_character_min, utf8_successor_character_max, fsm.edges.size() - 1
+        );
+        current_node_index = fsm.edges.size() - 1;
+        fsm.edges.emplace_back();
+        fsm.edges[current_node_index].emplace_back(
+            utf8_successor_character_min, utf8_successor_character_max, fsm.edges.size() - 1
+        );
+        current_node_index = fsm.edges.size() - 1;
+        fsm.edges[current_node_index].emplace_back(
+            utf8_successor_character_min, utf8_successor_character_max, end_node
+        );
+      }
+      break;
+    }
+    default: {
+      XGRAMMAR_LOG(FATAL) << "Invalid unicode character: " << min_ch;
+    }
+  }
+}
+
 void FSMWithStartEnd::AcceptAllUnicodeCharacters(const int& from_node, const int& to_node) {
   static const uint8_t& utf8_successor_character_min = 0x80;
-  static const uint8_t& utf8_start_character_max = 0xbF;
+  static const uint8_t& utf8_successor_character_max = 0xbF;
   static const uint8_t& min_start_character_of_2_byte = 0xc2;
   static const uint8_t& max_start_character_of_2_byte = 0xdf;
   static const uint8_t& min_start_character_of_3_byte = 0xe0;
@@ -971,7 +1177,7 @@ void FSMWithStartEnd::AcceptAllUnicodeCharacters(const int& from_node, const int
       static_cast<int>(fsm.edges.size() - 1)
   });
   fsm.edges.back().push_back(
-      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
+      FSMEdge{utf8_successor_character_min, utf8_successor_character_max, to_node}
   );
 
   // Handle the 3-byte characters.
@@ -983,10 +1189,12 @@ void FSMWithStartEnd::AcceptAllUnicodeCharacters(const int& from_node, const int
       static_cast<int>(fsm.edges.size() - 2)
   });
   fsm.edges[fsm.edges.size() - 2].push_back(FSMEdge{
-      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 1)
+      utf8_successor_character_min,
+      utf8_successor_character_max,
+      static_cast<int>(fsm.edges.size() - 1)
   });
   fsm.edges[fsm.edges.size() - 1].push_back(
-      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
+      FSMEdge{utf8_successor_character_min, utf8_successor_character_max, to_node}
   );
 
   // Handle the 4-byte characters.
@@ -999,13 +1207,17 @@ void FSMWithStartEnd::AcceptAllUnicodeCharacters(const int& from_node, const int
       static_cast<int>(fsm.edges.size() - 3)
   });
   fsm.edges[fsm.edges.size() - 3].push_back(FSMEdge{
-      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 2)
+      utf8_successor_character_min,
+      utf8_successor_character_max,
+      static_cast<int>(fsm.edges.size() - 2)
   });
   fsm.edges[fsm.edges.size() - 2].push_back(FSMEdge{
-      utf8_successor_character_min, utf8_start_character_max, static_cast<int>(fsm.edges.size() - 1)
+      utf8_successor_character_min,
+      utf8_successor_character_max,
+      static_cast<int>(fsm.edges.size() - 1)
   });
   fsm.edges[fsm.edges.size() - 1].push_back(
-      FSMEdge{utf8_successor_character_min, utf8_start_character_max, to_node}
+      FSMEdge{utf8_successor_character_min, utf8_successor_character_max, to_node}
   );
 }
 
