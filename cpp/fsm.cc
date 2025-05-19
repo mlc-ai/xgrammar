@@ -1429,9 +1429,13 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Leaf& node) const {
     result.fsm.edges.push_back(std::vector<FSMEdge>());
     if (node.regex[i] == '\\') {
       const auto& [length, escapes] = HandleEscapes(node.regex, i);
-      for (const auto& escape : escapes) {
+      if (escapes.size() == 1) {
         result.fsm.edges[result.NumNodes() - 1].emplace_back(
-            escape.first, escape.second, result.NumNodes()
+            escapes[0].first, escapes[0].second, result.NumNodes()
+        );
+      } else {
+        result.fsm.edges[result.NumNodes() - 1].emplace_back(
+            node.regex[i + 1], node.regex[i + 1], result.NumNodes()
         );
       }
       i = i + length - 1;
