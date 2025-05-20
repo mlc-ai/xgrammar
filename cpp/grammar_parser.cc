@@ -935,76 +935,9 @@ int32_t EBNFParser::ParseTagDispatch() {
   return builder_.AddTagDispatch(tag_rule_pairs);
 }
 
-// std::pair<int32_t, int32_t> EBNFParser::ParseTagDispatchElement() {
-//   PeekAndConsume(TokenType::LParen, "Expect ( in tag dispatch element");
-
-//   // Parse tag (a string literal)
-//   if (Peek().type != TokenType::StringLiteral) {
-//     ReportParseError("Expect string literal for tag");
-//   }
-//   auto tag_id = ParseString();
-//   if (builder_.GetRuleExpr(tag_id).type == RuleExprType::kEmptyStr) {
-//     ReportParseError("Tag cannot be empty");
-//   }
-
-//   PeekAndConsume(TokenType::Comma, "Expect , in tag dispatch element");
-
-//   // Parse rule name (should refer to a rule in the grammar)
-//   std::string rule_name = ParseIdentifier(false);
-
-//   // The rule cannot be the root rule and should be defined in the grammar
-//   if (rule_name == root_rule_name_) {
-//     ReportParseError("The root rule \"" + rule_name + "\" cannot be used as a tag");
-//   }
-//   auto rule_id = builder_.GetRuleId(rule_name);
-//   if (rule_id == -1) {
-//     ReportParseError("Rule \"" + rule_name + "\" is not defined");
-//   }
-
-//   PeekAndConsume(TokenType::RParen, "Expect ) in tag dispatch element");
-
-//   return {tag_id, rule_id};
-// }
-
-// int32_t EBNFParser::ParseTagDispatchOrChoices() {
-//   const Token* saved_token = current_token_;
-
-//   if (Peek().type == TokenType::Identifier && Peek().lexeme == "TagDispatch") {
-//     Consume();
-
-//     // TODO(yixin): Make tagdispatch general
-//     if (cur_rule_name_ != root_rule_name_) {
-//       ReportParseError("TagDispatch should only be used in the root rule");
-//     }
-
-//     PeekAndConsume(TokenType::LParen, "Expect ( after TagDispatch");
-
-//     std::vector<std::pair<int32_t, int32_t>> tag_dispatch_list;
-//     while (true) {
-//       auto tag_dispatch = ParseTagDispatchElement();
-//       tag_dispatch_list.push_back(tag_dispatch);
-
-//       if (Peek().type == TokenType::Comma) {
-//         Consume();
-//       } else if (Peek().type == TokenType::RParen) {
-//         Consume();
-//         break;
-//       } else {
-//         ReportParseError("Expect , or ) in macro function TagDispatch");
-//       }
-//     }
-
-//     return builder_.AddTagDispatch(tag_dispatch_list);
-//   }
-
-//   // Reset token position if not TagDispatch
-//   current_token_ = saved_token;
-//   return ParseChoices();
-// }
-
 int32_t EBNFParser::ParseLookaheadAssertion() {
   PeekAndConsume(TokenType::LookaheadLParen, "Expect (= in lookahead assertion");
-  auto result = ParseSequence();
+  auto result = ParseChoices();
   PeekAndConsume(TokenType::RParen, "Expect )");
   return result;
 }

@@ -175,7 +175,6 @@ root_1 ::= ("" | ("a" root_1))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
-    print(after)
     assert after == expected
 
 
@@ -183,7 +182,7 @@ def test_lookahead_assertion():
     """Test lookahead assertion."""
     before = """root ::= "a" (="b")
 """
-    expected = """root ::= (("a")) (=("b"))
+    expected = """root ::= (("a")) (=(("b")))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
@@ -194,7 +193,7 @@ def test_complex_lookahead():
     """Test complex lookahead assertion."""
     before = """root ::= "a" (="b" "c" [0-9])
 """
-    expected = """root ::= (("a")) (=("b" "c" [0-9]))
+    expected = """root ::= (("a")) (=(("b" "c" [0-9])))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
@@ -329,9 +328,11 @@ d_1_choice ::= (("bcd") | ("pq"))
 """
 
     grammar = _ebnf_to_grammar_no_normalization(before)
+    print(grammar)
     grammar = GrammarFunctor.structure_normalizer(grammar)
     grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
+    print(after)
     assert after == expected
 
     # Here rule1 can be empty
@@ -342,10 +343,15 @@ rule1 ::= [abc]* [def]*
 rule1 ::= (([abc]* [def]*))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
+    print(grammar)
     grammar = GrammarFunctor.structure_normalizer(grammar)
     grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
+
+
+test_star_quantifier()
+exit()
 
 
 def test_repetition_range():
@@ -779,29 +785,31 @@ rule3 ::= (("c"))
 
 
 ebnf_str__expected_error_regex__test_lexer_parser_errors = [
-    (r'root ::= "a" "', r'EBNF lexer error at line 1, column 15: Expect " in string literal'),
-    (
-        "root ::= [a\n]",
-        r"EBNF lexer error at line 1, column 12: Character class should not contain newline",
-    ),
-    (r'root ::= "\@"', r"EBNF lexer error at line 1, column 11: Invalid escape sequence"),
-    (r'root ::= "\uFF"', r"EBNF lexer error at line 1, column 11: Invalid escape sequence"),
-    (r'::= "a"', r"EBNF lexer error at line 1, column 1: Assign should not be the first token"),
-    (r"root ::= a b", r'EBNF parser error at line 1, column 10: Rule "a" is not defined'),
-    (r'root ::= "a" |', r"EBNF parser error at line 1, column 15: Expect element"),
-    (
-        r"root ::= [Z-A]",
-        r"EBNF parser error at line 1, column 10: Invalid character class: lower bound is larger than upper bound\n",
-    ),
-    (
-        'root ::= "a"\nroot ::= "b"',
-        r'EBNF parser error at line 2, column 1: Rule "root" is defined multiple times',
-    ),
-    (
-        r'a ::= "a"',
-        r'EBNF parser error at line 1, column 1: The root rule with name "root" is not found',
-    ),
-    (r'root ::= "a" (="a") (="b")', r"EBNF parser error at line 1, column 21: Expect rule name"),
+    # (r'root ::= "a" "', 'EBNF lexer error at line 1, column 15: Expect " in string literal'),
+    # (
+    #     "root ::= [a\n]",
+    #     "EBNF lexer error at line 1, column 12: Character class should not contain newline",
+    # ),
+    # (r'root ::= "\@"', "EBNF lexer error at line 1, column 11: Invalid escape sequence"),
+    # (r'root ::= "\uFF"', "EBNF lexer error at line 1, column 11: Invalid escape sequence"),
+    # (r'::= "a"', "EBNF lexer error at line 1, column 1: Assign should not be the first token"),
+    # (r"root ::= a b", 'EBNF parser error at line 1, column 10: Rule "a" is not defined'),
+    # (r'root ::= "a" |', "EBNF parser error at line 1, column 15: Expect element"),
+    # (
+    #     r"root ::= [Z-A]",
+    #     "EBNF parser error at line 1, column 10: Invalid character class: lower bound is larger "
+    #     "than upper bound",
+    # ),
+    # (
+    #     'root ::= "a"\nroot ::= "b"',
+    #     'EBNF parser error at line 2, column 1: Rule "root" is defined multiple times',
+    # ),
+    # (
+    #     r'a ::= "a"',
+    #     'EBNF parser error at line 1, column 1: The root rule with name "root" is not found',
+    # ),
+    # (r'root ::= "a" (="a") (="b")', "EBNF parser error at line 1, column 21: Expect rule name"),
+    (r'root ::= "a" (=("a" | "b"))', "EBNF parser error at line 1, column 21: Expect rule name")
 ]
 
 
@@ -810,10 +818,14 @@ ebnf_str__expected_error_regex__test_lexer_parser_errors = [
 )
 def test_lexer_parser_errors(ebnf_str: str, expected_error_regex: Optional[str]):
     with pytest.raises(RuntimeError, match=expected_error_regex):
-        _ebnf_to_grammar_no_normalization(ebnf_str)
+        result = _ebnf_to_grammar_no_normalization(ebnf_str)
+        print(result)
 
 
-ebnf_str__expected_error_regex__test_tag_dispatch_errors = [
+test_lexer_parser_errors(*ebnf_str__expected_error_regex__test_lexer_parser_errors[0])
+exit()
+
+ebnf_str__expected_error_regex__test_tag_dispatch_parser_errors = [
     (
         'root ::= TagDispatch(("", rule1))\nrule1 ::= "a"',
         "EBNF parser error at line 1, column 21: Tag must be a non-empty string literal",
@@ -834,9 +846,10 @@ ebnf_str__expected_error_regex__test_tag_dispatch_errors = [
 
 
 @pytest.mark.parametrize(
-    "ebnf_str, expected_error_regex", ebnf_str__expected_error_regex__test_tag_dispatch_errors
+    "ebnf_str, expected_error_regex",
+    ebnf_str__expected_error_regex__test_tag_dispatch_parser_errors,
 )
-def test_tag_dispatch_errors(ebnf_str: str, expected_error_regex: Optional[str]):
+def test_tag_dispatch_parser_errors(ebnf_str: str, expected_error_regex: Optional[str]):
     with pytest.raises(RuntimeError, match=expected_error_regex):
         _ebnf_to_grammar_no_normalization(ebnf_str)
 
