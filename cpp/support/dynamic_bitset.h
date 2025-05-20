@@ -9,7 +9,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <utility>
 #include <vector>
+
+#include "picojson.h"
 
 // For __popcnt
 #ifdef _MSC_VER
@@ -78,7 +81,7 @@ class DynamicBitset {
   }
 
   /*! \brief Move assignment. */
-  DynamicBitset& operator=(DynamicBitset&& other) {
+  DynamicBitset& operator=(DynamicBitset&& other) noexcept {
     size_ = other.size_;
     buffer_size_ = other.buffer_size_;
     is_internal_ = other.is_internal_;
@@ -185,6 +188,39 @@ class DynamicBitset {
 
   friend std::size_t MemorySize(const DynamicBitset& bitset) {
     return bitset.buffer_size_ * sizeof(bitset.data_[0]);
+  }
+
+  picojson::value JSONSerialize() const {
+    const auto count_one = Count();
+    const auto count_zero = size_ - count_one;
+    auto result = picojson::array{};
+    if (count_one <= count_zero) {
+      result.reserve(count_one + BITS_PER_BLOCK + 2);
+      result.emplace_back<int64_t>(1);
+      result.emplace_back<int64_t>(count_one);
+      for (int i = 0; i < buffer_size_; ++i) {
+        if (data_[i] == 0u) continue;
+        for (int j = 0; j < BITS_PER_BLOCK; ++j) {
+          if (data_[i] & (1u << j)) {
+            result.emplace_back<int64_t>(i * BITS_PER_BLOCK + j);
+          }
+        }
+      }
+    } else {
+      result.reserve(count_zero + BITS_PER_BLOCK + 2);
+      result.emplace_back<int64_t>(0);
+      result.emplace_back<int64_t>(count_zero);
+      for (int i = 0; i < buffer_size_; ++i) {
+        if (data_[i] == ~0u) continue;
+        for (int j = 0; j < BITS_PER_BLOCK; ++j) {
+          if (!(data_[i] & (1u << j))) {
+            result.emplace_back<int64_t>(i * BITS_PER_BLOCK + j);
+          }
+        }
+      }
+    }
+    while (!result.empty() && result.back().get<int64_t>() >= size_) result.pop_back();
+    return picojson::value(std::move(result));
   }
 
  private:
