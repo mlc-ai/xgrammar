@@ -14,6 +14,7 @@
 
 #include "grammar_data_structure.h"
 #include "grammar_serializer.h"
+#include "support/serialize.h"
 
 namespace xgrammar {
 
@@ -59,6 +60,16 @@ struct StackElement {
            left_utf8_bytes == other.left_utf8_bytes && element_in_string == other.element_in_string;
   }
 };
+
+XGRAMMAR_MEMBER_ARRAY(
+    StackElement,
+    &StackElement::rule_id,
+    &StackElement::sequence_id,
+    &StackElement::element_id,
+    &StackElement::left_utf8_bytes,
+    &StackElement::element_in_string,
+    &StackElement::parent_id
+);
 
 /*! \brief A special value for invalid StackElement. */
 inline constexpr StackElement kInvalidStackElement(-1, -1, -1, -1);

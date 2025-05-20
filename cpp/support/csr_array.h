@@ -210,7 +210,7 @@ inline int32_t CSRArray<DataType>::InsertNonContiguous(
 
 template <typename DataType>
 XGRAMMAR_MEMBER_TABLE_TEMPLATE(
-    CSRArray<DataType>, "data_", CSRArray<DataType>::data_, "indptr_", CSRArray<DataType>::indptr_
+    CSRArray<DataType>, "data_", &CSRArray<DataType>::data_, "indptr_", &CSRArray<DataType>::indptr_
 );
 
 }  // namespace xgrammar

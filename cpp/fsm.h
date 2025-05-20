@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -15,7 +16,8 @@
 #include <variant>
 #include <vector>
 
-#include "../cpp/support/csr_array.h"
+#include "support/csr_array.h"
+#include "support/serialize.h"
 
 namespace xgrammar {
 
@@ -54,7 +56,28 @@ struct FSMEdge {
     \brief Check if the edge is a character range.
   */
   bool IsCharRange() const;
+
+  explicit FSMEdge(uint64_t value) {
+    // first cast into unsigned int,
+    unsigned int target_ = static_cast<unsigned int>(value >> 32);
+    unsigned short max_ = static_cast<unsigned short>(value >> 16);
+    unsigned short min_ = static_cast<unsigned short>(value);
+    min = min_;
+    max = max_;
+    target = target_;
+  }
+
+  explicit operator uint64_t() const {
+    // first cast into unsigned int,
+    unsigned short min_ = static_cast<unsigned short>(min);
+    unsigned short max_ = static_cast<unsigned short>(max);
+    unsigned int target_ = static_cast<unsigned int>(target);
+    using u64 = uint64_t;
+    return (u64(target_) << 32) | (u64(max_) << 16) | u64(min_);
+  }
 };
+
+XGRAMMAR_MEMBER_DELEGATE(FSMEdge, uint64_t);
 
 class CompactFSM;
 
@@ -362,6 +385,8 @@ class CompactFSM {
   friend class CompactFSMWithStartEnd;
 };
 
+XGRAMMAR_MEMBER_SUBCLASS(CompactFSM, edges);
+
 class CompactFSMWithStartEnd {
  public:
   bool is_dfa = false;
@@ -443,6 +468,13 @@ class CompactFSMWithStartEnd {
   */
   void GetPossibleRules(const int& node_num, std::unordered_set<int>* rules) const;
 };
+
+XGRAMMAR_MEMBER_ARRAY(
+    CompactFSMWithStartEnd,
+    &CompactFSMWithStartEnd::fsm,
+    &CompactFSMWithStartEnd::start,
+    &CompactFSMWithStartEnd::ends
+);
 
 /*!
   \brief Converts a regex string to a FSM. The parsing range is [start, end).
