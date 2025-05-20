@@ -208,13 +208,17 @@ TEST(XGrammarLexerTest, LineAndColumnTracking) {
   EXPECT_EQ(tokens[0].line, 1);
   EXPECT_EQ(tokens[0].column, 1);
   EXPECT_EQ(tokens[1].line, 1);
+  EXPECT_EQ(tokens[1].column, 7);
   EXPECT_EQ(tokens[2].line, 1);
+  EXPECT_EQ(tokens[2].column, 11);
 
   // Second line tokens
   EXPECT_EQ(tokens[3].line, 2);
   EXPECT_EQ(tokens[3].column, 1);
   EXPECT_EQ(tokens[4].line, 2);
+  EXPECT_EQ(tokens[4].column, 7);
   EXPECT_EQ(tokens[5].line, 2);
+  EXPECT_EQ(tokens[5].column, 11);
 }
 
 TEST(XGrammarLexerTest, ComplexGrammar) {

@@ -465,7 +465,7 @@ class EBNFParser {
   void PeekAndConsume(TokenType type, const std::string& message);
 
   // Report a parsing error with the given message
-  [[noreturn]] void ReportParseError(const std::string& msg);
+  [[noreturn]] void ReportParseError(const std::string& msg, int delta_element = 0);
 
   // The grammar builder
   GrammarBuilder builder_;
@@ -479,14 +479,8 @@ class EBNFParser {
   // The current rule name. Help to generate a name for a new rule.
   std::string cur_rule_name_;
 
-  // Whether the current element is in parentheses.
-  // A sequence expression cannot contain newline, unless it is in parentheses.
-  bool in_parentheses_ = false;
-
   // The name of the root rule
   std::string root_rule_name_;
-
-  inline static constexpr int64_t MAX_INTEGER_IN_GRAMMAR = 1e10;
 
   static const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>> kMacroFunctions;
 };
@@ -507,12 +501,12 @@ void EBNFParser::PeekAndConsume(TokenType type, const std::string& message) {
   Consume();
 }
 
-void EBNFParser::ReportParseError(const std::string& msg) {
+void EBNFParser::ReportParseError(const std::string& msg, int delta_element) {
   XGRAMMAR_DCHECK(current_token_ < tokens_.data() + tokens_.size());
-  int line = Peek().line;
-  int column = Peek().column;
-  XGRAMMAR_LOG(FATAL) << "EBNF parse error at line " + std::to_string(line) + ", column " +
-                             std::to_string(column) + ": " + msg;
+  int line_to_print = Peek(delta_element).line;
+  int column_to_print = Peek(delta_element).column;
+  XGRAMMAR_LOG(FATAL) << "EBNF parser error at line " + std::to_string(line_to_print) +
+                             ", column " + std::to_string(column_to_print) + ": " + msg;
   XGRAMMAR_UNREACHABLE();
 }
 
@@ -555,7 +549,7 @@ int32_t EBNFParser::ParseCharacterClass() {
       TCodepoint upper = codepoints[i + 2];
 
       if (lower > upper) {
-        ReportParseError("Invalid character class: lower bound is larger than upper bound");
+        ReportParseError("Invalid character class: lower bound is larger than upper bound", -1);
       }
 
       elements.push_back({lower, upper});
@@ -593,7 +587,7 @@ int32_t EBNFParser::ParseRuleRef() {
   std::string name = ParseIdentifier();
   auto rule_id = builder_.GetRuleId(name);
   if (rule_id == -1) {
-    ReportParseError("Rule \"" + name + "\" is not defined");
+    ReportParseError("Rule \"" + name + "\" is not defined", -1);
   }
   return builder_.AddRuleRef(rule_id);
 }
@@ -602,7 +596,9 @@ int32_t EBNFParser::ParseElement() {
   if (Peek().type == TokenType::LParen) {
     Consume();
     if (Peek().type == TokenType::RParen) {
-      ReportParseError("Empty parentheses are not allowed");
+      // Special case: ( )
+      Consume();
+      return builder_.AddEmptyStr();
     }
     auto rule_expr_id = ParseChoices();
     PeekAndConsume(TokenType::RParen, "Expect )");
@@ -618,13 +614,13 @@ int32_t EBNFParser::ParseElement() {
       return ParseRuleRef();
     }
   } else {
-    ReportParseError("Expect element");
+    ReportParseError("Expect element, but got " + Peek().lexeme);
   }
 }
 
 int64_t EBNFParser::ParseInteger() {
   if (Peek().type != TokenType::IntegerLiteral) {
-    ReportParseError("Expect integer");
+    ReportParseError("Expect integer, but got " + Peek().lexeme);
   }
   int64_t num = std::any_cast<int64_t>(Peek().value);
   Consume();
@@ -637,7 +633,7 @@ std::pair<int64_t, int64_t> EBNFParser::ParseRepetitionRange() {
   int64_t lower = ParseInteger();
 
   if (lower < 0) {
-    ReportParseError("Lower bound cannot be negative");
+    ReportParseError("Lower bound cannot be negative", -1);
   }
 
   if (Peek().type == TokenType::Comma) {
@@ -650,7 +646,8 @@ std::pair<int64_t, int64_t> EBNFParser::ParseRepetitionRange() {
     if (upper < lower) {
       ReportParseError(
           "Lower bound is larger than upper bound: " + std::to_string(lower) + " > " +
-          std::to_string(upper)
+              std::to_string(upper),
+          -1
       );
     }
     PeekAndConsume(TokenType::RBrace, "Expect }");
@@ -897,7 +894,9 @@ EBNFParser::MacroIR::NodePtr EBNFParser::ParseMacroValue() {
 
 int32_t EBNFParser::ParseTagDispatch() {
   Consume();  // Consume TagDispatch operator
+  auto start = current_token_;
   auto args = ParseMacroArguments();
+  auto delta_element = start - current_token_;  // Used to report parse errors
   // Process the arguments for TagDispatch
   std::vector<std::pair<int32_t, int32_t>> tag_rule_pairs;
 
@@ -905,29 +904,29 @@ int32_t EBNFParser::ParseTagDispatch() {
   for (const auto& arg : args.arguments) {
     auto tuple_node = std::get_if<MacroIR::TupleNode>(arg.get());
     if (tuple_node == nullptr) {
-      ReportParseError("Each tag dispatch element must be a tuple");
+      ReportParseError("Each tag dispatch element must be a tuple", delta_element);
     }
 
     if (tuple_node->elements.size() != 2) {
-      ReportParseError("Each tag dispatch element must be a pair (tag, rule)");
+      ReportParseError("Each tag dispatch element must be a pair (tag, rule)", delta_element);
     }
 
     // First element should be a string (tag)
     auto tag_str_node = std::get_if<MacroIR::StringNode>(tuple_node->elements[0].get());
-    if (tag_str_node == nullptr) {
-      ReportParseError("Tag must be a string literal");
+    if (tag_str_node == nullptr || tag_str_node->value.empty()) {
+      ReportParseError("Tag must be a non-empty string literal", delta_element);
     }
     auto tag_id = builder_.AddByteString(tag_str_node->value);
 
     // Second element should be an identifier (rule name)
     auto rule_name_node = std::get_if<MacroIR::IdentifierNode>(tuple_node->elements[1].get());
     if (rule_name_node == nullptr) {
-      ReportParseError("Rule reference must be an identifier");
+      ReportParseError("Rule reference must be an identifier", delta_element);
     }
 
     auto rule_id = builder_.GetRuleId(rule_name_node->name);
     if (rule_id == -1) {
-      ReportParseError("Rule \"" + rule_name_node->name + "\" is not defined");
+      ReportParseError("Rule \"" + rule_name_node->name + "\" is not defined", delta_element);
     }
 
     tag_rule_pairs.push_back({tag_id, rule_id});
@@ -1030,17 +1029,19 @@ EBNFParser::Rule EBNFParser::ParseRule() {
 }
 
 void EBNFParser::InitRuleNames() {
+  int delta_element = 0;
   for (auto& token : tokens_) {
     if (token.type == TokenType::RuleName) {
-      auto name = token.lexeme;
+      auto name = std::any_cast<std::string>(token.value);
       if (builder_.GetRuleId(name) != -1) {
-        ReportParseError("Rule \"" + name + "\" is defined multiple times");
+        ReportParseError("Rule \"" + name + "\" is defined multiple times", delta_element);
       }
       builder_.AddEmptyRule(name);
     }
+    ++delta_element;
   }
   if (builder_.GetRuleId(root_rule_name_) == -1) {
-    ReportParseError("The root rule with name \"" + root_rule_name_ + "\" is not found.");
+    ReportParseError("The root rule with name \"" + root_rule_name_ + "\" is not found", 0);
   }
 }
 
@@ -1048,13 +1049,13 @@ Grammar EBNFParser::Parse(
     const std::vector<EBNFLexer::Token>& tokens, const std::string& root_rule_name
 ) {
   tokens_ = tokens;
+  current_token_ = tokens_.data();
   root_rule_name_ = root_rule_name;
 
   // First collect rule names
   InitRuleNames();
 
   // Then parse all the rules
-  current_token_ = tokens_.data();
   while (Peek().type != TokenType::EndOfFile) {
     auto new_rule = ParseRule();
     builder_.UpdateRuleBody(new_rule.name, new_rule.body_expr_id);
