@@ -176,8 +176,6 @@ class Grammar::Impl {
   std::vector<int32_t> allow_empty_rule_ids;
 
   friend class GrammarBuilder;
-  friend class GrammarSerializer;
-  friend class GrammarDeserializer;
   friend class GrammarCompiler;
 
   std::size_t MemorySize() const;

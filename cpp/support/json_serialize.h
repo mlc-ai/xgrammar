@@ -147,7 +147,7 @@ inline picojson::value TraitJSONSerialize(const T& value) {
     details::visit_tuple(
         [&obj, &value](auto pair, size_t) {
           auto&& [name, member_ptr] = pair;
-          obj.try_emplace(name, AutoJSONSerialize(value.*member_ptr));
+          obj[name] = AutoJSONSerialize(value.*member_ptr);
         },
         Trait::kTable
     );
