@@ -19,42 +19,29 @@ struct has_equality<T, std::void_t<decltype(std::declval<T>() == std::declval<T>
 
 template <bool SkipDefault = false, typename T>
 inline bool TraitCompareEq(const T& lhs, const T& rhs) {
-  using Trait = member_trait<T>;
-  // a shortcut for non-default compare
-  if constexpr (SkipDefault) {
-    if (&lhs == &rhs) return true;
-  }
-
+  using Functor = details::member_functor<T>;
   if constexpr (!SkipDefault && details::has_equality<T>::value) {
     return lhs == rhs;
-  } else if constexpr (std::is_base_of_v<member_array, Trait>) {
+  } else if constexpr (Functor::value == member_registry::kConfig) {
     return std::apply(
-        [&lhs, &rhs](auto&&... args) { return ((lhs.*args == rhs.*args) && ...); }, Trait::kArray
-    );
-  } else if constexpr (std::is_base_of_v<member_table, Trait>) {
-    return std::apply(
-        [&lhs, &rhs](auto&&... pairs) {
-          return ((lhs.*std::get<1>(pairs) == rhs.*std::get<1>(pairs)) && ...);
+        [&lhs, &rhs](auto&&... member_ptr) {
+          return (TraitCompareEq(lhs.*member_ptr, rhs.*member_ptr) && ...);
         },
-        Trait::kTable
+        Functor::members
     );
-  } else if constexpr (std::is_base_of_v<member_delegate, Trait>) {
-    using Delegate = typename Trait::delegate_type;
-    return TraitCompareEq(static_cast<Delegate>(lhs), static_cast<Delegate>(rhs));
-  } else if constexpr (std::is_base_of_v<member_subclass, Trait>) {
-    constexpr auto kSubclass = Trait::kSubclass;
-    return TraitCompareEq(lhs.*kSubclass, rhs.*kSubclass);
+  } else if constexpr (Functor::value == member_registry::kDelegate) {
+    return TraitCompareEq(Functor::into(lhs), Functor::into(rhs));
   } else {
     static_assert(details::false_v<T>, "Cannot compare this type");
     return false;
   }
 }
 
-#define XGRAMMAR_GENERATE_EQUALITY(T)                                \
-  bool operator==(const T& lhs, const T& rhs) {                      \
-    /* skip default compare to prevent infinite recursion  */        \
-    return xgrammar::TraitCompareEq</*SkipDefault=*/true>(lhs, rhs); \
-  }                                                                  \
+#define XGRAMMAR_GENERATE_EQUALITY(T)                                                \
+  bool operator==(const T& lhs, const T& rhs) {                                      \
+    /* skip default compare to prevent infinite recursion  */                        \
+    return &lhs == &rhs || xgrammar::TraitCompareEq</*SkipDefault=*/true>(lhs, rhs); \
+  }                                                                                  \
   static_assert(true, "Don't forget the semicolon after the macro")
 
 }  // namespace xgrammar
