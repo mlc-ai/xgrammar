@@ -7,6 +7,7 @@
 
 #include <sys/types.h>
 
+#include <algorithm>
 #include <cassert>
 #include <cctype>
 #include <cstddef>
@@ -774,6 +775,15 @@ std::pair<uint32_t, uint32_t> NextUnicode(const std::string& str, size_t& index)
   return std::make_pair(num_byte, unicode);
 }
 
+static const uint8_t& utf8_successor_character_min = 0x80;
+static const uint8_t& utf8_successor_character_max = 0xbF;
+static const uint32_t& min_2_byte_character = 0xc280;
+static const uint32_t& max_2_byte_character = 0xdfbf;
+static const uint32_t& min_3_byte_character = 0xe08080;
+static const uint32_t& max_3_byte_character = 0xefbfbf;
+static const uint32_t& min_4_byte_character = 0xf0808080;
+static const uint32_t& max_4_byte_character = 0xf4bfbfbf;
+
 FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
   is_dfa = true;
   start = 0;
@@ -900,13 +910,6 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
     char_class_edges.emplace_back('-', '-');
   }
 
-  for (const auto& edge : char_class_edges) {
-    if (edge.second > 0x7f) {
-      if (negative) {
-        XGRAMMAR_LOG(FATAL) << "In a negative character class, the range should be in [0, 0x7f].";
-      }
-    }
-  }
   BuildCharacterClass(char_class_edges, negative, 0, 1);
 }
 
@@ -917,39 +920,76 @@ void FSMWithStartEnd::BuildCharacterClass(
     int end_node
 ) {
   auto& edges = fsm.edges[start_node];
-  if (is_negative) {
-    std::vector<bool> is_accepted(0x80, true);
+  if (!is_negative) {
     for (const auto& edge : char_class_edges) {
-      for (int i = edge.first; i <= int(edge.second); i++) {
-        is_accepted[i] = false;
+      if (edge.second < 0x80) {
+        edges.emplace_back(edge.first, edge.second, end_node);
+      } else {
+        AddUnicodeEdge(edge.first, edge.second, start_node, end_node);
       }
     }
-    for (int i = 0; i < 0x80; i++) {
-      if (is_accepted[i]) {
-        bool has_end = false;
-        for (int j = i + 1; j < 0x80; j++) {
-          if (!is_accepted[j]) {
-            has_end = true;
-            edges.emplace_back(i, j - 1, end_node);
-            i = j;
-            break;
-          }
-        }
-        if (!has_end) {
-          edges.emplace_back(i, 0x7f, end_node);
-          break;
-        }
-      }
+    return;
+  }
+
+  // Sort the negative edges.
+  std::sort(char_class_edges.begin(), char_class_edges.end(), [](const auto& a, const auto& b) {
+    if (a.first != b.first) return a.first < b.first;
+    return a.second < b.second;
+  });
+  std::vector<std::pair<uint32_t, uint32_t>> negative_intervals;
+  if (char_class_edges.empty()) {
+    // Accept all characters.
+    edges.emplace_back(0, 0x7f, end_node);
+    AcceptAllUnicodeCharacters(start_node, end_node);
+    return;
+  }
+
+  // step 1. Get the negative intervals.
+  negative_intervals.push_back(char_class_edges[0]);
+  for (size_t i = 1; i < char_class_edges.size(); ++i) {
+    if (char_class_edges[i].first > negative_intervals.back().second + 1) {
+      // The two intervals have no intersection.
+      negative_intervals.emplace_back(char_class_edges[i]);
+    } else {
+      // The two intervals have intersection.
+      negative_intervals.back().second =
+          std::max(negative_intervals.back().second, char_class_edges[i].second);
+    }
+  }
+
+  // step 2. Get the complement intervals.
+  std::vector<std::pair<uint32_t, uint32_t>> complement_intervals;
+  uint32_t last_end = 0;
+  for (const auto& interval : negative_intervals) {
+    XGRAMMAR_LOG(INFO) << "interval: " << interval.first << ", " << interval.second;
+    // TODO(Linzhang): Here, the last unicode and the next unicode is not precise.
+    if (last_end < interval.first) {
+      complement_intervals.emplace_back(last_end, interval.first - 1);
+    }
+    last_end = interval.second + 1;
+  }
+  XGRAMMAR_LOG(INFO) << "last_end: " << last_end;
+
+  // step 3.1. Check if the characters are all ascii.
+  if (last_end <= 0x80) {
+    // In this case, all the unicode characters are accepted.
+    complement_intervals.emplace_back(last_end, 0x7f);
+    for (const auto& interval : complement_intervals) {
+      edges.emplace_back(interval.first, interval.second, end_node);
     }
     AcceptAllUnicodeCharacters(start_node, end_node);
     return;
   }
-  for (const auto& edge : char_class_edges) {
-    // TODO(Linzhang): support the unicode range here.
-    if (edge.second < 0x80) {
-      edges.emplace_back(edge.first, edge.second, end_node);
+  XGRAMMAR_DCHECK(last_end > 0x7f);
+  if (last_end <= max_4_byte_character) {
+    complement_intervals.emplace_back(last_end, max_4_byte_character);
+  }
+
+  for (const auto& interval : complement_intervals) {
+    if (interval.second <= 0x7f) {
+      edges.emplace_back(interval.first, interval.second, end_node);
     } else {
-      AddUnicodeEdge(edge.first, edge.second, start_node, end_node);
+      AddUnicodeEdge(interval.first, interval.second, start_node, end_node);
     }
   }
 }
@@ -957,13 +997,6 @@ void FSMWithStartEnd::BuildCharacterClass(
 void FSMWithStartEnd::AddUnicodeEdge(
     uint32_t min_ch, uint32_t max_ch, int start_node, int end_node
 ) {
-  static const uint8_t& utf8_successor_character_min = 0x80;
-  static const uint8_t& utf8_successor_character_max = 0xbF;
-  static const uint32_t& min_2_byte_character = 0xc280;
-  static const uint32_t& max_2_byte_character = 0xdfbf;
-  static const uint32_t& min_3_byte_character = 0xe08080;
-  static const uint32_t& max_3_byte_character = 0xefbfbf;
-  static const uint32_t& min_4_byte_character = 0xf0808080;
   uint8_t min_char[4] = {0};
   uint8_t max_char[4] = {0};
   int min_length = 0;

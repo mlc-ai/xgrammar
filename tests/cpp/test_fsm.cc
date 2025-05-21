@@ -894,7 +894,6 @@ TEST(XGrammarFSMTest, UTF8Test) {
   std::string unicode_in_character_class2 = "root ::= [a-𰻝]";
   test_str = "你";
   parser = EarleyParserWithFSM(unicode_in_character_class2, "root");
-  std::cout << parser;
   for (const auto& ch : test_str) {
     std::cout << static_cast<uint32_t>(static_cast<uint8_t>(ch)) << std::endl;
     EXPECT_FALSE(parser.IsAcceptStopToken());
@@ -917,4 +916,23 @@ TEST(XGrammarFSMTest, UTF8Test) {
     EXPECT_TRUE(parser.Advance(ch));
   }
   EXPECT_TRUE(parser.IsAcceptStopToken());
+
+  std::string negative_grammar = R"(
+    root ::= [^z-好]
+  )";
+  parser = EarleyParserWithFSM(negative_grammar, "root");
+  test_str = "𰻝";
+  for (const auto& ch : test_str) {
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  parser.Reset();
+  test_str = "a";
+  for (const auto& ch : test_str) {
+    EXPECT_FALSE(parser.IsAcceptStopToken());
+    EXPECT_TRUE(parser.Advance(ch));
+  }
+  EXPECT_TRUE(parser.IsAcceptStopToken());
+  std::cout << parser;
 }
