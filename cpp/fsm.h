@@ -75,6 +75,10 @@ struct FSMEdge {
     using u64 = uint64_t;
     return (u64(target_) << 32) | (u64(max_) << 16) | u64(min_);
   }
+
+  bool operator==(const FSMEdge& other) const {
+    return min == other.min && max == other.max && target == other.target;
+  }
 };
 
 XGRAMMAR_MEMBER_DELEGATE(FSMEdge, uint64_t);
@@ -471,6 +475,7 @@ class CompactFSMWithStartEnd {
 
 XGRAMMAR_MEMBER_ARRAY(
     CompactFSMWithStartEnd,
+    &CompactFSMWithStartEnd::is_dfa,
     &CompactFSMWithStartEnd::fsm,
     &CompactFSMWithStartEnd::start,
     &CompactFSMWithStartEnd::ends
