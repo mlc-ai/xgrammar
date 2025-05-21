@@ -784,6 +784,129 @@ static const uint32_t& max_3_byte_character = 0xefbfbf;
 static const uint32_t& min_4_byte_character = 0xf0808080;
 static const uint32_t& max_4_byte_character = 0xf4bfbfbf;
 
+uint32_t NextUnicode(uint32_t unicode) {
+  if (unicode == 0x7f) {
+    return min_2_byte_character;
+  }
+  if (unicode == max_2_byte_character) {
+    return min_3_byte_character;
+  }
+  if (unicode == max_3_byte_character) {
+    return min_4_byte_character;
+  }
+  if (unicode == max_4_byte_character) {
+    XGRAMMAR_LOG(WARNING) << "The unicode is too large: " << unicode;
+    return 0xffffffff;
+  }
+  uint32_t unicode_bytes[4] = {0};
+  int num_bytes = 0;
+  while (unicode > 0) {
+    unicode_bytes[num_bytes++] = unicode & 0xff;
+    unicode >>= 8;
+  }
+  if (num_bytes == 1) {
+    return unicode_bytes[0] + 1;
+  }
+  if (num_bytes == 2) {
+    if (unicode_bytes[0] != 0xbf) {
+      return unicode + 1;
+    }
+    unicode_bytes[0] = 0x80;
+    unicode_bytes[1] += 1;
+    return unicode_bytes[0] + (unicode_bytes[1] << 8);
+  }
+
+  if (num_bytes == 3) {
+    if (unicode_bytes[0] != 0xbf) {
+      return unicode + 1;
+    }
+    unicode_bytes[0] = 0x80;
+    unicode_bytes[1] += 1;
+    if (unicode_bytes[1] > 0xbf) {
+      unicode_bytes[1] = 0x80;
+      unicode_bytes[2] += 1;
+    }
+    return unicode_bytes[0] + (unicode_bytes[1] << 8) + (unicode_bytes[2] << 16);
+  }
+  XGRAMMAR_DCHECK(num_bytes == 4);
+  if (unicode_bytes[0] != 0xbf) {
+    return unicode + 1;
+  }
+  unicode_bytes[0] = 0x80;
+  unicode_bytes[1] += 1;
+  if (unicode_bytes[1] > 0xbf) {
+    unicode_bytes[1] = 0x80;
+    unicode_bytes[2] += 1;
+    if (unicode_bytes[2] > 0xbf) {
+      unicode_bytes[2] = 0x80;
+      unicode_bytes[3] += 1;
+    }
+  }
+  return unicode_bytes[0] + (unicode_bytes[1] << 8) + (unicode_bytes[2] << 16) +
+         (unicode_bytes[3] << 24);
+}
+
+uint32_t LastUnicode(uint32_t unicode) {
+  if (unicode == min_4_byte_character) {
+    return max_3_byte_character;
+  }
+  if (unicode == min_3_byte_character) {
+    return max_2_byte_character;
+  }
+  if (unicode == min_2_byte_character) {
+    return 0x7f;
+  }
+  if (unicode == 0) {
+    XGRAMMAR_LOG(WARNING) << "The unicode is too small: " << unicode;
+    return 0xffffffff;
+  }
+  uint32_t unicode_bytes[4] = {0};
+  int num_bytes = 0;
+  while (unicode > 0) {
+    unicode_bytes[num_bytes++] = unicode & 0xff;
+    unicode >>= 8;
+  }
+  if (num_bytes == 1) {
+    return unicode_bytes[0] - 1;
+  }
+  if (num_bytes == 2) {
+    if (unicode_bytes[0] != 0x80) {
+      return unicode - 1;
+    }
+    unicode_bytes[0] = 0xbf;
+    unicode_bytes[1] -= 1;
+    return unicode_bytes[0] + (unicode_bytes[1] << 8);
+  }
+  if (num_bytes == 3) {
+    if (unicode_bytes[0] != 0x80) {
+      return unicode - 1;
+    }
+    unicode_bytes[0] = 0xbf;
+    unicode_bytes[1] -= 1;
+    if (unicode_bytes[1] < 0x80) {
+      unicode_bytes[1] = 0xbf;
+      unicode_bytes[2] -= 1;
+    }
+    return unicode_bytes[0] + (unicode_bytes[1] << 8) + (unicode_bytes[2] << 16);
+  }
+  XGRAMMAR_DCHECK(num_bytes == 4);
+  if (unicode_bytes[0] != 0x80) {
+    return unicode - 1;
+  }
+  unicode_bytes[0] = 0xbf;
+  unicode_bytes[1] -= 1;
+  if (unicode_bytes[1] < 0x80) {
+    unicode_bytes[1] = 0xbf;
+    unicode_bytes[2] -= 1;
+    if (unicode_bytes[2] < 0x80) {
+      unicode_bytes[2] = 0xbf;
+      unicode_bytes[3] -= 1;
+    }
+  }
+  return unicode_bytes[0] + (unicode_bytes[1] << 8) + (unicode_bytes[2] << 16) +
+         (unicode_bytes[3] << 24);
+}
+
 FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
   is_dfa = true;
   start = 0;
@@ -947,7 +1070,7 @@ void FSMWithStartEnd::BuildCharacterClass(
   // step 1. Get the negative intervals.
   negative_intervals.push_back(char_class_edges[0]);
   for (size_t i = 1; i < char_class_edges.size(); ++i) {
-    if (char_class_edges[i].first > negative_intervals.back().second + 1) {
+    if (char_class_edges[i].first > NextUnicode(negative_intervals.back().second)) {
       // The two intervals have no intersection.
       negative_intervals.emplace_back(char_class_edges[i]);
     } else {
@@ -962,13 +1085,11 @@ void FSMWithStartEnd::BuildCharacterClass(
   uint32_t last_end = 0;
   for (const auto& interval : negative_intervals) {
     XGRAMMAR_LOG(INFO) << "interval: " << interval.first << ", " << interval.second;
-    // TODO(Linzhang): Here, the last unicode and the next unicode is not precise.
     if (last_end < interval.first) {
-      complement_intervals.emplace_back(last_end, interval.first - 1);
+      complement_intervals.emplace_back(last_end, LastUnicode(interval.first));
     }
-    last_end = interval.second + 1;
+    last_end = NextUnicode(interval.second);
   }
-  XGRAMMAR_LOG(INFO) << "last_end: " << last_end;
 
   // step 3.1. Check if the characters are all ascii.
   if (last_end <= 0x80) {
