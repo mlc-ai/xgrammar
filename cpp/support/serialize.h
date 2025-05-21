@@ -5,22 +5,17 @@
 
 namespace xgrammar {
 
-struct member_array : std::true_type {};
-
-struct member_table : std::true_type {};
-
-struct member_delegate : std::true_type {};
-
-struct member_subclass : std::true_type {};
-
-template <typename T>
-struct member_trait : std::false_type {};
-
 namespace details {
 
+// We cannot use `static_assert(false)` even in unreachable code in `if constexpr`.
+// See https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2593r1.html
+// for more details.
+// TL;DR: We use the following `false_v` as a workaround.
 template <typename T>
 inline constexpr bool false_v = false;
 
+// Make the table for member pointers, packing each 2 elements into a pair.
+// Note that we don't allow empty tables now (that's uncommon).
 template <typename X, typename Y, typename... Args>
 inline constexpr auto make_table(X first, Y second, Args... args) {
   // pack each 2 elements into a pair
@@ -37,39 +32,42 @@ inline constexpr auto make_table(X first, Y second, Args... args) {
 
 }  // namespace details
 
-template <auto... MemberPtrs>
-struct member_array_impl : member_array {
-  static constexpr auto kOffset = std::make_tuple(MemberPtrs...);
-};
+// base trait for member traits
+// for true_types, we define a few patterns to describe the member traits.
+template <typename T>
+struct member_trait : std::false_type {};
 
-template <typename T, typename D>
-struct member_delegate_impl : member_delegate {
-  using delegate_type = D;
-};
+// Implementation should contains `kArray` as the tuple of member pointers.
+struct member_array : std::true_type {};
 
-template <typename T, auto MemberPtr>
-struct member_subclass_impl : member_subclass {
-  static constexpr auto kSubclass = MemberPtr;
-};
+// Implementation should contains `kTable` as a tuple of pairs of (name, member pointer).
+struct member_table : std::true_type {};
+
+// Implementation should contains type `delegate_type` as the type of the delegate.
+struct member_delegate : std::true_type {};
+
+// Implementation should contains `kSubclass` as the member pointer to the subclass.
+// This will delegate the serialization to the member (usually the only one) of this class.
+struct member_subclass : std::true_type {};
 
 #define XGRAMMAR_MEMBER_TABLE_TEMPLATE(Type, ...)                                \
   struct member_trait<Type> : member_table {                                     \
     static constexpr auto kTable = ::xgrammar::details::make_table(__VA_ARGS__); \
   }
 
-#define XGRAMMAR_MEMBER_ARRAY_TEMPLATE(Type, ...)              \
-  struct member_trait<Type> : member_array_impl<__VA_ARGS__> { \
-    using member_array_impl<__VA_ARGS__>::kOffset;             \
+#define XGRAMMAR_MEMBER_ARRAY_TEMPLATE(Type, ...)                \
+  struct member_trait<Type> : member_array {                     \
+    static constexpr auto kArray = std::make_tuple(__VA_ARGS__); \
   }
 
-#define XGRAMMAR_MEMBER_DELEGATE_TEMPLATE(Type, Delegate)            \
-  struct member_trait<Type> : member_delegate_impl<Type, Delegate> { \
-    using member_delegate_impl<Type, Delegate>::delegate_type;       \
+#define XGRAMMAR_MEMBER_DELEGATE_TEMPLATE(Type, Delegate) \
+  struct member_trait<Type> : member_delegate {           \
+    using delegate_type = Delegate;                       \
   }
 
-#define XGRAMMAR_MEMBER_SUBCLASS_TEMPLATE(Type, MEMBER)                   \
-  struct member_trait<Type> : member_subclass_impl<Type, &Type::MEMBER> { \
-    using member_subclass_impl<Type, &Type::MEMBER>::kSubclass;           \
+#define XGRAMMAR_MEMBER_SUBCLASS_TEMPLATE(Type, MemberPtr) \
+  struct member_trait<Type> : member_subclass {            \
+    static constexpr auto kSubclass = MemberPtr;           \
   }
 
 #define XGRAMMAR_MEMBER_TABLE(Type, ...) \
@@ -84,8 +82,8 @@ struct member_subclass_impl : member_subclass {
   template <>                                    \
   XGRAMMAR_MEMBER_DELEGATE_TEMPLATE(Type, Delegate)
 
-#define XGRAMMAR_MEMBER_SUBCLASS(Type, MEMBER) \
-  template <>                                  \
-  XGRAMMAR_MEMBER_SUBCLASS_TEMPLATE(Type, MEMBER)
+#define XGRAMMAR_MEMBER_SUBCLASS(Type, MemberPtr) \
+  template <>                                     \
+  XGRAMMAR_MEMBER_SUBCLASS_TEMPLATE(Type, MemberPtr)
 
 }  // namespace xgrammar

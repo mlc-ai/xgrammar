@@ -133,12 +133,12 @@ inline picojson::value TraitJSONSerialize(const T& value) {
   using Trait = member_trait<T>;
   if constexpr (std::is_base_of_v<member_array, Trait>) {
     picojson::array arr;
-    arr.reserve(std::tuple_size_v<std::decay_t<decltype(Trait::kOffset)>>);
+    arr.reserve(std::tuple_size_v<std::decay_t<decltype(Trait::kArray)>>);
     details::visit_tuple(
         [&arr, &value](auto member_ptr, size_t) {
           arr.push_back(AutoJSONSerialize(value.*member_ptr));
         },
-        Trait::kOffset
+        Trait::kArray
     );
     return picojson::value(std::move(arr));
   } else if constexpr (std::is_base_of_v<member_table, Trait>) {
@@ -199,14 +199,14 @@ inline void TraitJSONDeserialize(T& result, const picojson::value& value) {
   using Trait = member_trait<T>;
   if constexpr (std::is_base_of_v<member_array, Trait>) {
     const auto& arr = details::json_as<picojson::array>(value);
-    XGRAMMAR_CHECK(arr.size() == std::tuple_size_v<std::decay_t<decltype(Trait::kOffset)>>)
+    XGRAMMAR_CHECK(arr.size() == std::tuple_size_v<std::decay_t<decltype(Trait::kArray)>>)
         << "Wrong number of elements in array in JSONDeserialize";
     details::visit_tuple(
         [&arr, &result](auto member_ptr, size_t idx) {
           using U = std::decay_t<decltype(result.*member_ptr)>;
           result.*member_ptr = AutoJSONDeserialize<U>(arr[idx]);
         },
-        Trait::kOffset
+        Trait::kArray
     );
   } else if constexpr (std::is_base_of_v<member_table, Trait>) {
     const auto& obj = details::json_as<picojson::object>(value);

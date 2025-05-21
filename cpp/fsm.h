@@ -385,7 +385,7 @@ class CompactFSM {
   friend class CompactFSMWithStartEnd;
 };
 
-XGRAMMAR_MEMBER_SUBCLASS(CompactFSM, edges);
+XGRAMMAR_MEMBER_SUBCLASS(CompactFSM, &CompactFSM::edges);
 
 class CompactFSMWithStartEnd {
  public:
