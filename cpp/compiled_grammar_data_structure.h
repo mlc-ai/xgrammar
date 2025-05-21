@@ -135,7 +135,7 @@ class CompiledGrammar::Impl {
   friend struct member_trait<Impl>;
 
   picojson::value JSONSerialize() const;
-  static Impl JSONDeserialize(const picojson::value& v);
+  friend void JSONDeserialize(Impl& impl, const picojson::value& v);
 };
 
 XGRAMMAR_MEMBER_TABLE(

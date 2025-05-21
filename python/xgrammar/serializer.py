@@ -48,6 +48,6 @@ class JSONSerializer:
     ) -> CompiledGrammar:
         return CompiledGrammar._create_from_handle(
             _core.JSONSerializer.deserialize_compiled_grammar(
-                serialized_compiled_grammar, encoded_vocab_or_tokenizer
+                serialized_compiled_grammar, tokenizer._handle
             )
         )

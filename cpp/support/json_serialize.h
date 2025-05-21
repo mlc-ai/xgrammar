@@ -1,17 +1,16 @@
 #pragma once
 #include <cstddef>
-#include <optional>
 #include <type_traits>
-#include <unordered_set>
 
-#include "dynamic_bitset.h"
 #include "logging.h"
 #include "picojson.h"
 #include "serialize.h"
+#include "serialize_utils.h"
 
 namespace xgrammar {
 
 namespace details {
+
 template <typename, typename = void>
 struct has_json_serialize_member : std::false_type {};
 
@@ -57,7 +56,7 @@ struct has_json_deserialize_global<
     std::void_t<decltype(JSONDeserialize(std::declval<T&>(), picojson::value{}))>>
     : std::true_type {
   static_assert(
-      std::is_same_v<decltype(JSONDeserialize(std::declval<T>(), picojson::value{})), void>,
+      std::is_same_v<decltype(JSONDeserialize(std::declval<T&>(), picojson::value{})), void>,
       "JSONDeserialize must be a global function returning void"
   );
   static_assert(
@@ -65,30 +64,6 @@ struct has_json_deserialize_global<
       "global deserializer can only apply to a default constructible type"
   );
 };
-
-template <typename>
-struct is_optional : std::false_type {};
-
-template <typename T>
-struct is_optional<std::optional<T>> : std::true_type {};
-
-template <typename>
-struct is_vector : std::false_type {};
-
-template <typename... R>
-struct is_vector<std::vector<R...>> : std::true_type {};
-
-template <typename>
-struct is_unordered_map : std::false_type {};
-
-template <typename... R>
-struct is_unordered_map<std::unordered_map<R...>> : std::true_type {};
-
-template <typename T>
-struct is_unordered_set : std::false_type {};
-
-template <typename... R>
-struct is_unordered_set<std::unordered_set<R...>> : std::true_type {};
 
 template <typename T>
 inline const T& json_as(const picojson::value& value) {
@@ -100,18 +75,6 @@ inline const picojson::value& json_member(const picojson::object& value, const s
   auto it = value.find(name);
   XGRAMMAR_CHECK(it != value.end()) << "Missing member in JSONDeserialize";
   return it->second;
-}
-
-template <typename Fn, typename Tuple, std::size_t... Idx>
-inline constexpr void visit_tuple(Fn&& f, const Tuple& t, std::index_sequence<Idx...>) {
-  (f(std::get<Idx>(t), Idx), ...);
-}
-
-template <typename Fn, typename Tuple>
-inline constexpr void visit_tuple(Fn&& f, const Tuple& t) {
-  return visit_tuple(
-      std::forward<Fn>(f), t, std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>()
-  );
 }
 
 }  // namespace details
@@ -368,7 +331,5 @@ inline void AutoJSONDeserialize(T& result, const picojson::value& value) {
     return T{};
   }
 }
-
-static_assert(details::has_json_serialize_member<DynamicBitset>::value);
 
 }  // namespace xgrammar

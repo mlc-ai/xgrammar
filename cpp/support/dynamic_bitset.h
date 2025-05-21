@@ -63,6 +63,31 @@ class DynamicBitset {
     }
   }
 
+  /*! \brief Copy constructor. Copy the buffer and manage the memory internally. */
+  DynamicBitset(const DynamicBitset& other)
+      : size_(other.size_),
+        buffer_size_(other.buffer_size_),
+        data_(),
+        internal_buffer_(),
+        is_internal_(other.is_internal_) {
+    if (other.is_internal_) {
+      // copy the internal buffer
+      internal_buffer_ = other.internal_buffer_;
+      data_ = internal_buffer_.data();
+    } else {
+      // simply point to the same external buffer
+      data_ = other.data_;
+    }
+  }
+
+  /*! \brief Move constructor. Reset other and take ownership of its buffer. */
+  DynamicBitset(DynamicBitset&& other) noexcept
+      : size_(std::exchange(other.size_, 0)),
+        buffer_size_(std::exchange(other.buffer_size_, 0)),
+        data_(std::exchange(other.data_, nullptr)),
+        internal_buffer_(std::move(other.internal_buffer_)),
+        is_internal_(std::exchange(other.is_internal_, true)) {}
+
   /*! \brief Copy assignment. */
   DynamicBitset& operator=(const DynamicBitset& other) {
     XGRAMMAR_DCHECK(is_internal_ || size_ >= other.size_)
@@ -195,9 +220,12 @@ class DynamicBitset {
     const auto count_zero = size_ - count_one;
     auto result = picojson::array{};
     if (count_one <= count_zero) {
-      result.reserve(count_one + BITS_PER_BLOCK + 2);
+      result.reserve(count_one + BITS_PER_BLOCK + HEADER);
+      // 4 header elements
       result.emplace_back<int64_t>(1);
       result.emplace_back<int64_t>(count_one);
+      result.emplace_back<int64_t>(size_);
+      result.emplace_back<int64_t>(buffer_size_);
       for (int i = 0; i < buffer_size_; ++i) {
         if (data_[i] == 0u) continue;
         for (int j = 0; j < BITS_PER_BLOCK; ++j) {
@@ -207,9 +235,12 @@ class DynamicBitset {
         }
       }
     } else {
-      result.reserve(count_zero + BITS_PER_BLOCK + 2);
+      result.reserve(count_zero + BITS_PER_BLOCK + HEADER);
+      // 4 header elements
       result.emplace_back<int64_t>(0);
       result.emplace_back<int64_t>(count_zero);
+      result.emplace_back<int64_t>(size_);
+      result.emplace_back<int64_t>(buffer_size_);
       for (int i = 0; i < buffer_size_; ++i) {
         if (data_[i] == ~0u) continue;
         for (int j = 0; j < BITS_PER_BLOCK; ++j) {
@@ -219,11 +250,48 @@ class DynamicBitset {
         }
       }
     }
-    while (!result.empty() && result.back().get<int64_t>() >= size_) result.pop_back();
+    // clean up the last few elements that is out of range
+    while (result.size() > HEADER && result.back().get<int64_t>() >= size_) result.pop_back();
     return picojson::value(std::move(result));
   }
 
+  friend void JSONDeserialize(DynamicBitset& bitset, const picojson::value& value) {
+    XGRAMMAR_CHECK(value.is<picojson::array>()) << "Invalid JSON value for DynamicBitset";
+    const auto& arr = value.get<picojson::array>();
+    XGRAMMAR_CHECK(arr.size() >= HEADER) << "Invalid JSON value for DynamicBitset";
+    const bool is_zero = arr[0].get<int64_t>() == 0;
+    const int count = arr[1].get<int64_t>();
+    const int size = arr[2].get<int64_t>();
+    const int buffer_size = arr[3].get<int64_t>();
+    XGRAMMAR_CHECK(static_cast<int>(arr.size()) == count + HEADER)
+        << "Invalid JSON value for DynamicBitset, expected " << count + HEADER << " elements";
+    XGRAMMAR_CHECK(size >= 0 && buffer_size >= 0) << "Invalid JSON value for DynamicBitset";
+    bitset.size_ = size;
+    bitset.buffer_size_ = buffer_size;
+    bitset.is_internal_ = true;
+    bitset.internal_buffer_.resize(buffer_size, is_zero ? ~0u : 0u);
+    bitset.data_ = bitset.internal_buffer_.data();
+    if (is_zero == true) {
+      for (int i = 0; i < count; ++i) {
+        const int index = arr[i + HEADER].get<int64_t>();
+        XGRAMMAR_CHECK(index >= 0 && index < size)
+            << "Invalid JSON value for DynamicBitset, index out of range";
+        bitset.data_[index / BITS_PER_BLOCK] &= ~(1u << (index % BITS_PER_BLOCK));
+      }
+    } else {
+      for (int i = 0; i < count; ++i) {
+        const int index = arr[i + HEADER].get<int64_t>();
+        XGRAMMAR_CHECK(index >= 0 && index < size)
+            << "Invalid JSON value for DynamicBitset, index out of range";
+        bitset.data_[index / BITS_PER_BLOCK] |= (1u << (index % BITS_PER_BLOCK));
+      }
+    }
+  }
+
  private:
+  // header size for JSON (de)serialization
+  inline static constexpr auto HEADER = 4;
+
   static int LowestBit(uint32_t value) {
 #ifdef __GNUC__
     return __builtin_ctz(value);
