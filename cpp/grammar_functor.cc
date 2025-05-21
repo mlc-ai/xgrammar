@@ -120,7 +120,7 @@ class StructureNormalizerSub : public GrammarMutator {
       case RuleExprType::kSequence:
         return builder_.AddSequence(VisitSequence_(assertion_expr));
       case RuleExprType::kChoices:
-        XGRAMMAR_LOG(FATAL) << "Choices should not be in lookahead assertion";
+        XGRAMMAR_LOG(FATAL) << "Choices in lookahead assertion are not supported yet";
       case RuleExprType::kEmptyStr:
         XGRAMMAR_LOG(FATAL) << "Empty string should not be in lookahead assertion";
       case RuleExprType::kTagDispatch:
