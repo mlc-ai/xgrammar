@@ -95,7 +95,7 @@ def test_grouping():
     assert after == expected
 
 
-def test_star_quantifier():
+def test_star_quantifier_simple():
     """Test star (*) quantifier."""
     before = """root ::= "a"*
 """
