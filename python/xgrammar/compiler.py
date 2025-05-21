@@ -36,6 +36,9 @@ class CompiledGrammar(XGRObject):
         """The approximate memory usage of the compiled grammar in bytes."""
         return self._handle.memory_size_bytes
 
+    def __eq__(self, other: "CompiledGrammar") -> bool:
+        return self._handle._compare(other._handle)
+
 
 class GrammarCompiler(XGRObject):
     """The compiler for grammars. It is associated with a certain tokenizer info, and compiles

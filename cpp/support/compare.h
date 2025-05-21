@@ -1,5 +1,6 @@
 #pragma once
 #include <tuple>
+#include <type_traits>
 
 #include "serialize.h"
 
@@ -16,19 +17,23 @@ struct has_equality<T, std::void_t<decltype(std::declval<T>() == std::declval<T>
 
 }  // namespace details
 
-template <bool AllowDefault = true, typename T>
+template <bool SkipDefault = false, typename T>
 inline bool TraitCompareEq(const T& lhs, const T& rhs) {
   using Trait = member_trait<T>;
-  if constexpr (AllowDefault && details::has_equality<T>::value) {
+  // a shortcut for non-default compare
+  if constexpr (SkipDefault) {
+    if (&lhs == &rhs) return true;
+  }
+
+  if constexpr (!SkipDefault && details::has_equality<T>::value) {
     return lhs == rhs;
   } else if constexpr (std::is_base_of_v<member_array, Trait>) {
     return std::apply(
-        [&lhs, &rhs](auto&&... args) { return ((lhs.*args == rhs.*args) && ...); }, Trait::kTable
+        [&lhs, &rhs](auto&&... args) { return ((lhs.*args == rhs.*args) && ...); }, Trait::kArray
     );
   } else if constexpr (std::is_base_of_v<member_table, Trait>) {
     return std::apply(
         [&lhs, &rhs](auto&&... pairs) {
-          // we just care about pair.first, so we can use std::ignore
           return ((lhs.*std::get<1>(pairs) == rhs.*std::get<1>(pairs)) && ...);
         },
         Trait::kTable
@@ -44,5 +49,11 @@ inline bool TraitCompareEq(const T& lhs, const T& rhs) {
     return false;
   }
 }
+
+#define XGRAMMAR_GENERATE_EQUALITY(T)                                \
+  bool operator==(const T& lhs, const T& rhs) {                      \
+    /* skip default compare to prevent infinite recursion  */        \
+    return xgrammar::TraitCompareEq</*SkipDefault=*/true>(lhs, rhs); \
+  }
 
 }  // namespace xgrammar

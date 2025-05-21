@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "compare.h"
 #include "logging.h"
 #include "serialize.h"
 #include "utils.h"
@@ -212,6 +213,9 @@ template <typename DataType>
 XGRAMMAR_MEMBER_TABLE_TEMPLATE(
     CSRArray<DataType>, "data_", &CSRArray<DataType>::data_, "indptr_", &CSRArray<DataType>::indptr_
 );
+
+template <typename DataType>
+inline XGRAMMAR_GENERATE_EQUALITY(CSRArray<DataType>)
 
 }  // namespace xgrammar
 

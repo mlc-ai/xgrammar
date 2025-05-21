@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "compiled_grammar_data_structure.h"
+#include "fsm.h"
 #include "grammar_data_structure.h"  // IWYU pragma: keep
 #include "picojson.h"
 #include "support/compare.h"
@@ -85,17 +86,37 @@ TokenizerInfo JSONSerializer::DeserializeTokenizerInfo(
   }
 }
 
+// Derive the required equality operators for the classes.
+// We don't want to pollute global namespace with these operators, so we use static.
+
+[[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(Grammar::Impl::Rule);
+[[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(AdaptiveTokenMask);
+[[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(CompactFSM);
+[[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(CompactFSMWithStartEnd);
+[[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(TokenizerInfo::Impl);
+[[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(Grammar::Impl);
+
 CompiledGrammar JSONSerializer::DeserializeCompiledGrammar(
     const std::string& str, const TokenizerInfo& tokenizer_info
 ) {
   auto v = parse_string(str);
   auto compiled_grammar = CompiledGrammar{std::make_shared<CompiledGrammar::Impl>()};
   AutoJSONDeserialize(*compiled_grammar, v);
-  // compare the tokenizer info
-  XGRAMMAR_CHECK(TraitCompareEq(*compiled_grammar->tokenizer_info, *tokenizer_info))
+  // compare the tokenizer info metadata
+  XGRAMMAR_CHECK(*compiled_grammar->tokenizer_info == *tokenizer_info)
       << "The tokenizer info in the compiled grammar does not match the provided one.";
-  // set the tokenizer info
+  // set the tokenizer info to the real one
+  compiled_grammar->tokenizer_info = tokenizer_info;
   return compiled_grammar;
+}
+
+// A debug only method. used in test_serializer.py
+bool CompiledGrammar::_Compare(const CompiledGrammar& other) const {
+  if (this == &other) return true;
+  // check each member
+  return *(**this).grammar == *(*other).grammar &&
+         *(**this).tokenizer_info == *(*other).tokenizer_info &&
+         (**this).adaptive_token_mask_cache == (*other).adaptive_token_mask_cache;
 }
 
 }  // namespace xgrammar

@@ -288,6 +288,15 @@ class DynamicBitset {
     }
   }
 
+  bool operator==(const DynamicBitset& other) const {
+    if (size_ != other.size_) return false;
+    if (buffer_size_ != other.buffer_size_) return false;
+    for (int i = 0; i < buffer_size_; ++i) {
+      if (data_[i] != other.data_[i]) return false;
+    }
+    return true;
+  }
+
  private:
   // header size for JSON (de)serialization
   inline static constexpr auto HEADER = 4;
