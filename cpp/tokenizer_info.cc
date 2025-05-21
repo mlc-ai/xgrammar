@@ -14,8 +14,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "serialize/json.h"
 #include "support/encoding.h"
-#include "support/json_serialize.h"
 #include "support/logging.h"
 #include "tokenizer_internal.h"
 

@@ -54,6 +54,7 @@ inline bool TraitCompareEq(const T& lhs, const T& rhs) {
   bool operator==(const T& lhs, const T& rhs) {                      \
     /* skip default compare to prevent infinite recursion  */        \
     return xgrammar::TraitCompareEq</*SkipDefault=*/true>(lhs, rhs); \
-  }
+  }                                                                  \
+  static_assert(true, "Don't forget the semicolon after the macro")
 
 }  // namespace xgrammar

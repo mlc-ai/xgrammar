@@ -2,10 +2,10 @@
 #include <cstddef>
 #include <type_traits>
 
-#include "logging.h"
+#include "../support/logging.h"
 #include "picojson.h"
 #include "serialize.h"
-#include "serialize_utils.h"
+#include "utils.h"
 
 namespace xgrammar {
 

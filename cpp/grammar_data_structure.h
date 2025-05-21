@@ -14,8 +14,8 @@
 #include <vector>
 
 #include "fsm.h"
+#include "serialize/serialize.h"
 #include "support/logging.h"
-#include "support/serialize.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {

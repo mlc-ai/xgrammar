@@ -11,9 +11,9 @@
 #include <cstdint>
 #include <vector>
 
-#include "compare.h"
+#include "../serialize/compare.h"
+#include "../serialize/serialize.h"
 #include "logging.h"
-#include "serialize.h"
 #include "utils.h"
 
 namespace xgrammar {
@@ -215,7 +215,7 @@ XGRAMMAR_MEMBER_TABLE_TEMPLATE(
 );
 
 template <typename DataType>
-inline XGRAMMAR_GENERATE_EQUALITY(CSRArray<DataType>)
+inline XGRAMMAR_GENERATE_EQUALITY(CSRArray<DataType>);
 
 }  // namespace xgrammar
 

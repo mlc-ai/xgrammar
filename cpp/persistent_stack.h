@@ -14,7 +14,7 @@
 
 #include "grammar_data_structure.h"
 #include "grammar_serializer.h"
-#include "support/serialize.h"
+#include "serialize/serialize.h"
 
 namespace xgrammar {
 

@@ -18,8 +18,8 @@
 // matcher_data_structure.h is included to use StackElement
 #include "persistent_stack.h"
 #include "picojson.h"
+#include "serialize/serialize.h"
 #include "support/dynamic_bitset.h"
-#include "support/serialize.h"
 #include "support/utils.h"
 #include "xgrammar/compiler.h"
 
