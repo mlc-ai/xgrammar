@@ -852,8 +852,11 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
         last_character = kParseFailure;
         continue;
       }
-      // It's just a single unicode character.
+
       if (is_possible_range) {
+        if (escape_vector[0].first < last_character) {
+          XGRAMMAR_LOG(FATAL) << "Invalid regex: " << regex;
+        }
         char_class_edges.emplace_back(last_character, escape_vector[0].first);
         last_character = kParseFailure;
         is_possible_range = false;
@@ -872,6 +875,9 @@ FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
       XGRAMMAR_LOG(FATAL) << "Invalid regex: " << regex;
     }
     if (is_possible_range) {
+      if (unicode < last_character) {
+        XGRAMMAR_LOG(FATAL) << "Invalid regex: " << regex;
+      }
       char_class_edges.emplace_back(last_character, unicode);
       last_character = kParseFailure;
       is_possible_range = false;
