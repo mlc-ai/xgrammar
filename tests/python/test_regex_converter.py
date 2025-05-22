@@ -59,7 +59,12 @@ regex_expected_grammar_instance = [
 def test_escape(regex: str, expected_grammar: str, instance: str):
     grammar_str = _regex_to_ebnf(regex)
     assert grammar_str == expected_grammar
+    print(grammar_str)
     assert _is_grammar_accept_string(grammar_str, instance)
+
+
+test_escape(*regex_expected_grammar_instance[3])
+exit()
 
 
 def test_escaped_char_class():

@@ -32,16 +32,23 @@ class EBNFLexer::Impl {
   constexpr static int64_t kMaxIntegerInGrammar = 1e15;
 
   // Helper functions
-  Token NextToken();
+
+  /*!
+   * \brief Consume a character sequence and return the next token. Return a token if it's a
+   * single token, or a vector of tokens if it's a sequence of tokens.
+   *
+   * \return std::variant<Token, std::vector<Token>>
+   */
+  std::variant<Token, std::vector<Token>> NextToken();
   Token ParseIdentifierOrBooleanToken();
   Token ParseStringToken();
-  Token ParseCharClassToken();
+  std::vector<Token> ParseCharClassToken();
   Token ParseIntegerToken();
   [[noreturn]] void ReportLexerError(const std::string& msg, int line = -1, int column = -1);
   char Peek(int delta = 0) const;
   void Consume(int cnt = 1);
   void ConsumeSpace();
-  std::string ParseIdentifier();
+  std::string ParseIdentifierToken();
   void ConvertIdentifierToRuleName(std::vector<Token>* tokens);
   static bool IsNameChar(char c, bool is_first = false);
 };
@@ -99,7 +106,7 @@ bool EBNFLexer::Impl::IsNameChar(char c, bool is_first) {
 }
 
 // Parse identifier
-std::string EBNFLexer::Impl::ParseIdentifier() {
+std::string EBNFLexer::Impl::ParseIdentifierToken() {
   const char* start = cur_;
   bool first_char = true;
   while (*cur_ && IsNameChar(*cur_, first_char)) {
@@ -117,12 +124,12 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
   int start_line = cur_line_;
   int start_column = cur_column_;
 
-  std::string identifier = ParseIdentifier();
+  std::string identifier = ParseIdentifierToken();
 
   // Check if it's a boolean value
   if (identifier == "true" || identifier == "false") {
     return {
-        TokenType::Boolean,
+        TokenType::BooleanLiteral,
         identifier,
         identifier == "true" ? true : false,
         start_line,
@@ -173,49 +180,74 @@ EBNFLexer::Token EBNFLexer::Impl::ParseStringToken() {
 }
 
 // Parse character class.
-EBNFLexer::Token EBNFLexer::Impl::ParseCharClassToken() {
-  int start_line = cur_line_;
-  int start_column = cur_column_;
-  const char* start_pos = cur_;
+std::vector<EBNFLexer::Token> EBNFLexer::Impl::ParseCharClassToken() {
+  std::vector<Token> tokens;
 
+  tokens.push_back({TokenType::LBracket, "[", "", cur_line_, cur_column_});
   Consume();  // Skip '['
 
-  std::vector<TCodepoint> codepoints;
-
   if (Peek() == '^') {
-    codepoints.push_back(static_cast<TCodepoint>(static_cast<uint8_t>('^')));
+    tokens.push_back({TokenType::Caret, "^", "", cur_line_, cur_column_});
     Consume();
   }
 
-  // Parse character class content
-  static const std::unordered_map<char, TCodepoint> CUSTOM_ESCAPE_MAP = {{'-', '-'}, {']', ']'}};
+  static const std::unordered_map<char, TCodepoint> kRegexEscapeChars = {
+      // clang-format off
+      {'^', '^'}, {'$', '$'}, {'\\', '\\'}, {'.', '.'}, {'*', '*'}, {'+', '+'}, {'?', '?'},
+      {'(', '('}, {')', ')'}, {'[', '['}, {']', ']'}, {'{', '{'}, {'}', '}'}, {'|', '|'},
+      {'/', '/'}, {'-', '-'}  // clang-format on
+  };
+
+  static const std::unordered_set<char> kRegexSpecialEscapes = {'d', 'D', 's', 'S', 'w', 'W'};
 
   while (Peek() && Peek() != ']') {
     if (Peek() == '\r' || Peek() == '\n') {
       ReportLexerError("Character class should not contain newline");
-    }
+    } else if (Peek() == '-') {
+      // Handle dash; this dash could be a range expression or a normal dash.
+      // It will further be handled in EBNFParser::ParseCharClass.
+      tokens.push_back({TokenType::Dash, "-", "", cur_line_, cur_column_});
+      Consume();
+    } else if (Peek() == '\\' && kRegexSpecialEscapes.count(Peek(1))) {
+      // Handle escaped characters with special function
+      tokens.push_back(
+          {TokenType::EscapeInCharClass,
+           std::string(cur_, cur_ + 2),
+           std::string(cur_ + 1, cur_ + 2),
+           cur_line_,
+           cur_column_}
+      );
+      Consume(2);
+    } else {
+      // Handle normal characters
+      auto [codepoint, len] = ParseNextUTF8OrEscaped(cur_, kRegexEscapeChars);
+      if (codepoint == CharHandlingError::kInvalidUTF8) {
+        ReportLexerError("Invalid UTF8 sequence");
+      }
 
-    auto [codepoint, len] = ParseNextUTF8OrEscaped(cur_, CUSTOM_ESCAPE_MAP);
-    if (codepoint == CharHandlingError::kInvalidUTF8) {
-      ReportLexerError("Invalid UTF8 sequence");
-    }
-    if (codepoint == CharHandlingError::kInvalidEscape) {
-      ReportLexerError("Invalid escape sequence");
-    }
+      if (codepoint == CharHandlingError::kInvalidEscape) {
+        ReportLexerError("Invalid escape sequence" + std::string(cur_, cur_ + 2));
+      }
 
-    Consume(len);
-    codepoints.push_back(codepoint);
+      tokens.push_back(
+          {TokenType::CharInCharClass,
+           std::string(cur_, cur_ + len),
+           codepoint,
+           cur_line_,
+           cur_column_}
+      );
+      Consume(len);
+    }
   }
 
   if (!Peek()) {
     ReportLexerError("Unterminated character class");
   }
 
+  tokens.push_back({TokenType::RBracket, "]", "", cur_line_, cur_column_});
   Consume();  // Skip ']'
 
-  // Extract original lexeme
-  std::string lexeme(start_pos, cur_ - start_pos);
-  return {TokenType::CharClass, lexeme, codepoints, start_line, start_column};
+  return tokens;
 }
 
 // Parse integer
@@ -249,57 +281,55 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIntegerToken() {
 }
 
 // Get the next token
-EBNFLexer::Token EBNFLexer::Impl::NextToken() {
+std::variant<EBNFLexer::Token, std::vector<EBNFLexer::Token>> EBNFLexer::Impl::NextToken() {
   ConsumeSpace();  // Skip whitespace and comments
 
   if (!Peek()) {
-    return {TokenType::EndOfFile, "", "", cur_line_, cur_column_};
+    return EBNFLexer::Token{TokenType::EndOfFile, "", "", cur_line_, cur_column_};
   }
-
-  int start_line = cur_line_;
-  int start_column = cur_column_;
 
   // Determine token type based on current character
   switch (Peek()) {
     case '(':
       if (Peek(1) == '=') {
         Consume(2);
-        return {TokenType::LookaheadLParen, "(=", "", start_line, start_column};
+        return EBNFLexer::Token{TokenType::LookaheadLParen, "(=", "", cur_line_, cur_column_};
       } else {
         Consume();
-        return {TokenType::LParen, "(", "", start_line, start_column};
+        return EBNFLexer::Token{TokenType::LParen, "(", "", cur_line_, cur_column_};
       }
     case ')':
       Consume();
-      return {TokenType::RParen, ")", "", start_line, start_column};
+      return EBNFLexer::Token{TokenType::RParen, ")", "", cur_line_, cur_column_};
     case '{':
       Consume();
-      return {TokenType::LBrace, "{", "", start_line, start_column};
+      return EBNFLexer::Token{TokenType::LBrace, "{", "", cur_line_, cur_column_};
     case '}':
       Consume();
-      return {TokenType::RBrace, "}", "", start_line, start_column};
+      return EBNFLexer::Token{TokenType::RBrace, "}", "", cur_line_, cur_column_};
     case '|':
       Consume();
-      return {TokenType::Pipe, "|", "", start_line, start_column};
+      return EBNFLexer::Token{TokenType::Pipe, "|", "", cur_line_, cur_column_};
     case ',':
       Consume();
-      return {TokenType::Comma, ",", "", start_line, start_column};
+      return EBNFLexer::Token{TokenType::Comma, ",", "", cur_line_, cur_column_};
     case '*':
       Consume();
-      return {TokenType::Star, "*", "", start_line, start_column};
+      return EBNFLexer::Token{TokenType::Star, "*", "", cur_line_, cur_column_};
     case '+':
       Consume();
-      return {TokenType::Plus, "+", "", start_line, start_column};
+      return EBNFLexer::Token{TokenType::Plus, "+", "", cur_line_, cur_column_};
     case '?':
       Consume();
-      return {TokenType::Question, "?", "", start_line, start_column};
+      return EBNFLexer::Token{TokenType::Question, "?", "", cur_line_, cur_column_};
     case '=':
       Consume();
-      return {TokenType::Equal, "=", "", start_line, start_column};
+      return EBNFLexer::Token{TokenType::Equal, "=", "", cur_line_, cur_column_};
     case ':':
       if (Peek(1) == ':' && Peek(2) == '=') {
+        auto result = EBNFLexer::Token{TokenType::Assign, "::=", "", cur_line_, cur_column_};
         Consume(3);
-        return {TokenType::Assign, "::=", "", start_line, start_column};
+        return result;
       }
       ReportLexerError("Unexpected character: ':'");
       break;
@@ -319,7 +349,7 @@ EBNFLexer::Token EBNFLexer::Impl::NextToken() {
   }
 
   // Should not reach here
-  return {TokenType::EndOfFile, "", "", cur_line_, cur_column_};
+  XGRAMMAR_UNREACHABLE();
 }
 
 void EBNFLexer::Impl::ConvertIdentifierToRuleName(std::vector<Token>* tokens) {
@@ -361,12 +391,18 @@ std::vector<EBNFLexer::Token> EBNFLexer::Impl::Tokenize(const std::string& input
   std::vector<Token> tokens;
 
   while (true) {
-    Token token = NextToken();
-    tokens.push_back(token);
+    auto token = NextToken();
 
-    // Stop when we reach the end of file
-    if (token.type == TokenType::EndOfFile) {
-      break;
+    if (auto* token_value = std::get_if<Token>(&token)) {
+      tokens.push_back(*token_value);
+      // Stop when we reach the end of file
+      if (token_value->type == TokenType::EndOfFile) {
+        break;
+      }
+    } else {
+      auto vec = std::get_if<std::vector<Token>>(&token);
+      XGRAMMAR_DCHECK(vec != nullptr);
+      tokens.insert(tokens.end(), vec->begin(), vec->end());
     }
   }
 
@@ -393,8 +429,8 @@ class EBNFParser {
   using TokenType = EBNFLexer::TokenType;
 
   // Parsing different parts of the grammar
-  std::string ParseIdentifier(bool allow_empty = false);
-  int32_t ParseCharacterClass();
+  std::string ParseIdentifier();
+  int32_t ParseCharClass();
   int32_t ParseString();
   int32_t ParseRuleRef();
   int32_t ParseElement();
@@ -502,7 +538,7 @@ void EBNFParser::PeekAndConsume(TokenType type, const std::string& message) {
 }
 
 void EBNFParser::ReportParseError(const std::string& msg, int delta_element) {
-  XGRAMMAR_DCHECK(current_token_ < tokens_.data() + tokens_.size());
+  XGRAMMAR_DCHECK(current_token_ + delta_element < tokens_.data() + tokens_.size());
   int line_to_print = Peek(delta_element).line;
   int column_to_print = Peek(delta_element).column;
   XGRAMMAR_LOG(FATAL) << "EBNF parser error at line " + std::to_string(line_to_print) +
@@ -510,55 +546,50 @@ void EBNFParser::ReportParseError(const std::string& msg, int delta_element) {
   XGRAMMAR_UNREACHABLE();
 }
 
-std::string EBNFParser::ParseIdentifier(bool allow_empty) {
+std::string EBNFParser::ParseIdentifier() {
   if (Peek().type != TokenType::Identifier) {
-    if (allow_empty) {
-      return "";
-    }
     ReportParseError("Expect identifier");
   }
-  std::string identifier = Peek().lexeme;
+  std::string identifier = std::any_cast<std::string>(Peek().value);
   Consume();
   return identifier;
 }
 
-int32_t EBNFParser::ParseCharacterClass() {
-  if (Peek().type != TokenType::CharClass) {
-    ReportParseError("Expect character class");
-  }
-
-  std::vector<TCodepoint> codepoints = std::any_cast<std::vector<TCodepoint>>(Peek().value);
-  Consume();
+int32_t EBNFParser::ParseCharClass() {
+  PeekAndConsume(TokenType::LBracket, "Expect [ in character class");
 
   std::vector<GrammarBuilder::CharacterClassElement> elements;
-
-  // Check if the character class is negated (first codepoint is '^')
   bool is_negated = false;
-  int start_idx = 0;
-  if (!codepoints.empty() && codepoints[0] == static_cast<TCodepoint>(static_cast<uint8_t>('^'))) {
+
+  if (Peek().type == TokenType::Caret) {
     is_negated = true;
-    start_idx = 1;
+    Consume();
   }
 
-  // Process the codepoints to build character class elements
-  for (int i = start_idx; i < static_cast<int>(codepoints.size()); i++) {
-    // Check for range expression (a-z)
-    if (i + 2 < static_cast<int>(codepoints.size()) &&
-        codepoints[i + 1] == static_cast<TCodepoint>(static_cast<uint8_t>('-'))) {
-      TCodepoint lower = codepoints[i];
-      TCodepoint upper = codepoints[i + 2];
-
-      if (lower > upper) {
+  while (Peek().type != TokenType::RBracket && Peek().type != TokenType::EndOfFile) {
+    if (Peek().type == TokenType::EscapeInCharClass) {
+      ReportParseError("Character class escape is not supported yet in EBNF");
+    }
+    if (Peek().type == TokenType::CharInCharClass) {
+      ReportParseError("Expect character in character class");
+    }
+    auto codepoint = std::any_cast<TCodepoint>(Peek().value);
+    Consume();
+    if (Peek().type == TokenType::Dash && Peek(1).type == TokenType::CharInCharClass) {
+      // Range expression
+      auto codepoint2 = std::any_cast<TCodepoint>(Peek(1).value);
+      if (codepoint > codepoint2) {
         ReportParseError("Invalid character class: lower bound is larger than upper bound", -1);
       }
-
-      elements.push_back({lower, upper});
-      i += 2;  // Skip the hyphen and upper bound
+      elements.push_back({codepoint, codepoint2});
+      Consume(2);
     } else {
       // Single character
-      elements.push_back({codepoints[i], codepoints[i]});
+      elements.push_back({codepoint, codepoint});
     }
   }
+
+  PeekAndConsume(TokenType::RBracket, "Expect ] in character class");
 
   return builder_.AddCharacterClass(elements, is_negated);
 }
@@ -603,13 +634,14 @@ int32_t EBNFParser::ParseElement() {
     auto rule_expr_id = ParseChoices();
     PeekAndConsume(TokenType::RParen, "Expect )");
     return rule_expr_id;
-  } else if (Peek().type == TokenType::CharClass) {
-    return ParseCharacterClass();
+  } else if (Peek().type == TokenType::LBracket) {
+    return ParseCharClass();
   } else if (Peek().type == TokenType::StringLiteral) {
     return ParseString();
   } else if (Peek().type == TokenType::Identifier) {
-    if (kMacroFunctions.count(Peek().lexeme)) {
-      return kMacroFunctions.at(Peek().lexeme)(this);
+    auto id = std::any_cast<std::string>(Peek().value);
+    if (kMacroFunctions.count(id)) {
+      return kMacroFunctions.at(id)(this);
     } else {
       return ParseRuleRef();
     }
@@ -816,7 +848,7 @@ EBNFParser::MacroIR::Arguments EBNFParser::ParseMacroArguments() {
     while (true) {
       // Check if it's a named argument (identifier = value)
       if (Peek().type == TokenType::Identifier && Peek(1).type == TokenType::Equal) {
-        std::string name = Peek().lexeme;
+        std::string name = std::any_cast<std::string>(Peek().value);
         Consume();  // Consume identifier
         Consume();  // Consume =
 
@@ -854,14 +886,14 @@ EBNFParser::MacroIR::NodePtr EBNFParser::ParseMacroValue() {
     int64_t value = std::any_cast<int64_t>(Peek().value);
     Consume();
     return std::make_unique<MacroIR::Node>(MacroIR::IntegerNode{value});
-  } else if (Peek().type == TokenType::Boolean) {
+  } else if (Peek().type == TokenType::BooleanLiteral) {
     // Boolean value
     bool value = std::any_cast<bool>(Peek().value);
     Consume();
     return std::make_unique<MacroIR::Node>(MacroIR::BooleanNode{value});
   } else if (Peek().type == TokenType::Identifier) {
     // Identifier value
-    std::string name = Peek().lexeme;
+    std::string name = std::any_cast<std::string>(Peek().value);
     Consume();
     return std::make_unique<MacroIR::Node>(MacroIR::IdentifierNode{name});
   } else if (Peek().type == TokenType::LParen) {
@@ -946,7 +978,7 @@ EBNFParser::Rule EBNFParser::ParseRule() {
   if (Peek().type != TokenType::RuleName) {
     ReportParseError("Expect rule name");
   }
-  cur_rule_name_ = Peek().lexeme;
+  cur_rule_name_ = std::any_cast<std::string>(Peek().value);
   Consume();
 
   PeekAndConsume(TokenType::Assign, "Expect ::=");

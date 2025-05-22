@@ -15,7 +15,7 @@ TEST(XGrammarLexerTest, BasicTokenization) {
   EBNFLexer lexer;
   auto tokens = lexer.Tokenize(input);
 
-  ASSERT_EQ(tokens.size(), 28);  // 27 tokens + EOF
+  ASSERT_EQ(tokens.size(), 32);  // 27 tokens + EOF
 
   // Check token types
   EXPECT_EQ(tokens[0].type, EBNFLexer::TokenType::RuleName);
@@ -30,51 +30,55 @@ TEST(XGrammarLexerTest, BasicTokenization) {
 
   EXPECT_EQ(tokens[3].type, EBNFLexer::TokenType::Pipe);
 
-  EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::CharClass);
-  EXPECT_EQ(tokens[4].lexeme, "[a-z]");
-  XGRAMMAR_EXPECT_ANY_EQ(
-      tokens[4].value, std::vector<TCodepoint>, std::vector<TCodepoint>({{'a', '-', 'z'}})
-  );
+  EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::LBracket);
+  EXPECT_EQ(tokens[5].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[5].lexeme, "a");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[5].value, TCodepoint, 'a');
+  EXPECT_EQ(tokens[6].type, EBNFLexer::TokenType::Dash);
+  EXPECT_EQ(tokens[7].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[7].lexeme, "z");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[7].value, TCodepoint, 'z');
+  EXPECT_EQ(tokens[8].type, EBNFLexer::TokenType::RBracket);
 
-  EXPECT_EQ(tokens[5].type, EBNFLexer::TokenType::Pipe);
+  EXPECT_EQ(tokens[9].type, EBNFLexer::TokenType::Pipe);
 
-  EXPECT_EQ(tokens[6].type, EBNFLexer::TokenType::IntegerLiteral);
-  EXPECT_EQ(tokens[6].lexeme, "123");
-  XGRAMMAR_EXPECT_ANY_EQ(tokens[6].value, int64_t, 123);
-
-  EXPECT_EQ(tokens[7].type, EBNFLexer::TokenType::Pipe);
-
-  EXPECT_EQ(tokens[8].type, EBNFLexer::TokenType::LParen);
-  EXPECT_EQ(tokens[9].type, EBNFLexer::TokenType::Identifier);
-  EXPECT_EQ(tokens[10].type, EBNFLexer::TokenType::RParen);
+  EXPECT_EQ(tokens[10].type, EBNFLexer::TokenType::IntegerLiteral);
+  EXPECT_EQ(tokens[10].lexeme, "123");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[10].value, int64_t, 123);
 
   EXPECT_EQ(tokens[11].type, EBNFLexer::TokenType::Pipe);
 
-  EXPECT_EQ(tokens[12].type, EBNFLexer::TokenType::LBrace);
-  EXPECT_EQ(tokens[13].type, EBNFLexer::TokenType::IntegerLiteral);
-  EXPECT_EQ(tokens[14].type, EBNFLexer::TokenType::Comma);
-  EXPECT_EQ(tokens[15].type, EBNFLexer::TokenType::IntegerLiteral);
-  EXPECT_EQ(tokens[16].type, EBNFLexer::TokenType::RBrace);
+  EXPECT_EQ(tokens[12].type, EBNFLexer::TokenType::LParen);
+  EXPECT_EQ(tokens[13].type, EBNFLexer::TokenType::Identifier);
+  EXPECT_EQ(tokens[14].type, EBNFLexer::TokenType::RParen);
 
-  EXPECT_EQ(tokens[17].type, EBNFLexer::TokenType::Pipe);
-  EXPECT_EQ(tokens[18].type, EBNFLexer::TokenType::Star);
-  EXPECT_EQ(tokens[19].type, EBNFLexer::TokenType::Pipe);
-  EXPECT_EQ(tokens[20].type, EBNFLexer::TokenType::Plus);
+  EXPECT_EQ(tokens[15].type, EBNFLexer::TokenType::Pipe);
+
+  EXPECT_EQ(tokens[16].type, EBNFLexer::TokenType::LBrace);
+  EXPECT_EQ(tokens[17].type, EBNFLexer::TokenType::IntegerLiteral);
+  EXPECT_EQ(tokens[18].type, EBNFLexer::TokenType::Comma);
+  EXPECT_EQ(tokens[19].type, EBNFLexer::TokenType::IntegerLiteral);
+  EXPECT_EQ(tokens[20].type, EBNFLexer::TokenType::RBrace);
+
   EXPECT_EQ(tokens[21].type, EBNFLexer::TokenType::Pipe);
-  EXPECT_EQ(tokens[22].type, EBNFLexer::TokenType::Question);
+  EXPECT_EQ(tokens[22].type, EBNFLexer::TokenType::Star);
   EXPECT_EQ(tokens[23].type, EBNFLexer::TokenType::Pipe);
-
-  EXPECT_EQ(tokens[24].type, EBNFLexer::TokenType::Boolean);
-  EXPECT_EQ(tokens[24].lexeme, "true");
-  XGRAMMAR_EXPECT_ANY_EQ(tokens[24].value, bool, true);
-
+  EXPECT_EQ(tokens[24].type, EBNFLexer::TokenType::Plus);
   EXPECT_EQ(tokens[25].type, EBNFLexer::TokenType::Pipe);
+  EXPECT_EQ(tokens[26].type, EBNFLexer::TokenType::Question);
+  EXPECT_EQ(tokens[27].type, EBNFLexer::TokenType::Pipe);
 
-  EXPECT_EQ(tokens[26].type, EBNFLexer::TokenType::Boolean);
-  EXPECT_EQ(tokens[26].lexeme, "false");
-  XGRAMMAR_EXPECT_ANY_EQ(tokens[26].value, bool, false);
+  EXPECT_EQ(tokens[28].type, EBNFLexer::TokenType::BooleanLiteral);
+  EXPECT_EQ(tokens[28].lexeme, "true");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[28].value, bool, true);
 
-  EXPECT_EQ(tokens[27].type, EBNFLexer::TokenType::EndOfFile);
+  EXPECT_EQ(tokens[29].type, EBNFLexer::TokenType::Pipe);
+
+  EXPECT_EQ(tokens[30].type, EBNFLexer::TokenType::BooleanLiteral);
+  EXPECT_EQ(tokens[30].lexeme, "false");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[30].value, bool, false);
+
+  EXPECT_EQ(tokens[31].type, EBNFLexer::TokenType::EndOfFile);
 }
 
 TEST(XGrammarLexerTest, CommentsAndWhitespace) {
@@ -117,58 +121,112 @@ TEST(XGrammarLexerTest, CharacterClasses) {
   EBNFLexer lexer;
   auto tokens = lexer.Tokenize(input);
 
-  ASSERT_EQ(tokens.size(), 18);  // 17 tokens + EOF
-  EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::CharClass);
-  EXPECT_EQ(tokens[2].lexeme, "[a-z]");
-  XGRAMMAR_EXPECT_ANY_EQ(
-      tokens[2].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'a', '-', 'z'})
-  );
+  ASSERT_EQ(tokens.size(), 49);  // 45 tokens + EOF
 
-  EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::CharClass);
-  EXPECT_EQ(tokens[4].lexeme, "[0-9]");
-  XGRAMMAR_EXPECT_ANY_EQ(
-      tokens[4].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'0', '-', '9'})
-  );
+  // [a-z]
+  EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::LBracket);
+  EXPECT_EQ(tokens[3].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[3].lexeme, "a");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[3].value, TCodepoint, 'a');
+  EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::Dash);
+  EXPECT_EQ(tokens[5].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[5].lexeme, "z");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[5].value, TCodepoint, 'z');
+  EXPECT_EQ(tokens[6].type, EBNFLexer::TokenType::RBracket);
 
-  EXPECT_EQ(tokens[6].type, EBNFLexer::TokenType::CharClass);
-  EXPECT_EQ(tokens[6].lexeme, "[^a-z]");
-  XGRAMMAR_EXPECT_ANY_EQ(
-      tokens[6].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'^', 'a', '-', 'z'})
-  );
+  EXPECT_EQ(tokens[7].type, EBNFLexer::TokenType::Pipe);
 
-  EXPECT_EQ(tokens[8].type, EBNFLexer::TokenType::CharClass);
-  EXPECT_EQ(tokens[8].lexeme, "[\\-\\]\\\\]");
-  XGRAMMAR_EXPECT_ANY_EQ(
-      tokens[8].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'-', ']', '\\'})
-  );
+  // [0-9]
+  EXPECT_EQ(tokens[8].type, EBNFLexer::TokenType::LBracket);
+  EXPECT_EQ(tokens[9].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[9].lexeme, "0");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[9].value, TCodepoint, '0');
+  EXPECT_EQ(tokens[10].type, EBNFLexer::TokenType::Dash);
+  EXPECT_EQ(tokens[11].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[11].lexeme, "9");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[11].value, TCodepoint, '9');
+  EXPECT_EQ(tokens[12].type, EBNFLexer::TokenType::RBracket);
 
-  // Unicode escape sequences (A-Z in Unicode code points)
-  EXPECT_EQ(tokens[10].type, EBNFLexer::TokenType::CharClass);
-  EXPECT_EQ(tokens[10].lexeme, "[\\u0041-\\u005A]");
-  XGRAMMAR_EXPECT_ANY_EQ(
-      tokens[10].value, std::vector<TCodepoint>, std::vector<TCodepoint>({0x41, '-', 0x5A})
-  );
+  EXPECT_EQ(tokens[13].type, EBNFLexer::TokenType::Pipe);
 
-  // UTF-8 characters directly in the character class
-  EXPECT_EQ(tokens[12].type, EBNFLexer::TokenType::CharClass);
-  EXPECT_EQ(tokens[12].lexeme, "[测试]");
-  XGRAMMAR_EXPECT_ANY_EQ(
-      tokens[12].value, std::vector<TCodepoint>, std::vector<TCodepoint>({0x6D4B, 0x8BD5})
-  );
+  // [^a-z]
+  EXPECT_EQ(tokens[14].type, EBNFLexer::TokenType::LBracket);
+  EXPECT_EQ(tokens[15].type, EBNFLexer::TokenType::Caret);
+  EXPECT_EQ(tokens[16].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[16].lexeme, "a");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[16].value, TCodepoint, 'a');
+  EXPECT_EQ(tokens[17].type, EBNFLexer::TokenType::Dash);
+  EXPECT_EQ(tokens[18].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[18].lexeme, "z");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[18].value, TCodepoint, 'z');
+  EXPECT_EQ(tokens[19].type, EBNFLexer::TokenType::RBracket);
 
-  // Common escape sequences: tab, carriage return, newline
-  EXPECT_EQ(tokens[14].type, EBNFLexer::TokenType::CharClass);
-  EXPECT_EQ(tokens[14].lexeme, "[\\t\\r\\n]");
-  XGRAMMAR_EXPECT_ANY_EQ(
-      tokens[14].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'\t', '\r', '\n'})
-  );
+  EXPECT_EQ(tokens[20].type, EBNFLexer::TokenType::Pipe);
 
-  // Additional escape sequences: backspace, form feed
-  EXPECT_EQ(tokens[16].type, EBNFLexer::TokenType::CharClass);
-  EXPECT_EQ(tokens[16].lexeme, "[\\b\\f]");
-  XGRAMMAR_EXPECT_ANY_EQ(
-      tokens[16].value, std::vector<TCodepoint>, std::vector<TCodepoint>({'\b', '\f'})
-  );
+  // [\-\]\\]
+  EXPECT_EQ(tokens[21].type, EBNFLexer::TokenType::LBracket);
+  EXPECT_EQ(tokens[22].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[22].lexeme, "\\-");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[22].value, TCodepoint, '-');
+  EXPECT_EQ(tokens[23].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[23].lexeme, "\\]");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[23].value, TCodepoint, ']');
+  EXPECT_EQ(tokens[24].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[24].lexeme, "\\\\");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[24].value, TCodepoint, '\\');
+  EXPECT_EQ(tokens[25].type, EBNFLexer::TokenType::RBracket);
+
+  EXPECT_EQ(tokens[26].type, EBNFLexer::TokenType::Pipe);
+
+  // [\u0041-\u005A]
+  EXPECT_EQ(tokens[27].type, EBNFLexer::TokenType::LBracket);
+  EXPECT_EQ(tokens[28].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[28].lexeme, "\\u0041");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[28].value, TCodepoint, 0x41);  // 'A'
+  EXPECT_EQ(tokens[29].type, EBNFLexer::TokenType::Dash);
+  EXPECT_EQ(tokens[30].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[30].lexeme, "\\u005A");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[30].value, TCodepoint, 0x5A);  // 'Z'
+  EXPECT_EQ(tokens[31].type, EBNFLexer::TokenType::RBracket);
+
+  EXPECT_EQ(tokens[32].type, EBNFLexer::TokenType::Pipe);
+
+  // [测试]
+  EXPECT_EQ(tokens[33].type, EBNFLexer::TokenType::LBracket);
+  EXPECT_EQ(tokens[34].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[34].lexeme, "测");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[34].value, TCodepoint, 0x6D4B);
+  EXPECT_EQ(tokens[35].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[35].lexeme, "试");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[35].value, TCodepoint, 0x8BD5);
+  EXPECT_EQ(tokens[36].type, EBNFLexer::TokenType::RBracket);
+
+  EXPECT_EQ(tokens[37].type, EBNFLexer::TokenType::Pipe);
+
+  // [\t\r\n]
+  EXPECT_EQ(tokens[38].type, EBNFLexer::TokenType::LBracket);
+  EXPECT_EQ(tokens[39].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[39].lexeme, "\\t");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[39].value, TCodepoint, '\t');
+  EXPECT_EQ(tokens[40].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[40].lexeme, "\\r");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[40].value, TCodepoint, '\r');
+  EXPECT_EQ(tokens[41].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[41].lexeme, "\\n");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[41].value, TCodepoint, '\n');
+  EXPECT_EQ(tokens[42].type, EBNFLexer::TokenType::RBracket);
+
+  EXPECT_EQ(tokens[43].type, EBNFLexer::TokenType::Pipe);
+
+  // [\b\f]
+  EXPECT_EQ(tokens[44].type, EBNFLexer::TokenType::LBracket);
+  EXPECT_EQ(tokens[45].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[45].lexeme, "\\b");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[45].value, TCodepoint, '\b');
+  EXPECT_EQ(tokens[46].type, EBNFLexer::TokenType::CharInCharClass);
+  EXPECT_EQ(tokens[46].lexeme, "\\f");
+  XGRAMMAR_EXPECT_ANY_EQ(tokens[46].value, TCodepoint, '\f');
+  EXPECT_EQ(tokens[47].type, EBNFLexer::TokenType::RBracket);
 }
 
 TEST(XGrammarLexerTest, BooleanValues) {
@@ -177,11 +235,11 @@ TEST(XGrammarLexerTest, BooleanValues) {
   auto tokens = lexer.Tokenize(input);
 
   ASSERT_EQ(tokens.size(), 6);  // 5 tokens + EOF
-  EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::Boolean);
+  EXPECT_EQ(tokens[2].type, EBNFLexer::TokenType::BooleanLiteral);
   EXPECT_EQ(tokens[2].lexeme, "true");
   XGRAMMAR_EXPECT_ANY_EQ(tokens[2].value, bool, true);
 
-  EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::Boolean);
+  EXPECT_EQ(tokens[4].type, EBNFLexer::TokenType::BooleanLiteral);
   EXPECT_EQ(tokens[4].lexeme, "false");
   XGRAMMAR_EXPECT_ANY_EQ(tokens[4].value, bool, false);
 }

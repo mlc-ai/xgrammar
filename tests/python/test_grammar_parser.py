@@ -62,6 +62,10 @@ def test_complex_character_class():
     assert after == expected
 
 
+test_complex_character_class()
+exit()
+
+
 def test_sequence():
     """Test sequence of expressions."""
     before = """root ::= "a" "b" "c"

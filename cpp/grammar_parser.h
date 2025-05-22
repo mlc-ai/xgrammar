@@ -20,8 +20,8 @@ class EBNFLexer {
     RuleName,        // the name of a rule definition, e.g.: root, rule1
     Identifier,      // reference to a rule, or a Macro name, e.g.: root, rule1, TagDispatch
     StringLiteral,   // e.g.: "tag1", "hello"
+    BooleanLiteral,  // true, false
     IntegerLiteral,  // 123
-    CharClass,       // Character class, e.g.: [a-z], [0-9], [^a-z]
     LParen,          // (
     RParen,          // )
     LBrace,          // {
@@ -30,15 +30,21 @@ class EBNFLexer {
     Comma,           // ,
     EndOfFile,       // End of file
 
-    // Boolean type
-    Boolean,  // true, false
-
     // Symbols and quantifiers
     Assign,    // ::=
     Equal,     // =
     Star,      // *
     Plus,      // +
     Question,  // ?
+
+    // Character class
+    LBracket,           // [
+    RBracket,           // ]
+    Dash,               // -
+    Caret,              // ^
+    CharInCharClass,    // a character in a character class, e.g. a and z in [a-z]; escaped chars
+                        // with no special meaning are also included, e.g. . in [a\.z]
+    EscapeInCharClass,  // Escaped sequence with special function, e.g. \S in [\S]
 
     // Special structures
     LookaheadLParen,  // (=

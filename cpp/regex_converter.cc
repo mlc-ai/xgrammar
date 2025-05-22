@@ -151,7 +151,7 @@ std::string RegexConverter::HandleCharEscape() {
       (current_[1] == 'x' && end_ - current_ < 4) || (current_[1] == 'c' && end_ - current_ < 3)) {
     RaiseError("Escape sequence is not finished.");
   }
-  auto [codepoint, len] = xgrammar::HandleEscape(current_, CUSTOM_ESCAPE_MAP);
+  auto [codepoint, len] = ParseNextEscaped(current_, CUSTOM_ESCAPE_MAP);
   if (codepoint != CharHandlingError::kInvalidEscape) {
     current_ += len;
     return PrintAsEscapedUTF8(codepoint);

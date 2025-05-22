@@ -82,15 +82,20 @@ enum CharHandlingError : TCodepoint {
 /*!
  * \brief Parse all codepoints in a UTF-8 string.
  * \param utf8 The UTF-8 string.
- * \return All codepoints. If the UTF-8 string is invalid, and the error policy is
- * kReturnInvalid, the function returns {CharHandlingError::kInvalidUTF8}.
+ * \param perserve_invalid_bytes If the invalid UTF8 bytes will be preserved in the result.
+ * \return All codepoints. If the UTF-8 string is invalid, when perserve_invalid_bytes is false,
+ * the invalid bytes will be added to the result as a TCodepoint. Otherwise, the function will
+ * return {CharHandlingError::kInvalidUTF8}.
  */
-std::vector<TCodepoint> ParseUTF8(const char* utf8, bool return_byte_on_error = false);
+std::vector<TCodepoint> ParseUTF8(const char* utf8, bool perserve_invalid_bytes = false);
 
-template <typename CharType>
-std::pair<TCodepoint, int32_t> HandleEscape(
-    const CharType* data, const std::unordered_map<char, TCodepoint>& additional_escape_map = {}
-);
+/*!
+ * \brief Parse the first codepoint in a UTF-8 string.
+ * \param utf8 The UTF-8 string.
+ * \return The codepoint and the number of bytes consumed. If the UTF-8 string is invalid, return
+ * {CharHandlingError::kInvalidUTF8, 0}.
+ */
+std::pair<TCodepoint, int32_t> ParseNextUTF8(const char* utf8);
 
 /*!
  * \brief Parse the first codepoint from a UTF-8 string. Also checks escape sequences and converts
@@ -98,18 +103,24 @@ std::pair<TCodepoint, int32_t> HandleEscape(
  * \param utf8 The UTF-8 string or the escape sequence.
  * \param additional_escape_map A map from escape sequence to codepoint. If the escape sequence is
  * in the map, it will be converted to the corresponding codepoint. e.g. {{"\\-", '-'}}.
- * \return The codepoint and the new pointer. If the UTF-8 string or the escape sequence is
- * invalid, and the error policy is kReturnInvalid, the function returns
- * (CharHandlingError::kInvalidUTF8, input char pointer).
+ * \return The codepoint and the number of bytes consumed. If the UTF-8 string is invalid, the
+ * function returns (CharHandlingError::kInvalidUTF8, 0). If the escape sequence is invalid, the
+ * function returns (CharHandlingError::kInvalidEscape, 0).
  */
 std::pair<TCodepoint, int32_t> ParseNextUTF8OrEscaped(
     const char* utf8, const std::unordered_map<char, TCodepoint>& additional_escape_map = {}
 );
 
-// Template implementation
+/*!
+ * \brief Parse the first codepoint from a escaped string. It doesn't consider the UTF-8 sequences.
+ * \param data The escaped string. Can be TCodepoint* (e.g. string decoded from UTF-8) or char*.
+ * \param additional_escape_map A map from escape sequence to codepoint. If the escape sequence is
+ * in the map, it will be converted to the corresponding codepoint. e.g. {{"\\-", '-'}}.
+ * \return The codepoint and the number of bytes consumed.
+ */
 template <typename CharType>
-std::pair<TCodepoint, int32_t> HandleEscape(
-    const CharType* data, const std::unordered_map<char, TCodepoint>& additional_escape_map
+std::pair<TCodepoint, int32_t> ParseNextEscaped(
+    const CharType* data, const std::unordered_map<char, TCodepoint>& additional_escape_map = {}
 ) {
   static const std::unordered_map<char, TCodepoint> kEscapeToCodepoint = {
       {'\'', '\''},
