@@ -189,12 +189,75 @@ void EarleyParserWithFSM::PushInitialState(const FSMState& state) {
 
 void EarleyParserWithFSM::BuildNullableSet() {
   can_be_empty_fsm_.resize(fsms_.size());
+  std::unordered_set<int32_t> completed_rules;
   for (size_t i = 0; i < fsms_.size(); ++i) {
+    // Initialize the parser.
     FSMState start_state(i, fsms_[i].StartNode(), -1);
-    PushInitialState(start_state);
-    can_be_empty_fsm_[i] = IsAcceptStopToken();
-    Reset();
+    tmp_states_visited_in_queue_.clear();
+    rule_id_to_completeable_states_.clear();
+    rule_id_to_completeable_states_.emplace_back();
+    can_accept_stop_token_.clear();
+    tmp_accept_stop_token_ = false;
+    while (!tmp_process_state_queue_.empty()) {
+      tmp_process_state_queue_.pop();
+    }
+
+    // Process the start state.
+    tmp_process_state_queue_.push(start_state);
+    while (!tmp_process_state_queue_.empty()) {
+      FSMState current_state = tmp_process_state_queue_.front();
+      tmp_process_state_queue_.pop();
+      XGRAMMAR_DCHECK(current_state.fsm_id >= 0 && size_t(current_state.fsm_id) < fsms_.size())
+          << "The fsm id is out of bound. The fsm id is " << current_state.fsm_id;
+      const auto& current_fsm = fsms_[current_state.fsm_id];
+      const auto& current_edges = current_fsm.fsm.edges[current_state.node_id];
+      for (const auto& edge : current_edges) {
+        // If the edge is an epsilon edge, then we need to add the target state into the queue.
+        if (edge.IsEpsilon()) {
+          FSMState new_state(current_state.fsm_id, edge.target, current_state.input_pos);
+          if (tmp_states_visited_in_queue_.find(new_state) == tmp_states_visited_in_queue_.end()) {
+            tmp_process_state_queue_.push(new_state);
+            tmp_states_visited_in_queue_.insert(new_state);
+          }
+          continue;
+        }
+        // If the rule is a ruleref, we need to consider:
+        // 1. If the rule has been completed before, we need to add the target state into the queue.
+        // 2. If the rule has not been completed before, we need to add the rule into the
+        // rule_id_to_completeable_states_, and add the reference rule into the queue.
+        if (edge.IsRuleRef()) {
+          if (completed_rules.find(edge.GetRefRuleId()) != completed_rules.end()) {
+            // The rule has been completed before.
+            FSMState new_state(current_state.fsm_id, edge.target, current_state.input_pos);
+            if (tmp_states_visited_in_queue_.find(new_state) ==
+                tmp_states_visited_in_queue_.end()) {
+              tmp_process_state_queue_.push(new_state);
+              tmp_states_visited_in_queue_.insert(new_state);
+            }
+            continue;
+          }
+          // Predict the new rule.
+          rule_id_to_completeable_states_.back().insert({edge.GetRefRuleId(), current_state});
+          FSMState rule_start_state(
+              edge.GetRefRuleId(),
+              fsms_[edge.GetRefRuleId()].StartNode(),
+              rule_id_to_completeable_states_.size() - 1
+          );
+          if (tmp_states_visited_in_queue_.find(rule_start_state) ==
+              tmp_states_visited_in_queue_.end()) {
+            tmp_process_state_queue_.push(rule_start_state);
+            tmp_states_visited_in_queue_.insert(rule_start_state);
+          }
+          continue;
+        }
+      }
+      if (current_fsm.IsEndNode(current_state.node_id)) {
+        Complete(current_state);
+      }
+    }
+    can_be_empty_fsm_[i] = tmp_accept_stop_token_;
   }
+  Reset();
 }
 
 EarleyParserWithFSM::EarleyParserWithFSM(FSMGroup fsm_group_) : FSMGroup(fsm_group_) {
