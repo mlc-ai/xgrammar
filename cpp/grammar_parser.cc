@@ -284,8 +284,11 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIntegerToken() {
 std::variant<EBNFLexer::Token, std::vector<EBNFLexer::Token>> EBNFLexer::Impl::NextToken() {
   ConsumeSpace();  // Skip whitespace and comments
 
+  auto start_line = cur_line_;
+  auto start_column = cur_column_;
+
   if (!Peek()) {
-    return EBNFLexer::Token{TokenType::EndOfFile, "", "", cur_line_, cur_column_};
+    return EBNFLexer::Token{TokenType::EndOfFile, "", "", start_line, start_column};
   }
 
   // Determine token type based on current character
@@ -293,43 +296,42 @@ std::variant<EBNFLexer::Token, std::vector<EBNFLexer::Token>> EBNFLexer::Impl::N
     case '(':
       if (Peek(1) == '=') {
         Consume(2);
-        return EBNFLexer::Token{TokenType::LookaheadLParen, "(=", "", cur_line_, cur_column_};
+        return EBNFLexer::Token{TokenType::LookaheadLParen, "(=", "", start_line, start_column};
       } else {
         Consume();
-        return EBNFLexer::Token{TokenType::LParen, "(", "", cur_line_, cur_column_};
+        return EBNFLexer::Token{TokenType::LParen, "(", "", start_line, start_column};
       }
     case ')':
       Consume();
-      return EBNFLexer::Token{TokenType::RParen, ")", "", cur_line_, cur_column_};
+      return EBNFLexer::Token{TokenType::RParen, ")", "", start_line, start_column};
     case '{':
       Consume();
-      return EBNFLexer::Token{TokenType::LBrace, "{", "", cur_line_, cur_column_};
+      return EBNFLexer::Token{TokenType::LBrace, "{", "", start_line, start_column};
     case '}':
       Consume();
-      return EBNFLexer::Token{TokenType::RBrace, "}", "", cur_line_, cur_column_};
+      return EBNFLexer::Token{TokenType::RBrace, "}", "", start_line, start_column};
     case '|':
       Consume();
-      return EBNFLexer::Token{TokenType::Pipe, "|", "", cur_line_, cur_column_};
+      return EBNFLexer::Token{TokenType::Pipe, "|", "", start_line, start_column};
     case ',':
       Consume();
-      return EBNFLexer::Token{TokenType::Comma, ",", "", cur_line_, cur_column_};
+      return EBNFLexer::Token{TokenType::Comma, ",", "", start_line, start_column};
     case '*':
       Consume();
-      return EBNFLexer::Token{TokenType::Star, "*", "", cur_line_, cur_column_};
+      return EBNFLexer::Token{TokenType::Star, "*", "", start_line, start_column};
     case '+':
       Consume();
-      return EBNFLexer::Token{TokenType::Plus, "+", "", cur_line_, cur_column_};
+      return EBNFLexer::Token{TokenType::Plus, "+", "", start_line, start_column};
     case '?':
       Consume();
-      return EBNFLexer::Token{TokenType::Question, "?", "", cur_line_, cur_column_};
+      return EBNFLexer::Token{TokenType::Question, "?", "", start_line, start_column};
     case '=':
       Consume();
-      return EBNFLexer::Token{TokenType::Equal, "=", "", cur_line_, cur_column_};
+      return EBNFLexer::Token{TokenType::Equal, "=", "", start_line, start_column};
     case ':':
       if (Peek(1) == ':' && Peek(2) == '=') {
-        auto result = EBNFLexer::Token{TokenType::Assign, "::=", "", cur_line_, cur_column_};
         Consume(3);
-        return result;
+        return EBNFLexer::Token{TokenType::Assign, "::=", "", start_line, start_column};
       }
       ReportLexerError("Unexpected character: ':'");
       break;
@@ -570,14 +572,28 @@ int32_t EBNFParser::ParseCharClass() {
     if (Peek().type == TokenType::EscapeInCharClass) {
       ReportParseError("Character class escape is not supported yet in EBNF");
     }
+
+    TCodepoint codepoint;
     if (Peek().type == TokenType::CharInCharClass) {
-      ReportParseError("Expect character in character class");
+      codepoint = std::any_cast<TCodepoint>(Peek().value);
+    } else if (Peek().type == TokenType::Dash) {
+      codepoint = static_cast<TCodepoint>(static_cast<uint8_t>('-'));
+    } else {
+      ReportParseError("Unexpected character in character class: " + Peek().lexeme);
     }
-    auto codepoint = std::any_cast<TCodepoint>(Peek().value);
     Consume();
-    if (Peek().type == TokenType::Dash && Peek(1).type == TokenType::CharInCharClass) {
+
+    if (Peek().type == TokenType::Dash &&
+        (Peek(1).type == TokenType::CharInCharClass || Peek(1).type == TokenType::Dash)) {
       // Range expression
-      auto codepoint2 = std::any_cast<TCodepoint>(Peek(1).value);
+      TCodepoint codepoint2;
+      if (Peek(1).type == TokenType::CharInCharClass) {
+        codepoint2 = std::any_cast<TCodepoint>(Peek(1).value);
+      } else {
+        XGRAMMAR_DCHECK(Peek(1).type == TokenType::Dash);
+        codepoint2 = static_cast<TCodepoint>(static_cast<uint8_t>('-'));
+      }
+
       if (codepoint > codepoint2) {
         ReportParseError("Invalid character class: lower bound is larger than upper bound", -1);
       }

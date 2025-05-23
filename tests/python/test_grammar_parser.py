@@ -53,17 +53,13 @@ def test_negated_character_class():
 
 def test_complex_character_class():
     """Test complex character class with multiple ranges and individual characters."""
-    before = """root ::= [a-zA-Z0-9_-]
+    before = r"""root ::= [a-zA-Z0-9_-] [\r\n$\x10-o\]\--]
 """
-    expected = r"""root ::= (([a-zA-Z0-9_\-]))
+    expected = r"""root ::= (([a-zA-Z0-9_\-] [\r\n$\x10-o\]\-\-]))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
     assert after == expected
-
-
-test_complex_character_class()
-exit()
 
 
 def test_sequence():
@@ -238,7 +234,6 @@ rule2 ::= (("b"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
-    print(after)
     assert after == expected
 
 
@@ -815,7 +810,7 @@ ebnf_str__expected_error_regex__test_lexer_parser_errors = [
     (r'root ::= "a" |', "EBNF parser error at line 1, column 15: Expect element"),
     (
         r"root ::= [Z-A]",
-        "EBNF parser error at line 1, column 10: Invalid character class: lower bound is larger "
+        "EBNF parser error at line 1, column 11: Invalid character class: lower bound is larger "
         "than upper bound",
     ),
     (

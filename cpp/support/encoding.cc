@@ -142,7 +142,7 @@ std::vector<TCodepoint> ParseUTF8(const char* utf8, bool perserve_invalid_bytes)
   std::vector<TCodepoint> codepoints;
   while (*utf8 != 0) {
     auto [codepoint, num_bytes] = ParseNextUTF8(utf8);
-    if (codepoint != CharHandlingError::kInvalidUTF8) {
+    if (codepoint == CharHandlingError::kInvalidUTF8) {
       if (perserve_invalid_bytes) {
         codepoints.push_back(static_cast<TCodepoint>(static_cast<uint8_t>(utf8[0])));
         utf8 += 1;
