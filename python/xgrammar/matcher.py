@@ -3,6 +3,7 @@ token.
 """
 
 import math
+import warnings
 from typing import List, Optional, Tuple, Union
 
 import torch
@@ -154,35 +155,38 @@ def apply_token_bitmask_inplace(
 
 class GrammarMatcher(XGRObject):
     """Match the output of the LLM to the specified grammar, then generate the mask for the next
-    token. This is the core class in the grammar-guided generation.
+     token. This is the core class in the grammar-guided generation.
 
-    This class maintains a stateful matcher that can accept tokens and strings, then match them
-    to the specified grammar. The matcher can provide a bitmask for the next token prediction,
-    so that the output of the LLM follows the specified grammar. Its state can be reset and
-    rolled back by tokens. It also provides utilities for jump-forward decoding.
+     This class maintains a stateful matcher that can accept tokens and strings, then match them
+     to the specified grammar. The matcher can provide a bitmask for the next token prediction,
+     so that the output of the LLM follows the specified grammar. Its state can be reset and
+     rolled back by tokens. It also provides utilities for jump-forward decoding.
 
-    After matching the whole grammar, the matcher will accept a stop token. The token mask at
-    this time will only allow stop tokens. After accepting the stop token, the matcher will
-    terminate, then it cannot accept any new token or generate a new token mask, meaning the
-    generation is finished.
+     After matching the whole grammar, the matcher will accept a stop token. The token mask at
+     this time will only allow stop tokens. After accepting the stop token, the matcher will
+     terminate, then it cannot accept any new token or generate a new token mask, meaning the
+     generation is finished.
 
-    Under the hood, it utilizes a pushdown automaton with backtracking to match the grammar,
-    with optimizations specific to LLM token mask generation.
+     Under the hood, it utilizes a pushdown automaton with backtracking to match the grammar,
+     with optimizations specific to LLM token mask generation.
 
-    Parameters
-    ----------
-    compiled_grammar : CompiledGrammar
-        The initialization context for the grammar matcher.
+     Parameters
+     ----------
+     compiled_grammar : CompiledGrammar
+         The initialization context for the grammar matcher.
 
-    override_stop_tokens : Optional[Union[int, List[int]]], default: None
-        If not None, the stop tokens to override the ones in the grammar.
+     override_stop_tokens : Optional[Union[int, List[int]]], default: None
+         If not None, the stop tokens to override the ones in the grammar.
 
-    terminate_without_stop_token : bool, default: False
-        Whether to terminate the matcher without accepting a stop token.
+     terminate_without_stop_token : bool, default: False
+         Whether to terminate the matcher without accepting a stop token.
 
     max_rollback_tokens : int, default: 0
-        The maximum number of rollback tokens allowed. The rollback operation is useful for
-        jump-forward decoding and speculative decoding.
+         Deprecated because the earley parser significantly reduces the number of states, so not
+         needed anymore.
+
+         The maximum number of rollback tokens allowed. The rollback operation is useful for
+         jump-forward decoding and speculative decoding.
     """
 
     def __init__(
@@ -191,10 +195,16 @@ class GrammarMatcher(XGRObject):
         *,
         override_stop_tokens: Optional[Union[int, List[int]]] = None,
         terminate_without_stop_token: bool = False,
-        max_rollback_tokens: int = 0,
+        max_rollback_tokens: int = -1,
     ) -> None:
         if not isinstance(compiled_grammar, CompiledGrammar):
             raise ValueError("The grammar should be compiled before passing it to GrammarMatcher.")
+
+        if not max_rollback_tokens == -1:
+            warnings.warn(
+                "max_rollback_tokens is deprecated because the earley parser significantly reduces the number of states, so not needed anymore.",
+                DeprecationWarning,
+            )
 
         if isinstance(override_stop_tokens, int):
             override_stop_tokens = [override_stop_tokens]

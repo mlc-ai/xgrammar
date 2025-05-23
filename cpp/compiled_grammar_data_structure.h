@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include "earley_parser.h"
+
 // matcher_data_structure.h is included to use StackElement
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
@@ -111,8 +113,7 @@ class CompiledGrammar::Impl {
   };
 
   /*! \brief Mapping from the stack top element to the adaptive token mask. */
-  std::unordered_map<StackElement, AdaptiveTokenMask, StackElementHash, StackElementEqual>
-      adaptive_token_mask_cache;
+  std::unordered_map<ParserState, AdaptiveTokenMask, StateHash> adaptive_token_mask_cache;
 
   Grammar GetGrammar() const { return grammar; }
 

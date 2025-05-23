@@ -1,11 +1,12 @@
 import json
 import sys
 import time
+from json import dumps
 from typing import Dict, List, Tuple
 
 import pytest
 from pydantic import BaseModel, Field
-from transformers import AutoTokenizer
+from transformers import AutoConfig, AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
@@ -382,6 +383,96 @@ def test_mask_generation_format(value: str, format: str):
 
     assert matcher.accept_token(tokenizer.eos_token_id)
     assert matcher.is_terminated()
+
+
+@pytest.mark.hf_token_required
+def test_implicit_left_recursion_schema():
+    model_name = "meta-llama/Llama-3.2-1B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    config = AutoConfig.from_pretrained(model_name)
+
+    json_schema = {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "type": "object",
+        "required": [
+            "location",
+            "country",
+            "city",
+            "parameter",
+            "unit",
+            "value",
+            "date",
+            "sourceName",
+            "sourceType",
+            "mobile",
+        ],
+        "properties": {
+            "location": {"type": "string", "minLength": 1},
+            "parameter": {
+                "type": "string",
+                "enum": ["pm25", "pm10", "no2", "so2", "o3", "co", "bc"],
+            },
+            "unit": {"type": "string", "enum": ["ug/m^3", "ppm"]},
+            "averagingPeriod": {
+                "type": "object",
+                "required": ["value", "unit"],
+                "additionalProperties": False,
+                "properties": {
+                    "value": {"type": "number"},
+                    "unit": {"type": "string", "enum": ["hours"]},
+                },
+            },
+            "attribution": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["name"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "name": {"type": "string", "minLength": 1},
+                        "url": {
+                            "type": "string",
+                            "pattern": "^(https?://)?([\\da-z\\.-]+)\\.([a-z\\.]{2,6})([/\\w \\.-]*)*/?",
+                        },
+                    },
+                },
+            },
+            "coordinates": {
+                "type": "object",
+                "required": ["latitude", "longitude"],
+                "additionalProperties": False,
+                "properties": {
+                    "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+                    "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+                },
+            },
+            "value": {"type": "number"},
+            "date": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["utc", "local"],
+                "properties": {
+                    "utc": {"type": "string"},
+                    "local": {
+                        "type": "string",
+                        "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\+|-)\\d{2}:\\d{2}",
+                    },
+                },
+            },
+            "sourceName": {"type": "string", "minLength": 1},
+            "sourceType": {"type": "string", "enum": ["government", "research", "other"]},
+            "mobile": {"type": "boolean"},
+            "city": {"type": "string", "minLength": 1},
+            "country": {"type": "string", "maxLength": 2, "minLength": 2},
+        },
+    }
+
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+    time_start = time.monotonic_ns()
+    _ = grammar_compiler.compile_json_schema(schema=dumps(json_schema))
+    time_end = time.monotonic_ns()
+    print(f"Time for preprocessing: {(time_end - time_start) / 1e3} us")
 
 
 if __name__ == "__main__":

@@ -339,7 +339,7 @@ CompactFSM FSM::ToCompact() {
     std::sort(edges[i].begin(), edges[i].end(), [](const FSMEdge& a, const FSMEdge& b) {
       return a.min != b.min ? a.min < b.min : a.max < b.max;
     });
-    result.edges.Insert(edges[i]);
+    result.edges.PushBack(edges[i]);
   }
   return result;
 }

@@ -8,7 +8,7 @@ from typing import List
 
 import pytest
 import torch
-from transformers import AutoTokenizer
+from transformers import AutoConfig, AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
@@ -398,6 +398,72 @@ def test_fill_next_token_bitmask(
     matcher.fill_next_token_bitmask(token_bitmask)
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert len(rejected_token_ids) == expected_rejected_sizes[-1]
+
+
+grammar_with_nullable_rules = """
+    root ::= rule1 | (rule1 rule1 rule1 rule3)+
+    rule1 ::= rule2
+    rule2 ::= [0-9]*
+    rule3 ::= [a-z]
+"""
+
+test_string = "abc12312398014a"
+
+
+@pytest.mark.hf_token_required
+def test_nullable_grammar():
+    model_name = "meta-llama/Llama-3.2-1B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    config = AutoConfig.from_pretrained(model_name)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+    time_start = time.monotonic_ns()
+    compiled_grammar = grammar_compiler.compile_grammar(grammar_with_nullable_rules)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device=device)
+
+    input_bytes = test_string.encode("utf-8")
+    fill_next_token_bitmask_time = 0
+    accept_token_time = 0
+    for i, c in enumerate(input_bytes):
+        time_start = time.monotonic_ns()
+        matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+        fill_next_token_bitmask_time += time_end - time_start
+
+        # 3. apply_token_bitmask_inplace
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_start = time.monotonic_ns()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_end = time.monotonic_ns()
+        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+
+        # 4. accept_string
+        print("Accepting char:", bytes([c]))
+        time_start = time.monotonic_ns()
+        assert matcher._debug_accept_string(bytes([c]))
+        time_end = time.monotonic_ns()
+        print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
+        accept_token_time += time_end - time_start
+
+    # 5. Final correctness verification
+    time_start = time.monotonic_ns()
+    matcher.fill_next_token_bitmask(token_bitmask)
+    time_end = time.monotonic_ns()
+    fill_next_token_bitmask_time += time_end - time_start
+    print(
+        f"Average time to fill_next_token_bitmask: {(fill_next_token_bitmask_time/(1 + len(input_bytes))) / 1e3} us"
+    )
+    print(f"Average time to accept_token: {(accept_token_time) / len(input_bytes) / 1e3} us")
 
 
 if __name__ == "__main__":
