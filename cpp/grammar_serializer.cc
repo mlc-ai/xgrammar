@@ -7,7 +7,23 @@
 
 #include <picojson.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <tuple>
+#include <utility>
+#include <vector>
+
+#include "compiled_grammar_data_structure.h"
+#include "fsm.h"
+#include "persistent_stack.h"
+#include "support/dynamic_bitset.h"
 #include "support/encoding.h"
+#include "support/logging.h"
+#include "support/utils.h"
+#include "tokenizer_internal.h"
+#include "xgrammar/compiler.h"
+#include "xgrammar/grammar.h"
+#include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
 
@@ -140,82 +156,407 @@ std::string GrammarPrinter::ToString() {
   return result;
 }
 
-std::string GrammarSerializer::Serialize() {
+picojson::value Grammar::Impl::SerializeToJSON() const {
   picojson::object grammar_json_obj;
 
   picojson::array rules_json;
-  for (const auto& rule : grammar_->rules_) {
+  for (const auto& [name, body_expr_id, lookahead_assertion_id] : rules_) {
     picojson::object rule_json;
-    rule_json["name"] = picojson::value(rule.name);
-    rule_json["body_expr_id"] = picojson::value(static_cast<int64_t>(rule.body_expr_id));
-    rules_json.push_back(picojson::value(rule_json));
+    rule_json["name"] = picojson::value(name);
+    rule_json["body_expr_id"] = picojson::value(static_cast<int64_t>(body_expr_id));
+    rule_json["lookahead_assertion_id"] =
+        picojson::value(static_cast<int64_t>(lookahead_assertion_id));
+    rules_json.emplace_back(std::move(rule_json));
   }
-  grammar_json_obj["rules"] = picojson::value(rules_json);
+  grammar_json_obj["rules"] = picojson::value(std::move(rules_json));
 
   picojson::array rule_expr_data_json;
-  for (const auto& data : grammar_->rule_expr_data_) {
-    rule_expr_data_json.push_back(picojson::value(static_cast<int64_t>(data)));
+  for (const auto& data : rule_expr_data_) {
+    rule_expr_data_json.emplace_back(static_cast<int64_t>(data));
   }
-  grammar_json_obj["rule_expr_data"] = picojson::value(rule_expr_data_json);
-  picojson::array rule_expr_indptr_json;
-  for (const auto& index_ptr : grammar_->rule_expr_indptr_) {
-    rule_expr_indptr_json.push_back(picojson::value(static_cast<int64_t>(index_ptr)));
-  }
-  grammar_json_obj["rule_expr_indptr"] = picojson::value(rule_expr_indptr_json);
+  grammar_json_obj["rule_expr_data"] = picojson::value(std::move(rule_expr_data_json));
 
-  auto grammar_json = picojson::value(grammar_json_obj);
-  return grammar_json.serialize(prettify_);
+  picojson::array rule_expr_indptr_json;
+  for (const auto& index_ptr : rule_expr_indptr_) {
+    rule_expr_indptr_json.emplace_back(static_cast<int64_t>(index_ptr));
+  }
+  grammar_json_obj["rule_expr_indptr"] = picojson::value(std::move(rule_expr_indptr_json));
+
+  grammar_json_obj["root_rule_id_"] = picojson::value(static_cast<int64_t>(root_rule_id_));
+
+  if (root_tag_dispatch_fsm) {
+    grammar_json_obj["root_tag_dispatch_fsm"] = root_tag_dispatch_fsm->SerializeToJSON();
+  } else {
+    grammar_json_obj["root_tag_dispatch_fsm"] = picojson::value();
+  }
+
+  picojson::array tag_dispatch_list;
+  for (const auto& [key, value] : tag_dispatch_end_node_to_rule_id) {
+    tag_dispatch_list.emplace_back(static_cast<int64_t>(key));
+    tag_dispatch_list.emplace_back(static_cast<int64_t>(value));
+  }
+  grammar_json_obj["tag_dispatch_list"] = picojson::value(std::move(tag_dispatch_list));
+
+  picojson::array allow_empty_list;
+  for (const auto& rule_id : allow_empty_rule_ids) {
+    allow_empty_list.emplace_back(static_cast<int64_t>(rule_id));
+  }
+  grammar_json_obj["allow_empty_rule_ids"] = picojson::value(std::move(allow_empty_list));
+
+  AddSerializeVersion(grammar_json_obj);
+  return picojson::value(std::move(grammar_json_obj));
 }
 
-Grammar GrammarDeserializer::Deserialize(std::string json_string) {
+Grammar Grammar::Impl::DeserializeFromJSON(const picojson::value& serialized_value) {
   auto node = std::make_shared<Grammar::Impl>();
 
   auto checker = [&](bool condition) {
-    XGRAMMAR_CHECK(condition) << "Failed to deserialize XGrammar object: " << json_string;
+    XGRAMMAR_CHECK(condition) << "Failed to deserialize XGrammar object: "
+                              << serialized_value.serialize();
   };
 
-  picojson::value serialized_value;
-  std::string err = picojson::parse(serialized_value, json_string);
+  auto get_key = [&](const picojson::object& obj, const std::string& key) -> const auto& {
+    auto iter = obj.find(key);
+    checker(iter != obj.end());
+    return iter->second;
+  };
 
-  checker(err.empty() && serialized_value.is<picojson::object>());
-  auto serialized_obj = serialized_value.get<picojson::object>();
+  auto as_type = [&](const picojson::value& val, auto type_obj) -> const auto& {
+    using type = decltype(type_obj);
+    checker(val.is<type>());
+    return val.get<type>();
+  };
+
+  const auto& serialized_obj = as_type(serialized_value, picojson::object{});
+  CheckSerializeVersion(serialized_obj);
 
   // rules
-  checker(serialized_obj.count("rules") && serialized_obj["rules"].is<picojson::array>());
-  auto rules_array = serialized_obj["rules"].get<picojson::array>();
-
+  const auto& rules_array = as_type(get_key(serialized_obj, "rules"), picojson::array{});
   checker(rules_array.size() > 0);
   for (const auto& rule_value : rules_array) {
-    checker(rule_value.is<picojson::object>());
-    auto rule_obj = rule_value.get<picojson::object>();
-    checker(rule_obj.count("name") && rule_obj["name"].is<std::string>());
-    auto name = rule_obj["name"].get<std::string>();
-    checker(rule_obj.count("body_expr_id") && rule_obj["body_expr_id"].is<int64_t>());
-    auto rule_expr = static_cast<int32_t>(rule_obj["body_expr_id"].get<int64_t>());
-    node->rules_.push_back(Grammar::Impl::Rule({name, rule_expr}));
+    const auto& rule_obj = as_type(rule_value, picojson::object{});
+    const auto& name = as_type(get_key(rule_obj, "name"), std::string{});
+    const auto& rule_expr = as_type(get_key(rule_obj, "body_expr_id"), int64_t{});
+    const auto& lookahead_assertion_id =
+        as_type(get_key(rule_obj, "lookahead_assertion_id"), int64_t{});
+    node->rules_.push_back(Grammar::Impl::Rule(
+        {name, static_cast<int32_t>(rule_expr), static_cast<int32_t>(lookahead_assertion_id)}
+    ));
   }
 
   // rule_expr_data
-  checker(
-      serialized_obj.count("rule_expr_data") &&
-      serialized_obj["rule_expr_data"].is<picojson::array>()
-  );
-  auto rule_expr_data_array = serialized_obj["rule_expr_data"].get<picojson::array>();
+  const auto& rule_expr_data_array =
+      as_type(get_key(serialized_obj, "rule_expr_data"), picojson::array{});
   for (const auto& data_json : rule_expr_data_array) {
     node->rule_expr_data_.push_back(static_cast<int32_t>(data_json.get<int64_t>()));
   }
 
   // rule_expr_indptr
-  checker(
-      serialized_obj.count("rule_expr_indptr") &&
-      serialized_obj["rule_expr_indptr"].is<picojson::array>()
-  );
-  auto rule_expr_indptr_array = serialized_obj["rule_expr_indptr"].get<picojson::array>();
+  const auto& rule_expr_indptr_array =
+      as_type(get_key(serialized_obj, "rule_expr_indptr"), picojson::array{});
   for (const auto& index_ptr_json : rule_expr_indptr_array) {
     node->rule_expr_indptr_.push_back(static_cast<int32_t>(index_ptr_json.get<int64_t>()));
   }
 
+  // root_rule_id
+  node->root_rule_id_ =
+      static_cast<int32_t>(get_key(serialized_obj, "root_rule_id_").get<int64_t>());
+
+  // root_tag_dispatch_fsm
+  const auto& fsm_json = get_key(serialized_obj, "root_tag_dispatch_fsm");
+  if (!fsm_json.is<picojson::null>()) {
+    node->root_tag_dispatch_fsm.emplace(CompactFSMWithStartEnd::DeserializeFromJSON(fsm_json));
+  }
+
+  // tag_dispatch_list
+  const auto& tag_dispatch_list =
+      as_type(get_key(serialized_obj, "tag_dispatch_list"), picojson::array{});
+  checker(tag_dispatch_list.size() % 2 == 0);
+  node->tag_dispatch_end_node_to_rule_id.reserve(tag_dispatch_list.size());
+  for (std::size_t i = 0; i < tag_dispatch_list.size(); ++i) {
+    const auto key = static_cast<int32_t>(tag_dispatch_list[i * 2 + 0].get<int64_t>());
+    const auto value = static_cast<int32_t>(tag_dispatch_list[i * 2 + 1].get<int64_t>());
+    node->tag_dispatch_end_node_to_rule_id.emplace(key, value);
+  }
+
+  // allow_empty_rule_ids
+  const auto& allow_empty_list =
+      as_type(get_key(serialized_obj, "allow_empty_rule_ids"), picojson::array{});
+  node->allow_empty_rule_ids.reserve(allow_empty_list.size());
+  for (const auto& rule_id_json : allow_empty_list) {
+    node->allow_empty_rule_ids.push_back(static_cast<int32_t>(rule_id_json.get<int64_t>()));
+  }
+
   return Grammar(node);
 }
+
+enum class SerializeMaskStoreType {
+  Unknown = 0,  // to prevent uninitialized value
+  AcceptedIndices = 1,
+  RejectedIndices = 2,
+  AcceptedBitsetIndices = 3,
+  RejectedBitsetIndices = 4,
+};
+
+static constexpr std::size_t ENTRY_DATA_OFFSET = 11;
+
+picojson::value CompiledGrammar::Impl::SerializeToJSON() const {
+  static constexpr auto serialized_entry =
+      [](const std::pair<const StackElement, AdaptiveTokenMask>& entry) -> picojson::value {
+    picojson::array entry_json;
+    entry_json.reserve(ENTRY_DATA_OFFSET);
+
+    const auto& [elem, mask] = entry;
+    // serialize stack element, except for ref count field
+    entry_json.emplace_back(static_cast<int64_t>(elem.rule_id));
+    entry_json.emplace_back(static_cast<int64_t>(elem.sequence_id));
+    entry_json.emplace_back(static_cast<int64_t>(elem.element_id));
+    entry_json.emplace_back(static_cast<int64_t>(elem.left_utf8_bytes));
+    entry_json.emplace_back(static_cast<int64_t>(elem.element_in_string));
+    entry_json.emplace_back(static_cast<int64_t>(elem.parent_id));
+    entry_json.emplace_back(static_cast<int64_t>(elem.reference_count));
+
+    // serialize adaptive token mask
+    std::vector<int32_t> indices;
+    SerializeMaskStoreType store_type;
+    const std::vector<int32_t>* indice_ptr = nullptr;
+    const auto mask_bitset_size = mask.accepted_bitset.Size();
+    switch (mask.store_type) {
+      case AdaptiveTokenMask::StoreType::kAccepted:
+        indice_ptr = &mask.accepted_indices;
+        store_type = SerializeMaskStoreType::AcceptedIndices;
+        break;
+      case AdaptiveTokenMask::StoreType::kRejected:
+        indice_ptr = &mask.rejected_indices;
+        store_type = SerializeMaskStoreType::RejectedIndices;
+        break;
+      case AdaptiveTokenMask::StoreType::kAcceptedBitset:
+        if (const auto count_one = mask.accepted_bitset.Count(),
+            count_zero = mask_bitset_size - count_one;
+            count_one < count_zero) {
+          store_type = SerializeMaskStoreType::AcceptedBitsetIndices;
+          indices = mask.accepted_bitset.ToIndices(1, count_one);
+        } else {
+          store_type = SerializeMaskStoreType::RejectedBitsetIndices;
+          indices = mask.accepted_bitset.ToIndices(0, count_zero);
+        }
+        indice_ptr = &indices;
+        break;
+      default:
+        XGRAMMAR_UNREACHABLE();
+    }
+    entry_json.emplace_back(static_cast<int64_t>(store_type));
+    entry_json.emplace_back(static_cast<int64_t>(indice_ptr->size()));
+    entry_json.emplace_back(static_cast<int64_t>(mask_bitset_size));
+    entry_json.emplace_back(static_cast<int64_t>(mask.uncertain_indices.size()));
+
+    XGRAMMAR_CHECK(indice_ptr != nullptr && entry_json.size() == ENTRY_DATA_OFFSET);
+    entry_json.reserve(ENTRY_DATA_OFFSET + indice_ptr->size() + mask.uncertain_indices.size());
+
+    for (const auto& index_value : *indice_ptr)
+      entry_json.emplace_back(static_cast<int64_t>(index_value));
+    for (const auto& uncertain_index : mask.uncertain_indices)
+      entry_json.emplace_back(static_cast<int64_t>(uncertain_index));
+
+    return picojson::value(std::move(entry_json));
+  };
+
+  picojson::object compiled_grammar_json_obj;
+
+  compiled_grammar_json_obj["grammar"] = grammar->SerializeToJSON();
+  compiled_grammar_json_obj["tokenizer_info"] = tokenizer_info->SerializeToJSON();
+
+  picojson::array adaptive_token_mask_json;
+  for (const auto& entry : adaptive_token_mask_cache)
+    adaptive_token_mask_json.push_back(serialized_entry(entry));
+
+  compiled_grammar_json_obj["adaptive_token_mask_cache"] =
+      picojson::value(std::move(adaptive_token_mask_json));
+
+  AddSerializeVersion(compiled_grammar_json_obj);
+  return picojson::value(std::move(compiled_grammar_json_obj));
+}
+
+static CompiledGrammar DeserializeFromJSONImpl(
+    const picojson::value& value,
+    const std::vector<std::string>& encoded_vocab,
+    const TokenizerInfo* tokenizer_info_ptr  // nullptr if not provided
+) {
+  static constexpr auto deserialized_entry = [](auto& map,
+                                                const picojson::value& entry_value,
+                                                const TokenizerInfo& tokenizer_info) {
+    const auto& entry_array = entry_value.get<picojson::array>();
+    XGRAMMAR_CHECK(entry_array.size() >= ENTRY_DATA_OFFSET)
+        << "Invalid AdaptiveTokenMask entry: " << entry_value.serialize();
+
+    StackElement elem;
+    elem.rule_id = static_cast<int32_t>(entry_array[0].get<int64_t>());
+    elem.sequence_id = static_cast<int32_t>(entry_array[1].get<int64_t>());
+    elem.element_id = static_cast<int32_t>(entry_array[2].get<int64_t>());
+    elem.left_utf8_bytes = static_cast<int32_t>(entry_array[3].get<int64_t>());
+    elem.element_in_string = static_cast<int32_t>(entry_array[4].get<int64_t>());
+    elem.parent_id = static_cast<int32_t>(entry_array[5].get<int64_t>());
+    elem.reference_count = static_cast<int32_t>(entry_array[6].get<int64_t>());
+
+    const auto store_type = static_cast<SerializeMaskStoreType>(entry_array[7].get<int64_t>());
+    const auto storage_indices_size = static_cast<std::size_t>(entry_array[8].get<int64_t>());
+    const auto mask_bitset_size = static_cast<std::size_t>(entry_array[9].get<int64_t>());
+    const auto uncertain_indices_size = static_cast<std::size_t>(entry_array[10].get<int64_t>());
+
+    XGRAMMAR_CHECK(
+        entry_array.size() == ENTRY_DATA_OFFSET + storage_indices_size + uncertain_indices_size
+    ) << "Invalid AdaptiveTokenMask entry: "
+      << entry_value.serialize();
+
+    std::vector<int32_t> storage_indices;
+    std::vector<int32_t> uncertain_indices;
+
+    storage_indices.reserve(storage_indices_size);
+    const auto start_s = ENTRY_DATA_OFFSET;
+    for (std::size_t i = 0; i < storage_indices_size; ++i)
+      storage_indices.push_back(static_cast<int32_t>(entry_array[start_s + i].get<int64_t>()));
+
+    uncertain_indices.reserve(uncertain_indices_size);
+    const auto start_u = start_s + storage_indices_size;
+    for (std::size_t i = 0; i < uncertain_indices_size; ++i)
+      uncertain_indices.push_back(static_cast<int32_t>(entry_array[start_u + i].get<int64_t>()));
+
+    auto [iter, success] = map.try_emplace(elem);
+    XGRAMMAR_CHECK(success) << "Duplicated StackElement in AdaptiveTokenMask entry: "
+                            << entry_value.serialize();
+
+    auto& mask = iter->second;
+    mask.uncertain_indices = std::move(uncertain_indices);
+
+    // extract indices data
+    switch (store_type) {
+      case SerializeMaskStoreType::AcceptedIndices:
+        mask.store_type = AdaptiveTokenMask::StoreType::kAccepted;
+        mask.accepted_indices = std::move(storage_indices);
+        break;
+      case SerializeMaskStoreType::RejectedIndices:
+        mask.store_type = AdaptiveTokenMask::StoreType::kRejected;
+        mask.rejected_indices = std::move(storage_indices);
+        break;
+      case SerializeMaskStoreType::AcceptedBitsetIndices:
+        mask.store_type = AdaptiveTokenMask::StoreType::kAcceptedBitset;
+        mask.accepted_bitset.FromIndices(storage_indices, mask_bitset_size, 1);
+        break;
+      case SerializeMaskStoreType::RejectedBitsetIndices:
+        mask.store_type = AdaptiveTokenMask::StoreType::kAcceptedBitset;
+        mask.accepted_bitset.FromIndices(storage_indices, mask_bitset_size, 0);
+        break;
+      default:
+        XGRAMMAR_LOG(FATAL) << "Unexpected AdaptiveTokenMask::StoreType in deserialization: "
+                            << static_cast<int>(store_type);
+    }
+  };
+
+  auto node = std::make_shared<CompiledGrammar::Impl>();
+
+  auto checker = [&](bool condition) {
+    XGRAMMAR_CHECK(condition) << "Failed to deserialize CompiledGrammar object: "
+                              << value.serialize();
+  };
+
+  auto get_key = [&](const picojson::object& obj, const std::string& key) -> const auto& {
+    auto iter = obj.find(key);
+    checker(iter != obj.end());
+    return iter->second;
+  };
+
+  auto as_type = [&](const picojson::value& val, auto type_obj) -> const auto& {
+    using type = decltype(type_obj);
+    checker(val.is<type>());
+    return val.get<type>();
+  };
+
+  const auto& serialized_obj = as_type(value, picojson::object{});
+  CheckSerializeVersion(serialized_obj);
+
+  const auto& serialized_grammar = get_key(serialized_obj, "grammar");
+  node->grammar = Grammar::Impl::DeserializeFromJSON(serialized_grammar);
+
+  const auto& serialized_tokenizer_info = get_key(serialized_obj, "tokenizer_info");
+  if (tokenizer_info_ptr == nullptr) {
+    node->tokenizer_info =
+        TokenizerInfo::Impl::DeserializeFromJSON(serialized_tokenizer_info, encoded_vocab);
+  } else {
+    // verify the tokenizer information
+    const auto& tokenizer_info = *tokenizer_info_ptr;
+    checker(tokenizer_info->SerializeToJSON() == serialized_tokenizer_info);
+    node->tokenizer_info = tokenizer_info;
+  }
+
+  const auto& serialized_adaptive_token_mask_cache_array =
+      as_type(get_key(serialized_obj, "adaptive_token_mask_cache"), picojson::array{});
+
+  for (const auto& entry_value : serialized_adaptive_token_mask_cache_array) {
+    deserialized_entry(node->adaptive_token_mask_cache, entry_value, node->tokenizer_info);
+  }
+
+  return CompiledGrammar(node);
+}
+
+CompiledGrammar CompiledGrammar::Impl::DeserializeFromJSON(
+    const picojson::value& value, const std::vector<std::string>& encoded_vocab
+) {
+  return DeserializeFromJSONImpl(value, encoded_vocab, nullptr);
+}
+
+CompiledGrammar CompiledGrammar::Impl::DeserializeFromJSON(
+    const picojson::value& value, const TokenizerInfo& tokenizer_info
+) {
+  return DeserializeFromJSONImpl(value, {}, &tokenizer_info);
+}
+
+bool AdaptiveTokenMask::operator==(const AdaptiveTokenMask& other) const {
+  auto ref = [](const AdaptiveTokenMask& mask) {
+    return std::tie(
+        mask.store_type,
+        mask.accepted_indices,
+        mask.rejected_indices,
+        mask.accepted_bitset,
+        mask.uncertain_indices
+    );
+  };
+  return ref(*this) == ref(other);
+}
+
+bool CompiledGrammar::Impl::operator==(const Impl& rhs) const {
+  const auto& lhs = *this;
+  if (&lhs == &rhs) return true;  // shortcut
+  auto ref = [](const Impl& impl) {
+    return std::tie(*impl.grammar, *impl.tokenizer_info, impl.adaptive_token_mask_cache);
+  };
+  return ref(*this) == ref(rhs);
+}
+
+[[maybe_unused]]
+static bool operator==(const Grammar::Impl::Rule& lhs, const Grammar::Impl::Rule& rhs) {
+  auto ref = [](const Grammar::Impl::Rule& rule) {
+    return std::tie(rule.name, rule.body_expr_id, rule.lookahead_assertion_id);
+  };
+  return ref(lhs) == ref(rhs);
+}
+
+bool Grammar::Impl::operator==(const Impl& rhs) const {
+  const auto& lhs = *this;
+  if (&lhs == &rhs) return true;  // shortcut
+  auto ref = [](const Impl& impl) {
+    return std::tie(
+        impl.rules_,
+        impl.rule_expr_data_,
+        impl.rule_expr_indptr_,
+        impl.root_rule_id_,
+        impl.root_tag_dispatch_fsm,
+        impl.tag_dispatch_end_node_to_rule_id,
+        impl.allow_empty_rule_ids
+    );
+  };
+  return ref(*this) == ref(rhs);
+}
+
+bool operator==(const CompiledGrammar& lhs, const CompiledGrammar& rhs) { return *lhs == *rhs; }
 
 }  // namespace xgrammar

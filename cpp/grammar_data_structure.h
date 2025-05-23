@@ -7,6 +7,7 @@
 #ifndef XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
 #define XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
 
+#include <picojson.h>
 #include <xgrammar/xgrammar.h>
 
 #include <cstddef>
@@ -175,12 +176,15 @@ class Grammar::Impl {
   std::vector<int32_t> allow_empty_rule_ids;
 
   friend class GrammarBuilder;
-  friend class GrammarSerializer;
-  friend class GrammarDeserializer;
   friend class GrammarCompiler;
 
   std::size_t MemorySize() const;
   friend std::size_t MemorySize(const Impl& impl);
+
+  picojson::value SerializeToJSON() const;
+  static Grammar DeserializeFromJSON(const picojson::value& value);
+
+  bool operator==(const Impl& other) const;
 };
 
 }  // namespace xgrammar

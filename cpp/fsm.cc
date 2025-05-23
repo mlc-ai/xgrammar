@@ -7,18 +7,22 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <list>
 #include <queue>
 #include <set>
 #include <stack>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "picojson.h"
+#include "support/csr_array.h"
 #include "support/logging.h"
 #include "support/union_find_set.h"
 
@@ -1963,6 +1967,35 @@ FSMWithStartEnd BuildTrie(
       end_nodes->push_back(current_node);
     }
   }
+  return fsm;
+}
+
+bool CompactFSMWithStartEnd::operator==(const CompactFSMWithStartEnd& other) const {
+  auto ref = [](const CompactFSMWithStartEnd& fsm) {
+    return std::tie(fsm.is_dfa, fsm.fsm.edges, fsm.start, fsm.ends);
+  };
+  return ref(*this) == ref(other);
+}
+
+picojson::value CompactFSMWithStartEnd::SerializeToJSON() const {
+  picojson::object json;
+  json["is_dfa"] = picojson::value(is_dfa);
+  json["start"] = picojson::value(static_cast<int64_t>(start));
+  auto end_array = picojson::array{};
+  for (const auto& end : ends) end_array.emplace_back(static_cast<int64_t>(end));
+  json["fsm.edges"] = fsm.edges.SerializeToJSON();
+  return picojson::value(std::move(json));
+}
+
+CompactFSMWithStartEnd CompactFSMWithStartEnd::DeserializeFromJSON(const picojson::value& json) {
+  CompactFSMWithStartEnd fsm;
+  fsm.is_dfa = json.get("is_dfa").get<bool>();
+  fsm.start = static_cast<int>(json.get("start").get<double>());
+  const auto& end_array = json.get("end").get<picojson::array>();
+  fsm.ends.clear();
+  fsm.ends.reserve(end_array.size());
+  for (const auto& end : end_array) fsm.ends.insert(end.get<int64_t>());
+  fsm.fsm.edges = CSRArray<FSMEdge>::DeserializeFromJSON(json.get("fsm.edges"));
   return fsm;
 }
 

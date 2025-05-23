@@ -15,6 +15,7 @@
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
+#include "../serializer.h"
 #include "../testing.h"
 #include "python_methods.h"
 
@@ -118,7 +119,10 @@ NB_MODULE(xgrammar_bindings, m) {
   auto pyCompiledGrammar = nb::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_prop_ro("grammar", &CompiledGrammar::GetGrammar)
       .def_prop_ro("tokenizer_info", &CompiledGrammar::GetTokenizerInfo)
-      .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes);
+      .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes)
+      .def("compare", [](const CompiledGrammar& self, const CompiledGrammar& other) {
+        return self == other;
+      });
 
   auto pyGrammarCompiler = nb::class_<GrammarCompiler>(m, "GrammarCompiler");
   pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, long long>())
@@ -190,6 +194,19 @@ NB_MODULE(xgrammar_bindings, m) {
             return self._DebugAcceptString(input_str.c_str(), debug_print);
           },
           nb::call_guard<nb::gil_scoped_release>()
+      );
+
+  auto pyJSONSerializer = nb::class_<JSONSerializer>(m, "JSONSerializer");
+  pyJSONSerializer.def(nb::init<>())
+      .def("serialize_grammar", &JSONSerializer::SerializeGrammar)
+      .def("deserialize_grammar", &JSONSerializer::DeserializeGrammar)
+      .def("serialize_tokenizer_info", &JSONSerializer::SerializeTokenizerInfo)
+      .def("deserialize_tokenizer_info", &JSONSerializer::DeserializeTokenizerInfo)
+      .def("serialize_compiled_grammar", &JSONSerializer::SerializeCompiledGrammar)
+      .def("deserialize_compiled_grammar", &JSONSerializer::DeserializeCompiledGrammar)
+      .def(
+          "deserialize_compiled_grammar_with_tokenizer",
+          &JSONSerializer::DeserializeCompiledGrammarWithTokenizer
       );
 
   auto pyTestingModule = m.def_submodule("testing");
