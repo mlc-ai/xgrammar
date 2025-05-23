@@ -4,14 +4,18 @@
  */
 #include "fsm.h"
 
+#include <sys/types.h>
+
 #include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <list>
+#include <memory>
 #include <queue>
 #include <set>
-#include <stack>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -19,12 +23,12 @@
 #include <variant>
 #include <vector>
 
+#include "support/encoding.h"
 #include "support/logging.h"
 #include "support/union_find_set.h"
+#include "support/utils.h"
 
 namespace xgrammar {
-
-std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start);
 
 Result<std::pair<int, int>> CheckRepeat(const std::string& regex, int& start);
 
@@ -71,9 +75,7 @@ short FSMEdge::GetRefRuleId() const {
   if (IsRuleRef()) {
     return max;
   } else {
-    XGRAMMAR_DCHECK(false) << "Invalid FSMEdge: not a rule reference. min=" << min
-                           << ", max=" << max;
-    return -1;
+    XGRAMMAR_LOG(FATAL) << "Invalid FSMEdge: not a rule reference. min=" << min << ", max=" << max;
   }
 }
 
@@ -81,6 +83,8 @@ void FSM::GetEpsilonClosure(std::unordered_set<int>* state_set, std::unordered_s
     const {
   if (result == nullptr) {
     result = state_set;
+  } else {
+    result->clear();
   }
   std::queue<int> queue;
   for (const auto& state : *state_set) {
@@ -333,13 +337,25 @@ std::string CompactFSMWithStartEnd::Print() const {
   return result;
 }
 
-CompactFSM FSM::ToCompact() {
+class EdgeCompare {
+ public:
+  bool operator()(const FSMEdge& a, const FSMEdge& b) const {
+    if (a.min != b.min) {
+      return a.min < b.min;
+    }
+    if (a.max != b.max) {
+      return a.max < b.max;
+    }
+    return a.target < b.target;
+  }
+};
+
+CompactFSM FSM::ToCompact() const {
+  std::vector<std::vector<FSMEdge>> new_edges = edges;
   CompactFSM result;
-  for (int i = 0; i < static_cast<int>(edges.size()); ++i) {
-    std::sort(edges[i].begin(), edges[i].end(), [](const FSMEdge& a, const FSMEdge& b) {
-      return a.min != b.min ? a.min < b.min : a.max < b.max;
-    });
-    result.edges.Insert(edges[i]);
+  for (int i = 0; i < static_cast<int>(new_edges.size()); ++i) {
+    std::sort(new_edges[i].begin(), new_edges[i].end(), EdgeCompare());
+    result.edges.Insert(new_edges[i]);
   }
   return result;
 }
@@ -408,7 +424,8 @@ void CompactFSM::Advance(
 FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
   FSMWithStartEnd dfa;
   dfa.is_dfa = true;
-  dfa.start = start;
+  // The first epsilon closure is the new start state.
+  dfa.start = 0;
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
   for (const auto& edges : fsm.edges) {
@@ -471,6 +488,9 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
           }
         }
       }
+      if (next_closure.empty()) {
+        continue;
+      }
       bool flag = false;
       for (int j = 0; j < static_cast<int>(closures.size()); j++) {
         if (closures[j] == next_closure) {
@@ -500,6 +520,9 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
             }
           }
         }
+      }
+      if (next_closure.empty()) {
+        continue;
       }
       bool flag = false;
       for (int j = 0; j < static_cast<int>(closures.size()); j++) {
@@ -583,144 +606,6 @@ FSMWithStartEnd FSMWithStartEnd::MakeOptional() const {
   return result;
 }
 
-FSMWithStartEnd::FSMWithStartEnd(const std::string& regex) {
-  is_dfa = true;
-  start = 0;
-  auto& edges = fsm.edges;
-  // Handle the regex string.
-  if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
-    edges.push_back(std::vector<FSMEdge>());
-    for (size_t i = 0; i < regex.size(); i++) {
-      if (regex[i] != '\\') {
-        if (regex[i] == '.') {
-          edges.back().emplace_back(0, 0xFF, edges.size());
-        } else {
-          edges.back().emplace_back(
-              (unsigned char)(regex[i]), (unsigned char)(regex[i]), edges.size()
-          );
-        }
-        edges.push_back(std::vector<FSMEdge>());
-        continue;
-      }
-      std::vector<std::pair<int, int>> escape_vector = HandleEscapes(regex, i);
-      for (const auto& escape : escape_vector) {
-        edges.back().emplace_back(
-            (unsigned char)(escape.first), (unsigned char)(escape.second), edges.size()
-        );
-      }
-      edges.push_back(std::vector<FSMEdge>());
-      i++;
-    }
-    ends.insert(edges.size() - 1);
-    return;
-  }
-  // Handle the character class.
-  if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
-    edges.push_back(std::vector<FSMEdge>());
-    edges.push_back(std::vector<FSMEdge>());
-    ends.insert(1);
-    bool reverse = regex[1] == '^';
-    for (size_t i = reverse ? 2 : 1; i < regex.size() - 1; i++) {
-      if (regex[i] != '\\') {
-        if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
-          // A single char.
-          edges[0].emplace_back(regex[i], regex[i], 1);
-          continue;
-        }
-        // Handle the char range.
-        if (regex[i + 2] != '\\') {
-          edges[0].emplace_back(regex[i], regex[i + 2], 1);
-          i = i + 2;
-          continue;
-        }
-        auto escaped_edges = HandleEscapes(regex, i + 2);
-        // Means it's not a range.
-        if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
-          edges[0].emplace_back(regex[i], regex[i], 1);
-          continue;
-        }
-        edges[0].emplace_back(regex[0], escaped_edges[0].first, 1);
-        i = i + 3;
-        continue;
-      }
-      auto escaped_edges = HandleEscapes(regex, i);
-      i = i + 1;
-      if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
-        // It's a multi-match escape char.
-        for (const auto& edge : escaped_edges) {
-          edges[0].emplace_back(edge.first, edge.second, 1);
-        }
-        continue;
-      }
-      if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
-        edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
-        continue;
-      }
-      if (regex[i + 2] != '\\') {
-        edges[0].emplace_back(escaped_edges[0].first, regex[i + 2], 1);
-        i = i + 2;
-        continue;
-      }
-      auto rhs_escaped_edges = HandleEscapes(regex, i + 2);
-      if (rhs_escaped_edges.size() != 1 ||
-          rhs_escaped_edges[0].first != rhs_escaped_edges[0].second) {
-        edges[0].emplace_back(escaped_edges[0].first, escaped_edges[0].second, 1);
-        continue;
-      }
-      edges[0].emplace_back(escaped_edges[0].first, rhs_escaped_edges[0].first, 1);
-      i = i + 3;
-      continue;
-    }
-    bool has_edge[0x100];
-    memset(has_edge, 0, sizeof(has_edge));
-    for (const auto& edge : edges[0]) {
-      for (int i = edge.min; i <= edge.max; i++) {
-        has_edge[i] = true;
-      }
-    }
-    edges[0].clear();
-
-    // Simplify the edges. e.g [abc] -> [a-c]
-    int last = -1;
-    if (reverse) {
-      for (int i = 0; i < 0x100; i++) {
-        if (!has_edge[i]) {
-          if (last == -1) {
-            last = i;
-          }
-          continue;
-        }
-        if (last != -1) {
-          edges[0].emplace_back(last, i - 1, 1);
-          last = -1;
-        }
-      }
-      if (last != -1) {
-        edges[0].emplace_back(last, 0xFF, 1);
-      }
-    } else {
-      for (int i = 0; i < 0x100; i++) {
-        if (has_edge[i]) {
-          if (last == -1) {
-            last = i;
-          }
-          continue;
-        }
-        if (last != -1) {
-          edges[0].emplace_back(last, i - 1, 1);
-          last = -1;
-        }
-      }
-      if (last != -1) {
-        edges[0].emplace_back(last, 0xFF, 1);
-      }
-    }
-    return;
-  }
-  // TODO: The support for rules.
-  XGRAMMAR_LOG(WARNING) << "rule is not supported yet.";
-}
-
 FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   FSMWithStartEnd now_fsm;
 
@@ -765,6 +650,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
       }
     }
   }
+
   for (auto it = interval_ends.begin(); it != interval_ends.end(); ++it) {
     auto next_it = std::next(it);
     if (next_it != interval_ends.end()) {
@@ -784,6 +670,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
     }
     // Check the intervals.
     std::list<std::unordered_set<int>> blocks_copy = blocks;
+
     for (const auto& interval : intervals) {
       std::unordered_set<int> from_block;
       for (const auto& node : prev_nodes) {
@@ -902,6 +789,11 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
     }
     cnt++;
   }
+  for (int i = 0; i < now_fsm.NumNodes(); i++) {
+    if (old_to_new.find(i) == old_to_new.end()) {
+      old_to_new[i] = cnt++;
+    }
+  }
   FSMWithStartEnd new_fsm;
   new_fsm.is_dfa = true;
   new_fsm.start = old_to_new[now_fsm.start];
@@ -924,60 +816,91 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   return new_fsm;
 }
 
-std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start) {
-  std::vector<std::pair<int, int>> result;
-  switch (regex[start + 1]) {
-    case 'n': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\n', '\n'));
-    }
-    case 't': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\t', '\t'));
-    }
-    case 'r': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\r', '\r'));
-    }
-
-    case '0': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\0', '\0'));
-    }
-    case 's': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair(0, ' '));
-    }
-    case 'S': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair(' ' + 1, 0x00FF));
-    }
-    case 'd': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('0', '9'));
-    }
-    case 'D': {
-      std::vector<std::pair<int, int>> result;
-      result.emplace_back(0, '0' - 1);
-      result.emplace_back('9' + 1, 0x00FF);
-      return result;
-    }
-    case 'w': {
-      std::vector<std::pair<int, int>> result;
-      result.emplace_back('0', '9');
-      result.emplace_back('a', 'z');
-      result.emplace_back('A', 'Z');
-      result.emplace_back('_', '_');
-      return result;
-    }
-    case 'W': {
-      std::vector<std::pair<int, int>> result;
-      result.emplace_back(0, '0' - 1);
-      result.emplace_back('9' + 1, 'A' - 1);
-      result.emplace_back('Z' + 1, '_' - 1);
-      result.emplace_back('_' + 1, 'a' - 1);
-      result.emplace_back('z' + 1, 0x00FF);
-      return result;
-    }
-    default: {
-      return std::vector<std::pair<int, int>>(
-          1, std::make_pair(regex[start + 1], regex[start + 1])
-      );
-    }
+std::pair<int, std::vector<std::pair<uint32_t, uint32_t>>> HandleEscapes(
+    const std::string& regex, int start
+) {
+  XGRAMMAR_DCHECK(regex[start] == '\\') << "Invalid regex: " << regex;
+  std::pair<int, std::vector<std::pair<uint32_t, uint32_t>>> result_pair;
+  static const std::unordered_map<char, std::vector<std::pair<uint32_t, uint32_t>>> escape_map = {
+      {'n', {{'\n', '\n'}}},
+      {'t', {{'\t', '\t'}}},
+      {'r', {{'\r', '\r'}}},
+      {'0', {{'\0', '\0'}}},
+      {'?', {{'\?', '\?'}}},
+      {'a', {{'\a', '\a'}}},
+      {'b', {{'\b', '\b'}}},
+      {'f', {{'\f', '\f'}}},
+      {'v', {{'\v', '\v'}}},
+      {'e', {{'\x1b', '\x1b'}}},
+      {'s', {{0, ' '}}},
+      {'S', {{' ' + 1, 0x00FF}}},
+      {'d', {{'0', '9'}}},
+      {'D', {{0, '0' - 1}, {'9' + 1, 0x00FF}}},
+      {'w', {{'0', '9'}, {'a', 'z'}, {'A', 'Z'}, {'_', '_'}}},
+      {'W',
+       {{0, '0' - 1}, {'9' + 1, 'A' - 1}, {'Z' + 1, '_' - 1}, {'_' + 1, 'a' - 1}, {'z' + 1, 0x00FF}}
+      }
+  };
+  if (escape_map.find(regex[start + 1]) != escape_map.end()) {
+    result_pair.first = 2;
+    result_pair.second = escape_map.at(regex[start + 1]);
+    return result_pair;
   }
+
+  // Handle unicode escape.
+  if (regex[start + 1] == 'x') {
+    int len = 0;
+    int codepoint = 0;
+    int32_t digit;
+    while ((digit = HexCharToInt(regex[start + 2 + len])) != -1) {
+      codepoint = codepoint * 16 + digit;
+      ++len;
+    }
+    if (len == 0) {
+      XGRAMMAR_DCHECK(false) << "Invalid regex: " << regex;
+    }
+    result_pair.first = len + 2;
+    result_pair.second.push_back({codepoint, codepoint});
+    return result_pair;
+  }
+
+  if (regex[start + 1] == 'u') {
+    int len = 0;
+    int codepoint = 0;
+    int32_t digit;
+    while ((digit = HexCharToInt(regex[start + 2 + len])) != -1) {
+      codepoint = codepoint * 16 + digit;
+      ++len;
+    }
+    if (len != 4) {
+      XGRAMMAR_DCHECK(false) << "Invalid regex: " << regex;
+    }
+    result_pair.first = len + 2;
+    result_pair.second.push_back({codepoint, codepoint});
+    return result_pair;
+  }
+
+  if (regex[start + 1] == 'U') {
+    int len = 0;
+    int codepoint = 0;
+    int32_t digit;
+    while ((digit = HexCharToInt(regex[start + 2 + len])) != -1) {
+      codepoint = codepoint * 16 + digit;
+      ++len;
+    }
+    if (len != 8) {
+      XGRAMMAR_DCHECK(false) << "Invalid regex: " << regex;
+    }
+    result_pair.first = len + 2;
+    result_pair.second.push_back({codepoint, codepoint});
+    return result_pair;
+  }
+
+  // In other cases, we just return the char itself, like '\\\\', '\\1'
+  // represent '\\' and '1'.
+  result_pair.first = 2;
+  result_pair.second.push_back({regex[start + 1], regex[start + 1]});
+  return result_pair;
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
@@ -1258,7 +1181,7 @@ void FSMWithStartEnd::SimplifyEpsilon() {
       }
       previous_nodes[edge.target].insert(i);
       if (edge.IsEpsilon()) {
-        if (edges.size() != 1) {
+        if (edges.size() != 1 || StartNode() == edge.target) {
           has_epsilon.insert(i);
         } else {
           // a -- epsilon --> b, and a doesn't have other outward edges.
@@ -1271,6 +1194,7 @@ void FSMWithStartEnd::SimplifyEpsilon() {
   }
 
   // a --> epsilon --> b, and b doesn't have other inward edges.
+  // Moreover, a b isn't the start node.
   for (const auto& node : has_epsilon) {
     const auto& edges = fsm.edges[node];
     for (const auto& edge : edges) {
@@ -1279,6 +1203,10 @@ void FSMWithStartEnd::SimplifyEpsilon() {
       }
       // Have other inward nodes.
       if (previous_nodes[edge.target].size() != 1) {
+        continue;
+      }
+      // The target node is the start node.
+      if (edge.target == start) {
         continue;
       }
       bool has_other_edge = false;
@@ -1491,7 +1419,37 @@ void FSMWithStartEnd::RebuildFSM(
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Leaf& node) const {
-  FSMWithStartEnd result(node.regex);
+  if (!node.is_literal) {
+    FSMWithStartEnd result(node.regex);
+    return Result<FSMWithStartEnd>::Ok(result);
+  }
+  // It's a literal string, only need to build the fsm node by node.
+  XGRAMMAR_DCHECK(node.is_literal);
+  FSMWithStartEnd result;
+  result.SetStartNode(0);
+  for (size_t i = 0; i < node.regex.size(); i++) {
+    result.fsm.edges.push_back(std::vector<FSMEdge>());
+    if (node.regex[i] == '\\') {
+      const auto& [length, escapes] = HandleEscapes(node.regex, i);
+      if (escapes.size() == 1) {
+        result.fsm.edges[result.NumNodes() - 1].emplace_back(
+            escapes[0].first, escapes[0].second, result.NumNodes()
+        );
+      } else {
+        result.fsm.edges[result.NumNodes() - 1].emplace_back(
+            node.regex[i + 1], node.regex[i + 1], result.NumNodes()
+        );
+      }
+      i = i + length - 1;
+      continue;
+    }
+    XGRAMMAR_DCHECK(node.regex[i] != '\\');
+    result.fsm.edges[result.NumNodes() - 1].emplace_back(
+        node.regex[i], node.regex[i], result.NumNodes()
+    );
+  }
+  result.fsm.edges.push_back(std::vector<FSMEdge>());
+  result.AddEndNode(result.NumNodes() - 1);
   return Result<FSMWithStartEnd>::Ok(result);
 }
 
@@ -1510,12 +1468,17 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Union& node) const {
   return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Union(fsm_list));
 }
 
+Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::RuleRef& node) const {
+  FSMWithStartEnd result{2};
+  result.SetStartNode(0);
+  result.fsm.edges[0].push_back(FSMEdge{-1, static_cast<short>(node.rule_id), 1});
+  result.AddEndNode(1);
+  return Result<FSMWithStartEnd>::Ok(result);
+}
+
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& node) const {
-  if (node.node.size() != 1) {
-    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid symbol"));
-  }
   Result<FSMWithStartEnd> child =
-      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, node.node[0]);
+      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, *node.node);
   if (child.IsErr()) {
     return child;
   }
@@ -1553,11 +1516,8 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Bracket& node) const {
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
-  if (node.nodes.size() != 1) {
-    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid repeat"));
-  }
   Result<FSMWithStartEnd> child =
-      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, node.nodes[0]);
+      std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, *node.node);
   if (child.IsErr()) {
     return child;
   }
@@ -1570,7 +1530,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
     }
   }
   // Handling {n,}
-  if (node.upper_bound == RegexIR::REPEATNOUPPERBOUND) {
+  if (node.upper_bound == RegexIR::KRepeatNoUpperBound) {
     for (int i = 2; i < node.lower_bound; i++) {
       result = FSMWithStartEnd::Concatenate(std::vector<FSMWithStartEnd>{result, child.Unwrap()});
     }
@@ -1592,233 +1552,6 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& node) const {
   }
   result.ends = new_ends;
   return Result<FSMWithStartEnd>::Ok(result);
-}
-
-Result<FSMWithStartEnd> RegexToFSM(const std::string& regex) {
-  RegexIR ir;
-  using IRNode = std::variant<RegexIR::Node, char>;
-  // We use a stack to store the nodes.
-  std::stack<IRNode> stack;
-  int left_middle_bracket = -1;
-  for (size_t i = 0; i < regex.size(); i++) {
-    if (i == 0 && regex[i] == '^') {
-      continue;
-    }
-    if (i == regex.size() - 1 && regex[i] == '$') {
-      continue;
-    }
-    // Handle The class.
-    if (regex[i] == '[') {
-      if (left_middle_bracket != -1) {
-        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Nested middle bracket!"));
-      }
-      left_middle_bracket = i;
-      continue;
-    }
-    if (regex[i] == ']') {
-      if (left_middle_bracket == -1) {
-        return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid middle bracket!"));
-      }
-      RegexIR::Leaf leaf;
-      leaf.regex = regex.substr(left_middle_bracket, i - left_middle_bracket + 1);
-      stack.push(leaf);
-      left_middle_bracket = -1;
-      continue;
-    }
-    if (left_middle_bracket != -1) {
-      if (regex[i] == '\\') {
-        i++;
-      }
-      continue;
-    }
-    if (regex[i] == '+' || regex[i] == '*' || regex[i] == '?') {
-      if (stack.empty()) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("Invalid regex: no node before operator!")
-        );
-      }
-      auto node = stack.top();
-      if (std::holds_alternative<char>(node)) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("Invalid regex: no node before operator!")
-        );
-      }
-      stack.pop();
-      auto child = std::get<RegexIR::Node>(node);
-      RegexIR::Symbol symbol;
-      symbol.node.push_back(child);
-      switch (regex[i]) {
-        case '+': {
-          symbol.symbol = RegexIR::RegexSymbol::plus;
-          break;
-        }
-        case '*': {
-          symbol.symbol = RegexIR::RegexSymbol::star;
-          break;
-        }
-        case '?': {
-          symbol.symbol = RegexIR::RegexSymbol::optional;
-          break;
-        }
-      }
-      stack.push(symbol);
-      continue;
-    }
-    if (regex[i] == '(' || regex[i] == '|') {
-      stack.push(regex[i]);
-      if (i < regex.size() - 2 && regex[i] == '(' && regex[i + 1] == '?' && regex[i + 2] == ':') {
-        i += 2;
-        continue;
-      }
-      if (i < regex.size() - 2 && regex[i] == '(' && regex[i + 1] == '?' &&
-          (regex[i + 2] == '!' || regex[i + 2] == '=')) {
-        i += 2;
-        // TODO(Linzhang Li): Handling the lookahead.
-        continue;
-      }
-      continue;
-    }
-    if (regex[i] == ')') {
-      std::stack<IRNode> nodes;
-      bool paired = false;
-      bool unioned = false;
-      while ((!stack.empty()) && (!paired)) {
-        auto node = stack.top();
-        stack.pop();
-        if (std::holds_alternative<char>(node)) {
-          char c = std::get<char>(node);
-          if (c == '(') {
-            paired = true;
-            break;
-          }
-          if (c == '|') {
-            unioned = true;
-          }
-          nodes.push(node);
-        } else {
-          nodes.push(node);
-        }
-      }
-      if (!paired) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("Invalid regex: no paired bracket!" + std::to_string(__LINE__))
-        );
-      }
-      if (nodes.empty()) {
-        continue;
-      }
-      if (!unioned) {
-        RegexIR::Bracket bracket;
-        while (!nodes.empty()) {
-          auto node = nodes.top();
-          nodes.pop();
-          auto child = std::get<RegexIR::Node>(node);
-          bracket.nodes.push_back(child);
-        }
-        stack.push(bracket);
-      } else {
-        RegexIR::Union union_node;
-        RegexIR::Bracket bracket;
-        while (!nodes.empty()) {
-          auto node = nodes.top();
-          nodes.pop();
-          if (std::holds_alternative<char>(node)) {
-            char c = std::get<char>(node);
-            if (c == '|') {
-              union_node.nodes.push_back(bracket);
-              bracket.nodes.clear();
-              continue;
-            }
-            return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
-                "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
-            ));
-          }
-          if (std::holds_alternative<RegexIR::Node>(node)) {
-            auto child = std::get<RegexIR::Node>(node);
-            bracket.nodes.push_back(child);
-            continue;
-          }
-          return Result<FSMWithStartEnd>::Err(std::make_shared<Error>(
-              "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
-          ));
-        }
-        union_node.nodes.push_back(bracket);
-        stack.push(union_node);
-      }
-      continue;
-    }
-    if (regex[i] == '{') {
-      if (stack.empty()) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("Invalid regex: no node before repeat!")
-        );
-      }
-      auto node = stack.top();
-      if (std::holds_alternative<char>(node)) {
-        return Result<FSMWithStartEnd>::Err(
-            std::make_shared<Error>("Invalid regex: no node before repeat!")
-        );
-      }
-      stack.pop();
-      auto bounds_result = CheckRepeat(regex, i);
-      if (bounds_result.IsErr()) {
-        return Result<FSMWithStartEnd>::Err(bounds_result.UnwrapErr());
-      }
-      auto child = std::get<RegexIR::Node>(node);
-      RegexIR::Repeat repeat;
-      repeat.lower_bound = bounds_result.Unwrap().first;
-      repeat.upper_bound = bounds_result.Unwrap().second;
-      repeat.nodes.push_back(child);
-      stack.push(repeat);
-      continue;
-    }
-    RegexIR::Leaf leaf;
-    if (regex[i] != '\\') {
-      leaf.regex = regex[i];
-    } else {
-      leaf.regex = regex.substr(i, 2);
-      i++;
-    }
-    stack.push(leaf);
-    continue;
-  }
-  std::vector<RegexIR::Node> res_nodes;
-  std::vector<decltype(res_nodes)> union_node_list;
-  bool unioned = false;
-  while (!stack.empty()) {
-    if (std::holds_alternative<char>(stack.top())) {
-      char c = std::get<char>(stack.top());
-      if (c == '|') {
-        union_node_list.push_back(res_nodes);
-        res_nodes.clear();
-        unioned = true;
-        stack.pop();
-        continue;
-      }
-      return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Invalid regex: no paired!"));
-    }
-    auto node = stack.top();
-    stack.pop();
-    auto child = std::get<RegexIR::Node>(node);
-    res_nodes.push_back(std::move(child));
-  }
-  if (!unioned) {
-    for (auto it = res_nodes.rbegin(); it != res_nodes.rend(); ++it) {
-      ir.nodes.push_back(std::move(*it));
-    }
-  } else {
-    union_node_list.push_back(res_nodes);
-    RegexIR::Union union_node;
-    for (auto it = union_node_list.begin(); it != union_node_list.end(); ++it) {
-      RegexIR::Bracket bracket;
-      for (auto node = it->rbegin(); node != it->rend(); ++node) {
-        bracket.nodes.push_back(std::move(*node));
-      }
-      union_node.nodes.push_back(std::move(bracket));
-    }
-    ir.nodes.push_back(std::move(union_node));
-  }
-  return ir.Build();
 }
 
 Result<FSMWithStartEnd> RegexIR::Build() const {
@@ -1870,7 +1603,7 @@ Result<std::pair<int, int>> CheckRepeat(const std::string& regex, size_t& start)
       start++;
     }
     if (start < regex.size() && regex[start] == '}') {
-      upper_bound = RegexIR::REPEATNOUPPERBOUND;
+      upper_bound = RegexIR::KRepeatNoUpperBound;
       return Result<std::pair<int, int>>::Ok(std::make_pair(lower_bound, upper_bound));
     }
     while (start < regex.size() && regex[start] >= '0' && regex[start] <= '9') {
@@ -1951,7 +1684,7 @@ FSMWithStartEnd BuildTrie(
     int current_node = 0;
     for (const auto& ch : pattern) {
       int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
-      int next_node = fsm.Transition(current_node, ch_int16);
+      int next_node = fsm.LegacyTransitionOnDFA(current_node, ch_int16);
       if (next_node == FSMWithStartEnd::NO_TRANSITION) {
         next_node = fsm.AddNode();
         fsm.AddEdge(current_node, next_node, ch_int16, ch_int16);
@@ -1964,6 +1697,52 @@ FSMWithStartEnd BuildTrie(
     }
   }
   return fsm;
+}
+
+void FSMWithStartEnd::Transition(
+    const std::unordered_set<int>& from,
+    int16_t input,
+    std::unordered_set<int>* result,
+    bool is_rule
+) const {
+  result->clear();
+  if (is_rule) {
+    for (const auto& node : from) {
+      const auto& edges = fsm.edges[node];
+      for (const auto& edge : edges) {
+        if (edge.IsRuleRef() && edge.GetRefRuleId() == input) {
+          result->insert(edge.target);
+        }
+      }
+    }
+  } else {
+    for (const auto& node : from) {
+      const auto& edges = fsm.edges[node];
+      for (const auto& edge : edges) {
+        if (edge.IsCharRange() && edge.min <= input && edge.max >= input) {
+          result->insert(edge.target);
+        }
+      }
+    }
+  }
+  fsm.GetEpsilonClosure(result);
+}
+
+void FSMGroup::Simplify() {
+  for (auto& fsm : fsms_) {
+    fsm.SimplifyEpsilon();
+    fsm.SimplifyTransition();
+  }
+}
+
+void FSMGroup::ToMinimizedDFA(int32_t maximum_nodes) {
+  for (auto& fsm : fsms_) {
+    if (fsm.NumNodes() > maximum_nodes) {
+      continue;
+    }
+    auto minimized_dfa = fsm.MinimizeDFA();
+    fsm = minimized_dfa;
+  }
 }
 
 }  // namespace xgrammar
