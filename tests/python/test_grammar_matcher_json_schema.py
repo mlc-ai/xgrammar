@@ -132,6 +132,10 @@ class LargeRangeSchema(BaseModel):
     value: int = Field(ge=-99999, le=99999)
 
 
+class LargeRangeSchemaStartZero(BaseModel):
+    value: int = Field(ge=0, le=20_000_000_000)
+
+
 class FloatRangeSchema(BaseModel):
     value: float = Field(ge=0.0, le=1.0)
 
@@ -159,6 +163,10 @@ class MixedTypeRangeSchema(BaseModel):
     float_value: float = Field(ge=-10.0, le=10.0)
 
 
+class VeryLargeFloatRangeSchema(BaseModel):
+    value: float = Field(ge=-20_000_000_000.123123, le=20_000_000_000.456789)
+
+
 @pytest.mark.parametrize("tokenizer_path", tokenizer_path)
 @pytest.mark.parametrize(
     "schema_class,test_value",
@@ -177,6 +185,10 @@ class MixedTypeRangeSchema(BaseModel):
         (LargeRangeSchema, 0),
         (LargeRangeSchema, 5678),
         (LargeRangeSchema, 99999),
+        (LargeRangeSchemaStartZero, 20000000000),
+        (LargeRangeSchemaStartZero, 0),
+        (LargeRangeSchemaStartZero, 10000000000),
+        (LargeRangeSchemaStartZero, 19999999999),
         # Float test cases
         (FloatRangeSchema, 0.0),
         (FloatRangeSchema, 0.5),
@@ -192,6 +204,8 @@ class MixedTypeRangeSchema(BaseModel):
         (ComplexFloatRangeSchema, (-1234.1234)),
         (ComplexFloatRangeSchema, (0)),
         (ComplexFloatRangeSchema, (5671.123456)),
+        (VeryLargeFloatRangeSchema, (20_000_000_000.456788)),
+        (VeryLargeFloatRangeSchema, (-19_999_999_999.456789)),
     ],
 )
 @pytest.mark.hf_token_required
