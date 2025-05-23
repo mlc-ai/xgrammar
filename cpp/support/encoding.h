@@ -122,24 +122,23 @@ template <typename CharType>
 std::pair<TCodepoint, int32_t> ParseNextEscaped(
     const CharType* data, const std::unordered_map<char, TCodepoint>& additional_escape_map = {}
 ) {
+  // C escape characters
   static const std::unordered_map<char, TCodepoint> kEscapeToCodepoint = {
-      {'\'', '\''},
-      {'\"', '\"'},
-      {'?', '\?'},
-      {'\\', '\\'},
-      {'a', '\a'},
-      {'b', '\b'},
-      {'f', '\f'},
-      {'n', '\n'},
-      {'r', '\r'},
-      {'t', '\t'},
-      {'v', '\v'},
-      {'0', '\0'},
-      {'e', '\x1B'}
+      // clang-format off
+      {'\'', '\''}, {'\"', '\"'}, {'?', '\?'}, {'\\', '\\'}, {'a', '\a'}, {'b', '\b'}, {'f', '\f'},
+      {'n', '\n'}, {'r', '\r'}, {'t', '\t'}, {'v', '\v'}, {'0', '\0'},
+      {'e', '\x1B'}  // clang-format on
   };
   if (data[0] != '\\') {
     return {CharHandlingError::kInvalidEscape, 0};
   }
+
+  bool escape_char_in_escape_range =
+      static_cast<int32_t>(static_cast<unsigned char>(data[1])) <= 128;
+  if (!escape_char_in_escape_range) {
+    return {CharHandlingError::kInvalidEscape, 0};
+  }
+
   if (auto it = additional_escape_map.find(static_cast<char>(data[1]));
       it != additional_escape_map.end()) {
     return {it->second, 2};
