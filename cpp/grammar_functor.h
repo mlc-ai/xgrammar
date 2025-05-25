@@ -61,7 +61,7 @@ class GrammarFunctor {
         auto new_body_expr_id = VisitExpr(rule.body_expr_id);
         builder_.UpdateRuleBody(i, new_body_expr_id);
         // Handle lookahead assertion
-        builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+        builder_.UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       }
       return builder_.Get(base_grammar_->GetRootRule().name);
     } else {
@@ -206,7 +206,7 @@ class GrammarFunctor {
   virtual T VisitRuleRef(const RuleExpr& rule_expr) { return VisitElement(rule_expr); }
 
   /*! \brief The grammar to visit or mutate. */
-  Grammar base_grammar_;
+  Grammar base_grammar_{NullObj{}};
 
   /*!
    * \brief The builder to build the new grammar. It is empty when the mutator is constructed, and

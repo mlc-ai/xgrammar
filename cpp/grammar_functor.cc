@@ -32,21 +32,6 @@ class SingleElementExprEliminator : public GrammarMutator {
   using GrammarMutator::GrammarMutator;
 
  private:
-  // Keep the sequence expr in lookahead assertion
-  int32_t VisitLookaheadAssertion(int32_t lookahead_assertion_id) final {
-    if (lookahead_assertion_id == -1) {
-      return -1;
-    }
-    auto rule_expr = base_grammar_->GetRuleExpr(lookahead_assertion_id);
-    XGRAMMAR_CHECK(rule_expr.type == RuleExprType::kSequence);
-
-    std::vector<int32_t> sequence_ids;
-    for (int32_t i : rule_expr) {
-      sequence_ids.push_back(VisitExpr(i));
-    }
-    return builder_.AddSequence(sequence_ids);
-  }
-
   int32_t VisitSequence(const RuleExpr& rule_expr) final {
     std::vector<int32_t> sequence_ids;
     for (int32_t i : rule_expr) {
@@ -84,22 +69,28 @@ class SingleElementExprEliminator : public GrammarMutator {
 };
 
 /*!
- * \brief Unwrap the rules containing nested expressions. After unwrapping, each rule will be in
- * the form: `rule_name ::= ("" | (element1_1 element1_2 ...) | (element2_1 element2_2 ...) | ...)`.
+ * \brief Take a grammar from SingleElementExprEliminator and normalize the structure of the
+ * grammar.
  *
- * I.e. a list of choices, each choice is a sequence of elements. Elements can be a character class
- * or a rule reference. And if the rule can be empty, the first choice will be an empty string.
+ * \note The normalized form:
+ * Each rule should be either:
+ * - A sequence of choices, each choice is a sequence of elements. Elements can be a character
+ *   class, a byte string, or a rule reference. Only the first choice can be an empty string,
+ *   indicating the rule can be empty. E.g.
+ *   `rule_name ::= ("" | (element1_1 element1_2 ...) | (element2_1 element2_2 ...) | ...)`
+ * - A macro. Now only TagDispatch is supported.
  *
- * \example The rule `A ::= ((a) (((b)) (c)) "")` will be replaced by `A ::= ((a b c))`. One choice
- * containing a sequence of three elements. The empty string is removed.
- * \example The rule `A ::= (a | (b | (c | "")))` will be replaced by
- * `A ::= ("" | (a) | (b) | (c))`. The first choice is an empty string, and each of the other three
- * choices is a sequence containing a single element.
- * \example The rule `A ::= (a | (b (c | d)))` will be replaced by
- * `A ::= ((a) | (b B)), B ::= ((c) | (d))`. A new rule B is created to represent the nested
- * choices.
+ * The lookahead assertion should be a sequence.
+ *
+ * New rules may be created to make every rule fit the normalized form.
+ *
+ * \example `A ::= ((a) (((b)) (c)) "")` -> `A ::= ((a b c))`
+ * \example `A ::= (a | (b | (c | "")))` -> `A ::= ("" | (a) | (b) | (c))`
+ * \example `A ::= (a | (b (c | d)))` -> `A ::= ((a) | (b A_1)), A_1 ::= ((c) | (d))`
+ * \example `A ::= (a | TagDispatch((tag1, rule1)))` -> `A ::= ((a) | (A_1)), A_1 ::=
+ * TagDispatch((tag1, rule1))`
  */
-class NestedRuleUnwrapper : public GrammarMutator {
+class StructureNormalizerSub : public GrammarMutator {
  public:
   using GrammarMutator::GrammarMutator;
 
@@ -114,7 +105,7 @@ class NestedRuleUnwrapper : public GrammarMutator {
       cur_rule_name_ = rule.name;
       auto new_body_expr_id = VisitRuleBody(rule_expr);
       builder_.UpdateRuleBody(i, new_body_expr_id);
-      builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+      builder_.UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
     }
     return builder_.Get(base_grammar_->GetRootRule().name);
   }
@@ -125,7 +116,24 @@ class NestedRuleUnwrapper : public GrammarMutator {
       return -1;
     }
     auto assertion_expr = base_grammar_->GetRuleExpr(lookahead_assertion_id);
-    return builder_.AddSequence(VisitSequence_(assertion_expr));
+    switch (assertion_expr.type) {
+      case RuleExprType::kSequence:
+        return builder_.AddSequence(VisitSequence_(assertion_expr));
+      case RuleExprType::kChoices:
+        XGRAMMAR_LOG(FATAL) << "Choices in lookahead assertion are not supported yet";
+      case RuleExprType::kEmptyStr:
+        XGRAMMAR_LOG(FATAL) << "Empty string should not be in lookahead assertion";
+      case RuleExprType::kTagDispatch:
+        XGRAMMAR_LOG(FATAL) << "TagDispatch should not be in lookahead assertion";
+      case RuleExprType::kByteString:
+      case RuleExprType::kCharacterClass:
+      case RuleExprType::kCharacterClassStar:
+      case RuleExprType::kRuleRef:
+        return builder_.AddSequence({builder_.AddRuleExpr(assertion_expr)});
+      default:
+        XGRAMMAR_LOG(FATAL) << "Unexpected lookahead assertion type: "
+                            << static_cast<int>(assertion_expr.type);
+    }
   }
 
   /*! \brief Visit a RuleExpr as a rule body. */
@@ -174,8 +182,13 @@ class NestedRuleUnwrapper : public GrammarMutator {
         case RuleExprType::kRuleRef:
           VisitElementInChoices(choice_expr, &new_choice_ids);
           break;
-        case RuleExprType::kTagDispatch:
-          XGRAMMAR_LOG(FATAL) << "TagDispatch should not be in choices";
+        case RuleExprType::kTagDispatch: {
+          auto tag_dispatch_expr_id = VisitTagDispatch(choice_expr);
+          auto new_rule_id = builder_.AddRuleWithHint(cur_rule_name_, tag_dispatch_expr_id);
+          auto new_sequence_id = builder_.AddSequence({builder_.AddRuleRef(new_rule_id)});
+          new_choice_ids.push_back(new_sequence_id);
+          break;
+        }
         default:
           XGRAMMAR_LOG(FATAL) << "Unexpected choice type: " << static_cast<int>(choice_expr.type);
       }
@@ -244,8 +257,12 @@ class NestedRuleUnwrapper : public GrammarMutator {
         case RuleExprType::kRuleRef:
           VisitElementInSequence(element_expr, &new_sequence_ids);
           break;
-        case RuleExprType::kTagDispatch:
-          XGRAMMAR_LOG(FATAL) << "TagDispatch should not be in sequence";
+        case RuleExprType::kTagDispatch: {
+          auto tag_dispatch_expr_id = VisitTagDispatch(element_expr);
+          auto new_rule_id = builder_.AddRuleWithHint(cur_rule_name_, tag_dispatch_expr_id);
+          new_sequence_ids.push_back(builder_.AddRuleRef(new_rule_id));
+          break;
+        }
         default:
           XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: "
                               << static_cast<int>(element_expr.type);
@@ -274,7 +291,7 @@ class NestedRuleUnwrapper : public GrammarMutator {
       }
     } else {
       auto new_choice_id = builder_.AddChoices(sub_choice_ids);
-      auto new_choice_rule_id = builder_.AddRuleWithHint(cur_rule_name_ + "_choice", new_choice_id);
+      auto new_choice_rule_id = builder_.AddRuleWithHint(cur_rule_name_, new_choice_id);
       new_sequence_ids->push_back(builder_.AddRuleRef(new_choice_rule_id));
     }
   }
@@ -291,7 +308,7 @@ class StructureNormalizerImpl : public GrammarMutator {
   using GrammarMutator::GrammarMutator;
 
   Grammar Apply(const Grammar& grammar) final {
-    return NestedRuleUnwrapper().Apply(SingleElementExprEliminator().Apply(grammar));
+    return StructureNormalizerSub().Apply(SingleElementExprEliminator().Apply(grammar));
   }
 };
 
@@ -328,6 +345,13 @@ class ByteStringFuserImpl : public GrammarMutator {
   }
 };
 
+/*!
+ * \brief Inline rules that can be inlined.
+ *
+ * Now we only inline rule references that:
+ * 1. at the beginning of a sequence
+ * 2. The rule should be a sequence of choices, cannot be empty, cannot refer to other rules
+ */
 class RuleInlinerImpl : public GrammarMutator {
  public:
   using GrammarMutator::Apply;
@@ -469,7 +493,7 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
       auto rule = grammar->GetRule(rule_id);
       auto new_body_expr_id = VisitExpr(rule.body_expr_id);
       builder_.UpdateRuleBody(rule_id_map_[rule_id], new_body_expr_id);
-      builder_.AddLookaheadAssertion(
+      builder_.UpdateLookaheadAssertion(
           rule_id_map_[rule_id], VisitLookaheadAssertion(rule.lookahead_assertion_id)
       );
     }
@@ -515,7 +539,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       }
       auto look_head_assertion_id = DetectLookaheadAssertion(i);
       if (look_head_assertion_id != -1) {
-        builder_.AddLookaheadAssertion(i, look_head_assertion_id);
+        builder_.UpdateLookaheadAssertion(i, look_head_assertion_id);
       }
     }
     return builder_.Get(grammar->GetRootRuleId());
@@ -610,9 +634,9 @@ class GrammarNormalizerImpl : public GrammarMutator {
  * Provides functionality to visit a subgrammar and add its rules to the builder
  * while maintaining proper rule references and names.
  */
-class SubGrammarAdder : public GrammarMutator {
+class SubGrammarCombiner : public GrammarMutator {
  public:
-  SubGrammarAdder() = default;
+  SubGrammarCombiner() = default;
 
  protected:
   /*!
@@ -635,7 +659,7 @@ class SubGrammarAdder : public GrammarMutator {
       auto new_body_expr_id = VisitExpr(rule.body_expr_id);
       builder_.UpdateRuleBody(new_rule_ids_names[i].first, new_body_expr_id);
       auto new_lookahead_assertion_id = VisitLookaheadAssertion(rule.lookahead_assertion_id);
-      builder_.AddLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
+      builder_.UpdateLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
     }
     return new_rule_ids_names[grammar->GetRootRuleId()].first;
   }
@@ -654,7 +678,7 @@ class SubGrammarAdder : public GrammarMutator {
  * The resulting grammar has a new root rule that chooses between the root rules
  * of all input grammars.
  */
-class GrammarUnionFunctorImpl : public SubGrammarAdder {
+class GrammarUnionFunctorImpl : public SubGrammarCombiner {
  public:
   GrammarUnionFunctorImpl() = default;
 
@@ -687,7 +711,7 @@ class GrammarUnionFunctorImpl : public SubGrammarAdder {
  * from the input grammars in order. The resulting grammar has a new root rule
  * that concatenates the root rules of all input grammars.
  */
-class GrammarConcatFunctorImpl : public SubGrammarAdder {
+class GrammarConcatFunctorImpl : public SubGrammarCombiner {
  public:
   GrammarConcatFunctorImpl() = default;
 
@@ -861,7 +885,7 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
   }
 };
 
-class StructuralTagGrammarCreatorImpl : public SubGrammarAdder {
+class StructuralTagGrammarCreatorImpl : public SubGrammarCombiner {
  public:
   Grammar Apply(
       const std::vector<std::string>& triggers,

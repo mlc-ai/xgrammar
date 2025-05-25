@@ -38,6 +38,33 @@ rule2 ::= "efg" [t]*
     assert _is_grammar_accept_string(grammar, "tag2efgtttttag1abc")
 
 
+def test_utf8():
+
+    # Test utf8-encoded string with structural tags
+    class Schema(BaseModel):
+        arg1: str
+        arg2: int
+
+    tags = [
+        xgr.StructuralTagItem(begin="，，", schema=Schema, end="。"),
+        xgr.StructuralTagItem(begin="，！", schema=Schema, end="。。"),
+        xgr.StructuralTagItem(begin="，，？", schema=Schema, end="。。。"),
+        xgr.StructuralTagItem(begin="｜｜？", schema=Schema, end="｜？｜"),
+    ]
+    triggers = ["，", "｜｜"]
+
+    grammar = xgr.Grammar.from_structural_tag(tags, triggers)
+
+    accepted_inputs = [
+        '这是无用的内容，，{"arg1": "你好，世界！", "arg2": 0}。这是无用的内容',
+        '这是无用的内容，！{"arg1": "こんにちは！", "arg2": 1}。。这是无用的内容',
+        '这是无用的内容，，？{"arg1": "안녕하세요！", "arg2": 2}。。。这是无用的内容，！{"arg1": "안녕하세요！", "arg2": 3}。。',
+        '这是无用的内容｜｜？{"arg1": "။စ်န, ်ပြ！", "arg2": 0}｜？｜｜｜？{"arg1": "။စ်န, ်ပြ", "arg2": 0}｜？｜',
+    ]
+    for input_str in accepted_inputs:
+        assert _is_grammar_accept_string(grammar, input_str, print_time=True)
+
+
 def test_tag_dispatch_mask_generation_correctness():
     grammar_str = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2))
 rule1 ::= "abc"
@@ -107,7 +134,7 @@ basic_integer_1_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 trigger_rule_1 ::= ((">" root_3 "</function>"))
 basic_escape_2 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_2))
 basic_string_sub_2 ::= (("\"") | ([^\"\\\r\n] basic_string_sub_2) | ("\\" basic_escape_2 basic_string_sub_2)) (=([ \n\t]* [,}\]:]))
-basic_number ::= ((basic_number_choice basic_number_3 basic_number_6)) (=([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "}"))
+basic_number ::= ((basic_number_7 basic_number_3 basic_number_6)) (=([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "}"))
 basic_string_2 ::= (("\"" basic_string_sub_2))
 root_prop_1 ::= (("[" [ \n\t]* basic_string_2 root_prop_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]")) (=([ \n\t]* "}"))
 root_3 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number [ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "}"))
@@ -118,7 +145,7 @@ basic_number_4 ::= ("" | ([+\-])) (=(basic_number_5))
 basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1)) (=([ \n\t]* "]"))
-basic_number_choice ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
+basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
 """
 
 
@@ -141,8 +168,6 @@ def test_structural_tag():
     triggers = ["<function=f", "<function=g"]
 
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
-
-    print("grammar: ", str(grammar))
 
     assert str(grammar) == expected_grammar_test_structural_tag
 

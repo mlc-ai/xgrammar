@@ -88,7 +88,7 @@ if(XGRAMMAR_BUILD_CXX_TESTS)
 
   add_executable(xgrammar_test ${XGRAMMAR_TEST_SOURCES_PATH})
   target_include_directories(xgrammar_test PUBLIC ${PROJECT_SOURCE_DIR}/cpp)
-  target_link_libraries(xgrammar_test xgrammar gtest gtest_main)
+  target_link_libraries(xgrammar_test xgrammar gtest gmock gtest_main)
 
   include(GoogleTest)
   gtest_discover_tests(xgrammar_test)
