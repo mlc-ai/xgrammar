@@ -7,6 +7,7 @@
 #include <picojson.h>
 
 #include <climits>
+#include <cstdint>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -318,6 +319,21 @@ class JSONSchemaConverter {
 
   Result<ArraySpec, SchemaError> ParseArraySchema(const picojson::object& schema);
 
+  struct ObjectSpec {
+    std::vector<std::pair<std::string, picojson::value>> properties;
+    std::vector<std::pair<std::string, picojson::value>> pattern_properties;
+    bool allow_additional_properties;
+    picojson::value additional_properties_schema;
+    bool allow_unevaluated_properties;
+    picojson::value unevaluated_properties_schema;
+    std::unordered_set<std::string> required_properties;
+    picojson::value property_names;
+    int min_properties;
+    int max_properties;
+  };
+
+  Result<ObjectSpec> ParseObjectSchema(const picojson::object& schema);
+
   /*!
    * \brief Visit an array schema.
    * \example
@@ -422,33 +438,24 @@ class JSONSchemaConverter {
       const std::string& rule_name_suffix
   );
 
-  /*! \brief Get the partial rule for the properties when all properties are optional. See the
-   * example in VisitObject(). */
-  std::string GetPartialRuleForPropertiesAllOptional(
-      const std::vector<std::pair<std::string, picojson::value>>& properties,
-      const picojson::value& additional,
-      const std::string& rule_name,
-      const std::string& additional_suffix = ""
+  /*! \brief Get the pattern for the properties with repetition number limit. */
+  std::string GetPropertyWithNumberConstrains(
+      const std::string& pattern,
+      int min_properties,
+      int max_properties,
+      int already_repeated_times = 0
   );
 
-  /*!
-   * \brief Get the partial rule for the properties when some properties are required. See the
-   * example in VisitObject().
-   *
-   * The constructed rule should be:
-   * \code
-   * start_separator (optional_property separator)? (optional_property separator)? ...
-   * first_required_property (separator optional_property)? separator required_property ...
-   * end_separator
-   * \endcode
-   *
-   * i.e. Before the first required property, all properties are in the form
-   * (property separator) ; and after the first required property, all properties are in the form
-   * (separator property) . */
-  std::string GetPartialRuleForPropertiesContainRequired(
+  /*! \brief Get the partial rule for the properties. See the
+   * example in VisitObject(). */
+  std::string GetPartialRuleForProperties(
       const std::vector<std::pair<std::string, picojson::value>>& properties,
       const std::unordered_set<std::string>& required,
-      const std::string& rule_name
+      const picojson::value& additional,
+      const std::string& rule_name,
+      const std::string& additional_suffix,
+      const int min_properties,
+      const int max_properties
   );
 
   // The EBNF script creator
@@ -713,10 +720,9 @@ std::string JSONSchemaConverter::VisitSchema(
       XGRAMMAR_LOG(FATAL) << "Unsupported type \"" << type << "\"";
     }
   } else if (schema_obj.count("properties") || schema_obj.count("additionalProperties") ||
-             schema_obj.count("unevaluatedProperties")) {
+            schema_obj.count("unevaluatedProperties")) {
     return VisitObject(schema_obj, rule_name);
-  } else if (schema_obj.count("items") || schema_obj.count("prefixItems") ||
-             schema_obj.count("unevaluatedItems")) {
+  } else if (schema_obj.count("items") || schema_obj.count("prefixItems") || schema_obj.count("unevaluatedItems")) {
     return VisitArray(schema_obj, rule_name);
   }
 
@@ -807,8 +813,7 @@ std::string JSONSchemaConverter::VisitEnum(
 
 std::string JSONSchemaConverter::JSONStrToPrintableStr(const std::string& json_str) {
   static const std::vector<std::pair<std::string, std::string>> kReplaceMapping = {
-      {"\\", "\\\\"}, {"\"", "\\\""}
-  };
+      {"\\", "\\\\"}, {"\"", "\\\""}};
   std::string result = json_str;
   for (const auto& [k, v] : kReplaceMapping) {
     size_t pos = 0;
@@ -1953,8 +1958,8 @@ std::string JSONSchemaConverter::VisitString(
     int64_t min_length = schema.count("minLength") ? schema.at("minLength").get<int64_t>() : 0;
     int64_t max_length = schema.count("maxLength") ? schema.at("maxLength").get<int64_t>() : -1;
     XGRAMMAR_CHECK(max_length == -1 || min_length <= max_length)
-        << "In string schema, minLength " << min_length << " is greater than " << "maxLength "
-        << max_length;
+        << "In string schema, minLength " << min_length << " is greater than "
+        << "maxLength " << max_length;
     std::string range_part = "{" + std::to_string(min_length) + "," +
                              (max_length == -1 ? "" : std::to_string(max_length)) + "}";
     return "\"\\\"\" " + std::string("[^\"\\\\\\r\\n]") + range_part + " \"\\\"\"";
@@ -2272,13 +2277,40 @@ std::string JSONSchemaConverter::GetOtherPropertyPattern(
   return key_pattern + " " + colon_pattern_ + " " + value;
 }
 
-std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
+std::string JSONSchemaConverter::GetPropertyWithNumberConstrains(
+    const std::string& pattern, int min_properties, int max_properties, int already_repeated_times
+) {
+  XGRAMMAR_DCHECK(max_properties >= already_repeated_times);
+  if (max_properties == already_repeated_times) {
+    return "\"\"";
+  }
+  int lower = std::max(0, min_properties - already_repeated_times);
+  int upper = std::max(-1, max_properties - already_repeated_times);
+  if (lower == 0 && upper == -1) {
+    return "(" + pattern + ")*";
+  } else if (lower == 0 && upper == 1) {
+    return "(" + pattern + ")?";
+  } else if (lower == 1 && upper == 1) {
+    return pattern;
+  } else {
+    return "(" + pattern + "){" + std::to_string(lower) + "," +
+           (max_properties == -1 ? "" : std::to_string(upper)) + "} ";
+  }
+}
+
+std::string JSONSchemaConverter::GetPartialRuleForProperties(
     const std::vector<std::pair<std::string, picojson::value>>& properties,
+    const std::unordered_set<std::string>& required,
     const picojson::value& additional,
     const std::string& rule_name,
-    const std::string& additional_suffix
+    const std::string& additional_suffix,
+    const int min_properties,
+    const int max_properties
 ) {
-  XGRAMMAR_CHECK(properties.size() >= 1);
+  // return empty when maxProperties=0
+  if (max_properties == 0) {
+    return "";
+  }
 
   std::string first_sep = NextSeparator();
   std::string mid_sep = NextSeparator();
@@ -2293,117 +2325,462 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
     ++idx;
   }
 
-  std::vector<std::string> rule_names(properties.size(), "");
+  if (min_properties == 0 && max_properties == -1) {
+    // Case 1. Without any properties number constrains
+    std::vector<std::string> rule_names(properties.size(), "");
 
-  // construct the last rule
-  std::string additional_prop_pattern;
-  if (!additional.is<bool>() || additional.get<bool>()) {
-    additional_prop_pattern =
-        GetOtherPropertyPattern(kBasicString, additional, rule_name, additional_suffix);
-    std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
-    std::string last_rule_name =
-        rule_name + "_part_" +
-        std::to_string(static_cast<int64_t>(properties.size()) - 1);  // Changed to int64_t
-    last_rule_name = ebnf_script_creator_.AddRule(last_rule_name, last_rule_body);
-    rule_names.back() = last_rule_name;
-  } else {
-    rule_names.back() = "\"\"";
-  }
-
-  // construct 0~(len(properties) - 2) rules
-  for (int64_t i = properties.size() - 2; i >= 0; --i) {  // Changed to int64_t
-    const std::string& prop_pattern = prop_patterns[i + 1];
-    const std::string& last_rule_name = rule_names[i + 1];
-    std::string cur_rule_body =
-        last_rule_name + " | " + mid_sep + " " + prop_pattern + " " + last_rule_name;
-    std::string cur_rule_name = rule_name + "_part_" + std::to_string(i);
-    cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
-    rule_names[i] = cur_rule_name;
-  }
-
-  // construct the root rule
-  for (int64_t i = 0; i < static_cast<int64_t>(properties.size()); ++i) {  // Changed to int64_t
-    if (i != 0) {
-      res += " | ";
-    }
-    res += "(" + prop_patterns[i] + " " + rule_names[i] + ")";
-  }
-
-  if (!additional.is<bool>() || additional.get<bool>()) {
-    res += " | " + additional_prop_pattern + " " + rule_names.back();
-  }
-
-  // add separators and the empty string option
-  res = first_sep + " (" + res + ") " + last_sep;
-  return res;
-}
-
-std::string JSONSchemaConverter::GetPartialRuleForPropertiesContainRequired(
-    const std::vector<std::pair<std::string, picojson::value>>& properties,
-    const std::unordered_set<std::string>& required,
-    const std::string& rule_name
-) {
-  // Find the index of the first required property
-  int64_t first_required_idx = properties.size();                          // Changed to int64_t
-  for (int64_t i = 0; i < static_cast<int64_t>(properties.size()); ++i) {  // Changed to int64_t
-    if (required.count(properties[i].first)) {
-      first_required_idx = i;
-      break;
-    }
-  }
-  XGRAMMAR_CHECK(
-      first_required_idx < static_cast<int64_t>(properties.size())
-  );  // Changed to int64_t
-
-  std::string res = NextSeparator();
-
-  // Handle the properties before the first required property
-  for (int64_t i = 0; i < first_required_idx; ++i) {  // Changed to int64_t
-    const auto& [prop_name, prop_schema] = properties[i];
-    XGRAMMAR_CHECK(!prop_schema.is<bool>() || prop_schema.get<bool>());
-    std::string property_pattern = GetPropertyPattern(prop_name, prop_schema, rule_name, i);
-    res += " (" + property_pattern + " " + NextSeparator() + ")?";
-  }
-
-  // Handle the first required property
-  const auto& [prop_name, prop_schema] = properties[first_required_idx];
-  std::string property_pattern =
-      GetPropertyPattern(prop_name, prop_schema, rule_name, first_required_idx);
-  res += " " + property_pattern;
-
-  // Handle the properties after the first required property
-  for (int64_t i = first_required_idx + 1; i < static_cast<int64_t>(properties.size());
-       ++i) {  // Changed to int64_t
-    const auto& [prop_name, prop_schema] = properties[i];
-    XGRAMMAR_CHECK(!prop_schema.is<bool>() || prop_schema.get<bool>());
-    std::string property_pattern = GetPropertyPattern(prop_name, prop_schema, rule_name, i);
-    if (required.count(prop_name)) {
-      res += " " + NextSeparator() + " " + property_pattern;
+    // construct the last rule
+    std::string additional_prop_pattern;
+    if (!additional.is<picojson::null>() && (!additional.is<bool>() || additional.get<bool>())) {
+      additional_prop_pattern =
+          GetOtherPropertyPattern(kBasicString, additional, rule_name, additional_suffix);
+      std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
+      std::string last_rule_name =
+          rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1);
+      last_rule_name = ebnf_script_creator_.AddRule(last_rule_name, last_rule_body);
+      rule_names.back() = last_rule_name;
     } else {
-      res += " (" + NextSeparator() + " " + property_pattern + ")?";
+      rule_names.back() = "\"\"";
     }
-  }
 
+    // construct 0~(len(properties) - 2) rules
+    for (int i = properties.size() - 2; i >= 0; --i) {
+      const std::string& prop_pattern = prop_patterns[i + 1];
+      const std::string& last_rule_name = rule_names[i + 1];
+      std::string cur_rule_body = mid_sep + " " + prop_pattern + " " + last_rule_name;
+      if (!required.count(properties[i].first)) {
+        cur_rule_body = last_rule_name + " | " + cur_rule_body;
+      }
+      std::string cur_rule_name = rule_name + "_part_" + std::to_string(i);
+      cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
+      rule_names[i] = cur_rule_name;
+    }
+
+    // construct the root rule
+    for (int i = 0; i < static_cast<int>(properties.size()); ++i) {
+      if (i != 0) {
+        res += " | ";
+      }
+      res += "(" + prop_patterns[i] + " " + rule_names[i] + ")";
+    }
+
+    if (!additional.is<bool>() || additional.get<bool>()) {
+      res += " | " + additional_prop_pattern + " " + rule_names.back();
+    }
+
+    // add separators and the empty string option
+    res = first_sep + " (" + res + ") " + last_sep;
+  } else if (max_properties == -1) {
+    // Case 2. With constrain on the lower bound of the properties number
+    int properties_size = static_cast<int>(properties.size());
+    std::vector<std::vector<std::string>> rule_names(properties_size, std::vector<std::string>());
+    std::vector<int> key_matched_min(properties_size, 0);
+    std::vector<uint8_t> is_required(properties_size, false);
+
+    bool allow_additional =
+        !additional.is<picojson::null>() && (!additional.is<bool>() || additional.get<bool>());
+
+    // get the range of matched properties for each rule
+    bool get_first_required = required.count(properties[0].first);
+    key_matched_min[0] = 1;
+    for (int i = 1; i < properties_size; ++i) {
+      if (required.count(properties[i].first)) {
+        is_required[i] = true;
+        key_matched_min[i] = key_matched_min[i - 1] + 1;
+      } else {
+        key_matched_min[i] = key_matched_min[i - 1];
+      }
+      if (!get_first_required) {
+        key_matched_min[i] = 1;
+      }
+      if (is_required[i]) {
+        get_first_required = true;
+      }
+    }
+    if (allow_additional) {
+      key_matched_min.back() = std::max(1, key_matched_min.back());
+    } else {
+      XGRAMMAR_DCHECK(key_matched_min.back() <= max_properties);
+      key_matched_min.back() = std::max(min_properties, key_matched_min.back());
+    }
+    for (int i = properties_size - 2; i >= 0; --i) {
+      key_matched_min[i] = std::max(key_matched_min[i], key_matched_min[i + 1] - 1);
+    }
+
+    // construct the last rule
+    std::string additional_prop_pattern;
+    if (allow_additional) {
+      additional_prop_pattern =
+          GetOtherPropertyPattern(kBasicString, additional, rule_name, additional_suffix);
+      for (int matched = key_matched_min.back(); matched <= properties_size; ++matched) {
+        std::string last_rule_body = GetPropertyWithNumberConstrains(
+            mid_sep + " " + additional_prop_pattern, min_properties, max_properties, matched
+        );
+        std::string last_rule_name = rule_name + "_part_" +
+                                     std::to_string(static_cast<int>(properties.size()) - 1) + "_" +
+                                     std::to_string(matched);
+        last_rule_name = ebnf_script_creator_.AddRule(last_rule_name, last_rule_body);
+        rule_names.back().push_back(last_rule_name);
+      }
+    } else {
+      for (int matched = key_matched_min.back(); matched <= properties_size; ++matched) {
+        rule_names.back().push_back("\"\"");
+      }
+    }
+
+    // construct 0~(len(properties) - 2) rules
+
+    for (int i = properties_size - 2; i >= 0; --i) {
+      const std::string& prop_pattern = prop_patterns[i + 1];
+      for (int matched = key_matched_min[i]; matched <= i + 1; ++matched) {
+        std::string cur_rule_body = "";
+        if (is_required[i + 1] || matched == key_matched_min[i + 1] - 1) {
+          cur_rule_body = mid_sep + " " + prop_pattern + " " +
+                          rule_names[i + 1][matched + 1 - key_matched_min[i + 1]];
+        } else {
+          cur_rule_body = rule_names[i + 1][matched - key_matched_min[i + 1]] + " | " + mid_sep +
+                          " " + prop_pattern + " " +
+                          rule_names[i + 1][matched - key_matched_min[i + 1] + 1];
+        }
+        std::string cur_rule_name =
+            rule_name + "_part_" + std::to_string(i) + "_" + std::to_string(matched);
+        cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
+        rule_names[i].push_back(cur_rule_name);
+      }
+    }
+
+    // construct the root rule
+    bool is_first = true;
+    for (int i = 0; i < static_cast<int>(properties.size()); ++i) {
+      if (key_matched_min[i] > 1) {
+        break;
+      }
+      if (!is_first) {
+        res += " | ";
+      } else {
+        is_first = false;
+      }
+      res += "(" + prop_patterns[i] + " " + rule_names[i][1 - key_matched_min[i]] + ")";
+      if (is_required[i]) {
+        break;
+      }
+    }
+
+    if (allow_additional && required.empty()) {
+      if (!is_first) {
+        res += " | ";
+      }
+      res += "(" + additional_prop_pattern + " " +
+             GetPropertyWithNumberConstrains(
+                 mid_sep + " " + additional_prop_pattern, min_properties, max_properties, 1
+             ) +
+             ")";
+    }
+
+    // add separators and the empty string option
+    res = first_sep + " (" + res + ") " + last_sep;
+  } else {
+    // Case 3. With constrains on the both lower & upper bound of the properties number
+    int properties_size = static_cast<int>(properties.size());
+    std::vector<std::vector<std::string>> rule_names(properties_size, std::vector<std::string>());
+    std::vector<int> key_matched_min(properties_size, 0);
+    std::vector<int> key_matched_max(properties_size, properties_size);
+    std::vector<uint8_t> is_required(properties_size, false);
+
+    bool allow_additional =
+        !additional.is<picojson::null>() && (!additional.is<bool>() || additional.get<bool>());
+
+    // get the range of matched properties for each rule
+    bool get_first_required = required.count(properties[0].first);
+    key_matched_min[0] = 1;
+    key_matched_max[0] = 1;
+    for (int i = 1; i < properties_size; ++i) {
+      if (required.count(properties[i].first)) {
+        is_required[i] = true;
+        key_matched_min[i] = key_matched_min[i - 1] + 1;
+      } else {
+        key_matched_min[i] = key_matched_min[i - 1];
+      }
+      if (!get_first_required) {
+        key_matched_min[i] = 1;
+      }
+      key_matched_max[i] = key_matched_max[i - 1] + 1;
+      if (is_required[i]) {
+        get_first_required = true;
+      }
+    }
+    if (allow_additional) {
+      key_matched_min.back() = std::max(1, key_matched_min.back());
+      key_matched_max.back() = std::min(max_properties, key_matched_max.back());
+    } else {
+      XGRAMMAR_DCHECK(
+          key_matched_min.back() <= max_properties && key_matched_max.back() >= min_properties
+      );
+      key_matched_min.back() = std::max(min_properties, key_matched_min.back());
+      key_matched_max.back() = std::min(max_properties, key_matched_max.back());
+    }
+    for (int i = properties_size - 2; i >= 0; --i) {
+      key_matched_min[i] = std::max(key_matched_min[i], key_matched_min[i + 1] - 1);
+      if (is_required[i + 1]) {
+        key_matched_max[i] = std::min(key_matched_max[i], key_matched_max[i + 1] - 1);
+      } else {
+        key_matched_max[i] = std::min(key_matched_max[i], key_matched_max[i + 1]);
+      }
+    }
+
+    // construct the last rule
+    std::string additional_prop_pattern;
+    if (allow_additional) {
+      additional_prop_pattern =
+          GetOtherPropertyPattern(kBasicString, additional, rule_name, additional_suffix);
+      for (int matched = key_matched_min.back(); matched <= key_matched_max.back(); ++matched) {
+        std::string last_rule_body = GetPropertyWithNumberConstrains(
+            mid_sep + " " + additional_prop_pattern, min_properties, max_properties, matched
+        );
+        std::string last_rule_name = rule_name + "_part_" +
+                                     std::to_string(static_cast<int>(properties.size()) - 1) + "_" +
+                                     std::to_string(matched);
+        last_rule_name = ebnf_script_creator_.AddRule(last_rule_name, last_rule_body);
+        rule_names.back().push_back(last_rule_name);
+      }
+    } else {
+      for (int matched = key_matched_min.back(); matched <= key_matched_max.back(); ++matched) {
+        rule_names.back().push_back("\"\"");
+      }
+    }
+
+    // construct 0~(len(properties) - 2) rules
+
+    for (int i = properties_size - 2; i >= 0; --i) {
+      const std::string& prop_pattern = prop_patterns[i + 1];
+      for (int matched = key_matched_min[i]; matched <= key_matched_max[i]; ++matched) {
+        std::string cur_rule_body = "";
+        if (matched == key_matched_max[i + 1]) {
+          cur_rule_body = rule_names[i + 1][matched - key_matched_min[i + 1]];
+        } else if (is_required[i + 1] || matched == key_matched_min[i + 1] - 1) {
+          cur_rule_body = mid_sep + " " + prop_pattern + " " +
+                          rule_names[i + 1][matched + 1 - key_matched_min[i + 1]];
+        } else {
+          cur_rule_body = rule_names[i + 1][matched - key_matched_min[i + 1]] + " | " + mid_sep +
+                          " " + prop_pattern + " " +
+                          rule_names[i + 1][matched - key_matched_min[i + 1] + 1];
+        }
+        std::string cur_rule_name =
+            rule_name + "_part_" + std::to_string(i) + "_" + std::to_string(matched);
+        cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
+        rule_names[i].push_back(cur_rule_name);
+      }
+    }
+
+    // construct the root rule
+    bool is_first = true;
+    for (int i = 0; i < static_cast<int>(properties.size()); ++i) {
+      if (key_matched_max[i] < key_matched_min[i]) {
+        continue;
+      }
+      if (key_matched_min[i] > 1) {
+        break;
+      }
+      if (!is_first) {
+        res += " | ";
+      } else {
+        is_first = false;
+      }
+      res += "(" + prop_patterns[i] + " " + rule_names[i][1 - key_matched_min[i]] + ")";
+      if (is_required[i]) {
+        break;
+      }
+    }
+
+    if (allow_additional && required.empty()) {
+      if (!is_first) {
+        res += " | ";
+      }
+      res += "(" + additional_prop_pattern + " " +
+             GetPropertyWithNumberConstrains(
+                 mid_sep + " " + additional_prop_pattern, min_properties, max_properties, 1
+             ) +
+             ")";
+    }
+
+    // add separators and the empty string option
+    res = first_sep + " (" + res + ") " + last_sep;
+  }
   return res;
 }
 
-std::string JSONSchemaConverter::VisitObject(
-    const picojson::object& schema, const std::string& rule_name
+Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
+    const picojson::object& schema
 ) {
   XGRAMMAR_CHECK(
       (schema.count("type") && schema.at("type").get<std::string>() == "object") ||
       schema.count("properties") || schema.count("additionalProperties") ||
       schema.count("unevaluatedProperties")
   );
-  WarnUnsupportedKeywords(
-      schema,
-      {
-          "patternProperties",
-          "minProperties",
-          "maxProperties",
-          "propertyNames",
+  std::vector<std::pair<std::string, picojson::value>> properties;
+  std::unordered_set<std::string> required_properties;
+  std::vector<std::pair<std::string, picojson::value>> pattern_properties;
+  picojson::value property_names = picojson::value();
+  bool allow_additional_properties = !strict_mode_;
+  picojson::value additional_properties_schema = picojson::value();
+  bool allow_unevaluated_properties = true;
+  picojson::value unevaluated_properties_schema = picojson::value();
+  int min_properties = 0;
+  int max_properties = -1;
+
+  if (schema.count("properties")) {
+    if (!schema.at("properties").is<picojson::object>()) {
+      return Result<ObjectSpec>::Err(
+          std::make_shared<InvalidSchemaError>("properties must be an object")
+      );
+    }
+    auto properties_obj = schema.at("properties").get<picojson::object>();
+    for (const auto& key : properties_obj.ordered_keys()) {
+      properties.push_back({key, properties_obj.at(key)});
+    }
+  }
+
+  if (schema.count("required")) {
+    if (!schema.at("required").is<picojson::array>()) {
+      return Result<ObjectSpec>::Err(
+          std::make_shared<InvalidSchemaError>("required must be an array")
+      );
+    }
+    for (const auto& required_prop : schema.at("required").get<picojson::array>()) {
+      required_properties.insert(required_prop.get<std::string>());
+    }
+  }
+
+  if (schema.count("patternProperties")) {
+    if (!schema.at("patternProperties").is<picojson::object>()) {
+      return Result<ObjectSpec>::Err(
+          std::make_shared<InvalidSchemaError>("patternProperties must be an object")
+      );
+    }
+    auto pattern_properties_obj = schema.at("patternProperties").get<picojson::object>();
+    for (const auto& key : pattern_properties_obj.ordered_keys()) {
+      pattern_properties.push_back({key, pattern_properties_obj.at(key)});
+    }
+  }
+
+  if (schema.count("propertyNames")) {
+    if (!schema.at("propertyNames").is<picojson::object>()) {
+      return Result<ObjectSpec>::Err(
+          std::make_shared<InvalidSchemaError>("propertyNames must be an object")
+      );
+    }
+    property_names = schema.at("propertyNames");
+    if (!property_names.is<picojson::object>()) {
+      return Result<ObjectSpec>::Err(
+          std::make_shared<InvalidSchemaError>("propertyNames must be an object schema")
+      );
+    } else {
+      picojson::object& property_names_obj = property_names.get<picojson::object>();
+      if (property_names_obj.count("type") && property_names_obj.at("type").is<std::string>() &&
+          property_names_obj.at("type").get<std::string>() != "string") {
+        return Result<ObjectSpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+            "propertyNames must be an object that validates string"
+        ));
       }
-  );
+      property_names_obj["type"] = picojson::value("string");
+    }
+  }
+
+  if (schema.count("additionalProperties") && (!schema.at("additionalProperties").is<bool>() ||
+                                               schema.at("additionalProperties").get<bool>())) {
+    additional_properties_schema = schema.at("additionalProperties");
+    allow_additional_properties = true;
+  } else {
+    allow_additional_properties = false;
+  }
+
+  // Here we ignore the effect of unevaluatedProperties after setting additionalProperties
+  // However, in fact unevaluatedProperties still has an impact on nested structures, such as allOf
+  // We temporarily overlook this situation
+
+  if (schema.count("additionalProperties") == 0) {
+    unevaluated_properties_schema = schema.count("unevaluatedProperties")
+                                        ? schema.at("unevaluatedProperties")
+                                        : picojson::value(!strict_mode_);
+    allow_unevaluated_properties =
+        !unevaluated_properties_schema.is<bool>() || unevaluated_properties_schema.get<bool>();
+  }
+
+  if (schema.count("minProperties")) {
+    if (!schema.at("minProperties").is<int64_t>()) {
+      return Result<ObjectSpec>::Err(
+          std::make_shared<InvalidSchemaError>("minProperties must be an integer")
+      );
+    }
+    min_properties = static_cast<int>(schema.at("minProperties").get<int64_t>());
+    if (min_properties < 0) {
+      return Result<ObjectSpec>::Err(
+          std::make_shared<InvalidSchemaError>("minProperties must be a non-negative integer")
+      );
+    }
+  }
+
+  if (schema.count("maxProperties")) {
+    if (!schema.at("maxProperties").is<int64_t>()) {
+      return Result<ObjectSpec>::Err(
+          std::make_shared<InvalidSchemaError>("maxProperties must be an integer")
+      );
+    }
+    max_properties = static_cast<int>(schema.at("maxProperties").get<int64_t>());
+    if (max_properties < 0) {
+      return Result<ObjectSpec>::Err(
+          std::make_shared<InvalidSchemaError>("maxProperties must be a non-negative integer")
+      );
+    }
+  }
+
+  if (max_properties != -1 && min_properties > max_properties) {
+    return Result<ObjectSpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+        "minxPropertiesmax is greater than maxProperties: " + std::to_string(min_properties) +
+        " > " + std::to_string(max_properties)
+    ));
+  }
+
+  if (max_properties != -1 && static_cast<int>(required_properties.size()) > max_properties) {
+    return Result<ObjectSpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+        "maxProperties is less than the number of required properties: " +
+        std::to_string(max_properties) + " < " + std::to_string(required_properties.size())
+    ));
+  }
+
+  if (pattern_properties.empty() && property_names.is<picojson::null>() &&
+      !allow_additional_properties && !allow_unevaluated_properties &&
+      min_properties > static_cast<int>(properties.size())) {
+    return Result<ObjectSpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+        "min_properties is greater than the number of properties, but additional "
+        "properties aren't allowed: " +
+        std::to_string(min_properties) + " > " + std::to_string(properties.size())
+    ));
+  }
+
+  return Result<ObjectSpec>::Ok(ObjectSpec{
+      properties,
+      pattern_properties,
+      allow_additional_properties,
+      additional_properties_schema,
+      allow_unevaluated_properties,
+      unevaluated_properties_schema,
+      required_properties,
+      property_names,
+      min_properties,
+      max_properties});
+}
+
+std::string JSONSchemaConverter::VisitObject(
+    const picojson::object& schema, const std::string& rule_name
+) {
+  // Parse the object schema
+  auto object_spec_result = ParseObjectSchema(schema);
+  if (object_spec_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << object_spec_result.UnwrapErr()->what();
+  }
+
+  auto object_spec = std::move(object_spec_result).Unwrap();
 
   std::string result = "\"{\"";
 
@@ -2411,75 +2788,87 @@ std::string JSONSchemaConverter::VisitObject(
   // last, and handle non-empty cases before that.
   bool could_be_empty = false;
 
+  // Handle additional properties
+  std::string additional_suffix = "";
+  picojson::value additional_property;
+  if (object_spec.allow_additional_properties) {
+    additional_suffix = "addl";
+    additional_property = object_spec.additional_properties_schema;
+  } else if (object_spec.allow_unevaluated_properties) {
+    additional_suffix = "uneval";
+    additional_property = object_spec.unevaluated_properties_schema;
+  }
   indentManager_->StartIndent();
 
-  // 1. Handle properties
-  std::vector<std::pair<std::string, picojson::value>> properties;
-  if (schema.count("properties")) {
-    XGRAMMAR_CHECK(schema.at("properties").is<picojson::object>())
-        << "properties must be an object";
-    auto properties_obj = schema.at("properties").get<picojson::object>();
-    for (const auto& key : properties_obj.ordered_keys()) {
-      properties.push_back({key, properties_obj.at(key)});
+  if (object_spec.pattern_properties.size() > 0 ||
+      !object_spec.property_names.is<picojson::null>()) {
+    // Case 1: patternProperties or propertyNames is difined
+    // TODO: Here we only handle the case that additionalProperties=False
+    // TODO: The coexistence of properties, required, etc. has not been addressed yet,
+    // as it may cause schema conflicts
+    // TODO: The situation of duplicate keys has not been resolved yet
+    std::string beg_seq = NextSeparator();
+    std::string property_rule_body = "(";
+    if (object_spec.max_properties != 0) {
+      if (object_spec.pattern_properties.size() > 0) {
+        for (int i = 0; i < static_cast<int>(object_spec.pattern_properties.size()); ++i) {
+          const auto& [prop_name, prop_schema] = object_spec.pattern_properties[i];
+          std::string value =
+              CreateRuleFromSchema(prop_schema, rule_name + "_prop_" + std::to_string(i));
+          std::string property_pattern = "\"\\\"\"" + RegexToEBNF(prop_name, false) + "\"\\\"\" " +
+                                         colon_pattern_ + " " + value;
+          if (i != 0) {
+            property_rule_body += " | ";
+          }
+          property_rule_body += "(" + beg_seq + " " + property_pattern + ")";
+        }
+        property_rule_body += ")";
+      } else {
+        auto key_pattern = CreateRuleFromSchema(object_spec.property_names, rule_name + "_name");
+        property_rule_body +=
+            beg_seq + " " + key_pattern + " " + colon_pattern_ + " " + kBasicAny + ")";
+      }
+      // set the property rule
+      auto prop_rule_name = ebnf_script_creator_.AllocateRuleName(rule_name + "_prop");
+      ebnf_script_creator_.AddRuleWithAllocatedName(prop_rule_name, property_rule_body);
+      result += " " + prop_rule_name + " " +
+                GetPropertyWithNumberConstrains(
+                    NextSeparator() + " " + prop_rule_name,
+                    object_spec.min_properties,
+                    object_spec.max_properties,
+                    1
+                ) +
+                NextSeparator(true);
+      could_be_empty = object_spec.min_properties == 0;
     }
-  }
-
-  std::unordered_set<std::string> required;
-  if (schema.count("required")) {
-    XGRAMMAR_CHECK(schema.at("required").is<picojson::array>()) << "required must be an array";
-    for (const auto& required_prop : schema.at("required").get<picojson::array>()) {
-      required.insert(required_prop.get<std::string>());
-    }
-  }
-
-  // 2. Find additional properties
-  picojson::value additional_property = picojson::value(false);
-  std::string additional_suffix = "";
-
-  if (schema.count("additionalProperties") && (!schema.at("additionalProperties").is<bool>() ||
-                                               schema.at("additionalProperties").get<bool>())) {
-    additional_property = schema.at("additionalProperties");
-    additional_suffix = "addl";
-  }
-
-  if (schema.count("additionalProperties") == 0) {
-    picojson::value unevaluated = schema.count("unevaluatedProperties")
-                                      ? schema.at("unevaluatedProperties")
-                                      : picojson::value(!strict_mode_);
-    if (!unevaluated.is<bool>() || unevaluated.get<bool>()) {
-      additional_property = unevaluated;
-      additional_suffix = "uneval";
-    }
-  }
-
-  bool is_all_properties_optional =
-      std::all_of(properties.begin(), properties.end(), [&](const auto& prop) {
-        return required.count(prop.first) == 0;
-      });
-
-  if (is_all_properties_optional && properties.size() > 0) {
-    // 3.1 Case 1: properties are defined and all properties are optional
-    result += " " + GetPartialRuleForPropertiesAllOptional(
-                        properties, additional_property, rule_name, additional_suffix
+  } else if (object_spec.properties.size() > 0) {
+    // Case 2: properties are defined
+    result += " " + GetPartialRuleForProperties(
+                        object_spec.properties,
+                        object_spec.required_properties,
+                        additional_property,
+                        rule_name,
+                        additional_suffix,
+                        object_spec.min_properties,
+                        object_spec.max_properties
                     );
-    could_be_empty = true;
-  } else if (properties.size() > 0) {
-    // 3.2 Case 2: properties are defined and some properties are required
-    result += " " + GetPartialRuleForPropertiesContainRequired(properties, required, rule_name);
-    if (!additional_property.is<bool>() || additional_property.get<bool>()) {
-      std::string other_property_pattern =
-          GetOtherPropertyPattern(kBasicString, additional_property, rule_name, additional_suffix);
-      result += " (" + NextSeparator() + " " + other_property_pattern + ")*";
-    }
-    result += " " + NextSeparator(true);
-  } else if (!additional_property.is<bool>() || additional_property.get<bool>()) {
-    // 3.3 Case 3: no properties are defined and additional properties are allowed
+    could_be_empty = object_spec.required_properties.empty() && object_spec.min_properties == 0;
+  } else if (!additional_property.is<picojson::null>() &&
+            (!additional_property.is<bool>() || additional_property.get<bool>())) {
+    // Case 3: no properties are defined and additional properties are allowed
     std::string other_property_pattern =
         GetOtherPropertyPattern(kBasicString, additional_property, rule_name, additional_suffix);
-    result += " " + NextSeparator() + " " + other_property_pattern + " (";
-    result += NextSeparator() + " " + other_property_pattern + ")* ";
-    result += NextSeparator(true);
-    could_be_empty = true;
+    result += " " + NextSeparator() + " " + other_property_pattern + " ";
+    if (object_spec.max_properties != 0) {
+      result += GetPropertyWithNumberConstrains(
+                    NextSeparator() + " " + other_property_pattern,
+                    object_spec.min_properties,
+                    object_spec.max_properties,
+                    1
+                ) +
+                " " + NextSeparator(true);
+    }
+    could_be_empty = object_spec.min_properties == 0;
   }
 
   indentManager_->EndIndent();
@@ -2488,7 +2877,11 @@ std::string JSONSchemaConverter::VisitObject(
   if (could_be_empty) {
     // result = (result) | {}
     auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"}\"";
-    result = "(" + result + ") | " + rest;
+    if (result == "\"{\"  \"}\"") {
+      result = rest;
+    } else {
+      result = "(" + result + ") | " + rest;
+    }
   }
 
   return result;
