@@ -720,9 +720,10 @@ std::string JSONSchemaConverter::VisitSchema(
       XGRAMMAR_LOG(FATAL) << "Unsupported type \"" << type << "\"";
     }
   } else if (schema_obj.count("properties") || schema_obj.count("additionalProperties") ||
-            schema_obj.count("unevaluatedProperties")) {
+             schema_obj.count("unevaluatedProperties")) {
     return VisitObject(schema_obj, rule_name);
-  } else if (schema_obj.count("items") || schema_obj.count("prefixItems") || schema_obj.count("unevaluatedItems")) {
+  } else if (schema_obj.count("items") || schema_obj.count("prefixItems") ||
+             schema_obj.count("unevaluatedItems")) {
     return VisitArray(schema_obj, rule_name);
   }
 
@@ -813,7 +814,8 @@ std::string JSONSchemaConverter::VisitEnum(
 
 std::string JSONSchemaConverter::JSONStrToPrintableStr(const std::string& json_str) {
   static const std::vector<std::pair<std::string, std::string>> kReplaceMapping = {
-      {"\\", "\\\\"}, {"\"", "\\\""}};
+      {"\\", "\\\\"}, {"\"", "\\\""}
+  };
   std::string result = json_str;
   for (const auto& [k, v] : kReplaceMapping) {
     size_t pos = 0;
@@ -2328,10 +2330,13 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
   if (min_properties == 0 && max_properties == -1) {
     // Case 1. Without any properties number constrains
     std::vector<std::string> rule_names(properties.size(), "");
+    std::vector<uint8_t> is_required(properties.size(), false);
+    bool allow_additional =
+        !additional.is<picojson::null>() && (!additional.is<bool>() || additional.get<bool>());
 
     // construct the last rule
     std::string additional_prop_pattern;
-    if (!additional.is<picojson::null>() && (!additional.is<bool>() || additional.get<bool>())) {
+    if (allow_additional) {
       additional_prop_pattern =
           GetOtherPropertyPattern(kBasicString, additional, rule_name, additional_suffix);
       std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
@@ -2348,12 +2353,17 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
       const std::string& prop_pattern = prop_patterns[i + 1];
       const std::string& last_rule_name = rule_names[i + 1];
       std::string cur_rule_body = mid_sep + " " + prop_pattern + " " + last_rule_name;
-      if (!required.count(properties[i].first)) {
+      if (!required.count(properties[i + 1].first)) {
         cur_rule_body = last_rule_name + " | " + cur_rule_body;
+      } else {
+        is_required[i + 1] = true;
       }
       std::string cur_rule_name = rule_name + "_part_" + std::to_string(i);
       cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
       rule_names[i] = cur_rule_name;
+    }
+    if (required.count(properties[0].first)) {
+      is_required[0] = true;
     }
 
     // construct the root rule
@@ -2362,9 +2372,12 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
         res += " | ";
       }
       res += "(" + prop_patterns[i] + " " + rule_names[i] + ")";
+      if (is_required[i]) {
+        break;
+      }
     }
 
-    if (!additional.is<bool>() || additional.get<bool>()) {
+    if (allow_additional && required.empty()) {
       res += " | " + additional_prop_pattern + " " + rule_names.back();
     }
 
@@ -2396,6 +2409,9 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
       if (is_required[i]) {
         get_first_required = true;
       }
+    }
+    if (required.count(properties[0].first)) {
+      is_required[0] = true;
     }
     if (allow_additional) {
       key_matched_min.back() = std::max(1, key_matched_min.back());
@@ -2508,6 +2524,9 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
       if (is_required[i]) {
         get_first_required = true;
       }
+    }
+    if (required.count(properties[0].first)) {
+      is_required[0] = true;
     }
     if (allow_additional) {
       key_matched_min.back() = std::max(1, key_matched_min.back());
@@ -2768,7 +2787,8 @@ Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
       required_properties,
       property_names,
       min_properties,
-      max_properties});
+      max_properties
+  });
 }
 
 std::string JSONSchemaConverter::VisitObject(
@@ -2854,19 +2874,21 @@ std::string JSONSchemaConverter::VisitObject(
                     );
     could_be_empty = object_spec.required_properties.empty() && object_spec.min_properties == 0;
   } else if (!additional_property.is<picojson::null>() &&
-            (!additional_property.is<bool>() || additional_property.get<bool>())) {
+             (!additional_property.is<bool>() || additional_property.get<bool>())) {
     // Case 3: no properties are defined and additional properties are allowed
-    std::string other_property_pattern =
-        GetOtherPropertyPattern(kBasicString, additional_property, rule_name, additional_suffix);
-    result += " " + NextSeparator() + " " + other_property_pattern + " ";
     if (object_spec.max_properties != 0) {
-      result += GetPropertyWithNumberConstrains(
-                    NextSeparator() + " " + other_property_pattern,
-                    object_spec.min_properties,
-                    object_spec.max_properties,
-                    1
-                ) +
-                " " + NextSeparator(true);
+      std::string other_property_pattern =
+          GetOtherPropertyPattern(kBasicString, additional_property, rule_name, additional_suffix);
+      result += " " + NextSeparator() + " " + other_property_pattern + " ";
+      if (object_spec.max_properties != 0) {
+        result += GetPropertyWithNumberConstrains(
+                      NextSeparator() + " " + other_property_pattern,
+                      object_spec.min_properties,
+                      object_spec.max_properties,
+                      1
+                  ) +
+                  " " + NextSeparator(true);
+      }
     }
     could_be_empty = object_spec.min_properties == 0;
   }
