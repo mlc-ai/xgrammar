@@ -483,6 +483,14 @@ void GrammarCompiler::Impl::BuildTagDispatchFSM(
   compacted_fsm.ends = trie.ends;
   compacted_fsm.start = trie.start;
   grammar->root_tag_dispatch_fsm = compacted_fsm;
+  for (const auto& end : compacted_fsm.ends) {
+    if (compacted_fsm.fsm.edges[end].size() != 0) {
+      XGRAMMAR_LOG(FATAL) << "The end node " << end
+                          << " of the tag dispatch fsm should not have any outgoing edges."
+                          << " One tag should be the prefix of another tag."
+                          << " Please check the grammar.";
+    }
+  }
   for (int i = 0; i < static_cast<int>(end_nodes.size()); ++i) {
     grammar->tag_dispatch_end_node_to_rule_id[end_nodes[i]] = rule_ids[i];
   }

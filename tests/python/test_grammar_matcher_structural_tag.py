@@ -291,5 +291,17 @@ def test_structural_tag_mask_gen():
     assert tokenizer.eos_token_id not in rejected_token_ids
 
 
+def test_invalid_tag_dispatch():
+    # Test invalid TagDispatch grammar.
+    grammar_str = """root ::= TagDispatch(("tag", rule1), ("tag2", rule2))
+rule1 ::= "1"
+rule2 ::= "2"
+"""
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    grammar_compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=False)
+    with pytest.raises(RuntimeError):
+        compiled_grammar = grammar_compiler.compile_grammar(grammar)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
