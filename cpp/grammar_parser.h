@@ -9,7 +9,62 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <any>
+
 namespace xgrammar {
+
+class EBNFLexer {
+ public:
+  // Token types
+  enum class TokenType {
+    RuleName,        // the name of a rule definition, e.g.: root, rule1
+    Identifier,      // reference to a rule, or a Macro name, e.g.: root, rule1, TagDispatch
+    StringLiteral,   // e.g.: "tag1", "hello"
+    BooleanLiteral,  // true, false
+    IntegerLiteral,  // 123
+    LParen,          // (
+    RParen,          // )
+    LBrace,          // {
+    RBrace,          // }
+    Pipe,            // |
+    Comma,           // ,
+    EndOfFile,       // End of file
+
+    // Symbols and quantifiers
+    Assign,    // ::=
+    Equal,     // =
+    Star,      // *
+    Plus,      // +
+    Question,  // ?
+
+    // Character class
+    LBracket,           // [
+    RBracket,           // ]
+    Dash,               // -
+    Caret,              // ^
+    CharInCharClass,    // a character in a character class, e.g. a and z in [a-z]; escaped chars
+                        // with no special meaning are also included, e.g. . in [a\.z]
+    EscapeInCharClass,  // Escaped sequence with special function, e.g. \S in [\S]
+
+    // Special structures
+    LookaheadLParen,  // (=
+  };
+
+  // Token structure
+  struct Token {
+    TokenType type;
+    std::string lexeme;  // original text
+    std::any value;  // The processed value. Can be a int for integer literal, a string for string
+                     // literal, etc.
+    int line;
+    int column;
+  };
+
+  EBNFLexer();
+  std::vector<Token> Tokenize(const std::string& input);
+
+  XGRAMMAR_DEFINE_PIMPL_METHODS(EBNFLexer);
+};
 
 /*!
  * \brief This class parses a BNF/EBNF grammar string into an BNF abstract syntax tree (AST).
