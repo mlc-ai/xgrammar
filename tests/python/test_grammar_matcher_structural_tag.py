@@ -300,7 +300,7 @@ rule2 ::= "2"
     grammar = xgr.Grammar.from_ebnf(grammar_str)
     grammar_compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=False)
     with pytest.raises(RuntimeError):
-        compiled_grammar = grammar_compiler.compile_grammar(grammar)
+        _ = grammar_compiler.compile_grammar(grammar)
 
 
 if __name__ == "__main__":
