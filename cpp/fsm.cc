@@ -255,15 +255,7 @@ void FSM::Advance(
       }
     }
   }
-  for (const auto& state : in_result) {
-    if (result_closure.find(state) != result_closure.end()) {
-      continue;
-    }
-    std::unordered_set<int> closure;
-    closure.insert(state);
-    GetEpsilonClosure(&closure);
-    result_closure.insert(closure.begin(), closure.end());
-  }
+  GetEpsilonClosure(&in_result, &result_closure);
   for (const auto& state : result_closure) {
     result->push_back(state);
   }
