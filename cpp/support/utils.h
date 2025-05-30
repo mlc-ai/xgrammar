@@ -45,7 +45,13 @@ inline uint32_t HashCombine(Args... args) {
 #define XGRAMMAR_UNREACHABLE()
 #endif
 
-// Return the memory consumption in heap memory of a container.
+/*!
+ * \brief Compute the memory consumption in heap memory. This function is specialized for
+ * containers.
+ * \tparam Container The container type.
+ * \param container The container.
+ * \return The memory consumption in heap memory of the container.
+ */
 template <typename Container>
 inline constexpr std::size_t MemorySize(const Container& container) {
   using Element_t = std::decay_t<decltype(*std::begin(container))>;
@@ -54,6 +60,13 @@ inline constexpr std::size_t MemorySize(const Container& container) {
   return sizeof(Element_t) * std::size(container);
 }
 
+/*!
+ * \brief Compute the memory consumption in heap memory. This function is specialized for
+ * std::optional.
+ * \tparam Tp The type of the optional.
+ * \param range The optional.
+ * \return The memory consumption in heap memory of the optional.
+ */
 template <typename Tp>
 inline constexpr std::size_t MemorySize(const std::optional<Tp>& range) {
   return range.has_value() ? MemorySize(*range) : 0;
