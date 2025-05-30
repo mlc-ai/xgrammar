@@ -275,7 +275,7 @@ def test_structural_tag_mask_gen():
         assert token_id_for_next_char not in rejected_token_ids
 
         # 3. Test character acceptance
-        # print("Accepting char:", bytes([c]))
+        print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
         assert matcher._debug_accept_string(bytes([c]))
         time_end = time.monotonic_ns()
