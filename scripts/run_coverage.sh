@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Usage: bash ./scripts/run_coverage.sh
-pytest -m "not hf_token_required"
+pytest
 
 lcov --gcov-tool /usr/bin/gcov-13 --directory . --capture --output-file coverage.info
 genhtml coverage.info --output-directory coverage_report --ignore-errors version
