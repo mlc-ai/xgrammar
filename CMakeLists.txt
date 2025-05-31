@@ -19,6 +19,7 @@ option(XGRAMMAR_BUILD_CXX_TESTS "Build C++ tests" OFF)
 option(XGRAMMAR_ENABLE_CPPTRACE
        "Enable C++ trace (Now only support Linux, and RelWithDebugInfo or Debug build)" OFF
 )
+option(XGRAMMAR_ENABLE_COVERAGE "Enable code coverage with gcov" OFF)
 
 set(XGRAMMAR_CUDA_ARCHITECTURES
     native
@@ -92,4 +93,18 @@ if(XGRAMMAR_BUILD_CXX_TESTS)
 
   include(GoogleTest)
   gtest_discover_tests(xgrammar_test)
+endif()
+
+if(XGRAMMAR_ENABLE_COVERAGE)
+  find_program(GCOV_PATH NAMES gcov-11 gcov-10 gcov)
+  target_link_libraries(xgrammar_bindings PRIVATE gcov)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-arcs -ftest-coverage")
+
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} --coverage")
+
+  if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} --coverage")
+  endif()
 endif()
