@@ -727,9 +727,10 @@ std::string JSONSchemaConverter::VisitSchema(
       XGRAMMAR_LOG(FATAL) << "Unsupported type \"" << type << "\"";
     }
   } else if (schema_obj.count("properties") || schema_obj.count("additionalProperties") ||
-            schema_obj.count("unevaluatedProperties")) {
+             schema_obj.count("unevaluatedProperties")) {
     return VisitObject(schema_obj, rule_name);
-  } else if (schema_obj.count("items") || schema_obj.count("prefixItems") || schema_obj.count("unevaluatedItems")) {
+  } else if (schema_obj.count("items") || schema_obj.count("prefixItems") ||
+             schema_obj.count("unevaluatedItems")) {
     return VisitArray(schema_obj, rule_name);
   }
 
@@ -820,7 +821,8 @@ std::string JSONSchemaConverter::VisitEnum(
 
 std::string JSONSchemaConverter::JSONStrToPrintableStr(const std::string& json_str) {
   static const std::vector<std::pair<std::string, std::string>> kReplaceMapping = {
-      {"\\", "\\\\"}, {"\"", "\\\""}};
+      {"\\", "\\\\"}, {"\"", "\\\""}
+  };
   std::string result = json_str;
   for (const auto& [k, v] : kReplaceMapping) {
     size_t pos = 0;
@@ -2088,7 +2090,8 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   }
 
   return Result<ArraySpec>::Ok(ArraySpec{
-      prefix_item_schemas, allow_additional_items, additional_item_schema, min_items, max_items});
+      prefix_item_schemas, allow_additional_items, additional_item_schema, min_items, max_items
+  });
 }
 
 std::string JSONSchemaConverter::VisitArray(
@@ -2753,7 +2756,8 @@ Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
       required_properties,
       property_names,
       min_properties,
-      max_properties});
+      max_properties
+  });
 }
 
 std::string JSONSchemaConverter::VisitObject(
@@ -2839,7 +2843,7 @@ std::string JSONSchemaConverter::VisitObject(
                     );
     could_be_empty = object_spec.required_properties.empty() && object_spec.min_properties == 0;
   } else if (!additional_property.is<picojson::null>() &&
-            (!additional_property.is<bool>() || additional_property.get<bool>())) {
+             (!additional_property.is<bool>() || additional_property.get<bool>())) {
     // Case 3: no properties are defined and additional properties are allowed
     if (object_spec.max_properties != 0) {
       std::string other_property_pattern =
