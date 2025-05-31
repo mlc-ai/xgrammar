@@ -96,7 +96,6 @@ if(XGRAMMAR_BUILD_CXX_TESTS)
 endif()
 
 if(XGRAMMAR_ENABLE_COVERAGE)
-  find_program(GCOV_PATH NAMES gcov-11 gcov-10 gcov)
   target_link_libraries(xgrammar_bindings PRIVATE gcov)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-arcs -ftest-coverage")
