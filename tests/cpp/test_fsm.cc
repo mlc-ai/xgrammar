@@ -265,6 +265,17 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = fsm_wse.SimplifyEpsilon();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   EXPECT_EQ(fsm_wse->NumStates(), 2);
+  std::cout << "--------- Function Test10 -----------" << std::endl;
+  const auto fsm_left = builder.Build("[c-f]+").Unwrap();
+  const auto fsm_right = builder.Build("[d-h]*").Unwrap();
+  std::cout << fsm_left << std::endl;
+  std::cout << fsm_right << std::endl;
+  fsm_wse = FSMWithStartEnd::Intersect(fsm_left, fsm_right).Unwrap();
+  std::cout << fsm_wse << std::endl;
+  EXPECT_TRUE(fsm_wse.AcceptString("de"));
+  EXPECT_TRUE(fsm_wse.AcceptString("def"));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("cd"));
   std::cout << "--------- Function Test Passed! -----------" << std::endl;
 }
 
@@ -422,25 +433,63 @@ TEST(XGrammarFSMTest, BuildTrieTest) {
   int state = fsm.GetStart();
   EXPECT_EQ(state, 0);
 
-  // // Test "hello"
-  // state = fsm.GetStart();
-  // EXPECT_EQ(fsm.Transition(state, 'h'), 1);
-  // EXPECT_EQ(fsm.Transition(1, 'e'), 2);
-  // EXPECT_EQ(fsm.Transition(2, 'l'), 3);
-  // EXPECT_EQ(fsm.Transition(3, 'l'), 4);
-  // EXPECT_EQ(fsm.Transition(4, 'o'), 5);
-  // EXPECT_TRUE(fsm.IsEndState(5));
+  // Test "hello"
+  state = fsm.GetStart();
+  EXPECT_EQ(fsm->GetNextState(state, 'h'), 1);
+  EXPECT_EQ(fsm->GetNextState(1, 'e'), 2);
+  EXPECT_EQ(fsm->GetNextState(2, 'l'), 3);
+  EXPECT_EQ(fsm->GetNextState(3, 'l'), 4);
+  EXPECT_EQ(fsm->GetNextState(4, 'o'), 5);
+  EXPECT_TRUE(fsm.IsEndState(5));
 
-  // // Test "hil"
-  // state = fsm.StartNode();
-  // EXPECT_EQ(fsm.Transition(state, 'h'), 1);
-  // EXPECT_EQ(fsm.Transition(1, 'i'), 6);
-  // EXPECT_EQ(fsm.Transition(6, 'l'), 13);
-  // EXPECT_FALSE(fsm.IsEndState(13));
+  // Test "hil"
+  state = fsm.GetStart();
+  EXPECT_EQ(fsm->GetNextState(state, 'h'), 1);
+  EXPECT_EQ(fsm->GetNextState(1, 'i'), 6);
+  EXPECT_EQ(fsm->GetNextState(6, 'l'), 13);
+  EXPECT_FALSE(fsm.IsEndState(13));
 
-  // // Test walk failure
-  // state = fsm.StartNode();
-  // EXPECT_EQ(fsm.Transition(state, 'g'), 15);
-  // EXPECT_EQ(fsm.Transition(15, 'o'), 16);
-  // EXPECT_EQ(fsm.Transition(16, 'e'), -1);
+  // Test walk failure
+  state = fsm.GetStart();
+  EXPECT_EQ(fsm->GetNextState(state, 'g'), 15);
+  EXPECT_EQ(fsm->GetNextState(15, 'o'), 16);
+  EXPECT_EQ(fsm->GetNextState(16, 'e'), -1);
+}
+
+TEST(XGrammarFSMTest, ComprehensiveTest) {
+  RegexFSMBuilder builder;
+  std::cout << "--------- Comprehensive Test Starts! -----------" << std::endl;
+
+  std::string email_pattern = R"((\w+)(\.\w+)*@(\w+)(\.\w+)+)";
+  auto fsm_wse = builder.Build(email_pattern).Unwrap();
+  std::string valid_emails[5] = {
+      "asnjdaj_19032910@google.com.test",
+      "12393089340190@a.b.c.d.f.e.org.test",
+      "as____________as@abc.me.test",
+      "ooooohhhhh@123456.test",
+      "ajidoa@a.test"
+  };
+  for (const auto& email : valid_emails) {
+    EXPECT_TRUE(fsm_wse.AcceptString(email)) << "Failed for email: " << email;
+  }
+
+  std::string invalid_emails[5] = {
+      "@google.test", "hello@", "hello@.test", "+++asd@b.test", "hello"
+  };
+  for (const auto& email : invalid_emails) {
+    EXPECT_FALSE(fsm_wse.AcceptString(email)) << "Failed for email: " << email;
+  }
+
+  std::string time_pattern = R"((\d{1,2}):(\d{2})(:(\d{2}))?)";
+  fsm_wse = builder.Build(time_pattern).Unwrap();
+  std::string valid_times[5] = {"1:34", "23:59", "00:00", "01:02:03", "23:59:59"};
+  for (const auto& time : valid_times) {
+    EXPECT_TRUE(fsm_wse.AcceptString(time)) << "Failed for time: " << time;
+  }
+  std::string invalid_times[9] = {
+      "19", "12:6", "12:34:", "12:34:5", "12:34:567", "12:123", "12:", ":34:23", "::"
+  };
+  for (const auto& time : invalid_times) {
+    EXPECT_FALSE(fsm_wse.AcceptString(time)) << "Failed for time: " << time;
+  }
 }
