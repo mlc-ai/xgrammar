@@ -187,6 +187,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.GrammarMatcher"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_string"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.accept_string()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_token"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.accept_token()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.fill_next_token_bitmask()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.find_jump_forward_string()</span></code></a></li>
@@ -813,22 +814,25 @@ jump-forward decoding and speculative decoding.</p></li>
 <p><strong>Methods:</strong></p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><code class="xref py py-obj docutils literal notranslate"><span class="pre">accept_token</span></code></a>(token_id, *[, debug_print])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_string" title="xgrammar.GrammarMatcher.accept_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">accept_string</span></code></a>(input_str, *[, debug_print])</p></td>
+<td><p>Accept a string and update the state of the matcher.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><code class="xref py py-obj docutils literal notranslate"><span class="pre">accept_token</span></code></a>(token_id, *[, debug_print])</p></td>
 <td><p>Accept one token and update the state of the matcher.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fill_next_token_bitmask</span></code></a>(bitmask[, index, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fill_next_token_bitmask</span></code></a>(bitmask[, index, ...])</p></td>
 <td><p>Fill the bitmask for the next token prediction.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_jump_forward_string</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_jump_forward_string</span></code></a>()</p></td>
 <td><p>Find the jump-forward string for jump-forward decoding.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_terminated</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_terminated</span></code></a>()</p></td>
 <td><p>Check if the matcher has terminated.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.reset" title="xgrammar.GrammarMatcher.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.reset" title="xgrammar.GrammarMatcher.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
 <td><p>Reset the matcher to the initial state.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback" title="xgrammar.GrammarMatcher.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rollback</span></code></a>([num_tokens])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback" title="xgrammar.GrammarMatcher.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rollback</span></code></a>([num_tokens])</p></td>
 <td><p>Rollback the matcher to a previous state by several tokens.</p></td>
 </tr>
 </tbody>
@@ -845,9 +849,44 @@ jump-forward decoding and speculative decoding.</p></li>
 </tbody>
 </table>
 <dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.accept_string">
+<span class="sig-name descname"><span class="pre">accept_string</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_str</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">bytes</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.accept_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Accept a string and update the state of the matcher. The whole string is considered
+as one step in rollback. It is used to complement the functionality of accept_token, and
+accept_token should always be used to accept tokens.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_str</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>bytes</em><em>]</em>) – The string to be accepted.</p></li>
+<li><p><strong>debug_print</strong> (<em>bool</em><em>, </em><em>default: False</em>) – Whether to print information about the internal state of the matcher. Helpful for
+debugging.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>accepted</strong> – Whether the string is accepted.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.GrammarMatcher.accept_token">
 <span class="sig-name descname"><span class="pre">accept_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.accept_token" title="Permalink to this definition">¶</a></dt>
 <dd><p>Accept one token and update the state of the matcher.</p>
+<p>In the following cases, the matcher will not accept the token and return False:
+1. The token does not match the grammar.
+2. The matcher has terminated after accepting the stop token, but is trying to accept a</p>
+<blockquote>
+<div><p>new token.</p>
+</div></blockquote>
+<ol class="arabic simple" start="3">
+<li><p>The token id is out of range.</p></li>
+<li><p>The token is a special token.</p></li>
+</ol>
+<p>The user should capture the return value and handle the cases where the token is not
+accepted.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
