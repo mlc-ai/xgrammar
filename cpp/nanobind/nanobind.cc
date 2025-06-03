@@ -164,6 +164,14 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("max_rollback_tokens")
       )
       .def("accept_token", &GrammarMatcher::AcceptToken, nb::call_guard<nb::gil_scoped_release>())
+      .def("accept_string", &GrammarMatcher::AcceptString, nb::call_guard<nb::gil_scoped_release>())
+      .def(
+          "accept_string",
+          [](GrammarMatcher& self, const nb::bytes& input_str, bool debug_print) {
+            return self.AcceptString(input_str.c_str(), debug_print);
+          },
+          nb::call_guard<nb::gil_scoped_release>()
+      )
       .def(
           "fill_next_token_bitmask",
           &GrammarMatcher_FillNextTokenBitmask,
@@ -179,18 +187,7 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("reset", &GrammarMatcher::Reset, nb::call_guard<nb::gil_scoped_release>())
       .def_prop_ro("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens)
       .def_prop_ro("stop_token_ids", &GrammarMatcher::GetStopTokenIds)
-      .def(
-          "_debug_accept_string",
-          &GrammarMatcher::_DebugAcceptString,
-          nb::call_guard<nb::gil_scoped_release>()
-      )
-      .def(
-          "_debug_accept_string",
-          [](GrammarMatcher& self, const nb::bytes& input_str, bool debug_print) {
-            return self._DebugAcceptString(input_str.c_str(), debug_print);
-          },
-          nb::call_guard<nb::gil_scoped_release>()
-      );
+      .def("_debug_print_internal_state", &GrammarMatcher::_DebugPrintInternalState);
 
   auto pyTestingModule = m.def_submodule("testing");
   pyTestingModule

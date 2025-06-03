@@ -60,7 +60,7 @@ def test_json_schema_debug_accept_string():
     matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
 
     for c in instance_str:
-        assert matcher._debug_accept_string(c)
+        assert matcher.accept_string(c)
     assert matcher.accept_token(2)
     assert matcher.is_terminated()
 
@@ -72,7 +72,7 @@ def test_json_schema_find_jump_forward_string():
     for i, c in enumerate(instance_str):
         jump_forward_str = matcher.find_jump_forward_string()
         assert instance_str[i : i + len(jump_forward_str)] == jump_forward_str
-        assert matcher._debug_accept_string(c)
+        assert matcher.accept_string(c)
     assert matcher.find_jump_forward_string() == ""
 
 
@@ -106,7 +106,7 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
         # 2. accept_string
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
-        assert matcher._debug_accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
@@ -220,7 +220,7 @@ def test_fill_next_token_bitmask_intfloat_range(tokenizer_path: str, schema_clas
         time_end = time.monotonic_ns()
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
-        assert matcher._debug_accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
 
     matcher.fill_next_token_bitmask(token_bitmask)
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
@@ -262,7 +262,7 @@ def test_mixed_type_range_schema(tokenizer_path: str):
             time_end = time.monotonic_ns()
             print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
-            assert matcher._debug_accept_string(bytes([c]))
+            assert matcher.accept_string(bytes([c]))
 
         matcher.fill_next_token_bitmask(token_bitmask)
         rejected_token_ids = _get_masked_tokens_from_bitmask(
@@ -310,7 +310,7 @@ def test_multiple_boundaries_schema(tokenizer_path: str):
             time_end = time.monotonic_ns()
             print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
-            assert matcher._debug_accept_string(bytes([c]))
+            assert matcher.accept_string(bytes([c]))
 
         matcher.fill_next_token_bitmask(token_bitmask)
         rejected_token_ids = _get_masked_tokens_from_bitmask(
@@ -372,7 +372,7 @@ def test_mask_generation_format(value: str, format: str):
         time_end = time.monotonic_ns()
         delta_us = (time_end - time_start) / 1e3
         print(f"Time for fill_next_token_bitmask: {delta_us} us before accepting char {bytes([c])}")
-        accepted = matcher._debug_accept_string(bytes([c]))
+        accepted = matcher.accept_string(bytes([c]))
         assert accepted
 
     time_start = time.monotonic_ns()

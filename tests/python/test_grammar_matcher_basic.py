@@ -1,7 +1,7 @@
-"""This test tests the token-based operations for the grammar matcher."""
+"""Test the basic functionality of GrammarMatcher."""
 
 import sys
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import pytest
 import torch
@@ -10,6 +10,7 @@ from transformers import AutoTokenizer
 import xgrammar as xgr
 from xgrammar.testing import (
     _get_masked_tokens_from_bitmask,
+    _get_matcher_from_grammar,
     _get_matcher_from_grammar_and_tokenizer_info,
     _is_grammar_accept_string,
 )
@@ -17,11 +18,27 @@ from xgrammar.testing import (
 json_grammar = xgr.Grammar.builtin_json_grammar()
 
 
+grammar__input__accepted__test_accept_string = [
+    ("""root ::= [^a]+""", "bbb", True),
+    ("""root ::= [^a]+""", "bba", False),
+    ("""root ::= [^a]+""", "©", True),
+    ("""root ::= [^a]+""", b"\xe2\xa1\xa1", True),
+    ("""root ::= [^a]+""", b"\xe2\xa1\xa1\xa1", False),
+    ("""root ::= [^a]+""", b"\xe2\xa1\xe2\xa1", False),
+]
+
+
+@pytest.mark.parametrize("grammar, input, accepted", grammar__input__accepted__test_accept_string)
+def test_accept_string(grammar: str, input: Union[str, bytes], accepted: bool):
+    matcher = _get_matcher_from_grammar(grammar)
+    assert matcher.accept_string(input) == accepted
+
+
 input_accepted = ['{"name": "John"}', '{ "name" : "John" }']
 
 
 @pytest.mark.parametrize("input_accepted", input_accepted)
-def test_accept(input_accepted: str):
+def test_grammar_accept(input_accepted: str):
     assert _is_grammar_accept_string(json_grammar, input_accepted)
 
 
@@ -29,8 +46,17 @@ input_refused = ('{ name: "John" }', '{ "name": "John" } ')
 
 
 @pytest.mark.parametrize("input_refused", input_refused)
-def test_refuse(input_refused: str):
+def test_grammar_refuse(input_refused: str):
     assert not _is_grammar_accept_string(json_grammar, input_refused)
+
+
+def test_debug_print_internal_state():
+    matcher = _get_matcher_from_grammar(json_grammar)
+    input_str = '{"name": "John"}'
+    for c in input_str:
+        assert matcher.accept_string(c)
+        internal_state = matcher._debug_print_internal_state()
+        assert len(internal_state) > 0
 
 
 tokenizer_path__input_str__expected_rejected_sizes = [
@@ -87,7 +113,7 @@ def test_fill_next_token_bitmask(
                 rejected_sizes[-1],
                 expected_rejected_sizes[i],
             )
-        assert matcher._debug_accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
 
     matcher.fill_next_token_bitmask(token_bitmask)
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
@@ -289,7 +315,7 @@ sub_rule ::= "b"
 """
     grammar = xgr.Grammar.from_ebnf(grammar_ebnf)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar)
-    assert matcher._debug_accept_string("a")
+    assert matcher.accept_string("a")
     assert matcher.find_jump_forward_string() == "bb"
 
 

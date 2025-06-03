@@ -211,6 +211,16 @@ class GrammarMatcher(XGRObject):
     def accept_token(self, token_id: int, *, debug_print: bool = False) -> bool:
         """Accept one token and update the state of the matcher.
 
+        In the following cases, the matcher will not accept the token and return False:
+        1. The token does not match the grammar.
+        2. The matcher has terminated after accepting the stop token, but is trying to accept a
+           new token.
+        3. The token id is out of range.
+        4. The token is a special token.
+
+        The user should capture the return value and handle the cases where the token is not
+        accepted.
+
         Parameters
         ----------
         token_id : int
@@ -226,6 +236,27 @@ class GrammarMatcher(XGRObject):
             Whether the token is accepted.
         """
         return self._handle.accept_token(token_id, debug_print)
+
+    def accept_string(self, input_str: Union[str, bytes], *, debug_print: bool = False) -> bool:
+        """Accept a string and update the state of the matcher. The whole string is considered
+        as one step in rollback. It is used to complement the functionality of accept_token, and
+        accept_token should always be used to accept tokens.
+
+        Parameters
+        ----------
+        input_str : Union[str, bytes]
+            The string to be accepted.
+
+        debug_print : bool, default: False
+            Whether to print information about the internal state of the matcher. Helpful for
+            debugging.
+
+        Returns
+        -------
+        accepted : bool
+            Whether the string is accepted.
+        """
+        return self._handle.accept_string(input_str, debug_print)
 
     def fill_next_token_bitmask(
         self, bitmask: torch.Tensor, index: int = 0, *, debug_print: bool = False
@@ -325,24 +356,13 @@ class GrammarMatcher(XGRObject):
         """
         return self._handle.stop_token_ids
 
-    def _debug_accept_string(
-        self, input_str: Union[str, bytes], *, debug_print: bool = False
-    ) -> bool:
-        """Accept a string and update the state of the matcher. The whole string is considered
-        as one step in rollback. It is only used to complement the functionality of accept_token.
-
-        Parameters
-        ----------
-        input_str : Union[str, bytes]
-            The string to be accepted.
-
-        debug_print : bool, default: False
-            Whether to print information about the internal state of the matcher. Helpful for
-            debugging.
+    def _debug_print_internal_state(self) -> str:
+        """Print the internal state of the matcher. This is used for debugging. The
+        representation of the internal state is subject to change.
 
         Returns
         -------
-        accepted : bool
-            Whether the string is accepted.
+        internal_state : str
+            The internal state of the matcher.
         """
-        return self._handle._debug_accept_string(input_str, debug_print)
+        return self._handle._debug_print_internal_state()

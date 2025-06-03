@@ -113,7 +113,7 @@ rule2 ::= "dg"
         accepted_indices = list(set(range(tokenizer_info.vocab_size)) - set(rejected_indices))
         accepted_tokens = [tokens[id] for id in accepted_indices]
         if i < len(input_str):
-            assert matcher._debug_accept_string(c)
+            assert matcher.accept_string(c)
         assert accepted_tokens == expected_accepted_tokens[i]
 
 
@@ -277,7 +277,7 @@ def test_structural_tag_mask_gen():
         # 3. Test character acceptance
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
-        assert matcher._debug_accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 

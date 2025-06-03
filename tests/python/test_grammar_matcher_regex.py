@@ -150,7 +150,7 @@ def test_fill_next_token_bitmask(regex: str, input_str: str):
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
         time_start = time.monotonic_ns()
-        assert matcher._debug_accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept char {chr(c)}: {(time_end - time_start) / 1e3} us")
 

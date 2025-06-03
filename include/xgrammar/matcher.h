@@ -91,6 +91,16 @@ class GrammarMatcher {
   bool AcceptToken(int32_t token_id, bool debug_print = false);
 
   /*!
+   * \brief Accept a string and update the state of the matcher. The whole string is considered
+   * as one step in rollback. It is used to complement the functionality of AcceptToken, and
+   * AcceptToken should always be used to accept tokens.
+   * \param input_str The string to be accepted.
+   * \param debug_print Whether to print information about the internal state of the matcher.
+   * \return Whether the string is accepted.
+   */
+  bool AcceptString(const std::string& input_str, bool debug_print = false);
+
+  /*!
    * \brief Get the set of tokens that are acceptable for the next step and store them in a
    * bitmask.
    * \param next_token_bitmask The bitmask to store the result. The bitmask must be pre-allocated
@@ -127,7 +137,10 @@ class GrammarMatcher {
 
   const std::vector<int>& GetStopTokenIds() const;
 
-  bool _DebugAcceptString(const std::string& input_str, bool debug_print = false);
+  /*! \brief Print the internal state of the matcher. This is only used for debugging. The
+   * representation of the internal state is subject to change.
+   */
+  std::string _DebugPrintInternalState() const;
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcher);
 };
