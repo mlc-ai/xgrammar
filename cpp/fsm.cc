@@ -1055,7 +1055,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
 }
 
 FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
-  FSMWithStartEnd now_fsm(0, 0, {}, true);
+  FSMWithStartEnd now_fsm(FSM(0), 0, {}, true);
 
   // To perform the algorithm, we must make sure the FSM is
   // a DFA.
@@ -1235,7 +1235,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
     }
     cnt++;
   }
-  FSMWithStartEnd new_fsm(0, old_to_new[now_fsm.GetStart()], {}, true);
+  FSMWithStartEnd new_fsm(FSM(0), old_to_new[now_fsm.GetStart()], {}, true);
   for (int i = 0; i < cnt; i++) {
     new_fsm->AddState();
   }
@@ -1256,7 +1256,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
 }
 
 FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
-  FSMWithStartEnd dfa(0, 0, {}, true);
+  FSMWithStartEnd dfa(FSM(0), 0, {}, true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
   for (const auto& edges : fsm_->GetEdges()) {
