@@ -58,6 +58,10 @@ struct StackElement {
            element_id == other.element_id && parent_id == other.parent_id &&
            left_utf8_bytes == other.left_utf8_bytes && element_in_string == other.element_in_string;
   }
+
+  inline constexpr static int32_t kUnexpandedRuleStartSequenceId = 128000;
+
+  inline constexpr static int32_t kDispatchedTagDispatchElementId = -1;
 };
 
 /*! \brief A special value for invalid StackElement. */
@@ -347,19 +351,28 @@ inline std::string PersistentStack::PrintStackElement(const StackElement& stack_
   if (stack_element.rule_id != -1) {
     ss << ": " << grammar_->GetRule(stack_element.rule_id).name;
   }
-  ss << ", sequence " << stack_element.sequence_id << ": "
-     << GrammarPrinter(grammar_).PrintRuleExpr(stack_element.sequence_id);
-  ss << ", element id: " << stack_element.element_id;
 
-  auto sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
-  if (sequence.type != Grammar::Impl::RuleExprType::kTagDispatch &&
-      stack_element.element_id < static_cast<int32_t>(sequence.size())) {
-    auto element = grammar_->GetRuleExpr(sequence[stack_element.element_id]);
-    if (element.type == Grammar::Impl::RuleExprType::kByteString) {
-      ss << ", element in string: " << stack_element.element_in_string;
-    } else if (element.type == Grammar::Impl::RuleExprType::kCharacterClass ||
-               element.type == Grammar::Impl::RuleExprType::kCharacterClassStar) {
-      ss << ", left utf8 bytes: " << stack_element.left_utf8_bytes;
+  if (stack_element.sequence_id == StackElement::kUnexpandedRuleStartSequenceId) {
+    ss << ", unexpanded rule start sequence";
+  } else {
+    ss << ", sequence " << stack_element.sequence_id << ": "
+       << GrammarPrinter(grammar_).PrintRuleExpr(stack_element.sequence_id);
+
+    if (stack_element.sequence_id == StackElement::kDispatchedTagDispatchElementId) {
+      ss << ", dispatched tag dispatch";
+    } else {
+      ss << ", element id: " << stack_element.element_id;
+      auto sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
+      if (sequence.type != Grammar::Impl::RuleExprType::kTagDispatch &&
+          stack_element.element_id < static_cast<int32_t>(sequence.size())) {
+        auto element = grammar_->GetRuleExpr(sequence[stack_element.element_id]);
+        if (element.type == Grammar::Impl::RuleExprType::kByteString) {
+          ss << ", element in string: " << stack_element.element_in_string;
+        } else if (element.type == Grammar::Impl::RuleExprType::kCharacterClass ||
+                   element.type == Grammar::Impl::RuleExprType::kCharacterClassStar) {
+          ss << ", left utf8 bytes: " << stack_element.left_utf8_bytes;
+        }
+      }
     }
   }
 
