@@ -11,7 +11,7 @@ def get_max_recursion_depth() -> int:
     The maximum recursion depth is determined in the following order:
     1. Manually set via set_max_recursion_depth()
     2. XGRAMMAR_MAX_RECURSION_DEPTH environment variable (if set and is a valid integer <= 1000000)
-    3. Default value of 1000000
+    3. Default value of 10000
 
     Returns
     -------
