@@ -19,20 +19,26 @@ Check out :ref:`quick-start` for quick start examples of using XGrammar.
    :caption: Get Started
    :hidden:
 
-   start/install.rst
-   start/quick_start.rst
+   start/install
+   start/quick_start
 
 .. toctree::
    :maxdepth: 1
    :caption: How To
    :hidden:
 
-   how_to/json_generation.rst
-   how_to/ebnf_guided_generation.rst
-   how_to/engine_integration.rst
-   how_to/portable_api.rst
-   .. tutorials/web_sdk.rst              .. TODO
+   how_to/json_generation
+   how_to/ebnf_guided_generation
+   how_to/engine_integration
+   how_to/portable_api
+   .. tutorials/web_sdk              .. TODO
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Misc
+   :hidden:
+
+   misc/runtime_safeguards
 
 .. toctree::
    :maxdepth: 1

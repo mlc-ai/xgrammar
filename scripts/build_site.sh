@@ -1,8 +1,11 @@
 #!/bin/bash
+
+# build the docs and the site to site/_site
+
 set -euxo pipefail
 
 export PYTHONPATH=$PWD/python
-cd docs && make html && cd ..
+cd docs && ./build_docs.sh && cd ..
 
 cd site && jekyll b && cd ..
 

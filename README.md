@@ -1,11 +1,12 @@
 <div align="center" id="top">
 
-# XGrammar
+<img src="https://raw.githubusercontent.com/mlc-ai/xgrammar/main/assets/logo.svg" alt="logo" width="400" margin="10px"></img>
 
 [![Documentation](https://img.shields.io/badge/docs-latest-green)](https://xgrammar.mlc.ai/docs/)
 [![License](https://img.shields.io/badge/license-apache_2-blue)](https://github.com/mlc-ai/xgrammar/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/xgrammar)](https://pypi.org/project/xgrammar)
 [![PyPI Downloads](https://static.pepy.tech/badge/xgrammar)](https://pepy.tech/projects/xgrammar)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mlc-ai/xgrammar)
 
 **Efficient, Flexible and Portable Structured Generation**
 

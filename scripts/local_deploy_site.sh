@@ -1,5 +1,6 @@
 #!/bin/bash
-# NOTE: use this script to check local site
+
+# Build the docs and the site, then serve the site locally
 
 set -euxo pipefail
 

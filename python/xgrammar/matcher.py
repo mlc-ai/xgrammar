@@ -77,40 +77,39 @@ def apply_token_bitmask_inplace(
 
     get_bitmask_value(bitmask, i, j) gets the j-th bit of the i-th row of the bitmask.
 
-    ## Padding
+    Notes
+    -----
+    Padding:
+        This method allows additional padding on the vocabulary dimension of logits or bitmask. If
+        padding exists, provide the real vocab size to the vocab_size parameter, and the operation
+        will be applied to logits[..., :vocab_size] and bitmask[..., :ceil(vocab_size / 32)].
 
-    This method allows additional padding on the vocabulary dimension of logits or bitmask. If
-    padding exists, provide the real vocab size to the vocab_size parameter, and the operation
-    will be applied to logits[..., :vocab_size] and bitmask[..., :ceil(vocab_size / 32)].
+        If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],
+        bitmask.shape[-1] * 32).
 
-    If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],
-    bitmask.shape[-1] * 32).
+    Indices:
+        Indices can be used to specify which logits in the batch to apply the bitmask to. It is
+        especially useful when there are structured requests and unstructured requests mixed in the
+        same batch by skipping masking the logits in the unstructured requests. When specified, the
+        operation will be
 
-    ## Indices
+        .. code:: python
 
-    Indices can be used to specify which logits in the batch to apply the bitmask to. It is
-    especially useful when there are structured requests and unstructured requests mixed in the
-    same batch by skipping masking the logits in the unstructured requests. When specified, the
-    operation will be
+            for batch_id in indices:
+                for j in range(vocab_size):
+                    if get_bitmask_value(bitmask, batch_id, j) == 0:
+                        logits[batch_id, j] = -inf
 
-    .. code:: python
+        When indices is specified, the batch sizes of logits and bitmask do not need to be the same.
+        As long as the indices are valid, the operation will be performed.
 
-        for batch_id in indices:
-            for j in range(vocab_size):
-                if get_bitmask_value(bitmask, batch_id, j) == 0:
-                    logits[batch_id, j] = -inf
+    Device:
+        The logits and bitmask should be on the same device. If both them are on GPU, we launch a GPU
+        kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The GPU kernel
+        is optimized and should be preferred.
 
-    When indices is specified, the batch sizes of logits and bitmask do not need to be the same.
-    As long as the indices are valid, the operation will be performed.
-
-    ## Device
-
-    The logits and bitmask should be on the same device. If both them are on GPU, we launch a GPU
-    kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The GPU kernel
-    is optimized and should be preferred.
-
-    In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
-    manually copy the bitmask to GPU before calling this function.
+        In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
+        manually copy the bitmask to GPU before calling this function.
 
     Parameters
     ----------
@@ -212,6 +211,7 @@ class GrammarMatcher(XGRObject):
         """Accept one token and update the state of the matcher.
 
         In the following cases, the matcher will not accept the token and return False:
+
         1. The token does not match the grammar.
         2. The matcher has terminated after accepting the stop token, but is trying to accept a
            new token.
