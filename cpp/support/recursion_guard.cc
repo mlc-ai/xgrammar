@@ -5,7 +5,7 @@
 #include <string_view>
 #include <system_error>
 
-#include "support/logging.h"
+#include "logging.h"
 
 namespace xgrammar {
 
