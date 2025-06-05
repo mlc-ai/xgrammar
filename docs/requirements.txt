@@ -2,6 +2,7 @@ autodocsumm
 ipykernel
 ipywidgets
 jupyter_client
+linkify-it-py
 markdown>=3.4.0
 matplotlib
 myst-parser

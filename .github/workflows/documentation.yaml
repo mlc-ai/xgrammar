@@ -17,10 +17,11 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Configuring build Environment
-        run: |
-          sudo apt-get update
-          python -m pip install -U pip wheel setuptools
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
