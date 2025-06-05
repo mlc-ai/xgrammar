@@ -119,6 +119,8 @@ class GrammarMatcherBase {
   // Temporary data for AcceptChar, PushInitialState, etc to store new stacks.
   // They are stored here to avoid repeated allocation.
   std::vector<int32_t> tmp_new_stack_tops_;
+
+  int expand_equivalent_stack_elements_recursion_depth_ = 0;
 };
 
 }  // namespace xgrammar

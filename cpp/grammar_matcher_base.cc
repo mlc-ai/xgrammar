@@ -16,13 +16,10 @@
 #include "grammar_data_structure.h"
 #include "persistent_stack.h"
 #include "support/encoding.h"
+#include "support/recursion_guard.h"
 #include "support/utils.h"
 
 namespace xgrammar {
-
-constexpr int32_t kUnexpandedRuleStartSequenceId = 128000;
-
-constexpr int32_t kDispatchedTagDispatchElementId = -1;
 
 /*! \brief Check the codepoint is contained in the character class. */
 bool GrammarMatcherBase::CheckIfAccepted(const StackElement& stack_element, uint8_t char_value)
@@ -110,13 +107,14 @@ StackElement GrammarMatcherBase::AdvanceStackElementWithChar(
       // Case 3. The new char can continue to be accepted by the tag dispatch fsm.
       // We need to dispatch the tag dispatch fsm to the end node.
       // We need to create a new stack element to represent the dispatched tag dispatch.
-      new_stack_element.element_id = kDispatchedTagDispatchElementId;
+      new_stack_element.element_id = StackElement::kDispatchedTagDispatchElementId;
       auto new_stack_element_id = persistent_stack_.NewNode(new_stack_element);
       XGRAMMAR_DCHECK(grammar_->tag_dispatch_end_node_to_rule_id.count(next_node))
           << "The end node of the tag dispatch fsm does not correspond to any rule id";
       auto refered_rule_id = grammar_->tag_dispatch_end_node_to_rule_id.at(next_node);
-      new_stack_element =
-          StackElement(refered_rule_id, kUnexpandedRuleStartSequenceId, 0, new_stack_element_id);
+      new_stack_element = StackElement(
+          refered_rule_id, StackElement::kUnexpandedRuleStartSequenceId, 0, new_stack_element_id
+      );
     }
     return new_stack_element;
   }
@@ -171,6 +169,7 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
     int32_t cur_stack_element_id,
     bool consider_parent
 ) {
+  RecursionGuard guard(&expand_equivalent_stack_elements_recursion_depth_);
   auto f_add_current_stack_element = [&]() {
     if (cur_stack_element_id != -1) {
       return cur_stack_element_id;
@@ -180,7 +179,7 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
   };
 
   // Step 1. Handle unexpanded rules.
-  if (cur_stack_element.sequence_id == kUnexpandedRuleStartSequenceId) {
+  if (cur_stack_element.sequence_id == StackElement::kUnexpandedRuleStartSequenceId) {
     auto cur_rule_id = cur_stack_element.rule_id;
     auto cur_rule_body_id = grammar_->GetRule(cur_rule_id).body_expr_id;
     auto cur_rule_body = grammar_->GetRuleExpr(cur_rule_body_id);
@@ -249,7 +248,9 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
   // Step 3. Iterate into sub rules
   if (current_element.type == RuleExprType::kRuleRef) {
     ExpandEquivalentStackElements(
-        StackElement(current_element[0], kUnexpandedRuleStartSequenceId, 0, stack_element_id),
+        StackElement(
+            current_element[0], StackElement::kUnexpandedRuleStartSequenceId, 0, stack_element_id
+        ),
         new_stack_tops,
         -1,
         false
@@ -295,8 +296,10 @@ bool GrammarMatcherBase::AcceptChar(uint8_t char_value, bool debug_print) {
     auto new_stack_element = AdvanceStackElementWithChar(cur_stack_element, char_value);
 
     if (new_stack_element == cur_stack_element) {
+      RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
       ExpandEquivalentStackElements(new_stack_element, &tmp_new_stack_tops_, prev_top);
     } else {
+      RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
       ExpandEquivalentStackElements(new_stack_element, &tmp_new_stack_tops_);
     }
   }
@@ -346,14 +349,19 @@ void GrammarMatcherBase::PushInitialState(
   if (init_stack_element == kInvalidStackElement) {
     // Initialize the stack with the root rule.
     auto init_stack_element = StackElement(
-        grammar_->GetRootRuleId(), kUnexpandedRuleStartSequenceId, 0, StackElement::kNoParent
+        grammar_->GetRootRuleId(),
+        StackElement::kUnexpandedRuleStartSequenceId,
+        0,
+        StackElement::kNoParent
     );
     tmp_new_stack_tops_.clear();
+    RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
     ExpandEquivalentStackElements(init_stack_element, &tmp_new_stack_tops_);
     stack_tops_history_.PushHistory(tmp_new_stack_tops_);
   } else {
     if (expand_init_stack_element) {
       tmp_new_stack_tops_.clear();
+      RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
       ExpandEquivalentStackElements(init_stack_element, &tmp_new_stack_tops_);
       stack_tops_history_.PushHistory(tmp_new_stack_tops_);
     } else {

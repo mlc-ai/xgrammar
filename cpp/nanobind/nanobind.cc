@@ -15,6 +15,7 @@
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
+#include "../support/recursion_guard.h"
 #include "../testing.h"
 #include "python_methods.h"
 
@@ -250,4 +251,17 @@ NB_MODULE(xgrammar_bindings, m) {
       nb::arg("indices").none(),
       nb::call_guard<nb::gil_scoped_release>()
   );
+
+  auto pyConfigModule = m.def_submodule("config");
+  pyConfigModule
+      .def(
+          "set_max_recursion_depth",
+          &RecursionGuard::SetMaxRecursionDepth,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def(
+          "get_max_recursion_depth",
+          &RecursionGuard::GetMaxRecursionDepth,
+          nb::call_guard<nb::gil_scoped_release>()
+      );
 }
