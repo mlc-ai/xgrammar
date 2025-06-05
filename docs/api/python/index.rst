@@ -24,3 +24,6 @@ xgrammar
    reset_token_bitmask
    get_bitmask_shape
    bitmask_dtype
+   get_max_recursion_depth
+   max_recursion_depth
+   set_max_recursion_depth

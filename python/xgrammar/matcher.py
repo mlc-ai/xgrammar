@@ -10,8 +10,8 @@ import torch
 from .base import XGRObject, _core
 from .compiler import CompiledGrammar
 
-"""The dtype of the bitmask: int32."""
 bitmask_dtype = torch.int32
+"""The dtype of the bitmask: int32."""
 
 
 def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
@@ -235,7 +235,7 @@ class GrammarMatcher(XGRObject):
         accepted : bool
             Whether the token is accepted.
 
-        Throws
+        Raises
         ------
         RuntimeError
             If the recursion depth is exceeded.
@@ -261,7 +261,7 @@ class GrammarMatcher(XGRObject):
         accepted : bool
             Whether the string is accepted.
 
-        Throws
+        Raises
         ------
         RuntimeError
             If the recursion depth is exceeded.
@@ -294,7 +294,7 @@ class GrammarMatcher(XGRObject):
             Whether the bitmask need to be applied (not all-true). An optimization: if False,
             this means the bitmask is already all-true, so no need to apply it.
 
-        Throws
+        Raises
         ------
         RuntimeError
             If the recursion depth is exceeded.
@@ -319,7 +319,7 @@ class GrammarMatcher(XGRObject):
         jump_forward_string : str
             The jump-forward string.
 
-        Throws
+        Raises
         ------
         RuntimeError
             If the recursion depth is exceeded.
