@@ -16,6 +16,7 @@
 #include "grammar_data_structure.h"
 #include "persistent_stack.h"
 #include "support/encoding.h"
+#include "support/recursion_guard.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -171,6 +172,7 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
     int32_t cur_stack_element_id,
     bool consider_parent
 ) {
+  RecursionGuard guard(&expand_equivalent_stack_elements_recursion_depth_);
   auto f_add_current_stack_element = [&]() {
     if (cur_stack_element_id != -1) {
       return cur_stack_element_id;
@@ -295,8 +297,10 @@ bool GrammarMatcherBase::AcceptChar(uint8_t char_value, bool debug_print) {
     auto new_stack_element = AdvanceStackElementWithChar(cur_stack_element, char_value);
 
     if (new_stack_element == cur_stack_element) {
+      RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
       ExpandEquivalentStackElements(new_stack_element, &tmp_new_stack_tops_, prev_top);
     } else {
+      RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
       ExpandEquivalentStackElements(new_stack_element, &tmp_new_stack_tops_);
     }
   }
@@ -349,11 +353,13 @@ void GrammarMatcherBase::PushInitialState(
         grammar_->GetRootRuleId(), kUnexpandedRuleStartSequenceId, 0, StackElement::kNoParent
     );
     tmp_new_stack_tops_.clear();
+    RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
     ExpandEquivalentStackElements(init_stack_element, &tmp_new_stack_tops_);
     stack_tops_history_.PushHistory(tmp_new_stack_tops_);
   } else {
     if (expand_init_stack_element) {
       tmp_new_stack_tops_.clear();
+      RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
       ExpandEquivalentStackElements(init_stack_element, &tmp_new_stack_tops_);
       stack_tops_history_.PushHistory(tmp_new_stack_tops_);
     } else {
