@@ -39,6 +39,7 @@ class TokenizerInfo {
   const std::vector<int32_t>& GetStopTokenIds() const;
   const std::vector<int32_t>& GetSpecialTokenIds() const;
   const std::vector<std::pair<int32_t, std::string>>& GetSortedDecodedVocab() const;
+  const std::vector<int32_t>& GetTrieSubtreeNodesRange() const;
   std::string DumpMetadata() const;
 
   static TokenizerInfo FromVocabAndMetadata(
