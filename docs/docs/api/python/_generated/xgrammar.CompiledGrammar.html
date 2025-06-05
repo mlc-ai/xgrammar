@@ -1,0 +1,406 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>xgrammar.CompiledGrammar &mdash; XGrammar 0.1.19 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+        <script src="../../../_static/clipboard.min.js"></script>
+        <script src="../../../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../../../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="xgrammar.GrammarMatcher" href="xgrammar.GrammarMatcher.html" />
+    <link rel="prev" title="xgrammar.GrammarCompiler" href="xgrammar.GrammarCompiler.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+             </ul>
+               <div class="responsivetlcdropdown">
+                 <button type="button" class="btn-link">
+                   Other Resources
+                 </button>
+                 <ul>
+                     <li>
+                       <a href=https://blog.mlc.ai/>MLC Blog</a>
+                     </li>
+                 </ul>
+               </div>
+          </div>
+            <div class="responsiveMenuIcon">
+              <button type="button" id="menuBtn" class="btn-menu"><img src="../../../_static/img/menu-icon.svg" alt="Menu Icon"></button>
+            </div>
+
+            <div class="tlcDropdown">
+              <div class="dropdown">
+                <button type="button" class="btn-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                  Other Resources
+                </button>
+                <div class="dropdown-menu dropdown-menu-right">
+                  <ul>
+                     <li>
+                       <a href=https://blog.mlc.ai/>MLC Blog</a>
+                     </li>
+                  </ul>
+                </div>
+              </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="sidetitle" alt="Documentation Home"> XGrammar
+          
+
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.19
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How To</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to/portable_api.html">Portable API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../misc/runtime_safeguards.html">Runtime Safeguards</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">xgrammar</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.Grammar.html">xgrammar.Grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.StructuralTagItem.html">xgrammar.StructuralTagItem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.GrammarCompiler.html">xgrammar.GrammarCompiler</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">xgrammar.CompiledGrammar</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.__init__"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.grammar</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.memory_size_bytes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.tokenizer_info</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.GrammarMatcher.html">xgrammar.GrammarMatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.TokenizerInfo.html">xgrammar.TokenizerInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.VocabType.html">xgrammar.VocabType</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.allocate_token_bitmask.html">xgrammar.allocate_token_bitmask</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.apply_token_bitmask_inplace.html">xgrammar.apply_token_bitmask_inplace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.reset_token_bitmask.html">xgrammar.reset_token_bitmask</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.get_bitmask_shape.html">xgrammar.get_bitmask_shape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xgrammar.bitmask_dtype.html">xgrammar.bitmask_dtype</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+          <li><a href="../index.html">xgrammar</a> <span class="br-arrow">></span></li>
+        
+      <li>xgrammar.CompiledGrammar</li>
+    
+    
+      
+      
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/_generated/xgrammar.CompiledGrammar.rst" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section id="xgrammar-compiledgrammar">
+<h1>xgrammar.CompiledGrammar<a class="headerlink" href="#xgrammar-compiledgrammar" title="Permalink to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">CompiledGrammar</span></span><a class="reference internal" href="../../../_modules/xgrammar/compiler.html#CompiledGrammar"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.CompiledGrammar" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the primary object to store compiled grammar.</p>
+<p>A CompiledGrammar can be used to construct GrammarMatcher
+to generate token masks efficiently.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Do not construct this class directly, instead
+use <a class="reference internal" href="xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a> to construct the object.</p>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.CompiledGrammar.__init__" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.__init__" title="xgrammar.CompiledGrammar.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>()</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Attributes</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar" title="xgrammar.CompiledGrammar.grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">grammar</span></code></a></p></td>
+<td><p>The original grammar.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="xgrammar.CompiledGrammar.memory_size_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memory_size_bytes</span></code></a></p></td>
+<td><p>The approximate memory usage of the compiled grammar in bytes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info" title="xgrammar.CompiledGrammar.tokenizer_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tokenizer_info</span></code></a></p></td>
+<td><p>The tokenizer info associated with the compiled grammar.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.grammar">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">grammar</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="xgrammar.Grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.grammar" title="Permalink to this definition">¶</a></dt>
+<dd><p>The original grammar.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.memory_size_bytes">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">memory_size_bytes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="Permalink to this definition">¶</a></dt>
+<dd><p>The approximate memory usage of the compiled grammar in bytes.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.tokenizer_info">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">tokenizer_info</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.tokenizer_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>The tokenizer info associated with the compiled grammar.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="xgrammar.GrammarMatcher.html" class="btn btn-neutral float-right" title="xgrammar.GrammarMatcher" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="xgrammar.GrammarCompiler.html" class="btn btn-neutral float-left" title="xgrammar.GrammarCompiler" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+
+<div id="button" class="backtop"><img src="../../../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>

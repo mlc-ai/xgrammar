@@ -1,0 +1,29 @@
+﻿xgrammar.Grammar
+================
+
+.. currentmodule:: xgrammar
+
+.. autoclass:: Grammar
+
+   
+   .. automethod:: __init__
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+      ~Grammar.__init__
+      ~Grammar.builtin_json_grammar
+      ~Grammar.concat
+      ~Grammar.from_ebnf
+      ~Grammar.from_json_schema
+      ~Grammar.from_regex
+      ~Grammar.from_structural_tag
+      ~Grammar.union
+   
+   
+
+   
+   
+   

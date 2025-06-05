@@ -1,0 +1,58 @@
+﻿xgrammar.StructuralTagItem
+==========================
+
+.. currentmodule:: xgrammar
+
+.. autoclass:: StructuralTagItem
+
+   
+   .. automethod:: __init__
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+      ~StructuralTagItem.__init__
+      ~StructuralTagItem.construct
+      ~StructuralTagItem.copy
+      ~StructuralTagItem.dict
+      ~StructuralTagItem.from_orm
+      ~StructuralTagItem.json
+      ~StructuralTagItem.model_construct
+      ~StructuralTagItem.model_copy
+      ~StructuralTagItem.model_dump
+      ~StructuralTagItem.model_dump_json
+      ~StructuralTagItem.model_json_schema
+      ~StructuralTagItem.model_parametrized_name
+      ~StructuralTagItem.model_post_init
+      ~StructuralTagItem.model_rebuild
+      ~StructuralTagItem.model_validate
+      ~StructuralTagItem.model_validate_json
+      ~StructuralTagItem.model_validate_strings
+      ~StructuralTagItem.parse_file
+      ~StructuralTagItem.parse_obj
+      ~StructuralTagItem.parse_raw
+      ~StructuralTagItem.schema
+      ~StructuralTagItem.schema_json
+      ~StructuralTagItem.update_forward_refs
+      ~StructuralTagItem.validate
+   
+   
+
+   
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~StructuralTagItem.model_computed_fields
+      ~StructuralTagItem.model_config
+      ~StructuralTagItem.model_extra
+      ~StructuralTagItem.model_fields
+      ~StructuralTagItem.model_fields_set
+      ~StructuralTagItem.begin
+      ~StructuralTagItem.schema_
+      ~StructuralTagItem.end
+   
+   

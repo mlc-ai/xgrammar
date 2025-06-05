@@ -1,0 +1,6 @@
+﻿xgrammar.bitmask\_dtype
+=======================
+
+.. currentmodule:: xgrammar
+
+.. autodata:: bitmask_dtype

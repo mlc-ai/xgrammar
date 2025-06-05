@@ -1,0 +1,6 @@
+﻿xgrammar.allocate\_token\_bitmask
+=================================
+
+.. currentmodule:: xgrammar
+
+.. autofunction:: allocate_token_bitmask

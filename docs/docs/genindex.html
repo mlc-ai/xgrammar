@@ -11,7 +11,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Index &mdash; XGrammar 0.1.0 documentation</title>
+  <title>Index &mdash; XGrammar 0.1.19 documentation</title>
   
 
   
@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="_static/tabs.css" type="text/css" />
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="_static/css/tlcpack_theme.css" type="text/css" />
@@ -38,7 +39,18 @@
         <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
         <script src="_static/doctools.js"></script>
         <script src="_static/sphinx_highlight.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
         <script src="_static/tabs.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
+        <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
+        <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+        <script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";
+window.addEventListener("load", () => mermaid.run());
+</script>
     
     <script type="text/javascript" src="_static/js/theme.js"></script>
 
@@ -119,7 +131,7 @@
             
             
                 <div class="version">
-                  0.1.0
+                  0.1.19
                 </div>
             
           
@@ -155,6 +167,10 @@
 <li class="toctree-l1"><a class="reference internal" href="how_to/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="how_to/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="how_to/portable_api.html">Portable API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="misc/runtime_safeguards.html">Runtime Safeguards</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -241,7 +257,8 @@
 <h1 id="index">Index</h1>
 
 <div class="genindex-jumpbox">
- <a href="#A"><strong>A</strong></a>
+ <a href="#_"><strong>_</strong></a>
+ | <a href="#A"><strong>A</strong></a>
  | <a href="#B"><strong>B</strong></a>
  | <a href="#C"><strong>C</strong></a>
  | <a href="#D"><strong>D</strong></a>
@@ -256,23 +273,44 @@
  | <a href="#T"><strong>T</strong></a>
  | <a href="#U"><strong>U</strong></a>
  | <a href="#V"><strong>V</strong></a>
- | <a href="#X"><strong>X</strong></a>
  
 </div>
+<h2 id="_">_</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/python/_generated/xgrammar.CompiledGrammar.html#xgrammar.CompiledGrammar.__init__">__init__() (xgrammar.CompiledGrammar method)</a>
+
+      <ul>
+        <li><a href="api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.__init__">(xgrammar.Grammar method)</a>
+</li>
+        <li><a href="api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.__init__">(xgrammar.GrammarCompiler method)</a>
+</li>
+        <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.__init__">(xgrammar.GrammarMatcher method)</a>
+</li>
+        <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.__init__">(xgrammar.StructuralTagItem method)</a>
+</li>
+        <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.__init__">(xgrammar.TokenizerInfo method)</a>
+</li>
+        <li><a href="api/python/_generated/xgrammar.VocabType.html#xgrammar.VocabType.__init__">(xgrammar.VocabType method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
 <h2 id="A">A</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher.accept_string">accept_string() (xgrammar.GrammarMatcher method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.accept_string">accept_string() (xgrammar.GrammarMatcher method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher.accept_token">accept_token() (xgrammar.GrammarMatcher method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.accept_token">accept_token() (xgrammar.GrammarMatcher method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo.add_prefix_space">add_prefix_space (xgrammar.TokenizerInfo property)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.add_prefix_space">add_prefix_space (xgrammar.TokenizerInfo property)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.allocate_token_bitmask">allocate_token_bitmask() (in module xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.allocate_token_bitmask.html#xgrammar.allocate_token_bitmask">allocate_token_bitmask() (in module xgrammar)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.apply_token_bitmask_inplace">apply_token_bitmask_inplace() (in module xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.apply_token_bitmask_inplace.html#xgrammar.apply_token_bitmask_inplace">apply_token_bitmask_inplace() (in module xgrammar)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -280,11 +318,13 @@
 <h2 id="B">B</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.StructuralTagItem.begin">begin (xgrammar.StructuralTagItem attribute)</a>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.begin">begin (xgrammar.StructuralTagItem attribute)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.Grammar.builtin_json_grammar">builtin_json_grammar() (xgrammar.Grammar static method)</a>
+      <li><a href="api/python/_generated/xgrammar.bitmask_dtype.html#xgrammar.bitmask_dtype">bitmask_dtype (in module xgrammar)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.builtin_json_grammar">builtin_json_grammar() (xgrammar.Grammar static method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -292,23 +332,25 @@
 <h2 id="C">C</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.GrammarCompiler.cache_limit_bytes">cache_limit_bytes (xgrammar.GrammarCompiler property)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.cache_limit_bytes">cache_limit_bytes (xgrammar.GrammarCompiler property)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarCompiler.clear_cache">clear_cache() (xgrammar.GrammarCompiler method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.clear_cache">clear_cache() (xgrammar.GrammarCompiler method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarCompiler.compile_builtin_json_grammar">compile_builtin_json_grammar() (xgrammar.GrammarCompiler method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.compile_builtin_json_grammar">compile_builtin_json_grammar() (xgrammar.GrammarCompiler method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarCompiler.compile_json_schema">compile_json_schema() (xgrammar.GrammarCompiler method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.compile_json_schema">compile_json_schema() (xgrammar.GrammarCompiler method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.GrammarCompiler.compile_regex">compile_regex() (xgrammar.GrammarCompiler method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.compile_regex">compile_regex() (xgrammar.GrammarCompiler method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarCompiler.compile_structural_tag">compile_structural_tag() (xgrammar.GrammarCompiler method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.compile_structural_tag">compile_structural_tag() (xgrammar.GrammarCompiler method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.CompiledGrammar">CompiledGrammar (class in xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.CompiledGrammar.html#xgrammar.CompiledGrammar">CompiledGrammar (class in xgrammar)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.Grammar.concat">concat() (xgrammar.Grammar static method)</a>
+      <li><a href="api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.concat">concat() (xgrammar.Grammar static method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.copy">copy() (xgrammar.StructuralTagItem method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -316,11 +358,11 @@
 <h2 id="D">D</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo.decoded_vocab">decoded_vocab (xgrammar.TokenizerInfo property)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.decoded_vocab">decoded_vocab (xgrammar.TokenizerInfo property)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo.dump_metadata">dump_metadata() (xgrammar.TokenizerInfo method)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.dump_metadata">dump_metadata() (xgrammar.TokenizerInfo method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -328,7 +370,7 @@
 <h2 id="E">E</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.StructuralTagItem.end">end (xgrammar.StructuralTagItem attribute)</a>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.end">end (xgrammar.StructuralTagItem attribute)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -336,23 +378,23 @@
 <h2 id="F">F</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher.fill_next_token_bitmask">fill_next_token_bitmask() (xgrammar.GrammarMatcher method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask">fill_next_token_bitmask() (xgrammar.GrammarMatcher method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher.find_jump_forward_string">find_jump_forward_string() (xgrammar.GrammarMatcher method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.find_jump_forward_string">find_jump_forward_string() (xgrammar.GrammarMatcher method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.Grammar.from_ebnf">from_ebnf() (xgrammar.Grammar static method)</a>
+      <li><a href="api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.from_ebnf">from_ebnf() (xgrammar.Grammar static method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo.from_huggingface">from_huggingface() (xgrammar.TokenizerInfo static method)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.from_huggingface">from_huggingface() (xgrammar.TokenizerInfo static method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.Grammar.from_json_schema">from_json_schema() (xgrammar.Grammar static method)</a>
+      <li><a href="api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.from_json_schema">from_json_schema() (xgrammar.Grammar static method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.Grammar.from_regex">from_regex() (xgrammar.Grammar static method)</a>
+      <li><a href="api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.from_regex">from_regex() (xgrammar.Grammar static method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.Grammar.from_structural_tag">from_structural_tag() (xgrammar.Grammar static method)</a>
+      <li><a href="api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.from_structural_tag">from_structural_tag() (xgrammar.Grammar static method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo.from_vocab_and_metadata">from_vocab_and_metadata() (xgrammar.TokenizerInfo static method)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.from_vocab_and_metadata">from_vocab_and_metadata() (xgrammar.TokenizerInfo static method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -360,19 +402,19 @@
 <h2 id="G">G</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.get_bitmask_shape">get_bitmask_shape() (in module xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.get_bitmask_shape.html#xgrammar.get_bitmask_shape">get_bitmask_shape() (in module xgrammar)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarCompiler.get_cache_size_bytes">get_cache_size_bytes() (xgrammar.GrammarCompiler method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.get_cache_size_bytes">get_cache_size_bytes() (xgrammar.GrammarCompiler method)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.Grammar">Grammar (class in xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar">Grammar (class in xgrammar)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.CompiledGrammar.grammar">grammar (xgrammar.CompiledGrammar property)</a>
+      <li><a href="api/python/_generated/xgrammar.CompiledGrammar.html#xgrammar.CompiledGrammar.grammar">grammar (xgrammar.CompiledGrammar property)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarCompiler">GrammarCompiler (class in xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler">GrammarCompiler (class in xgrammar)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher">GrammarMatcher (class in xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher">GrammarMatcher (class in xgrammar)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -380,7 +422,7 @@
 <h2 id="I">I</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher.is_terminated">is_terminated() (xgrammar.GrammarMatcher method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.is_terminated">is_terminated() (xgrammar.GrammarMatcher method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -388,28 +430,47 @@
 <h2 id="M">M</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher.max_rollback_tokens">max_rollback_tokens (xgrammar.GrammarMatcher property)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.max_rollback_tokens">max_rollback_tokens (xgrammar.GrammarMatcher property)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.CompiledGrammar.memory_size_bytes">memory_size_bytes (xgrammar.CompiledGrammar property)</a>
+      <li><a href="api/python/_generated/xgrammar.CompiledGrammar.html#xgrammar.CompiledGrammar.memory_size_bytes">memory_size_bytes (xgrammar.CompiledGrammar property)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_config">model_config (xgrammar.StructuralTagItem attribute)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_construct">model_construct() (xgrammar.StructuralTagItem class method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_copy">model_copy() (xgrammar.StructuralTagItem method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_dump">model_dump() (xgrammar.StructuralTagItem method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_dump_json">model_dump_json() (xgrammar.StructuralTagItem method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_extra">model_extra (xgrammar.StructuralTagItem property)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.StructuralTagItem.model_config">model_config (xgrammar.StructuralTagItem attribute)</a>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_fields_set">model_fields_set (xgrammar.StructuralTagItem property)</a>
 </li>
-      <li>
-    module
-
-      <ul>
-        <li><a href="api/python/index.html#module-xgrammar">xgrammar</a>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_json_schema">model_json_schema() (xgrammar.StructuralTagItem class method)</a>
 </li>
-      </ul></li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_parametrized_name">model_parametrized_name() (xgrammar.StructuralTagItem class method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_post_init">model_post_init() (xgrammar.StructuralTagItem method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_rebuild">model_rebuild() (xgrammar.StructuralTagItem class method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_validate">model_validate() (xgrammar.StructuralTagItem class method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_validate_json">model_validate_json() (xgrammar.StructuralTagItem class method)</a>
+</li>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.model_validate_strings">model_validate_strings() (xgrammar.StructuralTagItem class method)</a>
+</li>
   </ul></td>
 </tr></table>
 
 <h2 id="P">P</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo.prepend_space_in_tokenization">prepend_space_in_tokenization (xgrammar.TokenizerInfo property)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.prepend_space_in_tokenization">prepend_space_in_tokenization (xgrammar.TokenizerInfo property)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -417,13 +478,13 @@
 <h2 id="R">R</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher.reset">reset() (xgrammar.GrammarMatcher method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.reset">reset() (xgrammar.GrammarMatcher method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.reset_token_bitmask">reset_token_bitmask() (in module xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.reset_token_bitmask.html#xgrammar.reset_token_bitmask">reset_token_bitmask() (in module xgrammar)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher.rollback">rollback() (xgrammar.GrammarMatcher method)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.rollback">rollback() (xgrammar.GrammarMatcher method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -431,19 +492,19 @@
 <h2 id="S">S</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.StructuralTagItem.schema_">schema_ (xgrammar.StructuralTagItem attribute)</a>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem.schema_">schema_ (xgrammar.StructuralTagItem attribute)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo.special_token_ids">special_token_ids (xgrammar.TokenizerInfo property)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.special_token_ids">special_token_ids (xgrammar.TokenizerInfo property)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.GrammarMatcher.stop_token_ids">stop_token_ids (xgrammar.GrammarMatcher property)</a>
+      <li><a href="api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.stop_token_ids">stop_token_ids (xgrammar.GrammarMatcher property)</a>
 
       <ul>
-        <li><a href="api/python/index.html#xgrammar.TokenizerInfo.stop_token_ids">(xgrammar.TokenizerInfo property)</a>
+        <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.stop_token_ids">(xgrammar.TokenizerInfo property)</a>
 </li>
       </ul></li>
-      <li><a href="api/python/index.html#xgrammar.StructuralTagItem">StructuralTagItem (class in xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem">StructuralTagItem (class in xgrammar)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -451,11 +512,11 @@
 <h2 id="T">T</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.CompiledGrammar.tokenizer_info">tokenizer_info (xgrammar.CompiledGrammar property)</a>
+      <li><a href="api/python/_generated/xgrammar.CompiledGrammar.html#xgrammar.CompiledGrammar.tokenizer_info">tokenizer_info (xgrammar.CompiledGrammar property)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo">TokenizerInfo (class in xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo">TokenizerInfo (class in xgrammar)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -463,7 +524,7 @@
 <h2 id="U">U</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.Grammar.union">union() (xgrammar.Grammar static method)</a>
+      <li><a href="api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.union">union() (xgrammar.Grammar static method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -471,27 +532,14 @@
 <h2 id="V">V</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo.vocab_size">vocab_size (xgrammar.TokenizerInfo property)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.vocab_size">vocab_size (xgrammar.TokenizerInfo property)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/index.html#xgrammar.TokenizerInfo.vocab_type">vocab_type (xgrammar.TokenizerInfo property)</a>
+      <li><a href="api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.vocab_type">vocab_type (xgrammar.TokenizerInfo property)</a>
 </li>
-      <li><a href="api/python/index.html#xgrammar.VocabType">VocabType (class in xgrammar)</a>
+      <li><a href="api/python/_generated/xgrammar.VocabType.html#xgrammar.VocabType">VocabType (class in xgrammar)</a>
 </li>
-  </ul></td>
-</tr></table>
-
-<h2 id="X">X</h2>
-<table style="width: 100%" class="indextable genindextable"><tr>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li>
-    xgrammar
-
-      <ul>
-        <li><a href="api/python/index.html#module-xgrammar">module</a>
-</li>
-      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -532,7 +580,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
 
-  </body>
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
   <script type="text/javascript">
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
@@ -544,5 +596,9 @@
     
    
 
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
 </body>
 </html>

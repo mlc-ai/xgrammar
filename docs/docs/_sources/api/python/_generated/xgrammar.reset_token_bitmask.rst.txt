@@ -1,0 +1,6 @@
+﻿xgrammar.reset\_token\_bitmask
+==============================
+
+.. currentmodule:: xgrammar
+
+.. autofunction:: reset_token_bitmask

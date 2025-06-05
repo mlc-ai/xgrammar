@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>xgrammar &mdash; XGrammar 0.1.0 documentation</title>
+  <title>xgrammar &mdash; XGrammar 0.1.19 documentation</title>
   
 
   
@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
@@ -39,6 +40,9 @@
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
         <script src="../../_static/doctools.js"></script>
         <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
     
     <script type="text/javascript" src="../../_static/js/theme.js"></script>
 
@@ -46,7 +50,8 @@
     <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="prev" title="Portable API" href="../../how_to/portable_api.html" /> 
+    <link rel="next" title="xgrammar.Grammar" href="_generated/xgrammar.Grammar.html" />
+    <link rel="prev" title="Runtime Safeguards" href="../../misc/runtime_safeguards.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -120,7 +125,7 @@
             
             
                 <div class="version">
-                  0.1.0
+                  0.1.19
                 </div>
             
           
@@ -157,72 +162,25 @@
 <li class="toctree-l1"><a class="reference internal" href="../../how_to/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../how_to/portable_api.html">Portable API</a></li>
 </ul>
+<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../misc/runtime_safeguards.html">Runtime Safeguards</a></li>
+</ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">xgrammar</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.CompiledGrammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.grammar</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.memory_size_bytes</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.tokenizer_info</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.Grammar"><code class="docutils literal notranslate"><span class="pre">Grammar</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.builtin_json_grammar"><code class="docutils literal notranslate"><span class="pre">Grammar.builtin_json_grammar()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.concat"><code class="docutils literal notranslate"><span class="pre">Grammar.concat()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_ebnf"><code class="docutils literal notranslate"><span class="pre">Grammar.from_ebnf()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_json_schema"><code class="docutils literal notranslate"><span class="pre">Grammar.from_json_schema()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_regex"><code class="docutils literal notranslate"><span class="pre">Grammar.from_regex()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.from_structural_tag"><code class="docutils literal notranslate"><span class="pre">Grammar.from_structural_tag()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar.union"><code class="docutils literal notranslate"><span class="pre">Grammar.union()</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.GrammarCompiler"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.cache_limit_bytes"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.cache_limit_bytes</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.clear_cache"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.clear_cache()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_builtin_json_grammar"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_builtin_json_grammar()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_json_schema"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_json_schema()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_regex"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_regex()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_structural_tag()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarCompiler.get_cache_size_bytes"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.get_cache_size_bytes()</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.GrammarMatcher"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_string"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.accept_string()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_token"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.accept_token()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.fill_next_token_bitmask()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.find_jump_forward_string()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.is_terminated()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.max_rollback_tokens"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.max_rollback_tokens</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.reset"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.reset()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.rollback()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher.stop_token_ids"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.stop_token_ids</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.StructuralTagItem"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem.begin"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.begin</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem.schema_"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.schema_</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem.end"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.end</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem.model_config"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.model_config</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.TokenizerInfo"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.add_prefix_space"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.add_prefix_space</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.decoded_vocab"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.decoded_vocab</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.dump_metadata"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.dump_metadata()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.from_huggingface"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.from_huggingface()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.from_vocab_and_metadata()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.prepend_space_in_tokenization</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.special_token_ids"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.special_token_ids</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.stop_token_ids"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.stop_token_ids</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_size"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.vocab_size</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_type"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.vocab_type</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.VocabType"><code class="docutils literal notranslate"><span class="pre">VocabType</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.allocate_token_bitmask"><code class="docutils literal notranslate"><span class="pre">allocate_token_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.apply_token_bitmask_inplace"><code class="docutils literal notranslate"><span class="pre">apply_token_bitmask_inplace()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.get_bitmask_shape"><code class="docutils literal notranslate"><span class="pre">get_bitmask_shape()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.reset_token_bitmask"><code class="docutils literal notranslate"><span class="pre">reset_token_bitmask()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.Grammar.html">xgrammar.Grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.StructuralTagItem.html">xgrammar.StructuralTagItem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.GrammarCompiler.html">xgrammar.GrammarCompiler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.CompiledGrammar.html">xgrammar.CompiledGrammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.GrammarMatcher.html">xgrammar.GrammarMatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.TokenizerInfo.html">xgrammar.TokenizerInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.VocabType.html">xgrammar.VocabType</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.allocate_token_bitmask.html">xgrammar.allocate_token_bitmask</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.apply_token_bitmask_inplace.html">xgrammar.apply_token_bitmask_inplace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.reset_token_bitmask.html">xgrammar.reset_token_bitmask</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.get_bitmask_shape.html">xgrammar.get_bitmask_shape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.bitmask_dtype.html">xgrammar.bitmask_dtype</a></li>
 </ul>
 </li>
 </ul>
@@ -306,1061 +264,52 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section id="module-xgrammar">
-<span id="xgrammar"></span><span id="apixgrammar"></span><h1>xgrammar<a class="headerlink" href="#module-xgrammar" title="Permalink to this heading">¶</a></h1>
-<p><strong>Classes:</strong></p>
+  <section id="xgrammar">
+<span id="apixgrammar"></span><h1>xgrammar<a class="headerlink" href="#xgrammar" title="Permalink to this heading">¶</a></h1>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a>()</p></td>
-<td><p>This is the primary object to store compiled grammar.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Grammar</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.Grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Grammar</span></code></a>()</p></td>
 <td><p>This class represents a grammar object in XGrammar, and can be used later in the grammar-guided generation.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a>(tokenizer_info, *[, ...])</p></td>
-<td><p>The compiler for grammars.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a>(compiled_grammar, *[, ...])</p></td>
-<td><p>Match the output of the LLM to the specified grammar, then generate the mask for the next token.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a>(*, begin, schema, end)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a>(*, begin, schema, end)</p></td>
 <td><p>A structural tag item.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a>(encoded_vocab[, vocab_type, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a>(tokenizer_info, *[, ...])</p></td>
+<td><p>The compiler for grammars.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_generated/xgrammar.CompiledGrammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a>()</p></td>
+<td><p>This is the primary object to store compiled grammar.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a>(compiled_grammar, *[, ...])</p></td>
+<td><p>Match the output of the LLM to the specified grammar, then generate the mask for the next token.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a>(encoded_vocab[, vocab_type, ...])</p></td>
 <td><p>The tokenizer info contains the vocabulary, the type of the vocabulary, and necessary information for the grammar-guided generation.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.VocabType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">VocabType</span></code></a>(value[, names, module, qualname, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.VocabType.html#xgrammar.VocabType" title="xgrammar.VocabType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">VocabType</span></code></a>(value[, names, module, qualname, ...])</p></td>
 <td><p>The type of the vocabulary.</p></td>
 </tr>
 </tbody>
 </table>
-<p><strong>Functions:</strong></p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.allocate_token_bitmask" title="xgrammar.allocate_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">allocate_token_bitmask</span></code></a>(batch_size, vocab_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.allocate_token_bitmask.html#xgrammar.allocate_token_bitmask" title="xgrammar.allocate_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">allocate_token_bitmask</span></code></a>(batch_size, vocab_size)</p></td>
 <td><p>Allocate the bitmask for the next token prediction.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.apply_token_bitmask_inplace" title="xgrammar.apply_token_bitmask_inplace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">apply_token_bitmask_inplace</span></code></a>(logits, bitmask, *)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_generated/xgrammar.apply_token_bitmask_inplace.html#xgrammar.apply_token_bitmask_inplace" title="xgrammar.apply_token_bitmask_inplace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">apply_token_bitmask_inplace</span></code></a>(logits, bitmask, *)</p></td>
 <td><p>Apply the bitmask to the logits in-place.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.get_bitmask_shape" title="xgrammar.get_bitmask_shape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_bitmask_shape</span></code></a>(batch_size, vocab_size)</p></td>
-<td><p>Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32)).</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.reset_token_bitmask" title="xgrammar.reset_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset_token_bitmask</span></code></a>(bitmask)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.reset_token_bitmask.html#xgrammar.reset_token_bitmask" title="xgrammar.reset_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset_token_bitmask</span></code></a>(bitmask)</p></td>
 <td><p>Reset the bitmask to the full mask.</p></td>
 </tr>
-</tbody>
-</table>
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">CompiledGrammar</span></span><a class="headerlink" href="#xgrammar.CompiledGrammar" title="Permalink to this definition">¶</a></dt>
-<dd><p>This is the primary object to store compiled grammar.</p>
-<p>A CompiledGrammar can be used to construct GrammarMatcher
-to generate token masks efficiently.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Do not construct this class directly, instead
-use <a class="reference internal" href="#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a> to construct the object.</p>
-</div>
-<p><strong>Attributes:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar" title="xgrammar.CompiledGrammar.grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">grammar</span></code></a></p></td>
-<td><p>The original grammar.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_generated/xgrammar.get_bitmask_shape.html#xgrammar.get_bitmask_shape" title="xgrammar.get_bitmask_shape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_bitmask_shape</span></code></a>(batch_size, vocab_size)</p></td>
+<td><p>Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32)).</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="xgrammar.CompiledGrammar.memory_size_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memory_size_bytes</span></code></a></p></td>
-<td><p>The approximate memory usage of the compiled grammar in bytes.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info" title="xgrammar.CompiledGrammar.tokenizer_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tokenizer_info</span></code></a></p></td>
-<td><p>The tokenizer info associated with the compiled grammar.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.bitmask_dtype.html#xgrammar.bitmask_dtype" title="xgrammar.bitmask_dtype"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bitmask_dtype</span></code></a></p></td>
+<td><p></p></td>
 </tr>
 </tbody>
 </table>
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.grammar">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">grammar</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.grammar" title="Permalink to this definition">¶</a></dt>
-<dd><p>The original grammar.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.memory_size_bytes">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">memory_size_bytes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="Permalink to this definition">¶</a></dt>
-<dd><p>The approximate memory usage of the compiled grammar in bytes.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.tokenizer_info">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">tokenizer_info</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.tokenizer_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>The tokenizer info associated with the compiled grammar.</p>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.Grammar">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">Grammar</span></span><a class="headerlink" href="#xgrammar.Grammar" title="Permalink to this definition">¶</a></dt>
-<dd><p>This class represents a grammar object in XGrammar, and can be used later in the
-grammar-guided generation.</p>
-<p>The Grammar object supports context-free grammar (CFG). EBNF (extended Backus-Naur Form) is
-used as the format of the grammar. There are many specifications for EBNF in the literature,
-and we follow the specification of GBNF (GGML BNF) in
-<a class="reference external" href="https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md">https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md</a>.</p>
-<p>When printed, the grammar will be converted to GBNF format.</p>
-<p><strong>Methods:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.builtin_json_grammar" title="xgrammar.Grammar.builtin_json_grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">builtin_json_grammar</span></code></a>()</p></td>
-<td><p>Get the grammar of standard JSON.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.concat" title="xgrammar.Grammar.concat"><code class="xref py py-obj docutils literal notranslate"><span class="pre">concat</span></code></a>(*grammars)</p></td>
-<td><p>Create a grammar that matches the concatenation of the grammars in the list.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_ebnf" title="xgrammar.Grammar.from_ebnf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_ebnf</span></code></a>(ebnf_string, *[, root_rule_name])</p></td>
-<td><p>Construct a grammar from EBNF string.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_json_schema" title="xgrammar.Grammar.from_json_schema"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_json_schema</span></code></a>(schema, *[, ...])</p></td>
-<td><p>Construct a grammar from JSON schema.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_regex" title="xgrammar.Grammar.from_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_regex</span></code></a>(regex_string, *[, ...])</p></td>
-<td><p>Create a grammar from a regular expression string.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_structural_tag" title="xgrammar.Grammar.from_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_structural_tag</span></code></a>(tags, triggers)</p></td>
-<td><p>Create a grammar from structural tags.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.union" title="xgrammar.Grammar.union"><code class="xref py py-obj docutils literal notranslate"><span class="pre">union</span></code></a>(*grammars)</p></td>
-<td><p>Create a grammar that matches any of the grammars in the list.</p></td>
-</tr>
-</tbody>
-</table>
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.Grammar.builtin_json_grammar">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">builtin_json_grammar</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="headerlink" href="#xgrammar.Grammar.builtin_json_grammar" title="Permalink to this definition">¶</a></dt>
-<dd><p>Get the grammar of standard JSON. This is compatible with the official JSON grammar
-specification in <a class="reference external" href="https://www.json.org/json-en.html">https://www.json.org/json-en.html</a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>grammar</strong> – The JSON grammar.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.Grammar.concat">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">concat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">grammars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="headerlink" href="#xgrammar.Grammar.concat" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a grammar that matches the concatenation of the grammars in the list. That is
-equivalent to using the <cite>+</cite> operator to concatenate the grammars in the list.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>grammars</strong> (<em>List</em><em>[</em><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar"><em>Grammar</em></a><em>]</em>) – The grammars to create the concatenation of.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>grammar</strong> – The concatenation of the grammars.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.Grammar.from_ebnf">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_ebnf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ebnf_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">root_rule_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'root'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="headerlink" href="#xgrammar.Grammar.from_ebnf" title="Permalink to this definition">¶</a></dt>
-<dd><p>Construct a grammar from EBNF string. The EBNF string should follow the format
-in <a class="reference external" href="https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md">https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md</a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>ebnf_string</strong> (<em>str</em>) – The grammar string in EBNF format.</p></li>
-<li><p><strong>root_rule_name</strong> (<em>str</em><em>, </em><em>default: &quot;root&quot;</em>) – The name of the root rule in the grammar.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>RuntimeError</strong> – When converting the regex pattern fails, with details about the parsing error.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.Grammar.from_json_schema">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_json_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">BaseModel</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_whitespace</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separators</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strict_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_converted_ebnf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="headerlink" href="#xgrammar.Grammar.from_json_schema" title="Permalink to this definition">¶</a></dt>
-<dd><p>Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
-used to specify the schema.</p>
-<p>It allows any whitespace by default. If user want to specify the format of the JSON,
-set <cite>any_whitespace</cite> to False and use the <cite>indent</cite> and <cite>separators</cite> parameters. The
-meaning and the default values of the parameters follows the convention in json.dumps().</p>
-<p>It internally converts the JSON schema to a EBNF grammar.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>schema</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>Type</em><em>[</em><em>BaseModel</em><em>]</em><em>, </em><em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em><em>]</em>) – The schema string or Pydantic model or JSON schema dict.</p></li>
-<li><p><strong>any_whitespace</strong> (<em>bool</em><em>, </em><em>default: True</em>) – Whether to use any whitespace. If True, the generated grammar will ignore the
-indent and separators parameters, and allow any whitespace.</p></li>
-<li><p><strong>indent</strong> (<em>Optional</em><em>[</em><em>int</em><em>]</em><em>, </em><em>default: None</em>) – <p>The number of spaces for indentation. If None, the output will be in one line.</p>
-<p>Note that specifying the indentation means forcing the LLM to generate JSON strings
-strictly formatted. However, some models may tend to generate JSON strings that
-are not strictly formatted. In this case, forcing the LLM to generate strictly
-formatted JSON strings may degrade the generation quality. See
-&lt;<a class="reference external" href="https://github.com/sgl-project/sglang/issues/2216#issuecomment-2516192009">https://github.com/sgl-project/sglang/issues/2216#issuecomment-2516192009</a>&gt; for more
-details.</p>
-</p></li>
-<li><p><strong>separators</strong> (<em>Optional</em><em>[</em><em>Tuple</em><em>[</em><em>str</em><em>, </em><em>str</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – Two separators used in the schema: comma and colon. Examples: (“,”, “:”), (”, “, “: “).
-If None, the default separators will be used: (“,”, “: “) when the indent is not None,
-and (”, “, “: “) otherwise.</p></li>
-<li><p><strong>strict_mode</strong> (<em>bool</em><em>, </em><em>default: True</em>) – <p>Whether to use strict mode. In strict mode, the generated grammar will not allow
-properties and items that is not specified in the schema. This is equivalent to
-setting unevaluatedProperties and unevaluatedItems to false.</p>
-<p>This helps LLM to generate accurate output in the grammar-guided generation with JSON
-schema.</p>
-</p></li>
-<li><p><strong>print_converted_ebnf</strong> (<em>bool</em><em>, </em><em>default: False</em>) – If True, the converted EBNF string will be printed. For debugging purposes.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>grammar</strong> – The constructed grammar.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>RuntimeError</strong> – When converting the json schema fails, with details about the parsing error.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.Grammar.from_regex">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_regex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">regex_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_converted_ebnf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="headerlink" href="#xgrammar.Grammar.from_regex" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a grammar from a regular expression string.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>regex_string</strong> (<em>str</em>) – The regular expression pattern to create the grammar from.</p></li>
-<li><p><strong>print_converted_ebnf</strong> (<em>bool</em><em>, </em><em>default: False</em>) – This method will convert the regex pattern to EBNF first. If this is true, the converted
-EBNF string will be printed. For debugging purposes. Default: False.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>grammar</strong> – The constructed grammar from the regex pattern.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>RuntimeError</strong> – When parsing the regex pattern fails, with details about the parsing error.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.Grammar.from_structural_tag">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.grammar.StructuralTagItem"><span class="pre">StructuralTagItem</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triggers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="headerlink" href="#xgrammar.Grammar.from_structural_tag" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a grammar from structural tags. The structural tag handles the dispatching
-of different grammars based on the tags and triggers: it initially allows any output,
-until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
-is encountered, the grammar will allow any following output, until the next trigger is
-encountered.</p>
-<p>The tags parameter is used to specify the output pattern. It is especially useful for LLM
-function calling, where the pattern is:
-&lt;function=func_name&gt;{“arg1”: …, “arg2”: …}&lt;/function&gt;.
-This pattern consists of three parts: a begin tag (&lt;function=func_name&gt;), a parameter list
-according to some schema ({“arg1”: …, “arg2”: …}), and an end tag (&lt;/function&gt;). This
-pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag.
-The structural tag is able to handle multiple such patterns by passing them into multiple
-tags.</p>
-<p>The triggers parameter is used to trigger the dispatching of different grammars. The trigger
-should be a prefix of a provided begin tag. When the trigger is encountered, the
-corresponding tag should be used to constrain the following output. There can be multiple
-tags matching the same trigger. Then if the trigger is encountered, the following output
-should match one of the tags. For example, in function calling, the triggers can be
-[“&lt;function=”]. Then if “&lt;function=” is encountered, the following output must match one
-of the tags (e.g. &lt;function=get_weather&gt;{“city”: “Beijing”}&lt;/function&gt;).</p>
-<p>The corrrespondence of tags and triggers is automatically determined: all tags with the
-same trigger will be grouped together. User should make sure any trigger is not a prefix
-of another trigger: then the corrrespondence of tags and triggers will be ambiguous.</p>
-<p>To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
-structural tag will generate a mask for each token. When the trigger is not encountered,
-the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
-False, meaning no token is masked). When a trigger is encountered, the mask should be
-enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
-output logits.</p>
-<p>The benefit of this method is the token boundary between tags and triggers is automatically
-handled. The user does not need to worry about the token boundary.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>tags</strong> (<em>List</em><em>[</em><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><em>StructuralTagItem</em></a><em>]</em>) – The structural tags.</p></li>
-<li><p><strong>triggers</strong> (<em>List</em><em>[</em><em>str</em><em>]</em>) – The triggers.</p></li>
-</ul>
-</dd>
-</dl>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Schema1</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg1</span><span class="p">:</span> <span class="nb">str</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg2</span><span class="p">:</span> <span class="nb">int</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Schema2</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg3</span><span class="p">:</span> <span class="nb">float</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg4</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=f&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema1</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=g&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema2</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="p">]</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">triggers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&lt;function=&quot;</span><span class="p">]</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="n">triggers</span><span class="p">)</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.Grammar.union">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">union</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">grammars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="headerlink" href="#xgrammar.Grammar.union" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a grammar that matches any of the grammars in the list. That is equivalent to
-using the <cite>|</cite> operator to concatenate the grammars in the list.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>grammars</strong> (<em>List</em><em>[</em><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar"><em>Grammar</em></a><em>]</em>) – The grammars to create the union of.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>grammar</strong> – The union of the grammars.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.GrammarCompiler">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">GrammarCompiler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tokenizer_info</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_enabled</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_limit_bytes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.GrammarCompiler" title="Permalink to this definition">¶</a></dt>
-<dd><p>The compiler for grammars. It is associated with a certain tokenizer info, and compiles
-grammars into CompiledGrammar with the tokenizer info. It allows parallel compilation with
-multiple threads, and has a cache to store the compilation result, avoiding compiling the
-same grammar multiple times.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>tokenizer_info</strong> (<a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><em>TokenizerInfo</em></a>) – The tokenizer info.</p></li>
-<li><p><strong>max_threads</strong> (<em>int</em><em>, </em><em>default: 8</em>) – The maximum number of threads used to compile the grammar.</p></li>
-<li><p><strong>cache_enabled</strong> (<em>bool</em><em>, </em><em>default: True</em>) – Whether to enable the cache.</p></li>
-<li><p><strong>cache_limit_bytes</strong> (<em>int</em><em>, </em><em>default: -1</em>) – The maximum memory usage for the cache in the specified unit.
-Note that the actual memory usage may slightly exceed this value.</p></li>
-</ul>
-</dd>
-</dl>
-<p><strong>Attributes:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.cache_limit_bytes" title="xgrammar.GrammarCompiler.cache_limit_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cache_limit_bytes</span></code></a></p></td>
-<td><p>The maximum memory usage for the cache in bytes.</p></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Methods:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.clear_cache" title="xgrammar.GrammarCompiler.clear_cache"><code class="xref py py-obj docutils literal notranslate"><span class="pre">clear_cache</span></code></a>()</p></td>
-<td><p>Clear all cached compiled grammars.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_builtin_json_grammar" title="xgrammar.GrammarCompiler.compile_builtin_json_grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_builtin_json_grammar</span></code></a>()</p></td>
-<td><p>Get CompiledGrammar from the standard JSON.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_json_schema" title="xgrammar.GrammarCompiler.compile_json_schema"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_json_schema</span></code></a>(schema, *[, ...])</p></td>
-<td><p>Get CompiledGrammar from the specified JSON schema and format.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_regex" title="xgrammar.GrammarCompiler.compile_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_regex</span></code></a>(regex)</p></td>
-<td><p>Get CompiledGrammar from the specified regex.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="xgrammar.GrammarCompiler.compile_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_structural_tag</span></code></a>(tags, triggers)</p></td>
-<td><p>Compile a grammar from structural tags.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.get_cache_size_bytes" title="xgrammar.GrammarCompiler.get_cache_size_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_cache_size_bytes</span></code></a>()</p></td>
-<td><p>The approximate memory usage of the cache in bytes.</p></td>
-</tr>
-</tbody>
-</table>
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.cache_limit_bytes">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cache_limit_bytes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#xgrammar.GrammarCompiler.cache_limit_bytes" title="Permalink to this definition">¶</a></dt>
-<dd><p>The maximum memory usage for the cache in bytes.
-Returns -1 if the cache has no memory limit.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.clear_cache">
-<span class="sig-name descname"><span class="pre">clear_cache</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.clear_cache" title="Permalink to this definition">¶</a></dt>
-<dd><p>Clear all cached compiled grammars.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.compile_builtin_json_grammar">
-<span class="sig-name descname"><span class="pre">compile_builtin_json_grammar</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.compile_builtin_json_grammar" title="Permalink to this definition">¶</a></dt>
-<dd><p>Get CompiledGrammar from the standard JSON.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.compile_json_schema">
-<span class="sig-name descname"><span class="pre">compile_json_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">BaseModel</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_whitespace</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separators</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strict_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.compile_json_schema" title="Permalink to this definition">¶</a></dt>
-<dd><p>Get CompiledGrammar from the specified JSON schema and format. The indent
-and separators parameters follow the same convention as in json.dumps().</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>schema</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>Type</em><em>[</em><em>BaseModel</em><em>]</em><em>, </em><em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em><em>]</em>) – The schema string or Pydantic model or JSON schema dict.</p></li>
-<li><p><strong>indent</strong> (<em>Optional</em><em>[</em><em>int</em><em>]</em><em>, </em><em>default: None</em>) – The number of spaces for indentation. If None, the output will be in one line.</p></li>
-<li><p><strong>separators</strong> (<em>Optional</em><em>[</em><em>Tuple</em><em>[</em><em>str</em><em>, </em><em>str</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – Two separators used in the schema: comma and colon. Examples: (“,”, “:”), (”, “, “: “).
-If None, the default separators will be used: (“,”, “: “) when the indent is not None,
-and (”, “, “: “) otherwise.</p></li>
-<li><p><strong>strict_mode</strong> (<em>bool</em><em>, </em><em>default: True</em>) – <p>Whether to use strict mode. In strict mode, the generated grammar will not allow
-properties and items that is not specified in the schema. This is equivalent to
-setting unevaluatedProperties and unevaluatedItems to false.</p>
-<p>This helps LLM to generate accurate output in the grammar-guided generation with JSON
-schema.</p>
-</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.compile_regex">
-<span class="sig-name descname"><span class="pre">compile_regex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">regex</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.compile_regex" title="Permalink to this definition">¶</a></dt>
-<dd><p>Get CompiledGrammar from the specified regex.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>regex</strong> (<em>str</em>) – The regex string.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.compile_structural_tag">
-<span class="sig-name descname"><span class="pre">compile_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.grammar.StructuralTagItem"><span class="pre">StructuralTagItem</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triggers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="Permalink to this definition">¶</a></dt>
-<dd><p>Compile a grammar from structural tags. See Grammar.from_structural_tag() for more
-details.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>tags</strong> (<em>List</em><em>[</em><a class="reference internal" href="#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><em>StructuralTagItem</em></a><em>]</em>) – The structural tags.</p></li>
-<li><p><strong>triggers</strong> (<em>List</em><em>[</em><em>str</em><em>]</em>) – The triggers.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.get_cache_size_bytes">
-<span class="sig-name descname"><span class="pre">get_cache_size_bytes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="headerlink" href="#xgrammar.GrammarCompiler.get_cache_size_bytes" title="Permalink to this definition">¶</a></dt>
-<dd><p>The approximate memory usage of the cache in bytes.</p>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">GrammarMatcher</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">compiled_grammar</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">override_stop_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">terminate_without_stop_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_rollback_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.GrammarMatcher" title="Permalink to this definition">¶</a></dt>
-<dd><p>Match the output of the LLM to the specified grammar, then generate the mask for the next
-token. This is the core class in the grammar-guided generation.</p>
-<p>This class maintains a stateful matcher that can accept tokens and strings, then match them
-to the specified grammar. The matcher can provide a bitmask for the next token prediction,
-so that the output of the LLM follows the specified grammar. Its state can be reset and
-rolled back by tokens. It also provides utilities for jump-forward decoding.</p>
-<p>After matching the whole grammar, the matcher will accept a stop token. The token mask at
-this time will only allow stop tokens. After accepting the stop token, the matcher will
-terminate, then it cannot accept any new token or generate a new token mask, meaning the
-generation is finished.</p>
-<p>Under the hood, it utilizes a pushdown automaton with backtracking to match the grammar,
-with optimizations specific to LLM token mask generation.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>compiled_grammar</strong> (<a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><em>CompiledGrammar</em></a>) – The initialization context for the grammar matcher.</p></li>
-<li><p><strong>override_stop_tokens</strong> (<em>Optional</em><em>[</em><em>Union</em><em>[</em><em>int</em><em>, </em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – If not None, the stop tokens to override the ones in the grammar.</p></li>
-<li><p><strong>terminate_without_stop_token</strong> (<em>bool</em><em>, </em><em>default: False</em>) – Whether to terminate the matcher without accepting a stop token.</p></li>
-<li><p><strong>max_rollback_tokens</strong> (<em>int</em><em>, </em><em>default: 0</em>) – The maximum number of rollback tokens allowed. The rollback operation is useful for
-jump-forward decoding and speculative decoding.</p></li>
-</ul>
-</dd>
-</dl>
-<p><strong>Methods:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_string" title="xgrammar.GrammarMatcher.accept_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">accept_string</span></code></a>(input_str, *[, debug_print])</p></td>
-<td><p>Accept a string and update the state of the matcher.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><code class="xref py py-obj docutils literal notranslate"><span class="pre">accept_token</span></code></a>(token_id, *[, debug_print])</p></td>
-<td><p>Accept one token and update the state of the matcher.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fill_next_token_bitmask</span></code></a>(bitmask[, index, ...])</p></td>
-<td><p>Fill the bitmask for the next token prediction.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_jump_forward_string</span></code></a>()</p></td>
-<td><p>Find the jump-forward string for jump-forward decoding.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_terminated</span></code></a>()</p></td>
-<td><p>Check if the matcher has terminated.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.reset" title="xgrammar.GrammarMatcher.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
-<td><p>Reset the matcher to the initial state.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback" title="xgrammar.GrammarMatcher.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rollback</span></code></a>([num_tokens])</p></td>
-<td><p>Rollback the matcher to a previous state by several tokens.</p></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Attributes:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.max_rollback_tokens" title="xgrammar.GrammarMatcher.max_rollback_tokens"><code class="xref py py-obj docutils literal notranslate"><span class="pre">max_rollback_tokens</span></code></a></p></td>
-<td><p>Get the maximum number of rollback tokens allowed.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.stop_token_ids" title="xgrammar.GrammarMatcher.stop_token_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stop_token_ids</span></code></a></p></td>
-<td><p>The ids of the stop tokens used in the matcher.</p></td>
-</tr>
-</tbody>
-</table>
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.accept_string">
-<span class="sig-name descname"><span class="pre">accept_string</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_str</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">bytes</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.accept_string" title="Permalink to this definition">¶</a></dt>
-<dd><p>Accept a string and update the state of the matcher. The whole string is considered
-as one step in rollback. It is used to complement the functionality of accept_token, and
-accept_token should always be used to accept tokens.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>input_str</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>bytes</em><em>]</em>) – The string to be accepted.</p></li>
-<li><p><strong>debug_print</strong> (<em>bool</em><em>, </em><em>default: False</em>) – Whether to print information about the internal state of the matcher. Helpful for
-debugging.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>accepted</strong> – Whether the string is accepted.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.accept_token">
-<span class="sig-name descname"><span class="pre">accept_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.accept_token" title="Permalink to this definition">¶</a></dt>
-<dd><p>Accept one token and update the state of the matcher.</p>
-<p>In the following cases, the matcher will not accept the token and return False:
-1. The token does not match the grammar.
-2. The matcher has terminated after accepting the stop token, but is trying to accept a</p>
-<blockquote>
-<div><p>new token.</p>
-</div></blockquote>
-<ol class="arabic simple" start="3">
-<li><p>The token id is out of range.</p></li>
-<li><p>The token is a special token.</p></li>
-</ol>
-<p>The user should capture the return value and handle the cases where the token is not
-accepted.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>token_id</strong> (<em>int</em>) – The id of the token to accept.</p></li>
-<li><p><strong>debug_print</strong> (<em>bool</em><em>, </em><em>default: False</em>) – Whether to print information about the internal state of the matcher. Helpful
-for debugging.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>accepted</strong> – Whether the token is accepted.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.fill_next_token_bitmask">
-<span class="sig-name descname"><span class="pre">fill_next_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="Permalink to this definition">¶</a></dt>
-<dd><p>Fill the bitmask for the next token prediction. The input bitmask can be generated
-by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the
-next token bitmask.</p>
-<p>This method does not change the matcher state.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>bitmask</strong> (<em>torch.Tensor</em>) – The bitmask for the next token prediction.</p></li>
-<li><p><strong>index</strong> (<em>int</em><em>, </em><em>default: 0</em>) – The batch id of the bitmask.</p></li>
-<li><p><strong>debug_print</strong> (<em>bool</em><em>, </em><em>default: False</em>) – Whether to print information about generated bitmask. Helpful for debugging.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>need_apply</strong> – Whether the bitmask need to be applied (not all-true). An optimization: if False,
-this means the bitmask is already all-true, so no need to apply it.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.find_jump_forward_string">
-<span class="sig-name descname"><span class="pre">find_jump_forward_string</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.find_jump_forward_string" title="Permalink to this definition">¶</a></dt>
-<dd><p>Find the jump-forward string for jump-forward decoding. This is the longest string that
-certainly conforms with the current grammar from the current matcher state. This string
-can become the output of the LLM without requiring LLM decoding.</p>
-<p>This method does not change the matcher state.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>jump_forward_string</strong> – The jump-forward string.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>str</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.is_terminated">
-<span class="sig-name descname"><span class="pre">is_terminated</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.is_terminated" title="Permalink to this definition">¶</a></dt>
-<dd><p>Check if the matcher has terminated. If terminate_without_stop_token is False, the
-matcher will terminate if it has accepted the stop token. Otherwise, the matcher will
-terminate after matching the whole grammar.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>terminated</strong> – Whether the matcher has terminated.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.max_rollback_tokens">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">max_rollback_tokens</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#xgrammar.GrammarMatcher.max_rollback_tokens" title="Permalink to this definition">¶</a></dt>
-<dd><p>Get the maximum number of rollback tokens allowed.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>max_rollback_tokens</strong> – The maximum number of rollback tokens.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>int</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.reset">
-<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.reset" title="Permalink to this definition">¶</a></dt>
-<dd><p>Reset the matcher to the initial state.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.rollback">
-<span class="sig-name descname"><span class="pre">rollback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.GrammarMatcher.rollback" title="Permalink to this definition">¶</a></dt>
-<dd><p>Rollback the matcher to a previous state by several tokens.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>num_tokens</strong> (<em>int</em><em>, </em><em>default: 1</em>) – The number of tokens to rollback. It cannot exceed the current number of steps, nor can
-it exceed the specified maximum number of rollback tokens.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.stop_token_ids">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">stop_token_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.GrammarMatcher.stop_token_ids" title="Permalink to this definition">¶</a></dt>
-<dd><p>The ids of the stop tokens used in the matcher. If specified, the provided stop tokens
-will be used. Otherwise, the stop tokens will be detected from the vocabulary.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>stop_token_ids</strong> – The ids of the stop tokens.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>List[int]</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.StructuralTagItem">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">StructuralTagItem</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">begin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">BaseModel</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.StructuralTagItem" title="Permalink to this definition">¶</a></dt>
-<dd><p>A structural tag item. See Grammar.from_structural_tag() for more details.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.begin">
-<span class="sig-name descname"><span class="pre">begin</span></span><a class="headerlink" href="#xgrammar.StructuralTagItem.begin" title="Permalink to this definition">¶</a></dt>
-<dd><p>The begin tag.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.schema_">
-<span class="sig-name descname"><span class="pre">schema_</span></span><a class="headerlink" href="#xgrammar.StructuralTagItem.schema_" title="Permalink to this definition">¶</a></dt>
-<dd><p>The schema.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Union[str, Type[BaseModel]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.end">
-<span class="sig-name descname"><span class="pre">end</span></span><a class="headerlink" href="#xgrammar.StructuralTagItem.end" title="Permalink to this definition">¶</a></dt>
-<dd><p>The end tag.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-</dd></dl>
-
-<p><strong>Attributes:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.StructuralTagItem.model_config" title="xgrammar.StructuralTagItem.model_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">model_config</span></code></a></p></td>
-<td><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p></td>
-</tr>
-</tbody>
-</table>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.StructuralTagItem.model_config" title="Permalink to this definition">¶</a></dt>
-<dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">TokenizerInfo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">bytes</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">VocabType.RAW</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_prefix_space</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.TokenizerInfo" title="Permalink to this definition">¶</a></dt>
-<dd><p>The tokenizer info contains the vocabulary, the type of the vocabulary, and necessary
-information for the grammar-guided generation.</p>
-<p>Note that although some tokenizers will encode the tokens in a special format, e.g.
-“&lt;0x1B&gt;” for “” in the ByteFallback tokenizer, and “Ġ” for ” ” in the Byte-Level BPE
-tokenizer, TokenizerInfo always decodes the vocabulary to the original format (e.g. “”
-and ” “).</p>
-<p>Also note that some models (e.g. Phi-3 and Deepseek-V2) may pad the vocabulary to a multiple
-of 32. In this case, the model’s vocab_size is larger than the tokenizer’s vocabulary size.
-Please pass the model’s vocab_size to the vocab_size parameter in the constructor, because
-this information is used to determine the size of the token mask.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>encoded_vocab</strong> (<em>Union</em><em>[</em><em>List</em><em>[</em><em>bytes</em><em>]</em><em>, </em><em>List</em><em>[</em><em>str</em><em>]</em><em>]</em>) – The encoded vocabulary of the tokenizer.</p></li>
-<li><p><strong>vocab_type</strong> (<a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.VocabType"><em>VocabType</em></a><em>, </em><em>default: VocabType.RAW</em>) – The type of the vocabulary. See also VocabType.</p></li>
-<li><p><strong>vocab_size</strong> (<em>Optional</em><em>[</em><em>int</em><em>]</em><em>, </em><em>default: None</em>) – The size of the vocabulary. If not provided, the vocabulary size will be len(encoded_vocab).</p></li>
-<li><p><strong>stop_token_ids</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – The stop token ids. If not provided, the stop token ids will be auto detected (but may not
-be correct).</p></li>
-<li><p><strong>add_prefix_space</strong> (<em>bool</em><em>, </em><em>default: False</em>) – Whether the tokenizer will prepend a space before the text in the tokenization process.</p></li>
-</ul>
-</dd>
-</dl>
-<p><strong>Attributes:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.add_prefix_space" title="xgrammar.TokenizerInfo.add_prefix_space"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_prefix_space</span></code></a></p></td>
-<td><p>Whether the tokenizer will prepend a space before the text in the tokenization process.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.decoded_vocab" title="xgrammar.TokenizerInfo.decoded_vocab"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decoded_vocab</span></code></a></p></td>
-<td><p>The decoded vocabulary of the tokenizer.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization" title="xgrammar.TokenizerInfo.prepend_space_in_tokenization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">prepend_space_in_tokenization</span></code></a></p></td>
-<td><p>Whether the tokenizer will prepend a space before the text in the tokenization process.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.special_token_ids" title="xgrammar.TokenizerInfo.special_token_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">special_token_ids</span></code></a></p></td>
-<td><p>The special token ids.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.stop_token_ids" title="xgrammar.TokenizerInfo.stop_token_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stop_token_ids</span></code></a></p></td>
-<td><p>The stop token ids.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_size" title="xgrammar.TokenizerInfo.vocab_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vocab_size</span></code></a></p></td>
-<td><p>The size of the vocabulary.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_type" title="xgrammar.TokenizerInfo.vocab_type"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vocab_type</span></code></a></p></td>
-<td><p>The type of the vocabulary.</p></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Methods:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.dump_metadata" title="xgrammar.TokenizerInfo.dump_metadata"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dump_metadata</span></code></a>()</p></td>
-<td><p>Dump the metadata of the tokenizer to a json string.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.from_huggingface" title="xgrammar.TokenizerInfo.from_huggingface"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_huggingface</span></code></a>(tokenizer, *[, vocab_size, ...])</p></td>
-<td><p>Construct the tokenizer info from the huggingface tokenizer.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata" title="xgrammar.TokenizerInfo.from_vocab_and_metadata"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_vocab_and_metadata</span></code></a>(encoded_vocab, metadata)</p></td>
-<td><p>Construct the tokenizer info from the vocabulary and the metadata string in json format.</p></td>
-</tr>
-</tbody>
-</table>
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.add_prefix_space">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">add_prefix_space</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.add_prefix_space" title="Permalink to this definition">¶</a></dt>
-<dd><p>Whether the tokenizer will prepend a space before the text in the tokenization
-process.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.decoded_vocab">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">decoded_vocab</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">bytes</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.decoded_vocab" title="Permalink to this definition">¶</a></dt>
-<dd><p>The decoded vocabulary of the tokenizer. This converts the tokens in the LLM’s
-vocabulary back to the original format of the input text. E.g. for type ByteFallback,
-the token &lt;0x1B&gt; is converted back to “”.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.dump_metadata">
-<span class="sig-name descname"><span class="pre">dump_metadata</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#xgrammar.TokenizerInfo.dump_metadata" title="Permalink to this definition">¶</a></dt>
-<dd><p>Dump the metadata of the tokenizer to a json string. It can be used to construct the
-tokenizer info from the vocabulary and the metadata string.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.from_huggingface">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_huggingface</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tokenizer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">PreTrainedTokenizerBase</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></span><a class="headerlink" href="#xgrammar.TokenizerInfo.from_huggingface" title="Permalink to this definition">¶</a></dt>
-<dd><p>Construct the tokenizer info from the huggingface tokenizer. This constructor supports
-various tokenizer backends, including the huggingface fast tokenizer and tiktoken tokenizer.
-Necessary information is automatically detected from the tokenizer.</p>
-<p>The vocab_size parameter is introduced to handle the misalignment between the model’s
-vocab_size and the tokenizer’s vocabulary size. User should pass the model’s vocab_size
-(could be defined in the model config) here. See docs of vocab_size for more details.</p>
-<p>The stop token ids is by default the eos_token_id of the tokenizer. If there are other
-stop tokens, you can specify them manually.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>tokenizer</strong> (<em>PreTrainedTokenizerBase</em>) – The huggingface tokenizer.</p></li>
-<li><p><strong>vocab_size</strong> (<em>Optional</em><em>[</em><em>int</em><em>]</em><em>, </em><em>default: None</em>) – <p>The vocabulary size <strong>defined by the model</strong> (<strong>not the tokenizer</strong>). This equals to the
-vocab dimention of the model’s lm_head. This is the size of the token mask.</p>
-<p>It can be:
-1. the same as the tokenizer’s vocabulary size. This is the most common case.
-2. larger than the tokenizer’s vocabulary size. This happens when the model has padding</p>
-<blockquote>
-<div><p>to lm_head, possibly due to aligning lm_head to the power of 2.
-E.g. Phi-3 and Deepseek-V2.</p>
-</div></blockquote>
-<ol class="arabic simple" start="3">
-<li><p>smaller than the tokenizer’s vocabulary size. This happens when the tokenizer has
-some added tokens that will not supported by the model. E.g.
-Llama-3.2 Vision and Molmo-72B-0924 has padded &lt;<a href="#id1"><span class="problematic" id="id2">|image|</span></a>&gt; tokens, but they will not
-be considered in lm_head or generated by the model.</p></li>
-</ol>
-<p>model_vocab_size need to be provided for case 2 and 3. If not provided, it will be
-set to the tokenizer’s vocabulary size.</p>
-</p></li>
-<li><p><strong>stop_token_ids</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – The stop token ids. If not provided, the eos_token_id of the tokenizer will be used.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>tokenizer_info</strong> – The tokenizer info.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo">TokenizerInfo</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.from_vocab_and_metadata">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_vocab_and_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">bytes</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></span><a class="headerlink" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata" title="Permalink to this definition">¶</a></dt>
-<dd><p>Construct the tokenizer info from the vocabulary and the metadata string in json
-format.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>encoded_vocab</strong> (<em>List</em><em>[</em><em>Union</em><em>[</em><em>bytes</em><em>, </em><em>str</em><em>]</em><em>]</em>) – The encoded vocabulary of the tokenizer.</p></li>
-<li><p><strong>metadata</strong> (<em>str</em>) – The metadata string in json format.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.prepend_space_in_tokenization">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">prepend_space_in_tokenization</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization" title="Permalink to this definition">¶</a></dt>
-<dd><p>Whether the tokenizer will prepend a space before the text in the tokenization
-process.</p>
-<p>This property is deprecated. Use add_prefix_space instead.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.special_token_ids">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">special_token_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.special_token_ids" title="Permalink to this definition">¶</a></dt>
-<dd><p>The special token ids. Special tokens include control tokens, reserved tokens,
-padded tokens, etc. Now it is automatically detected from the vocabulary.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.stop_token_ids">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">stop_token_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.stop_token_ids" title="Permalink to this definition">¶</a></dt>
-<dd><p>The stop token ids.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.vocab_size">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">vocab_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.vocab_size" title="Permalink to this definition">¶</a></dt>
-<dd><p>The size of the vocabulary.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.vocab_type">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">vocab_type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></em><a class="headerlink" href="#xgrammar.TokenizerInfo.vocab_type" title="Permalink to this definition">¶</a></dt>
-<dd><p>The type of the vocabulary.</p>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.VocabType">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">VocabType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">names=&lt;not</span> <span class="pre">given&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qualname=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.VocabType" title="Permalink to this definition">¶</a></dt>
-<dd><p>The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of
-vocabularies:</p>
-<dl>
-<dt>RAW</dt><dd><p>The vocabulary is in the raw format. The tokens in the vocabulary are kept in their
-original form without any processing. This kind of tokenizer includes the tiktoken
-tokenizer, e.g. microsoft/Phi-3-small-8k-instruct, Qwen/Qwen-7B-Chat, etc.</p>
-</dd>
-<dt>BYTE_FALLBACK</dt><dd><p>The vocabulary used in the byte fallback BPE tokenizer. The tokens are encoded through
-the byte-fallback conversion. E.g. “” -&gt; “&lt;0x1B&gt;”, ” apple” -&gt; “▁apple”. This kind of
-tokenizer includes meta-llama/Llama-2-7b-chat, microsoft/Phi-3.5-mini-instruct, etc.</p>
-</dd>
-<dt>BYTE_LEVEL</dt><dd><p>The vocabulary used in the byte level BPE tokenizer. The tokens are encoded through
-the byte-to-unicode conversion, as in
-<a class="reference external" href="https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59">https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59</a></p>
-<p>This kind of tokenizer includes meta-llama/Meta-Llama-3-8B-Instruct,
-meta-llama/Meta-Llama-3.1-8B-Instruct, etc.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.allocate_token_bitmask">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">allocate_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#xgrammar.allocate_token_bitmask" title="Permalink to this definition">¶</a></dt>
-<dd><p>Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on
-CPU with shape (batch_size, ceil(vocab_size / 32)). Users who have their own needs to
-manage CUDA memory can construct the tensor with get_bitmask_shape and bitmask_dtype
-themselves.</p>
-<p>The reason why we use int32 instead of uint32 is that old versions of PyTorch do not support
-uint32.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>batch_size</strong> (<em>int</em>) – The batch size of the bitmask.</p></li>
-<li><p><strong>vocab_size</strong> (<em>int</em>) – The size of the vocabulary.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>bitmask</strong> – The shape of the bitmask.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.apply_token_bitmask_inplace">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">apply_token_bitmask_inplace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.apply_token_bitmask_inplace" title="Permalink to this definition">¶</a></dt>
-<dd><p>Apply the bitmask to the logits in-place. The bitmask is a 01 bitwise compressed tensor,
-where 0 means the token is masked and 1 means the token is not masked. It can be generated by
-allocate_token_bitmask and filled by fill_next_token_bitmask. After applying the bitmask, the
-masked logits will be set to -inf.</p>
-<p>The shape of logits and bitmask should be (batch_size, vocab_size) and
-(batch_size, bitmask_size) respectively. bitmask_size = ceil(vocab_size / 32). The operation is:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">vocab_size</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">get_bitmask_value</span><span class="p">(</span><span class="n">bitmask</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">logits</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">inf</span>
-</pre></div>
-</div>
-<p>get_bitmask_value(bitmask, i, j) gets the j-th bit of the i-th row of the bitmask.</p>
-<p>## Padding</p>
-<p>This method allows additional padding on the vocabulary dimension of logits or bitmask. If
-padding exists, provide the real vocab size to the vocab_size parameter, and the operation
-will be applied to logits[…, :vocab_size] and bitmask[…, :ceil(vocab_size / 32)].</p>
-<p>If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],
-bitmask.shape[-1] * 32).</p>
-<p>## Indices</p>
-<p>Indices can be used to specify which logits in the batch to apply the bitmask to. It is
-especially useful when there are structured requests and unstructured requests mixed in the
-same batch by skipping masking the logits in the unstructured requests. When specified, the
-operation will be</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">batch_id</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">vocab_size</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">get_bitmask_value</span><span class="p">(</span><span class="n">bitmask</span><span class="p">,</span> <span class="n">batch_id</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">logits</span><span class="p">[</span><span class="n">batch_id</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">inf</span>
-</pre></div>
-</div>
-<p>When indices is specified, the batch sizes of logits and bitmask do not need to be the same.
-As long as the indices are valid, the operation will be performed.</p>
-<p>## Device</p>
-<p>The logits and bitmask should be on the same device. If both them are on GPU, we launch a GPU
-kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The GPU kernel
-is optimized and should be preferred.</p>
-<p>In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
-manually copy the bitmask to GPU before calling this function.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>logits</strong> (<em>torch.Tensor</em>) – The tensor to apply the bitmask to.</p></li>
-<li><p><strong>bitmask</strong> (<em>torch.Tensor</em>) – The bitmask to apply.</p></li>
-<li><p><strong>vocab_size</strong> (<em>Optional</em><em>[</em><em>int</em><em>]</em><em>, </em><em>default: None</em>) – The size of the vocabulary. If not provided, the vocab size will be detected as
-min(logits.shape[-1], bitmask.shape[-1] * 32).</p></li>
-<li><p><strong>indices</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – A list of indices to specify which logits in the batch to apply the bitmask to. Should be
-unique. If None, apply the bitmask to all logits in the batch.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.get_bitmask_shape">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">get_bitmask_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#xgrammar.get_bitmask_shape" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32)).</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.reset_token_bitmask">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">reset_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.reset_token_bitmask" title="Permalink to this definition">¶</a></dt>
-<dd><p>Reset the bitmask to the full mask.</p>
-</dd></dl>
-
 </section>
 
 
@@ -1373,8 +322,10 @@ unique. If None, apply the bitmask to all logits in the batch.</p></li>
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
+        <a href="_generated/xgrammar.Grammar.html" class="btn btn-neutral float-right" title="xgrammar.Grammar" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
-        <a href="../../how_to/portable_api.html" class="btn btn-neutral float-left" title="Portable API" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+        <a href="../../misc/runtime_safeguards.html" class="btn btn-neutral float-left" title="Runtime Safeguards" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 
@@ -1406,7 +357,11 @@ unique. If None, apply the bitmask to all logits in the batch.</p></li>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
 
-  </body>
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
   <script type="text/javascript">
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
@@ -1418,5 +373,9 @@ unique. If None, apply the bitmask to all logits in the batch.</p></li>
     
    
 
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
 </body>
 </html>
