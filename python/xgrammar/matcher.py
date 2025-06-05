@@ -234,6 +234,11 @@ class GrammarMatcher(XGRObject):
         -------
         accepted : bool
             Whether the token is accepted.
+
+        Throws
+        ------
+        RuntimeError
+            If the recursion depth is exceeded.
         """
         return self._handle.accept_token(token_id, debug_print)
 
@@ -255,6 +260,11 @@ class GrammarMatcher(XGRObject):
         -------
         accepted : bool
             Whether the string is accepted.
+
+        Throws
+        ------
+        RuntimeError
+            If the recursion depth is exceeded.
         """
         return self._handle.accept_string(input_str, debug_print)
 
@@ -283,6 +293,11 @@ class GrammarMatcher(XGRObject):
         need_apply : bool
             Whether the bitmask need to be applied (not all-true). An optimization: if False,
             this means the bitmask is already all-true, so no need to apply it.
+
+        Throws
+        ------
+        RuntimeError
+            If the recursion depth is exceeded.
         """
         if bitmask.device.type != "cpu":
             raise ValueError("bitmask should be on CPU.")
@@ -303,6 +318,11 @@ class GrammarMatcher(XGRObject):
         -------
         jump_forward_string : str
             The jump-forward string.
+
+        Throws
+        ------
+        RuntimeError
+            If the recursion depth is exceeded.
         """
         return self._handle.find_jump_forward_string()
 
