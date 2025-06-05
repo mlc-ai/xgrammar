@@ -222,10 +222,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.allocate_token_bitmask"><code class="docutils literal notranslate"><span class="pre">allocate_token_bitmask()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.apply_token_bitmask_inplace"><code class="docutils literal notranslate"><span class="pre">apply_token_bitmask_inplace()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.get_bitmask_shape"><code class="docutils literal notranslate"><span class="pre">get_bitmask_shape()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.get_max_recursion_depth"><code class="docutils literal notranslate"><span class="pre">get_max_recursion_depth()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.max_recursion_depth"><code class="docutils literal notranslate"><span class="pre">max_recursion_depth()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#xgrammar.reset_token_bitmask"><code class="docutils literal notranslate"><span class="pre">reset_token_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar.set_max_recursion_depth"><code class="docutils literal notranslate"><span class="pre">set_max_recursion_depth()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -349,17 +346,8 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.get_bitmask_shape" title="xgrammar.get_bitmask_shape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_bitmask_shape</span></code></a>(batch_size, vocab_size)</p></td>
 <td><p>Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32)).</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.get_max_recursion_depth" title="xgrammar.get_max_recursion_depth"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_max_recursion_depth</span></code></a>()</p></td>
-<td><p>Get the maximum allowed recursion depth.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.max_recursion_depth" title="xgrammar.max_recursion_depth"><code class="xref py py-obj docutils literal notranslate"><span class="pre">max_recursion_depth</span></code></a>(temp_depth)</p></td>
-<td><p>A context manager for temporarily setting recursion depth.</p></td>
-</tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.reset_token_bitmask" title="xgrammar.reset_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset_token_bitmask</span></code></a>(bitmask)</p></td>
 <td><p>Reset the bitmask to the full mask.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.set_max_recursion_depth" title="xgrammar.set_max_recursion_depth"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_max_recursion_depth</span></code></a>(max_recursion_depth)</p></td>
-<td><p>Set the maximum allowed recursion depth.</p></td>
 </tr>
 </tbody>
 </table>
@@ -875,13 +863,10 @@ debugging.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><ul class="simple">
-<li><p><strong>accepted</strong> (<em>bool</em>) – Whether the string is accepted.</p></li>
-<li><p><em>Throws</em></p></li>
-<li><p><em>——</em></p></li>
-<li><p><em>RuntimeError</em> – If the recursion depth is exceeded.</p></li>
-</ul>
-</p>
+<dd class="field-even"><p><strong>accepted</strong> – Whether the string is accepted.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
 </dd>
 </dl>
 </dd></dl>
@@ -911,13 +896,10 @@ for debugging.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><ul class="simple">
-<li><p><strong>accepted</strong> (<em>bool</em>) – Whether the token is accepted.</p></li>
-<li><p><em>Throws</em></p></li>
-<li><p><em>——</em></p></li>
-<li><p><em>RuntimeError</em> – If the recursion depth is exceeded.</p></li>
-</ul>
-</p>
+<dd class="field-even"><p><strong>accepted</strong> – Whether the token is accepted.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
 </dd>
 </dl>
 </dd></dl>
@@ -938,14 +920,11 @@ next token bitmask.</p>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><ul class="simple">
-<li><p><strong>need_apply</strong> (<em>bool</em>) – Whether the bitmask need to be applied (not all-true). An optimization: if False,
-this means the bitmask is already all-true, so no need to apply it.</p></li>
-<li><p><em>Throws</em></p></li>
-<li><p><em>——</em></p></li>
-<li><p><em>RuntimeError</em> – If the recursion depth is exceeded.</p></li>
-</ul>
-</p>
+<dd class="field-even"><p><strong>need_apply</strong> – Whether the bitmask need to be applied (not all-true). An optimization: if False,
+this means the bitmask is already all-true, so no need to apply it.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
 </dd>
 </dl>
 </dd></dl>
@@ -959,13 +938,10 @@ can become the output of the LLM without requiring LLM decoding.</p>
 <p>This method does not change the matcher state.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><ul class="simple">
-<li><p><strong>jump_forward_string</strong> (<em>str</em>) – The jump-forward string.</p></li>
-<li><p><em>Throws</em></p></li>
-<li><p><em>——</em></p></li>
-<li><p><em>RuntimeError</em> – If the recursion depth is exceeded.</p></li>
-</ul>
-</p>
+<dd class="field-odd"><p><strong>jump_forward_string</strong> – The jump-forward string.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>str</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1380,52 +1356,9 @@ unique. If None, apply the bitmask to all logits in the batch.</p></li>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.get_max_recursion_depth">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">get_max_recursion_depth</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="headerlink" href="#xgrammar.get_max_recursion_depth" title="Permalink to this definition">¶</a></dt>
-<dd><p>Get the maximum allowed recursion depth. The depth is shared per process.</p>
-<p>The maximum recursion depth is determined in the following order:
-1. Manually set via set_max_recursion_depth()
-2. XGRAMMAR_MAX_RECURSION_DEPTH environment variable (if set and is a valid integer &lt;= 1000000)
-3. Default value of 10000</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>max_recursion_depth</strong> – The maximum allowed recursion depth.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>int</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.max_recursion_depth">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">max_recursion_depth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">temp_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.max_recursion_depth" title="Permalink to this definition">¶</a></dt>
-<dd><p>A context manager for temporarily setting recursion depth.</p>
-<p class="rubric">Example</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">recursion_depth</span><span class="p">(</span><span class="mi">1000</span><span class="p">):</span>
-<span class="gp">... </span>    <span class="c1"># recursion depth is 1000 here</span>
-<span class="gp">... </span>    <span class="k">pass</span>
-<span class="gp">... </span><span class="c1"># recursion depth is restored to original value</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
 <dt class="sig sig-object py" id="xgrammar.reset_token_bitmask">
 <span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">reset_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.reset_token_bitmask" title="Permalink to this definition">¶</a></dt>
 <dd><p>Reset the bitmask to the full mask.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.set_max_recursion_depth">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">set_max_recursion_depth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">max_recursion_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#xgrammar.set_max_recursion_depth" title="Permalink to this definition">¶</a></dt>
-<dd><p>Set the maximum allowed recursion depth. The depth is shared per process. This method is
-thread-safe.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>max_recursion_depth</strong> (<em>int</em>) – The maximum allowed recursion depth.</p>
-</dd>
-</dl>
 </dd></dl>
 
 </section>
