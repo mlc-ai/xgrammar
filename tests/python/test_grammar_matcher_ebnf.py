@@ -11,7 +11,11 @@ import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
+from xgrammar.testing import (
+    _get_masked_tokens_from_bitmask,
+    _get_matcher_from_grammar_and_tokenizer_info,
+    _is_grammar_accept_string,
+)
 
 
 def test_simple():
@@ -397,6 +401,95 @@ def test_fill_next_token_bitmask(
     matcher.fill_next_token_bitmask(token_bitmask)
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert len(rejected_token_ids) == expected_rejected_sizes[-1]
+
+
+def test_nullable_grammar():
+    grammar_with_nullable_rules = """
+    root ::= rule1 | (rule1 rule1 rule1 rule3)+
+    rule1 ::= rule2
+    rule2 ::= [0-9]*
+    rule3 ::= [a-z]
+"""
+    test_string = ["abc12312398014a", ""]
+
+    for s in test_string:
+        assert _is_grammar_accept_string(grammar_with_nullable_rules, s)
+
+
+def test_predict_complete():
+    # Test complex prediction and completion with EBNF grammar.
+    mixed_grammar_str = """root ::= rule1 [0-9]?
+    rule1 ::= rule2 [0-9]? | rule4 [0-9]?
+    rule2 ::= rule3 [0-9]? | rule2 [0-9]? | rule1 [0-9]?
+    rule3 ::= rule4 [0-9]? | rule5 [0-9]?
+    rule4 ::= rule5 [0-9]? | rule6 [0-9]?
+    rule5 ::= rule6 [0-9]? | rule7 [0-9]? | rule8 [0-9]?
+    rule6 ::= rule7 [0-9]? | rule1 [0-9]?
+    rule7 ::= rule8 [0-9]? | rule9 [0-9]?
+    rule8 ::= rule9 [0-9]? | rule7 [0-9]?
+    rule9 ::= [0-9]?
+    """
+
+    grammar = xgr.Grammar.from_ebnf(mixed_grammar_str)
+    input_str = ""
+    for i in range(10):
+        assert _is_grammar_accept_string(grammar, input_str)
+        input_str += "0"
+    assert _is_grammar_accept_string(grammar, input_str)
+
+    # Test right recursion
+    right_recursion_grammar = "root ::= [a-z] root | [a-z]"
+
+    accept_strings = ["a", "ab", "abc", "abcd", "abcde"]
+    reject_strings = ["", "1", "a1", "ab1", "abc1"]
+    for accept_string in accept_strings:
+        assert _is_grammar_accept_string(right_recursion_grammar, accept_string)
+    for reject_string in reject_strings:
+        assert not _is_grammar_accept_string(right_recursion_grammar, reject_string)
+
+    # Test the mixture of right recursion and other rules
+    mixed_grammar_str = """root ::= rule1
+    rule1 ::= "{" rule2 | ""
+    rule2 ::= root "}"
+    """
+    test_strings = {"", "{}", "{{}}", "{{{}}}", "{{{{}}}}", "{{{{{}}}}}"}
+    rejected_strings = {"{", "{}{}", "{{{{}", "{{}}}", "{{{{{}}}}}}"}
+
+    for test_string in test_strings:
+        assert _is_grammar_accept_string(mixed_grammar_str, test_string)
+    for rejected_string in rejected_strings:
+        assert not _is_grammar_accept_string(mixed_grammar_str, rejected_string)
+
+
+def test_advance():
+    # Test complex Advance and completion with EBNF grammar.
+    ebnf_grammar_str = """root ::= rule1
+    rule1 ::= [a] | [a-b] | [a-c]* | "a" | "aaaaaaaaaaaaaaaaaaa"
+    """
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+    for i in range(10):
+        input_str = "a" * i
+        assert _is_grammar_accept_string(grammar, input_str)
+
+
+def test_character_class_star_utf8():
+    ebnf_grammar_str = """root ::= [^0-9]*"""
+    test_string = "worldせかい世界"
+    assert _is_grammar_accept_string(ebnf_grammar_str, test_string)
+
+
+@pytest.mark.hf_token_required
+def test_not_neighbour_character_class():
+    raw_grammar = "root ::= [a-cx-z]*"
+    tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    grammar = xgr.Grammar.from_ebnf(raw_grammar)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    assert len(rejected_token_ids) == 31933
 
 
 if __name__ == "__main__":

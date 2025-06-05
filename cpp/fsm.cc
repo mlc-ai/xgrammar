@@ -285,7 +285,7 @@ CompactFSM FSM::Impl::ToCompact() {
   CSRArray<FSMEdge> edges;
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     std::sort(edges_[i].begin(), edges_[i].end());
-    edges.Insert(edges_[i]);
+    edges.PushBack(edges_[i]);
   }
   return CompactFSM(edges);
 }

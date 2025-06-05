@@ -113,21 +113,21 @@ class CSRArray {
    * \param data_len Length of the data to be inserted.
    * \return The index of the newly inserted row.
    */
-  int32_t Insert(const DataType* new_data, int32_t new_data_len);
+  int32_t PushBack(const DataType* new_data, int32_t new_data_len);
 
   /*!
    * \brief Insert a new row of data into the CSRArray from a vector.
    * \param data Vector containing the data to be inserted.
    * \return The index of the newly inserted row.
    */
-  int32_t Insert(const std::vector<DataType>& new_data);
+  int32_t PushBack(const std::vector<DataType>& new_data);
 
   /*!
    * \brief Insert a new row of data into the CSRArray from a Row struct.
    * \param row The Row struct containing the data to be inserted.
    * \return The index of the newly inserted row.
    */
-  int32_t Insert(const Row& row) { return Insert(row.data, row.data_len); }
+  int32_t PushBack(const Row& row) { return PushBack(row.data, row.data_len); }
 
   /*!
    * \brief Insert a new row of non-contiguous data into the CSRArray. This method inserts a
@@ -138,7 +138,17 @@ class CSRArray {
    * \param data_2_len Length of the remaining data to be inserted.
    * \return The index of the newly inserted row.
    */
-  int32_t InsertNonContiguous(DataType data_1, const DataType* data_2, int32_t data_2_len);
+  int32_t PushBackNonContiguous(DataType data_1, const DataType* data_2, int32_t data_2_len);
+
+  /*!
+   * \brief Pop back the last one or multiple rows of the CSRArray.
+   * \param cnt The number of rows to be popped.
+   */
+  void PopBack(const int32_t& cnt) {
+    indptr_.erase(indptr_.end() - cnt, indptr_.end());
+    data_.erase(data_.begin() + indptr_.back(), data_.end());
+    return;
+  }
 
   /****************** Internal Accessors ******************/
 
@@ -178,7 +188,7 @@ inline typename CSRArray<DataType>::Row CSRArray<DataType>::operator[](int32_t i
 }
 
 template <typename DataType>
-inline int32_t CSRArray<DataType>::Insert(const DataType* new_data, int32_t new_data_len) {
+inline int32_t CSRArray<DataType>::PushBack(const DataType* new_data, int32_t new_data_len) {
   // TODO(yixin): whether to add a additional data_len
   // If the new data is already in the CSRArray, we need to copy it to the new memory location.
   if (new_data >= data_.data() && new_data < data_.data() + data_.size()) {
@@ -192,14 +202,14 @@ inline int32_t CSRArray<DataType>::Insert(const DataType* new_data, int32_t new_
 }
 
 template <typename DataType>
-inline int32_t CSRArray<DataType>::Insert(const std::vector<DataType>& new_data) {
+inline int32_t CSRArray<DataType>::PushBack(const std::vector<DataType>& new_data) {
   data_.insert(data_.end(), new_data.begin(), new_data.end());
   indptr_.push_back(static_cast<int32_t>(data_.size()));
   return static_cast<int32_t>(indptr_.size()) - 2;
 }
 
 template <typename DataType>
-inline int32_t CSRArray<DataType>::InsertNonContiguous(
+inline int32_t CSRArray<DataType>::PushBackNonContiguous(
     DataType data_1, const DataType* data_2, int32_t data_2_len
 ) {
   if (data_2 >= data_.data() && data_2 < data_.data() + data_.size()) {

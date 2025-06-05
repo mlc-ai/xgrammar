@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include "earley_parser.h"
+
 // matcher_data_structure.h is included to use StackElement
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
@@ -70,6 +72,13 @@ struct AdaptiveTokenMask {
       const std::vector<int32_t>& uncertain_indices
   );
 
+  AdaptiveTokenMask(
+      size_t vocab_size,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
+      const std::vector<int32_t>& accepted_indices,
+      const std::vector<int32_t>& uncertain_indices
+  );
+
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
   std::size_t MemorySize() const;
@@ -122,8 +131,7 @@ class CompiledGrammar::Impl {
   };
 
   /*! \brief Mapping from the stack top element to the adaptive token mask. */
-  std::unordered_map<StackElement, AdaptiveTokenMask, StackElementHash, StackElementEqual>
-      adaptive_token_mask_cache;
+  std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache> adaptive_token_mask_cache;
 
   Grammar GetGrammar() const { return grammar; }
 
