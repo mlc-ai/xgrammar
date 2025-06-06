@@ -262,11 +262,11 @@ window.addEventListener("load", () => mermaid.run());
 <span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGRObject</span><span class="p">,</span> <span class="n">_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.compiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledGrammar</span>
 
-<span class="sd">&quot;&quot;&quot;The dtype of the bitmask: int32.&quot;&quot;&quot;</span>
 <span class="n">bitmask_dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">int32</span>
+<span class="sd">&quot;&quot;&quot;The dtype of the bitmask: int32.&quot;&quot;&quot;</span>
 
 
-<div class="viewcode-block" id="get_bitmask_shape"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.get_bitmask_shape.html#xgrammar.get_bitmask_shape">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">get_bitmask_shape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<div class="viewcode-block" id="get_bitmask_shape"><a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.get_bitmask_shape">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">get_bitmask_shape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32)).&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">vocab_size</span> <span class="o">/</span> <span class="mi">32</span><span class="p">))</span></div>
 
@@ -274,7 +274,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="n">_FULL_MASK</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">bitmask_dtype</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="allocate_token_bitmask"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.allocate_token_bitmask.html#xgrammar.allocate_token_bitmask">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">allocate_token_bitmask</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<div class="viewcode-block" id="allocate_token_bitmask"><a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.allocate_token_bitmask">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">allocate_token_bitmask</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on</span>
 <span class="sd">    CPU with shape (batch_size, ceil(vocab_size / 32)). Users who have their own needs to</span>
 <span class="sd">    manage CUDA memory can construct the tensor with get_bitmask_shape and bitmask_dtype</span>
@@ -300,12 +300,12 @@ window.addEventListener("load", () => mermaid.run());
     <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">get_bitmask_shape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">),</span> <span class="n">_FULL_MASK</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">bitmask_dtype</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="reset_token_bitmask"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.reset_token_bitmask.html#xgrammar.reset_token_bitmask">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">reset_token_bitmask</span><span class="p">(</span><span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="reset_token_bitmask"><a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.reset_token_bitmask">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">reset_token_bitmask</span><span class="p">(</span><span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Reset the bitmask to the full mask.&quot;&quot;&quot;</span>
     <span class="n">bitmask</span><span class="o">.</span><span class="n">fill_</span><span class="p">(</span><span class="n">_FULL_MASK</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="apply_token_bitmask_inplace"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.apply_token_bitmask_inplace.html#xgrammar.apply_token_bitmask_inplace">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">apply_token_bitmask_inplace</span><span class="p">(</span>
+<div class="viewcode-block" id="apply_token_bitmask_inplace"><a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.apply_token_bitmask_inplace">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">apply_token_bitmask_inplace</span><span class="p">(</span>
     <span class="n">logits</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
     <span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
@@ -487,7 +487,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        accepted : bool</span>
 <span class="sd">            Whether the token is accepted.</span>
 
-<span class="sd">        Throws</span>
+<span class="sd">        Raises</span>
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the recursion depth is exceeded.</span>
@@ -513,7 +513,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        accepted : bool</span>
 <span class="sd">            Whether the string is accepted.</span>
 
-<span class="sd">        Throws</span>
+<span class="sd">        Raises</span>
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the recursion depth is exceeded.</span>
@@ -546,7 +546,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">            Whether the bitmask need to be applied (not all-true). An optimization: if False,</span>
 <span class="sd">            this means the bitmask is already all-true, so no need to apply it.</span>
 
-<span class="sd">        Throws</span>
+<span class="sd">        Raises</span>
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the recursion depth is exceeded.</span>
@@ -571,7 +571,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        jump_forward_string : str</span>
 <span class="sd">            The jump-forward string.</span>
 
-<span class="sd">        Throws</span>
+<span class="sd">        Raises</span>
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the recursion depth is exceeded.</span>

@@ -260,24 +260,15 @@ window.addEventListener("load", () => mermaid.run());
 <span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGRObject</span><span class="p">,</span> <span class="n">_core</span>
 
 
-<div class="viewcode-block" id="StructuralTagItem"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.StructuralTagItem.html#xgrammar.StructuralTagItem">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A structural tag item. See Grammar.from_structural_tag() for more details.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    begin : str</span>
-<span class="sd">        The begin tag.</span>
-
-<span class="sd">    schema_ : Union[str, Type[BaseModel]]</span>
-<span class="sd">        The schema.</span>
-
-<span class="sd">    end : str</span>
-<span class="sd">        The end tag.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="StructuralTagItem"><a class="viewcode-back" href="../../api/python/structural_tag_item.html#xgrammar.StructuralTagItem">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A structural tag item. See Grammar.from_structural_tag() for more details.&quot;&quot;&quot;</span>
 
     <span class="n">begin</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag.&quot;&quot;&quot;</span>
     <span class="n">schema_</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">alias</span><span class="o">=</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span>
-    <span class="n">end</span><span class="p">:</span> <span class="nb">str</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The schema.&quot;&quot;&quot;</span>
+    <span class="n">end</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag.&quot;&quot;&quot;</span></div>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_convert_schema_to_str</span><span class="p">(</span><span class="n">schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>

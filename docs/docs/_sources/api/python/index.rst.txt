@@ -9,18 +9,20 @@ xgrammar
    :toctree: _generated
 
    Grammar
-   StructuralTagItem
+
+.. toctree::
+   structural_tag_item
+
+.. autosummary::
+   :toctree: _generated
+
    GrammarCompiler
    CompiledGrammar
    GrammarMatcher
    TokenizerInfo
    VocabType
 
-.. autosummary::
-   :toctree: _generated
+.. toctree::
 
-   allocate_token_bitmask
-   apply_token_bitmask_inplace
-   reset_token_bitmask
-   get_bitmask_shape
-   bitmask_dtype
+   bitmask_ops
+   recursion_depth

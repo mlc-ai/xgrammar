@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>xgrammar &mdash; XGrammar 0.1.19 documentation</title>
+  <title>xgrammar.StructuralTagItem &mdash; XGrammar 0.1.19 documentation</title>
   
 
   
@@ -50,8 +50,8 @@
     <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="xgrammar.Grammar" href="_generated/xgrammar.Grammar.html" />
-    <link rel="prev" title="Runtime Safeguards" href="../../misc/runtime_safeguards.html" /> 
+    <link rel="next" title="xgrammar.GrammarCompiler" href="_generated/xgrammar.GrammarCompiler.html" />
+    <link rel="prev" title="xgrammar.Grammar" href="_generated/xgrammar.Grammar.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -168,9 +168,17 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">xgrammar</a><ul>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">xgrammar</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.Grammar.html">xgrammar.Grammar</a></li>
-<li class="toctree-l2"><a class="reference internal" href="structural_tag_item.html">xgrammar.StructuralTagItem</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">xgrammar.StructuralTagItem</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.StructuralTagItem.begin"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.begin</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.StructuralTagItem.end"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.end</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.StructuralTagItem.schema_"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.schema_</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.GrammarCompiler.html">xgrammar.GrammarCompiler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.CompiledGrammar.html">xgrammar.CompiledGrammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_generated/xgrammar.GrammarMatcher.html">xgrammar.GrammarMatcher</a></li>
@@ -236,7 +244,9 @@
     
       <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>xgrammar</li>
+          <li><a href="index.html">xgrammar</a> <span class="br-arrow">></span></li>
+        
+      <li>xgrammar.StructuralTagItem</li>
     
     
       
@@ -247,7 +257,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/index.rst" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/structural_tag_item.rst" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -261,65 +271,33 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section id="xgrammar">
-<span id="apixgrammar"></span><h1>xgrammar<a class="headerlink" href="#xgrammar" title="Permalink to this heading">¶</a></h1>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.Grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Grammar</span></code></a>()</p></td>
-<td><p>This class represents a grammar object in XGrammar, and can be used later in the grammar-guided generation.</p></td>
-</tr>
-</tbody>
-</table>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structural_tag_item.html">xgrammar.StructuralTagItem</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structural_tag_item.html#xgrammar.StructuralTagItem"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structural_tag_item.html#xgrammar.StructuralTagItem.begin"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.begin</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="structural_tag_item.html#xgrammar.StructuralTagItem.end"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.end</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="structural_tag_item.html#xgrammar.StructuralTagItem.schema_"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.schema_</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a>(tokenizer_info, *[, ...])</p></td>
-<td><p>The compiler for grammars.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_generated/xgrammar.CompiledGrammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a>()</p></td>
-<td><p>This is the primary object to store compiled grammar.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a>(compiled_grammar, *[, ...])</p></td>
-<td><p>Match the output of the LLM to the specified grammar, then generate the mask for the next token.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a>(encoded_vocab[, vocab_type, ...])</p></td>
-<td><p>The tokenizer info contains the vocabulary, the type of the vocabulary, and necessary information for the grammar-guided generation.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_generated/xgrammar.VocabType.html#xgrammar.VocabType" title="xgrammar.VocabType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">VocabType</span></code></a>(value[, names, module, qualname, ...])</p></td>
-<td><p>The type of the vocabulary.</p></td>
-</tr>
-</tbody>
-</table>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.allocate_token_bitmask"><code class="docutils literal notranslate"><span class="pre">allocate_token_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.apply_token_bitmask_inplace"><code class="docutils literal notranslate"><span class="pre">apply_token_bitmask_inplace()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.reset_token_bitmask"><code class="docutils literal notranslate"><span class="pre">reset_token_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.get_bitmask_shape"><code class="docutils literal notranslate"><span class="pre">get_bitmask_shape()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.bitmask_dtype"><code class="docutils literal notranslate"><span class="pre">bitmask_dtype</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="recursion_depth.html">Recursion Depth Management</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="recursion_depth.html#xgrammar.get_max_recursion_depth"><code class="docutils literal notranslate"><span class="pre">get_max_recursion_depth()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="recursion_depth.html#xgrammar.set_max_recursion_depth"><code class="docutils literal notranslate"><span class="pre">set_max_recursion_depth()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="recursion_depth.html#xgrammar.max_recursion_depth"><code class="docutils literal notranslate"><span class="pre">max_recursion_depth()</span></code></a></li>
-</ul>
-</li>
-</ul>
-</div>
+  <section id="xgrammar-structuraltagitem">
+<h1>xgrammar.StructuralTagItem<a class="headerlink" href="#xgrammar-structuraltagitem" title="Permalink to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="xgrammar.StructuralTagItem">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">StructuralTagItem</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">begin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Type" title="(in Python v3.12)"><span class="pre">Type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">BaseModel</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#StructuralTagItem"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.StructuralTagItem" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
+<p>A structural tag item. See Grammar.from_structural_tag() for more details.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.begin">
+<span class="sig-name descname"><span class="pre">begin</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></em><a class="headerlink" href="#xgrammar.StructuralTagItem.begin" title="Permalink to this definition">¶</a></dt>
+<dd><p>The begin tag.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.end">
+<span class="sig-name descname"><span class="pre">end</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></em><a class="headerlink" href="#xgrammar.StructuralTagItem.end" title="Permalink to this definition">¶</a></dt>
+<dd><p>The end tag.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.schema_">
+<span class="sig-name descname"><span class="pre">schema_</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Type" title="(in Python v3.12)"><span class="pre">Type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">BaseModel</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.StructuralTagItem.schema_" title="Permalink to this definition">¶</a></dt>
+<dd><p>The schema.</p>
+</dd></dl>
+
+</dd></dl>
+
 </section>
 
 
@@ -332,10 +310,10 @@
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="_generated/xgrammar.Grammar.html" class="btn btn-neutral float-right" title="xgrammar.Grammar" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="_generated/xgrammar.GrammarCompiler.html" class="btn btn-neutral float-right" title="xgrammar.GrammarCompiler" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../../misc/runtime_safeguards.html" class="btn btn-neutral float-left" title="Runtime Safeguards" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="_generated/xgrammar.Grammar.html" class="btn btn-neutral float-left" title="xgrammar.Grammar" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

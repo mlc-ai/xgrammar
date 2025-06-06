@@ -1,6 +1,0 @@
-﻿xgrammar.get\_bitmask\_shape
-============================
-
-.. currentmodule:: xgrammar
-
-.. autofunction:: get_bitmask_shape

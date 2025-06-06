@@ -1,6 +1,0 @@
-﻿xgrammar.apply\_token\_bitmask\_inplace
-=======================================
-
-.. currentmodule:: xgrammar
-
-.. autofunction:: apply_token_bitmask_inplace

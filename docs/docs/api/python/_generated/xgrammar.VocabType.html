@@ -50,7 +50,7 @@
     <script type="text/javascript" src="../../../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
-    <link rel="next" title="xgrammar.allocate_token_bitmask" href="xgrammar.allocate_token_bitmask.html" />
+    <link rel="next" title="Bitmask Operations" href="../bitmask_ops.html" />
     <link rel="prev" title="xgrammar.TokenizerInfo" href="xgrammar.TokenizerInfo.html" /> 
 </head>
 
@@ -170,7 +170,7 @@
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="../index.html">xgrammar</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="xgrammar.Grammar.html">xgrammar.Grammar</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.StructuralTagItem.html">xgrammar.StructuralTagItem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../structural_tag_item.html">xgrammar.StructuralTagItem</a></li>
 <li class="toctree-l2"><a class="reference internal" href="xgrammar.GrammarCompiler.html">xgrammar.GrammarCompiler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="xgrammar.CompiledGrammar.html">xgrammar.CompiledGrammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="xgrammar.GrammarMatcher.html">xgrammar.GrammarMatcher</a></li>
@@ -178,15 +178,15 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">xgrammar.VocabType</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.VocabType"><code class="docutils literal notranslate"><span class="pre">VocabType</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.VocabType.__init__"><code class="docutils literal notranslate"><span class="pre">VocabType.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.VocabType.BYTE_FALLBACK"><code class="docutils literal notranslate"><span class="pre">VocabType.BYTE_FALLBACK</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.VocabType.BYTE_LEVEL"><code class="docutils literal notranslate"><span class="pre">VocabType.BYTE_LEVEL</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.VocabType.RAW"><code class="docutils literal notranslate"><span class="pre">VocabType.RAW</span></code></a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.allocate_token_bitmask.html">xgrammar.allocate_token_bitmask</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.apply_token_bitmask_inplace.html">xgrammar.apply_token_bitmask_inplace</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.reset_token_bitmask.html">xgrammar.reset_token_bitmask</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.get_bitmask_shape.html">xgrammar.get_bitmask_shape</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.bitmask_dtype.html">xgrammar.bitmask_dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bitmask_ops.html">Bitmask Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../recursion_depth.html">Recursion Depth Management</a></li>
 </ul>
 </li>
 </ul>
@@ -277,7 +277,8 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.VocabType">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">VocabType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">names=&lt;not</span> <span class="pre">given&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qualname=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/xgrammar/tokenizer_info.html#VocabType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.VocabType" title="Permalink to this definition">¶</a></dt>
-<dd><p>The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.12/library/enum.html#enum.Enum" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
+<p>The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of
 vocabularies:</p>
 <dl>
 <dt>RAW</dt><dd><p>The vocabulary is in the raw format. The tokens in the vocabulary are kept in their
@@ -303,17 +304,32 @@ meta-llama/Meta-Llama-3.1-8B-Instruct, etc.</p>
 <p class="rubric">Attributes</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">RAW</span></code></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.VocabType.RAW" title="xgrammar.VocabType.RAW"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RAW</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">BYTE_FALLBACK</span></code></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.VocabType.BYTE_FALLBACK" title="xgrammar.VocabType.BYTE_FALLBACK"><code class="xref py py-obj docutils literal notranslate"><span class="pre">BYTE_FALLBACK</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">BYTE_LEVEL</span></code></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.VocabType.BYTE_LEVEL" title="xgrammar.VocabType.BYTE_LEVEL"><code class="xref py py-obj docutils literal notranslate"><span class="pre">BYTE_LEVEL</span></code></a></p></td>
 <td><p></p></td>
 </tr>
 </tbody>
 </table>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.VocabType.BYTE_FALLBACK">
+<span class="sig-name descname"><span class="pre">BYTE_FALLBACK</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#xgrammar.VocabType.BYTE_FALLBACK" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.VocabType.BYTE_LEVEL">
+<span class="sig-name descname"><span class="pre">BYTE_LEVEL</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></em><a class="headerlink" href="#xgrammar.VocabType.BYTE_LEVEL" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="xgrammar.VocabType.RAW">
+<span class="sig-name descname"><span class="pre">RAW</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></em><a class="headerlink" href="#xgrammar.VocabType.RAW" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 </section>
@@ -328,7 +344,7 @@ meta-llama/Meta-Llama-3.1-8B-Instruct, etc.</p>
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="xgrammar.allocate_token_bitmask.html" class="btn btn-neutral float-right" title="xgrammar.allocate_token_bitmask" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="../bitmask_ops.html" class="btn btn-neutral float-right" title="Bitmask Operations" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="xgrammar.TokenizerInfo.html" class="btn btn-neutral float-left" title="xgrammar.TokenizerInfo" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

@@ -170,7 +170,7 @@
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="../index.html">xgrammar</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="xgrammar.Grammar.html">xgrammar.Grammar</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.StructuralTagItem.html">xgrammar.StructuralTagItem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../structural_tag_item.html">xgrammar.StructuralTagItem</a></li>
 <li class="toctree-l2"><a class="reference internal" href="xgrammar.GrammarCompiler.html">xgrammar.GrammarCompiler</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">xgrammar.CompiledGrammar</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a><ul>
@@ -185,11 +185,8 @@
 <li class="toctree-l2"><a class="reference internal" href="xgrammar.GrammarMatcher.html">xgrammar.GrammarMatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="xgrammar.TokenizerInfo.html">xgrammar.TokenizerInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="xgrammar.VocabType.html">xgrammar.VocabType</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.allocate_token_bitmask.html">xgrammar.allocate_token_bitmask</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.apply_token_bitmask_inplace.html">xgrammar.apply_token_bitmask_inplace</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.reset_token_bitmask.html">xgrammar.reset_token_bitmask</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.get_bitmask_shape.html">xgrammar.get_bitmask_shape</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xgrammar.bitmask_dtype.html">xgrammar.bitmask_dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bitmask_ops.html">Bitmask Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../recursion_depth.html">Recursion Depth Management</a></li>
 </ul>
 </li>
 </ul>
@@ -280,7 +277,8 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.CompiledGrammar">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">CompiledGrammar</span></span><a class="reference internal" href="../../../_modules/xgrammar/compiler.html#CompiledGrammar"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.CompiledGrammar" title="Permalink to this definition">¶</a></dt>
-<dd><p>This is the primary object to store compiled grammar.</p>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">XGRObject</span></code></p>
+<p>This is the primary object to store compiled grammar.</p>
 <p>A CompiledGrammar can be used to construct GrammarMatcher
 to generate token masks efficiently.</p>
 <div class="admonition note">
