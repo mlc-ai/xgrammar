@@ -72,7 +72,12 @@ intersphinx_mapping = {
     "torch": ("https://pytorch.org/docs/stable", None),
 }
 
-autodoc_default_options = {"members": True, "inherited-members": True}
+autodoc_default_options = {
+    "members": True,
+    "inherited-members": False,
+    "undoc-members": True,
+    "show-inheritance": True,
+}
 
 # -- Other Options --------------------------------------------------------
 

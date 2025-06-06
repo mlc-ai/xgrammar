@@ -13,7 +13,7 @@ pandoc
 pillow
 pydantic
 sentencepiece
-sphinx == 5.2.3
+sphinx==5.2.3
 sphinx-autobuild
 sphinx-book-theme
 sphinx-copybutton
