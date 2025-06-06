@@ -3,7 +3,6 @@ import sys
 import pytest
 
 import xgrammar as xgr
-from xgrammar.testing import _get_matcher_from_grammar
 
 
 def test_set_get_recursion_depth():
@@ -35,19 +34,20 @@ def test_error_set_recursion_depth():
         xgr.set_max_recursion_depth(100000000)
 
 
-def test_recursion_exceed():
-    with xgr.max_recursion_depth(1000):
-        grammar_ebnf = r"""
-    root ::= "\"" basic_string "\""
-    basic_string ::= "" | [^"\\\r\n] basic_string | "\\" escape basic_string
-    escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-    """
-        input_str = '"' + " " * 10000 + '"'
+# deprecated in Earley Parser
+# def test_recursion_exceed():
+#     with xgr.max_recursion_depth(1000):
+#         grammar_ebnf = r"""
+#     root ::= "\"" basic_string "\""
+#     basic_string ::= "" | [^"\\\r\n] basic_string | "\\" escape basic_string
+#     escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+#     """
+#         input_str = '"' + " " * 10000 + '"'
 
-        matcher = _get_matcher_from_grammar(grammar_ebnf)
+#         matcher = _get_matcher_from_grammar(grammar_ebnf)
 
-        with pytest.raises(RuntimeError):
-            matcher.accept_string(input_str)
+#         with pytest.raises(RuntimeError):
+#             matcher.accept_string(input_str)
 
 
 if __name__ == "__main__":

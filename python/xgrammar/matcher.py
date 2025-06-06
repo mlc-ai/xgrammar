@@ -3,6 +3,7 @@ token.
 """
 
 import math
+import warnings
 from typing import List, Optional, Tuple, Union
 
 import torch
@@ -180,6 +181,9 @@ class GrammarMatcher(XGRObject):
         Whether to terminate the matcher without accepting a stop token.
 
     max_rollback_tokens : int, default: 0
+        Deprecated because the earley parser significantly reduces the number of states, so not
+        needed anymore.
+
         The maximum number of rollback tokens allowed. The rollback operation is useful for
         jump-forward decoding and speculative decoding.
     """
@@ -190,10 +194,16 @@ class GrammarMatcher(XGRObject):
         *,
         override_stop_tokens: Optional[Union[int, List[int]]] = None,
         terminate_without_stop_token: bool = False,
-        max_rollback_tokens: int = 0,
+        max_rollback_tokens: int = -1,
     ) -> None:
         if not isinstance(compiled_grammar, CompiledGrammar):
             raise ValueError("The grammar should be compiled before passing it to GrammarMatcher.")
+
+        if not max_rollback_tokens == -1:
+            warnings.warn(
+                "max_rollback_tokens is deprecated because the earley parser significantly reduces the number of states, so not needed anymore.",
+                DeprecationWarning,
+            )
 
         if isinstance(override_stop_tokens, int):
             override_stop_tokens = [override_stop_tokens]
