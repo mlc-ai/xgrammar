@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import platform
 from contextlib import suppress
 from typing import List, Optional, Union
 
@@ -74,7 +75,9 @@ def _load_torch_ops() -> None:
     torch_op_file_path = Path(__file__).with_suffix(".cu")
     with open(torch_op_file_path) as f:
         source = f.read()
-    cflags = ["-O3", "-Wno-switch-bool"]
+    cflags = ["-O3"]
+    if platform.system() != "Windows":
+        cflags.append("-Wno-switch-bool")
     cuda_cflags = ["-O3", "-std=c++17", "--threads", "4", "-use_fast_math"]
     # Use the safer cpp_extension.load_inline instead of cpp_extension.load
     torch.utils.cpp_extension.load_inline(

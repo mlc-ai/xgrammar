@@ -92,11 +92,7 @@ class GrammarBuilder {
    * \param str The string to be added.
    */
   int32_t AddByteString(const std::string& str) {
-    std::vector<int32_t> bytes;
-    bytes.reserve(str.size());
-    for (char c : str) {
-      bytes.push_back(static_cast<int32_t>(c));
-    }
+    std::vector<int32_t> bytes(str.begin(), str.end());
     return AddRuleExpr({RuleExprType::kByteString, bytes.data(), static_cast<int32_t>(bytes.size())}
     );
   }
@@ -250,11 +246,9 @@ class GrammarBuilder {
    * \brief Add a lookahead assertion to a rule referred by the given rule_id. The lookahead
    * assertion should be a sequence RuleExpr id. An id of -1 means no lookahead assertion.
    */
-  void AddLookaheadAssertion(int32_t rule_id, int32_t lookahead_assertion_id) {
+  void UpdateLookaheadAssertion(int32_t rule_id, int32_t lookahead_assertion_id) {
     XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(grammar_->rules_.size()))
         << "Rule id " << rule_id << " is out of range.";
-    XGRAMMAR_CHECK(grammar_->rules_[rule_id].lookahead_assertion_id == -1)
-        << "Rule " << rule_id << " already has a lookahead assertion.";
     grammar_->rules_[rule_id].lookahead_assertion_id = lookahead_assertion_id;
   }
 
@@ -262,10 +256,10 @@ class GrammarBuilder {
    * \brief Add a lookahead assertion to a rule referred by the given name. The lookahead
    * assertion should be a sequence RuleExpr id. An id of -1 means no lookahead assertion.
    */
-  void AddLookaheadAssertion(std::string rule_name, int32_t lookahead_assertion_id) {
+  void UpdateLookaheadAssertion(std::string rule_name, int32_t lookahead_assertion_id) {
     int32_t rule_id = GetRuleId(rule_name);
     XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
-    AddLookaheadAssertion(rule_id, lookahead_assertion_id);
+    UpdateLookaheadAssertion(rule_id, lookahead_assertion_id);
   }
 
   /*!

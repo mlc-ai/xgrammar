@@ -268,6 +268,8 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
 
+  bool AcceptString(const std::string& input_str, bool debug_print = false);
+
   bool FillNextTokenBitmask(DLTensor* next_token_bitmask, int index, bool debug_print = false);
 
   std::string FindJumpForwardString();
@@ -286,7 +288,7 @@ class GrammarMatcher::Impl : public GrammarMatcherBase {
 
   const std::vector<int>& GetStopTokenIds() const { return stop_token_ids_; }
 
-  bool _DebugAcceptString(const std::string& input_str, bool debug_print = false);
+  std::string _DebugPrintInternalState() const { return PrintStackState(); }
 
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
@@ -365,22 +367,20 @@ bool GrammarMatcher::Impl::IsStopTokenAccepted() const {
 // TODO(yixin): Polish verbose logging
 bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   if (IsStopTokenAccepted()) {
-    if (debug_print) {
-      XGRAMMAR_LOG(INFO) << "The matcher has terminated after accepting the stop token, but is "
-                            "trying to accept new token with id "
-                         << token_id;
-    }
+    XGRAMMAR_LOG(WARNING) << "The matcher has terminated after accepting the stop token, but is "
+                          << "trying to accept new token with id " << token_id << ".";
     return false;
   }
 
-  XGRAMMAR_CHECK(token_id >= 0 && token_id < tokenizer_info_.GetVocabSize())
-      << "Invalid token id " << token_id << " for GrammarMatcher";
+  if (token_id < 0 || token_id >= tokenizer_info_.GetVocabSize()) {
+    XGRAMMAR_LOG(WARNING) << "The token id " << token_id << " is out of range [0, "
+                          << tokenizer_info_.GetVocabSize() << "). Rejecting the token.";
+    return false;
+  }
 
   if (debug_print) {
-    XGRAMMAR_LOG(INFO) << "Accepting token id " << token_id << ", string: \""
-                       << PrintAsEscapedUTF8(tokenizer_info_.GetDecodedVocab()[token_id])
-                       << "\", state state:\n"
-                       << PrintStackState();
+    XGRAMMAR_LOG(INFO) << "Accepting token #" << token_id << "<"
+                       << PrintAsEscapedUTF8(tokenizer_info_.GetDecodedVocab()[token_id]) << ">";
   }
 
   // Handle the stop token
@@ -396,10 +396,10 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   const auto& special_token_ids = tokenizer_info_.GetSpecialTokenIds();
   if (std::find(special_token_ids.begin(), special_token_ids.end(), token_id) !=
       special_token_ids.end()) {
-    XGRAMMAR_LOG(FATAL) << "Token id " << token_id << ": "
-                        << tokenizer_info_.GetDecodedVocab()[token_id]
-                        << " is regarded as a special token, and cannot be accepted by the "
-                           "GrammarMatcher";
+    XGRAMMAR_LOG(WARNING) << "GrammarMatcher cannot accept special token id " << token_id << ": "
+                          << tokenizer_info_.GetDecodedVocab()[token_id]
+                          << ". Rejecting the token.";
+    return false;
   }
 
   const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
@@ -407,7 +407,8 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   for (auto char_value : token) {
     if (!AcceptChar(char_value, debug_print)) {
       if (debug_print) {
-        XGRAMMAR_LOG(INFO) << "The token is rejected at position " << pos << ", character "
+        XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << PrintAsEscapedUTF8(token)
+                           << "> rejected at position " << pos << ", char "
                            << PrintAsEscapedUTF8(char_value);
       }
       RollbackChars(pos);
@@ -420,19 +421,20 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     DiscardEarliestChars(token_length_history.front());
     token_length_history.pop_front();
   }
+
   if (debug_print) {
-    XGRAMMAR_LOG(INFO) << "The token is accepted. State after accepting:\n" << PrintStackState();
+    XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<"
+                       << PrintAsEscapedUTF8(tokenizer_info_.GetDecodedVocab()[token_id])
+                       << "> accepted.";
   }
   return true;
 }
 
-bool GrammarMatcher::Impl::_DebugAcceptString(const std::string& input_str, bool debug_print) {
+bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug_print) {
   if (IsStopTokenAccepted()) {
-    if (debug_print) {
-      XGRAMMAR_LOG(INFO) << "The matcher has terminated after accepting the stop token, but is "
-                            "trying to accept new string "
-                         << PrintAsEscapedUTF8(input_str);
-    }
+    XGRAMMAR_LOG(WARNING) << "The matcher has terminated after accepting the stop token, but is "
+                          << "trying to accept new string \"" << PrintAsEscapedUTF8(input_str)
+                          << "\".";
     return false;
   }
 
@@ -440,7 +442,9 @@ bool GrammarMatcher::Impl::_DebugAcceptString(const std::string& input_str, bool
   for (auto char_value : input_str) {
     if (!AcceptChar(char_value, debug_print)) {
       if (debug_print) {
-        XGRAMMAR_LOG(INFO) << "Matching failed after accepting " << accepted_cnt << " characters";
+        XGRAMMAR_LOG(INFO) << "String \"" << PrintAsEscapedUTF8(input_str)
+                           << "\" rejected at position " << accepted_cnt << ", char "
+                           << PrintAsEscapedUTF8(char_value);
       }
       RollbackChars(accepted_cnt);
       return false;
@@ -453,9 +457,7 @@ bool GrammarMatcher::Impl::_DebugAcceptString(const std::string& input_str, bool
     token_length_history.pop_front();
   }
   if (debug_print) {
-    XGRAMMAR_LOG(INFO) << "String \"" << PrintAsEscapedUTF8(input_str)
-                       << "\" is accepted. State after accepting:\n"
-                       << PrintStackState();
+    XGRAMMAR_LOG(INFO) << "String \"" << PrintAsEscapedUTF8(input_str) << "\" accepted.";
   }
   return true;
 }
@@ -844,6 +846,10 @@ bool GrammarMatcher::AcceptToken(int32_t token_id, bool debug_print) {
   return pimpl_->AcceptToken(token_id, debug_print);
 }
 
+bool GrammarMatcher::AcceptString(const std::string& input_str, bool debug_print) {
+  return pimpl_->AcceptString(input_str, debug_print);
+}
+
 bool GrammarMatcher::FillNextTokenBitmask(
     DLTensor* next_token_bitmask, int index, bool debug_print
 ) {
@@ -864,7 +870,8 @@ const std::vector<int>& GrammarMatcher::GetStopTokenIds() const {
   return pimpl_->GetStopTokenIds();
 }
 
-bool GrammarMatcher::_DebugAcceptString(const std::string& input_str, bool debug_print) {
-  return pimpl_->_DebugAcceptString(input_str, debug_print);
+std::string GrammarMatcher::_DebugPrintInternalState() const {
+  return pimpl_->_DebugPrintInternalState();
 }
+
 }  // namespace xgrammar

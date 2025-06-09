@@ -9,18 +9,17 @@
 #include "grammar_matcher_base.h"
 
 #include <algorithm>
+#include <unordered_set>
 #include <vector>
 
+#include "fsm.h"
 #include "grammar_data_structure.h"
 #include "persistent_stack.h"
 #include "support/encoding.h"
+#include "support/recursion_guard.h"
 #include "support/utils.h"
 
 namespace xgrammar {
-
-constexpr int32_t kUnexpandedRuleStartSequenceId = 128000;
-
-constexpr int32_t kDispatchedTagDispatchElementId = -1;
 
 /*! \brief Check the codepoint is contained in the character class. */
 bool GrammarMatcherBase::CheckIfAccepted(const StackElement& stack_element, uint8_t char_value)
@@ -84,22 +83,23 @@ StackElement GrammarMatcherBase::AdvanceStackElementWithChar(
 ) {
   auto current_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
   if (current_sequence.type == Grammar::Impl::RuleExprType::kTagDispatch) {
-    auto root_tag_dispatch_fsm = grammar_->root_tag_dispatch_fsm;
-    if (!root_tag_dispatch_fsm) {
+    auto root_tag_dispatch_fsm_optional = grammar_->root_tag_dispatch_fsm;
+    if (!root_tag_dispatch_fsm_optional) {
       XGRAMMAR_LOG(FATAL) << "The grammar does not have a root tag dispatch rule; it is not built.";
       XGRAMMAR_UNREACHABLE();
     }
-    auto start_node = root_tag_dispatch_fsm->StartNode();
-    auto next_node = root_tag_dispatch_fsm->Transition(stack_element.element_id, char_value);
+    auto root_tag_dispatch_fsm = root_tag_dispatch_fsm_optional.value();
+    auto start_node = root_tag_dispatch_fsm.GetStart();
+    auto next_node = root_tag_dispatch_fsm->GetNextState(stack_element.element_id, char_value);
     auto new_stack_element = stack_element;
-    if (next_node == CompactFSMWithStartEnd::NO_TRANSITION) {
+    if (next_node == CompactFSM::kNoNextState) {
       // Case 1. The new char cannot continue to be accepted by the tag dispatch fsm.
       // We try to accept the new char from the start node. If accepted, we go to the target node.
       // If it still cannot be accepted, we stay at the start node.
-      auto new_next_node = root_tag_dispatch_fsm->Transition(start_node, char_value);
+      auto new_next_node = root_tag_dispatch_fsm->GetNextState(start_node, char_value);
       new_stack_element.element_id =
-          new_next_node == CompactFSMWithStartEnd::NO_TRANSITION ? start_node : new_next_node;
-    } else if (!root_tag_dispatch_fsm->IsEndNode(next_node)) {
+          new_next_node == CompactFSM::kNoNextState ? start_node : new_next_node;
+    } else if (!root_tag_dispatch_fsm.IsEndState(next_node)) {
       // Case 2. The new char can continue to be accepted by the tag dispatch fsm.
       // We need to update the element id to the next node.
       new_stack_element.element_id = next_node;
@@ -107,13 +107,14 @@ StackElement GrammarMatcherBase::AdvanceStackElementWithChar(
       // Case 3. The new char can continue to be accepted by the tag dispatch fsm.
       // We need to dispatch the tag dispatch fsm to the end node.
       // We need to create a new stack element to represent the dispatched tag dispatch.
-      new_stack_element.element_id = kDispatchedTagDispatchElementId;
+      new_stack_element.element_id = StackElement::kDispatchedTagDispatchElementId;
       auto new_stack_element_id = persistent_stack_.NewNode(new_stack_element);
       XGRAMMAR_DCHECK(grammar_->tag_dispatch_end_node_to_rule_id.count(next_node))
           << "The end node of the tag dispatch fsm does not correspond to any rule id";
       auto refered_rule_id = grammar_->tag_dispatch_end_node_to_rule_id.at(next_node);
-      new_stack_element =
-          StackElement(refered_rule_id, kUnexpandedRuleStartSequenceId, 0, new_stack_element_id);
+      new_stack_element = StackElement(
+          refered_rule_id, StackElement::kUnexpandedRuleStartSequenceId, 0, new_stack_element_id
+      );
     }
     return new_stack_element;
   }
@@ -168,6 +169,7 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
     int32_t cur_stack_element_id,
     bool consider_parent
 ) {
+  RecursionGuard guard(&expand_equivalent_stack_elements_recursion_depth_);
   auto f_add_current_stack_element = [&]() {
     if (cur_stack_element_id != -1) {
       return cur_stack_element_id;
@@ -177,7 +179,7 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
   };
 
   // Step 1. Handle unexpanded rules.
-  if (cur_stack_element.sequence_id == kUnexpandedRuleStartSequenceId) {
+  if (cur_stack_element.sequence_id == StackElement::kUnexpandedRuleStartSequenceId) {
     auto cur_rule_id = cur_stack_element.rule_id;
     auto cur_rule_body_id = grammar_->GetRule(cur_rule_id).body_expr_id;
     auto cur_rule_body = grammar_->GetRuleExpr(cur_rule_body_id);
@@ -186,7 +188,7 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
       auto new_stack_element = StackElement(
           cur_rule_id,
           cur_rule_body_id,
-          grammar_->root_tag_dispatch_fsm->StartNode(),
+          grammar_->root_tag_dispatch_fsm->GetStart(),
           cur_stack_element.parent_id
       );
       new_stack_tops->push_back(persistent_stack_.NewNode(new_stack_element));
@@ -228,7 +230,7 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
       auto new_stack_element = persistent_stack_[cur_stack_element.parent_id];
       auto parent_sequence = grammar_->GetRuleExpr(new_stack_element.sequence_id);
       if (parent_sequence.type == RuleExprType::kTagDispatch) {
-        new_stack_element.element_id = grammar_->root_tag_dispatch_fsm->StartNode();
+        new_stack_element.element_id = grammar_->root_tag_dispatch_fsm->GetStart();
       } else {
         new_stack_element.element_id += 1;
       }
@@ -246,7 +248,9 @@ void GrammarMatcherBase::ExpandEquivalentStackElements(
   // Step 3. Iterate into sub rules
   if (current_element.type == RuleExprType::kRuleRef) {
     ExpandEquivalentStackElements(
-        StackElement(current_element[0], kUnexpandedRuleStartSequenceId, 0, stack_element_id),
+        StackElement(
+            current_element[0], StackElement::kUnexpandedRuleStartSequenceId, 0, stack_element_id
+        ),
         new_stack_tops,
         -1,
         false
@@ -292,8 +296,10 @@ bool GrammarMatcherBase::AcceptChar(uint8_t char_value, bool debug_print) {
     auto new_stack_element = AdvanceStackElementWithChar(cur_stack_element, char_value);
 
     if (new_stack_element == cur_stack_element) {
+      RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
       ExpandEquivalentStackElements(new_stack_element, &tmp_new_stack_tops_, prev_top);
     } else {
+      RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
       ExpandEquivalentStackElements(new_stack_element, &tmp_new_stack_tops_);
     }
   }
@@ -343,14 +349,19 @@ void GrammarMatcherBase::PushInitialState(
   if (init_stack_element == kInvalidStackElement) {
     // Initialize the stack with the root rule.
     auto init_stack_element = StackElement(
-        grammar_->GetRootRuleId(), kUnexpandedRuleStartSequenceId, 0, StackElement::kNoParent
+        grammar_->GetRootRuleId(),
+        StackElement::kUnexpandedRuleStartSequenceId,
+        0,
+        StackElement::kNoParent
     );
     tmp_new_stack_tops_.clear();
+    RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
     ExpandEquivalentStackElements(init_stack_element, &tmp_new_stack_tops_);
     stack_tops_history_.PushHistory(tmp_new_stack_tops_);
   } else {
     if (expand_init_stack_element) {
       tmp_new_stack_tops_.clear();
+      RecursionGuard::ResetRecursionDepth(&expand_equivalent_stack_elements_recursion_depth_);
       ExpandEquivalentStackElements(init_stack_element, &tmp_new_stack_tops_);
       stack_tops_history_.PushHistory(tmp_new_stack_tops_);
     } else {

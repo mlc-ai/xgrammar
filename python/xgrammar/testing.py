@@ -101,6 +101,27 @@ def _ebnf_to_grammar_no_normalization(ebnf_string: str, root_rule_name: str = "r
     )
 
 
+def _get_matcher_from_grammar(grammar: Union[Grammar, str], **kwargs) -> GrammarMatcher:
+    """Create a GrammarMatcher from a grammar. The tokenizer info will be set to an empty
+    TokenizerInfo. The result matcher can only accept strings, and cannot accept tokens.
+
+    Parameters
+    ----------
+    grammar : Union[Grammar, str]
+        The grammar to create the matcher from. Can be either a Grammar object or a string
+        containing EBNF grammar.
+
+    Returns
+    -------
+    matcher : GrammarMatcher
+        The created grammar matcher.
+    """
+    tokenizer_info = TokenizerInfo([])
+    grammar_compiler = GrammarCompiler(tokenizer_info, cache_enabled=False)
+    compiled_grammar = grammar_compiler.compile_grammar(grammar)
+    return GrammarMatcher(compiled_grammar, terminate_without_stop_token=True, **kwargs)
+
+
 def _is_grammar_accept_string(
     grammar: Union[Grammar, str],
     input_str: str,
@@ -126,16 +147,12 @@ def _is_grammar_accept_string(
     bool
         True if the grammar accepts the string, False otherwise.
     """
-
-    if isinstance(grammar, str):
-        grammar = Grammar.from_ebnf(grammar)
-    grammar_compiler = GrammarCompiler(TokenizerInfo([]), cache_enabled=False)
-    compiled_grammar = grammar_compiler.compile_grammar(grammar)
-    matcher = GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+    grammar_matcher = _get_matcher_from_grammar(grammar)
 
     if print_time:
         start = time.monotonic_ns()
-    accepted = matcher._debug_accept_string(input_str, debug_print=debug_print)
+
+    accepted = grammar_matcher.accept_string(input_str, debug_print=debug_print)
 
     if print_time:
         end = time.monotonic_ns()
@@ -143,7 +160,7 @@ def _is_grammar_accept_string(
 
     if not accepted:
         return False
-    return matcher.is_terminated()
+    return grammar_matcher.is_terminated()
 
 
 def _get_masked_tokens_from_bitmask(

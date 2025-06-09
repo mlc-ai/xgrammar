@@ -10,8 +10,8 @@ import torch
 from .base import XGRObject, _core
 from .compiler import CompiledGrammar
 
-"""The dtype of the bitmask: int32."""
 bitmask_dtype = torch.int32
+"""The dtype of the bitmask: int32."""
 
 
 def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
@@ -77,40 +77,39 @@ def apply_token_bitmask_inplace(
 
     get_bitmask_value(bitmask, i, j) gets the j-th bit of the i-th row of the bitmask.
 
-    ## Padding
+    Notes
+    -----
+    Padding:
+        This method allows additional padding on the vocabulary dimension of logits or bitmask. If
+        padding exists, provide the real vocab size to the vocab_size parameter, and the operation
+        will be applied to logits[..., :vocab_size] and bitmask[..., :ceil(vocab_size / 32)].
 
-    This method allows additional padding on the vocabulary dimension of logits or bitmask. If
-    padding exists, provide the real vocab size to the vocab_size parameter, and the operation
-    will be applied to logits[..., :vocab_size] and bitmask[..., :ceil(vocab_size / 32)].
+        If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],
+        bitmask.shape[-1] * 32).
 
-    If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],
-    bitmask.shape[-1] * 32).
+    Indices:
+        Indices can be used to specify which logits in the batch to apply the bitmask to. It is
+        especially useful when there are structured requests and unstructured requests mixed in the
+        same batch by skipping masking the logits in the unstructured requests. When specified, the
+        operation will be
 
-    ## Indices
+        .. code:: python
 
-    Indices can be used to specify which logits in the batch to apply the bitmask to. It is
-    especially useful when there are structured requests and unstructured requests mixed in the
-    same batch by skipping masking the logits in the unstructured requests. When specified, the
-    operation will be
+            for batch_id in indices:
+                for j in range(vocab_size):
+                    if get_bitmask_value(bitmask, batch_id, j) == 0:
+                        logits[batch_id, j] = -inf
 
-    .. code:: python
+        When indices is specified, the batch sizes of logits and bitmask do not need to be the same.
+        As long as the indices are valid, the operation will be performed.
 
-        for batch_id in indices:
-            for j in range(vocab_size):
-                if get_bitmask_value(bitmask, batch_id, j) == 0:
-                    logits[batch_id, j] = -inf
+    Device:
+        The logits and bitmask should be on the same device. If both them are on GPU, we launch a GPU
+        kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The GPU kernel
+        is optimized and should be preferred.
 
-    When indices is specified, the batch sizes of logits and bitmask do not need to be the same.
-    As long as the indices are valid, the operation will be performed.
-
-    ## Device
-
-    The logits and bitmask should be on the same device. If both them are on GPU, we launch a GPU
-    kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The GPU kernel
-    is optimized and should be preferred.
-
-    In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
-    manually copy the bitmask to GPU before calling this function.
+        In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
+        manually copy the bitmask to GPU before calling this function.
 
     Parameters
     ----------
@@ -211,6 +210,17 @@ class GrammarMatcher(XGRObject):
     def accept_token(self, token_id: int, *, debug_print: bool = False) -> bool:
         """Accept one token and update the state of the matcher.
 
+        In the following cases, the matcher will not accept the token and return False:
+
+        1. The token does not match the grammar.
+        2. The matcher has terminated after accepting the stop token, but is trying to accept a
+           new token.
+        3. The token id is out of range.
+        4. The token is a special token.
+
+        The user should capture the return value and handle the cases where the token is not
+        accepted.
+
         Parameters
         ----------
         token_id : int
@@ -224,8 +234,39 @@ class GrammarMatcher(XGRObject):
         -------
         accepted : bool
             Whether the token is accepted.
+
+        Raises
+        ------
+        RuntimeError
+            If the recursion depth is exceeded.
         """
         return self._handle.accept_token(token_id, debug_print)
+
+    def accept_string(self, input_str: Union[str, bytes], *, debug_print: bool = False) -> bool:
+        """Accept a string and update the state of the matcher. The whole string is considered
+        as one step in rollback. It is used to complement the functionality of accept_token, and
+        accept_token should always be used to accept tokens.
+
+        Parameters
+        ----------
+        input_str : Union[str, bytes]
+            The string to be accepted.
+
+        debug_print : bool, default: False
+            Whether to print information about the internal state of the matcher. Helpful for
+            debugging.
+
+        Returns
+        -------
+        accepted : bool
+            Whether the string is accepted.
+
+        Raises
+        ------
+        RuntimeError
+            If the recursion depth is exceeded.
+        """
+        return self._handle.accept_string(input_str, debug_print)
 
     def fill_next_token_bitmask(
         self, bitmask: torch.Tensor, index: int = 0, *, debug_print: bool = False
@@ -252,6 +293,11 @@ class GrammarMatcher(XGRObject):
         need_apply : bool
             Whether the bitmask need to be applied (not all-true). An optimization: if False,
             this means the bitmask is already all-true, so no need to apply it.
+
+        Raises
+        ------
+        RuntimeError
+            If the recursion depth is exceeded.
         """
         if bitmask.device.type != "cpu":
             raise ValueError("bitmask should be on CPU.")
@@ -272,6 +318,11 @@ class GrammarMatcher(XGRObject):
         -------
         jump_forward_string : str
             The jump-forward string.
+
+        Raises
+        ------
+        RuntimeError
+            If the recursion depth is exceeded.
         """
         return self._handle.find_jump_forward_string()
 
@@ -325,24 +376,13 @@ class GrammarMatcher(XGRObject):
         """
         return self._handle.stop_token_ids
 
-    def _debug_accept_string(
-        self, input_str: Union[str, bytes], *, debug_print: bool = False
-    ) -> bool:
-        """Accept a string and update the state of the matcher. The whole string is considered
-        as one step in rollback. It is only used to complement the functionality of accept_token.
-
-        Parameters
-        ----------
-        input_str : Union[str, bytes]
-            The string to be accepted.
-
-        debug_print : bool, default: False
-            Whether to print information about the internal state of the matcher. Helpful for
-            debugging.
+    def _debug_print_internal_state(self) -> str:
+        """Print the internal state of the matcher. This is used for debugging. The
+        representation of the internal state is subject to change.
 
         Returns
         -------
-        accepted : bool
-            Whether the string is accepted.
+        internal_state : str
+            The internal state of the matcher.
         """
-        return self._handle._debug_accept_string(input_str, debug_print)
+        return self._handle._debug_print_internal_state()

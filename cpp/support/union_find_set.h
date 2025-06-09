@@ -4,11 +4,14 @@
  */
 #ifndef XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
 #define XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
+
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
 namespace xgrammar {
+
 template <typename T>
 class UnionFindSet {
  private:
@@ -21,11 +24,11 @@ class UnionFindSet {
   ~UnionFindSet() = default;
 
   /*!
-    \brief Insert a new element into the union-find set.
-    \param value The value to be inserted.
-    \return true if the value was successfully inserted, false if it already
-    exists.
-  */
+   * \brief Insert a new element into the union-find set.
+   * \param value The value to be inserted.
+   * \return true if the value was successfully inserted, false if it already
+   * exists.
+   */
   bool Make(const T& value) {
     if (parent.find(value) != parent.end()) {
       return false;
@@ -36,12 +39,12 @@ class UnionFindSet {
   }
 
   /*!
-    \brief Union two elements in the union-find set.
-    \param a The first element.
-    \param b The second element.
-    \return true if the union was successful, false if the elements are already
-    in the same set.
-  */
+   * \brief Union two elements in the union-find set.
+   * \param a The first element.
+   * \param b The second element.
+   * \return true if the union was successful, false if the elements are already
+   * in the same set.
+   */
   bool Union(T a, T b) {
     std::queue<T> queue;
     while (parent[a] != a) {
@@ -74,10 +77,10 @@ class UnionFindSet {
   }
 
   /*!
-    \brief Find the representative of the set containing the given element.
-    \param value The element whose representative is to be found.
-    \return The representative of the set containing the element.
-  */
+   * \brief Find the representative of the set containing the given element.
+   * \param value The element whose representative is to be found.
+   * \return The representative of the set containing the element.
+   */
   T find(T value) {
     std::queue<T> queue;
     while (parent[value] != value) {
@@ -91,18 +94,18 @@ class UnionFindSet {
     return value;
   }
 
-  /*
-    \brief Check if two elements are in the same set.
-    \param a The first element.
-    \param b The second element.
-    \return true if the elements are in the same set, false otherwise.
-  */
+  /*!
+   * \brief Check if two elements are in the same set.
+   * \param a The first element.
+   * \param b The second element.
+   * \return true if the elements are in the same set, false otherwise.
+   */
   bool SameSet(T a, T b) const { return find(a) == find(b); }
 
   /*!
-    \brief Get all the equivalence classes in the union-find set.
-    \return A vector of unordered sets, each representing an equivalence class.
-  */
+   * \brief Get all the equivalence classes in the union-find set.
+   * \return A vector of unordered sets, each representing an equivalence class.
+   */
   std::vector<std::unordered_set<T>> GetAllSets() const {
     std::vector<std::unordered_set<T>> result;
     std::unordered_map<T, int> which_set;
@@ -116,10 +119,15 @@ class UnionFindSet {
     return result;
   }
 
+  /*!
+   * \brief Clear the union-find set.
+   */
   void Clear() {
     parent.clear();
     rank.clear();
   }
 };
+
 }  // namespace xgrammar
+
 #endif  // XGRAMMAR_SUPPORT_UNION_FIND_SET_H_

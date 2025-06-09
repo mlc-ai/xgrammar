@@ -26,8 +26,8 @@ def test_compiled_grammar():
 
     def check_matcher(matcher: xgr.GrammarMatcher):
         assert not matcher.is_terminated()
-        assert not matcher._debug_accept_string('{ name: "John" }')
-        assert matcher._debug_accept_string('{"name": "John"}')
+        assert not matcher.accept_string('{ name: "John" }')
+        assert matcher.accept_string('{"name": "John"}')
         assert matcher.is_terminated()
 
     time_start = time.monotonic_ns()
@@ -55,8 +55,8 @@ def test_grammar_compiler_json(max_threads):
 
     def check_matcher(matcher: xgr.GrammarMatcher):
         assert not matcher.is_terminated()
-        assert not matcher._debug_accept_string('{ name: "John" }')
-        assert matcher._debug_accept_string('{"name": "John"}')
+        assert not matcher.accept_string('{ name: "John" }')
+        assert matcher.accept_string('{"name": "John"}')
         assert matcher.is_terminated()
 
     time_start = time.monotonic_ns()
@@ -122,7 +122,7 @@ def test_grammar_compiler_json_schema():
         matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
 
         assert not matcher.is_terminated()
-        assert matcher._debug_accept_string(instance_str)
+        assert matcher.accept_string(instance_str)
         assert matcher.is_terminated()
 
     check_with_fmt(False, None, (",", ":"), "1")
@@ -233,7 +233,7 @@ def test_grammar_compiler_json_schema_concurrent():
 
     def check_matcher(matcher: xgr.GrammarMatcher, instance_str: str):
         assert not matcher.is_terminated()
-        assert matcher._debug_accept_string(instance_str)
+        assert matcher.accept_string(instance_str)
         assert matcher.is_terminated()
 
     num_schemas = len(schema_instances)

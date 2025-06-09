@@ -96,10 +96,10 @@ class CompiledGrammar::Impl {
   /******************* The grammar and tokenizer info *******************/
 
   /*! \brief The grammar for the GrammarMatcher. */
-  Grammar grammar;
+  Grammar grammar{NullObj{}};
 
   /*! \brief The tokenizer information. */
-  TokenizerInfo tokenizer_info;
+  TokenizerInfo tokenizer_info{NullObj{}};
 
   /******************* The adaptive token mask cache *******************/
 

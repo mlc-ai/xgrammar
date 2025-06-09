@@ -9,23 +9,14 @@ from .base import XGRObject, _core
 
 
 class StructuralTagItem(BaseModel):
-    """A structural tag item. See Grammar.from_structural_tag() for more details.
-
-    Attributes
-    ----------
-    begin : str
-        The begin tag.
-
-    schema_ : Union[str, Type[BaseModel]]
-        The schema.
-
-    end : str
-        The end tag.
-    """
+    """A structural tag item. See Grammar.from_structural_tag() for more details."""
 
     begin: str
+    """The begin tag."""
     schema_: Union[str, Type[BaseModel], Dict[str, Any]] = Field(alias="schema")
+    """The schema."""
     end: str
+    """The end tag."""
 
 
 def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:

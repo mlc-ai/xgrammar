@@ -18,7 +18,7 @@
 
 namespace xgrammar {
 
-// TODO(yixin): consider renaming to CompactVector
+// TODO(yixin): consider renaming to Flat2DArray
 
 /*!
  * \brief This class implements a Compressed Sparse Row (CSR) array data structure. It stores
@@ -41,22 +41,13 @@ namespace xgrammar {
 template <typename DataType = int32_t>
 class CSRArray {
  public:
-  /*! \brief Default constructor. */
-  CSRArray() = default;
-
-  /****************** Accessors ******************/
-
-  /*! \brief Get the number of rows in the CSRArray. */
-  int32_t Size() const { return static_cast<int32_t>(indptr_.size()) - 1; }
-
-  friend std::size_t MemorySize(const CSRArray<DataType>& arr) {
-    return MemorySize(arr.data_) + MemorySize(arr.indptr_);
-  }
-
   /*!
-   * \brief Struct representing a row in the CSRArray.
+   * \brief The struct representing a row in the CSRArray.
    */
   struct Row {
+    /*! \brief The value type is DataType. */
+    using value_type = DataType;
+
     /*! \brief Pointer to the data of the row. */
     const DataType* data;
     /*! \brief Length of the row data. */
@@ -92,6 +83,21 @@ class CSRArray {
       return os;
     }
   };
+
+  /*! \brief The value type is Row. */
+  using value_type = Row;
+
+  /*! \brief Default constructor. */
+  CSRArray() = default;
+
+  /****************** Accessors ******************/
+
+  /*! \brief Get the number of rows in the CSRArray. */
+  int32_t size() const { return static_cast<int32_t>(indptr_.size()) - 1; }
+
+  friend std::size_t MemorySize(const CSRArray<DataType>& arr) {
+    return MemorySize(arr.data_) + MemorySize(arr.indptr_);
+  }
 
   /*!
    * \brief Access a row in the CSRArray.
@@ -146,7 +152,7 @@ class CSRArray {
 
   friend std::ostream& operator<<(std::ostream& os, const CSRArray& csr_array) {
     os << "CSRArray([";
-    for (auto i = 0; i < csr_array.Size(); ++i) {
+    for (auto i = 0; i < csr_array.size(); ++i) {
       if (i > 0) {
         os << ", ";
       }
@@ -166,7 +172,7 @@ class CSRArray {
 
 template <typename DataType>
 inline typename CSRArray<DataType>::Row CSRArray<DataType>::operator[](int32_t i) const {
-  XGRAMMAR_DCHECK(i >= 0 && i < Size()) << "CSRArray index " << i << " is out of bound";
+  XGRAMMAR_DCHECK(i >= 0 && i < size()) << "CSRArray index " << i << " is out of bound";
   int32_t start = indptr_[i];
   int32_t end = indptr_[i + 1];
   return {data_.data() + start, end - start};

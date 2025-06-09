@@ -1,14 +1,31 @@
 autodocsumm
+ipykernel
+ipywidgets
+jupyter_client
+linkify-it-py
+markdown>=3.4.0
+matplotlib
+myst-parser
+nbconvert
+nbsphinx
+nbstripout
+pandoc
+pillow
 pydantic
 sentencepiece
-sphinx == 5.2.3
+sphinx==5.2.3
+sphinx-autobuild
+sphinx-book-theme
+sphinx-copybutton
 sphinx-reredirects==0.1.2
 sphinx-rtd-theme
 sphinx-tabs == 3.4.1
 sphinx-toolbox == 3.4.0
+sphinxcontrib-mermaid
 sphinxcontrib-napoleon==0.7
 sphinxcontrib_httpdomain==1.8.1
 tiktoken
 tlcpack-sphinx-addon==0.2.2
 torch
 transformers
+urllib3<2.0.0

@@ -11,7 +11,7 @@ After :ref:`installing XGrammar <installation>`, run the following example to se
 structured generation -- a JSON in this case.
 
 
-Perparation
+Preparation
 ^^^^^^^^^^^
 Instantiate a model, a tokenizer, and inputs.
 

@@ -101,6 +101,7 @@ editable.rebuild = true
 editable.verbose = true
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 addopts = "-rA --durations=0 --ignore=3rdparty"
 markers = ["hf_token_required: mark test as requiring a huggingface token"]
 

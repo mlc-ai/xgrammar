@@ -64,7 +64,7 @@ class LoggingError : public Error {
       : Error("", "LoggingError"), file_(file), lineno_(lineno), time_(time) {
     std::ostringstream s;
     s << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] " << file << ":" << lineno
-      << ": " << message << std::endl;
+      << ": " << message << "\n";
     full_message_ = s.str();
   }
 
@@ -192,7 +192,7 @@ class LogMessage {
     stream_ << "[" << std::put_time(std::localtime(&t), "%H:%M:%S") << "] " << file << ":" << lineno
             << level_strings_[level];
   }
-  ~LogMessage() { std::cerr << stream_.str() << std::endl; }
+  ~LogMessage() { std::cerr << stream_.str() << "\n"; }
   std::ostringstream& stream() { return stream_; }
 
  private:

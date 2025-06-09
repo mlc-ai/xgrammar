@@ -48,7 +48,6 @@ def test_repetition(input: str, accepted: bool):
 
 
 def test_utf8():
-
     # Test utf8-encoded string with EBNF grammar
     ebnf_grammar_str = "root ::= [，]+"
 
@@ -390,7 +389,7 @@ def test_fill_next_token_bitmask(
         # 4. accept_string
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
-        assert matcher._debug_accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
