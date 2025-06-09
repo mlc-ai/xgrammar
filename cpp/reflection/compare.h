@@ -1,35 +1,26 @@
 #pragma once
 #include <tuple>
-#include <type_traits>
 
+#include "details/compare.h"  // IWYU pragma: export
 #include "reflection.h"
 
 namespace xgrammar {
 
-namespace details {
-
-template <typename, typename = void>
-struct has_equality : std::false_type {};
-
-template <typename T>
-struct has_equality<T, std::void_t<decltype(std::declval<T>() == std::declval<T>())>>
-    : std::true_type {};
-
-}  // namespace details
-
 template <bool SkipDefault = false, typename T>
 inline bool TraitCompareEq(const T& lhs, const T& rhs) {
   using Functor = details::member_functor<T>;
+  // skip default is useful for automatically generated equality operators
+  // this will prevent infinite recursion
   if constexpr (!SkipDefault && details::has_equality<T>::value) {
     return lhs == rhs;
-  } else if constexpr (Functor::value == member_registry::kConfig) {
+  } else if constexpr (Functor::value == member_type::kConfig) {
     return std::apply(
         [&lhs, &rhs](auto&&... member_ptr) {
           return (TraitCompareEq(lhs.*member_ptr, rhs.*member_ptr) && ...);
         },
         Functor::members
     );
-  } else if constexpr (Functor::value == member_registry::kDelegate) {
+  } else if constexpr (Functor::value == member_type::kDelegate) {
     return TraitCompareEq(Functor::into(lhs), Functor::into(rhs));
   } else {
     static_assert(details::false_v<T>, "Cannot compare this type");

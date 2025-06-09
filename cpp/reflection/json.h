@@ -3,102 +3,21 @@
 #include <type_traits>
 
 #include "../support/logging.h"
+#include "details/json.h"  // IWYU pragma: export
 #include "picojson.h"
 #include "reflection.h"
 #include "utils.h"
 
 namespace xgrammar {
 
-namespace details {
-
-template <typename Fn, typename Tuple, std::size_t... Idx>
-inline constexpr void visit_tuple(Fn&& f, const Tuple& t, std::index_sequence<Idx...>) {
-  (f(std::get<Idx>(t), Idx), ...);
-}
-
-template <typename Fn, typename Tuple>
-inline constexpr void visit_tuple(Fn&& f, const Tuple& t) {
-  return visit_tuple(
-      std::forward<Fn>(f), t, std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>()
-  );
-}
-
-template <typename, typename = void>
-struct has_json_serialize_member : std::false_type {};
-
-template <typename T>
-struct has_json_serialize_member<T, std::void_t<decltype(std::declval<const T&>().JSONSerialize())>>
-    : std::true_type {
-  static_assert(
-      std::is_same_v<decltype(std::declval<const T&>().JSONSerialize()), picojson::value>,
-      "JSONSerialize must be a const method returning picojson::value"
-  );
-};
-
-template <typename, typename = void>
-struct has_json_serialize_global : std::false_type {};
-
-template <typename T>
-struct has_json_serialize_global<T, std::void_t<decltype(JSONSerialize(std::declval<const T&>()))>>
-    : std::true_type {
-  static_assert(
-      std::is_same_v<decltype(JSONSerialize(std::declval<const T&>())), picojson::value>,
-      "JSONSerialize must be a global function returning picojson::value"
-  );
-};
-
-template <typename, typename = void>
-struct has_json_deserialize_member : std::false_type {};
-
-template <typename T>
-struct has_json_deserialize_member<T, std::void_t<decltype(T::JSONDeserialize(picojson::value{}))>>
-    : std::true_type {
-  static_assert(
-      std::is_same_v<decltype(T::JSONDeserialize(picojson::value{})), T>,
-      "JSONDeserialize must be a static method returning T"
-  );
-};
-
-template <typename T, typename = void>
-struct has_json_deserialize_global : std::false_type {};
-
-template <typename T>
-struct has_json_deserialize_global<
-    T,
-    std::void_t<decltype(JSONDeserialize(std::declval<T&>(), picojson::value{}))>>
-    : std::true_type {
-  static_assert(
-      std::is_same_v<decltype(JSONDeserialize(std::declval<T&>(), picojson::value{})), void>,
-      "JSONDeserialize must be a global function returning void"
-  );
-  static_assert(
-      std::is_default_constructible_v<T>,
-      "global deserializer can only apply to a default constructible type"
-  );
-};
-
-template <typename T>
-inline const T& json_as(const picojson::value& value) {
-  XGRAMMAR_CHECK(value.is<T>()) << "Wrong type in JSONDeserialize";
-  return value.get<T>();
-}
-
-inline const picojson::value& json_member(const picojson::object& value, const std::string& name) {
-  auto it = value.find(name);
-  XGRAMMAR_CHECK(it != value.end()) << "Missing member in JSONDeserialize";
-  return it->second;
-}
-
-}  // namespace details
-
 template <typename T>
 inline picojson::value AutoJSONSerialize(const T& value);
 
 template <typename T>
-inline T AutoJSONDeserialize(const picojson::value& value);
+inline void AutoJSONDeserialize(T& result, const picojson::value& value);
 
 template <typename T>
-inline void AutoJSONDeserialize(T& result, const picojson::value& value);
+inline picojson::value TraitJSONSerialize(const T& value);
 
 template <typename T>
 inline void TraitJSONDeserialize(T& result, const picojson::value& value);
@@ -106,19 +25,14 @@ inline void TraitJSONDeserialize(T& result, const picojson::value& value);
 template <typename T>
 inline picojson::value TraitJSONSerialize(const T& value) {
   using Functor = details::member_functor<T>;
-  static_assert(Functor::value != member_registry::kNone, "No member registry found");
-  if constexpr (Functor::value == member_registry::kConfig) {
+  if constexpr (Functor::value == member_type::kConfig) {
     if constexpr (Functor::has_names) {
       // normal named struct
       picojson::object obj;
       obj.reserve(Functor::member_count);
-      details::visit_tuple(
-          [&obj, &value](auto member_ptr, size_t idx) {
-            const char* name = Functor::names[idx];
-            obj[name] = AutoJSONSerialize(value.*member_ptr);
-          },
-          Functor::members
-      );
+      details::visit_config<T>([&](auto ptr, const char* name, std::size_t idx) {
+        obj[name] = AutoJSONSerialize(value.*ptr);
+      });
       return picojson::value(std::move(obj));
     } else if constexpr (Functor::member_count == 1) {
       // optimize for single member unnamed structs
@@ -127,16 +41,13 @@ inline picojson::value TraitJSONSerialize(const T& value) {
     } else {
       // normal unnamed struct
       picojson::array arr;
-      arr.reserve(Functor::member_count);
-      details::visit_tuple(
-          [&arr, &value](auto member_ptr, size_t) {
-            arr.push_back(AutoJSONSerialize(value.*member_ptr));
-          },
-          Functor::members
-      );
+      arr.resize(Functor::member_count);
+      details::visit_config<T>([&](auto ptr, const char* name, std::size_t idx) {
+        arr[idx] = AutoJSONSerialize(value.*ptr);
+      });
       return picojson::value(std::move(arr));
     }
-  } else if constexpr (Functor::value == member_registry::kDelegate) {
+  } else if constexpr (Functor::value == member_type::kDelegate) {
     // just cast to the delegate type
     return AutoJSONSerialize(Functor::into(value));
   } else {
@@ -147,65 +58,37 @@ inline picojson::value TraitJSONSerialize(const T& value) {
 }
 
 template <typename T>
-inline T TraitJSONDeserialize(const picojson::value& value) {
-  using Functor = details::member_functor<T>;
-  static_assert(Functor::value != member_registry::kNone, "No member registry found");
-  if constexpr (Functor::value == member_registry::kConfig) {
-    // fallback to result + value
-    T result;
-    TraitJSONDeserialize(result, value);
-    return result;
-  } else if constexpr (Functor::value == member_registry::kDelegate) {
-    // cast to the delegate type
-    using delegate_type = typename Functor::delegate_type;
-    return Functor::from(AutoJSONDeserialize<delegate_type>(value));
-  } else {
-    // should give an error in this case
-    static_assert(details::false_v<T>, "Invalid trait type");
-    return T{};
-  }
-}
-
-template <typename T>
 inline void TraitJSONDeserialize(T& result, const picojson::value& value) {
   using Functor = details::member_functor<T>;
-  static_assert(Functor::value != member_registry::kNone, "No member registry found");
-  if constexpr (Functor::value == member_registry::kConfig) {
+  if constexpr (Functor::value == member_type::kConfig) {
     if constexpr (Functor::has_names) {
       // normal named struct
       const auto& obj = details::json_as<picojson::object>(value);
       XGRAMMAR_CHECK(obj.size() == Functor::member_count)
           << "Wrong number of members in object in JSONDeserialize" << " expected "
           << Functor::member_count << " but got " << obj.size();
-      details::visit_tuple(
-          [&obj, &result](auto member_ptr, size_t idx) {
-            const char* name = Functor::names[idx];
-            AutoJSONDeserialize(result.*member_ptr, details::json_member(obj, name));
-          },
-          Functor::members
-      );
+      details::visit_config<T>([&](auto ptr, const char* name, std::size_t idx) {
+        AutoJSONDeserialize(result.*ptr, details::json_member(obj, name));
+      });
     } else if constexpr (Functor::member_count == 1) {
       // optimize for single member unnamed structs
       constexpr auto member_ptr = std::get<0>(Functor::members);
-      using U = std::decay_t<decltype(result.*member_ptr)>;
-      result.*member_ptr = AutoJSONDeserialize<U>(value);
+      AutoJSONDeserialize(result.*member_ptr, value);
     } else {
       // normal unnamed struct
       const auto& arr = details::json_as<picojson::array>(value);
       XGRAMMAR_CHECK(arr.size() == Functor::member_count)
           << "Wrong number of elements in array in JSONDeserialize" << " expected "
           << Functor::member_count << " but got " << arr.size();
-      details::visit_tuple(
-          [&arr, &result](auto member_ptr, size_t idx) {
-            AutoJSONDeserialize(result.*member_ptr, arr[idx]);
-          },
-          Functor::members
-      );
+      details::visit_config<T>([&arr, &result](auto ptr, const char* name, size_t idx) {
+        AutoJSONDeserialize(result.*ptr, arr[idx]);
+      });
     }
-  } else if constexpr (Functor::value == member_registry::kDelegate) {
+  } else if constexpr (Functor::value == member_type::kDelegate) {
     // cast to the delegate type
-    using Delegate = typename Functor::delegate_type;
-    result = Functor::from(AutoJSONDeserialize<Delegate>(value));
+    typename Functor::delegate_type value_delegate;
+    AutoJSONDeserialize(value_delegate, value);
+    result = Functor::from(value_delegate);
   } else {
     // should give an error in this case
     static_assert(details::false_v<T>, "Invalid trait type");
@@ -255,7 +138,7 @@ inline picojson::value AutoJSONSerialize(const T& value) {
       arr.push_back(AutoJSONSerialize(item));
     }
     return picojson::value(std::move(arr));
-  } else if constexpr (member_trait<T>::value != member_registry::kNone) {
+  } else if constexpr (member_trait<T>::value != member_type::kNone) {
     return TraitJSONSerialize(value);
   } else {
     // should give an error in this case
@@ -265,37 +148,8 @@ inline picojson::value AutoJSONSerialize(const T& value) {
 }
 
 template <typename T>
-inline T AutoJSONDeserialize(const picojson::value& value) {
-  if constexpr (details::has_json_deserialize_member<T>::value) {
-    return T::JSONDeserialize(value);
-  } else if constexpr (details::has_json_deserialize_global<T>::value) {
-    T obj;
-    JSONDeserialize(obj, value);
-    return obj;
-  } else if constexpr (std::is_same_v<T, bool>) {
-    return details::json_as<bool>(value);
-  } else if constexpr (std::is_integral_v<T> || std::is_enum_v<T>) {
-    return static_cast<T>(details::json_as<int64_t>(value));
-  } else if constexpr (std::is_floating_point_v<T>) {
-    return static_cast<T>(details::json_as<double>(value));
-  } else if constexpr (std::is_same_v<T, std::string>) {
-    return details::json_as<std::string>(value);
-  } else if constexpr (details::is_optional<T>::value || details::is_vector<T>::value ||
-                       details::is_unordered_set<T>::value || details::is_unordered_map<T>::value) {
-    T result;
-    AutoJSONDeserialize(result, value);
-    return result;
-  } else if constexpr (member_trait<T>::value != member_registry::kNone) {
-    return TraitJSONDeserialize<T>(value);
-  } else {
-    // should give an error in this case
-    static_assert(details::false_v<T>, "Cannot deserialize this type");
-    return T{};
-  }
-}
-
-template <typename T>
 inline void AutoJSONDeserialize(T& result, const picojson::value& value) {
+  static_assert(!std::is_const_v<T>, "Cannot deserialize into a const type");
   if constexpr (details::has_json_deserialize_member<T>::value) {
     result = T::JSONDeserialize(value);
   } else if constexpr (details::has_json_deserialize_global<T>::value) {
@@ -319,14 +173,17 @@ inline void AutoJSONDeserialize(T& result, const picojson::value& value) {
     const auto& arr = details::json_as<picojson::array>(value);
     result.reserve(arr.size());
     for (const auto& item : details::json_as<picojson::array>(value)) {
-      result.emplace_back(AutoJSONDeserialize<typename T::value_type>(item));
+      auto& item_value = result.emplace_back();
+      AutoJSONDeserialize(item_value, item);
     }
   } else if constexpr (details::is_unordered_set<T>::value) {
     result.clear();
     const auto& arr = details::json_as<picojson::array>(value);
     result.reserve(arr.size());
     for (const auto& item : arr) {
-      result.emplace(AutoJSONDeserialize<typename T::value_type>(item));
+      typename T::value_type item_value;
+      AutoJSONDeserialize(item_value, item);
+      result.emplace(std::move(item_value));
     }
   } else if constexpr (details::is_unordered_map<T>::value) {
     const auto& arr = details::json_as<picojson::array>(value);
@@ -334,17 +191,18 @@ inline void AutoJSONDeserialize(T& result, const picojson::value& value) {
     result.clear();
     result.reserve(arr.size() / 2);
     for (size_t i = 0; i < arr.size(); i += 2) {
-      result.try_emplace(
-          AutoJSONDeserialize<typename T::key_type>(arr[i]),
-          AutoJSONDeserialize<typename T::mapped_type>(arr[i + 1])
-      );
+      // typename T::value_type item_value;
+      typename T::key_type key_value;
+      AutoJSONDeserialize(key_value, arr[i + 0]);
+      typename T::mapped_type item_value;
+      AutoJSONDeserialize(item_value, arr[i + 1]);
+      result.emplace(std::move(key_value), std::move(item_value));
     }
-  } else if constexpr (member_trait<T>::value != member_registry::kNone) {
-    return TraitJSONDeserialize<T>(result, value);
+  } else if constexpr (member_trait<T>::value != member_type::kNone) {
+    return TraitJSONDeserialize(result, value);
   } else {
     // should give an error in this case
     static_assert(details::false_v<T>, "Cannot deserialize this type");
-    return T{};
   }
 }
 

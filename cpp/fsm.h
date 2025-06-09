@@ -57,6 +57,8 @@ struct FSMEdge {
   */
   bool IsCharRange() const;
 
+  FSMEdge() = default;
+
   explicit FSMEdge(uint64_t value) {
     // first cast into unsigned int,
     unsigned int target_ = static_cast<unsigned int>(value >> 32);
