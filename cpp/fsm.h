@@ -16,7 +16,7 @@
 #include <variant>
 #include <vector>
 
-#include "serialize/serialize.h"
+#include "reflection/reflection.h"
 #include "support/csr_array.h"
 
 namespace xgrammar {

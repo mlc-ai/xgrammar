@@ -31,16 +31,4 @@ struct is_unordered_set : std::false_type {};
 template <typename... R>
 struct is_unordered_set<std::unordered_set<R...>> : std::true_type {};
 
-template <typename Fn, typename Tuple, std::size_t... Idx>
-inline constexpr void visit_tuple(Fn&& f, const Tuple& t, std::index_sequence<Idx...>) {
-  (f(std::get<Idx>(t), Idx), ...);
-}
-
-template <typename Fn, typename Tuple>
-inline constexpr void visit_tuple(Fn&& f, const Tuple& t) {
-  return visit_tuple(
-      std::forward<Fn>(f), t, std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>()
-  );
-}
-
 }  // namespace xgrammar::details

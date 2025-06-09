@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "fsm.h"
-#include "serialize/serialize.h"
+#include "reflection/reflection.h"
 #include "support/logging.h"
 #include "xgrammar/grammar.h"
 

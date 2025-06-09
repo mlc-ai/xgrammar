@@ -11,8 +11,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "../serialize/compare.h"
-#include "../serialize/serialize.h"
+#include "../reflection/compare.h"
+#include "../reflection/reflection.h"
 #include "logging.h"
 #include "utils.h"
 

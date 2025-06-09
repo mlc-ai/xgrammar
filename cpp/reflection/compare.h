@@ -2,7 +2,7 @@
 #include <tuple>
 #include <type_traits>
 
-#include "serialize.h"
+#include "reflection.h"
 
 namespace xgrammar {
 

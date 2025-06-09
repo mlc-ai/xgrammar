@@ -8,8 +8,8 @@
 #include "fsm.h"
 #include "grammar_data_structure.h"  // IWYU pragma: keep
 #include "picojson.h"
-#include "serialize/compare.h"
-#include "serialize/json.h"
+#include "reflection/compare.h"
+#include "reflection/json.h"
 #include "support/logging.h"
 #include "tokenizer_internal.h"  // IWYU pragma: keep
 #include "xgrammar/compiler.h"

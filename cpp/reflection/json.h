@@ -4,12 +4,24 @@
 
 #include "../support/logging.h"
 #include "picojson.h"
-#include "serialize.h"
+#include "reflection.h"
 #include "utils.h"
 
 namespace xgrammar {
 
 namespace details {
+
+template <typename Fn, typename Tuple, std::size_t... Idx>
+inline constexpr void visit_tuple(Fn&& f, const Tuple& t, std::index_sequence<Idx...>) {
+  (f(std::get<Idx>(t), Idx), ...);
+}
+
+template <typename Fn, typename Tuple>
+inline constexpr void visit_tuple(Fn&& f, const Tuple& t) {
+  return visit_tuple(
+      std::forward<Fn>(f), t, std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>()
+  );
+}
 
 template <typename, typename = void>
 struct has_json_serialize_member : std::false_type {};
@@ -163,8 +175,8 @@ inline void TraitJSONDeserialize(T& result, const picojson::value& value) {
       // normal named struct
       const auto& obj = details::json_as<picojson::object>(value);
       XGRAMMAR_CHECK(obj.size() == Functor::member_count)
-          << "Wrong number of members in object in JSONDeserialize"
-          << " expected " << Functor::member_count << " but got " << obj.size();
+          << "Wrong number of members in object in JSONDeserialize" << " expected "
+          << Functor::member_count << " but got " << obj.size();
       details::visit_tuple(
           [&obj, &result](auto member_ptr, size_t idx) {
             const char* name = Functor::names[idx];
@@ -181,8 +193,8 @@ inline void TraitJSONDeserialize(T& result, const picojson::value& value) {
       // normal unnamed struct
       const auto& arr = details::json_as<picojson::array>(value);
       XGRAMMAR_CHECK(arr.size() == Functor::member_count)
-          << "Wrong number of elements in array in JSONDeserialize"
-          << " expected " << Functor::member_count << " but got " << arr.size();
+          << "Wrong number of elements in array in JSONDeserialize" << " expected "
+          << Functor::member_count << " but got " << arr.size();
       details::visit_tuple(
           [&arr, &result](auto member_ptr, size_t idx) {
             AutoJSONDeserialize(result.*member_ptr, arr[idx]);

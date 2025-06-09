@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "serialize/serialize.h"
+#include "reflection/reflection.h"
 #include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
