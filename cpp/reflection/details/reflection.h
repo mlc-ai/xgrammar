@@ -64,11 +64,28 @@ inline constexpr auto make_name_table(Args... args) {
   return make_name_table_aux(std::make_index_sequence<N / 2>{}, std::make_tuple(args...));
 }
 
-template <typename T, member_type R = member_trait<T>::value>
+/*!
+ * @brief A functor that provides access to the members of a config type.
+ * It extracts the members from the `member_trait` specialization for the type `T`.
+ * A valid `member_trait` specialization must meet the following requirements:
+ * - It must have a static member `value` of type `member_type`,
+ *   which must be either `kNone`, `kConfig`, or `kDelegate`.
+ */
+template <typename T, member_type = member_trait<T>::value>
 struct member_functor {
   static_assert(false_v<T>, "This specialization should never be used");
 };
 
+/*!
+ * @brief A specialization of `member_functor` for config types.
+ * A valid `member_trait` specialization for a config type must meet the following:
+ * - It must have a static member `value` of type `member_type::kConfig`.
+ * - It must have a static tuple `members` that contains the member pointers.
+ * - It must have a static array `names` that contains the names of the members.
+ * - The size of `names` must be either 0 or equal to the number of members in `members`.
+ *   - In the first case, `names` will be empty.
+ *   - In the second case, `names` represent the printed name of each member.
+ */
 template <typename T>
 struct member_functor<T, member_type::kConfig> {
   using _trait_type = member_trait<T>;
@@ -89,6 +106,13 @@ struct member_functor<T, member_type::kConfig> {
   );
 };
 
+/*!
+ * @brief A specialization of `member_functor` for delegate types.
+ * A valid `member_trait` specialization for a delegate type must meet the following:
+ * - It must have a static member `value` of type `member_type::kDelegate`.
+ * - It must have a static member `delegate_type` that represents the type of the delegate.
+ * - `T` must be convertible to `delegate_type` and vice versa.
+ */
 template <typename T>
 struct member_functor<T, member_type::kDelegate> {
   using _trait_type = member_trait<T>;
