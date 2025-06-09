@@ -53,27 +53,24 @@ struct D {
 // in delegate mode, we will convert to delegate_type before comparing
 XGRAMMAR_MEMBER_DELEGATE(D, uint64_t);
 
-static XGRAMMAR_GENERATE_EQUALITY(A);
-static XGRAMMAR_GENERATE_EQUALITY(B);
-template <typename T>
-static XGRAMMAR_GENERATE_EQUALITY(C<T>);
-static XGRAMMAR_GENERATE_EQUALITY(D);
+// automatically generate equality and not equal operators for the types
 
-#define AUTO_GENERATE_NE(T)                                                    \
-  static bool operator!=(const T& lhs, const T& rhs) { return !(lhs == rhs); } \
-  static_assert(true)
-
-AUTO_GENERATE_NE(A);
-AUTO_GENERATE_NE(B);
+static XGRAMMAR_GENERATE_EQUALITY_DEMO(A);
+static XGRAMMAR_GENERATE_EQUALITY_DEMO(B);
 template <typename T>
-AUTO_GENERATE_NE(C<T>);
-AUTO_GENERATE_NE(D);
+static XGRAMMAR_GENERATE_EQUALITY_DEMO(C<T>);
+static XGRAMMAR_GENERATE_EQUALITY_DEMO(D);
+
+// For gtest, we need to define the not-equal operators...
+template <typename T>
+inline bool operator!=(const T& lhs, const T& rhs) {
+  return !(lhs == rhs);
+}
 
 }  // namespace xgrammar
 
-using namespace xgrammar;
-
 TEST(XGrammarReflectionTest, BasicEq) {
+  using namespace xgrammar;
   A a1{'x', 42, 3.14};
   A a2{'x', 42, 3.14};
   A a3{'y', 42, 3.14};

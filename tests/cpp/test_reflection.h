@@ -41,7 +41,7 @@ inline bool AutoCompareEq(const T& lhs, const T& rhs) {
   }
 }
 
-#define XGRAMMAR_GENERATE_EQUALITY(T)                                               \
+#define XGRAMMAR_GENERATE_EQUALITY_DEMO(T)                                          \
   bool operator==(const T& lhs, const T& rhs) {                                     \
     /* skip default compare to prevent infinite recursion  */                       \
     return &lhs == &rhs || xgrammar::AutoCompareEq</*SkipDefault=*/true>(lhs, rhs); \
