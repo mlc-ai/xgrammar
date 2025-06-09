@@ -1,9 +1,10 @@
+#include "test_reflection.h"
+
 #include <gtest/gtest.h>
 
 #include <cstdint>
 #include <string>
 
-#include "reflection/compare.h"
 #include "reflection/reflection.h"
 
 namespace xgrammar {
@@ -68,6 +69,10 @@ template <typename T>
 AUTO_GENERATE_NE(C<T>);
 AUTO_GENERATE_NE(D);
 
+}  // namespace xgrammar
+
+using namespace xgrammar;
+
 TEST(XGrammarReflectionTest, BasicEq) {
   A a1{'x', 42, 3.14};
   A a2{'x', 42, 3.14};
@@ -98,5 +103,3 @@ TEST(XGrammarReflectionTest, BasicEq) {
   ASSERT_EQ(d1, d2);
   ASSERT_NE(d1, d3);
 }
-
-}  // namespace xgrammar
