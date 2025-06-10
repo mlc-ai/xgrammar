@@ -568,6 +568,8 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     }
     int last_rejected_uncertain_range = 0;
     for (const auto& cur_token_idx : adaptive_token_mask.uncertain_indices) {
+      // Check if the current token is in the rejected range. i.e. check if the current token
+      // is on the subtree of the rejected token.
       if (cur_token_idx < last_rejected_uncertain_range) {
         continue;
       }

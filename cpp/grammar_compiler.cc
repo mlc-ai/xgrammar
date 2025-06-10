@@ -450,6 +450,8 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
     for (int i = interval.first; i < interval.second; ++i) {
+      // Check if the current token is in the rejected range. i.e. check if the current token
+      // is on the subtree of the rejected token.
       if (i < last_rejected_range) {
         if (fill_reject_indices) {
           tmp_rejected_indices_.push_back(i);
@@ -460,6 +462,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         }
         continue;
       }
+
       const auto& token = sorted_decoded_vocab[i].second;
       // This optimization is useful for simple self-recursive rules, like string content.
       if (is_self_recursion) {
