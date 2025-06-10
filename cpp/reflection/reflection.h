@@ -9,6 +9,21 @@ struct member_trait {
   static constexpr auto value = member_type::kNone;
 };
 
+/*!
+ * @brief Macros to define member traits for types.
+ *
+ * These macros are used to define the structural information of types
+ * for serialization and reflection purposes.
+ *
+ * - `XGRAMMAR_MEMBER_TABLE`: Defines a type with a table of (name, member pointer) pairs.
+ * - `XGRAMMAR_MEMBER_ARRAY`: Defines a type with an array of member pointer.
+ * - `XGRAMMAR_MEMBER_DELEGATE`: Defines a type that can be converted from/into another type.
+ *
+ * For template types, use the version with `_TEMPLATE` suffix instead.
+ *
+ * For real-world examples, see `tests/cpp/test_reflection.h` and `tests/cpp/test_reflection.cc`.
+ */
+
 #define XGRAMMAR_MEMBER_TABLE_TEMPLATE(Type, ...)                            \
   struct member_trait<Type> {                                                \
     static constexpr auto value = member_type::kConfig;                      \

@@ -91,7 +91,6 @@ TokenizerInfo JSONSerializer::DeserializeTokenizerInfo(
 
 [[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(Grammar::Impl::Rule);
 [[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(AdaptiveTokenMask);
-[[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(CompactFSM);
 [[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(CompactFSMWithStartEnd);
 [[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(TokenizerInfo::Impl);
 [[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(Grammar::Impl);

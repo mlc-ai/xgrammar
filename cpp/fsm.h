@@ -16,9 +16,9 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <variant>
 #include <vector>
 
+#include "picojson.h"
 #include "reflection/reflection.h"
 #include "support/csr_array.h"
 
@@ -44,6 +44,22 @@ struct FSMEdge {
   FSMEdge(short min, short max, int target) : min(min), max(max), target(target) {
     XGRAMMAR_DCHECK(!IsCharRange() || min <= max)
         << "Invalid FSMEdge: min > max. min=" << min << ", max=" << max;
+  }
+
+  // for serialization only
+  FSMEdge() = default;
+  explicit FSMEdge(uint64_t packed)
+      : min(static_cast<unsigned short>(packed & 0xFFFF)),
+        max(static_cast<unsigned short>((packed >> 16) & 0xFFFF)),
+        target(static_cast<unsigned int>((packed >> 32) & 0xFFFFFFFF)) {}
+  explicit operator uint64_t() const {
+    const auto _min = static_cast<unsigned short>(min);
+    const auto _max = static_cast<unsigned short>(max);
+    const auto _target = static_cast<unsigned int>(target);
+    return (
+        static_cast<uint64_t>(_min) | (static_cast<uint64_t>(_max) << 16) |
+        (static_cast<uint64_t>(_target) << 32)
+    );
   }
 
   /*!
@@ -84,6 +100,8 @@ struct FSMEdge {
    */
   int GetRefRuleId() const { return IsRuleRef() ? max : -1; }
 };
+
+XGRAMMAR_MEMBER_DELEGATE(FSMEdge, uint64_t);
 
 }  // namespace xgrammar
 
@@ -269,6 +287,9 @@ class FSM {
  */
 class CompactFSM {
  public:
+  // for serialization only
+  CompactFSM() = default;
+
   CompactFSM(const CSRArray<FSMEdge>& edges);
 
   CompactFSM(CSRArray<FSMEdge>&& edges);
@@ -347,8 +368,14 @@ class CompactFSM {
    */
   FSM ToFSM() const;
 
+  picojson::value JSONSerialize() const;
+  friend void JSONDeserialize(CompactFSM& fsm, const picojson::value& v);
+  bool operator==(const CompactFSM& other) const;
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
 };
+
+class CompactFSMWithStartEnd;
 
 /*!
  * \brief The base class for FSMWithStartEnd and CompactFSMWithStartEnd. It defines the
@@ -362,6 +389,9 @@ class FSMWithStartEndBase {
   );
 
  public:
+  // for serialization only
+  FSMWithStartEndBase() = default;
+
   /*! \brief Constructs an FSMWithStartEnd with a given FSM, start state, and end states. */
   FSMWithStartEndBase(
       const FSMType& fsm, int start, const std::unordered_set<int>& ends, bool is_dfa = false
@@ -457,9 +487,9 @@ class FSMWithStartEndBase {
   std::unordered_set<int> ends_;
   /*! \brief Whether this FSM is a deterministic finite automaton. */
   bool is_dfa_ = false;
-};
 
-class CompactFSMWithStartEnd;
+  friend struct member_trait<CompactFSMWithStartEnd>;
+};
 
 /*!
  * \brief FSMWithStartEnd represents a FSM with start and end states.
@@ -592,6 +622,9 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
  public:
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
+  // for serialization only
+  CompactFSMWithStartEnd() = default;
+
   /*!
    * \brief Print the FSM.
    * \return The string representation of the FSM.
@@ -613,6 +646,14 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    */
   FSMWithStartEnd ToFSM() const;
 };
+
+XGRAMMAR_MEMBER_ARRAY(
+    CompactFSMWithStartEnd,
+    &CompactFSMWithStartEnd::fsm_,
+    &CompactFSMWithStartEnd::start_,
+    &CompactFSMWithStartEnd::ends_,
+    &CompactFSMWithStartEnd::is_dfa_
+);
 
 /****************** FSMWithStartEndBase Template Implementation ******************/
 

@@ -21,6 +21,10 @@
 #include <utility>
 #include <vector>
 
+#include "picojson.h"
+#include "reflection/compare.h"
+#include "reflection/json.h"
+#include "reflection/reflection.h"
 #include "support/encoding.h"
 #include "support/logging.h"
 #include "support/union_find_set.h"
@@ -65,6 +69,7 @@ class FSMImplBase {
 
  protected:
   ContainerType edges_;
+  friend struct member_trait<CompactFSM::Impl>;
 };
 
 template <typename ContainerType>
@@ -157,6 +162,8 @@ void FSMImplBase<ContainerType>::GetReachableStates(
 
 class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
  public:
+  Impl() = default;
+
   Impl(int num_states = 0) { edges_.resize(num_states); }
 
   using FSMImplBase<std::vector<std::vector<FSMEdge>>>::FSMImplBase;
@@ -371,6 +378,8 @@ class CompactFSM::Impl : public FSMImplBase<CSRArray<FSMEdge>> {
 
   friend std::size_t MemorySize(const Impl& self) { return MemorySize(self.edges_); }
 };
+
+XGRAMMAR_MEMBER_ARRAY(CompactFSM::Impl, &CompactFSM::Impl::edges_);
 
 int CompactFSM::Impl::GetNextState(int from, int16_t character) const {
   for (const auto& edge : edges_[from]) {
@@ -1408,6 +1417,16 @@ std::size_t MemorySize(const CompactFSMWithStartEnd& self) {
 
 FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
+}
+
+[[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(CompactFSM::Impl);
+
+bool CompactFSM::operator==(const CompactFSM& other) const { return **this == *other; }
+
+picojson::value CompactFSM::JSONSerialize() const { return AutoJSONSerialize(**this); }
+
+void JSONDeserialize(CompactFSM& fsm, const picojson::value& v) {
+  return AutoJSONDeserialize(*fsm, v);
 }
 
 }  // namespace xgrammar
