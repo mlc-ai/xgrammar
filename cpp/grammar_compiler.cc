@@ -245,6 +245,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   AdaptiveTokenMask GetAdaptiveTokenMask(
       size_t vocab_size,
       const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
+      const std::vector<int32_t>& subtree_nodes_range,
       bool is_root_rule
   );
 
@@ -260,6 +261,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   bool GetTokenMaskWithFirstCharacterCheck(
       const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
       const std::bitset<256>& first_char_mask,
+      const std::vector<int>& subtree_nodes_range,
       bool is_root_rule
   );
 
@@ -391,6 +393,7 @@ void GetPossibleTokenIntervals(
 bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
     const std::bitset<256>& first_char_mask,
+    const std::vector<int>& subtree_nodes_range,
     bool is_root_rule
 ) {
   using RuleExprType = Grammar::Impl::RuleExprType;
@@ -442,10 +445,21 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
   }
 
   int prev_matched_size = 0;
+  int last_rejected_range = 0;
   const std::string* prev_token = nullptr;
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
     for (int i = interval.first; i < interval.second; ++i) {
+      if (i < last_rejected_range) {
+        if (fill_reject_indices) {
+          tmp_rejected_indices_.push_back(i);
+          fill_reject_indices =
+              tmp_rejected_indices_.size() < AdaptiveTokenMask::USE_BITSET_THRESHOLD;
+        } else {
+          i = last_rejected_range - 1;
+        }
+        continue;
+      }
       const auto& token = sorted_decoded_vocab[i].second;
       // This optimization is useful for simple self-recursive rules, like string content.
       if (is_self_recursion) {
@@ -521,6 +535,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         tmp_uncertain_indices_.push_back(i);
       } else {
         tmp_rejected_indices_.push_back(i);
+        last_rejected_range = subtree_nodes_range[i];
+        fill_reject_indices =
+            tmp_rejected_indices_.size() < AdaptiveTokenMask::USE_BITSET_THRESHOLD;
       }
     }
     if (interval_idx != possible_intervals.size() - 1 && fill_reject_indices) {
@@ -528,6 +545,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       for (int i = interval.second; i < next_interval.first; ++i) {
         tmp_rejected_indices_.push_back(i);
       }
+      fill_reject_indices = tmp_rejected_indices_.size() < AdaptiveTokenMask::USE_BITSET_THRESHOLD;
     }
   }
 
@@ -550,6 +568,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
     size_t vocab_size,
     const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
+    const std::vector<int32_t>& subtree_nodes_range,
     bool is_root_rule
 ) {
   tmp_accepted_indices_.clear();
@@ -599,8 +618,9 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
     XGRAMMAR_DCHECK(sequence.type == Grammar::Impl::RuleExprType::kTagDispatch);
     first_character_mask.set();
   }
-  bool rejected_indices_are_filled =
-      GetTokenMaskWithFirstCharacterCheck(sorted_decoded_vocab, first_character_mask, is_root_rule);
+  bool rejected_indices_are_filled = GetTokenMaskWithFirstCharacterCheck(
+      sorted_decoded_vocab, first_character_mask, subtree_nodes_range, is_root_rule
+  );
   if (rejected_indices_are_filled) {
     return AdaptiveTokenMask(
         vocab_size,
@@ -776,7 +796,10 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
   auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(grammar, state, false);
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
-        tokenizer_info_.GetVocabSize(), tokenizer_info_.GetSortedDecodedVocab(), is_root_rule
+        tokenizer_info_.GetVocabSize(),
+        tokenizer_info_.GetSortedDecodedVocab(),
+        tokenizer_info_.GetTrieSubtreeNodesRange(),
+        is_root_rule
     );
     if (max_threads_ > 1) {
       std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
