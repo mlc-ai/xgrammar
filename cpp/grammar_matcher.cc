@@ -571,6 +571,9 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       // Check if the current token is in the rejected range. i.e. check if the current token
       // is on the subtree of the rejected token.
       if (cur_token_idx < last_rejected_uncertain_range) {
+        if (adaptive_token_mask.store_type == StoreType::kRejected) {
+          tmp_rejected_indices_delta_.push_back(cur_token_idx);
+        }
         continue;
       }
       const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
