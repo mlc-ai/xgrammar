@@ -9,6 +9,7 @@
 #include <xgrammar/matcher.h>
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "compiled_grammar_data_structure.h"
@@ -182,8 +183,7 @@ void ApplyTokenBitmaskInplaceCPU(
  * Note these stacks form a tree structure as when splitting, the new stacks share the same prefix.
  * We store all StackElements as a tree, where every path from tree root to a node represents a
  * stack. To represent stack tops, we attach additional pointers pointing the stack top nodes.
- * Also, We maintain a history of the stack top pointers, so we can rollback to the previous
- * ParserState.
+ * Also, We maintain a history of the stack top pointers, so we can rollback to the previous state.
  *
  * All tree nodes are maintained by a buffer, and utilize reference counting to recycle. If a node
  * is neither pointed by a stack top pointer, not pointed by some child nodes, it will be freed.
@@ -534,16 +534,31 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
                        << ", num of states=" << latest_states.size();
   }
 
-  for (auto ParserState : latest_states) {
-    auto cur_sequence = grammar_->GetRuleExpr(ParserState.sequence_id);
+  std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
+      latest_states_with_masks;
+
+  for (const auto& state : latest_states) {
+    auto cur_sequence = grammar_->GetRuleExpr(state.sequence_id);
     XGRAMMAR_DCHECK(!(
         cur_sequence.type == RuleExprType::kRuleRef ||
         cur_sequence.type == RuleExprType::kChoices || cur_sequence.type == RuleExprType::kEmptyStr
     ));
     have_tag_dispatch = cur_sequence.type == RuleExprType::kTagDispatch;
     XGRAMMAR_DCHECK(have_tag_dispatch || cur_sequence.type == RuleExprType::kSequence);
-    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(ParserState);
-    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << ParserState;
+    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
+    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
+    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
+    if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
+      tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
+    } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
+      for (auto idx : adaptive_token_mask.accepted_indices) {
+        tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
+      }
+    }
+  }
+
+  for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
@@ -558,23 +573,31 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     tmp_rejected_indices_delta_.clear();
 
     // Examine only the current one ParserState
-    PushOneStateToCheck(ParserState);
+    PushOneStateToCheck(state);
 
     const std::string* prev_token = nullptr;
     int prev_matched_size = 0;
     if (debug_print) {
-      XGRAMMAR_LOG(INFO) << "The ParserState is " << ParserState << ", the mask is "
+      XGRAMMAR_LOG(INFO) << "The ParserState is " << state << ", the mask is "
                          << adaptive_token_mask.Print(tokenizer_info_);
     }
     int last_rejected_uncertain_range = 0;
     for (const auto& cur_token_idx : adaptive_token_mask.uncertain_indices) {
-      if (cur_token_idx < last_rejected_uncertain_range) {
-        continue;
-      }
-      const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
+      // Check if the current token is already accepted. If it is, we can skip it.
       if (tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
         continue;
       }
+
+      // Check if the current token is in the rejected range. i.e. check if the current token
+      // is on the subtree of the rejected token.
+      if (cur_token_idx < last_rejected_uncertain_range) {
+        if (adaptive_token_mask.store_type == StoreType::kRejected) {
+          tmp_rejected_indices_delta_.push_back(cur_token_idx);
+        }
+        continue;
+      }
+
+      const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
       bool accepted = true;
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
@@ -623,13 +646,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
 
     PopLastStates(prev_matched_size + 1);
     // Step 3. Update the accepted_indices or rejected_indices
-    if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
-      tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
-    } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
-      for (auto idx : adaptive_token_mask.accepted_indices) {
-        tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
-      }
-    } else {
+    if (adaptive_token_mask.store_type == StoreType::kRejected) {
       // rejected_indices = Intersect(
       //     rejected_indices,
       //     adaptive_token_mask.rejected_indices + rejected_indices_delta)

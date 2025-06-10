@@ -1,7 +1,6 @@
 import json
 import sys
 import time
-from json import dumps
 from typing import Dict, List, Tuple
 
 import pytest
@@ -509,8 +508,7 @@ def test_implicit_left_recursion_schema():
     }
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
-    _ = grammar_compiler.compile_json_schema(schema=dumps(json_schema))
-    print(_.grammar)
+    _ = grammar_compiler.compile_json_schema(schema=json.dumps(json_schema))
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ namespace xgrammar {
  * -sequence_id: The id of the sequence in the rule.
  * -element_id: The id of the element in the sequence, or the id of the node in
  * the tag dispatch fsm.
- * -parent_pos: The id of the parent node in the Earley parser. i.e. the rule
+ * -rule_start_pos: The id of the parent node in the Earley parser. i.e. the rule
  * is predicted from the k-th character.
  * -sub_element_id: The id of the sub element in the current element, i.e.:
  *   - kbytestring: the id of the byte in the string.
@@ -50,13 +50,13 @@ struct ParserState {
       const int32_t& rule_id,
       const int32_t& sequence_id,
       const int32_t& element_id,
-      const int32_t& parent_pos,
+      const int32_t& rule_start_pos,
       const int32_t& sub_element_id
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
         element_id(element_id),
-        input_pos(parent_pos),
+        rule_start_pos(rule_start_pos),
         sub_element_id(sub_element_id) {}
 
   /*!
@@ -86,7 +86,7 @@ struct ParserState {
   int32_t element_id = -1;
 
   /*! \brief The position of the state, i.e. from which position, the rule starts. */
-  int32_t input_pos = -1;
+  int32_t rule_start_pos = -1;
 
   /*! \brief The id of the sub element in the current selement of the sequence. */
   int32_t sub_element_id = 0;
@@ -103,7 +103,7 @@ struct ParserState {
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
     os << "ParserState(rule_id=" << state.rule_id << ", sequence_id=" << state.sequence_id
-       << ", element_id=" << state.element_id << ", parent_pos=" << state.input_pos
+       << ", element_id=" << state.element_id << ", rule_start_pos=" << state.rule_start_pos
        << ", sub_element_id=" << state.sub_element_id << ")";
     return os;
   }
@@ -112,13 +112,13 @@ struct ParserState {
     return "ParserState(rule_id=" + std::to_string(rule_id) +
            ", sequence_id=" + std::to_string(sequence_id) +
            ", element_id=" + std::to_string(element_id) +
-           ", parent_pos=" + std::to_string(input_pos) +
+           ", rule_start_pos=" + std::to_string(rule_start_pos) +
            ", sub_element_id=" + std::to_string(sub_element_id) + ")";
   }
 };
 
 /*!
- * \brief When getting the mask of the state, we don't need to consider the parent_pos.
+ * \brief When getting the mask of the state, we don't need to consider the rule_start_pos.
  */
 class StateHashForCache {
  public:
@@ -128,27 +128,31 @@ class StateHashForCache {
 };
 
 /*!
- * \brief When matching the state, we need to consider the parent_pos, since if two states
- * don't have the same parent_pos, they are not the same state.
+ * \brief When matching the state, we need to consider the rule_start_pos, since if two states
+ * don't have the same rule_start_pos, they are not the same state.
  */
 class StateEqualForParsing {
  public:
   bool operator()(const ParserState& lhs, const ParserState& rhs) const {
     return lhs.rule_id == rhs.rule_id && lhs.sequence_id == rhs.sequence_id &&
-           lhs.element_id == rhs.element_id && lhs.input_pos == rhs.input_pos &&
+           lhs.element_id == rhs.element_id && lhs.rule_start_pos == rhs.rule_start_pos &&
            lhs.sub_element_id == rhs.sub_element_id;
   }
 };
 
 /*!
  * \brief This class is used to hash the ParserState for parsing.
- * If two ParserStates don't have the same parent_pos, they are not the same state.
+ * If two ParserStates don't have the same rule_start_pos, they are not the same state.
  */
 class StateHashForParsing {
  public:
   size_t operator()(const ParserState& state) const {
     return HashCombine(
-        state.rule_id, state.sequence_id, state.element_id, state.input_pos, state.sub_element_id
+        state.rule_id,
+        state.sequence_id,
+        state.element_id,
+        state.rule_start_pos,
+        state.sub_element_id
     );
   }
 };

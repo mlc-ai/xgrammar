@@ -130,7 +130,7 @@ class CompiledGrammar::Impl {
     }
   };
 
-  /*! \brief Mapping from the stack top element to the adaptive token mask. */
+  /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache> adaptive_token_mask_cache;
 
   Grammar GetGrammar() const { return grammar; }
