@@ -167,7 +167,7 @@ def test_serializer_correctness(
         assert schemas[i] == deserialized, f"Schema mismatch for schema {i}"
 
     # test serialization and deserialization in practice
-    # copied from test_grammar_matcher.py
+    # copied from test_grammar_matcher_basic.py
 
     from xgrammar.testing import _get_masked_tokens_from_bitmask
 
@@ -191,7 +191,7 @@ def test_serializer_correctness(
                 rejected_sizes[-1],
                 expected_rejected_sizes[i],
             )
-        assert matcher._debug_accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
 
     matcher.fill_next_token_bitmask(token_bitmask)
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
