@@ -11,7 +11,7 @@
 #include "reflection/compare.h"
 #include "reflection/json.h"
 #include "support/logging.h"
-#include "tokenizer_internal.h"  // IWYU pragma: keep
+#include "tokenizer_info_impl.h"  // IWYU pragma: keep
 #include "xgrammar/compiler.h"
 #include "xgrammar/grammar.h"
 #include "xgrammar/tokenizer_info.h"

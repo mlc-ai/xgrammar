@@ -17,7 +17,7 @@
 #include "reflection/json.h"
 #include "support/encoding.h"
 #include "support/logging.h"
-#include "tokenizer_internal.h"
+#include "tokenizer_info_impl.h"
 
 namespace xgrammar {
 
