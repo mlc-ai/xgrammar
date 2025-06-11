@@ -584,6 +584,11 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     }
     int last_rejected_uncertain_range = 0;
     for (const auto& cur_token_idx : adaptive_token_mask.uncertain_indices) {
+      // Check if the current token is already accepted. If it is, we can skip it.
+      if (tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
+        continue;
+      }
+
       // Check if the current token is in the rejected range. i.e. check if the current token
       // is on the subtree of the rejected token.
       if (cur_token_idx < last_rejected_uncertain_range) {
@@ -592,10 +597,8 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
         }
         continue;
       }
+
       const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
-      if (tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
-        continue;
-      }
       bool accepted = true;
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
