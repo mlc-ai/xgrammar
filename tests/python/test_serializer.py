@@ -1,7 +1,5 @@
-import json
 import time
-from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 import pytest
 from pydantic import BaseModel
@@ -85,7 +83,7 @@ def test_serializer_roundtrip():
     )
 
     grammar = grammar_compiler.compile_json_schema(make_trivial_schema(0))
-    _serialize_test(grammar, f"JSON schema")
+    _serialize_test(grammar, "JSON schema")
 
     grammar = grammar_compiler.compile_structural_tag(EXAMPLE_TAGS, EXAMPLE_TRIGGERS)
     _serialize_test(grammar, "structural tag")
