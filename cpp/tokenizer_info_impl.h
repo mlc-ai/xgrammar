@@ -44,6 +44,8 @@ class TokenizerInfo::Impl {
 
   static std::string DetectMetadataFromHF(const std::string& backend_str);
 
+  bool operator==(const Impl& other) const;
+
  private:
   static bool IsSpecialToken(const std::string& decoded_token);
 

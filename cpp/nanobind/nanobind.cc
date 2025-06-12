@@ -120,8 +120,7 @@ NB_MODULE(xgrammar_bindings, m) {
   auto pyCompiledGrammar = nb::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_prop_ro("grammar", &CompiledGrammar::GetGrammar)
       .def_prop_ro("tokenizer_info", &CompiledGrammar::GetTokenizerInfo)
-      .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes)
-      .def("_compare", &CompiledGrammar::_Compare);
+      .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes);
 
   auto pyGrammarCompiler = nb::class_<GrammarCompiler>(m, "GrammarCompiler");
   pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, long long>())

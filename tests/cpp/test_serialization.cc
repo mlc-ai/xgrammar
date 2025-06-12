@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <unordered_set>
 #include <vector>
@@ -9,9 +11,30 @@
 #include "reflection/json.h"
 #include "support/csr_array.h"
 
-using namespace xgrammar;
+namespace xgrammar {
+
+bool operator==(const CSRArray<int>& lhs, const CSRArray<int>& rhs) {
+  if (lhs.size() != rhs.size()) return false;
+  const std::size_t indptr_size = lhs.size() + 1;
+  const auto* lhs_indptr = lhs.indptr();
+  const auto* rhs_indptr = rhs.indptr();
+  for (std::size_t i = 0; i < indptr_size; ++i) {
+    if (lhs_indptr[i] != rhs_indptr[i]) return false;
+  }
+  const auto data_size = *std::max_element(lhs_indptr, lhs_indptr + indptr_size);
+  const auto* lhs_data = lhs.data();
+  const auto* rhs_data = rhs.data();
+  for (std::size_t i = 0; i < data_size; ++i) {
+    if (lhs_data[i] != rhs_data[i]) return false;
+  }
+  return true;
+}
+
+}  // namespace xgrammar
 
 TEST(XGrammarReflectionTest, JSONSerialization) {
+  using namespace xgrammar;
+
   // FSMedge is delegated to a int64_t object
   const auto edge = FSMEdge{1, 2, 3};
   auto deserialized_edge = FSMEdge{};

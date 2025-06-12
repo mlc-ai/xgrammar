@@ -22,7 +22,6 @@
 #include <vector>
 
 #include "picojson.h"
-#include "reflection/compare.h"
 #include "reflection/json.h"
 #include "reflection/reflection.h"
 #include "support/encoding.h"
@@ -1418,10 +1417,6 @@ std::size_t MemorySize(const CompactFSMWithStartEnd& self) {
 FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
 }
-
-[[maybe_unused]] static XGRAMMAR_GENERATE_EQUALITY(CompactFSM::Impl);
-
-bool CompactFSM::operator==(const CompactFSM& other) const { return **this == *other; }
 
 picojson::value CompactFSM::JSONSerialize() const { return AutoJSONSerialize(**this); }
 

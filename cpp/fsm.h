@@ -370,7 +370,6 @@ class CompactFSM {
 
   picojson::value JSONSerialize() const;
   friend void JSONDeserialize(CompactFSM& fsm, const picojson::value& v);
-  bool operator==(const CompactFSM& other) const;
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
 };

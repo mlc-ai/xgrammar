@@ -28,9 +28,6 @@ class CompiledGrammar {
   /*! \brief Return the approximate memory usage of the grammar in bytes. */
   std::size_t MemorySizeBytes() const;
 
-  // for debug purpose only
-  bool _Compare(const CompiledGrammar& other) const;
-
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);
 };
 
