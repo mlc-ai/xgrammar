@@ -30,13 +30,13 @@ static picojson::value parse_string(const std::string& str) {
   std::string err;
   picojson::parse(v, str.begin(), str.end(), &err);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err;
-  XGRAMMAR_CHECK(v.is<picojson::object>()) << "Expected a JSON object, but got: " << v;
+  XGRAMMAR_CHECK(v.is<picojson::object>()) << "Expected a JSON object, but got: " << v.serialize();
   const auto& object = v.get<picojson::object>();
   auto version_it = object.find("__VERSION__");
   XGRAMMAR_CHECK(version_it != object.end()) << "Missing __VERSION__ field in the JSON object.";
   const auto& version = version_it->second;
   XGRAMMAR_CHECK(version.is<std::string>())
-      << "Expected __VERSION__ to be a string, but got: " << version;
+      << "Expected __VERSION__ to be a string, but got: " << version.serialize();
   XGRAMMAR_CHECK(version.get<std::string>() == kXGrammarSerializeVersion)
       << "Unsupported XGrammar serialization version: " << version.get<std::string>();
   return v;
