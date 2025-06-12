@@ -19,10 +19,10 @@ namespace xgrammar {
 
 static const char kXGrammarSerializeVersion[] = "v1";
 
-static std::string serialize_json(picojson::object& v, bool prettify) {
-  v["__VERSION__"] = picojson::value(kXGrammarSerializeVersion);
-  picojson::value json_value(std::move(v));
-  return json_value.serialize(prettify);
+static std::string serialize_json(picojson::value v, bool prettify) {
+  auto& object = v.get<picojson::object>();
+  object["__VERSION__"] = picojson::value(kXGrammarSerializeVersion);
+  return v.serialize(prettify);
 }
 
 static picojson::value parse_string(const std::string& str) {
@@ -63,22 +63,19 @@ void JSONDeserialize(CompiledGrammar::Impl& impl, const picojson::value& v) {
 }
 
 std::string JSONSerializer::SerializeGrammar(const Grammar& grammar, bool prettify) {
-  auto value = AutoJSONSerialize(*grammar);
-  return serialize_json(value.get<picojson::object>(), prettify);
+  return serialize_json(AutoJSONSerialize(*grammar), prettify);
 }
 
 std::string JSONSerializer::SerializeTokenizerInfo(
     const TokenizerInfo& tokenizer_info, bool prettify
 ) {
-  auto value = AutoJSONSerialize(*tokenizer_info);
-  return serialize_json(value.get<picojson::object>(), prettify);
+  return serialize_json(AutoJSONSerialize(*tokenizer_info), prettify);
 }
 
 std::string JSONSerializer::SerializeCompiledGrammar(
     const CompiledGrammar& compiled_grammar, bool prettify
 ) {
-  auto value = AutoJSONSerialize(*compiled_grammar);
-  return serialize_json(value.get<picojson::object>(), prettify);
+  return serialize_json(AutoJSONSerialize(*compiled_grammar), prettify);
 }
 
 Grammar JSONSerializer::DeserializeGrammar(const std::string& str) {
