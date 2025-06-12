@@ -2,9 +2,13 @@
 #pragma once
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace xgrammar {
 
@@ -38,6 +42,30 @@ struct is_std_tuple : std::false_type {};
 
 template <typename... R>
 struct is_std_tuple<std::tuple<R...>> : std::true_type {};
+
+template <typename>
+struct is_optional : std::false_type {};
+
+template <typename T>
+struct is_optional<std::optional<T>> : std::true_type {};
+
+template <typename>
+struct is_vector : std::false_type {};
+
+template <typename... R>
+struct is_vector<std::vector<R...>> : std::true_type {};
+
+template <typename>
+struct is_unordered_map : std::false_type {};
+
+template <typename... R>
+struct is_unordered_map<std::unordered_map<R...>> : std::true_type {};
+
+template <typename T>
+struct is_unordered_set : std::false_type {};
+
+template <typename... R>
+struct is_unordered_set<std::unordered_set<R...>> : std::true_type {};
 
 // Note that we don't allow empty tables now (that's uncommon).
 template <typename X, typename Y, typename... Args>

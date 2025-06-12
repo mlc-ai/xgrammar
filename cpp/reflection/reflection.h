@@ -1,5 +1,5 @@
 #pragma once
-#include "details/reflection.h"  // IWYU pragma: export
+#include "reflection_details.h"  // IWYU pragma: export
 
 namespace xgrammar {
 
