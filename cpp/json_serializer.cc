@@ -17,6 +17,31 @@
 
 namespace xgrammar {
 
+static const char kXGrammarSerializeVersion[] = "v1";
+
+static std::string serialize_json(picojson::object& v, bool prettify) {
+  v["__VERSION__"] = picojson::value(kXGrammarSerializeVersion);
+  picojson::value json_value(std::move(v));
+  return json_value.serialize(prettify);
+}
+
+static picojson::value parse_string(const std::string& str) {
+  picojson::value v;
+  std::string err;
+  picojson::parse(v, str.begin(), str.end(), &err);
+  XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err;
+  XGRAMMAR_CHECK(v.is<picojson::object>()) << "Expected a JSON object, but got: " << v;
+  const auto& object = v.get<picojson::object>();
+  auto version_it = object.find("__VERSION__");
+  XGRAMMAR_CHECK(version_it != object.end()) << "Missing __VERSION__ field in the JSON object.";
+  const auto& version = version_it->second;
+  XGRAMMAR_CHECK(version.is<std::string>())
+      << "Expected __VERSION__ to be a string, but got: " << version;
+  XGRAMMAR_CHECK(version.get<std::string>() == kXGrammarSerializeVersion)
+      << "Unsupported XGrammar serialization version: " << version.get<std::string>();
+  return v;
+}
+
 picojson::value CompiledGrammar::Impl::JSONSerialize() const {
   auto result = picojson::object{};
   result["grammar"] = AutoJSONSerialize(*grammar);
@@ -38,35 +63,27 @@ void JSONDeserialize(CompiledGrammar::Impl& impl, const picojson::value& v) {
 }
 
 std::string JSONSerializer::SerializeGrammar(const Grammar& grammar, bool prettify) {
-  return AutoJSONSerialize(*grammar).serialize(prettify);
+  auto value = AutoJSONSerialize(*grammar);
+  return serialize_json(value.get<picojson::object>(), prettify);
 }
 
 std::string JSONSerializer::SerializeTokenizerInfo(
     const TokenizerInfo& tokenizer_info, bool prettify
 ) {
-  // NOTE: this should be the same as the following function (except for prettify):
-  // return tokenizer_info.DumpMetadata();
-  return AutoJSONSerialize(*tokenizer_info).serialize(prettify);
+  auto value = AutoJSONSerialize(*tokenizer_info);
+  return serialize_json(value.get<picojson::object>(), prettify);
 }
 
 std::string JSONSerializer::SerializeCompiledGrammar(
     const CompiledGrammar& compiled_grammar, bool prettify
 ) {
-  return AutoJSONSerialize(*compiled_grammar).serialize(prettify);
-}
-
-static picojson::value parse_string(const std::string& str) {
-  picojson::value v;
-  std::string err;
-  picojson::parse(v, str.begin(), str.end(), &err);
-  XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err;
-  return v;
+  auto value = AutoJSONSerialize(*compiled_grammar);
+  return serialize_json(value.get<picojson::object>(), prettify);
 }
 
 Grammar JSONSerializer::DeserializeGrammar(const std::string& str) {
-  auto v = parse_string(str);
   auto grammar = Grammar{std::make_shared<Grammar::Impl>()};
-  AutoJSONDeserialize(*grammar, v);
+  AutoJSONDeserialize(*grammar, parse_string(str));
   return grammar;
 }
 
@@ -75,9 +92,8 @@ TokenizerInfo JSONSerializer::DeserializeTokenizerInfo(
 ) {
   if (encoded_vocab.empty()) {
     // simply build a tokenizer info with only metadata
-    auto v = parse_string(str);
     auto tokenizer_info = TokenizerInfo{std::make_shared<TokenizerInfo::Impl>()};
-    AutoJSONDeserialize(*tokenizer_info, v);
+    AutoJSONDeserialize(*tokenizer_info, parse_string(str));
     return tokenizer_info;
   } else {
     // rebuild a complete tokenizer info with vocab
@@ -109,9 +125,8 @@ bool TokenizerInfo::Impl::operator==(const TokenizerInfo::Impl& other) const {
 CompiledGrammar JSONSerializer::DeserializeCompiledGrammar(
     const std::string& str, const TokenizerInfo& tokenizer_info
 ) {
-  auto v = parse_string(str);
   auto compiled_grammar = CompiledGrammar{std::make_shared<CompiledGrammar::Impl>()};
-  AutoJSONDeserialize(*compiled_grammar, v);
+  AutoJSONDeserialize(*compiled_grammar, parse_string(str));
   // compare the tokenizer info metadata
   XGRAMMAR_CHECK(*compiled_grammar->tokenizer_info == *tokenizer_info)
       << "The tokenizer info in the compiled grammar does not match the provided one.";
