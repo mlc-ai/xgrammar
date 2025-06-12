@@ -147,11 +147,12 @@ def test_serializer_correctness(
                 result.append(item)
         return result
 
-    def extract_cache(obj) -> Dict[Tuple[int, ...], int]:
+    def extract_cache(obj) -> Dict[Tuple[int, ...], List[int]]:
         cache: List[List[int]] = obj.pop("adaptive_token_mask_cache")
-        result: Dict[Tuple[int, ...], int] = defaultdict(int)
-        for item in cache:
-            result[tuple(flatten_list(item))] += 1
+        result: Dict[Tuple[int, ...], List[int]] = defaultdict(list)
+        assert len(cache) % 2 == 0
+        for i in range(0, len(cache), 2):
+            result[tuple(cache[i])] = cache[i + 1]
         return result
 
     # theoretically test the correctness of serialization and deserialization
