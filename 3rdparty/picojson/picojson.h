@@ -50,7 +50,6 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <map>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -267,6 +266,7 @@ class object_with_ordered_keys : private std::unordered_map<std::string, value> 
   using std::unordered_map<std::string, value>::at;
   using std::unordered_map<std::string, value>::count;
   using std::unordered_map<std::string, value>::find;
+  using std::unordered_map<std::string, value>::reserve;
 
   value& operator[](const std::string& key) {
     if (count(key) == 0) {

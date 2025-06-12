@@ -14,6 +14,7 @@
 
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
+#include "../json_serializer.h"
 #include "../regex_converter.h"
 #include "../support/recursion_guard.h"
 #include "../testing.h"
@@ -189,6 +190,15 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_prop_ro("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens)
       .def_prop_ro("stop_token_ids", &GrammarMatcher::GetStopTokenIds)
       .def("_debug_print_internal_state", &GrammarMatcher::_DebugPrintInternalState);
+
+  auto pyJSONSerializer = nb::class_<JSONSerializer>(m, "JSONSerializer");
+  pyJSONSerializer.def(nb::init<>())
+      .def("serialize_grammar", &JSONSerializer::SerializeGrammar)
+      .def("deserialize_grammar", &JSONSerializer::DeserializeGrammar)
+      .def("serialize_tokenizer_info", &JSONSerializer::SerializeTokenizerInfo)
+      .def("deserialize_tokenizer_info", &JSONSerializer::DeserializeTokenizerInfo)
+      .def("serialize_compiled_grammar", &JSONSerializer::SerializeCompiledGrammar)
+      .def("deserialize_compiled_grammar", &JSONSerializer::DeserializeCompiledGrammar);
 
   auto pyTestingModule = m.def_submodule("testing");
   pyTestingModule
