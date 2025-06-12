@@ -24,7 +24,7 @@ bool operator==(const CSRArray<int>& lhs, const CSRArray<int>& rhs) {
   const auto data_size = *std::max_element(lhs_indptr, lhs_indptr + indptr_size);
   const auto* lhs_data = lhs.data();
   const auto* rhs_data = rhs.data();
-  for (std::size_t i = 0; i < data_size; ++i) {
+  for (int i = 0; i < int(data_size); ++i) {
     if (lhs_data[i] != rhs_data[i]) return false;
   }
   return true;
