@@ -94,15 +94,15 @@ class TokenizerInfo::Impl {
 // we ignore the vocab here and only store the metadata
 XGRAMMAR_MEMBER_TABLE(
     TokenizerInfo::Impl,
-    "vocab_type_",
+    "vocab_type",
     &TokenizerInfo::Impl::vocab_type_,
-    "vocab_size_",
+    "vocab_size",
     &TokenizerInfo::Impl::vocab_size_,
-    "add_prefix_space_",
+    "add_prefix_space",
     &TokenizerInfo::Impl::add_prefix_space_,
-    "stop_token_ids_",
+    "stop_token_ids",
     &TokenizerInfo::Impl::stop_token_ids_,
-    "special_token_ids_",
+    "special_token_ids",
     &TokenizerInfo::Impl::special_token_ids_
 );
 

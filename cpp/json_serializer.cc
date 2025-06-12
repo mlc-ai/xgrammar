@@ -81,7 +81,15 @@ TokenizerInfo JSONSerializer::DeserializeTokenizerInfo(
     return tokenizer_info;
   } else {
     // rebuild a complete tokenizer info with vocab
-    return TokenizerInfo::FromVocabAndMetadata(encoded_vocab, str);
+    auto temp_impl = TokenizerInfo::Impl{};
+    AutoJSONDeserialize(temp_impl, parse_string(str));
+    return TokenizerInfo{
+        encoded_vocab,
+        temp_impl.GetVocabType(),
+        temp_impl.GetVocabSize(),
+        temp_impl.GetStopTokenIds(),
+        temp_impl.GetAddPrefixSpace(),
+    };
   }
 }
 
