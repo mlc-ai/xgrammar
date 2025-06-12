@@ -14,7 +14,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "reflection/json.h"
 #include "support/encoding.h"
 #include "support/logging.h"
 #include "tokenizer_info_impl.h"
@@ -297,7 +296,17 @@ TokenizerInfo::Impl::Impl(
 }
 
 std::string TokenizerInfo::Impl::DumpMetadata() const {
-  return AutoJSONSerialize(*this).serialize(false);
+  picojson::object obj;
+  obj["vocab_type"] = picojson::value(static_cast<int64_t>(vocab_type_));
+  obj["vocab_size"] = picojson::value(static_cast<int64_t>(vocab_size_));
+  obj["add_prefix_space"] = picojson::value(add_prefix_space_);
+  picojson::array stop_token_ids_array;
+  for (auto id : stop_token_ids_) {
+    stop_token_ids_array.push_back(picojson::value(static_cast<int64_t>(id)));
+  }
+  obj["stop_token_ids"] = picojson::value(stop_token_ids_array);
+
+  return picojson::value(obj).serialize(false);
 }
 
 std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
