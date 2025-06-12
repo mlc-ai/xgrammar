@@ -1,6 +1,8 @@
 #pragma once
+#include <algorithm>
 #include <cstddef>
 #include <type_traits>
+#include <vector>
 
 #include "../support/logging.h"
 #include "details/json.h"  // IWYU pragma: export
@@ -124,16 +126,27 @@ inline picojson::value AutoJSONSerialize(const T& value) {
     }
     return picojson::value(std::move(arr));
   } else if constexpr (details::is_unordered_set<T>::value) {
+    std::vector<const typename T::value_type*> ptr_vec;
+    ptr_vec.reserve(value.size());
+    for (const auto& item : value) ptr_vec.push_back(&item);
+    std::sort(ptr_vec.begin(), ptr_vec.end(), [](const auto* a, const auto* b) { return *a < *b; });
     picojson::array arr;
     arr.reserve(value.size());
-    for (const auto& item : value) {
-      arr.push_back(AutoJSONSerialize(item));
+    for (const auto* ptr : ptr_vec) {
+      arr.push_back(AutoJSONSerialize(*ptr));
     }
     return picojson::value(std::move(arr));
   } else if constexpr (details::is_unordered_map<T>::value) {
+    std::vector<const typename T::value_type*> ptr_vec;
+    ptr_vec.reserve(value.size());
+    for (const auto& item : value) ptr_vec.push_back(&item);
+    std::sort(ptr_vec.begin(), ptr_vec.end(), [](const auto* a, const auto* b) {
+      return a->first < b->first;
+    });
     picojson::array arr;
     arr.reserve(value.size() * 2);
-    for (const auto& [key, item] : value) {
+    for (const auto* ptr : ptr_vec) {
+      const auto& [key, item] = *ptr;
       arr.push_back(AutoJSONSerialize(key));
       arr.push_back(AutoJSONSerialize(item));
     }

@@ -60,6 +60,15 @@ struct StackElement {
            left_utf8_bytes == other.left_utf8_bytes && element_in_string == other.element_in_string;
   }
 
+  bool operator<(const StackElement& other) const {
+    if (rule_id != other.rule_id) return rule_id < other.rule_id;
+    if (sequence_id != other.sequence_id) return sequence_id < other.sequence_id;
+    if (element_id != other.element_id) return element_id < other.element_id;
+    if (parent_id != other.parent_id) return parent_id < other.parent_id;
+    if (left_utf8_bytes != other.left_utf8_bytes) return left_utf8_bytes < other.left_utf8_bytes;
+    return element_in_string < other.element_in_string;
+  }
+
   inline constexpr static int32_t kUnexpandedRuleStartSequenceId = 128000;
 
   inline constexpr static int32_t kDispatchedTagDispatchElementId = -1;
