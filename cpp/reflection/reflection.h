@@ -1,4 +1,5 @@
-#pragma once
+#ifndef XGRAMMAR_REFLECTION_H_
+#define XGRAMMAR_REFLECTION_H_
 #include "reflection_details.h"  // IWYU pragma: export
 
 namespace xgrammar {
@@ -57,3 +58,5 @@ struct member_trait {
   XGRAMMAR_MEMBER_DELEGATE_TEMPLATE(Type, Delegate)
 
 }  // namespace xgrammar
+
+#endif  // XGRAMMAR_REFLECTION_H_

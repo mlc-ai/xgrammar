@@ -1,4 +1,5 @@
-#pragma once
+#ifndef XGRAMMAR_REFLECTION_JSON_H_
+#define XGRAMMAR_REFLECTION_JSON_H_
 #include <algorithm>
 #include <cstddef>
 #include <type_traits>
@@ -288,3 +289,5 @@ inline void AutoJSONDeserialize(T& result, const picojson::value& value) {
 }
 
 }  // namespace xgrammar
+
+#endif  // XGRAMMAR_REFLECTION_JSON_H_
