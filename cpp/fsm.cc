@@ -12,6 +12,7 @@
 #include <cstring>
 #include <iostream>
 #include <list>
+#include <memory>
 #include <queue>
 #include <set>
 #include <string>
@@ -1421,6 +1422,9 @@ FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
 picojson::value CompactFSM::JSONSerialize() const { return AutoJSONSerialize(**this); }
 
 void JSONDeserialize(CompactFSM& fsm, const picojson::value& v) {
+  if (!fsm.pimpl_) {
+    fsm.pimpl_ = std::make_unique<CompactFSM::Impl>();
+  }
   return AutoJSONDeserialize(*fsm, v);
 }
 
