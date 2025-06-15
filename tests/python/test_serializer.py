@@ -1,5 +1,4 @@
-import time
-from typing import List, Optional, Tuple
+from typing import Any, List, Literal, Optional, Tuple
 
 import pytest
 from pydantic import BaseModel
@@ -94,6 +93,41 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         ],
     ),
 ]
+
+
+@pytest.mark.hf_token_required
+def test_serialize_compiled_grammar_string():
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+    date_regex = r"\d{4}-\d{2}-\d{2}"
+
+    class GrammarModel(BaseModel):
+        rules_: List[Any]
+        rule_expr_data_: List[int]
+        rule_expr_indptr_: List[int]
+        root_rule_id_: int
+        root_tag_dispatch_fsm: Any
+        tag_dispatch_end_node_to_rule_id: List[int]
+        allow_empty_rule_ids: List[int]
+
+    class TokenizerInfoMetaData(BaseModel):
+        vocab_type: int
+        vocab_size: int
+        add_prefix_space: bool
+        stop_token_ids: List[int]
+        special_token_ids: List[int]
+
+    class Output(BaseModel):
+        grammar: GrammarModel
+        tokenizer_metadata: TokenizerInfoMetaData
+        adaptive_token_mask_cache: List
+        __VERSION__: Literal["v1"]
+
+    # test serialization and deserialization in practice
+    grammar = grammar_compiler.compile_regex(date_regex)
+    json_str = grammar.serialize_json()
+    Output.model_validate_json(json_str)
 
 
 @pytest.mark.hf_token_required
