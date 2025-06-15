@@ -15,8 +15,6 @@ keywords = ["machine learning", "inference"]
 requires-python = ">=3.8, <4"
 dependencies = [
   "pydantic",
-  "sentencepiece",
-  "tiktoken",
   "torch>=1.10.0",
   "transformers>=4.38.0",
   "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",

@@ -4,8 +4,15 @@ import json
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-import sentencepiece
-import tiktoken
+try:
+    import sentencepiece
+except ImportError:
+    sentencepiece = None
+try:
+    import tiktoken
+except ImportError:
+    tiktoken = None
+
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
 from .base import XGRObject, _core
@@ -95,6 +102,9 @@ class TokenizerInfo(XGRObject):
 
     @staticmethod
     def _is_tiktoken_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
+        if tiktoken is None:
+            return False
+
         # helper to check if tokenizer is a tiktoken tokenizer
         has_tiktoken_encoding = hasattr(tokenizer, "tokenizer") and isinstance(
             tokenizer.tokenizer, tiktoken.Encoding
@@ -110,6 +120,9 @@ class TokenizerInfo(XGRObject):
 
     @staticmethod
     def _is_sentencepiece_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
+        if sentencepiece is None:
+            return False
+
         # helper to check if tokenizer is a sentence piece tokenizer
         has_sp_model_attr = hasattr(tokenizer, "sp_model") and isinstance(
             tokenizer.sp_model, sentencepiece.SentencePieceProcessor
