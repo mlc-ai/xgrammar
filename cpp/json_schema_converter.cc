@@ -1970,7 +1970,7 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   if (schema.count("prefixItems")) {
     if (!schema.at("prefixItems").is<picojson::array>()) {
       return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("prefixItems must be an array")
+          std::make_unique<InvalidSchemaError>("prefixItems must be an array")
       );
     }
     prefix_item_schemas = schema.at("prefixItems").get<picojson::array>();
@@ -1978,11 +1978,11 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
       if (item.is<bool>()) {
         if (!item.get<bool>()) {
           return Result<ArraySpec>::Err(
-              std::make_shared<UnsatisfiableSchemaError>("prefixItems contains false")
+              std::make_unique<UnsatisfiableSchemaError>("prefixItems contains false")
           );
         }
       } else if (!item.is<picojson::object>()) {
-        return Result<ArraySpec>::Err(std::make_shared<InvalidSchemaError>(
+        return Result<ArraySpec>::Err(std::make_unique<InvalidSchemaError>(
             "prefixItems must be an array of objects or booleans"
         ));
       }
@@ -1993,7 +1993,7 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
     auto items_value = schema.at("items");
     if (!items_value.is<bool>() && !items_value.is<picojson::object>()) {
       return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("items must be a boolean or an object")
+          std::make_unique<InvalidSchemaError>("items must be a boolean or an object")
       );
     }
     if (items_value.is<bool>() && !items_value.get<bool>()) {
@@ -2006,7 +2006,7 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
     auto unevaluated_items_value = schema.at("unevaluatedItems");
     if (!unevaluated_items_value.is<bool>() && !unevaluated_items_value.is<picojson::object>()) {
       return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("unevaluatedItems must be a boolean or an object")
+          std::make_unique<InvalidSchemaError>("unevaluatedItems must be a boolean or an object")
       );
     }
     if (unevaluated_items_value.is<bool>() && !unevaluated_items_value.get<bool>()) {
@@ -2025,7 +2025,7 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   if (schema.count("minItems")) {
     if (!schema.at("minItems").is<int64_t>()) {
       return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("minItems must be an integer")
+          std::make_unique<InvalidSchemaError>("minItems must be an integer")
       );
     }
     min_items = std::max(0, static_cast<int>(schema.at("minItems").get<int64_t>()));
@@ -2034,7 +2034,7 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   if (schema.count("minContains")) {
     if (!schema.at("minContains").is<int64_t>()) {
       return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("minContains must be an integer")
+          std::make_unique<InvalidSchemaError>("minContains must be an integer")
       );
     }
     min_items = std::max(min_items, static_cast<int>(schema.at("minContains").get<int64_t>()));
@@ -2043,7 +2043,7 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   if (schema.count("maxItems")) {
     if (!schema.at("maxItems").is<int64_t>() || schema.at("maxItems").get<int64_t>() < 0) {
       return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("maxItems must be a non-negative integer")
+          std::make_unique<InvalidSchemaError>("maxItems must be a non-negative integer")
       );
     }
     max_items = schema.at("maxItems").get<int64_t>();
@@ -2051,14 +2051,14 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
 
   // Check if the schema is unsatisfiable
   if (max_items != -1 && min_items > max_items) {
-    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+    return Result<ArraySpec>::Err(std::make_unique<UnsatisfiableSchemaError>(
         "minItems is greater than maxItems: " + std::to_string(min_items) + " > " +
         std::to_string(max_items)
     ));
   }
 
   if (max_items != -1 && max_items < static_cast<int>(prefix_item_schemas.size())) {
-    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+    return Result<ArraySpec>::Err(std::make_unique<UnsatisfiableSchemaError>(
         "maxItems is less than the number of prefixItems: " + std::to_string(max_items) + " < " +
         std::to_string(prefix_item_schemas.size())
     ));
@@ -2067,14 +2067,14 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   if (!allow_additional_items) {
     // [len, len] must be in [min, max]
     if (static_cast<int>(prefix_item_schemas.size()) < min_items) {
-      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+      return Result<ArraySpec>::Err(std::make_unique<UnsatisfiableSchemaError>(
           "minItems is greater than the number of prefixItems, but additional items are not "
           "allowed: " +
           std::to_string(min_items) + " > " + std::to_string(prefix_item_schemas.size())
       ));
     }
     if (max_items != -1 && static_cast<int>(prefix_item_schemas.size()) > max_items) {
-      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+      return Result<ArraySpec>::Err(std::make_unique<UnsatisfiableSchemaError>(
           "maxItems is less than the number of prefixItems, but additional items are not "
           "allowed: " +
           std::to_string(max_items) + " < " + std::to_string(prefix_item_schemas.size())
@@ -2092,7 +2092,7 @@ std::string JSONSchemaConverter::VisitArray(
 ) {
   auto array_spec_result = ParseArraySchema(schema);
   if (array_spec_result.IsErr()) {
-    XGRAMMAR_LOG(FATAL) << array_spec_result.UnwrapErr()->what();
+    XGRAMMAR_LOG(FATAL) << std::move(array_spec_result).UnwrapErr()->what();
   }
 
   auto array_spec = std::move(array_spec_result).Unwrap();

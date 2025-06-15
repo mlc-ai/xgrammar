@@ -682,7 +682,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
     const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, const int& num_of_states_limited
 ) {
   if (!lhs.IsLeaf() || !rhs.IsLeaf()) {
-    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Intersect only support leaf fsm!")
+    return Result<FSMWithStartEnd>::Err(std::make_unique<Error>("Intersect only support leaf fsm!")
     );
   }
   auto lhs_dfa = lhs.ToDFA();
@@ -733,7 +733,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   while (!queue.empty()) {
     if (int(state_map.size()) > num_of_states_limited) {
       return Result<FSMWithStartEnd>::Err(
-          std::make_shared<Error>("Intersection have too many states!")
+          std::make_unique<Error>("Intersection have too many states!")
       );
     }
     auto state = queue.front();

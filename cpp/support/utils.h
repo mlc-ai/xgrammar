@@ -83,7 +83,7 @@ class Result {
   static Result Ok(T value) { return Result(std::move(value), nullptr); }
 
   /*! \brief Construct an error Result */
-  static Result Err(std::shared_ptr<Error> error) { return Result(std::nullopt, std::move(error)); }
+  static Result Err(std::unique_ptr<Error> error) { return Result(std::nullopt, std::move(error)); }
 
   /*! \brief Check if Result contains success value */
   bool IsOk() const { return value_.has_value(); }
@@ -110,16 +110,7 @@ class Result {
   }
 
   /*! \brief Get the error value as a pointer, or terminate if this is not an error */
-  std::shared_ptr<Error> UnwrapErr() const& {
-    if (!IsErr()) {
-      XGRAMMAR_LOG(FATAL) << "Called UnwrapErr() on an Ok value";
-      XGRAMMAR_UNREACHABLE();
-    }
-    return error_;
-  }
-
-  /*! \brief Get the error value as a pointer, or terminate if this is not an error */
-  std::shared_ptr<Error> UnwrapErr() && {
+  std::unique_ptr<Error> UnwrapErr() && {
     if (!IsErr()) {
       XGRAMMAR_LOG(FATAL) << "Called UnwrapErr() on an Ok value";
       XGRAMMAR_UNREACHABLE();
@@ -149,11 +140,11 @@ class Result {
   }
 
  private:
-  Result(std::optional<T> value, std::shared_ptr<Error> error)
+  Result(std::optional<T> value, std::unique_ptr<Error> error)
       : value_(std::move(value)), error_(std::move(error)) {}
 
   std::optional<T> value_;
-  std::shared_ptr<Error> error_;
+  std::unique_ptr<Error> error_;
 };
 
 }  // namespace xgrammar
