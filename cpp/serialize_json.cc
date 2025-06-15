@@ -53,7 +53,7 @@ static std::variant<picojson::value, VersionError> DeserializeJSONPython(const s
   picojson::parse(v, str.begin(), str.end(), &err);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err;
   XGRAMMAR_CHECK(v.is<picojson::object>()) << "Expected a JSON object, but got: " << v.serialize();
-  const auto& object = v.get<picojson::object>();
+  auto& object = v.get<picojson::object>();
   auto version_it = object.find("__VERSION__");
   if (version_it == object.end()) {
     return VersionError::kMissingVersion;
@@ -62,6 +62,7 @@ static std::variant<picojson::value, VersionError> DeserializeJSONPython(const s
   if (!version.is<std::string>() || version.get<std::string>() != kXGrammarSerializeVersion) {
     return VersionError::kVersionMismatch;
   }
+  object.erase(version_it);  // Remove the version field from the object.
   return v;
 }
 
@@ -97,11 +98,9 @@ static void throw_format_error(std::string type) {
 
 std::string CompiledGrammar::SerializeJSON() const {
   auto result = picojson::object{};
-  auto& compiler_grammar = *this;
-  result["grammar"] = AutoSerializeJSONValue(*compiler_grammar->grammar);
-  result["tokenizer_metadata"] = AutoSerializeJSONValue(*compiler_grammar->tokenizer_info);
-  result["adaptive_token_mask_cache"] =
-      AutoSerializeJSONValue(compiler_grammar->adaptive_token_mask_cache);
+  result["grammar"] = AutoSerializeJSONValue(*(*this)->grammar);
+  result["tokenizer_metadata"] = AutoSerializeJSONValue(*(*this)->tokenizer_info);
+  result["adaptive_token_mask_cache"] = AutoSerializeJSONValue((*this)->adaptive_token_mask_cache);
   return SerializeJSONPython(result);
 }
 
@@ -116,19 +115,23 @@ CompiledGrammar CompiledGrammar::DeserializeJSON(
   auto& value = std::get<picojson::value>(result);
   try {
     const auto& object = details::json_as<picojson::object>(value);
+    auto grammar = std::make_shared<Grammar::Impl>();
+    compiler_grammar->grammar = Grammar{grammar};
     AutoDeserializeJSONValue(
-        *compiler_grammar->grammar,  // grammar pimpl
+        *grammar,  // grammar pimpl
         details::json_member(object, "grammar")
     );
+    auto tokenizer_metadata = std::make_shared<TokenizerInfo::Impl>();
+    compiler_grammar->tokenizer_info = TokenizerInfo{tokenizer_metadata};
     AutoDeserializeJSONValue(
-        *compiler_grammar->tokenizer_info,  // tokenizer_info pimpl
+        *tokenizer_metadata,  // tokenizer info pimpl
         details::json_member(object, "tokenizer_metadata")
     );
     AutoDeserializeJSONValue(
         compiler_grammar->adaptive_token_mask_cache,
         details::json_member(object, "adaptive_token_mask_cache")
     );
-    XGRAMMAR_CHECK(*compiler_grammar->tokenizer_info == *tokenizer_info)
+    XGRAMMAR_CHECK(*compiler_grammar->tokenizer_info == *tokenizer_metadata)
         << "The tokenizer info in the compiled grammar does not match the provided one.";
     compiler_grammar->tokenizer_info = std::move(tokenizer_info);
     return compiler_grammar;
