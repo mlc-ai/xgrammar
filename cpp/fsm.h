@@ -16,10 +16,11 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <variant>
 #include <vector>
 
-#include "../cpp/support/csr_array.h"
+#include "picojson.h"
+#include "support/csr_array.h"
+#include "support/reflection.h"
 
 namespace xgrammar {
 
@@ -44,6 +45,9 @@ struct FSMEdge {
     XGRAMMAR_DCHECK(!IsCharRange() || min <= max)
         << "Invalid FSMEdge: min > max. min=" << min << ", max=" << max;
   }
+
+  // for serialization only
+  FSMEdge() = default;
 
   /*!
    * \brief Compare the edges. Used to sort the edges in the FSM.
@@ -83,6 +87,8 @@ struct FSMEdge {
    */
   int GetRefRuleId() const { return IsRuleRef() ? max : -1; }
 };
+
+XGRAMMAR_MEMBER_ARRAY(FSMEdge, &FSMEdge::min, &FSMEdge::max, &FSMEdge::target);
 
 }  // namespace xgrammar
 
@@ -268,6 +274,9 @@ class FSM {
  */
 class CompactFSM {
  public:
+  // for serialization only
+  CompactFSM() = default;
+
   CompactFSM(const CSRArray<FSMEdge>& edges);
 
   CompactFSM(CSRArray<FSMEdge>&& edges);
@@ -346,8 +355,13 @@ class CompactFSM {
    */
   FSM ToFSM() const;
 
+  picojson::value SerializeJSONValue() const;
+  friend void DeserializeJSONValue(CompactFSM& fsm, const picojson::value& v);
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
 };
+
+class CompactFSMWithStartEnd;
 
 /*!
  * \brief The base class for FSMWithStartEnd and CompactFSMWithStartEnd. It defines the
@@ -361,6 +375,9 @@ class FSMWithStartEndBase {
   );
 
  public:
+  // for serialization only
+  FSMWithStartEndBase() = default;
+
   /*! \brief Constructs an FSMWithStartEnd with a given FSM, start state, and end states. */
   FSMWithStartEndBase(
       const FSMType& fsm, int start, const std::unordered_set<int>& ends, bool is_dfa = false
@@ -456,9 +473,9 @@ class FSMWithStartEndBase {
   std::unordered_set<int> ends_;
   /*! \brief Whether this FSM is a deterministic finite automaton. */
   bool is_dfa_ = false;
-};
 
-class CompactFSMWithStartEnd;
+  friend struct member_trait<CompactFSMWithStartEnd>;
+};
 
 /*!
  * \brief FSMWithStartEnd represents a FSM with start and end states.
@@ -591,6 +608,9 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
  public:
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
+  // for serialization only
+  CompactFSMWithStartEnd() = default;
+
   /*!
    * \brief Print the FSM.
    * \return The string representation of the FSM.
@@ -612,6 +632,14 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    */
   FSMWithStartEnd ToFSM() const;
 };
+
+XGRAMMAR_MEMBER_ARRAY(
+    CompactFSMWithStartEnd,
+    &CompactFSMWithStartEnd::fsm_,
+    &CompactFSMWithStartEnd::start_,
+    &CompactFSMWithStartEnd::ends_,
+    &CompactFSMWithStartEnd::is_dfa_
+);
 
 /****************** FSMWithStartEndBase Template Implementation ******************/
 

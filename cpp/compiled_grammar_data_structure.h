@@ -18,7 +18,9 @@
 // matcher_data_structure.h is included to use StackElement
 #include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
+#include "support/reflection.h"
 #include "support/utils.h"
+#include "xgrammar/compiler.h"
 
 namespace xgrammar {
 
@@ -74,6 +76,15 @@ struct AdaptiveTokenMask {
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask);
 };
 
+XGRAMMAR_MEMBER_ARRAY(
+    AdaptiveTokenMask,
+    &AdaptiveTokenMask::store_type,
+    &AdaptiveTokenMask::accepted_indices,
+    &AdaptiveTokenMask::rejected_indices,
+    &AdaptiveTokenMask::accepted_bitset,
+    &AdaptiveTokenMask::uncertain_indices
+);
+
 /*!
  * \brief All information that we need to match tokens in the tokenizer to the specified grammar.
  * It is the result of preprocessing.
@@ -119,7 +130,19 @@ class CompiledGrammar::Impl {
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
 
   std::size_t MemorySize() const;
+
+  friend struct member_trait<Impl>;
 };
+
+XGRAMMAR_MEMBER_TABLE(
+    CompiledGrammar::Impl,
+    "grammar",
+    &CompiledGrammar::Impl::grammar,
+    "tokenizer_info",
+    &CompiledGrammar::Impl::tokenizer_info,
+    "adaptive_token_mask_cache",
+    &CompiledGrammar::Impl::adaptive_token_mask_cache
+);
 
 }  // namespace xgrammar
 

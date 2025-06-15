@@ -15,6 +15,7 @@
 
 #include "fsm.h"
 #include "support/logging.h"
+#include "support/reflection.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -175,13 +176,37 @@ class Grammar::Impl {
   std::vector<int32_t> allow_empty_rule_ids;
 
   friend class GrammarBuilder;
-  friend class GrammarSerializer;
-  friend class GrammarDeserializer;
   friend class GrammarCompiler;
 
   std::size_t MemorySize() const;
   friend std::size_t MemorySize(const Impl& impl);
+  friend struct member_trait<Impl>;
 };
+
+XGRAMMAR_MEMBER_ARRAY(
+    Grammar::Impl::Rule,
+    &Grammar::Impl::Rule::name,
+    &Grammar::Impl::Rule::body_expr_id,
+    &Grammar::Impl::Rule::lookahead_assertion_id
+);
+
+XGRAMMAR_MEMBER_TABLE(
+    Grammar::Impl,
+    "rules_",
+    &Grammar::Impl::rules_,
+    "rule_expr_data_",
+    &Grammar::Impl::rule_expr_data_,
+    "rule_expr_indptr_",
+    &Grammar::Impl::rule_expr_indptr_,
+    "root_rule_id_",
+    &Grammar::Impl::root_rule_id_,
+    "root_tag_dispatch_fsm",
+    &Grammar::Impl::root_tag_dispatch_fsm,
+    "tag_dispatch_end_node_to_rule_id",
+    &Grammar::Impl::tag_dispatch_end_node_to_rule_id,
+    "allow_empty_rule_ids",
+    &Grammar::Impl::allow_empty_rule_ids
+);
 
 }  // namespace xgrammar
 

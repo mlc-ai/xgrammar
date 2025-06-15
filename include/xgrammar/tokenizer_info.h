@@ -47,6 +47,14 @@ class TokenizerInfo {
 
   static std::string DetectMetadataFromHF(const std::string& backend_str);
 
+  /*! \brief Return the serialized JSON string of the tokenizer info. */
+  std::string SerializeJSON() const;
+
+  /*! \brief Deserialize a tokenizer info from a JSON string (and encoded_vocab). */
+  static TokenizerInfo DeserializeJSON(
+      const std::string& json_string, const std::vector<std::string>& encoded_vocab
+  );
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
 };
 
