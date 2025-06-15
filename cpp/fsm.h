@@ -19,8 +19,8 @@
 #include <vector>
 
 #include "picojson.h"
-#include "reflection/reflection.h"
 #include "support/csr_array.h"
+#include "support/reflection.h"
 
 namespace xgrammar {
 

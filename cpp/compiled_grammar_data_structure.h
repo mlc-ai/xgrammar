@@ -17,8 +17,8 @@
 
 // matcher_data_structure.h is included to use StackElement
 #include "persistent_stack.h"
-#include "reflection/reflection.h"
 #include "support/dynamic_bitset.h"
+#include "support/reflection.h"
 #include "support/utils.h"
 #include "xgrammar/compiler.h"
 

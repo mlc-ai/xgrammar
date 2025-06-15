@@ -11,8 +11,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "../reflection/reflection.h"
 #include "logging.h"
+#include "reflection.h"
 #include "utils.h"
 
 namespace xgrammar {

@@ -14,8 +14,8 @@
 #include <vector>
 
 #include "fsm.h"
-#include "reflection/reflection.h"
 #include "support/logging.h"
+#include "support/reflection.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {

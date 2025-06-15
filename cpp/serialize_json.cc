@@ -10,7 +10,7 @@
 #include "compiled_grammar_data_structure.h"
 #include "grammar_data_structure.h"
 #include "picojson.h"
-#include "reflection/json.h"
+#include "support/json.h"
 #include "support/logging.h"
 #include "support/utils.h"
 #include "tokenizer_info_impl.h"

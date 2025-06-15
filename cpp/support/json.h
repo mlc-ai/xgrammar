@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "../support/logging.h"
+#include "logging.h"
 #include "picojson.h"
 #include "reflection.h"
 

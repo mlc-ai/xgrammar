@@ -23,10 +23,10 @@
 #include <vector>
 
 #include "picojson.h"
-#include "reflection/json.h"
-#include "reflection/reflection.h"
 #include "support/encoding.h"
+#include "support/json.h"
 #include "support/logging.h"
+#include "support/reflection.h"
 #include "support/union_find_set.h"
 
 namespace xgrammar {

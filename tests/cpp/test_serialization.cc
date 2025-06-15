@@ -8,8 +8,8 @@
 
 #include "fsm.h"
 #include "picojson.h"
-#include "reflection/json.h"
 #include "support/csr_array.h"
+#include "support/json.h"
 
 namespace xgrammar {
 

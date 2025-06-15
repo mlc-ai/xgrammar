@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "reflection/reflection.h"
+#include "support/reflection.h"
 #include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
