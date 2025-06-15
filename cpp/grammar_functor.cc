@@ -701,7 +701,7 @@ class GrammarUnionFunctorImpl : public SubGrammarCombiner {
   }
 
   // Avoid hiding the original Apply(const Grammar&)
-  Grammar Apply(const Grammar& grammar) final { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
+  Grammar Apply(const Grammar&) final { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
 };
 
 /*!
@@ -735,7 +735,7 @@ class GrammarConcatFunctorImpl : public SubGrammarCombiner {
   }
 
   // Avoid hiding the original Apply(const Grammar&)
-  Grammar Apply(const Grammar& grammar) final { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
+  Grammar Apply(const Grammar&) final { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
 };
 
 /*!
@@ -955,7 +955,7 @@ class StructuralTagGrammarCreatorImpl : public SubGrammarCombiner {
   }
 
   // Avoid hiding the original Apply(const Grammar&)
-  Grammar Apply(const Grammar& grammar) final { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
+  Grammar Apply(const Grammar&) final { XGRAMMAR_LOG(FATAL) << "Should not be called"; }
 };
 
 /*************************** Forward grammar functors to their impl ***************************/

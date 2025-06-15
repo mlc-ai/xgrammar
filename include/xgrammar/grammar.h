@@ -153,6 +153,12 @@ class Grammar {
   /*! \brief Print a BNF grammar. */
   friend std::ostream& operator<<(std::ostream& os, const Grammar& grammar);
 
+  /*! \brief Return the serialized JSON string of the grammar. */
+  std::string SerializeJSON() const;
+
+  /*! \brief Deserialize a grammar from a JSON string. */
+  static Grammar DeserializeJSON(const std::string& json_string);
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(Grammar);
 };
 

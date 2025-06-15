@@ -17,9 +17,8 @@ template <typename T>
 struct member_trait;
 
 enum class member_type {
-  kNone = 0,      // this is default, which has no member trait
-  kConfig = 1,    // this is a config with member pointers
-  kDelegate = 2,  // this is a delegate member, which is forwarded to delegate
+  kNone = 0,    // this is default, which has no member trait
+  kConfig = 1,  // this is a config with member pointers
 };
 
 }  // namespace xgrammar
@@ -70,7 +69,7 @@ struct is_unordered_set<std::unordered_set<R...>> : std::true_type {};
 
 // Note that we don't allow empty tables now (that's uncommon).
 template <typename X, typename Y, typename... Args>
-inline constexpr auto make_member_table(X first, Y second, Args... args) {
+inline constexpr auto make_member_table(X, Y second, Args... args) {
   static_assert(sizeof...(args) % 2 == 0, "member table must be even");
   static_assert(std::is_same_v<X, const char*>, "first member must be a c-string");
   static_assert(std::is_member_pointer_v<Y>, "second member must be a member pointer");
@@ -98,7 +97,7 @@ inline constexpr auto make_name_table(Args... args) {
  * It extracts the members from the `member_trait` specialization for the type `T`.
  * A valid `member_trait` specialization must meet the following requirements:
  * - It must have a static member `value` of type `member_type`,
- *   which must be either `kNone`, `kConfig`, or `kDelegate`.
+ *   which must be either `kNone` or `kConfig`.
  */
 template <typename T, member_type = member_trait<T>::value>
 struct member_functor {
@@ -133,27 +132,6 @@ struct member_functor<T, member_type::kConfig> {
       names.size() == member_count || names.size() == 0,
       "Name list must be empty or have the same size as member list"
   );
-};
-
-/*!
- * @brief A specialization of `member_functor` for delegate types.
- * A valid `member_trait` specialization for a delegate type must meet the following:
- * - It must have a static member `value` of type `member_type::kDelegate`.
- * - It must have a static member `delegate_type` that represents the type of the delegate.
- * - `T` must be convertible to `delegate_type` and vice versa.
- */
-template <typename T>
-struct member_functor<T, member_type::kDelegate> {
-  using _trait_type = member_trait<T>;
-  using U = typename _trait_type::delegate_type;
-  using delegate_type = U;
-  static constexpr auto value = member_type::kDelegate;
-  static constexpr auto members = std::tuple{};
-  static constexpr auto names = std::array<const char*, 0>{};
-  static constexpr auto member_count = 0;
-  static constexpr auto has_names = false;
-  static U into(const T& obj) { return static_cast<U>(obj); }
-  static T from(const U& obj) { return static_cast<T>(obj); }
 };
 
 template <typename Ftor, typename Fn, std::size_t... Idx>

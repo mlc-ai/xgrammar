@@ -215,7 +215,7 @@ class DynamicBitset {
     return bitset.buffer_size_ * sizeof(bitset.data_[0]);
   }
 
-  picojson::value JSONSerialize() const {
+  picojson::value SerializeJSONValue() const {
     const auto count_one = Count();
     const auto count_zero = size_ - count_one;
     auto result = picojson::array{};
@@ -255,7 +255,7 @@ class DynamicBitset {
     return picojson::value(std::move(result));
   }
 
-  friend void JSONDeserialize(DynamicBitset& bitset, const picojson::value& value) {
+  friend void DeserializeJSONValue(DynamicBitset& bitset, const picojson::value& value) {
     XGRAMMAR_CHECK(value.is<picojson::array>()) << "Invalid JSON value for DynamicBitset";
     const auto& arr = value.get<picojson::array>();
     XGRAMMAR_CHECK(arr.size() >= HEADER) << "Invalid JSON value for DynamicBitset";

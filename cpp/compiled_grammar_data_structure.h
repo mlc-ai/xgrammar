@@ -17,7 +17,6 @@
 
 // matcher_data_structure.h is included to use StackElement
 #include "persistent_stack.h"
-#include "picojson.h"
 #include "reflection/reflection.h"
 #include "support/dynamic_bitset.h"
 #include "support/utils.h"
@@ -133,9 +132,6 @@ class CompiledGrammar::Impl {
   std::size_t MemorySize() const;
 
   friend struct member_trait<Impl>;
-
-  picojson::value JSONSerialize() const;
-  friend void JSONDeserialize(Impl& impl, const picojson::value& v);
 };
 
 XGRAMMAR_MEMBER_TABLE(

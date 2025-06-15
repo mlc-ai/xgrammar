@@ -48,19 +48,6 @@ struct FSMEdge {
 
   // for serialization only
   FSMEdge() = default;
-  explicit FSMEdge(uint64_t packed)
-      : min(static_cast<unsigned short>(packed & 0xFFFF)),
-        max(static_cast<unsigned short>((packed >> 16) & 0xFFFF)),
-        target(static_cast<unsigned int>((packed >> 32) & 0xFFFFFFFF)) {}
-  explicit operator uint64_t() const {
-    const auto _min = static_cast<unsigned short>(min);
-    const auto _max = static_cast<unsigned short>(max);
-    const auto _target = static_cast<unsigned int>(target);
-    return (
-        static_cast<uint64_t>(_min) | (static_cast<uint64_t>(_max) << 16) |
-        (static_cast<uint64_t>(_target) << 32)
-    );
-  }
 
   /*!
    * \brief Compare the edges. Used to sort the edges in the FSM.
@@ -101,7 +88,7 @@ struct FSMEdge {
   int GetRefRuleId() const { return IsRuleRef() ? max : -1; }
 };
 
-XGRAMMAR_MEMBER_DELEGATE(FSMEdge, uint64_t);
+XGRAMMAR_MEMBER_ARRAY(FSMEdge, &FSMEdge::min, &FSMEdge::max, &FSMEdge::target);
 
 }  // namespace xgrammar
 
@@ -368,8 +355,8 @@ class CompactFSM {
    */
   FSM ToFSM() const;
 
-  picojson::value JSONSerialize() const;
-  friend void JSONDeserialize(CompactFSM& fsm, const picojson::value& v);
+  picojson::value SerializeJSONValue() const;
+  friend void DeserializeJSONValue(CompactFSM& fsm, const picojson::value& v);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
 };
