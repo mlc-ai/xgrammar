@@ -36,6 +36,17 @@ class CompiledGrammar(XGRObject):
         """The approximate memory usage of the compiled grammar in bytes."""
         return self._handle.memory_size_bytes
 
+    def serialize_json(self) -> str:
+        """Serialize the compiled grammar to a JSON string."""
+        return self._handle.serialize_json()
+
+    @staticmethod
+    def deserialize_json(json_str: str, tokenizer_info: TokenizerInfo) -> "CompiledGrammar":
+        """Deserialize the compiled grammar from a JSON string and tokenizer info."""
+        return CompiledGrammar._create_from_handle(
+            _core.CompiledGrammar.deserialize_json(json_str, tokenizer_info._handle)
+        )
+
 
 class GrammarCompiler(XGRObject):
     """The compiler for grammars. It is associated with a certain tokenizer info, and compiles

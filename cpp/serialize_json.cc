@@ -166,7 +166,7 @@ std::string TokenizerInfo::SerializeJSON() const {
 }
 
 TokenizerInfo TokenizerInfo::DeserializeJSON(
-    const std::string& json_string, std::optional<std::vector<std::string>> encoded_vocab
+    const std::string& json_string, const std::vector<std::string>& encoded_vocab
 ) {
   auto result = DeserializeJSONPython(json_string);
   if (std::holds_alternative<VersionError>(result))
@@ -176,10 +176,10 @@ TokenizerInfo TokenizerInfo::DeserializeJSON(
   try {
     auto tokenizer_info = TokenizerInfo{std::make_shared<TokenizerInfo::Impl>()};
     AutoDeserializeJSONValue(*tokenizer_info, value);
-    if (encoded_vocab) {
+    if (!encoded_vocab.empty()) {
       // construct the tokenizer info with the encoded vocab
       return TokenizerInfo{
-          *encoded_vocab,
+          encoded_vocab,
           tokenizer_info->GetVocabType(),
           tokenizer_info->GetVocabSize(),
           tokenizer_info->GetStopTokenIds(),

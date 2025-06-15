@@ -369,3 +369,16 @@ class TokenizerInfo(XGRObject):
             "vocab_type": VocabType(metadata["vocab_type"]),
             "add_prefix_space": metadata["add_prefix_space"],
         }
+
+    def serialize_json(self) -> str:
+        """Serialize the tokenizer_info to a JSON string."""
+        return self._handle.serialize_json()
+
+    @staticmethod
+    def deserialize_json(
+        json_string: str, encoded_vocab: List[Union[bytes, str]]
+    ) -> "TokenizerInfo":
+        """Deserialize a grammar from a JSON string."""
+        return TokenizerInfo._create_from_handle(
+            _core.TokenizerInfo.deserialize_json(json_string, encoded_vocab)
+        )

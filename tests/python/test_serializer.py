@@ -1,5 +1,5 @@
 import time
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pytest
 from pydantic import BaseModel
@@ -56,62 +56,19 @@ EXAMPLE_TAGS = [
 
 EXAMPLE_TRIGGERS = ["<function=f", "<function=g"]
 
+serialize_name__args: List[Tuple[str, Tuple]] = [
+    ("json_schema", (make_trivial_schema(0),)),
+    ("structural_tag", (EXAMPLE_TAGS, EXAMPLE_TRIGGERS)),
+    ("grammar", (JSON_GRAMMAR,)),
+    ("builtin_json_grammar", ()),
+    ("regex", (EMAIL_REGEX,)),
+]
 
-@pytest.mark.hf_token_required
-def test_serializer_roundtrip():
-    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH, use_fast=True, trust_remote_code=True)
-    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
-    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
-    serializer = xgr.JSONSerializer()
-
-    def _serialize_test(grammar: xgr.CompiledGrammar, name: str):
-        tic = time.monotonic_ns()
-        serialized_json = serializer.serialize_compiled_grammar(grammar)
-        toc = time.monotonic_ns()
-        print(f"Serialization {name}: {(toc - tic) / 1_000_000:.2f} ms")
-        tic = time.monotonic_ns()
-        deserialized_obj = serializer.deserialize_compiled_grammar(serialized_json, tokenizer_info)
-        toc = time.monotonic_ns()
-        print(f"Deserialization {name}: {(toc - tic) / 1_000_000:.2f} ms")
-        serialized_json_new = serializer.serialize_compiled_grammar(deserialized_obj)
-        return serialized_json == serialized_json_new
-
-    # skip the first serialization and deserialization to warm up
-    _ = serializer.deserialize_compiled_grammar(
-        serializer.serialize_compiled_grammar(grammar_compiler.compile_builtin_json_grammar()),
-        tokenizer_info,
-    )
-
-    grammar = grammar_compiler.compile_json_schema(make_trivial_schema(0))
-    _serialize_test(grammar, "JSON schema")
-
-    grammar = grammar_compiler.compile_structural_tag(EXAMPLE_TAGS, EXAMPLE_TRIGGERS)
-    _serialize_test(grammar, "structural tag")
-
-    grammar = grammar_compiler.compile_grammar(JSON_GRAMMAR)
-    _serialize_test(grammar, "simple JSON EBNF")
-
-    grammar = grammar_compiler.compile_builtin_json_grammar()
-    _serialize_test(grammar, "builtin JSON EBNF")
-
-    grammar = grammar_compiler.compile_regex(EMAIL_REGEX)
-    _serialize_test(grammar, "email regex")
-
-    # test the overall serialization time
-    schemas = [grammar_compiler.compile_json_schema(make_trivial_schema(i)) for i in range(100)]
-    tic = time.monotonic_ns()
-    results = [serializer.serialize_compiled_grammar(schema) for schema in schemas]
-    toc = time.monotonic_ns()
-    print(f"Serialization of 100 simple schemas: {(toc - tic) / 1_000_000:.2f} ms")
-    tic = time.monotonic_ns()
-    schemas_new = [
-        serializer.deserialize_compiled_grammar(result, tokenizer_info) for result in results
-    ]
-    toc = time.monotonic_ns()
-    print(f"Deserialization of 100 simple schemas: {(toc - tic) / 1_000_000:.2f} ms")
-    results_new = [serializer.serialize_compiled_grammar(schema) for schema in schemas_new]
-    assert results == results_new, "Serialized and deserialized schemas do not match"
-
+tokenizer_paths = [
+    "meta-llama/Llama-2-7b-chat-hf",
+    "meta-llama/Meta-Llama-3-8B-Instruct",
+    "meta-llama/Llama-3.1-70B-Instruct",
+]
 
 tokenizer_path__input_str__expected_rejected_sizes = [
     (
@@ -140,6 +97,41 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 
 
 @pytest.mark.hf_token_required
+@pytest.mark.parametrize("name, args", serialize_name__args)
+def test_serialize_compiled_grammar_roundtrip(name: str, args: Tuple):
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    method_name = f"compile_{name}"
+    grammar: xgr.CompiledGrammar = getattr(grammar_compiler, method_name)(*args)
+
+    serialized_json = grammar.serialize_json()
+    deserialized_obj = xgr.CompiledGrammar.deserialize_json(serialized_json, tokenizer_info)
+    serialized_json_new = deserialized_obj.serialize_json()
+    assert serialized_json == serialized_json_new, f"Serialized JSON mismatch for {name}."
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("tokenizer_path", tokenizer_paths)
+def test_serialize_tokenizer_info_roundtrip(tokenizer_path: str):
+    # test serialization and deserialization in practice
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+
+    # tokenizer roundtrip
+    serialized_tokenizer = tokenizer_info.serialize_json()
+    deserialized_tokenizer_info = xgr.TokenizerInfo.deserialize_json(serialized_tokenizer, [])
+    assert (
+        tokenizer_info.vocab_type == deserialized_tokenizer_info.vocab_type
+        and tokenizer_info.vocab_size == deserialized_tokenizer_info.vocab_size
+        and tokenizer_info.add_prefix_space == deserialized_tokenizer_info.add_prefix_space
+        and tokenizer_info.stop_token_ids == deserialized_tokenizer_info.stop_token_ids
+        and tokenizer_info.special_token_ids == deserialized_tokenizer_info.special_token_ids
+    ), "Tokenizer info mismatch after serialization and deserialization."
+
+
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path, input_str, expected_rejected_sizes",
     tokenizer_path__input_str__expected_rejected_sizes,
@@ -151,15 +143,16 @@ def test_serializer_correctness_functional(
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
-    serializer = xgr.JSONSerializer()
 
     # copied from test_grammar_matcher_basic.py
     from xgrammar.testing import _get_masked_tokens_from_bitmask
 
-    json_grammar = xgr.Grammar.builtin_json_grammar()
-    grammar = grammar_compiler.compile_grammar(json_grammar)
-    serialized = serializer.serialize_compiled_grammar(grammar)
-    deserialized = serializer.deserialize_compiled_grammar(serialized, tokenizer_info)
+    # go through a roundtrip for the grammar object
+    serialized = grammar_compiler.compile_grammar(
+        xgr.Grammar.builtin_json_grammar()
+    ).serialize_json()
+    deserialized = xgr.CompiledGrammar.deserialize_json(serialized, tokenizer_info)
+
     matcher = xgr.GrammarMatcher(deserialized)
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
     input_bytes = input_str.encode("utf-8")

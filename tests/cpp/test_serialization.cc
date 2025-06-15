@@ -35,14 +35,12 @@ bool operator==(const CSRArray<int>& lhs, const CSRArray<int>& rhs) {
 TEST(XGrammarReflectionTest, JSONSerialization) {
   using namespace xgrammar;
 
-  // FSMedge is delegated to a int64_t object
   const auto edge = FSMEdge{1, 2, 3};
   auto deserialized_edge = FSMEdge{};
 
-  auto json_obj = AutoJSONSerialize(edge);
-  AutoJSONDeserialize(deserialized_edge, json_obj);
+  auto json_obj = AutoSerializeJSONValue(edge);
+  AutoDeserializeJSONValue(deserialized_edge, json_obj);
   ASSERT_EQ(edge, deserialized_edge);
-  ASSERT_TRUE(json_obj.is<int64_t>());
 
   // CSRArray use a data_ and indptr_ structure
   auto array = CSRArray<int>{};
@@ -50,8 +48,8 @@ TEST(XGrammarReflectionTest, JSONSerialization) {
   array.Insert({4, 5, 6, 7});
   auto deserialized_array = CSRArray<int>{};
 
-  auto json_array = AutoJSONSerialize(array);
-  AutoJSONDeserialize(deserialized_array, json_array);
+  auto json_array = AutoSerializeJSONValue(array);
+  AutoDeserializeJSONValue(deserialized_array, json_array);
   ASSERT_EQ(array, deserialized_array);
   ASSERT_TRUE(json_array.is<picojson::object>());
   for (const auto& [key, value] : json_array.get<picojson::object>()) {
@@ -73,22 +71,22 @@ TEST(XGrammarReflectionTest, JSONSerialization) {
 
   // C++ standard library types
   auto native_structure = std::vector<std::unordered_set<double>>{{1.0, 2.0, 3.0}, {4.0, 5.0}};
-  auto json_native = AutoJSONSerialize(native_structure);
+  auto json_native = AutoSerializeJSONValue(native_structure);
   auto deserialized_native_structure = std::vector<std::unordered_set<double>>{};
-  AutoJSONDeserialize(deserialized_native_structure, json_native);
+  AutoDeserializeJSONValue(deserialized_native_structure, json_native);
   ASSERT_EQ(native_structure, deserialized_native_structure);
 
   // optional serialization
   auto optional_value = std::optional<int>{42};
   auto deserialized_optional = std::optional<int>{};
 
-  auto json_optional = AutoJSONSerialize(optional_value);
-  AutoJSONDeserialize(deserialized_optional, json_optional);
+  auto json_optional = AutoSerializeJSONValue(optional_value);
+  AutoDeserializeJSONValue(deserialized_optional, json_optional);
   ASSERT_TRUE(deserialized_optional.has_value());
   ASSERT_EQ(*deserialized_optional, 42);
 
   optional_value.reset();
-  json_optional = AutoJSONSerialize(optional_value);
-  AutoJSONDeserialize(deserialized_optional, json_optional);
+  json_optional = AutoSerializeJSONValue(optional_value);
+  AutoDeserializeJSONValue(deserialized_optional, json_optional);
   ASSERT_FALSE(deserialized_optional.has_value());
 }

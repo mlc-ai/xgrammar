@@ -52,7 +52,7 @@ class TokenizerInfo {
 
   /*! \brief Deserialize a tokenizer info from a JSON string (and encoded_vocab). */
   static TokenizerInfo DeserializeJSON(
-      const std::string& json_string, std::optional<std::vector<std::string>> encoded_vocab
+      const std::string& json_string, const std::vector<std::string>& encoded_vocab
   );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);

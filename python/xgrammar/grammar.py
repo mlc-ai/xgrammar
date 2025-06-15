@@ -310,3 +310,12 @@ class Grammar(XGRObject):
         """
         grammar_handles = [grammar._handle for grammar in grammars]
         return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
+
+    def serialize_json(self) -> str:
+        """Serialize the grammar to a JSON string."""
+        return self._handle.serialize_json()
+
+    @staticmethod
+    def deserialize_json(json_string: str) -> "Grammar":
+        """Deserialize a grammar from a JSON string."""
+        return Grammar._create_from_handle(_core.Grammar.deserialize_json(json_string))
