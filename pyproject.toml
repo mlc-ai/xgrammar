@@ -22,6 +22,7 @@ dependencies = [
   "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
   "mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'",
   "ninja",
+  "numpy",
 ]
 dynamic = ["version"]
 

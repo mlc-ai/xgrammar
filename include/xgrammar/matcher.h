@@ -107,7 +107,9 @@ class GrammarMatcher {
    * and with shape (GetBitmaskSize(),) and dtype int32.
    * \return Whether the bitmask need to be applied (not all-true).
    */
-  bool FillNextTokenBitmask(DLTensor* next_token_bitmask, int index = 0, bool debug_print = false);
+  bool FillNextTokenBitmask(
+      const DLTensor& next_token_bitmask, int index = 0, bool debug_print = false
+  );
 
   /*!
    * \brief Find the jump-forward string for jump-forward decoding. This is the longest string that

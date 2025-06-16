@@ -39,27 +39,6 @@ int TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer) {
   return static_cast<int>(tokenizer.GetVocabType());
 }
 
-bool GrammarMatcher_FillNextTokenBitmask(
-    GrammarMatcher& matcher,
-    intptr_t token_bitmask_ptr,
-    std::vector<int64_t> shape,
-    int32_t index,
-    bool debug_print
-) {
-  XGRAMMAR_CHECK(shape.size() == 1 || shape.size() == 2) << "token_bitmask tensor must be 1D or 2D";
-
-  DLTensor bitmask_dltensor{
-      reinterpret_cast<void*>(token_bitmask_ptr),
-      DLDevice{kDLCPU, 0},
-      static_cast<int32_t>(shape.size()),
-      GetBitmaskDLType(),
-      shape.data(),
-      nullptr,
-      0
-  };
-  return matcher.FillNextTokenBitmask(&bitmask_dltensor, index, debug_print);
-}
-
 std::vector<int> Testing_DebugGetMaskedTokensFromBitmask(
     intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
 ) {

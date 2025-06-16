@@ -85,7 +85,7 @@ std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher,
   tensor.strides = &strides[0];
   tensor.byte_offset = 0;
   // 3. Populate tensor, hence result
-  matcher.FillNextTokenBitmask(&tensor);
+  matcher.FillNextTokenBitmask(tensor);
   return result;
 }
 
