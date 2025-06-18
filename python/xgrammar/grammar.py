@@ -98,7 +98,9 @@ class Grammar(XGRObject):
         RuntimeError
             When converting the regex pattern fails, with details about the parsing error.
         """
-        return Grammar._create_from_handle(_core.Grammar.from_ebnf(ebnf_string, root_rule_name))
+        return Grammar._create_from_handle(
+            _core.Grammar.from_ebnf(ebnf_string, root_rule_name=root_rule_name)
+        )
 
     @staticmethod
     def from_json_schema(
@@ -167,7 +169,12 @@ class Grammar(XGRObject):
         schema_str = _convert_schema_to_str(schema)
         return Grammar._create_from_handle(
             _core.Grammar.from_json_schema(
-                schema_str, any_whitespace, indent, separators, strict_mode, print_converted_ebnf
+                schema_str,
+                any_whitespace=any_whitespace,
+                indent=indent,
+                separators=separators,
+                strict_mode=strict_mode,
+                print_converted_ebnf=print_converted_ebnf,
             )
         )
 
