@@ -418,27 +418,28 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     }
   }
 
-  bool is_self_recursion = false;
+  bool speculative_calculation = false;
 
-  // Check if the initial state is self-recursive.
+  // Check if the initial state is self-recursive-like. If the state is self-recursive-like,
+  // and it covers a large part of the vocabulary, we will do speculative calculation in compiling.
   if (initial_state.sub_element_id == 0 &&
       possible_token_num > static_cast<int>(sorted_decoded_vocab.size() / 4)) {
     const auto& sequence_expr = grammar_->GetRuleExpr(initial_state.sequence_id);
-    // A self-recursive rule must be a sequence.
+    // A self-recursive-like rule must be a sequence.
     if (sequence_expr.type == RuleExprType::kSequence) {
       const auto& current_element_expr =
           grammar_->GetRuleExpr(sequence_expr[initial_state.element_id]);
       // If the current element is a character class star, then it's self-recursive without doubt.
       if (current_element_expr.type == RuleExprType::kCharacterClassStar) {
-        is_self_recursion = true;
+        speculative_calculation = true;
         // If the current element is a character class, and the next element is a rule ref to
-        // itself, and the rule only has 2 elements, then it's almost self-recursive.
+        // itself, and the rule only has 2 elements, then it's self-recursive-like.
       } else if (current_element_expr.type == RuleExprType::kCharacterClass &&
                  sequence_expr.size() == 2 && initial_state.element_id == 0) {
         const auto& end_element_expr = grammar_->GetRuleExpr(sequence_expr[1]);
         if (end_element_expr.type == RuleExprType::kRuleRef &&
             end_element_expr[0] == initial_state.rule_id) {
-          is_self_recursion = true;
+          speculative_calculation = true;
         }
       }
     }
@@ -465,7 +466,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
       const auto& token = sorted_decoded_vocab[i].second;
       // This optimization is useful for simple self-recursive rules, like string content.
-      if (is_self_recursion) {
+      if (speculative_calculation) {
         bool all_accepted = true;
         for (char ch : token) {
           // If the first character is not the ascii character or can't be accepted by the
