@@ -271,6 +271,12 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::string& token, const std::vector<bool>& can_reach_end_stack
   );
 
+  /*! \brief Check if speculative calculation will be applied.*/
+  bool IsSpeculativeCalculationApplied(
+      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
+      int possible_token_num
+  );
+
   // The id of the initial rule.
   int32_t init_rule_id;
 
@@ -340,11 +346,12 @@ class IntStringPairComparator {
   }
 };
 
-void GetPossibleTokenIntervals(
+int GetPossibleTokenIntervals(
     const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
     const std::bitset<256>& first_char_mask,
     std::vector<std::pair<int32_t, int32_t>>& possible_intervals
 ) {
+  int possible_token_num = 0;
   int matched_size = 0;
   int last_interval_end = -1;
   for (int32_t i = 0; i < 256; i++) {
@@ -370,6 +377,7 @@ void GetPossibleTokenIntervals(
                                      ) -
                                      sorted_decoded_vocab.begin();
         possible_intervals.emplace_back(interval_left_end, interval_right_end);
+        possible_token_num += interval_right_end - interval_left_end;
         last_interval_end = -1;
         matched_size = interval_right_end;
       }
@@ -387,7 +395,40 @@ void GetPossibleTokenIntervals(
         ) -
         sorted_decoded_vocab.begin();
     possible_intervals.emplace_back(interval_left_end, sorted_decoded_vocab.size());
+    possible_token_num += sorted_decoded_vocab.size() - interval_left_end;
   }
+  return possible_token_num;
+}
+
+bool GrammarMatcherForTokenMaskCache::IsSpeculativeCalculationApplied(
+    const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab, int possible_token_num
+) {
+  using RuleExprType = Grammar::Impl::RuleExprType;
+  // Check if the initial state is self-recursive-like. If the state is self-recursive-like,
+  // and it covers a large part of the vocabulary, we will do speculative calculation in compiling.
+  if (initial_state.sub_element_id == 0 &&
+      possible_token_num > static_cast<int>(sorted_decoded_vocab.size() / 4)) {
+    const auto& sequence_expr = grammar_->GetRuleExpr(initial_state.sequence_id);
+    // A self-recursive-like rule must be a sequence.
+    if (sequence_expr.type == RuleExprType::kSequence) {
+      const auto& current_element_expr =
+          grammar_->GetRuleExpr(sequence_expr[initial_state.element_id]);
+      // If the current element is a character class star, then it's self-recursive without doubt.
+      if (current_element_expr.type == RuleExprType::kCharacterClassStar) {
+        return true;
+        // If the current element is a character class, and the next element is a rule ref to
+        // itself, and the rule only has 2 elements, then it's self-recursive-like.
+      } else if (current_element_expr.type == RuleExprType::kCharacterClass &&
+                 sequence_expr.size() == 2 && initial_state.element_id == 0) {
+        const auto& end_element_expr = grammar_->GetRuleExpr(sequence_expr[1]);
+        if (end_element_expr.type == RuleExprType::kRuleRef &&
+            end_element_expr[0] == initial_state.rule_id) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
@@ -396,16 +437,12 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     const std::vector<int>& subtree_nodes_range,
     bool is_root_rule
 ) {
-  using RuleExprType = Grammar::Impl::RuleExprType;
   // the pair (a, b) means [a, b). Intialize the possible intervals.
   std::vector<std::pair<int32_t, int32_t>> possible_intervals;
-  GetPossibleTokenIntervals(sorted_decoded_vocab, first_char_mask, possible_intervals);
+  int possible_token_num =
+      GetPossibleTokenIntervals(sorted_decoded_vocab, first_char_mask, possible_intervals);
 
   // Check if the type of the mask can be krejected.
-  int possible_token_num = 0;
-  for (const auto& interval : possible_intervals) {
-    possible_token_num += interval.second - interval.first;
-  }
   bool fill_reject_indices =
       (sorted_decoded_vocab.size() - possible_token_num) < AdaptiveTokenMask::USE_BITSET_THRESHOLD;
 
@@ -418,32 +455,8 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     }
   }
 
-  bool speculative_calculation = false;
-
-  // Check if the initial state is self-recursive-like. If the state is self-recursive-like,
-  // and it covers a large part of the vocabulary, we will do speculative calculation in compiling.
-  if (initial_state.sub_element_id == 0 &&
-      possible_token_num > static_cast<int>(sorted_decoded_vocab.size() / 4)) {
-    const auto& sequence_expr = grammar_->GetRuleExpr(initial_state.sequence_id);
-    // A self-recursive-like rule must be a sequence.
-    if (sequence_expr.type == RuleExprType::kSequence) {
-      const auto& current_element_expr =
-          grammar_->GetRuleExpr(sequence_expr[initial_state.element_id]);
-      // If the current element is a character class star, then it's self-recursive without doubt.
-      if (current_element_expr.type == RuleExprType::kCharacterClassStar) {
-        speculative_calculation = true;
-        // If the current element is a character class, and the next element is a rule ref to
-        // itself, and the rule only has 2 elements, then it's self-recursive-like.
-      } else if (current_element_expr.type == RuleExprType::kCharacterClass &&
-                 sequence_expr.size() == 2 && initial_state.element_id == 0) {
-        const auto& end_element_expr = grammar_->GetRuleExpr(sequence_expr[1]);
-        if (end_element_expr.type == RuleExprType::kRuleRef &&
-            end_element_expr[0] == initial_state.rule_id) {
-          speculative_calculation = true;
-        }
-      }
-    }
-  }
+  bool speculative_calculation =
+      IsSpeculativeCalculationApplied(sorted_decoded_vocab, possible_token_num);
 
   int prev_matched_size = 0;
   int last_rejected_range = 0;
