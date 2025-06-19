@@ -202,7 +202,7 @@ class Grammar(XGRObject):
             When parsing the regex pattern fails, with details about the parsing error.
         """
         return Grammar._create_from_handle(
-            _core.Grammar.from_regex(regex_string, print_converted_ebnf)
+            _core.Grammar.from_regex(regex_string, print_converted_ebnf=print_converted_ebnf)
         )
 
     @staticmethod

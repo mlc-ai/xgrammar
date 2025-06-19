@@ -75,7 +75,7 @@ class GrammarCompiler(XGRObject):
 
         self._init_handle(
             _core.GrammarCompiler(
-                tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
+                tokenizer_info._handle, max_threads=max_threads, cache_enabled=cache_enabled, cache_limit_bytes=cache_limit_bytes
             )
         )
 
@@ -120,7 +120,7 @@ class GrammarCompiler(XGRObject):
         schema_str = _convert_schema_to_str(schema)
         return CompiledGrammar._create_from_handle(
             self._handle.compile_json_schema(
-                schema_str, any_whitespace, indent, separators, strict_mode
+                schema_str, any_whitespace=any_whitespace, indent=indent, separators=separators, strict_mode=strict_mode
             )
         )
 

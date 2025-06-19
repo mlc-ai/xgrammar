@@ -201,9 +201,9 @@ class GrammarMatcher(XGRObject):
         self._init_handle(
             _core.GrammarMatcher(
                 compiled_grammar._handle,
-                override_stop_tokens,
-                terminate_without_stop_token,
-                max_rollback_tokens,
+                override_stop_tokens=print_converted_ebnf,
+                terminate_without_stop_token=terminate_without_stop_token,
+                max_rollback_tokens=max_rollback_tokens,
             )
         )
 
@@ -240,7 +240,7 @@ class GrammarMatcher(XGRObject):
         RuntimeError
             If the recursion depth is exceeded.
         """
-        return self._handle.accept_token(token_id, debug_print)
+        return self._handle.accept_token(token_id, debug_print=debug_print)
 
     def accept_string(self, input_str: Union[str, bytes], *, debug_print: bool = False) -> bool:
         """Accept a string and update the state of the matcher. The whole string is considered
@@ -266,7 +266,7 @@ class GrammarMatcher(XGRObject):
         RuntimeError
             If the recursion depth is exceeded.
         """
-        return self._handle.accept_string(input_str, debug_print)
+        return self._handle.accept_string(input_str, debug_print=debug_print)
 
     def fill_next_token_bitmask(
         self, bitmask: torch.Tensor, index: int = 0, *, debug_print: bool = False
@@ -304,7 +304,7 @@ class GrammarMatcher(XGRObject):
         if bitmask.dtype != bitmask_dtype:
             raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
         return self._handle.fill_next_token_bitmask(
-            bitmask.data_ptr(), list(bitmask.shape), index, debug_print
+            bitmask.data_ptr(), list(bitmask.shape), index, debug_print=debug_print
         )
 
     def find_jump_forward_string(self) -> str:
@@ -335,7 +335,7 @@ class GrammarMatcher(XGRObject):
             The number of tokens to rollback. It cannot exceed the current number of steps, nor can
             it exceed the specified maximum number of rollback tokens.
         """
-        self._handle.rollback(num_tokens)
+        self._handle.rollback(num_tokens=num_tokens)
 
     def is_terminated(self) -> bool:
         """Check if the matcher has terminated. If terminate_without_stop_token is False, the
