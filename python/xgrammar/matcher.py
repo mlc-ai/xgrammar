@@ -201,7 +201,7 @@ class GrammarMatcher(XGRObject):
         self._init_handle(
             _core.GrammarMatcher(
                 compiled_grammar._handle,
-                override_stop_tokens=print_converted_ebnf,
+                override_stop_tokens=override_stop_tokens,
                 terminate_without_stop_token=terminate_without_stop_token,
                 max_rollback_tokens=max_rollback_tokens,
             )
