@@ -63,6 +63,7 @@ myst_enable_extensions = [
 
 myst_heading_anchors = 3
 myst_ref_domains = ["std", "py"]
+myst_all_links_external = False
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3.12", None),
@@ -119,6 +120,7 @@ footer_note = " "
 
 header_links = [
     ("Home", "https://xgrammar.mlc.ai/"),
+    ("Docs", "https://xgrammar.mlc.ai/docs/"),
     ("Github", "https://github.com/mlc-ai/xgrammar"),
     ("Blog", "https://blog.mlc.ai/"),
 ]

@@ -17,12 +17,14 @@ The mission of this project is to bring flexible zero-overhead structure generat
 
 .. toctree::
    :maxdepth: 1
-   :caption: How To
+   :caption: Tutorials
 
-   how_to/json_generation
-   how_to/ebnf_guided_generation
-   how_to/engine_integration
-   how_to/portable_api
+   tutorials/constrained_decoding
+   tutorials/workflow_of_xgrammar
+   tutorials/json_generation
+   tutorials/ebnf_guided_generation
+   tutorials/engine_integration
+   tutorials/portable_api
    .. tutorials/web_sdk              .. TODO
 
 .. toctree::
