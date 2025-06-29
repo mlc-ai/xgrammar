@@ -1,0 +1,597 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>xgr.Grammar &mdash; XGrammar 0.1.19 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="xgr.TokenizerInfo" href="tokenizer_info.html" />
+    <link rel="prev" title="XGrammar Python API" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html">
+          
+
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.19
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage Tool</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">XGrammar Python API</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">xgr.Grammar</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.Grammar"><code class="docutils literal notranslate"><span class="pre">Grammar</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.__str__"><code class="docutils literal notranslate"><span class="pre">Grammar.__str__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.from_ebnf"><code class="docutils literal notranslate"><span class="pre">Grammar.from_ebnf()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.from_json_schema"><code class="docutils literal notranslate"><span class="pre">Grammar.from_json_schema()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.from_regex"><code class="docutils literal notranslate"><span class="pre">Grammar.from_regex()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.from_structural_tag"><code class="docutils literal notranslate"><span class="pre">Grammar.from_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.builtin_json_grammar"><code class="docutils literal notranslate"><span class="pre">Grammar.builtin_json_grammar()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.concat"><code class="docutils literal notranslate"><span class="pre">Grammar.concat()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.union"><code class="docutils literal notranslate"><span class="pre">Grammar.union()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+          <li><a href="index.html">XGrammar Python API</a> <span class="br-arrow">></span></li>
+        
+      <li>xgr.Grammar</li>
+    
+    
+      
+      
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/grammar.rst" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section id="xgr-grammar">
+<h1>xgr.Grammar<a class="headerlink" href="#xgr-grammar" title="Permalink to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="xgrammar.Grammar">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">Grammar</span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar" title="Permalink to this definition">¶</a></dt>
+<dd><p>This class represents a grammar object in XGrammar, and can be used later in the
+grammar-guided generation.</p>
+<p>The Grammar object supports context-free grammar (CFG). EBNF (extended Backus-Naur Form) is
+used as the format of the grammar. There are many specifications for EBNF in the literature,
+and we follow the specification of GBNF (GGML BNF) in
+<a class="reference external" href="https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md">https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md</a>.</p>
+<p>When printed, the grammar will be converted to GBNF format.</p>
+<p><strong>Methods:</strong></p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.__str__" title="xgrammar.Grammar.__str__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__str__</span></code></a>()</p></td>
+<td><p>Print the BNF grammar to a string, in EBNF format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_ebnf" title="xgrammar.Grammar.from_ebnf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_ebnf</span></code></a>(ebnf_string, *[, root_rule_name])</p></td>
+<td><p>Construct a grammar from EBNF string.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_json_schema" title="xgrammar.Grammar.from_json_schema"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_json_schema</span></code></a>(schema, *[, ...])</p></td>
+<td><p>Construct a grammar from JSON schema.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_regex" title="xgrammar.Grammar.from_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_regex</span></code></a>(regex_string, *[, ...])</p></td>
+<td><p>Create a grammar from a regular expression string.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_structural_tag" title="xgrammar.Grammar.from_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_structural_tag</span></code></a>(tags, triggers)</p></td>
+<td><p>Create a grammar from structural tags.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.builtin_json_grammar" title="xgrammar.Grammar.builtin_json_grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">builtin_json_grammar</span></code></a>()</p></td>
+<td><p>Get the grammar of standard JSON.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.concat" title="xgrammar.Grammar.concat"><code class="xref py py-obj docutils literal notranslate"><span class="pre">concat</span></code></a>(*grammars)</p></td>
+<td><p>Create a grammar that matches the concatenation of the grammars in the list.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.union" title="xgrammar.Grammar.union"><code class="xref py py-obj docutils literal notranslate"><span class="pre">union</span></code></a>(*grammars)</p></td>
+<td><p>Create a grammar that matches any of the grammars in the list.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.__str__">
+<span class="sig-name descname"><span class="pre">__str__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.__str__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.__str__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print the BNF grammar to a string, in EBNF format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>grammar_string</strong> – The BNF grammar string.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.from_ebnf">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_ebnf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ebnf_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">root_rule_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'root'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.from_ebnf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.from_ebnf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Construct a grammar from EBNF string. The EBNF string should follow the format
+in <a class="reference external" href="https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md">https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ebnf_string</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a>) – The grammar string in EBNF format.</p></li>
+<li><p><strong>root_rule_name</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>default: &quot;root&quot;</em>) – The name of the root rule in the grammar.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><strong>RuntimeError</strong></a> – When converting the regex pattern fails, with details about the parsing error.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.from_json_schema">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_json_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Type" title="(in Python v3.12)"><span class="pre">Type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">BaseModel</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_whitespace</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separators</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Tuple" title="(in Python v3.12)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strict_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_converted_ebnf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.from_json_schema"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.from_json_schema" title="Permalink to this definition">¶</a></dt>
+<dd><p>Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
+used to specify the schema.</p>
+<p>It allows any whitespace by default. If user want to specify the format of the JSON,
+set <cite>any_whitespace</cite> to False and use the <cite>indent</cite> and <cite>separators</cite> parameters. The
+meaning and the default values of the parameters follows the convention in json.dumps().</p>
+<p>It internally converts the JSON schema to a EBNF grammar.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>schema</strong> (<em>Union</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Type</em><em>[</em><em>BaseModel</em><em>]</em><em>, </em><em>Dict</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Any</em><em>]</em><em>]</em>) – The schema string or Pydantic model or JSON schema dict.</p></li>
+<li><p><strong>any_whitespace</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: True</em>) – Whether to use any whitespace. If True, the generated grammar will ignore the
+indent and separators parameters, and allow any whitespace.</p></li>
+<li><p><strong>indent</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>]</em><em>, </em><em>default: None</em>) – <p>The number of spaces for indentation. If None, the output will be in one line.</p>
+<p>Note that specifying the indentation means forcing the LLM to generate JSON strings
+strictly formatted. However, some models may tend to generate JSON strings that
+are not strictly formatted. In this case, forcing the LLM to generate strictly
+formatted JSON strings may degrade the generation quality. See
+&lt;<a class="reference external" href="https://github.com/sgl-project/sglang/issues/2216#issuecomment-2516192009">https://github.com/sgl-project/sglang/issues/2216#issuecomment-2516192009</a>&gt; for more
+details.</p>
+</p></li>
+<li><p><strong>separators</strong> (<em>Optional</em><em>[</em><em>Tuple</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>]</em><em>]</em><em>, </em><em>default: None</em>) – Two separators used in the schema: comma and colon. Examples: (“,”, “:”), (”, “, “: “).
+If None, the default separators will be used: (“,”, “: “) when the indent is not None,
+and (”, “, “: “) otherwise.</p></li>
+<li><p><strong>strict_mode</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: True</em>) – <p>Whether to use strict mode. In strict mode, the generated grammar will not allow
+properties and items that is not specified in the schema. This is equivalent to
+setting unevaluatedProperties and unevaluatedItems to false.</p>
+<p>This helps LLM to generate accurate output in the grammar-guided generation with JSON
+schema.</p>
+</p></li>
+<li><p><strong>print_converted_ebnf</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: False</em>) – If True, the converted EBNF string will be printed. For debugging purposes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>grammar</strong> – The constructed grammar.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><strong>RuntimeError</strong></a> – When converting the json schema fails, with details about the parsing error.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.from_regex">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_regex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">regex_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_converted_ebnf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.from_regex"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.from_regex" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a grammar from a regular expression string.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>regex_string</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a>) – The regular expression pattern to create the grammar from.</p></li>
+<li><p><strong>print_converted_ebnf</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: False</em>) – This method will convert the regex pattern to EBNF first. If this is true, the converted
+EBNF string will be printed. For debugging purposes. Default: False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>grammar</strong> – The constructed grammar from the regex pattern.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><strong>RuntimeError</strong></a> – When parsing the regex pattern fails, with details about the parsing error.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.from_structural_tag">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTagItem" title="xgrammar.grammar.StructuralTagItem"><span class="pre">StructuralTagItem</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triggers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.from_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.from_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a grammar from structural tags. The structural tag handles the dispatching
+of different grammars based on the tags and triggers: it initially allows any output,
+until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
+is encountered, the grammar will allow any following output, until the next trigger is
+encountered.</p>
+<p>The tags parameter is used to specify the output pattern. It is especially useful for LLM
+function calling, where the pattern is:
+&lt;function=func_name&gt;{“arg1”: …, “arg2”: …}&lt;/function&gt;.
+This pattern consists of three parts: a begin tag (&lt;function=func_name&gt;), a parameter list
+according to some schema ({“arg1”: …, “arg2”: …}), and an end tag (&lt;/function&gt;). This
+pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag.
+The structural tag is able to handle multiple such patterns by passing them into multiple
+tags.</p>
+<p>The triggers parameter is used to trigger the dispatching of different grammars. The trigger
+should be a prefix of a provided begin tag. When the trigger is encountered, the
+corresponding tag should be used to constrain the following output. There can be multiple
+tags matching the same trigger. Then if the trigger is encountered, the following output
+should match one of the tags. For example, in function calling, the triggers can be
+[“&lt;function=”]. Then if “&lt;function=” is encountered, the following output must match one
+of the tags (e.g. &lt;function=get_weather&gt;{“city”: “Beijing”}&lt;/function&gt;).</p>
+<p>The corrrespondence of tags and triggers is automatically determined: all tags with the
+same trigger will be grouped together. User should make sure any trigger is not a prefix
+of another trigger: then the corrrespondence of tags and triggers will be ambiguous.</p>
+<p>To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
+structural tag will generate a mask for each token. When the trigger is not encountered,
+the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
+False, meaning no token is masked). When a trigger is encountered, the mask should be
+enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
+output logits.</p>
+<p>The benefit of this method is the token boundary between tags and triggers is automatically
+handled. The user does not need to worry about the token boundary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tags</strong> (<em>List</em><em>[</em><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><em>StructuralTagItem</em></a><em>]</em>) – The structural tags.</p></li>
+<li><p><strong>triggers</strong> (<em>List</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>]</em>) – The triggers.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>grammar</strong> – The constructed grammar.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span><span class="w"> </span><span class="nc">Schema1</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg1</span><span class="p">:</span> <span class="nb">str</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg2</span><span class="p">:</span> <span class="nb">int</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span><span class="w"> </span><span class="nc">Schema2</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg3</span><span class="p">:</span> <span class="nb">float</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">arg4</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=f&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema1</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=g&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema2</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">triggers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&lt;function=&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="n">triggers</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.builtin_json_grammar">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">builtin_json_grammar</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.builtin_json_grammar"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.builtin_json_grammar" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the grammar of standard JSON. This is compatible with the official JSON grammar
+specification in <a class="reference external" href="https://www.json.org/json-en.html">https://www.json.org/json-en.html</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>grammar</strong> – The JSON grammar.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.concat">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">concat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">grammars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.concat"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.concat" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a grammar that matches the concatenation of the grammars in the list. That is
+equivalent to using the <cite>+</cite> operator to concatenate the grammars in the list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>grammars</strong> (<em>List</em><em>[</em><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar"><em>Grammar</em></a><em>]</em>) – The grammars to create the concatenation of.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>grammar</strong> – The concatenation of the grammars.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.union">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">union</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">grammars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.union"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.union" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a grammar that matches any of the grammars in the list. That is equivalent to
+using the <cite>|</cite> operator to concatenate the grammars in the list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>grammars</strong> (<em>List</em><em>[</em><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar"><em>Grammar</em></a><em>]</em>) – The grammars to create the union of.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>grammar</strong> – The union of the grammars.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="tokenizer_info.html" class="btn btn-neutral float-right" title="xgr.TokenizerInfo" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="index.html" class="btn btn-neutral float-left" title="XGrammar Python API" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+
+<div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>

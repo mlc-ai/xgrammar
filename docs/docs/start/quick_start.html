@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/fix_text_selection.css" type="text/css" />
   <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="../_static/css/tlcpack_theme.css" type="text/css" />
 
@@ -50,7 +51,7 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="JSON Generation" href="../how_to/json_generation.html" />
+    <link rel="next" title="Constrained Decoding" href="../tutorials/constrained_decoding.html" />
     <link rel="prev" title="Installation" href="install.html" /> 
 </head>
 
@@ -73,37 +74,16 @@
                    <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
                 </li>
                 <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
                    <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
                 </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
              </ul>
-               <div class="responsivetlcdropdown">
-                 <button type="button" class="btn-link">
-                   Other Resources
-                 </button>
-                 <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                 </ul>
-               </div>
           </div>
-            <div class="responsiveMenuIcon">
-              <button type="button" id="menuBtn" class="btn-menu"><img src="../_static/img/menu-icon.svg" alt="Menu Icon"></button>
-            </div>
-
-            <div class="tlcDropdown">
-              <div class="dropdown">
-                <button type="button" class="btn-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                  Other Resources
-                </button>
-                <div class="dropdown-menu dropdown-menu-right">
-                  <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                  </ul>
-                </div>
-              </div>
           </div>
        </div>
     </div>
@@ -115,9 +95,12 @@
           
 
           
-            <a href="../index.html" class="sidetitle" alt="Documentation Home"> XGrammar
+            <a href="../index.html">
           
 
+          
+            
+            <img src="../_static/img/logo.png" class="logo" alt="Logo"/>
           
           </a>
 
@@ -154,30 +137,33 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Quick Start</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#example">Example</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#preparation">Preparation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#compile-grammar">Compile Grammar</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#generate-with-grammar">Generate with grammar</a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="#preparation">Preparation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#compile-grammar">Compile Grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#generate-with-grammar">Generate with grammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#what-to-do-next">What to Do Next</a></li>
 </ul>
 </li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">How To</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../how_to/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../how_to/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../how_to/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../how_to/portable_api.html">Portable API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../misc/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage Tool</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../api/python/index.html">xgrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/python/index.html">XGrammar Python API</a></li>
 </ul>
 
             
@@ -245,7 +231,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/start/quick_start.rst" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/start/quick_start.md" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -259,22 +245,20 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section id="quick-start">
-<span id="id1"></span><h1>Quick Start<a class="headerlink" href="#quick-start" title="Permalink to this heading">¶</a></h1>
-<section id="example">
-<h2>Example<a class="headerlink" href="#example" title="Permalink to this heading">¶</a></h2>
-<p>The easiest way of trying out XGrammar is to use the <code class="docutils literal notranslate"><span class="pre">transformers</span></code> library in Python.
-After <a class="reference internal" href="install.html#installation"><span class="std std-ref">installing XGrammar</span></a>, run the following example to see how XGrammar enables
-structured generation – a JSON in this case.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="quick-start">
+<h1>Quick Start<a class="headerlink" href="#quick-start" title="Permalink to this heading">¶</a></h1>
+<p>This guide introduces how to use XGrammar with HuggingFace <code class="docutils literal notranslate"><span class="pre">transformers</span></code> in Python to generate
+structured outputs. It focuses on JSON generation – the most important use case of structured
+generation. You should have already <a class="reference internal" href="install.html"><span class="std std-doc">installed XGrammar</span></a>.</p>
 <section id="preparation">
-<h3>Preparation<a class="headerlink" href="#preparation" title="Permalink to this heading">¶</a></h3>
-<p>Instantiate a model, a tokenizer, and inputs.</p>
+<h2>Preparation<a class="headerlink" href="#preparation" title="Permalink to this heading">¶</a></h2>
+<p>Instantiate a model, a tokenizer, and inputs to the LLM.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoConfig</span>
 
-<span class="n">device</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span>  <span class="c1"># Or &quot;cpu&quot;, etc.</span>
+<span class="n">device</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span>  <span class="c1"># Or &quot;cpu&quot; if you don&#39;t have a GPU</span>
 <span class="n">model_name</span> <span class="o">=</span> <span class="s2">&quot;meta-llama/Llama-3.2-1B-Instruct&quot;</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
     <span class="n">model_name</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="n">device</span>
@@ -292,7 +276,7 @@ structured generation – a JSON in this case.</p>
 </div>
 </section>
 <section id="compile-grammar">
-<h3>Compile Grammar<a class="headerlink" href="#compile-grammar" title="Permalink to this heading">¶</a></h3>
+<h2>Compile Grammar<a class="headerlink" href="#compile-grammar" title="Permalink to this heading">¶</a></h2>
 <p>Construct a <code class="docutils literal notranslate"><span class="pre">GrammarCompiler</span></code> and compile the grammar.</p>
 <p>The grammar can be a built-in JSON grammar, a JSON schema string, or an EBNF string. EBNF provides
 more flexibility for customization. See
@@ -309,7 +293,7 @@ specification.</p>
 </div>
 </section>
 <section id="generate-with-grammar">
-<h3>Generate with grammar<a class="headerlink" href="#generate-with-grammar" title="Permalink to this heading">¶</a></h3>
+<h2>Generate with grammar<a class="headerlink" href="#generate-with-grammar" title="Permalink to this heading">¶</a></h2>
 <p>Use logits_processor to generate with grammar.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">xgr_logits_processor</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">contrib</span><span class="o">.</span><span class="n">hf</span><span class="o">.</span><span class="n">LogitsProcessor</span><span class="p">(</span><span class="n">compiled_grammar</span><span class="p">)</span>
 <span class="n">generated_ids</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
@@ -320,11 +304,10 @@ specification.</p>
 </pre></div>
 </div>
 </section>
-</section>
 <section id="what-to-do-next">
 <h2>What to Do Next<a class="headerlink" href="#what-to-do-next" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>Check out <a class="reference internal" href="../how_to/json_generation.html#how-to-json-generation"><span class="std std-ref">JSON Generation</span></a> and other How-To guides for the detailed usage guide of XGrammar.</p></li>
+<li><p>Check out <a class="reference internal" href="../tutorials/ebnf_guided_generation.html"><span class="std std-doc">JSON Generation Guide</span></a> and other How-To guides for the detailed usage guide of XGrammar.</p></li>
 <li><p>Report any problem or ask any question: open new issues in our <a class="reference external" href="https://github.com/mlc-ai/xgrammar/issues">GitHub repo</a>.</p></li>
 </ul>
 </section>
@@ -340,7 +323,7 @@ specification.</p>
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../how_to/json_generation.html" class="btn btn-neutral float-right" title="JSON Generation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="../tutorials/constrained_decoding.html" class="btn btn-neutral float-right" title="Constrained Decoding" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="install.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

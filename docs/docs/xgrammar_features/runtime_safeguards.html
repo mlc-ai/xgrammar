@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Installation &mdash; XGrammar 0.1.19 documentation</title>
+  <title>Runtime Safeguards &mdash; XGrammar 0.1.19 documentation</title>
   
 
   
@@ -51,8 +51,8 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Quick Start" href="quick_start.html" />
-    <link rel="prev" title="👋 Welcome to XGrammar" href="../index.html" /> 
+    <link rel="next" title="JavaScript API" href="javascript_api.html" />
+    <link rel="prev" title="Integration with LLM Engine" href="../tutorials/engine_integration.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -134,20 +134,9 @@
             
             
               <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#method-1-prebuilt-package">Method 1: Prebuilt Package</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#method-2-build-xgrammar-from-source">Method 2: Build XGrammar from Source</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#optional-run-python-tests">Optional: Run Python Tests</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#method-3-build-xgrammar-c-library-only">Method 3: Build XGrammar C++ Library Only</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#optional-run-c-tests">Optional: Run C++ Tests</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick Start</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
@@ -157,9 +146,13 @@
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Runtime Safeguards</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#recursion-limit">Recursion Limit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cache-size-limit">Cache Size Limit</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="javascript_api.html">JavaScript API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
@@ -225,7 +218,7 @@
     
       <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>Installation</li>
+      <li>Runtime Safeguards</li>
     
     
       
@@ -236,7 +229,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/start/install.md" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/xgrammar_features/runtime_safeguards.md" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -250,80 +243,42 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="installation">
-<h1>Installation<a class="headerlink" href="#installation" title="Permalink to this heading">¶</a></h1>
-<p>XGrammar Python Package can be installed directly from a prebuilt package or built from source.</p>
-<section id="method-1-prebuilt-package">
-<h2>Method 1: Prebuilt Package<a class="headerlink" href="#method-1-prebuilt-package" title="Permalink to this heading">¶</a></h2>
-<p>XGrammar supports various platforms:</p>
-<ul class="simple">
-<li><p>Operating Systems: Linux, macOS, and Windows</p></li>
-<li><p>Hardware: CPU, NVIDIA GPUs, AMD GPUs, Apple Silicon, TPU, etc.</p></li>
-<li><p>Python: 3.9 and later</p></li>
-</ul>
-<p>We provide Python wheels for XGrammar via pip.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>xgrammar
-</pre></div>
-</div>
-<p>We also provide conda packages for XGrammar:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>xgrammar
-</pre></div>
-</div>
-<p>Use the following command to verify installation:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import xgrammar; print(xgrammar)&quot;</span>
-<span class="c1"># Prints: &lt;module &#39;xgrammar&#39; from &#39;/path-to-env/lib/python3.11/site-packages/xgrammar/__init__.py&#39;&gt;</span>
+  <section class="tex2jax_ignore mathjax_ignore" id="runtime-safeguards">
+<h1>Runtime Safeguards<a class="headerlink" href="#runtime-safeguards" title="Permalink to this heading">¶</a></h1>
+<p>XGrammar has a set of mechanisms to safeguard the runtime and avoid the LLM server from
+crashing.</p>
+<section id="recursion-limit">
+<h2>Recursion Limit<a class="headerlink" href="#recursion-limit" title="Permalink to this heading">¶</a></h2>
+<p>The <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><code class="xref py py-class docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher</span></code></a> class uses a pushdown automata parser to parse the grammar.
+It may involve very deep recursion, which may cause stack overflow. XGrammar provides
+<a class="reference internal" href="../api/python/configuration.html#xgrammar.set_max_recursion_depth" title="xgrammar.set_max_recursion_depth"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.set_max_recursion_depth()</span></code></a> to set the maximum recursion depth and
+<a class="reference internal" href="../api/python/configuration.html#xgrammar.get_max_recursion_depth" title="xgrammar.get_max_recursion_depth"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.get_max_recursion_depth()</span></code></a> to get the current maximum recursion
+depth. The maximum recursion depth is set per process.The default maximum recursion depth is 10000.</p>
+<p>If the recursion depth exceeds the limit,
+the matcher operations (including <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher.accept_token()</span></code></a>,
+<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_string" title="xgrammar.GrammarMatcher.accept_string"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher.accept_string()</span></code></a>, <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher.fill_next_token_bitmask()</span></code></a>,
+<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher.find_jump_forward_string()</span></code></a>) will raise
+<a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><code class="xref py py-exc docutils literal notranslate"><span class="pre">RuntimeError</span></code></a>.</p>
+<p>You can also use the <a class="reference internal" href="../api/python/configuration.html#xgrammar.max_recursion_depth" title="xgrammar.max_recursion_depth"><code class="xref py py-func docutils literal notranslate"><span class="pre">xgrammar.max_recursion_depth()</span></code></a> context manager to set the maximum
+recursion depth for a code block.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">max_recursion_depth</span>
+
+<span class="k">with</span> <span class="n">max_recursion_depth</span><span class="p">(</span><span class="mi">10000</span><span class="p">):</span>
+    <span class="n">matcher</span><span class="o">.</span><span class="n">accept_token</span><span class="p">(</span><span class="n">token_id</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
-<section id="method-2-build-xgrammar-from-source">
-<h2>Method 2: Build XGrammar from Source<a class="headerlink" href="#method-2-build-xgrammar-from-source" title="Permalink to this heading">¶</a></h2>
-<p>This option is useful when you want to make modification or obtain a specific version of XGrammar.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/mlc-ai/xgrammar.git<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>xgrammar
-pre-commit<span class="w"> </span>install
-<span class="c1"># Copy cmake config. You can update the config if needed.</span>
-cp<span class="w"> </span>cmake/config.cmake<span class="w"> </span>.
-python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-build-isolation<span class="w"> </span>-e<span class="w"> </span>.
+<section id="cache-size-limit">
+<h2>Cache Size Limit<a class="headerlink" href="#cache-size-limit" title="Permalink to this heading">¶</a></h2>
+<p>The <a class="reference internal" href="../api/python/grammar_compiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">xgrammar.GrammarCompiler</span></code></a> class uses a cache to store the compiled grammars.
+The cache size can be limited to avoid the cache from growing too large. The cache uses an LRU
+algorithm to evict the least recently used items. The cache size limit is -1 by default, which means
+no limit.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrammarCompiler</span>
+
+<span class="n">compiler</span> <span class="o">=</span> <span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">,</span> <span class="n">cache_limit_bytes</span><span class="o">=</span><span class="mi">10000</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>XGrammar is a library written in C++ and Python. The editable install will automatically rebuild
-the package when XGrammar is imported in Python.</p>
-<section id="optional-run-python-tests">
-<h3>Optional: Run Python Tests<a class="headerlink" href="#optional-run-python-tests" title="Permalink to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install the test dependencies</span>
-python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;.[test]&quot;</span>
-
-<span class="c1"># If you have a HuggingFace token, you can run all tests including the ones that have gated models.</span>
-huggingface-cli<span class="w"> </span>login<span class="w"> </span>--token<span class="w"> </span>YOUR_HF_TOKEN
-python3<span class="w"> </span>-m<span class="w"> </span>pytest
-
-<span class="c1"># If you do not have a HuggingFace token, you can run a subset of tests that do not require gated models.</span>
-python3<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;not hf_token_required&quot;</span>
-</pre></div>
-</div>
-</section>
-</section>
-<section id="method-3-build-xgrammar-c-library-only">
-<h2>Method 3: Build XGrammar C++ Library Only<a class="headerlink" href="#method-3-build-xgrammar-c-library-only" title="Permalink to this heading">¶</a></h2>
-<p>XGrammar can also be build as a C++ library. This is useful for using XGrammar in C++ or Rust projects.</p>
-<p>XGrammar uses CMake and Ninja to build the C++ library.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/mlc-ai/xgrammar.git<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>xgrammar
-<span class="c1"># Copy cmake config. You can update the config if needed.</span>
-cp<span class="w"> </span>cmake/config.cmake<span class="w"> </span>.
-
-mkdir<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>build
-cmake<span class="w"> </span>-G<span class="w"> </span>Ninja<span class="w"> </span>..
-ninja
-</pre></div>
-</div>
-<section id="optional-run-c-tests">
-<h3>Optional: Run C++ Tests<a class="headerlink" href="#optional-run-c-tests" title="Permalink to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/run_ctest.sh
-
-<span class="c1"># If you want to filter certain tests, you can run:</span>
-bash<span class="w"> </span>scripts/run_ctest.sh<span class="w"> </span>test_name<span class="w"> </span><span class="c1"># runs all tests whose name contains &quot;test_name&quot;</span>
-</pre></div>
-</div>
-</section>
 </section>
 </section>
 
@@ -337,10 +292,10 @@ bash<span class="w"> </span>scripts/run_ctest.sh<span class="w"> </span>test_nam
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="quick_start.html" class="btn btn-neutral float-right" title="Quick Start" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="javascript_api.html" class="btn btn-neutral float-right" title="JavaScript API" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../index.html" class="btn btn-neutral float-left" title="👋 Welcome to XGrammar" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="../tutorials/engine_integration.html" class="btn btn-neutral float-left" title="Integration with LLM Engine" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

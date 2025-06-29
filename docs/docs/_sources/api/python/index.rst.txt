@@ -1,28 +1,16 @@
 .. _apixgrammar:
 
-xgrammar
-========
-
-.. currentmodule:: xgrammar
-
-.. autosummary::
-   :toctree: _generated
-
-   Grammar
+XGrammar Python API
+===================
 
 .. toctree::
-   structural_tag_item
+   :maxdepth: 2
 
-.. autosummary::
-   :toctree: _generated
-
-   GrammarCompiler
-   CompiledGrammar
-   GrammarMatcher
-   TokenizerInfo
-   VocabType
-
-.. toctree::
-
+   grammar
+   tokenizer_info
+   grammar_compiler
+   compiled_grammar
+   grammar_matcher
+   structural_tag
    bitmask_ops
-   recursion_depth
+   configuration

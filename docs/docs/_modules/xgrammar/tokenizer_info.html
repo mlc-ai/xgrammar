@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
 
@@ -79,37 +80,16 @@ window.addEventListener("load", () => mermaid.run());
                    <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
                 </li>
                 <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
                    <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
                 </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
              </ul>
-               <div class="responsivetlcdropdown">
-                 <button type="button" class="btn-link">
-                   Other Resources
-                 </button>
-                 <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                 </ul>
-               </div>
           </div>
-            <div class="responsiveMenuIcon">
-              <button type="button" id="menuBtn" class="btn-menu"><img src="../../_static/img/menu-icon.svg" alt="Menu Icon"></button>
-            </div>
-
-            <div class="tlcDropdown">
-              <div class="dropdown">
-                <button type="button" class="btn-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                  Other Resources
-                </button>
-                <div class="dropdown-menu dropdown-menu-right">
-                  <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                  </ul>
-                </div>
-              </div>
           </div>
        </div>
     </div>
@@ -121,9 +101,12 @@ window.addEventListener("load", () => mermaid.run());
           
 
           
-            <a href="../../index.html" class="sidetitle" alt="Documentation Home"> XGrammar
+            <a href="../../index.html">
           
 
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
           
           </a>
 
@@ -161,20 +144,26 @@ window.addEventListener("load", () => mermaid.run());
 <li class="toctree-l1"><a class="reference internal" href="../../start/install.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">How To</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/portable_api.html">Portable API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../misc/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage Tool</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">xgrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a></li>
 </ul>
 
             
@@ -274,35 +263,39 @@ window.addEventListener("load", () => mermaid.run());
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="VocabType"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.VocabType.html#xgrammar.VocabType">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">VocabType</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+<div class="viewcode-block" id="VocabType"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.VocabType">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">VocabType</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of</span>
-<span class="sd">    vocabularies:</span>
-
-<span class="sd">    RAW</span>
-<span class="sd">        The vocabulary is in the raw format. The tokens in the vocabulary are kept in their</span>
-<span class="sd">        original form without any processing. This kind of tokenizer includes the tiktoken</span>
-<span class="sd">        tokenizer, e.g. microsoft/Phi-3-small-8k-instruct, Qwen/Qwen-7B-Chat, etc.</span>
-
-<span class="sd">    BYTE_FALLBACK</span>
-<span class="sd">        The vocabulary used in the byte fallback BPE tokenizer. The tokens are encoded through</span>
-<span class="sd">        the byte-fallback conversion. E.g. &quot;\u001b&quot; -&gt; &quot;&lt;0x1B&gt;&quot;, &quot; apple&quot; -&gt; &quot;▁apple&quot;. This kind of</span>
-<span class="sd">        tokenizer includes meta-llama/Llama-2-7b-chat, microsoft/Phi-3.5-mini-instruct, etc.</span>
-
-<span class="sd">    BYTE_LEVEL</span>
-<span class="sd">        The vocabulary used in the byte level BPE tokenizer. The tokens are encoded through</span>
-<span class="sd">        the byte-to-unicode conversion, as in</span>
-<span class="sd">        https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59</span>
-
-<span class="sd">        This kind of tokenizer includes meta-llama/Meta-Llama-3-8B-Instruct,</span>
-<span class="sd">        meta-llama/Meta-Llama-3.1-8B-Instruct, etc.</span>
+<span class="sd">    vocabularies: RAW, BYTE_FALLBACK, BYTE_LEVEL.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">RAW</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The vocabulary is in the raw format.</span>
+
+<span class="sd">    The tokens in the vocabulary are kept in their original form without any processing. This kind</span>
+<span class="sd">    of tokenizer includes the tiktoken tokenizer, e.g. microsoft/Phi-3-small-8k-instruct,</span>
+<span class="sd">    Qwen/Qwen-7B-Chat, etc.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="n">BYTE_FALLBACK</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="n">BYTE_LEVEL</span> <span class="o">=</span> <span class="mi">2</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The vocabulary used in the byte fallback BPE tokenizer.</span>
+
+<span class="sd">    The tokens are encoded through the byte-fallback conversion. E.g. &quot;\u001b&quot; -&gt; &quot;&lt;0x1B&gt;&quot;,</span>
+<span class="sd">    &quot; apple&quot; -&gt; &quot;▁apple&quot;. This kind of tokenizer includes meta-llama/Llama-2-7b-chat,</span>
+<span class="sd">    microsoft/Phi-3.5-mini-instruct, etc.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">BYTE_LEVEL</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The vocabulary used in the byte level BPE tokenizer.</span>
+
+<span class="sd">    The tokens are encoded through the byte-to-unicode conversion, as in</span>
+<span class="sd">    https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59</span>
+
+<span class="sd">    This kind of tokenizer includes meta-llama/Meta-Llama-3-8B-Instruct,</span>
+<span class="sd">    meta-llama/Meta-Llama-3.1-8B-Instruct, etc.</span>
+<span class="sd">    &quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="TokenizerInfo"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TokenizerInfo</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
+<div class="viewcode-block" id="TokenizerInfo"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TokenizerInfo</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The tokenizer info contains the vocabulary, the type of the vocabulary, and necessary</span>
 <span class="sd">    information for the grammar-guided generation.</span>
 
@@ -315,27 +308,9 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">    of 32. In this case, the model&#39;s vocab_size is larger than the tokenizer&#39;s vocabulary size.</span>
 <span class="sd">    Please pass the model&#39;s vocab_size to the vocab_size parameter in the constructor, because</span>
 <span class="sd">    this information is used to determine the size of the token mask.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    encoded_vocab : Union[List[bytes], List[str]]</span>
-<span class="sd">        The encoded vocabulary of the tokenizer.</span>
-
-<span class="sd">    vocab_type : VocabType, default: VocabType.RAW</span>
-<span class="sd">        The type of the vocabulary. See also VocabType.</span>
-
-<span class="sd">    vocab_size : Optional[int], default: None</span>
-<span class="sd">        The size of the vocabulary. If not provided, the vocabulary size will be len(encoded_vocab).</span>
-
-<span class="sd">    stop_token_ids : Optional[List[int]], default: None</span>
-<span class="sd">        The stop token ids. If not provided, the stop token ids will be auto detected (but may not</span>
-<span class="sd">        be correct).</span>
-
-<span class="sd">    add_prefix_space : bool, default: False</span>
-<span class="sd">        Whether the tokenizer will prepend a space before the text in the tokenization process.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-<div class="viewcode-block" id="TokenizerInfo.__init__"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="TokenizerInfo.__init__"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">encoded_vocab</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">bytes</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
         <span class="n">vocab_type</span><span class="p">:</span> <span class="n">VocabType</span> <span class="o">=</span> <span class="n">VocabType</span><span class="o">.</span><span class="n">RAW</span><span class="p">,</span>
@@ -344,6 +319,26 @@ window.addEventListener("load", () => mermaid.run());
         <span class="n">stop_token_ids</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">add_prefix_space</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct the tokenizer info.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        encoded_vocab : Union[List[bytes], List[str]]</span>
+<span class="sd">            The encoded vocabulary of the tokenizer.</span>
+
+<span class="sd">        vocab_type : VocabType, default: VocabType.RAW</span>
+<span class="sd">            The type of the vocabulary. See also VocabType.</span>
+
+<span class="sd">        vocab_size : Optional[int], default: None</span>
+<span class="sd">            The size of the vocabulary. If not provided, the vocabulary size will be len(encoded_vocab).</span>
+
+<span class="sd">        stop_token_ids : Optional[List[int]], default: None</span>
+<span class="sd">            The stop token ids. If not provided, the stop token ids will be auto detected (but may not</span>
+<span class="sd">            be correct).</span>
+
+<span class="sd">        add_prefix_space : bool, default: False</span>
+<span class="sd">            Whether the tokenizer will prepend a space before the text in the tokenization process.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stop_token_ids</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
             <span class="n">stop_token_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">stop_token_ids</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_init_handle</span><span class="p">(</span>
@@ -388,7 +383,7 @@ window.addEventListener("load", () => mermaid.run());
 
         <span class="k">return</span> <span class="n">has_sp_model_attr</span> <span class="ow">or</span> <span class="n">has_nested_sp_model_attr</span>
 
-<div class="viewcode-block" id="TokenizerInfo.from_huggingface"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.from_huggingface">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="TokenizerInfo.from_huggingface"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo.from_huggingface">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_huggingface</span><span class="p">(</span>
         <span class="n">tokenizer</span><span class="p">:</span> <span class="n">PreTrainedTokenizerBase</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
@@ -596,12 +591,12 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        padded tokens, etc. Now it is automatically detected from the vocabulary.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">special_token_ids</span>
 
-<div class="viewcode-block" id="TokenizerInfo.dump_metadata"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.dump_metadata">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">dump_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<div class="viewcode-block" id="TokenizerInfo.dump_metadata"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo.dump_metadata">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">dump_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Dump the metadata of the tokenizer to a json string. It can be used to construct the</span>
 <span class="sd">        tokenizer info from the vocabulary and the metadata string.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">dump_metadata</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="TokenizerInfo.from_vocab_and_metadata"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.TokenizerInfo.html#xgrammar.TokenizerInfo.from_vocab_and_metadata">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="TokenizerInfo.from_vocab_and_metadata"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo.from_vocab_and_metadata">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_vocab_and_metadata</span><span class="p">(</span>
         <span class="n">encoded_vocab</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="n">metadata</span><span class="p">:</span> <span class="nb">str</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TokenizerInfo&quot;</span><span class="p">:</span>

@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>XGrammar Python API &mdash; XGrammar 0.1.19 documentation</title>
+  <title>xgr.CompiledGrammar &mdash; XGrammar 0.1.19 documentation</title>
   
 
   
@@ -51,8 +51,8 @@
     <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="xgr.Grammar" href="grammar.html" />
-    <link rel="prev" title="Code Coverage Tool" href="../../developer_guide/code_coverage.html" /> 
+    <link rel="next" title="xgr.GrammarMatcher" href="grammar_matcher.html" />
+    <link rel="prev" title="xgr.GrammarCompiler" href="grammar_compiler.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -157,11 +157,19 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">XGrammar Python API</a><ul>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">XGrammar Python API</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="grammar.html">xgr.Grammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">xgr.CompiledGrammar</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.grammar</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.tokenizer_info</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.memory_size_bytes</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
@@ -224,7 +232,9 @@
     
       <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>XGrammar Python API</li>
+          <li><a href="index.html">XGrammar Python API</a> <span class="br-arrow">></span></li>
+        
+      <li>xgr.CompiledGrammar</li>
     
     
       
@@ -235,7 +245,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/index.rst" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/compiled_grammar.rst" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -249,49 +259,51 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section id="xgrammar-python-api">
-<span id="apixgrammar"></span><h1>XGrammar Python API<a class="headerlink" href="#xgrammar-python-api" title="Permalink to this heading">¶</a></h1>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="grammar.html">xgr.Grammar</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="grammar.html#xgrammar.Grammar"><code class="docutils literal notranslate"><span class="pre">Grammar</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html#xgrammar.VocabType"><code class="docutils literal notranslate"><span class="pre">VocabType</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html#xgrammar.TokenizerInfo"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html#xgrammar.GrammarCompiler"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html#xgrammar.GrammarMatcher"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="structural_tag.html">Structural Tag</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTagItem"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.allocate_token_bitmask"><code class="docutils literal notranslate"><span class="pre">allocate_token_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.apply_token_bitmask_inplace"><code class="docutils literal notranslate"><span class="pre">apply_token_bitmask_inplace()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.reset_token_bitmask"><code class="docutils literal notranslate"><span class="pre">reset_token_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.get_bitmask_shape"><code class="docutils literal notranslate"><span class="pre">get_bitmask_shape()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.bitmask_dtype"><code class="docutils literal notranslate"><span class="pre">bitmask_dtype</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="configuration.html#recursion-depth-management">Recursion Depth Management</a></li>
-</ul>
-</li>
-</ul>
-</div>
+  <section id="xgr-compiledgrammar">
+<h1>xgr.CompiledGrammar<a class="headerlink" href="#xgr-compiledgrammar" title="Permalink to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">CompiledGrammar</span></span><a class="reference internal" href="../../_modules/xgrammar/compiler.html#CompiledGrammar"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.CompiledGrammar" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the primary object to store compiled grammar.</p>
+<p>A CompiledGrammar can be used to construct GrammarMatcher
+to generate token masks efficiently.</p>
+<p class="rubric">Notes</p>
+<p>Do not construct this class directly, instead
+use <a class="reference internal" href="grammar_compiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a> to construct the object.</p>
+<p><strong>Attributes:</strong></p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar" title="xgrammar.CompiledGrammar.grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">grammar</span></code></a></p></td>
+<td><p>The original grammar.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info" title="xgrammar.CompiledGrammar.tokenizer_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tokenizer_info</span></code></a></p></td>
+<td><p>The tokenizer info associated with the compiled grammar.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="xgrammar.CompiledGrammar.memory_size_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memory_size_bytes</span></code></a></p></td>
+<td><p>The approximate memory usage of the compiled grammar in bytes.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.grammar">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">grammar</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.grammar" title="Permalink to this definition">¶</a></dt>
+<dd><p>The original grammar.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.tokenizer_info">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">tokenizer_info</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.tokenizer_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>The tokenizer info associated with the compiled grammar.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.memory_size_bytes">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">memory_size_bytes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="Permalink to this definition">¶</a></dt>
+<dd><p>The approximate memory usage of the compiled grammar in bytes.</p>
+</dd></dl>
+
+</dd></dl>
+
 </section>
 
 
@@ -304,10 +316,10 @@
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="grammar.html" class="btn btn-neutral float-right" title="xgr.Grammar" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="grammar_matcher.html" class="btn btn-neutral float-right" title="xgr.GrammarMatcher" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../../developer_guide/code_coverage.html" class="btn btn-neutral float-left" title="Code Coverage Tool" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="grammar_compiler.html" class="btn btn-neutral float-left" title="xgr.GrammarCompiler" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

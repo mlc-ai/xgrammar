@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="_static/css/fix_text_selection.css" type="text/css" />
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="_static/css/tlcpack_theme.css" type="text/css" />
 
@@ -72,37 +73,16 @@
                    <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
                 </li>
                 <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
                    <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
                 </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
              </ul>
-               <div class="responsivetlcdropdown">
-                 <button type="button" class="btn-link">
-                   Other Resources
-                 </button>
-                 <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                 </ul>
-               </div>
           </div>
-            <div class="responsiveMenuIcon">
-              <button type="button" id="menuBtn" class="btn-menu"><img src="_static/img/menu-icon.svg" alt="Menu Icon"></button>
-            </div>
-
-            <div class="tlcDropdown">
-              <div class="dropdown">
-                <button type="button" class="btn-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                  Other Resources
-                </button>
-                <div class="dropdown-menu dropdown-menu-right">
-                  <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                  </ul>
-                </div>
-              </div>
           </div>
        </div>
     </div>
@@ -114,9 +94,12 @@
           
 
           
-            <a href="#" class="sidetitle" alt="Documentation Home"> XGrammar
+            <a href="#">
           
 
+          
+            
+            <img src="_static/img/logo.png" class="logo" alt="Logo"/>
           
           </a>
 
@@ -154,20 +137,26 @@
 <li class="toctree-l1"><a class="reference internal" href="start/install.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="start/quick_start.html">Quick Start</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">How To</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="how_to/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to/portable_api.html">Portable API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="misc/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer_guide/code_coverage.html">Code Coverage Tool</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="api/python/index.html">xgrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/python/index.html">XGrammar Python API</a></li>
 </ul>
 
             
@@ -254,18 +243,42 @@
 <p><a class="reference external" href="https://github.com/mlc-ai/xgrammar">GitHub</a></p>
 <p>XGrammar is open-source solution for flexible, portable, and fast structured generations.
 The mission of this project is to bring flexible zero-overhead structure generation everywhere.</p>
-<section id="quick-start">
-<h2>Quick Start<a class="headerlink" href="#quick-start" title="Permalink to this heading">¶</a></h2>
-<p>Check out <a class="reference internal" href="start/quick_start.html#quick-start"><span class="std std-ref">Quick Start</span></a> for quick start examples of using XGrammar.</p>
 <div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="start/quick_start.html">Quick Start</a></li>
+</ul>
 </div>
 <div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+</ul>
 </div>
 <div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
 </div>
 <div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer_guide/code_coverage.html">Code Coverage Tool</a></li>
+</ul>
 </div>
-</section>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/python/index.html">XGrammar Python API</a></li>
+</ul>
+</div>
 </section>
 
 

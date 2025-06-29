@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
 
@@ -79,37 +80,16 @@ window.addEventListener("load", () => mermaid.run());
                    <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
                 </li>
                 <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
                    <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
                 </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
              </ul>
-               <div class="responsivetlcdropdown">
-                 <button type="button" class="btn-link">
-                   Other Resources
-                 </button>
-                 <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                 </ul>
-               </div>
           </div>
-            <div class="responsiveMenuIcon">
-              <button type="button" id="menuBtn" class="btn-menu"><img src="../../_static/img/menu-icon.svg" alt="Menu Icon"></button>
-            </div>
-
-            <div class="tlcDropdown">
-              <div class="dropdown">
-                <button type="button" class="btn-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                  Other Resources
-                </button>
-                <div class="dropdown-menu dropdown-menu-right">
-                  <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                  </ul>
-                </div>
-              </div>
           </div>
        </div>
     </div>
@@ -121,9 +101,12 @@ window.addEventListener("load", () => mermaid.run());
           
 
           
-            <a href="../../index.html" class="sidetitle" alt="Documentation Home"> XGrammar
+            <a href="../../index.html">
           
 
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
           
           </a>
 
@@ -161,20 +144,26 @@ window.addEventListener("load", () => mermaid.run());
 <li class="toctree-l1"><a class="reference internal" href="../../start/install.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">How To</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/portable_api.html">Portable API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../misc/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage Tool</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">xgrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a></li>
 </ul>
 
             
@@ -261,14 +250,14 @@ window.addEventListener("load", () => mermaid.run());
 <span class="kn">from</span><span class="w"> </span><span class="nn">.tokenizer_info</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenizerInfo</span>
 
 
-<div class="viewcode-block" id="CompiledGrammar"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.CompiledGrammar.html#xgrammar.CompiledGrammar">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">CompiledGrammar</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
+<div class="viewcode-block" id="CompiledGrammar"><a class="viewcode-back" href="../../api/python/compiled_grammar.html#xgrammar.CompiledGrammar">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">CompiledGrammar</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;This is the primary object to store compiled grammar.</span>
 
 <span class="sd">    A CompiledGrammar can be used to construct GrammarMatcher</span>
 <span class="sd">    to generate token masks efficiently.</span>
 
-<span class="sd">    Note</span>
-<span class="sd">    ----</span>
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
 <span class="sd">    Do not construct this class directly, instead</span>
 <span class="sd">    use :class:`GrammarCompiler` to construct the object.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -289,29 +278,14 @@ window.addEventListener("load", () => mermaid.run());
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">memory_size_bytes</span></div>
 
 
-<div class="viewcode-block" id="GrammarCompiler"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarCompiler</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
+<div class="viewcode-block" id="GrammarCompiler"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarCompiler</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The compiler for grammars. It is associated with a certain tokenizer info, and compiles</span>
 <span class="sd">    grammars into CompiledGrammar with the tokenizer info. It allows parallel compilation with</span>
 <span class="sd">    multiple threads, and has a cache to store the compilation result, avoiding compiling the</span>
 <span class="sd">    same grammar multiple times.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    tokenizer_info : TokenizerInfo</span>
-<span class="sd">        The tokenizer info.</span>
-
-<span class="sd">    max_threads : int, default: 8</span>
-<span class="sd">        The maximum number of threads used to compile the grammar.</span>
-
-<span class="sd">    cache_enabled : bool, default: True</span>
-<span class="sd">        Whether to enable the cache.</span>
-
-<span class="sd">    cache_limit_bytes : int, default: -1</span>
-<span class="sd">        The maximum memory usage for the cache in the specified unit.</span>
-<span class="sd">        Note that the actual memory usage may slightly exceed this value.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-<div class="viewcode-block" id="GrammarCompiler.__init__"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="GrammarCompiler.__init__"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">TokenizerInfo</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
@@ -319,6 +293,23 @@ window.addEventListener("load", () => mermaid.run());
         <span class="n">cache_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">cache_limit_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
     <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct the compiler.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        tokenizer_info : TokenizerInfo</span>
+<span class="sd">            The tokenizer info.</span>
+
+<span class="sd">        max_threads : int, default: 8</span>
+<span class="sd">            The maximum number of threads used to compile the grammar.</span>
+
+<span class="sd">        cache_enabled : bool, default: True</span>
+<span class="sd">            Whether to enable the cache.</span>
+
+<span class="sd">        cache_limit_bytes : int, default: -1</span>
+<span class="sd">            The maximum memory usage for the cache in the specified unit.</span>
+<span class="sd">            Note that the actual memory usage may slightly exceed this value.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">,</span> <span class="n">TokenizerInfo</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="s2">&quot;Please convert the tokenizer to TokenizerInfo before passing it &quot;</span>
@@ -331,7 +322,7 @@ window.addEventListener("load", () => mermaid.run());
             <span class="p">)</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="GrammarCompiler.compile_json_schema"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.compile_json_schema">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_json_schema</span><span class="p">(</span>
+<div class="viewcode-block" id="GrammarCompiler.compile_json_schema"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_json_schema">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_json_schema</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
         <span class="o">*</span><span class="p">,</span>
@@ -376,7 +367,7 @@ window.addEventListener("load", () => mermaid.run());
             <span class="p">)</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="GrammarCompiler.compile_builtin_json_grammar"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.compile_builtin_json_grammar">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_builtin_json_grammar</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarCompiler.compile_builtin_json_grammar"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_builtin_json_grammar">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_builtin_json_grammar</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get CompiledGrammar from the standard JSON.</span>
 
 <span class="sd">        Returns</span>
@@ -386,7 +377,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_builtin_json_grammar</span><span class="p">())</span></div>
 
-<div class="viewcode-block" id="GrammarCompiler.compile_regex"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.compile_regex">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_regex</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">regex</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarCompiler.compile_regex"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_regex">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_regex</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">regex</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get CompiledGrammar from the specified regex.</span>
 
 <span class="sd">        Parameters</span>
@@ -401,7 +392,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_regex</span><span class="p">(</span><span class="n">regex</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="GrammarCompiler.compile_structural_tag"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.compile_structural_tag">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_structural_tag</span><span class="p">(</span>
+<div class="viewcode-block" id="GrammarCompiler.compile_structural_tag"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_structural_tag">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_structural_tag</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Compile a grammar from structural tags. See Grammar.from_structural_tag() for more</span>
@@ -426,48 +417,50 @@ window.addEventListener("load", () => mermaid.run());
         <span class="p">)</span></div>
 
     <span class="nd">@overload</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">compile_grammar</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compile a grammar from EBNF string. The EBNF string should follow the format</span>
-<span class="sd">        in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compile_grammar</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="nd">@overload</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compile_grammar</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span> <span class="o">...</span>
+
+<div class="viewcode-block" id="GrammarCompiler.compile_grammar"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_grammar">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_grammar</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">grammar</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Grammar</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compile a grammar object.</span>
+
+<span class="sd">        Overloads:</span>
+
+<span class="sd">        1. ``compile_grammar(ebnf_string: str, *, root_rule_name: str = &quot;root&quot;) -&gt; CompiledGrammar``</span>
+<span class="sd">            - Compile a grammar from an EBNF string. The string should follow the format described</span>
+<span class="sd">              in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.</span>
+
+<span class="sd">        2. ``compile_grammar(grammar: Grammar) -&gt; CompiledGrammar``</span>
+<span class="sd">            - Compile a grammar from a Grammar object.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        ebnf_string : str</span>
 <span class="sd">            The grammar string in EBNF format.</span>
-
 <span class="sd">        root_rule_name : str, default: &quot;root&quot;</span>
 <span class="sd">            The name of the root rule in the grammar.</span>
+<span class="sd">        grammar : Union[str, Grammar]</span>
+<span class="sd">            The grammar string or Grammar object.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        compiled_grammar : CompiledGrammar</span>
 <span class="sd">            The compiled grammar.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="o">...</span>
-
-    <span class="nd">@overload</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">compile_grammar</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compile a grammar object.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        compiled_grammar : CompiledGrammar</span>
-<span class="sd">            The compiled grammar.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="o">...</span>
-
-<div class="viewcode-block" id="GrammarCompiler.compile_grammar"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.compile_grammar">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_grammar</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">grammar</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Grammar</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grammar</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
             <span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="n">grammar</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="o">=</span><span class="n">root_rule_name</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="GrammarCompiler.clear_cache"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.clear_cache">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">clear_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarCompiler.clear_cache"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.clear_cache">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">clear_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Clear all cached compiled grammars.&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">clear_cache</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="GrammarCompiler.get_cache_size_bytes"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarCompiler.html#xgrammar.GrammarCompiler.get_cache_size_bytes">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_cache_size_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarCompiler.get_cache_size_bytes"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.get_cache_size_bytes">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_cache_size_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;The approximate memory usage of the cache in bytes.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">get_cache_size_bytes</span><span class="p">()</span></div>
 

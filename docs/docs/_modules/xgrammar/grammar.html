@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
 
@@ -79,37 +80,16 @@ window.addEventListener("load", () => mermaid.run());
                    <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
                 </li>
                 <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
                    <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
                 </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
              </ul>
-               <div class="responsivetlcdropdown">
-                 <button type="button" class="btn-link">
-                   Other Resources
-                 </button>
-                 <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                 </ul>
-               </div>
           </div>
-            <div class="responsiveMenuIcon">
-              <button type="button" id="menuBtn" class="btn-menu"><img src="../../_static/img/menu-icon.svg" alt="Menu Icon"></button>
-            </div>
-
-            <div class="tlcDropdown">
-              <div class="dropdown">
-                <button type="button" class="btn-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                  Other Resources
-                </button>
-                <div class="dropdown-menu dropdown-menu-right">
-                  <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                  </ul>
-                </div>
-              </div>
           </div>
        </div>
     </div>
@@ -121,9 +101,12 @@ window.addEventListener("load", () => mermaid.run());
           
 
           
-            <a href="../../index.html" class="sidetitle" alt="Documentation Home"> XGrammar
+            <a href="../../index.html">
           
 
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
           
           </a>
 
@@ -161,20 +144,26 @@ window.addEventListener("load", () => mermaid.run());
 <li class="toctree-l1"><a class="reference internal" href="../../start/install.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">How To</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/portable_api.html">Portable API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../misc/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage Tool</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">xgrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a></li>
 </ul>
 
             
@@ -260,8 +249,8 @@ window.addEventListener("load", () => mermaid.run());
 <span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGRObject</span><span class="p">,</span> <span class="n">_core</span>
 
 
-<div class="viewcode-block" id="StructuralTagItem"><a class="viewcode-back" href="../../api/python/structural_tag_item.html#xgrammar.StructuralTagItem">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A structural tag item. See Grammar.from_structural_tag() for more details.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="StructuralTagItem"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTagItem">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A structural tag item. See :meth:`xgrammar.Grammar.from_structural_tag` for more details.&quot;&quot;&quot;</span>
 
     <span class="n">begin</span><span class="p">:</span> <span class="nb">str</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag.&quot;&quot;&quot;</span>
@@ -310,7 +299,7 @@ window.addEventListener("load", () => mermaid.run());
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The schema should be a string or a Pydantic model.&quot;</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="Grammar"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">Grammar</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
+<div class="viewcode-block" id="Grammar"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">Grammar</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;This class represents a grammar object in XGrammar, and can be used later in the</span>
 <span class="sd">    grammar-guided generation.</span>
 
@@ -322,7 +311,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">    When printed, the grammar will be converted to GBNF format.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<div class="viewcode-block" id="Grammar.__str__"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.__str__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Print the BNF grammar to a string, in EBNF format.</span>
 
 <span class="sd">        Returns</span>
@@ -330,9 +319,9 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        grammar_string : str</span>
 <span class="sd">            The BNF grammar string.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="Grammar.from_ebnf"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.from_ebnf">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="Grammar.from_ebnf"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.from_ebnf">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_ebnf</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct a grammar from EBNF string. The EBNF string should follow the format</span>
 <span class="sd">        in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.</span>
@@ -352,7 +341,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="Grammar.from_json_schema"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.from_json_schema">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="Grammar.from_json_schema"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.from_json_schema">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_json_schema</span><span class="p">(</span>
         <span class="n">schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
         <span class="o">*</span><span class="p">,</span>
@@ -423,7 +412,7 @@ window.addEventListener("load", () => mermaid.run());
             <span class="p">)</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="Grammar.from_regex"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.from_regex">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="Grammar.from_regex"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.from_regex">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_regex</span><span class="p">(</span><span class="n">regex_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">print_converted_ebnf</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar from a regular expression string.</span>
 
@@ -450,7 +439,7 @@ window.addEventListener("load", () => mermaid.run());
             <span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_regex</span><span class="p">(</span><span class="n">regex_string</span><span class="p">,</span> <span class="n">print_converted_ebnf</span><span class="p">)</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="Grammar.from_structural_tag"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.from_structural_tag">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="Grammar.from_structural_tag"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.from_structural_tag">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar from structural tags. The structural tag handles the dispatching</span>
 <span class="sd">        of different grammars based on the tags and triggers: it initially allows any output,</span>
@@ -497,6 +486,11 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        triggers : List[str]</span>
 <span class="sd">            The triggers.</span>
 
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        grammar : Grammar</span>
+<span class="sd">            The constructed grammar.</span>
+
 <span class="sd">        Examples</span>
 <span class="sd">        --------</span>
 <span class="sd">        &gt;&gt;&gt; class Schema1(BaseModel):</span>
@@ -515,7 +509,7 @@ window.addEventListener("load", () => mermaid.run());
         <span class="n">tags_tuple</span> <span class="o">=</span> <span class="p">[(</span><span class="n">tag</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">),</span> <span class="n">tag</span><span class="o">.</span><span class="n">end</span><span class="p">)</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">]</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">tags_tuple</span><span class="p">,</span> <span class="n">triggers</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="Grammar.builtin_json_grammar"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.builtin_json_grammar">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="Grammar.builtin_json_grammar"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.builtin_json_grammar">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">builtin_json_grammar</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the grammar of standard JSON. This is compatible with the official JSON grammar</span>
 <span class="sd">        specification in https://www.json.org/json-en.html.</span>
@@ -527,7 +521,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">builtin_json_grammar</span><span class="p">())</span></div>
 
-<div class="viewcode-block" id="Grammar.concat"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.concat">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="Grammar.concat"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.concat">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">concat</span><span class="p">(</span><span class="o">*</span><span class="n">grammars</span><span class="p">:</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar that matches the concatenation of the grammars in the list. That is</span>
 <span class="sd">        equivalent to using the `+` operator to concatenate the grammars in the list.</span>
@@ -545,7 +539,7 @@ window.addEventListener("load", () => mermaid.run());
         <span class="n">grammar_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">grammar</span> <span class="ow">in</span> <span class="n">grammars</span><span class="p">]</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">grammar_handles</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="Grammar.union"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.Grammar.html#xgrammar.Grammar.union">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="Grammar.union"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.union">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">union</span><span class="p">(</span><span class="o">*</span><span class="n">grammars</span><span class="p">:</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar that matches any of the grammars in the list. That is equivalent to</span>
 <span class="sd">        using the `|` operator to concatenate the grammars in the list.</span>

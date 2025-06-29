@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="_static/css/fix_text_selection.css" type="text/css" />
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="_static/css/tlcpack_theme.css" type="text/css" />
 
@@ -71,37 +72,16 @@
                    <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
                 </li>
                 <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
                    <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
                 </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
              </ul>
-               <div class="responsivetlcdropdown">
-                 <button type="button" class="btn-link">
-                   Other Resources
-                 </button>
-                 <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                 </ul>
-               </div>
           </div>
-            <div class="responsiveMenuIcon">
-              <button type="button" id="menuBtn" class="btn-menu"><img src="_static/img/menu-icon.svg" alt="Menu Icon"></button>
-            </div>
-
-            <div class="tlcDropdown">
-              <div class="dropdown">
-                <button type="button" class="btn-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                  Other Resources
-                </button>
-                <div class="dropdown-menu dropdown-menu-right">
-                  <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                  </ul>
-                </div>
-              </div>
           </div>
        </div>
     </div>
@@ -113,9 +93,12 @@
           
 
           
-            <a href="index.html" class="sidetitle" alt="Documentation Home"> XGrammar
+            <a href="index.html">
           
 
+          
+            
+            <img src="_static/img/logo.png" class="logo" alt="Logo"/>
           
           </a>
 
@@ -153,20 +136,26 @@
 <li class="toctree-l1"><a class="reference internal" href="start/install.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="start/quick_start.html">Quick Start</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">How To</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="how_to/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to/portable_api.html">Portable API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="misc/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer_guide/code_coverage.html">Code Coverage Tool</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="api/python/index.html">xgrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/python/index.html">XGrammar Python API</a></li>
 </ul>
 
             
@@ -251,29 +240,7 @@
   <section class="tex2jax_ignore mathjax_ignore" id="xgrammar-documentation">
 <h1>XGrammar Documentation<a class="headerlink" href="#xgrammar-documentation" title="Permalink to this heading">¶</a></h1>
 <p>The documentation was built upon <a class="reference external" href="https://www.sphinx-doc.org/en/master/">Sphinx</a>.</p>
-<section id="dependencies">
-<h2>Dependencies<a class="headerlink" href="#dependencies" title="Permalink to this heading">¶</a></h2>
-<p>Run the following command in this directory to install dependencies first:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip3<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
-</pre></div>
-</div>
-</section>
-<section id="build-the-documentation">
-<h2>Build the Documentation<a class="headerlink" href="#build-the-documentation" title="Permalink to this heading">¶</a></h2>
-<p>Then you can build the documentation by running:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>html
-</pre></div>
-</div>
-</section>
-<section id="view-the-documentation">
-<h2>View the Documentation<a class="headerlink" href="#view-the-documentation" title="Permalink to this heading">¶</a></h2>
-<p>Run the following command to start a simple HTTP server:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>_build/html
-python3<span class="w"> </span>-m<span class="w"> </span>http.server
-</pre></div>
-</div>
-<p>Then you can view the documentation in your browser at <code class="docutils literal notranslate"><span class="pre">http://localhost:8000</span></code> (the port can be customized by appending <code class="docutils literal notranslate"> <span class="pre">-p</span> <span class="pre">PORT_NUMBER</span></code> in the python command above). You may also need <code class="docutils literal notranslate"><span class="pre">--bind</span> <span class="pre">0.0.0.0</span></code> for machines like Mac.</p>
-</section>
+<p>See XGrammar docs for help to build the documentation.</p>
 </section>
 
 

@@ -4,45 +4,42 @@
 `GitHub <https://github.com/mlc-ai/xgrammar>`_
 
 
-
 XGrammar is open-source solution for flexible, portable, and fast structured generations.
 The mission of this project is to bring flexible zero-overhead structure generation everywhere.
-
-Quick Start
------------
-
-Check out :ref:`quick-start` for quick start examples of using XGrammar.
 
 
 .. toctree::
    :maxdepth: 1
    :caption: Get Started
-   :hidden:
 
    start/install
    start/quick_start
 
 .. toctree::
    :maxdepth: 1
-   :caption: How To
-   :hidden:
+   :caption: Tutorials
 
-   how_to/json_generation
-   how_to/ebnf_guided_generation
-   how_to/engine_integration
-   how_to/portable_api
-   .. tutorials/web_sdk              .. TODO
+   tutorials/constrained_decoding
+   tutorials/json_generation
+   tutorials/ebnf_guided_generation
+   tutorials/engine_integration
 
 .. toctree::
    :maxdepth: 1
-   :caption: Misc
-   :hidden:
+   :caption: XGrammar Features
 
-   misc/runtime_safeguards
+   xgrammar_features/runtime_safeguards
+   xgrammar_features/javascript_api
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Developer Guide
+
+   developer_guide/building_docs
+   developer_guide/code_coverage
 
 .. toctree::
    :maxdepth: 1
    :caption: API Reference
-   :hidden:
 
    api/python/index

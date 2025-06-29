@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
 
@@ -79,37 +80,16 @@ window.addEventListener("load", () => mermaid.run());
                    <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
                 </li>
                 <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
                    <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
                 </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
              </ul>
-               <div class="responsivetlcdropdown">
-                 <button type="button" class="btn-link">
-                   Other Resources
-                 </button>
-                 <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                 </ul>
-               </div>
           </div>
-            <div class="responsiveMenuIcon">
-              <button type="button" id="menuBtn" class="btn-menu"><img src="../../_static/img/menu-icon.svg" alt="Menu Icon"></button>
-            </div>
-
-            <div class="tlcDropdown">
-              <div class="dropdown">
-                <button type="button" class="btn-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                  Other Resources
-                </button>
-                <div class="dropdown-menu dropdown-menu-right">
-                  <ul>
-                     <li>
-                       <a href=https://blog.mlc.ai/>MLC Blog</a>
-                     </li>
-                  </ul>
-                </div>
-              </div>
           </div>
        </div>
     </div>
@@ -121,9 +101,12 @@ window.addEventListener("load", () => mermaid.run());
           
 
           
-            <a href="../../index.html" class="sidetitle" alt="Documentation Home"> XGrammar
+            <a href="../../index.html">
           
 
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
           
           </a>
 
@@ -161,20 +144,26 @@ window.addEventListener("load", () => mermaid.run());
 <li class="toctree-l1"><a class="reference internal" href="../../start/install.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">How To</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../how_to/portable_api.html">Portable API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Misc</span></p>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../misc/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage Tool</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">xgrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a></li>
 </ul>
 
             
@@ -403,7 +392,7 @@ window.addEventListener("load", () => mermaid.run());
         <span class="n">apply_token_bitmask_inplace_torch_compile</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="GrammarMatcher"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarMatcher</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
+<div class="viewcode-block" id="GrammarMatcher"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarMatcher</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Match the output of the LLM to the specified grammar, then generate the mask for the next</span>
 <span class="sd">    token. This is the core class in the grammar-guided generation.</span>
 
@@ -419,24 +408,9 @@ window.addEventListener("load", () => mermaid.run());
 
 <span class="sd">    Under the hood, it utilizes a pushdown automaton with backtracking to match the grammar,</span>
 <span class="sd">    with optimizations specific to LLM token mask generation.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    compiled_grammar : CompiledGrammar</span>
-<span class="sd">        The initialization context for the grammar matcher.</span>
-
-<span class="sd">    override_stop_tokens : Optional[Union[int, List[int]]], default: None</span>
-<span class="sd">        If not None, the stop tokens to override the ones in the grammar.</span>
-
-<span class="sd">    terminate_without_stop_token : bool, default: False</span>
-<span class="sd">        Whether to terminate the matcher without accepting a stop token.</span>
-
-<span class="sd">    max_rollback_tokens : int, default: 0</span>
-<span class="sd">        The maximum number of rollback tokens allowed. The rollback operation is useful for</span>
-<span class="sd">        jump-forward decoding and speculative decoding.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-<div class="viewcode-block" id="GrammarMatcher.__init__"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="GrammarMatcher.__init__"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">compiled_grammar</span><span class="p">:</span> <span class="n">CompiledGrammar</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
@@ -444,6 +418,23 @@ window.addEventListener("load", () => mermaid.run());
         <span class="n">terminate_without_stop_token</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">max_rollback_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct the grammar matcher.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The initialization context for the grammar matcher.</span>
+
+<span class="sd">        override_stop_tokens : Optional[Union[int, List[int]]], default: None</span>
+<span class="sd">            If not None, the stop tokens to override the ones in the grammar.</span>
+
+<span class="sd">        terminate_without_stop_token : bool, default: False</span>
+<span class="sd">            Whether to terminate the matcher without accepting a stop token.</span>
+
+<span class="sd">        max_rollback_tokens : int, default: 0</span>
+<span class="sd">            The maximum number of rollback tokens allowed. The rollback operation is useful for</span>
+<span class="sd">            jump-forward decoding and speculative decoding.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">compiled_grammar</span><span class="p">,</span> <span class="n">CompiledGrammar</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The grammar should be compiled before passing it to GrammarMatcher.&quot;</span><span class="p">)</span>
 
@@ -459,7 +450,7 @@ window.addEventListener("load", () => mermaid.run());
             <span class="p">)</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="GrammarMatcher.accept_token"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.accept_token">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">accept_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarMatcher.accept_token"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">accept_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept one token and update the state of the matcher.</span>
 
 <span class="sd">        In the following cases, the matcher will not accept the token and return False:</span>
@@ -494,7 +485,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">accept_token</span><span class="p">(</span><span class="n">token_id</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="GrammarMatcher.accept_string"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.accept_string">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">accept_string</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_str</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarMatcher.accept_string"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_string">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">accept_string</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_str</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept a string and update the state of the matcher. The whole string is considered</span>
 <span class="sd">        as one step in rollback. It is used to complement the functionality of accept_token, and</span>
 <span class="sd">        accept_token should always be used to accept tokens.</span>
@@ -520,7 +511,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">accept_string</span><span class="p">(</span><span class="n">input_str</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="GrammarMatcher.fill_next_token_bitmask"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">fill_next_token_bitmask</span><span class="p">(</span>
+<div class="viewcode-block" id="GrammarMatcher.fill_next_token_bitmask"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">fill_next_token_bitmask</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Fill the bitmask for the next token prediction. The input bitmask can be generated</span>
@@ -559,7 +550,7 @@ window.addEventListener("load", () => mermaid.run());
             <span class="n">bitmask</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">(),</span> <span class="nb">list</span><span class="p">(</span><span class="n">bitmask</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">index</span><span class="p">,</span> <span class="n">debug_print</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="GrammarMatcher.find_jump_forward_string"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.find_jump_forward_string">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">find_jump_forward_string</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarMatcher.find_jump_forward_string"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">find_jump_forward_string</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Find the jump-forward string for jump-forward decoding. This is the longest string that</span>
 <span class="sd">        certainly conforms with the current grammar from the current matcher state. This string</span>
 <span class="sd">        can become the output of the LLM without requiring LLM decoding.</span>
@@ -578,7 +569,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">find_jump_forward_string</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="GrammarMatcher.rollback"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.rollback">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarMatcher.rollback"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.rollback">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Rollback the matcher to a previous state by several tokens.</span>
 
 <span class="sd">        Parameters</span>
@@ -589,7 +580,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">rollback</span><span class="p">(</span><span class="n">num_tokens</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="GrammarMatcher.is_terminated"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.is_terminated">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_terminated</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarMatcher.is_terminated"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.is_terminated">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_terminated</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if the matcher has terminated. If terminate_without_stop_token is False, the</span>
 <span class="sd">        matcher will terminate if it has accepted the stop token. Otherwise, the matcher will</span>
 <span class="sd">        terminate after matching the whole grammar.</span>
@@ -601,7 +592,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">is_terminated</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="GrammarMatcher.reset"><a class="viewcode-back" href="../../api/python/_generated/xgrammar.GrammarMatcher.html#xgrammar.GrammarMatcher.reset">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="GrammarMatcher.reset"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.reset">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Reset the matcher to the initial state.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span></div>
 

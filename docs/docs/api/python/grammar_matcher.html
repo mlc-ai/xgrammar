@@ -1,0 +1,584 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>xgr.GrammarMatcher &mdash; XGrammar 0.1.19 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Structural Tag" href="structural_tag.html" />
+    <link rel="prev" title="xgr.CompiledGrammar" href="compiled_grammar.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html">
+          
+
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.19
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage Tool</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">XGrammar Python API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="grammar.html">xgr.Grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">xgr.GrammarMatcher</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.GrammarMatcher"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.__init__"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_token"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.accept_token()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_string"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.accept_string()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.fill_next_token_bitmask()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.find_jump_forward_string()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.rollback()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.is_terminated()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.reset"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.reset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.max_rollback_tokens"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.max_rollback_tokens</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.stop_token_ids"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.stop_token_ids</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+          <li><a href="index.html">XGrammar Python API</a> <span class="br-arrow">></span></li>
+        
+      <li>xgr.GrammarMatcher</li>
+    
+    
+      
+      
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/grammar_matcher.rst" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section id="xgr-grammarmatcher">
+<h1>xgr.GrammarMatcher<a class="headerlink" href="#xgr-grammarmatcher" title="Permalink to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">GrammarMatcher</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">compiled_grammar</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">override_stop_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">terminate_without_stop_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_rollback_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher" title="Permalink to this definition">¶</a></dt>
+<dd><p>Match the output of the LLM to the specified grammar, then generate the mask for the next
+token. This is the core class in the grammar-guided generation.</p>
+<p>This class maintains a stateful matcher that can accept tokens and strings, then match them
+to the specified grammar. The matcher can provide a bitmask for the next token prediction,
+so that the output of the LLM follows the specified grammar. Its state can be reset and
+rolled back by tokens. It also provides utilities for jump-forward decoding.</p>
+<p>After matching the whole grammar, the matcher will accept a stop token. The token mask at
+this time will only allow stop tokens. After accepting the stop token, the matcher will
+terminate, then it cannot accept any new token or generate a new token mask, meaning the
+generation is finished.</p>
+<p>Under the hood, it utilizes a pushdown automaton with backtracking to match the grammar,
+with optimizations specific to LLM token mask generation.</p>
+<p><strong>Methods:</strong></p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.__init__" title="xgrammar.GrammarMatcher.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(compiled_grammar, *[, ...])</p></td>
+<td><p>Construct the grammar matcher.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><code class="xref py py-obj docutils literal notranslate"><span class="pre">accept_token</span></code></a>(token_id, *[, debug_print])</p></td>
+<td><p>Accept one token and update the state of the matcher.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.accept_string" title="xgrammar.GrammarMatcher.accept_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">accept_string</span></code></a>(input_str, *[, debug_print])</p></td>
+<td><p>Accept a string and update the state of the matcher.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fill_next_token_bitmask</span></code></a>(bitmask[, index, ...])</p></td>
+<td><p>Fill the bitmask for the next token prediction.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_jump_forward_string</span></code></a>()</p></td>
+<td><p>Find the jump-forward string for jump-forward decoding.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback" title="xgrammar.GrammarMatcher.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rollback</span></code></a>([num_tokens])</p></td>
+<td><p>Rollback the matcher to a previous state by several tokens.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_terminated</span></code></a>()</p></td>
+<td><p>Check if the matcher has terminated.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.reset" title="xgrammar.GrammarMatcher.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
+<td><p>Reset the matcher to the initial state.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Attributes:</strong></p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.max_rollback_tokens" title="xgrammar.GrammarMatcher.max_rollback_tokens"><code class="xref py py-obj docutils literal notranslate"><span class="pre">max_rollback_tokens</span></code></a></p></td>
+<td><p>Get the maximum number of rollback tokens allowed.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.stop_token_ids" title="xgrammar.GrammarMatcher.stop_token_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stop_token_ids</span></code></a></p></td>
+<td><p>The ids of the stop tokens used in the matcher.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">compiled_grammar</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">override_stop_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">terminate_without_stop_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_rollback_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Construct the grammar matcher.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>compiled_grammar</strong> (<a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><em>CompiledGrammar</em></a>) – The initialization context for the grammar matcher.</p></li>
+<li><p><strong>override_stop_tokens</strong> (<em>Optional</em><em>[</em><em>Union</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>, </em><em>List</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>]</em><em>]</em><em>]</em><em>, </em><em>default: None</em>) – If not None, the stop tokens to override the ones in the grammar.</p></li>
+<li><p><strong>terminate_without_stop_token</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: False</em>) – Whether to terminate the matcher without accepting a stop token.</p></li>
+<li><p><strong>max_rollback_tokens</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>, </em><em>default: 0</em>) – The maximum number of rollback tokens allowed. The rollback operation is useful for
+jump-forward decoding and speculative decoding.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.accept_token">
+<span class="sig-name descname"><span class="pre">accept_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.accept_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.accept_token" title="Permalink to this definition">¶</a></dt>
+<dd><p>Accept one token and update the state of the matcher.</p>
+<p>In the following cases, the matcher will not accept the token and return False:</p>
+<ol class="arabic simple">
+<li><p>The token does not match the grammar.</p></li>
+<li><p>The matcher has terminated after accepting the stop token, but is trying to accept a
+new token.</p></li>
+<li><p>The token id is out of range.</p></li>
+<li><p>The token is a special token.</p></li>
+</ol>
+<p>The user should capture the return value and handle the cases where the token is not
+accepted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>token_id</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a>) – The id of the token to accept.</p></li>
+<li><p><strong>debug_print</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: False</em>) – Whether to print information about the internal state of the matcher. Helpful
+for debugging.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>accepted</strong> – Whether the token is accepted.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)">bool</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><strong>RuntimeError</strong></a> – If the recursion depth is exceeded.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.accept_string">
+<span class="sig-name descname"><span class="pre">accept_string</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_str</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.accept_string"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.accept_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Accept a string and update the state of the matcher. The whole string is considered
+as one step in rollback. It is used to complement the functionality of accept_token, and
+accept_token should always be used to accept tokens.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_str</strong> (<em>Union</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><em>bytes</em></a><em>]</em>) – The string to be accepted.</p></li>
+<li><p><strong>debug_print</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: False</em>) – Whether to print information about the internal state of the matcher. Helpful for
+debugging.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>accepted</strong> – Whether the string is accepted.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)">bool</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><strong>RuntimeError</strong></a> – If the recursion depth is exceeded.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.fill_next_token_bitmask">
+<span class="sig-name descname"><span class="pre">fill_next_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.7)"><span class="pre">torch.Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_print</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.fill_next_token_bitmask"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fill the bitmask for the next token prediction. The input bitmask can be generated
+by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the
+next token bitmask.</p>
+<p>This method does not change the matcher state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bitmask</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.7)"><em>torch.Tensor</em></a>) – The bitmask for the next token prediction.</p></li>
+<li><p><strong>index</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>, </em><em>default: 0</em>) – The batch id of the bitmask.</p></li>
+<li><p><strong>debug_print</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: False</em>) – Whether to print information about generated bitmask. Helpful for debugging.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>need_apply</strong> – Whether the bitmask need to be applied (not all-true). An optimization: if False,
+this means the bitmask is already all-true, so no need to apply it.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)">bool</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><strong>RuntimeError</strong></a> – If the recursion depth is exceeded.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.find_jump_forward_string">
+<span class="sig-name descname"><span class="pre">find_jump_forward_string</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.find_jump_forward_string"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.find_jump_forward_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the jump-forward string for jump-forward decoding. This is the longest string that
+certainly conforms with the current grammar from the current matcher state. This string
+can become the output of the LLM without requiring LLM decoding.</p>
+<p>This method does not change the matcher state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>jump_forward_string</strong> – The jump-forward string.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)">str</a></p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><strong>RuntimeError</strong></a> – If the recursion depth is exceeded.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.rollback">
+<span class="sig-name descname"><span class="pre">rollback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.rollback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.rollback" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rollback the matcher to a previous state by several tokens.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>num_tokens</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>, </em><em>default: 1</em>) – The number of tokens to rollback. It cannot exceed the current number of steps, nor can
+it exceed the specified maximum number of rollback tokens.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.is_terminated">
+<span class="sig-name descname"><span class="pre">is_terminated</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.is_terminated"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.is_terminated" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the matcher has terminated. If terminate_without_stop_token is False, the
+matcher will terminate if it has accepted the stop token. Otherwise, the matcher will
+terminate after matching the whole grammar.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>terminated</strong> – Whether the matcher has terminated.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reset the matcher to the initial state.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.max_rollback_tokens">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">max_rollback_tokens</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></em><a class="headerlink" href="#xgrammar.GrammarMatcher.max_rollback_tokens" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the maximum number of rollback tokens allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>max_rollback_tokens</strong> – The maximum number of rollback tokens.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.stop_token_ids">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">stop_token_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.GrammarMatcher.stop_token_ids" title="Permalink to this definition">¶</a></dt>
+<dd><p>The ids of the stop tokens used in the matcher. If specified, the provided stop tokens
+will be used. Otherwise, the stop tokens will be detected from the vocabulary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>stop_token_ids</strong> – The ids of the stop tokens.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>List[<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)">int</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="structural_tag.html" class="btn btn-neutral float-right" title="Structural Tag" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="compiled_grammar.html" class="btn btn-neutral float-left" title="xgr.CompiledGrammar" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+
+<div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>

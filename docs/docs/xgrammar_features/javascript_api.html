@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Installation &mdash; XGrammar 0.1.19 documentation</title>
+  <title>JavaScript API &mdash; XGrammar 0.1.19 documentation</title>
   
 
   
@@ -51,8 +51,8 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Quick Start" href="quick_start.html" />
-    <link rel="prev" title="👋 Welcome to XGrammar" href="../index.html" /> 
+    <link rel="next" title="Building Docs" href="../developer_guide/building_docs.html" />
+    <link rel="prev" title="Runtime Safeguards" href="runtime_safeguards.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -134,20 +134,9 @@
             
             
               <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#method-1-prebuilt-package">Method 1: Prebuilt Package</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#method-2-build-xgrammar-from-source">Method 2: Build XGrammar from Source</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#optional-run-python-tests">Optional: Run Python Tests</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#method-3-build-xgrammar-c-library-only">Method 3: Build XGrammar C++ Library Only</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#optional-run-c-tests">Optional: Run C++ Tests</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick Start</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
@@ -157,9 +146,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">JavaScript API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
@@ -225,7 +214,7 @@
     
       <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>Installation</li>
+      <li>JavaScript API</li>
     
     
       
@@ -236,7 +225,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/start/install.md" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/xgrammar_features/javascript_api.md" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -250,81 +239,17 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="installation">
-<h1>Installation<a class="headerlink" href="#installation" title="Permalink to this heading">¶</a></h1>
-<p>XGrammar Python Package can be installed directly from a prebuilt package or built from source.</p>
-<section id="method-1-prebuilt-package">
-<h2>Method 1: Prebuilt Package<a class="headerlink" href="#method-1-prebuilt-package" title="Permalink to this heading">¶</a></h2>
-<p>XGrammar supports various platforms:</p>
-<ul class="simple">
-<li><p>Operating Systems: Linux, macOS, and Windows</p></li>
-<li><p>Hardware: CPU, NVIDIA GPUs, AMD GPUs, Apple Silicon, TPU, etc.</p></li>
-<li><p>Python: 3.9 and later</p></li>
-</ul>
-<p>We provide Python wheels for XGrammar via pip.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>xgrammar
+  <section class="tex2jax_ignore mathjax_ignore" id="javascript-api">
+<h1>JavaScript API<a class="headerlink" href="#javascript-api" title="Permalink to this heading">¶</a></h1>
+<p>Beside the Python and C++ API, XGrammar also provides JavaScript/TypeScript API.</p>
+<p>The JS SDK uses <a class="reference external" href="https://emscripten.org/">emscripten</a> to compile the C++
+code into WebAssembly. It is designed to be used for LLMs that run in the browser, such as
+<a class="reference external" href="https://github.com/mlc-ai/web-llm">WebLLM</a>.</p>
+<p>To use this SDK, run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>npm<span class="w"> </span>install<span class="w"> </span>@mlc-ai/web-xgrammar
 </pre></div>
 </div>
-<p>We also provide conda packages for XGrammar:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>xgrammar
-</pre></div>
-</div>
-<p>Use the following command to verify installation:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import xgrammar; print(xgrammar)&quot;</span>
-<span class="c1"># Prints: &lt;module &#39;xgrammar&#39; from &#39;/path-to-env/lib/python3.11/site-packages/xgrammar/__init__.py&#39;&gt;</span>
-</pre></div>
-</div>
-</section>
-<section id="method-2-build-xgrammar-from-source">
-<h2>Method 2: Build XGrammar from Source<a class="headerlink" href="#method-2-build-xgrammar-from-source" title="Permalink to this heading">¶</a></h2>
-<p>This option is useful when you want to make modification or obtain a specific version of XGrammar.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/mlc-ai/xgrammar.git<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>xgrammar
-pre-commit<span class="w"> </span>install
-<span class="c1"># Copy cmake config. You can update the config if needed.</span>
-cp<span class="w"> </span>cmake/config.cmake<span class="w"> </span>.
-python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-build-isolation<span class="w"> </span>-e<span class="w"> </span>.
-</pre></div>
-</div>
-<p>XGrammar is a library written in C++ and Python. The editable install will automatically rebuild
-the package when XGrammar is imported in Python.</p>
-<section id="optional-run-python-tests">
-<h3>Optional: Run Python Tests<a class="headerlink" href="#optional-run-python-tests" title="Permalink to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install the test dependencies</span>
-python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;.[test]&quot;</span>
-
-<span class="c1"># If you have a HuggingFace token, you can run all tests including the ones that have gated models.</span>
-huggingface-cli<span class="w"> </span>login<span class="w"> </span>--token<span class="w"> </span>YOUR_HF_TOKEN
-python3<span class="w"> </span>-m<span class="w"> </span>pytest
-
-<span class="c1"># If you do not have a HuggingFace token, you can run a subset of tests that do not require gated models.</span>
-python3<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;not hf_token_required&quot;</span>
-</pre></div>
-</div>
-</section>
-</section>
-<section id="method-3-build-xgrammar-c-library-only">
-<h2>Method 3: Build XGrammar C++ Library Only<a class="headerlink" href="#method-3-build-xgrammar-c-library-only" title="Permalink to this heading">¶</a></h2>
-<p>XGrammar can also be build as a C++ library. This is useful for using XGrammar in C++ or Rust projects.</p>
-<p>XGrammar uses CMake and Ninja to build the C++ library.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/mlc-ai/xgrammar.git<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>xgrammar
-<span class="c1"># Copy cmake config. You can update the config if needed.</span>
-cp<span class="w"> </span>cmake/config.cmake<span class="w"> </span>.
-
-mkdir<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>build
-cmake<span class="w"> </span>-G<span class="w"> </span>Ninja<span class="w"> </span>..
-ninja
-</pre></div>
-</div>
-<section id="optional-run-c-tests">
-<h3>Optional: Run C++ Tests<a class="headerlink" href="#optional-run-c-tests" title="Permalink to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/run_ctest.sh
-
-<span class="c1"># If you want to filter certain tests, you can run:</span>
-bash<span class="w"> </span>scripts/run_ctest.sh<span class="w"> </span>test_name<span class="w"> </span><span class="c1"># runs all tests whose name contains &quot;test_name&quot;</span>
-</pre></div>
-</div>
-</section>
-</section>
+<p>For more information, see <a class="reference external" href="https://github.com/mlc-ai/xgrammar/tree/main/web">the code</a>.</p>
 </section>
 
 
@@ -337,10 +262,10 @@ bash<span class="w"> </span>scripts/run_ctest.sh<span class="w"> </span>test_nam
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="quick_start.html" class="btn btn-neutral float-right" title="Quick Start" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="../developer_guide/building_docs.html" class="btn btn-neutral float-right" title="Building Docs" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../index.html" class="btn btn-neutral float-left" title="👋 Welcome to XGrammar" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="runtime_safeguards.html" class="btn btn-neutral float-left" title="Runtime Safeguards" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 
