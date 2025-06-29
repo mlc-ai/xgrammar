@@ -10,7 +10,6 @@ import tlcpack_sphinx_addon
 os.environ["XGRAMMAR_BUILD_DOCS"] = "1"
 sys.path.insert(0, os.path.abspath("../python"))
 sys.path.insert(0, os.path.abspath("../"))
-autodoc_mock_imports = ["torch"]
 
 version_file = "../python/xgrammar/version.py"
 with open(version_file, "r") as f:
@@ -27,22 +26,21 @@ release = __version__
 # -- Extensions and extension configurations --------------------------------
 
 extensions = [
-    "autodocsumm",
     "myst_parser",
-    "nbsphinx",
+    # "nbsphinx",
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosectionlabel",
-    "sphinx.ext.autosummary",
-    "sphinx.ext.intersphinx",
-    "sphinx.ext.mathjax",
-    "sphinx.ext.napoleon",
-    "sphinx.ext.viewcode",
-    "sphinx_copybutton",
-    "sphinx_reredirects",
-    "sphinx_tabs.tabs",
-    "sphinx_toolbox.collapse",
-    "sphinxcontrib.httpdomain",
-    "sphinxcontrib.mermaid",
+    # "sphinx.ext.autosectionlabel",
+    # "sphinx.ext.autosummary",
+    # "sphinx.ext.intersphinx",
+    # "sphinx.ext.mathjax",
+    # "sphinx.ext.napoleon",
+    # "sphinx.ext.viewcode",
+    # "sphinx_copybutton",
+    # "sphinx_reredirects",
+    # "sphinx_tabs.tabs",
+    # "sphinx_toolbox.collapse",
+    # "sphinxcontrib.httpdomain",
+    # "sphinxcontrib.mermaid",
 ]
 
 nbsphinx_allow_errors = True
@@ -73,11 +71,13 @@ intersphinx_mapping = {
     "torch": ("https://pytorch.org/docs/stable", None),
 }
 
+autodoc_mock_imports = ["torch"]
 autodoc_default_options = {
     "members": True,
-    "inherited-members": False,
     "undoc-members": True,
-    "show-inheritance": True,
+    "show-inheritance": False,
+    "inherited-members": False,
+    "no-show-inheritance": True,
 }
 
 # -- Other Options --------------------------------------------------------

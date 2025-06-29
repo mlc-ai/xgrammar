@@ -1,4 +1,4 @@
-xgrammar.StructuralTagItem
+Structural Tag
 ==========================
 
 .. currentmodule:: xgrammar
