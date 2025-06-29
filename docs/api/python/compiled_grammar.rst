@@ -4,7 +4,6 @@
 .. currentmodule:: xgrammar
 
 .. autoclass:: CompiledGrammar
-
    :no-show-inheritance:
 
    .. rubric:: Attributes

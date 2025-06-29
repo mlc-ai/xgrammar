@@ -27,20 +27,21 @@ release = __version__
 
 extensions = [
     "myst_parser",
-    # "nbsphinx",
+    "nbsphinx",
+    "autodocsumm",
     "sphinx.ext.autodoc",
-    # "sphinx.ext.autosectionlabel",
-    # "sphinx.ext.autosummary",
-    # "sphinx.ext.intersphinx",
-    # "sphinx.ext.mathjax",
-    # "sphinx.ext.napoleon",
-    # "sphinx.ext.viewcode",
-    # "sphinx_copybutton",
-    # "sphinx_reredirects",
-    # "sphinx_tabs.tabs",
-    # "sphinx_toolbox.collapse",
-    # "sphinxcontrib.httpdomain",
-    # "sphinxcontrib.mermaid",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
+    "sphinx_copybutton",
+    "sphinx_reredirects",
+    "sphinx_tabs.tabs",
+    "sphinx_toolbox.collapse",
+    "sphinxcontrib.httpdomain",
+    "sphinxcontrib.mermaid",
 ]
 
 nbsphinx_allow_errors = True
@@ -75,9 +76,9 @@ autodoc_mock_imports = ["torch"]
 autodoc_default_options = {
     "members": True,
     "undoc-members": True,
-    "show-inheritance": False,
+    "show-inheritance": True,
     "inherited-members": False,
-    "no-show-inheritance": True,
+    "member-order": "bysource",
 }
 
 # -- Other Options --------------------------------------------------------
@@ -143,5 +144,5 @@ html_context = {
 }
 
 # add additional overrides
-templates_path += [tlcpack_sphinx_addon.get_templates_path()]
-html_static_path += [tlcpack_sphinx_addon.get_static_path()]
+# templates_path += [tlcpack_sphinx_addon.get_templates_path()]
+# html_static_path += [tlcpack_sphinx_addon.get_static_path()]

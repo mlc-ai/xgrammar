@@ -4,8 +4,7 @@
 .. currentmodule:: xgrammar
 
 .. autoclass:: GrammarCompiler
-   :show-inheritance: false
-
+   :no-show-inheritance:
 
    .. automethod:: __init__
 
@@ -22,10 +21,6 @@
       ~GrammarCompiler.compile_regex
       ~GrammarCompiler.compile_structural_tag
       ~GrammarCompiler.get_cache_size_bytes
-
-
-
-
 
    .. rubric:: Attributes
 
