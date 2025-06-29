@@ -106,38 +106,39 @@ import sphinx_rtd_theme
 html_theme = "sphinx_rtd_theme"
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
-html_static_path = []
+html_static_path = ["_static"]
+
+# Add custom CSS files to fix text selection issues
+html_css_files = ["css/fix_text_selection.css"]
 
 footer_copyright = "© 2024 XGrammar"
 footer_note = " "
 
-# html_logo = "_static/img/mlc-logo-with-text-landscape.svg"
-
-html_theme_options = {"logo_only": False}
+# html_logo = "_static/img/logo.png"
+# html_theme_options = {"logo_only": True}
 
 header_links = [
     ("Home", "https://xgrammar.mlc.ai/"),
     ("Github", "https://github.com/mlc-ai/xgrammar"),
+    ("Blog", "https://blog.mlc.ai/"),
 ]
-
-header_dropdown = {"name": "Other Resources", "items": [("MLC Blog", "https://blog.mlc.ai/")]}
 
 html_context = {
     "footer_copyright": footer_copyright,
     "footer_note": footer_note,
     "header_links": header_links,
-    "header_dropdown": header_dropdown,
     "display_github": True,
     "github_user": "mlc-ai",
     "github_repo": "xgrammar",
     "github_version": "main/docs/",
     "theme_vcs_pageview_mode": "edit",
-    # "header_logo": "/path/to/logo",
+    # Set the logo in left sidebar
+    "logo": "img/logo.png",
+    "theme_logo_only": True,
+    # "header_logo": "_static/img/logo.png",
     # "header_logo_link": "",
     # "version_selecter": "",
 }
-
-import xgrammar
 
 # add additional overrides
 templates_path += [tlcpack_sphinx_addon.get_templates_path()]

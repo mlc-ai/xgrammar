@@ -4,6 +4,6 @@
 
 set -euxo pipefail
 
-scripts/build_site.sh
+scripts/support/build_site.sh
 
 cd site && jekyll serve  --skip-initial-build --host localhost --baseurl / --port 8888

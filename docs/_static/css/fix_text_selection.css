@@ -1,0 +1,4 @@
+/* Fix any overlay issues in tlcpack theme that might prevent text selection */
+.wy-grid-for-nav {
+    position: relative !important;
+}
