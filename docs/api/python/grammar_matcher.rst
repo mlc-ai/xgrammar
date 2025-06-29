@@ -4,7 +4,6 @@
 .. currentmodule:: xgrammar
 
 .. autoclass:: GrammarMatcher
-
    :no-show-inheritance:
-   :members:
-   :undoc-members:
+   :special-members: __init__
+   :autosummary:

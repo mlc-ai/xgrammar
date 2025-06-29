@@ -11,6 +11,6 @@ XGrammar Python API
    grammar_compiler
    compiled_grammar
    grammar_matcher
-   structural_tag_item
+   structural_tag
    bitmask_ops
-   recursion_depth
+   configuration

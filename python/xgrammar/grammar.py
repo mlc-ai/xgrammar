@@ -9,7 +9,7 @@ from .base import XGRObject, _core
 
 
 class StructuralTagItem(BaseModel):
-    """A structural tag item. See Grammar.from_structural_tag() for more details."""
+    """A structural tag item. See :meth:`xgrammar.Grammar.from_structural_tag` for more details."""
 
     begin: str
     """The begin tag."""
@@ -244,6 +244,11 @@ class Grammar(XGRObject):
 
         triggers : List[str]
             The triggers.
+
+        Returns
+        -------
+        grammar : Grammar
+            The constructed grammar.
 
         Examples
         --------

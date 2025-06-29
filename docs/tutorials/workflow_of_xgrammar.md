@@ -9,15 +9,11 @@ import xgrammar as xgr
 
 ## Grammar
 
-
-Grammar describes the structure of the LLM output. It can be:
+[`xgr.Grammar`](xgrammar.Grammar) describes the structure of the LLM output. It can be:
 * A JSON schema or free-form JSON
 * A regex
 * A customized context-free grammar in the extended BNF format
 * etc.
-
-[`xgr.Grammar`](xgrammar.Grammar)
-
 
 
 To construct a grammar, use
@@ -29,12 +25,22 @@ grammar: xgr.Grammar = xgr.Grammar.from_regex(regex_string)
 grammar: xgr.Grammar = xgr.Grammar.from_ebnf(ebnf_string)
 ```
 
-
 ## Tokenizer Info
 
+[`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) contains the tokenizer information of the model.
+It is necessary for XGrammar to generate the token mask.
 
+`xgr.TokenizerInfo` can be constructed from a HuggingFace tokenizer, or from a list of raw tokens.
+For HuggingFace tokenizers, XGrammar supports [HuggingFace's fast tokenizer](https://github.com/huggingface/tokenizers),
+[tiktoken](https://github.com/openai/tiktoken), and [SentencePiece](https://github.com/google/sentencepiece)
+tokenizers as the backend.
 
+```python
+tokenizer = AutoTokenizer.from_pretrained(...)
+tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)
+```
 
+## Compile Grammar
 
 ## Single LLM Engine
 
