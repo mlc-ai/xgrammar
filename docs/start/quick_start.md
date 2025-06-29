@@ -64,5 +64,5 @@ print(tokenizer.decode(generated_ids, skip_special_tokens=True))
 
 ## What to Do Next
 
-- Check out [JSON Generation Guide](../how_to/ebnf_guided_generation.md) and other How-To guides for the detailed usage guide of XGrammar.
+- Check out [JSON Generation Guide](../tutorials/ebnf_guided_generation.md) and other How-To guides for the detailed usage guide of XGrammar.
 - Report any problem or ask any question: open new issues in our [GitHub repo](https://github.com/mlc-ai/xgrammar/issues).

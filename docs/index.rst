@@ -20,18 +20,16 @@ The mission of this project is to bring flexible zero-overhead structure generat
    :caption: Tutorials
 
    tutorials/constrained_decoding
-   tutorials/workflow_of_xgrammar
    tutorials/json_generation
    tutorials/ebnf_guided_generation
    tutorials/engine_integration
-   tutorials/portable_api
-   .. tutorials/web_sdk              .. TODO
 
 .. toctree::
    :maxdepth: 1
-   :caption: Misc
+   :caption: XGrammar Features
 
-   misc/runtime_safeguards
+   xgrammar_features/runtime_safeguards
+   xgrammar_features/javascript_api
 
 .. toctree::
    :maxdepth: 1
