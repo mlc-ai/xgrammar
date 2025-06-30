@@ -496,15 +496,15 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        Examples</span>
 <span class="sd">        --------</span>
 <span class="sd">        &gt;&gt;&gt; class Schema1(BaseModel):</span>
-<span class="sd">        &gt;&gt;&gt;     arg1: str</span>
-<span class="sd">        &gt;&gt;&gt;     arg2: int</span>
+<span class="sd">        ...     arg1: str</span>
+<span class="sd">        ...     arg2: int</span>
 <span class="sd">        &gt;&gt;&gt; class Schema2(BaseModel):</span>
-<span class="sd">        &gt;&gt;&gt;     arg3: float</span>
-<span class="sd">        &gt;&gt;&gt;     arg4: List[str]</span>
+<span class="sd">        ...     arg3: float</span>
+<span class="sd">        ...     arg4: List[str]</span>
 <span class="sd">        &gt;&gt;&gt; tags = [</span>
-<span class="sd">        &gt;&gt;&gt;     StructuralTagItem(begin=&quot;&lt;function=f&gt;&quot;, schema=Schema1, end=&quot;&lt;/function&gt;&quot;),</span>
-<span class="sd">        &gt;&gt;&gt;     StructuralTagItem(begin=&quot;&lt;function=g&gt;&quot;, schema=Schema2, end=&quot;&lt;/function&gt;&quot;),</span>
-<span class="sd">        &gt;&gt;&gt; ]</span>
+<span class="sd">        ...     StructuralTagItem(begin=&quot;&lt;function=f&gt;&quot;, schema=Schema1, end=&quot;&lt;/function&gt;&quot;),</span>
+<span class="sd">        ...     StructuralTagItem(begin=&quot;&lt;function=g&gt;&quot;, schema=Schema2, end=&quot;&lt;/function&gt;&quot;),</span>
+<span class="sd">        ... ]</span>
 <span class="sd">        &gt;&gt;&gt; triggers = [&quot;&lt;function=&quot;]</span>
 <span class="sd">        &gt;&gt;&gt; grammar = Grammar.from_structural_tag(tags, triggers)</span>
 <span class="sd">        &quot;&quot;&quot;</span>

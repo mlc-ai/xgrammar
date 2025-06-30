@@ -252,9 +252,10 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the maximum allowed recursion depth. The depth is shared per process.</span>
 
 <span class="sd">    The maximum recursion depth is determined in the following order:</span>
-<span class="sd">    1. Manually set via set_max_recursion_depth()</span>
-<span class="sd">    2. XGRAMMAR_MAX_RECURSION_DEPTH environment variable (if set and is a valid integer &lt;= 1000000)</span>
-<span class="sd">    3. Default value of 10000</span>
+
+<span class="sd">    1. Manually set via :py:func:`set_max_recursion_depth`</span>
+<span class="sd">    2. ``XGRAMMAR_MAX_RECURSION_DEPTH`` environment variable (if set and is a valid integer &lt;= 1,000,000)</span>
+<span class="sd">    3. Default value of 10,000</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -280,12 +281,12 @@ window.addEventListener("load", () => mermaid.run());
 <span class="k">def</span><span class="w"> </span><span class="nf">max_recursion_depth</span><span class="p">(</span><span class="n">temp_depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A context manager for temporarily setting recursion depth.</span>
 
-<span class="sd">    Example</span>
-<span class="sd">    -------</span>
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
 <span class="sd">    &gt;&gt;&gt; with recursion_depth(1000):</span>
 <span class="sd">    ...     # recursion depth is 1000 here</span>
 <span class="sd">    ...     pass</span>
-<span class="sd">    ... # recursion depth is restored to original value</span>
+<span class="sd">    &gt;&gt;&gt; # recursion depth is restored to original value</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">prev_depth</span> <span class="o">=</span> <span class="n">get_max_recursion_depth</span><span class="p">()</span>
     <span class="n">set_max_recursion_depth</span><span class="p">(</span><span class="n">temp_depth</span><span class="p">)</span>

@@ -269,10 +269,12 @@
 <dt class="sig sig-object py" id="xgrammar.get_max_recursion_depth">
 <span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">get_max_recursion_depth</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/config.html#get_max_recursion_depth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.get_max_recursion_depth" title="Permalink to this definition">¶</a></dt>
 <dd><p>Get the maximum allowed recursion depth. The depth is shared per process.</p>
-<p>The maximum recursion depth is determined in the following order:
-1. Manually set via set_max_recursion_depth()
-2. XGRAMMAR_MAX_RECURSION_DEPTH environment variable (if set and is a valid integer &lt;= 1000000)
-3. Default value of 10000</p>
+<p>The maximum recursion depth is determined in the following order:</p>
+<ol class="arabic simple">
+<li><p>Manually set via <a class="reference internal" href="#xgrammar.set_max_recursion_depth" title="xgrammar.set_max_recursion_depth"><code class="xref py py-func docutils literal notranslate"><span class="pre">set_max_recursion_depth()</span></code></a></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">XGRAMMAR_MAX_RECURSION_DEPTH</span></code> environment variable (if set and is a valid integer &lt;= 1,000,000)</p></li>
+<li><p>Default value of 10,000</p></li>
+</ol>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>max_recursion_depth</strong> – The maximum allowed recursion depth.</p>
@@ -299,11 +301,11 @@ thread-safe.</p>
 <dt class="sig sig-object py" id="xgrammar.max_recursion_depth">
 <span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">max_recursion_depth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">temp_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/config.html#max_recursion_depth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.max_recursion_depth" title="Permalink to this definition">¶</a></dt>
 <dd><p>A context manager for temporarily setting recursion depth.</p>
-<p class="rubric">Example</p>
+<p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">recursion_depth</span><span class="p">(</span><span class="mi">1000</span><span class="p">):</span>
 <span class="gp">... </span>    <span class="c1"># recursion depth is 1000 here</span>
 <span class="gp">... </span>    <span class="k">pass</span>
-<span class="gp">... </span><span class="c1"># recursion depth is restored to original value</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># recursion depth is restored to original value</span>
 </pre></div>
 </div>
 </dd></dl>

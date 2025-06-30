@@ -53,7 +53,7 @@ To accelerate mask generation, XGrammar performs preprocessing on the grammar us
 * Simplify the grammar and build automata
 * Compute an adaptive token mask cache. It will be used at runtime to generate the real mask
 
-[`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) processes the grammar and produces a [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object. Each [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) is bound to a specific [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. When given a grammar, it uses this tokenizer info to compile it. You can pass in a Grammar object directly, or provide a raw EBNF string, JSON Schema, or regex pattern):
+[`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) processes the grammar and produces a [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object. Each [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) is bound to a specific [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. When given a grammar, it uses this tokenizer info to compile it. You can pass in a Grammar object directly, or provide a raw EBNF string, JSON Schema, or regex pattern:
 
 ```python
 grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
@@ -71,7 +71,7 @@ compiled_grammar = grammar_compiler.compile_grammar(ebnf_string)
 
 ## Compiled Grammar
 
-A [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object is associated with a [`xgr.Grammar`](xgrammar.Grammar) object and a [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. It contains the compiled grammar and the token mask cache. Use these methods to access the grammar and tokenizer info:
+A [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object is associated with an [`xgr.Grammar`](xgrammar.Grammar) object and an [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. It contains the compiled grammar and the token mask cache. Use these methods to access the grammar and tokenizer info:
 
 ```python
 compiled_grammar.grammar
