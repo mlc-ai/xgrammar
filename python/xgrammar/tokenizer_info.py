@@ -24,30 +24,34 @@ logger = logging.getLogger(__name__)
 
 class VocabType(Enum):
     """The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of
-    vocabularies:
-
-    RAW
-        The vocabulary is in the raw format. The tokens in the vocabulary are kept in their
-        original form without any processing. This kind of tokenizer includes the tiktoken
-        tokenizer, e.g. microsoft/Phi-3-small-8k-instruct, Qwen/Qwen-7B-Chat, etc.
-
-    BYTE_FALLBACK
-        The vocabulary used in the byte fallback BPE tokenizer. The tokens are encoded through
-        the byte-fallback conversion. E.g. "\u001b" -> "<0x1B>", " apple" -> "▁apple". This kind of
-        tokenizer includes meta-llama/Llama-2-7b-chat, microsoft/Phi-3.5-mini-instruct, etc.
-
-    BYTE_LEVEL
-        The vocabulary used in the byte level BPE tokenizer. The tokens are encoded through
-        the byte-to-unicode conversion, as in
-        https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59
-
-        This kind of tokenizer includes meta-llama/Meta-Llama-3-8B-Instruct,
-        meta-llama/Meta-Llama-3.1-8B-Instruct, etc.
+    vocabularies: RAW, BYTE_FALLBACK, BYTE_LEVEL.
     """
 
     RAW = 0
+    """The vocabulary is in the raw format.
+
+    The tokens in the vocabulary are kept in their original form without any processing. This kind
+    of tokenizer includes the tiktoken tokenizer, e.g. microsoft/Phi-3-small-8k-instruct,
+    Qwen/Qwen-7B-Chat, etc.
+    """
+
     BYTE_FALLBACK = 1
+    """The vocabulary used in the byte fallback BPE tokenizer.
+
+    The tokens are encoded through the byte-fallback conversion. E.g. "\u001b" -> "<0x1B>",
+    " apple" -> "▁apple". This kind of tokenizer includes meta-llama/Llama-2-7b-chat,
+    microsoft/Phi-3.5-mini-instruct, etc.
+    """
+
     BYTE_LEVEL = 2
+    """The vocabulary used in the byte level BPE tokenizer.
+
+    The tokens are encoded through the byte-to-unicode conversion, as in
+    https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59
+
+    This kind of tokenizer includes meta-llama/Meta-Llama-3-8B-Instruct,
+    meta-llama/Meta-Llama-3.1-8B-Instruct, etc.
+    """
 
 
 class TokenizerInfo(XGRObject):
@@ -63,24 +67,6 @@ class TokenizerInfo(XGRObject):
     of 32. In this case, the model's vocab_size is larger than the tokenizer's vocabulary size.
     Please pass the model's vocab_size to the vocab_size parameter in the constructor, because
     this information is used to determine the size of the token mask.
-
-    Parameters
-    ----------
-    encoded_vocab : Union[List[bytes], List[str]]
-        The encoded vocabulary of the tokenizer.
-
-    vocab_type : VocabType, default: VocabType.RAW
-        The type of the vocabulary. See also VocabType.
-
-    vocab_size : Optional[int], default: None
-        The size of the vocabulary. If not provided, the vocabulary size will be len(encoded_vocab).
-
-    stop_token_ids : Optional[List[int]], default: None
-        The stop token ids. If not provided, the stop token ids will be auto detected (but may not
-        be correct).
-
-    add_prefix_space : bool, default: False
-        Whether the tokenizer will prepend a space before the text in the tokenization process.
     """
 
     def __init__(
@@ -92,6 +78,26 @@ class TokenizerInfo(XGRObject):
         stop_token_ids: Optional[Union[List[int], int]] = None,
         add_prefix_space: bool = False,
     ) -> None:
+        """Construct the tokenizer info.
+
+        Parameters
+        ----------
+        encoded_vocab : Union[List[bytes], List[str]]
+            The encoded vocabulary of the tokenizer.
+
+        vocab_type : VocabType, default: VocabType.RAW
+            The type of the vocabulary. See also VocabType.
+
+        vocab_size : Optional[int], default: None
+            The size of the vocabulary. If not provided, the vocabulary size will be len(encoded_vocab).
+
+        stop_token_ids : Optional[List[int]], default: None
+            The stop token ids. If not provided, the stop token ids will be auto detected (but may not
+            be correct).
+
+        add_prefix_space : bool, default: False
+            Whether the tokenizer will prepend a space before the text in the tokenization process.
+        """
         if isinstance(stop_token_ids, int):
             stop_token_ids = [stop_token_ids]
         self._init_handle(

@@ -10,7 +10,6 @@ import tlcpack_sphinx_addon
 os.environ["XGRAMMAR_BUILD_DOCS"] = "1"
 sys.path.insert(0, os.path.abspath("../python"))
 sys.path.insert(0, os.path.abspath("../"))
-autodoc_mock_imports = ["torch"]
 
 version_file = "../python/xgrammar/version.py"
 with open(version_file, "r") as f:
@@ -27,9 +26,9 @@ release = __version__
 # -- Extensions and extension configurations --------------------------------
 
 extensions = [
-    "autodocsumm",
     "myst_parser",
     "nbsphinx",
+    "autodocsumm",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.autosummary",
@@ -63,6 +62,7 @@ myst_enable_extensions = [
 
 myst_heading_anchors = 3
 myst_ref_domains = ["std", "py"]
+myst_all_links_external = False
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3.12", None),
@@ -72,11 +72,13 @@ intersphinx_mapping = {
     "torch": ("https://pytorch.org/docs/stable", None),
 }
 
+autodoc_mock_imports = ["torch"]
 autodoc_default_options = {
     "members": True,
-    "inherited-members": False,
     "undoc-members": True,
     "show-inheritance": True,
+    "inherited-members": False,
+    "member-order": "bysource",
 }
 
 # -- Other Options --------------------------------------------------------
@@ -89,7 +91,7 @@ source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 
 language = "en"
 
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md"]
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
@@ -106,38 +108,40 @@ import sphinx_rtd_theme
 html_theme = "sphinx_rtd_theme"
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
-html_static_path = []
+html_static_path = ["_static"]
+
+# Add custom CSS files to fix text selection issues
+html_css_files = ["css/fix_text_selection.css"]
 
 footer_copyright = "© 2024 XGrammar"
 footer_note = " "
 
-# html_logo = "_static/img/mlc-logo-with-text-landscape.svg"
-
-html_theme_options = {"logo_only": False}
+# html_logo = "_static/img/logo.png"
+# html_theme_options = {"logo_only": True}
 
 header_links = [
     ("Home", "https://xgrammar.mlc.ai/"),
+    ("Docs", "https://xgrammar.mlc.ai/docs/"),
     ("Github", "https://github.com/mlc-ai/xgrammar"),
+    ("Blog", "https://blog.mlc.ai/"),
 ]
-
-header_dropdown = {"name": "Other Resources", "items": [("MLC Blog", "https://blog.mlc.ai/")]}
 
 html_context = {
     "footer_copyright": footer_copyright,
     "footer_note": footer_note,
     "header_links": header_links,
-    "header_dropdown": header_dropdown,
     "display_github": True,
     "github_user": "mlc-ai",
     "github_repo": "xgrammar",
     "github_version": "main/docs/",
     "theme_vcs_pageview_mode": "edit",
-    # "header_logo": "/path/to/logo",
+    # Set the logo in left sidebar
+    "logo": "img/logo.png",
+    "theme_logo_only": True,
+    # "header_logo": "_static/img/logo.png",
     # "header_logo_link": "",
     # "version_selecter": "",
 }
-
-import xgrammar
 
 # add additional overrides
 templates_path += [tlcpack_sphinx_addon.get_templates_path()]

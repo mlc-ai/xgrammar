@@ -7,7 +7,7 @@
 
 set -euxo pipefail
 
-scripts/build_site.sh
+scripts/support/build_site.sh
 
 git fetch
 git checkout -B gh-pages origin/gh-pages
