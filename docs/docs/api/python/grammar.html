@@ -170,6 +170,8 @@
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.builtin_json_grammar"><code class="docutils literal notranslate"><span class="pre">Grammar.builtin_json_grammar()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.concat"><code class="docutils literal notranslate"><span class="pre">Grammar.concat()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.union"><code class="docutils literal notranslate"><span class="pre">Grammar.union()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.serialize_json"><code class="docutils literal notranslate"><span class="pre">Grammar.serialize_json()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.Grammar.deserialize_json"><code class="docutils literal notranslate"><span class="pre">Grammar.deserialize_json()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -305,6 +307,12 @@ and we follow the specification of GBNF (GGML BNF) in
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.union" title="xgrammar.Grammar.union"><code class="xref py py-obj docutils literal notranslate"><span class="pre">union</span></code></a>(*grammars)</p></td>
 <td><p>Create a grammar that matches any of the grammars in the list.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.serialize_json" title="xgrammar.Grammar.serialize_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">serialize_json</span></code></a>()</p></td>
+<td><p>Serialize the grammar to a JSON string.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.deserialize_json" title="xgrammar.Grammar.deserialize_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">deserialize_json</span></code></a>(json_string)</p></td>
+<td><p>Deserialize a grammar from a JSON string.</p></td>
 </tr>
 </tbody>
 </table>
@@ -525,6 +533,18 @@ using the <cite>|</cite> operator to concatenate the grammars in the list.</p>
 <dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.serialize_json">
+<span class="sig-name descname"><span class="pre">serialize_json</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.serialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.serialize_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Serialize the grammar to a JSON string.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.Grammar.deserialize_json">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">deserialize_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">json_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.deserialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.deserialize_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deserialize a grammar from a JSON string.</p>
 </dd></dl>
 
 </dd></dl>

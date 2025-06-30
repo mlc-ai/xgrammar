@@ -630,7 +630,20 @@ window.addEventListener("load", () => mermaid.run());
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;vocab_type&quot;</span><span class="p">:</span> <span class="n">VocabType</span><span class="p">(</span><span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;vocab_type&quot;</span><span class="p">]),</span>
             <span class="s2">&quot;add_prefix_space&quot;</span><span class="p">:</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;add_prefix_space&quot;</span><span class="p">],</span>
-        <span class="p">}</span></div>
+        <span class="p">}</span>
+
+<div class="viewcode-block" id="TokenizerInfo.serialize_json"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo.serialize_json">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">serialize_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Serialize the tokenizer_info to a JSON string.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="TokenizerInfo.deserialize_json"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo.deserialize_json">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">deserialize_json</span><span class="p">(</span>
+        <span class="n">json_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">encoded_vocab</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TokenizerInfo&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Deserialize a grammar from a JSON string.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
+            <span class="n">_core</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span><span class="n">json_string</span><span class="p">,</span> <span class="n">encoded_vocab</span><span class="p">)</span>
+        <span class="p">)</span></div></div>
 </pre></div>
 
            </div>

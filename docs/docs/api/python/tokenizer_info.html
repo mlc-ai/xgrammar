@@ -180,6 +180,8 @@
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.special_token_ids"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.special_token_ids</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.dump_metadata"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.dump_metadata()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.from_vocab_and_metadata()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.serialize_json"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.serialize_json()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.deserialize_json"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.deserialize_json()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -356,6 +358,12 @@ this information is used to determine the size of the token mask.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata" title="xgrammar.TokenizerInfo.from_vocab_and_metadata"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_vocab_and_metadata</span></code></a>(encoded_vocab, metadata)</p></td>
 <td><p>Construct the tokenizer info from the vocabulary and the metadata string in json format.</p></td>
 </tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.serialize_json" title="xgrammar.TokenizerInfo.serialize_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">serialize_json</span></code></a>()</p></td>
+<td><p>Serialize the tokenizer_info to a JSON string.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.deserialize_json" title="xgrammar.TokenizerInfo.deserialize_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">deserialize_json</span></code></a>(json_string, encoded_vocab)</p></td>
+<td><p>Deserialize a grammar from a JSON string.</p></td>
+</tr>
 </tbody>
 </table>
 <p><strong>Attributes:</strong></p>
@@ -513,6 +521,18 @@ format.</p>
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.serialize_json">
+<span class="sig-name descname"><span class="pre">serialize_json</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.serialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.serialize_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Serialize the tokenizer_info to a JSON string.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.TokenizerInfo.deserialize_json">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">deserialize_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">json_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.deserialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.deserialize_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deserialize a grammar from a JSON string.</p>
 </dd></dl>
 
 </dd></dl>

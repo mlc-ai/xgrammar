@@ -557,7 +557,16 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">            The union of the grammars.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">grammar_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">grammar</span> <span class="ow">in</span> <span class="n">grammars</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">grammar_handles</span><span class="p">))</span></div></div>
+        <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">grammar_handles</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="Grammar.serialize_json"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.serialize_json">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">serialize_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Serialize the grammar to a JSON string.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Grammar.deserialize_json"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.deserialize_json">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">deserialize_json</span><span class="p">(</span><span class="n">json_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Deserialize a grammar from a JSON string.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span><span class="n">json_string</span><span class="p">))</span></div></div>
 </pre></div>
 
            </div>

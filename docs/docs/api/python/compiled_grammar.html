@@ -168,6 +168,8 @@
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.grammar</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.tokenizer_info</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.memory_size_bytes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.serialize_json"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.serialize_json()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.deserialize_json"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.deserialize_json()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -287,6 +289,17 @@ use <a class="reference internal" href="grammar_compiler.html#xgrammar.GrammarCo
 </tr>
 </tbody>
 </table>
+<p><strong>Methods:</strong></p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.serialize_json" title="xgrammar.CompiledGrammar.serialize_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">serialize_json</span></code></a>()</p></td>
+<td><p>Serialize the compiled grammar to a JSON string.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.deserialize_json" title="xgrammar.CompiledGrammar.deserialize_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">deserialize_json</span></code></a>(json_str, tokenizer_info)</p></td>
+<td><p>Deserialize the compiled grammar from a JSON string and tokenizer info.</p></td>
+</tr>
+</tbody>
+</table>
 <dl class="py property">
 <dt class="sig sig-object py" id="xgrammar.CompiledGrammar.grammar">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">grammar</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.grammar" title="Permalink to this definition">¶</a></dt>
@@ -303,6 +316,18 @@ use <a class="reference internal" href="grammar_compiler.html#xgrammar.GrammarCo
 <dt class="sig sig-object py" id="xgrammar.CompiledGrammar.memory_size_bytes">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">memory_size_bytes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="Permalink to this definition">¶</a></dt>
 <dd><p>The approximate memory usage of the compiled grammar in bytes.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.serialize_json">
+<span class="sig-name descname"><span class="pre">serialize_json</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/compiler.html#CompiledGrammar.serialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.CompiledGrammar.serialize_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Serialize the compiled grammar to a JSON string.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.deserialize_json">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">deserialize_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">json_str</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">tokenizer_info</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/compiler.html#CompiledGrammar.deserialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.CompiledGrammar.deserialize_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deserialize the compiled grammar from a JSON string and tokenizer info.</p>
 </dd></dl>
 
 </dd></dl>
