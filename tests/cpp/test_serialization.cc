@@ -44,8 +44,8 @@ TEST(XGrammarReflectionTest, JSONSerialization) {
 
   // CSRArray use a data_ and indptr_ structure
   auto array = CSRArray<int>{};
-  array.Insert({0, 1, 2, 3});
-  array.Insert({4, 5, 6, 7});
+  array.PushBack({0, 1, 2, 3});
+  array.PushBack({4, 5, 6, 7});
   auto deserialized_array = CSRArray<int>{};
 
   auto json_array = AutoSerializeJSONValue(array);
