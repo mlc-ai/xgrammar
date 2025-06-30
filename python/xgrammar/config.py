@@ -9,9 +9,10 @@ def get_max_recursion_depth() -> int:
     """Get the maximum allowed recursion depth. The depth is shared per process.
 
     The maximum recursion depth is determined in the following order:
-    1. Manually set via set_max_recursion_depth()
-    2. XGRAMMAR_MAX_RECURSION_DEPTH environment variable (if set and is a valid integer <= 1000000)
-    3. Default value of 10000
+
+    1. Manually set via :py:func:`set_max_recursion_depth`
+    2. ``XGRAMMAR_MAX_RECURSION_DEPTH`` environment variable (if set and is a valid integer <= 1,000,000)
+    3. Default value of 10,000
 
     Returns
     -------

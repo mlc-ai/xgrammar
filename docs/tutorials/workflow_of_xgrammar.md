@@ -71,7 +71,7 @@ compiled_grammar = grammar_compiler.compile_grammar(ebnf_string)
 
 ## Compiled Grammar
 
-A [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object is associated with a [`xgr.Grammar`](xgrammar.Grammar) object and a [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. It contains the compiled grammar and the token mask cache. Use these methods to access the grammar and tokenizer info:
+A [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object is associated with an [`xgr.Grammar`](xgrammar.Grammar) object and an [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. It contains the compiled grammar and the token mask cache. Use these methods to access the grammar and tokenizer info:
 
 ```python
 compiled_grammar.grammar
