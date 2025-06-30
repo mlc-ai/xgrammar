@@ -38,12 +38,12 @@ def set_max_recursion_depth(max_recursion_depth: int) -> None:
 def max_recursion_depth(temp_depth: int):
     """A context manager for temporarily setting recursion depth.
 
-    Example
-    -------
+    Examples
+    --------
     >>> with recursion_depth(1000):
     ...     # recursion depth is 1000 here
     ...     pass
-    ... # recursion depth is restored to original value
+    >>> # recursion depth is restored to original value
     """
     prev_depth = get_max_recursion_depth()
     set_max_recursion_depth(temp_depth)

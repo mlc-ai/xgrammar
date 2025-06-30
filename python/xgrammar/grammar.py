@@ -253,15 +253,15 @@ class Grammar(XGRObject):
         Examples
         --------
         >>> class Schema1(BaseModel):
-        >>>     arg1: str
-        >>>     arg2: int
+        ...     arg1: str
+        ...     arg2: int
         >>> class Schema2(BaseModel):
-        >>>     arg3: float
-        >>>     arg4: List[str]
+        ...     arg3: float
+        ...     arg4: List[str]
         >>> tags = [
-        >>>     StructuralTagItem(begin="<function=f>", schema=Schema1, end="</function>"),
-        >>>     StructuralTagItem(begin="<function=g>", schema=Schema2, end="</function>"),
-        >>> ]
+        ...     StructuralTagItem(begin="<function=f>", schema=Schema1, end="</function>"),
+        ...     StructuralTagItem(begin="<function=g>", schema=Schema2, end="</function>"),
+        ... ]
         >>> triggers = ["<function="]
         >>> grammar = Grammar.from_structural_tag(tags, triggers)
         """
