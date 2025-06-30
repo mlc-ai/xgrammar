@@ -180,24 +180,24 @@ class GrammarMatcher(XGRObject):
     ) -> None:
         """Construct the grammar matcher.
 
-        Parameters
-        ----------
-        compiled_grammar : CompiledGrammar
-            The initialization context for the grammar matcher.
+            Parameters
+            ----------
+            compiled_grammar : CompiledGrammar
+                The initialization context for the grammar matcher.
 
-        override_stop_tokens : Optional[Union[int, List[int]]], default: None
-            If not None, the stop tokens to override the ones in the grammar.
+            override_stop_tokens : Optional[Union[int, List[int]]], default: None
+                If not None, the stop tokens to override the ones in the grammar.
 
-        terminate_without_stop_token : bool, default: False
-            Whether to terminate the matcher without accepting a stop token.
+            terminate_without_stop_token : bool, default: False
+                Whether to terminate the matcher without accepting a stop token.
 
-    max_rollback_tokens : int, default: 0
-        Deprecated because the earley parser significantly reduces the number of states, so not
-        needed anymore.
+        max_rollback_tokens : int, default: 0
+            Deprecated because the earley parser significantly reduces the number of states, so not
+            needed anymore.
 
-        The maximum number of rollback tokens allowed. The rollback operation is useful for
-        jump-forward decoding and speculative decoding.
-    """
+            The maximum number of rollback tokens allowed. The rollback operation is useful for
+            jump-forward decoding and speculative decoding.
+        """
 
     def __init__(
         self,
