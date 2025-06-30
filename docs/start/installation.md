@@ -28,7 +28,7 @@ python -c "import xgrammar; print(xgrammar)"
 # Prints: <module 'xgrammar' from '/path-to-env/lib/python3.11/site-packages/xgrammar/__init__.py'>
 ```
 
-## Method 2: Build XGrammar from Source
+## Method 2: Build XGrammar Python Package from Source
 
 This option is useful when you want to make modification or obtain a specific version of XGrammar.
 

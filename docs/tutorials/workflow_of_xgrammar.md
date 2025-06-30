@@ -1,10 +1,13 @@
 # Workflow of XGrammar
 
-XGrammar is a library for structured generation. It can be used in LLM inference code with HuggingFace `transformers`,
-or be integrated into LLM engines.
+This tutorial introduces the workflow of XGrammar, including most of its core components. Please read [constrained decoding](constrained_decoding.md) first to understand how XGrammar achieves structured generation.
 
 ```python
 import xgrammar as xgr
+
+import asyncio
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 ```
 
 ## Grammar
@@ -20,9 +23,13 @@ To construct a grammar, use
 ```python
 grammar: xgr.Grammar = xgr.Grammar.from_json_schema(json_schema_string)
 # or
+grammar: xgr.Grammar = xgr.Grammar.builtin_json_grammar()
+# or
 grammar: xgr.Grammar = xgr.Grammar.from_regex(regex_string)
 # or
 grammar: xgr.Grammar = xgr.Grammar.from_ebnf(ebnf_string)
+
+print(grammar) # print the ebnf format of the grammar
 ```
 
 ## Tokenizer Info
@@ -30,68 +37,115 @@ grammar: xgr.Grammar = xgr.Grammar.from_ebnf(ebnf_string)
 [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) contains the tokenizer information of the model.
 It is necessary for XGrammar to generate the token mask.
 
-`xgr.TokenizerInfo` can be constructed from a HuggingFace tokenizer, or from a list of raw tokens.
+[`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) can be constructed from a HuggingFace tokenizer, or from a list of raw tokens.
 For HuggingFace tokenizers, XGrammar supports [HuggingFace's fast tokenizer](https://github.com/huggingface/tokenizers),
 [tiktoken](https://github.com/openai/tiktoken), and [SentencePiece](https://github.com/google/sentencepiece)
 tokenizers as the backend.
 
 ```python
 tokenizer = AutoTokenizer.from_pretrained(...)
-tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)
+tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 ```
 
-## Compile Grammar
+## Grammar Compiler
 
-## Single LLM Engine
+To accelerate mask generation, XGrammar performs preprocessing on the grammar using the vocabulary of the model. This process is called **Grammar Compilation**. During grammar compilation, we:
+* Simplify the grammar and build automata
+* Compute an adaptive token mask cache. It will be used at runtime to generate the real mask
 
-
-
-
-
-
-## Compile Grammar
-
-XGrammar has these data structures for structured generation:
-
-- `xgr.Grammar`: The grammar that the output should follow. It can be a JSON schema, a regex, a BNF grammar, etc.
-- `xgr.TokenizerInfo`: The tokenizer information of the model. This is necessary for XGrammar to generate the token mask.
-- `xgr.CompiledGrammar`: It will be used to match the grammar against a sequence of tokens.
-- `xgr.GrammarCompiler`: Compiles a grammar into a `xgr.CompiledGrammar` object.
-- `xgr.GrammarMatcher`: Matches a grammar against a sequence of tokens.
-
-Construct a `GrammarCompiler` and compile the grammar.
-
-
-
-The grammar can be a built-in JSON grammar, a JSON schema string, or an EBNF string. EBNF provides
-more flexibility for customization. See
-[GBNF documentation](https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md) for
-specification.
+[`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) processes the grammar and produces a [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object. Each [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) is bound to a specific [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. When given a grammar, it uses this tokenizer info to compile it. You can pass in a Grammar object directly, or provide a raw EBNF string, JSON Schema, or regex pattern):
 
 ```python
-tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)
 grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+
+compiled_grammar = grammar_compiler.compile_grammar(grammar)
+# or
+compiled_grammar = grammar_compiler.compile_json_schema(json_schema_string)
+# or
 compiled_grammar = grammar_compiler.compile_builtin_json_grammar()
-# Other ways: provide a json schema string
-# compiled_grammar = grammar_compiler.compile_json_schema(json_schema_string)
-# Or provide an EBNF string
-# compiled_grammar = grammar_compiler.compile_grammar(ebnf_string)
+# or
+compiled_grammar = grammar_compiler.compile_regex(regex_string)
+# or
+compiled_grammar = grammar_compiler.compile_grammar(ebnf_string)
 ```
 
-## Generate with grammar
+## Compiled Grammar
 
-Use logits_processor to generate with grammar.
+A [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object is associated with a [`xgr.Grammar`](xgrammar.Grammar) object and a [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. It contains the compiled grammar and the token mask cache. Use these methods to access the grammar and tokenizer info:
 
 ```python
-xgr_logits_processor = xgr.contrib.hf.LogitsProcessor(compiled_grammar)
-generated_ids = model.generate(
-    **model_inputs, max_new_tokens=512, logits_processor=[xgr_logits_processor]
-)
-generated_ids = generated_ids[0][len(model_inputs.input_ids[0]) :]
-print(tokenizer.decode(generated_ids, skip_special_tokens=True))
+compiled_grammar.grammar
+compiled_grammar.tokenizer_info
 ```
 
-## What to Do Next
+## Token Bitmask
 
-- Check out [JSON Generation Guide](../tutorials/ebnf_guided_generation) and other How-To guides for the detailed usage guide of XGrammar.
-- Report any problem or ask any question: open new issues in our [GitHub repo](https://github.com/mlc-ai/xgrammar/issues).
+The mask is a bool tensor with the same shape as the vocabulary size. XGrammar further compresses the mask into a int32 bitset to save memory. It also support batch settings. Use [`xgr.allocate_token_bitmask`](xgrammar.allocate_token_bitmask) to allocate a bitmask:
+
+```python
+bitmask = xgr.allocate_token_bitmask(batch_size, tokenizer_info.vocab_size)
+```
+
+The bitmask is a [`torch.Tensor`](https://pytorch.org/docs/stable/tensors.html) with the shape `(batch_size, ceil(vocab_size / 32))`, dtype `int32` and device `cpu`. It is located on CPU because we will further fill the bitmask with CPU logic.
+
+## Grammar Matcher
+
+[`xgr.GrammarMatcher`](xgrammar.GrammarMatcher) handles the logic of matching the LLM output to the structure and generating the token mask. It is constructed with a [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object. In each step, it will accept the last token generated by the LLM with [`xgr.GrammarMatcher.accept_token`](xgrammar.GrammarMatcher.accept_token), and then generate the mask with [`xgr.GrammarMatcher.fill_next_token_bitmask`](xgrammar.GrammarMatcher.fill_next_token_bitmask).
+
+```python
+grammar_matcher = xgr.GrammarMatcher(compiled_grammar)
+token_id = ... # the last token generated by the LLM
+grammar_matcher.accept_token(token_id)
+grammar_matcher.fill_next_token_bitmask(bitmask)
+```
+
+Use [`xgr.apply_token_bitmask_inplace`](xgrammar.apply_token_bitmask_inplace) to apply the bitmask to the logits of the LLM. It will modify the logits in place. If the logits is on GPU, the bitmask should be moved to the same device first.
+
+```python
+logits = ... # the logits of the LLM
+xgr.apply_token_bitmask_inplace(logits, bitmask.to(logits.device))
+
+# Sample the next token
+prob = torch.softmax(logits, dim=-1)
+next_token_id = torch.argmax(prob, dim=-1)
+print(tokenizer.decode(next_token_id))
+```
+
+## The Generation Loop
+
+With the above introduction, it’s easy for us to write a generation loop using Hugging Face Transformers. [`xgr.GrammarMatcher.is_terminated`](xgrammar.GrammarMatcher.is_terminated) is provided to check if the matcher is terminated.
+
+```python
+input_ids: list(int) = ... # the input tokens
+token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+model = AutoModelForCausalLM.from_pretrained(...)
+
+while not grammar_matcher.is_terminated():
+    # Generate the logits. Shape: (1, seq_len, vocab_size)
+    logits = model(torch.tensor([input_ids], device=torch.device("cuda"))).logits
+    # Fill and apply the bitmask
+    grammar_matcher.fill_next_token_bitmask(token_bitmask)
+    xgr.apply_token_bitmask_inplace(logits[0, -1, :], token_bitmask.to(logits.device))
+    # Sample the next token
+    prob = torch.softmax(logits[0, -1, :], dim=-1)
+    next_token_id = torch.argmax(prob, dim=-1)
+    # Accept the token and append it to the input
+    grammar_matcher.accept_token(next_token_id.item())
+    input_ids.append(next_token_id.item())
+
+# Reset the matcher so it can be used again
+grammar_matcher.reset()
+
+# Print the generated text
+print(tokenizer.decode(input_ids))
+```
+
+[`xgr.GrammarMatcher.is_terminated`](xgrammar.GrammarMatcher.is_terminated) will require the LLM generate
+an EOS token after completing the structure. It is equivalent to the EOS-terminated generation.
+
+Congratulations! You have successfully generated a structured output using XGrammar.
+
+## Next Steps
+
+Read [advanced topics](advanced_topics.md) to learn more advanced features about XGrammar.
+Read [integration with LLM engine](engine_integration.md) to learn how to integrate XGrammar into an LLM engine.

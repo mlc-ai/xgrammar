@@ -11,6 +11,7 @@ XGrammar Python API
    grammar_compiler
    compiled_grammar
    grammar_matcher
+   testing
    structural_tag
    bitmask_ops
    configuration

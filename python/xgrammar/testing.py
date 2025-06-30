@@ -1,4 +1,7 @@
-"""Testing utilities."""
+"""Testing utilities.
+
+The APIs in this module are used for testing and debugging and are prone to
+change. Don't use them in production."""
 
 import time
 from typing import Any, Dict, List, Optional, Tuple, Type, Union

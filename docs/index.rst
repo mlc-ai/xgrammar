@@ -17,16 +17,15 @@ The mission of this project is to bring flexible zero-overhead structure generat
 
    tutorials/constrained_decoding
    tutorials/workflow_of_xgrammar
+   tutorials/advanced_topics
+   tutorials/engine_integration
    tutorials/json_generation
    tutorials/ebnf_guided_generation
-   tutorials/engine_integration
 
 .. toctree::
    :maxdepth: 1
    :caption: XGrammar Features
 
-   xgrammar_features/xgrammar_bnf
-   xgrammar_features/supported_models
    xgrammar_features/runtime_safeguards
    xgrammar_features/javascript_api
 
@@ -42,3 +41,11 @@ The mission of this project is to bring flexible zero-overhead structure generat
    :caption: API Reference
 
    api/python/index
+
+
+.. TODOs:
+.. xgrammar_bnf
+.. json_schema
+.. supported_models
+.. debugging
+.. rewrite json/ebnf generation, engine_integration
