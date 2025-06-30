@@ -101,6 +101,14 @@ struct ParserState {
            element_id == other.element_id && sub_element_id == other.sub_element_id;
   }
 
+  bool operator<(const ParserState& other) const {
+    if (rule_id != other.rule_id) return rule_id < other.rule_id;
+    if (sequence_id != other.sequence_id) return sequence_id < other.sequence_id;
+    if (element_id != other.element_id) return element_id < other.element_id;
+    if (rule_start_pos != other.rule_start_pos) return rule_start_pos < other.rule_start_pos;
+    return sub_element_id < other.sub_element_id;
+  }
+
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
     os << "ParserState(rule_id=" << state.rule_id << ", sequence_id=" << state.sequence_id
        << ", element_id=" << state.element_id << ", rule_start_pos=" << state.rule_start_pos
@@ -116,6 +124,15 @@ struct ParserState {
            ", sub_element_id=" + std::to_string(sub_element_id) + ")";
   }
 };
+
+XGRAMMAR_MEMBER_ARRAY(
+    ParserState,
+    &ParserState::rule_id,
+    &ParserState::sequence_id,
+    &ParserState::element_id,
+    &ParserState::rule_start_pos,
+    &ParserState::sub_element_id
+);
 
 /*!
  * \brief When getting the mask of the state, we don't need to consider the rule_start_pos.

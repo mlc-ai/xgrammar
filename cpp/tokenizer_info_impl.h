@@ -35,6 +35,7 @@ class TokenizerInfo::Impl {
   const std::vector<std::pair<int32_t, std::string>>& GetSortedDecodedVocab() const {
     return sorted_decoded_vocab_;
   }
+  const std::vector<int32_t>& GetTrieSubtreeNodesRange() const { return trie_subtree_nodes_range; }
 
   std::string DumpMetadata() const;
 
@@ -61,6 +62,9 @@ class TokenizerInfo::Impl {
   /*! \brief All (id, token) pairs sorted in lexicographic order. This sorting is done to
    * maximize prefix reuse during matching. Special tokens and stop tokens are not included. */
   std::vector<std::pair<int32_t, std::string>> sorted_decoded_vocab_;
+  /*! \brief A pesudo-trie. trie_subtree_nodes_range[i] stores how many nodes there are in the
+   * subtree. */
+  std::vector<int32_t> trie_subtree_nodes_range;
   /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
   std::vector<int32_t> stop_token_ids_;
