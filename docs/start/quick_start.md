@@ -2,7 +2,7 @@
 
 This guide introduces how to use XGrammar with HuggingFace `transformers` in Python to generate
 structured outputs. It focuses on JSON generation -- the most important use case of structured
-generation. You should have already [installed XGrammar](install.md).
+generation. You should have already [installed XGrammar](installation).
 
 ## Preparation
 

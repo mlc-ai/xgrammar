@@ -30,15 +30,13 @@ XGrammar is an open-source library for efficient, flexible, and portable structu
 
 It leverages constrained decoding to ensure **100% structural correctness** of the output. It supports general context-free grammar to enable a broad range of structures, including **JSON**, **regex**, **custom context-free grammar**, etc.
 
-XGrammar leverages careful system-level optimizations to achieve extremely low overhead in structured generation. We have achieved **near-zero overhead** in JSON generation, making it one of the fastest structured generation engines available.
+XGrammar uses careful optimizations to achieve extremely low overhead in structured generation. It has achieved **near-zero overhead** in JSON generation, making it one of the fastest structured generation engines available.
 
 XGrammar features **universal deployment**. It supports:
 * **Platforms**: Linux, macOS, Windows
 * **Hardware**: CPU, NVIDIA GPU, AMD GPU, Apple Silicon, TPU, etc.
 * **Languages**: Python, C++, and JavaScript APIs
 * **Models**: Qwen, Llama, DeepSeek, Phi, Gemma, etc.
-
-XGrammar features a minimal and portable C++ backend that can be easily integrated into multiple environments and frameworks, and is co-designed with the LLM inference engine and enables zero-overhead structured generation in LLM inference.
 
 XGrammar is very easy to integrate with LLM inference engines. It is the default structured generation backend for most LLM inference engines, including  [**vLLM**](https://github.com/vllm-project/vllm), [**SGLang**](https://github.com/sgl-project/sglang), [**TensorRT-LLM**](https://github.com/NVIDIA/TensorRT-LLM), and [**MLC-LLM**](https://github.com/mlc-ai/mlc-llm), as well as many other companies. You can also try out their structured generation modes!
 
@@ -61,7 +59,7 @@ Please visit our [documentation](https://xgrammar.mlc.ai/docs/) to get started w
 
 ## Adoption
 
-XGrammar has been adopted by many projects and frameworks, including but not limited to:
+XGrammar has been adopted by many projects and companies, including but not limited to:
 
 <div align="center">
 
@@ -69,16 +67,15 @@ XGrammar has been adopted by many projects and frameworks, including but not lim
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/modular.svg" height=50/>](https://www.modular.com/)
 &emsp;
+[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/nvidia.svg" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
+&emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/vllm.png" height=50/>](https://github.com/vllm-project/vllm)
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/sglang.png" height=50/>](https://github.com/sgl-project/sglang)
-
-
-[<span style="font-size:30px">TensorRT-LLM</span>](https://github.com/NVIDIA/TensorRT-LLM)
 &emsp;
-[<span style="font-size:30px">MLC-LLM</span>](https://github.com/mlc-ai/mlc-llm)
+[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/mlc.jpeg" height=50/>](https://github.com/mlc-ai/mlc-llm)
 &emsp;
-[<span style="font-size:30px">WebLLM</span>](https://github.com/mlc-ai/web-llm)
+[<span style="font-size:50px">WebLLM</span>](https://github.com/mlc-ai/web-llm)
 
 </div>
 

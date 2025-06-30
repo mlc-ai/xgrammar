@@ -91,7 +91,7 @@ source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 
 language = "en"
 
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md"]
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
