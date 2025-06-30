@@ -67,7 +67,6 @@ XGrammar uses CMake and Ninja to build the C++ library.
 git clone --recursive https://github.com/mlc-ai/xgrammar.git && cd xgrammar
 # Copy cmake config. You can update the config if needed.
 cp cmake/config.cmake .
-
 mkdir build && cd build
 cmake -G Ninja ..
 ninja
@@ -76,8 +75,9 @@ ninja
 ### Optional: Run C++ Tests
 
 ```bash
+# Run all tests
 bash scripts/run_ctest.sh
 
-# If you want to filter certain tests, you can run:
-bash scripts/run_ctest.sh test_name # runs all tests whose name contains "test_name"
+# Run a subset of tests whose name contains "test_name"
+bash scripts/run_ctest.sh test_name
 ```

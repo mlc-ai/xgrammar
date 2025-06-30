@@ -29,7 +29,7 @@ with max_recursion_depth(10000):
 
 ## Cache Size Limit
 
-The {py:class}`xgrammar.GrammarCompiler` class uses a cache to store the compiled grammars.
+The {py:class}`xgr.GrammarCompiler` class uses a cache to store the compiled grammars.
 The cache size can be limited to avoid the cache from growing too large. The cache uses an LRU
 algorithm to evict the least recently used items. The cache size limit is -1 by default, which means
 no limit.
