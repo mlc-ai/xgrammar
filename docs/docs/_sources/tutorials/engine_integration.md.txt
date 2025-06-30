@@ -11,7 +11,7 @@ The code snippets below are actual runnable code as we simulate the LLM generati
 
 ## Install XGrammar
 
-[XGrammar](../start/install.md) is available via pip.
+[XGrammar](../start/installation) is available via pip.
 It is always recommended to install it in an isolated conda virtual environment.
 
 ## High-Level Flow

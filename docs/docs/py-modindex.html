@@ -8,11 +8,10 @@
 <html class="writer-html5" lang="en" >
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
-
+  
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>XGrammar Documentation &mdash; XGrammar 0.1.19 documentation</title>
+  <title>Python Module Index &mdash; XGrammar 0.1.19 documentation</title>
   
 
   
@@ -43,14 +42,26 @@
         <script src="_static/sphinx_highlight.js"></script>
         <script src="_static/clipboard.min.js"></script>
         <script src="_static/copybutton.js"></script>
+        <script src="_static/tabs.js"></script>
         <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
+        <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
+        <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+        <script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";
+window.addEventListener("load", () => mermaid.run());
+</script>
     
     <script type="text/javascript" src="_static/js/theme.js"></script>
 
     
     <script type="text/javascript" src="_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="search.html" /> 
+    <link rel="search" title="Search" href="search.html" />
+ 
+
+
 </head>
 
 <body class="wy-body-for-nav">
@@ -133,15 +144,17 @@
             
               <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="start/quick_start.html">Quick Start</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
@@ -151,7 +164,7 @@
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="developer_guide/building_docs.html">Building Docs</a></li>
-<li class="toctree-l1"><a class="reference internal" href="developer_guide/code_coverage.html">Code Coverage Tool</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer_guide/code_coverage.html">Code Coverage</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -212,20 +225,11 @@
     
       <li><a href="index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>XGrammar Documentation</li>
+      <li>Python Module Index</li>
     
-    
-      
-      
     
     
       <li class="wy-breadcrumbs-aside">
-        
-            
-            
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/README.md" class="fa fa-github"> Edit on GitHub</a>
-            
-          
         
       </li>
     
@@ -237,11 +241,29 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="xgrammar-documentation">
-<h1>XGrammar Documentation<a class="headerlink" href="#xgrammar-documentation" title="Permalink to this heading">¶</a></h1>
-<p>The documentation was built upon <a class="reference external" href="https://www.sphinx-doc.org/en/master/">Sphinx</a>.</p>
-<p>See XGrammar docs for help to build the documentation.</p>
-</section>
+
+   <h1>Python Module Index</h1>
+
+   <div class="modindex-jumpbox">
+   <a href="#cap-x"><strong>x</strong></a>
+   </div>
+
+   <table class="indextable modindextable">
+     <tr class="pcap"><td></td><td>&#160;</td><td></td></tr>
+     <tr class="cap" id="cap-x"><td></td><td>
+       <strong>x</strong></td><td></td></tr>
+     <tr>
+       <td><img src="_static/minus.png" class="toggler"
+              id="toggle-1" style="display: none" alt="-" /></td>
+       <td>
+       <code class="xref">xgrammar</code></td><td>
+       <em></em></td></tr>
+     <tr class="cg-1">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="api/python/testing.html#module-xgrammar.testing"><code class="xref">xgrammar.testing</code></a></td><td>
+       <em></em></td></tr>
+   </table>
 
 
            </div>

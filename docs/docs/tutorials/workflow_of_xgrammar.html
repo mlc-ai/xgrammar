@@ -1,0 +1,461 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Workflow of XGrammar &mdash; XGrammar 0.1.19 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+        <script src="../_static/clipboard.min.js"></script>
+        <script src="../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Advanced Topics" href="advanced_topics.html" />
+    <link rel="prev" title="Constrained Decoding" href="constrained_decoding.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html">
+          
+
+          
+            
+            <img src="../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.19
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Workflow of XGrammar</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#grammar">Grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tokenizer-info">Tokenizer Info</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#grammar-compiler">Grammar Compiler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#compiled-grammar">Compiled Grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#token-bitmask">Token Bitmask</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#grammar-matcher">Grammar Matcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-generation-loop">The Generation Loop</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/python/index.html">XGrammar Python API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+      <li>Workflow of XGrammar</li>
+    
+    
+      
+      
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/tutorials/workflow_of_xgrammar.md" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section class="tex2jax_ignore mathjax_ignore" id="workflow-of-xgrammar">
+<h1>Workflow of XGrammar<a class="headerlink" href="#workflow-of-xgrammar" title="Permalink to this heading">¶</a></h1>
+<p>This tutorial introduces the workflow of XGrammar, including most of its core components. Please read <a class="reference internal" href="constrained_decoding.html"><span class="std std-doc">constrained decoding</span></a> first to understand how XGrammar achieves structured generation.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoModelForCausalLM</span>
+</pre></div>
+</div>
+<section id="grammar">
+<h2>Grammar<a class="headerlink" href="#grammar" title="Permalink to this heading">¶</a></h2>
+<p><a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a> describes the structure of the LLM output. It can be:</p>
+<ul class="simple">
+<li><p>A JSON schema or free-form JSON</p></li>
+<li><p>A regex</p></li>
+<li><p>A customized context-free grammar in the extended BNF format</p></li>
+<li><p>etc.</p></li>
+</ul>
+<p>To construct a grammar, use</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_json_schema</span><span class="p">(</span><span class="n">json_schema_string</span><span class="p">)</span>
+<span class="c1"># or</span>
+<span class="n">grammar</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">builtin_json_grammar</span><span class="p">()</span>
+<span class="c1"># or</span>
+<span class="n">grammar</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_regex</span><span class="p">(</span><span class="n">regex_string</span><span class="p">)</span>
+<span class="c1"># or</span>
+<span class="n">grammar</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">grammar</span><span class="p">)</span> <span class="c1"># print the ebnf format of the grammar</span>
+</pre></div>
+</div>
+</section>
+<section id="tokenizer-info">
+<h2>Tokenizer Info<a class="headerlink" href="#tokenizer-info" title="Permalink to this heading">¶</a></h2>
+<p><a class="reference internal" href="../api/python/tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo</span></code></span></a> contains the tokenizer information of the model.
+It is necessary for XGrammar to generate the token mask.</p>
+<p><a class="reference internal" href="../api/python/tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo</span></code></span></a> can be constructed from a HuggingFace tokenizer, or from a list of raw tokens.
+For HuggingFace tokenizers, XGrammar supports <a class="reference external" href="https://github.com/huggingface/tokenizers">HuggingFace’s fast tokenizer</a>,
+<a class="reference external" href="https://github.com/openai/tiktoken">tiktoken</a>, and <a class="reference external" href="https://github.com/google/sentencepiece">SentencePiece</a>
+tokenizers as the backend.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="grammar-compiler">
+<h2>Grammar Compiler<a class="headerlink" href="#grammar-compiler" title="Permalink to this heading">¶</a></h2>
+<p>To accelerate mask generation, XGrammar performs preprocessing on the grammar using the vocabulary of the model. This process is called <strong>Grammar Compilation</strong>. During grammar compilation, we:</p>
+<ul class="simple">
+<li><p>Simplify the grammar and build automata</p></li>
+<li><p>Compute an adaptive token mask cache. It will be used at runtime to generate the real mask</p></li>
+</ul>
+<p><a class="reference internal" href="../api/python/grammar_compiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarCompiler</span></code></span></a> processes the grammar and produces a <a class="reference internal" href="../api/python/compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code></span></a> object. Each <a class="reference internal" href="../api/python/grammar_compiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarCompiler</span></code></span></a> is bound to a specific <a class="reference internal" href="../api/python/tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo</span></code></span></a> object. When given a grammar, it uses this tokenizer info to compile it. You can pass in a Grammar object directly, or provide a raw EBNF string, JSON Schema, or regex pattern):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar_compiler</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">)</span>
+
+<span class="n">compiled_grammar</span> <span class="o">=</span> <span class="n">grammar_compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="p">)</span>
+<span class="c1"># or</span>
+<span class="n">compiled_grammar</span> <span class="o">=</span> <span class="n">grammar_compiler</span><span class="o">.</span><span class="n">compile_json_schema</span><span class="p">(</span><span class="n">json_schema_string</span><span class="p">)</span>
+<span class="c1"># or</span>
+<span class="n">compiled_grammar</span> <span class="o">=</span> <span class="n">grammar_compiler</span><span class="o">.</span><span class="n">compile_builtin_json_grammar</span><span class="p">()</span>
+<span class="c1"># or</span>
+<span class="n">compiled_grammar</span> <span class="o">=</span> <span class="n">grammar_compiler</span><span class="o">.</span><span class="n">compile_regex</span><span class="p">(</span><span class="n">regex_string</span><span class="p">)</span>
+<span class="c1"># or</span>
+<span class="n">compiled_grammar</span> <span class="o">=</span> <span class="n">grammar_compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="compiled-grammar">
+<h2>Compiled Grammar<a class="headerlink" href="#compiled-grammar" title="Permalink to this heading">¶</a></h2>
+<p>A <a class="reference internal" href="../api/python/compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code></span></a> object is associated with a <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a> object and a <a class="reference internal" href="../api/python/tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo</span></code></span></a> object. It contains the compiled grammar and the token mask cache. Use these methods to access the grammar and tokenizer info:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compiled_grammar</span><span class="o">.</span><span class="n">grammar</span>
+<span class="n">compiled_grammar</span><span class="o">.</span><span class="n">tokenizer_info</span>
+</pre></div>
+</div>
+</section>
+<section id="token-bitmask">
+<h2>Token Bitmask<a class="headerlink" href="#token-bitmask" title="Permalink to this heading">¶</a></h2>
+<p>The mask is a bool tensor with the same shape as the vocabulary size. XGrammar further compresses the mask into a int32 bitset to save memory. It also support batch settings. Use <a class="reference internal" href="../api/python/bitmask_ops.html#xgrammar.allocate_token_bitmask" title="xgrammar.allocate_token_bitmask"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.allocate_token_bitmask</span></code></span></a> to allocate a bitmask:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">bitmask</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">allocate_token_bitmask</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The bitmask is a <a class="reference external" href="https://pytorch.org/docs/stable/tensors.html"><code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code></a> with the shape <code class="docutils literal notranslate"><span class="pre">(batch_size,</span> <span class="pre">ceil(vocab_size</span> <span class="pre">/</span> <span class="pre">32))</span></code>, dtype <code class="docutils literal notranslate"><span class="pre">int32</span></code> and device <code class="docutils literal notranslate"><span class="pre">cpu</span></code>. It is located on CPU because we will further fill the bitmask with CPU logic.</p>
+</section>
+<section id="grammar-matcher">
+<h2>Grammar Matcher<a class="headerlink" href="#grammar-matcher" title="Permalink to this heading">¶</a></h2>
+<p><a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher</span></code></span></a> handles the logic of matching the LLM output to the structure and generating the token mask. It is constructed with a <a class="reference internal" href="../api/python/compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code></span></a> object. In each step, it will accept the last token generated by the LLM with <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.accept_token</span></code></span></a>, and then generate the mask with <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.fill_next_token_bitmask</span></code></span></a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar_matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled_grammar</span><span class="p">)</span>
+<span class="n">token_id</span> <span class="o">=</span> <span class="o">...</span> <span class="c1"># the last token generated by the LLM</span>
+<span class="n">grammar_matcher</span><span class="o">.</span><span class="n">accept_token</span><span class="p">(</span><span class="n">token_id</span><span class="p">)</span>
+<span class="n">grammar_matcher</span><span class="o">.</span><span class="n">fill_next_token_bitmask</span><span class="p">(</span><span class="n">bitmask</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Use <a class="reference internal" href="../api/python/bitmask_ops.html#xgrammar.apply_token_bitmask_inplace" title="xgrammar.apply_token_bitmask_inplace"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.apply_token_bitmask_inplace</span></code></span></a> to apply the bitmask to the logits of the LLM. It will modify the logits in place. If the logits is on GPU, the bitmask should be moved to the same device first.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">logits</span> <span class="o">=</span> <span class="o">...</span> <span class="c1"># the logits of the LLM</span>
+<span class="n">xgr</span><span class="o">.</span><span class="n">apply_token_bitmask_inplace</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="p">))</span>
+
+<span class="c1"># Sample the next token</span>
+<span class="n">prob</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">next_token_id</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">prob</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">next_token_id</span><span class="p">))</span>
+</pre></div>
+</div>
+</section>
+<section id="the-generation-loop">
+<h2>The Generation Loop<a class="headerlink" href="#the-generation-loop" title="Permalink to this heading">¶</a></h2>
+<p>With the above introduction, it’s easy for us to write a generation loop using Hugging Face Transformers. <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.is_terminated</span></code></span></a> is provided to check if the matcher is terminated.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">input_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span> <span class="o">=</span> <span class="o">...</span> <span class="c1"># the input tokens</span>
+<span class="n">token_bitmask</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">allocate_token_bitmask</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+
+<span class="k">while</span> <span class="ow">not</span> <span class="n">grammar_matcher</span><span class="o">.</span><span class="n">is_terminated</span><span class="p">():</span>
+    <span class="c1"># Generate the logits. Shape: (1, seq_len, vocab_size)</span>
+    <span class="n">logits</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="n">input_ids</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)))</span><span class="o">.</span><span class="n">logits</span>
+    <span class="c1"># Fill and apply the bitmask</span>
+    <span class="n">grammar_matcher</span><span class="o">.</span><span class="n">fill_next_token_bitmask</span><span class="p">(</span><span class="n">token_bitmask</span><span class="p">)</span>
+    <span class="n">xgr</span><span class="o">.</span><span class="n">apply_token_bitmask_inplace</span><span class="p">(</span><span class="n">logits</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:],</span> <span class="n">token_bitmask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="p">))</span>
+    <span class="c1"># Sample the next token</span>
+    <span class="n">prob</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">next_token_id</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">prob</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="c1"># Accept the token and append it to the input</span>
+    <span class="n">grammar_matcher</span><span class="o">.</span><span class="n">accept_token</span><span class="p">(</span><span class="n">next_token_id</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+    <span class="n">input_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">next_token_id</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+
+<span class="c1"># Reset the matcher so it can be used again</span>
+<span class="n">grammar_matcher</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+
+<span class="c1"># Print the generated text</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">input_ids</span><span class="p">))</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.is_terminated</span></code></span></a> will require the LLM generate
+an EOS token after completing the structure. It is equivalent to the EOS-terminated generation.</p>
+<p>Congratulations! You have successfully generated a structured output using XGrammar.</p>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Permalink to this heading">¶</a></h2>
+<p>Read <a class="reference internal" href="advanced_topics.html"><span class="std std-doc">advanced topics</span></a> to learn more advanced features about XGrammar.
+Read <a class="reference internal" href="engine_integration.html"><span class="std std-doc">integration with LLM engine</span></a> to learn how to integrate XGrammar into an LLM engine.</p>
+</section>
+</section>
+
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="advanced_topics.html" class="btn btn-neutral float-right" title="Advanced Topics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="constrained_decoding.html" class="btn btn-neutral float-left" title="Constrained Decoding" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+
+<div id="button" class="backtop"><img src="../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>

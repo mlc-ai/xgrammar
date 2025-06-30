@@ -52,7 +52,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="xgr.Grammar" href="grammar.html" />
-    <link rel="prev" title="Code Coverage Tool" href="../../developer_guide/code_coverage.html" /> 
+    <link rel="prev" title="Code Coverage" href="../../developer_guide/code_coverage.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -135,15 +135,17 @@
             
               <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
@@ -153,7 +155,7 @@
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage Tool</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
@@ -163,6 +165,7 @@
 <li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html">xgr.testing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
@@ -274,6 +277,22 @@
 <li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html#xgrammar.GrammarMatcher"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">xgr.testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._json_schema_to_ebnf"><code class="docutils literal notranslate"><span class="pre">_json_schema_to_ebnf()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._regex_to_ebnf"><code class="docutils literal notranslate"><span class="pre">_regex_to_ebnf()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._ebnf_to_grammar_no_normalization"><code class="docutils literal notranslate"><span class="pre">_ebnf_to_grammar_no_normalization()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._get_matcher_from_grammar"><code class="docutils literal notranslate"><span class="pre">_get_matcher_from_grammar()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._is_grammar_accept_string"><code class="docutils literal notranslate"><span class="pre">_is_grammar_accept_string()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._get_masked_tokens_from_bitmask"><code class="docutils literal notranslate"><span class="pre">_get_masked_tokens_from_bitmask()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._is_single_token_bitmask"><code class="docutils literal notranslate"><span class="pre">_is_single_token_bitmask()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._bool_mask_to_bitmask"><code class="docutils literal notranslate"><span class="pre">_bool_mask_to_bitmask()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._get_matcher_from_grammar_and_tokenizer_info"><code class="docutils literal notranslate"><span class="pre">_get_matcher_from_grammar_and_tokenizer_info()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._get_allow_empty_rule_ids"><code class="docutils literal notranslate"><span class="pre">_get_allow_empty_rule_ids()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._generate_range_regex"><code class="docutils literal notranslate"><span class="pre">_generate_range_regex()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._generate_float_regex"><code class="docutils literal notranslate"><span class="pre">_generate_float_regex()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing.GrammarFunctor"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="structural_tag.html">Structural Tag</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTagItem"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a></li>
 </ul>
@@ -307,7 +326,7 @@
         <a href="grammar.html" class="btn btn-neutral float-right" title="xgr.Grammar" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../../developer_guide/code_coverage.html" class="btn btn-neutral float-left" title="Code Coverage Tool" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="../../developer_guide/code_coverage.html" class="btn btn-neutral float-left" title="Code Coverage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

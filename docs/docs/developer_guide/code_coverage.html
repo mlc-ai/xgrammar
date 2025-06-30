@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Code Coverage Tool &mdash; XGrammar 0.1.19 documentation</title>
+  <title>Code Coverage &mdash; XGrammar 0.1.19 documentation</title>
   
 
   
@@ -135,15 +135,17 @@
             
               <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
@@ -153,7 +155,7 @@
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="building_docs.html">Building Docs</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Code Coverage Tool</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Code Coverage</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -214,7 +216,7 @@
     
       <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>Code Coverage Tool</li>
+      <li>Code Coverage</li>
     
     
       
@@ -239,8 +241,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="code-coverage-tool">
-<h1>Code Coverage Tool<a class="headerlink" href="#code-coverage-tool" title="Permalink to this heading">¶</a></h1>
+  <section class="tex2jax_ignore mathjax_ignore" id="code-coverage">
+<h1>Code Coverage<a class="headerlink" href="#code-coverage" title="Permalink to this heading">¶</a></h1>
 <p>The script <a class="reference external" href="https://github.com/mlc-ai/xgrammar/blob/main/scripts/run_coverage.sh"><code class="docutils literal notranslate"><span class="pre">run_coverage.sh</span></code></a> offers a way to test the code coverage
 of the XGrammar library.</p>
 <p>To run the coverage test, please follow these steps:</p>
@@ -251,6 +253,7 @@ of the XGrammar library.</p>
 </ol>
 <p>After running the script, you will find the coverage report in the
 <code class="docutils literal notranslate"><span class="pre">coverage_report</span></code> directory.</p>
+<p>Please note that code coverage tools are merely aids to help identify which parts of the code have not been tested. However, pursuing 100% code coverage is not advisable. It can actually have <a class="reference external" href="https://neatstack.substack.com/p/stop-using-code-coverage-as-a-quality">negative consequences</a>.</p>
 </section>
 
 

@@ -52,7 +52,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="JavaScript API" href="javascript_api.html" />
-    <link rel="prev" title="Integration with LLM Engine" href="../tutorials/engine_integration.html" /> 
+    <link rel="prev" title="EBNF-Guided Generation" href="../tutorials/ebnf_guided_generation.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -135,15 +135,17 @@
             
               <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul class="current">
@@ -157,7 +159,7 @@
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage Tool</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -249,17 +251,17 @@
 crashing.</p>
 <section id="recursion-limit">
 <h2>Recursion Limit<a class="headerlink" href="#recursion-limit" title="Permalink to this heading">¶</a></h2>
-<p>The <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><code class="xref py py-class docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher</span></code></a> class uses a pushdown automata parser to parse the grammar.
+<p>The <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher</span></code></span></a> class uses a pushdown automata parser to parse the grammar.
 It may involve very deep recursion, which may cause stack overflow. XGrammar provides
-<a class="reference internal" href="../api/python/configuration.html#xgrammar.set_max_recursion_depth" title="xgrammar.set_max_recursion_depth"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.set_max_recursion_depth()</span></code></a> to set the maximum recursion depth and
-<a class="reference internal" href="../api/python/configuration.html#xgrammar.get_max_recursion_depth" title="xgrammar.get_max_recursion_depth"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.get_max_recursion_depth()</span></code></a> to get the current maximum recursion
+<a class="reference internal" href="../api/python/configuration.html#xgrammar.set_max_recursion_depth" title="xgrammar.set_max_recursion_depth"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.set_max_recursion_depth</span></code></span></a> to set the maximum recursion depth and
+<a class="reference internal" href="../api/python/configuration.html#xgrammar.get_max_recursion_depth" title="xgrammar.get_max_recursion_depth"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.get_max_recursion_depth</span></code></span></a> to get the current maximum recursion
 depth. The maximum recursion depth is set per process.The default maximum recursion depth is 10000.</p>
 <p>If the recursion depth exceeds the limit,
-the matcher operations (including <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher.accept_token()</span></code></a>,
-<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_string" title="xgrammar.GrammarMatcher.accept_string"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher.accept_string()</span></code></a>, <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher.fill_next_token_bitmask()</span></code></a>,
-<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.GrammarMatcher.find_jump_forward_string()</span></code></a>) will raise
-<a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><code class="xref py py-exc docutils literal notranslate"><span class="pre">RuntimeError</span></code></a>.</p>
-<p>You can also use the <a class="reference internal" href="../api/python/configuration.html#xgrammar.max_recursion_depth" title="xgrammar.max_recursion_depth"><code class="xref py py-func docutils literal notranslate"><span class="pre">xgrammar.max_recursion_depth()</span></code></a> context manager to set the maximum
+the matcher operations (including <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.accept_token</span></code></span></a>,
+<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_string" title="xgrammar.GrammarMatcher.accept_string"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.accept_string</span></code></span></a>, <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.fill_next_token_bitmask</span></code></span></a>,
+<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.find_jump_forward_string</span></code></span></a>) will raise
+<code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>.</p>
+<p>You can also use the <a class="reference internal" href="../api/python/configuration.html#xgrammar.max_recursion_depth" title="xgrammar.max_recursion_depth"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.max_recursion_depth</span></code></span></a> context manager to set the maximum
 recursion depth for a code block.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">max_recursion_depth</span>
 
@@ -270,7 +272,7 @@ recursion depth for a code block.</p>
 </section>
 <section id="cache-size-limit">
 <h2>Cache Size Limit<a class="headerlink" href="#cache-size-limit" title="Permalink to this heading">¶</a></h2>
-<p>The <a class="reference internal" href="../api/python/grammar_compiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">xgrammar.GrammarCompiler</span></code></a> class uses a cache to store the compiled grammars.
+<p>The <code class="xref py py-class docutils literal notranslate"><span class="pre">xgr.GrammarCompiler</span></code> class uses a cache to store the compiled grammars.
 The cache size can be limited to avoid the cache from growing too large. The cache uses an LRU
 algorithm to evict the least recently used items. The cache size limit is -1 by default, which means
 no limit.</p>
@@ -295,7 +297,7 @@ no limit.</p>
         <a href="javascript_api.html" class="btn btn-neutral float-right" title="JavaScript API" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../tutorials/engine_integration.html" class="btn btn-neutral float-left" title="Integration with LLM Engine" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="../tutorials/ebnf_guided_generation.html" class="btn btn-neutral float-left" title="EBNF-Guided Generation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

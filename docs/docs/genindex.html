@@ -141,15 +141,17 @@ window.addEventListener("load", () => mermaid.run());
             
               <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="start/install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="start/quick_start.html">Quick Start</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
@@ -159,7 +161,7 @@ window.addEventListener("load", () => mermaid.run());
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="developer_guide/building_docs.html">Building Docs</a></li>
-<li class="toctree-l1"><a class="reference internal" href="developer_guide/code_coverage.html">Code Coverage Tool</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer_guide/code_coverage.html">Code Coverage</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -255,6 +257,7 @@ window.addEventListener("load", () => mermaid.run());
  | <a href="#F"><strong>F</strong></a>
  | <a href="#G"><strong>G</strong></a>
  | <a href="#I"><strong>I</strong></a>
+ | <a href="#L"><strong>L</strong></a>
  | <a href="#M"><strong>M</strong></a>
  | <a href="#P"><strong>P</strong></a>
  | <a href="#R"><strong>R</strong></a>
@@ -262,6 +265,7 @@ window.addEventListener("load", () => mermaid.run());
  | <a href="#T"><strong>T</strong></a>
  | <a href="#U"><strong>U</strong></a>
  | <a href="#V"><strong>V</strong></a>
+ | <a href="#X"><strong>X</strong></a>
  
 </div>
 <h2 id="_">_</h2>
@@ -275,9 +279,33 @@ window.addEventListener("load", () => mermaid.run());
         <li><a href="api/python/tokenizer_info.html#xgrammar.TokenizerInfo.__init__">(xgrammar.TokenizerInfo method)</a>
 </li>
       </ul></li>
+      <li><a href="api/python/grammar.html#xgrammar.Grammar.__str__">__str__() (xgrammar.Grammar method)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._bool_mask_to_bitmask">_bool_mask_to_bitmask() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._ebnf_to_grammar_no_normalization">_ebnf_to_grammar_no_normalization() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._generate_float_regex">_generate_float_regex() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._generate_range_regex">_generate_range_regex() (in module xgrammar.testing)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/grammar.html#xgrammar.Grammar.__str__">__str__() (xgrammar.Grammar method)</a>
+      <li><a href="api/python/testing.html#xgrammar.testing._get_allow_empty_rule_ids">_get_allow_empty_rule_ids() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._get_masked_tokens_from_bitmask">_get_masked_tokens_from_bitmask() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._get_matcher_from_grammar">_get_matcher_from_grammar() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._get_matcher_from_grammar_and_tokenizer_info">_get_matcher_from_grammar_and_tokenizer_info() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._is_grammar_accept_string">_is_grammar_accept_string() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._is_single_token_bitmask">_is_single_token_bitmask() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._json_schema_to_ebnf">_json_schema_to_ebnf() (in module xgrammar.testing)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing._regex_to_ebnf">_regex_to_ebnf() (in module xgrammar.testing)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -307,13 +335,15 @@ window.addEventListener("load", () => mermaid.run());
 </li>
       <li><a href="api/python/bitmask_ops.html#xgrammar.bitmask_dtype">bitmask_dtype (in module xgrammar)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/grammar.html#xgrammar.Grammar.builtin_json_grammar">builtin_json_grammar() (xgrammar.Grammar static method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/tokenizer_info.html#xgrammar.VocabType.BYTE_FALLBACK">BYTE_FALLBACK (xgrammar.VocabType attribute)</a>
 </li>
       <li><a href="api/python/tokenizer_info.html#xgrammar.VocabType.BYTE_LEVEL">BYTE_LEVEL (xgrammar.VocabType attribute)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing.GrammarFunctor.byte_string_fuser">byte_string_fuser() (xgrammar.testing.GrammarFunctor static method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -347,10 +377,12 @@ window.addEventListener("load", () => mermaid.run());
 <h2 id="D">D</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/tokenizer_info.html#xgrammar.TokenizerInfo.decoded_vocab">decoded_vocab (xgrammar.TokenizerInfo property)</a>
+      <li><a href="api/python/testing.html#xgrammar.testing.GrammarFunctor.dead_code_eliminator">dead_code_eliminator() (xgrammar.testing.GrammarFunctor static method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/python/tokenizer_info.html#xgrammar.TokenizerInfo.decoded_vocab">decoded_vocab (xgrammar.TokenizerInfo property)</a>
+</li>
       <li><a href="api/python/tokenizer_info.html#xgrammar.TokenizerInfo.dump_metadata">dump_metadata() (xgrammar.TokenizerInfo method)</a>
 </li>
   </ul></td>
@@ -397,13 +429,15 @@ window.addEventListener("load", () => mermaid.run());
 </li>
       <li><a href="api/python/configuration.html#xgrammar.get_max_recursion_depth">get_max_recursion_depth() (in module xgrammar)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/grammar.html#xgrammar.Grammar">Grammar (class in xgrammar)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/compiled_grammar.html#xgrammar.CompiledGrammar.grammar">grammar (xgrammar.CompiledGrammar property)</a>
 </li>
       <li><a href="api/python/grammar_compiler.html#xgrammar.GrammarCompiler">GrammarCompiler (class in xgrammar)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing.GrammarFunctor">GrammarFunctor (class in xgrammar.testing)</a>
 </li>
       <li><a href="api/python/grammar_matcher.html#xgrammar.GrammarMatcher">GrammarMatcher (class in xgrammar)</a>
 </li>
@@ -418,17 +452,32 @@ window.addEventListener("load", () => mermaid.run());
   </ul></td>
 </tr></table>
 
+<h2 id="L">L</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/python/testing.html#xgrammar.testing.GrammarFunctor.lookahead_assertion_analyzer">lookahead_assertion_analyzer() (xgrammar.testing.GrammarFunctor static method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
 <h2 id="M">M</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/configuration.html#xgrammar.max_recursion_depth">max_recursion_depth() (in module xgrammar)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/grammar_matcher.html#xgrammar.GrammarMatcher.max_rollback_tokens">max_rollback_tokens (xgrammar.GrammarMatcher property)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/compiled_grammar.html#xgrammar.CompiledGrammar.memory_size_bytes">memory_size_bytes (xgrammar.CompiledGrammar property)</a>
 </li>
+      <li>
+    module
+
+      <ul>
+        <li><a href="api/python/testing.html#module-xgrammar.testing">xgrammar.testing</a>
+</li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -453,6 +502,8 @@ window.addEventListener("load", () => mermaid.run());
 </li>
       <li><a href="api/python/grammar_matcher.html#xgrammar.GrammarMatcher.rollback">rollback() (xgrammar.GrammarMatcher method)</a>
 </li>
+      <li><a href="api/python/testing.html#xgrammar.testing.GrammarFunctor.rule_inliner">rule_inliner() (xgrammar.testing.GrammarFunctor static method)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -474,6 +525,8 @@ window.addEventListener("load", () => mermaid.run());
 </li>
       </ul></li>
       <li><a href="api/python/structural_tag.html#xgrammar.StructuralTagItem">StructuralTagItem (class in xgrammar)</a>
+</li>
+      <li><a href="api/python/testing.html#xgrammar.testing.GrammarFunctor.structure_normalizer">structure_normalizer() (xgrammar.testing.GrammarFunctor static method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -509,6 +562,19 @@ window.addEventListener("load", () => mermaid.run());
 </li>
       <li><a href="api/python/tokenizer_info.html#xgrammar.VocabType">VocabType (class in xgrammar)</a>
 </li>
+  </ul></td>
+</tr></table>
+
+<h2 id="X">X</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li>
+    xgrammar.testing
+
+      <ul>
+        <li><a href="api/python/testing.html#module-xgrammar.testing">module</a>
+</li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
