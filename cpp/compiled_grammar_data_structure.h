@@ -45,7 +45,7 @@ struct AdaptiveTokenMask {
     // Only store all accepted token indices. Then rejected indices = all_indices - accepted_indices
     // - uncertain_indices. This is useful when |accepted_indices| < |rejected_indices|.
     kAccepted = 0,
-    // Only store all accepted token indices. Then accepted indices = all_indices - rejected_indices
+    // Only store all rejected token indices. Then accepted indices = all_indices - rejected_indices
     // - uncertain_indices. This is useful when |accepted_indices| > |rejected_indices|.
     kRejected = 1,
     // Store all accepted token indices in a bitset. This is useful when both |accepted_indices| and
