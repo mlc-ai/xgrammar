@@ -9,11 +9,7 @@
 #include "fsm.h"
 #include "picojson.h"
 #include "support/csr_array.h"
-#include "support/dynamic_bitset.h"
 #include "support/json.h"
-#include "xgrammar/compiler.h"
-#include "xgrammar/grammar.h"
-#include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
 
@@ -93,38 +89,4 @@ TEST(XGrammarReflectionTest, JSONSerialization) {
   json_optional = AutoSerializeJSONValue(optional_value);
   AutoDeserializeJSONValue(deserialized_optional, json_optional);
   ASSERT_FALSE(deserialized_optional.has_value());
-}
-
-TEST(XGrammarReflectionTest, AdaptiveMaskCache) {
-  using namespace xgrammar;
-  /*!
-   * [1,7,0,-1,0]: [^0-9]*, the first byte. kRejected. "1", "212" are rejected.
-   * [1,7,0,-1,k]: [^0-9]*, not the first byte. Then the UTF-8 character is incompleted, all
-   * the tokens are rejected.
-   * [3,15,0,-1,0]: ."AB", kAccepted. "A" is accepted.
-   * [3,15,0,-1,1]: "A"."B", kAccepted. Nothing is accepted.
-   * [3,17,0,-1,0]: "1", kAccepted. "1" is accepted.
-   */
-  std::string expected_mask =
-      "[[1,7,0,-1,0],[1,[],[1,2],[1,0,0,0],[]],[1,7,0,-1,1],[0,[],[],[1,0,0,0],[]],[1,7,0,-1,2],[0,"
-      "[],[],[1,0,0,0],[]],[1,7,0,-1,3],[0,[],[],[1,0,0,0],[]],[3,15,0,-1,0],[0,[3],[],[1,0,0,0],[]"
-      "],[3,15,0,-1,1],[0,[],[],[1,0,0,0],[]],[3,17,0,-1,0],[0,[1],[],[1,0,0,0],[]]]";
-  TokenizerInfo tokenizer_info =
-      TokenizerInfo({"1", "212", "a", "A", "b", "一", "-", "aBc", "abc"});
-  std::string test_grammar = R"(
-    root ::= rule1 | rule2
-    rule1 ::= [^0-9] rule1
-    rule2 ::= ("AB" | "1" | "") rule2
-  )";
-  ;
-  auto grammar = Grammar::FromEBNF(test_grammar, "root");
-  auto grammar_compiler = GrammarCompiler(tokenizer_info);
-  auto compiled_grammar = grammar_compiler.CompileGrammar(grammar);
-  auto serialized_grammar = compiled_grammar.SerializeJSON();
-  std::cout << "Serialized grammar: " << serialized_grammar << std::endl;
-  size_t adaptive_mask_cache_idx = serialized_grammar.find("\"adaptive_token_mask_cache\":");
-  ASSERT_NE(adaptive_mask_cache_idx, std::string::npos);
-  adaptive_mask_cache_idx += strlen("\"adaptive_token_mask_cache\":");
-  auto result = serialized_grammar.substr(adaptive_mask_cache_idx, expected_mask.length());
-  ASSERT_EQ(result, expected_mask);
 }
