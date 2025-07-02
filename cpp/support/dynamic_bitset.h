@@ -6,13 +6,13 @@
 #ifndef XGRAMMAR_SUPPORT_DYNAMIC_BITSET_H_
 #define XGRAMMAR_SUPPORT_DYNAMIC_BITSET_H_
 
+#include <picojson.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <utility>
 #include <vector>
-
-#include "picojson.h"
 
 // For __popcnt
 #ifdef _MSC_VER

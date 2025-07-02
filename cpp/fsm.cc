@@ -4,6 +4,8 @@
  */
 #include "fsm.h"
 
+#include <picojson.h>
+
 #include <algorithm>
 #include <bitset>
 #include <cassert>
@@ -22,11 +24,10 @@
 #include <utility>
 #include <vector>
 
-#include "picojson.h"
 #include "support/encoding.h"
-#include "support/json.h"
 #include "support/logging.h"
-#include "support/reflection.h"
+#include "support/reflection/json_serializer.h"
+#include "support/reflection/reflection.h"
 #include "support/union_find_set.h"
 
 namespace xgrammar {
@@ -37,8 +38,8 @@ template <typename ContainerType>
 class FSMImplBase {
   static_assert(
       std::is_same_v<ContainerType, std::vector<std::vector<FSMEdge>>> ||
-          std::is_same_v<ContainerType, CSRArray<FSMEdge>>,
-      "ContainerType must be std::vector<std::vector<FSMEdge>> or CSRArray<FSMEdge>"
+          std::is_same_v<ContainerType, Compact2DArray<FSMEdge>>,
+      "ContainerType must be std::vector<std::vector<FSMEdge>> or Compact2DArray<FSMEdge>"
   );
 
  public:
@@ -58,7 +59,8 @@ class FSMImplBase {
   const ContainerType& GetEdges() const { return edges_; }
 
   // For std::vector<std::vector<FSMEdge>>, return const std::vector<FSMEdge>& to avoid copying.
-  // For CSRArray<FSMEdge>, return CSRArray<FSMEdge>::Row since it is just a simple pointer.
+  // For Compact2DArray<FSMEdge>, return Compact2DArray<FSMEdge>::Row since it is just a simple
+  // pointer.
   decltype(auto) GetEdges(int state) const { return edges_[state]; }
 
   void GetEpsilonClosure(std::unordered_set<int>* state_set) const;
@@ -282,7 +284,7 @@ FSM FSM::Impl::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, i
 }
 
 CompactFSM FSM::Impl::ToCompact() {
-  CSRArray<FSMEdge> edges;
+  Compact2DArray<FSMEdge> edges;
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     std::sort(edges_[i].begin(), edges_[i].end());
     edges.PushBack(edges_[i]);
@@ -360,9 +362,9 @@ CompactFSM FSM::ToCompact() { return pimpl_->ToCompact(); }
 
 /****************** CompactFSM::Impl ******************/
 
-class CompactFSM::Impl : public FSMImplBase<CSRArray<FSMEdge>> {
+class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
  public:
-  using FSMImplBase<CSRArray<FSMEdge>>::FSMImplBase;
+  using FSMImplBase<Compact2DArray<FSMEdge>>::FSMImplBase;
 
   int GetNextState(int from, int16_t character) const;
 
@@ -450,16 +452,19 @@ FSM CompactFSM::Impl::ToFSM() const {
 
 /****************** CompactFSM ******************/
 
-CompactFSM::CompactFSM(const CSRArray<FSMEdge>& edges) : pimpl_(std::make_shared<Impl>(edges)) {}
+CompactFSM::CompactFSM(const Compact2DArray<FSMEdge>& edges)
+    : pimpl_(std::make_shared<Impl>(edges)) {}
 
-CompactFSM::CompactFSM(CSRArray<FSMEdge>&& edges)
+CompactFSM::CompactFSM(Compact2DArray<FSMEdge>&& edges)
     : pimpl_(std::make_shared<Impl>(std::move(edges))) {}
 
 int CompactFSM::NumStates() const { return pimpl_->NumStates(); }
 
-const CSRArray<FSMEdge>& CompactFSM::GetEdges() const { return pimpl_->GetEdges(); }
+const Compact2DArray<FSMEdge>& CompactFSM::GetEdges() const { return pimpl_->GetEdges(); }
 
-CSRArray<FSMEdge>::Row CompactFSM::GetEdges(int state) const { return pimpl_->GetEdges(state); }
+Compact2DArray<FSMEdge>::Row CompactFSM::GetEdges(int state) const {
+  return pimpl_->GetEdges(state);
+}
 
 std::string CompactFSM::PrintEdges() const { return pimpl_->PrintEdges(); }
 

@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "grammar_data_structure.h"
-#include "support/csr_array.h"
+#include "support/compact_2d_array.h"
 #include "support/utils.h"
 #include "xgrammar/grammar.h"
 
@@ -242,7 +242,7 @@ class EarleyParser {
    * \brief The states history. state_stack[i] is a vector storing the states after accepting the
    * input[i-1].
    */
-  CSRArray<ParserState> scanable_state_history_;
+  Compact2DArray<ParserState> scanable_state_history_;
 
   /*!
    * \brief A temperate vector only used in Advance, used to add states in the

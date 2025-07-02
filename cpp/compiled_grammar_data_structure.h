@@ -16,11 +16,8 @@
 #include <vector>
 
 #include "earley_parser.h"
-
-// matcher_data_structure.h is included to use StackElement
-#include "persistent_stack.h"
 #include "support/dynamic_bitset.h"
-#include "support/reflection.h"
+#include "support/reflection/reflection.h"
 #include "support/utils.h"
 #include "xgrammar/compiler.h"
 
@@ -29,11 +26,11 @@ namespace xgrammar {
 /******************* CompiledGrammar Datastructures *******************/
 
 /*!
- * \brief Preprocessed information, for a given specific StackElement, divides the token set
+ * \brief Preprocessed information, for a given specific ParserState, divides the token set
  * into three categories: accepted, rejected, and uncertain.
- * Accepted: tokens that can be determined by the current StackElement to be acceptable
- * Rejected: tokens that can be determined by the current StackElement to be unacceptable
- * Uncertain: tokens that need the state of the parent StackElements to determine if acceptable
+ * Accepted: tokens that can be determined by the current ParserState to be acceptable
+ * Rejected: tokens that can be determined by the current ParserState to be unacceptable
+ * Uncertain: tokens that need the state of the parent ParserStates to determine if acceptable
  *
  * \note uncertain indices are stored directly. Accepted / rejected indices have three ways to
  * store to reduce memory and computation usage. See StoreType.
@@ -110,25 +107,6 @@ class CompiledGrammar::Impl {
   TokenizerInfo tokenizer_info{NullObj{}};
 
   /******************* The adaptive token mask cache *******************/
-
-  struct StackElementEqual {
-    std::size_t operator()(const StackElement& lhs, const StackElement& rhs) const noexcept {
-      return lhs.sequence_id == rhs.sequence_id && lhs.element_id == rhs.element_id &&
-             lhs.left_utf8_bytes == rhs.left_utf8_bytes &&
-             lhs.element_in_string == rhs.element_in_string;
-    }
-  };
-
-  struct StackElementHash {
-    std::size_t operator()(const StackElement& stack_element) const noexcept {
-      return HashCombine(
-          stack_element.sequence_id,
-          stack_element.element_id,
-          stack_element.left_utf8_bytes,
-          stack_element.element_in_string
-      );
-    }
-  };
 
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache> adaptive_token_mask_cache;

@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <picojson.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -7,13 +8,12 @@
 #include <vector>
 
 #include "fsm.h"
-#include "picojson.h"
-#include "support/csr_array.h"
-#include "support/json.h"
+#include "support/compact_2d_array.h"
+#include "support/reflection/json_serializer.h"
 
 namespace xgrammar {
 
-bool operator==(const CSRArray<int>& lhs, const CSRArray<int>& rhs) {
+bool operator==(const Compact2DArray<int>& lhs, const Compact2DArray<int>& rhs) {
   if (lhs.size() != rhs.size()) return false;
   const std::size_t indptr_size = lhs.size() + 1;
   const auto* lhs_indptr = lhs.indptr();
@@ -42,11 +42,11 @@ TEST(XGrammarReflectionTest, JSONSerialization) {
   AutoDeserializeJSONValue(deserialized_edge, json_obj);
   ASSERT_EQ(edge, deserialized_edge);
 
-  // CSRArray use a data_ and indptr_ structure
-  auto array = CSRArray<int>{};
+  // Compact2DArray use a data_ and indptr_ structure
+  auto array = Compact2DArray<int>{};
   array.PushBack({0, 1, 2, 3});
   array.PushBack({4, 5, 6, 7});
-  auto deserialized_array = CSRArray<int>{};
+  auto deserialized_array = Compact2DArray<int>{};
 
   auto json_array = AutoSerializeJSONValue(array);
   AutoDeserializeJSONValue(deserialized_array, json_array);

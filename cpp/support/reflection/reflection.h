@@ -1,5 +1,6 @@
 #ifndef XGRAMMAR_REFLECTION_H_
 #define XGRAMMAR_REFLECTION_H_
+
 #include "reflection_details.h"  // IWYU pragma: export
 
 namespace xgrammar {

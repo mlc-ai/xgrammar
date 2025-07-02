@@ -7,6 +7,7 @@
 #ifndef XGRAMMAR_FSM_H_
 #define XGRAMMAR_FSM_H_
 
+#include <picojson.h>
 #include <xgrammar/object.h>
 
 #include <algorithm>
@@ -18,9 +19,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "picojson.h"
-#include "support/csr_array.h"
-#include "support/reflection.h"
+#include "support/compact_2d_array.h"
+#include "support/reflection/reflection.h"
 
 namespace xgrammar {
 
@@ -264,8 +264,8 @@ class FSM {
 
 /*!
  * \brief CompactFSM is the compact from of FSM.
- * \details It uses CSRArray to store the edges, ensuring memory contiguity. It sorts all outgoing
- * edges from a node according to their min and max values, so traversal can be faster.
+ * \details It uses Compact2DArray to store the edges, ensuring memory contiguity. It sorts all
+ * outgoing edges from a node according to their min and max values, so traversal can be faster.
  *
  * CompactFSM is immutable. If you need to modify a CompactFSM, you need to convert it to a FSM
  * first, and convert it back after modification.
@@ -277,9 +277,9 @@ class CompactFSM {
   // for serialization only
   CompactFSM() = default;
 
-  CompactFSM(const CSRArray<FSMEdge>& edges);
+  CompactFSM(const Compact2DArray<FSMEdge>& edges);
 
-  CompactFSM(CSRArray<FSMEdge>&& edges);
+  CompactFSM(Compact2DArray<FSMEdge>&& edges);
 
   /****************** CompactFSM Visitors ******************/
 
@@ -289,9 +289,9 @@ class CompactFSM {
    */
   int NumStates() const;
 
-  const CSRArray<FSMEdge>& GetEdges() const;
+  const Compact2DArray<FSMEdge>& GetEdges() const;
 
-  CSRArray<FSMEdge>::Row GetEdges(int state) const;
+  Compact2DArray<FSMEdge>::Row GetEdges(int state) const;
 
   std::string PrintEdges() const;
 

@@ -1,12 +1,14 @@
 #ifndef XGRAMMAR_REFLECTION_JSON_H_
 #define XGRAMMAR_REFLECTION_JSON_H_
+
+#include <picojson.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <type_traits>
 #include <vector>
 
-#include "logging.h"
-#include "picojson.h"
+#include "../logging.h"
 #include "reflection.h"
 
 namespace xgrammar {

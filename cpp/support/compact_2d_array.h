@@ -1,9 +1,9 @@
 /*!
  * Copyright (c) 2024 by Contributors
- * \file xgrammar/support/csr_array.h
+ * \file xgrammar/support/compact_2d_array.h
  */
-#ifndef XGRAMMAR_SUPPORT_CSR_ARRAY_H_
-#define XGRAMMAR_SUPPORT_CSR_ARRAY_H_
+#ifndef XGRAMMAR_SUPPORT_COMPACT_2D_ARRAY_H_
+#define XGRAMMAR_SUPPORT_COMPACT_2D_ARRAY_H_
 
 #include <picojson.h>
 
@@ -12,24 +12,22 @@
 #include <vector>
 
 #include "logging.h"
-#include "reflection.h"
+#include "reflection/reflection.h"
 #include "utils.h"
 
 namespace xgrammar {
-
-// TODO(yixin): consider renaming to Flat2DArray
 
 /*!
  * \brief This class implements a Compressed Sparse Row (CSR) array data structure. It stores
  * a 2D array in a compressed format, where each row can have a variable number of elements, and
  * all rows are stored contiguously in memory. The inserted row is immutable.
  *
- * \note Inserting new rows into the CSRArray will invalidate the existing Row objects.
+ * \note Inserting new rows into the Compact2DArray will invalidate the existing Row objects.
  *
- * \tparam DataType The type of elements stored in the CSRArray.
+ * \tparam DataType The type of elements stored in the Compact2DArray.
  *
  * \details
- * The CSRArray stores elements of type DataType in a compressed format,
+ * The Compact2DArray stores elements of type DataType in a compressed format,
  * where each row can have a variable number of elements. It uses two vectors:
  * - data_: stores all elements contiguously
  * - indptr_: stores the starting index of each row in data_. Its last element is the size of data_
@@ -38,10 +36,10 @@ namespace xgrammar {
  * This structure allows efficient storage and access for sparse data.
  */
 template <typename DataType = int32_t>
-class CSRArray {
+class Compact2DArray {
  public:
   /*!
-   * \brief The struct representing a row in the CSRArray.
+   * \brief The struct representing a row in the Compact2DArray.
    */
   struct Row {
     /*! \brief The value type is DataType. */
@@ -59,7 +57,7 @@ class CSRArray {
      */
     const DataType& operator[](int32_t i) const {
       XGRAMMAR_DCHECK(i >= 0 && i < data_len)
-          << "Index " << i << " of the CSRArray Row is out of bound";
+          << "Index " << i << " of the Compact2DArray Row is out of bound";
       return data[i];
     }
 
@@ -87,19 +85,19 @@ class CSRArray {
   using value_type = Row;
 
   /*! \brief Default constructor. */
-  CSRArray() = default;
+  Compact2DArray() = default;
 
   /****************** Accessors ******************/
 
-  /*! \brief Get the number of rows in the CSRArray. */
+  /*! \brief Get the number of rows in the Compact2DArray. */
   int32_t size() const { return static_cast<int32_t>(indptr_.size()) - 1; }
 
-  friend std::size_t MemorySize(const CSRArray<DataType>& arr) {
+  friend std::size_t MemorySize(const Compact2DArray<DataType>& arr) {
     return MemorySize(arr.data_) + MemorySize(arr.indptr_);
   }
 
   /*!
-   * \brief Access a row in the CSRArray.
+   * \brief Access a row in the Compact2DArray.
    * \param i Index of the row to access.
    * \return Row struct representing the i-th row.
    */
@@ -108,7 +106,7 @@ class CSRArray {
   /****************** Modifiers ******************/
 
   /*!
-   * \brief Insert a new row of data into the CSRArray.
+   * \brief Insert a new row of data into the Compact2DArray.
    * \param data Pointer to the data to be inserted.
    * \param data_len Length of the data to be inserted.
    * \return The index of the newly inserted row.
@@ -116,21 +114,21 @@ class CSRArray {
   int32_t PushBack(const DataType* new_data, int32_t new_data_len);
 
   /*!
-   * \brief Insert a new row of data into the CSRArray from a vector.
+   * \brief Insert a new row of data into the Compact2DArray from a vector.
    * \param data Vector containing the data to be inserted.
    * \return The index of the newly inserted row.
    */
   int32_t PushBack(const std::vector<DataType>& new_data);
 
   /*!
-   * \brief Insert a new row of data into the CSRArray from a Row struct.
+   * \brief Insert a new row of data into the Compact2DArray from a Row struct.
    * \param row The Row struct containing the data to be inserted.
    * \return The index of the newly inserted row.
    */
   int32_t PushBack(const Row& row) { return PushBack(row.data, row.data_len); }
 
   /*!
-   * \brief Insert a new row of non-contiguous data into the CSRArray. This method inserts a
+   * \brief Insert a new row of non-contiguous data into the Compact2DArray. This method inserts a
    * single element followed by a sequence of elements. This is useful in the GrammarExpr data
    * structure.
    * \param data_1 The first element to be inserted.
@@ -141,7 +139,7 @@ class CSRArray {
   int32_t PushBackNonContiguous(DataType data_1, const DataType* data_2, int32_t data_2_len);
 
   /*!
-   * \brief Pop back the last one or multiple rows of the CSRArray.
+   * \brief Pop back the last one or multiple rows of the Compact2DArray.
    * \param cnt The number of rows to be popped.
    */
   void PopBack(const int32_t& cnt) {
@@ -159,13 +157,13 @@ class CSRArray {
 
   /****************** Serialization ******************/
 
-  friend std::ostream& operator<<(std::ostream& os, const CSRArray& csr_array) {
-    os << "CSRArray([";
-    for (auto i = 0; i < csr_array.size(); ++i) {
+  friend std::ostream& operator<<(std::ostream& os, const Compact2DArray& compact_2d_array) {
+    os << "Compact2DArray([";
+    for (auto i = 0; i < compact_2d_array.size(); ++i) {
       if (i > 0) {
         os << ", ";
       }
-      os << csr_array[i];
+      os << compact_2d_array[i];
     }
     os << "])";
     return os;
@@ -176,21 +174,23 @@ class CSRArray {
   std::vector<DataType> data_;
   /*! \brief Vector storing the starting index of each row in data_. */
   std::vector<int32_t> indptr_{0};
-  friend struct member_trait<CSRArray<DataType>>;
+  friend struct member_trait<Compact2DArray<DataType>>;
 };
 
 template <typename DataType>
-inline typename CSRArray<DataType>::Row CSRArray<DataType>::operator[](int32_t i) const {
-  XGRAMMAR_DCHECK(i >= 0 && i < size()) << "CSRArray index " << i << " is out of bound";
+inline typename Compact2DArray<DataType>::Row Compact2DArray<DataType>::operator[](int32_t i
+) const {
+  XGRAMMAR_DCHECK(i >= 0 && i < size()) << "Compact2DArray index " << i << " is out of bound";
   int32_t start = indptr_[i];
   int32_t end = indptr_[i + 1];
   return {data_.data() + start, end - start};
 }
 
 template <typename DataType>
-inline int32_t CSRArray<DataType>::PushBack(const DataType* new_data, int32_t new_data_len) {
+inline int32_t Compact2DArray<DataType>::PushBack(const DataType* new_data, int32_t new_data_len) {
   // TODO(yixin): whether to add a additional data_len
-  // If the new data is already in the CSRArray, we need to copy it to the new memory location.
+  // If the new data is already in the Compact2DArray, we need to copy it to the new memory
+  // location.
   if (new_data >= data_.data() && new_data < data_.data() + data_.size()) {
     std::vector<DataType> new_data_copied(new_data, new_data + new_data_len);
     data_.insert(data_.end(), new_data_copied.begin(), new_data_copied.end());
@@ -202,14 +202,14 @@ inline int32_t CSRArray<DataType>::PushBack(const DataType* new_data, int32_t ne
 }
 
 template <typename DataType>
-inline int32_t CSRArray<DataType>::PushBack(const std::vector<DataType>& new_data) {
+inline int32_t Compact2DArray<DataType>::PushBack(const std::vector<DataType>& new_data) {
   data_.insert(data_.end(), new_data.begin(), new_data.end());
   indptr_.push_back(static_cast<int32_t>(data_.size()));
   return static_cast<int32_t>(indptr_.size()) - 2;
 }
 
 template <typename DataType>
-inline int32_t CSRArray<DataType>::PushBackNonContiguous(
+inline int32_t Compact2DArray<DataType>::PushBackNonContiguous(
     DataType data_1, const DataType* data_2, int32_t data_2_len
 ) {
   if (data_2 >= data_.data() && data_2 < data_.data() + data_.size()) {
@@ -226,9 +226,13 @@ inline int32_t CSRArray<DataType>::PushBackNonContiguous(
 
 template <typename DataType>
 XGRAMMAR_MEMBER_TABLE_TEMPLATE(
-    CSRArray<DataType>, "data_", &CSRArray<DataType>::data_, "indptr_", &CSRArray<DataType>::indptr_
+    Compact2DArray<DataType>,
+    "data_",
+    &Compact2DArray<DataType>::data_,
+    "indptr_",
+    &Compact2DArray<DataType>::indptr_
 );
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_SUPPORT_CSR_ARRAY_H_
+#endif  // XGRAMMAR_SUPPORT_COMPACT_2D_ARRAY_H_

@@ -15,7 +15,7 @@
 
 #include "fsm.h"
 #include "support/logging.h"
-#include "support/reflection.h"
+#include "support/reflection/reflection.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
