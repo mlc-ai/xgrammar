@@ -7,6 +7,7 @@
 
 #include "compiled_grammar_impl.h"
 #include "support/json_serializer.h"
+#include "tokenizer_info_impl.h"
 
 namespace xgrammar {
 
@@ -14,8 +15,8 @@ namespace xgrammar {
 
 picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
-  result["grammar"] = AutoSerializeJSONValue(impl.grammar_);
-  result["tokenizer_metadata"] = picojson::value(impl.tokenizer_info_.DumpMetadata());
+  result["grammar"] = AutoSerializeJSONValue(impl.grammar);
+  result["tokenizer_metadata"] = picojson::value(impl.tokenizer_info.DumpMetadata());
   result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(impl.adaptive_token_mask_cache);
   return picojson::value(result);
 }
@@ -33,11 +34,17 @@ std::optional<std::runtime_error> DeserializeJSONValue(
   if (object.find("grammar") == object.end()) {
     return ConstructDeserializeError("Expect a 'grammar' field", type_name);
   }
-  AutoDeserializeJSONValue(&impl->grammar_, object["grammar"]);
+  AutoDeserializeJSONValue(&impl->grammar, object["grammar"]);
   if (object.find("tokenizer_metadata") == object.end()) {
     return ConstructDeserializeError("Expect a 'tokenizer_metadata' field", type_name);
   }
-  AutoDeserializeJSONValue(&impl->tokenizer_info_, object["tokenizer_metadata"]);
+  const auto& tokenizer_metadata = object["tokenizer_metadata"];
+  if (auto error = tokenizer_info->CheckMetadataMatch(tokenizer_metadata)) {
+    return ConstructDeserializeError(
+        std::string("Tokenizer metadata mismatch: ") + error->what(), type_name
+    );
+  }
+  impl->tokenizer_info = tokenizer_info;
   if (object.find("adaptive_token_mask_cache") == object.end()) {
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
@@ -45,72 +52,10 @@ std::optional<std::runtime_error> DeserializeJSONValue(
   return std::nullopt;
 }
 
-//   if (!json_value.is<picojson::object>()) {
-//     return std::runtime_error(
-//         "CompiledGrammar Deserialization: Expect an object in the deserialization input"
-//     );
-//   }
-
-//   auto& object = json_value.get<picojson::object>();
-//   if (object.find("grammar") == object.end()) {
-//     return std::runtime_error(
-//         "CompiledGrammar Deserialization: Expect a 'grammar' field in the deserialization
-//         input"
-//     );
-//   }
-//   auto grammar_value = object["grammar"];
-//   AutoDeserializeJSONValue(*compiled_grammar.grammar_.ImplPtr(), grammar_value);
-//   if (object.find("tokenizer_metadata") == object.end()) {
-//     return std::runtime_error(
-//         "CompiledGrammar Deserialization: Expect a 'tokenizer_metadata' field in the "
-//         "deserialization input"
-//     );
-//   }
-//   if (object.find("adaptive_token_mask_cache") == object.end()) {
-//     auto grammar = std::make_shared<Grammar::Impl>();
-//     AutoDeserializeJSONValue(
-//         *grammar,  // grammar pimpl
-//         details::json_member(object, "grammar")
-//     );
-//     auto tokenizer_metadata = std::make_shared<TokenizerInfo::Impl>();
-//   auto compiler_grammar = CompiledGrammar{std::make_shared<CompiledGrammar::Impl>()};
-//   auto result = DeserializeJSONPython(json_string);
-//   if (std::holds_alternative<VersionError>(result))
-//     throw_version_error(std::get<VersionError>(result), "CompiledGrammar");
-
-//   auto& value = std::get<picojson::value>(result);
-//   try {
-//     const auto& object = details::json_as<picojson::object>(value);
-//     auto grammar = std::make_shared<Grammar::Impl>();
-//     compiler_grammar->grammar = Grammar{grammar};
-//     AutoDeserializeJSONValue(
-//         *grammar,  // grammar pimpl
-//         details::json_member(object, "grammar")
-//     );
-//     auto tokenizer_metadata = std::make_shared<TokenizerInfo::Impl>();
-//     compiler_grammar->tokenizer_info = TokenizerInfo{tokenizer_metadata};
-//     AutoDeserializeJSONValue(
-//         *tokenizer_metadata,  // tokenizer info pimpl
-//         details::json_member(object, "tokenizer_metadata")
-//     );
-//     AutoDeserializeJSONValue(
-//         compiler_grammar->adaptive_token_mask_cache,
-//         details::json_member(object, "adaptive_token_mask_cache")
-//     );
-//     XGRAMMAR_CHECK(*compiler_grammar->tokenizer_info == *tokenizer_metadata)
-//         << "The tokenizer info in the compiled grammar does not match the provided one.";
-//     compiler_grammar->tokenizer_info = std::move(tokenizer_info);
-//     return compiler_grammar;
-//   } catch (const std::exception&) {
-//     // pass the exception to the caller
-//   }
-//   throw_format_error("CompiledGrammar");
-// }
-
 /************** CompiledGrammar **************/
 
 std::size_t MemorySize(const CompiledGrammar::Impl& impl) {
-  return MemorySize(impl.grammar_) + MemorySize(impl.adaptive_token_mask_cache);
+  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache);
 }
 
 std::size_t CompiledGrammar::MemorySizeBytes() const { return MemorySize(*pimpl_); }
@@ -118,5 +63,30 @@ std::size_t CompiledGrammar::MemorySizeBytes() const { return MemorySize(*pimpl_
 Grammar CompiledGrammar::GetGrammar() const { return pimpl_->GetGrammar(); }
 
 TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetTokenizerInfo(); }
+
+/*! \brief Return the serialized JSON string of the compiled grammar. */
+std::string CompiledGrammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
+
+/*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
+std::variant<CompiledGrammar, std::runtime_error> DeserializeJSON(
+    const std::string& json_string, const TokenizerInfo& tokenizer_info
+) {
+  picojson::value json_value;
+  if (auto error = picojson::parse(json_value, json_string); !error.empty()) {
+    return std::runtime_error("Failed to parse JSON: " + error);
+  }
+  if (!json_value.is<picojson::object>()) {
+    return std::runtime_error("Expect an object");
+  }
+  const auto& object = json_value.get<picojson::object>();
+  if (auto error = SerializeVersion::Check(object)) {
+    return error.value();
+  }
+  auto impl = std::make_shared<CompiledGrammar::Impl>();
+  if (auto error = DeserializeJSONValue(impl.get(), json_value, tokenizer_info)) {
+    return error.value();
+  }
+  return CompiledGrammar(std::move(impl));
+}
 
 }  // namespace xgrammar

@@ -11,12 +11,17 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <vector>
 
 #include "logging.h"
 #include "reflection.h"
+#include "utils.h"
 
 namespace xgrammar {
 
@@ -359,7 +364,7 @@ inline picojson::value AutoSerializeJSONValue(const T& value) {
     return picojson::value(std::move(arr));
   } else {
     // should give an error in this case
-    XGRAMMAR_LOG(FATAL) << "Cannot serialize this type: " << typeid(T).name();
+    static_assert(detail::json_serializer::false_v<T>, "Cannot serialize this type");
     XGRAMMAR_UNREACHABLE();
   }
 }
@@ -507,8 +512,8 @@ inline std::optional<std::runtime_error> AutoDeserializeJSON(
     T* result, const std::string& json_string, bool check_version, const std::string& type_name
 ) {
   picojson::value json_value;
-  if (auto error = picojson::parse(json_value, json_string)) {
-    return std::runtime_error("Failed to parse JSON: " + error.what());
+  if (auto error = picojson::parse(json_value, json_string); !error.empty()) {
+    return std::runtime_error("Failed to parse JSON: " + error);
   }
   if (check_version) {
     XGRAMMAR_DCHECK(json_value.is<picojson::object>());

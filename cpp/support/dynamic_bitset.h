@@ -19,6 +19,7 @@
 #include <intrin.h>
 #endif
 
+#include "json_serializer.h"
 #include "logging.h"
 
 namespace xgrammar {
@@ -218,7 +219,7 @@ class DynamicBitset {
   picojson::value SerializeJSONValue() const {
     XGRAMMAR_DCHECK(buffer_size_ == GetBufferSize(size_));
     picojson::array result;
-    result.reserve(kSerializeHeaderSize + buffer_size_);
+    result.reserve(2 + buffer_size_);
     result.emplace_back(picojson::value(static_cast<int64_t>(size_)));
     result.emplace_back(picojson::value(static_cast<int64_t>(buffer_size_)));
     for (int i = 0; i < buffer_size_; ++i) {
@@ -227,31 +228,47 @@ class DynamicBitset {
     return picojson::value(std::move(result));
   }
 
-  friend void DeserializeJSONValue(DynamicBitset& bitset, const picojson::value& value) {
-    XGRAMMAR_CHECK(value.is<picojson::array>())
-        << "Error in deserializing DynamicBitset: Except an array";
+  friend std::optional<std::runtime_error> DeserializeJSONValue(
+      DynamicBitset* bitset, const picojson::value& value
+  ) {
+    const std::string& type_name = "DynamicBitset";
+    if (!value.is<picojson::array>()) {
+      return ConstructDeserializeError("Except an array", type_name);
+    }
     const auto& arr = value.get<picojson::array>();
-    XGRAMMAR_CHECK(arr.size() >= kSerializeHeaderSize)
-        << "Error in deserializing DynamicBitset: Except at least " << kSerializeHeaderSize
-        << " elements in the array";
-
+    if (arr.size() < 2) {
+      return ConstructDeserializeError("Except at least 2 elements in the array", type_name);
+    }
+    if (!arr[0].is<int64_t>()) {
+      return ConstructDeserializeError("Except an integer for size", type_name);
+    }
     int size = static_cast<int>(arr[0].get<int64_t>());
+    if (!arr[1].is<int64_t>()) {
+      return ConstructDeserializeError("Except an integer for buffer_size", type_name);
+    }
     int buffer_size = static_cast<int>(arr[1].get<int64_t>());
-    XGRAMMAR_CHECK(buffer_size == GetBufferSize(size))
-        << "Error in deserializing DynamicBitset: Invalid buffer_size. Buffer size should be "
-           "ceil(size / 32)";
+    if (buffer_size != GetBufferSize(size)) {
+      return ConstructDeserializeError(
+          "Invalid buffer_size. Buffer size should be ceil(size / 32)", type_name
+      );
+    }
 
     DynamicBitset result(size);
     for (int i = 0; i < buffer_size; ++i) {
-      XGRAMMAR_CHECK(arr[i + kSerializeHeaderSize].is<int64_t>())
-          << "Error in deserializing DynamicBitset: Except an integer in the array";
-      int64_t value = arr[i + kSerializeHeaderSize].get<int64_t>();
-      XGRAMMAR_CHECK(value >= 0 && value <= std::numeric_limits<uint32_t>::max())
-          << "Error in deserializing DynamicBitset: Integer in the array is out of the uint32_t "
-             "range";
+      if (!arr[i + 2].is<int64_t>()) {
+        return ConstructDeserializeError("Except an integer in the array", type_name);
+      }
+      int64_t value = arr[i + 2].get<int64_t>();
+      if (value < 0 || value > std::numeric_limits<uint32_t>::max()) {
+        return ConstructDeserializeError(
+            "Integer in the array is " + std::to_string(value) + " and out of the uint32_t range",
+            type_name
+        );
+      }
       result.data_[i] = static_cast<uint32_t>(value);
     }
-    bitset = std::move(result);
+    *bitset = std::move(result);
+    return std::nullopt;
   }
 
   bool operator==(const DynamicBitset& other) const {
@@ -264,11 +281,6 @@ class DynamicBitset {
   }
 
  private:
-  /*!
-   * \brief The header size for JSON serialization in the number of integers.
-   */
-  inline static constexpr auto kSerializeHeaderSize = 2;
-
   static int LowestBit(uint32_t value) {
 #ifdef __GNUC__
     return __builtin_ctz(value);

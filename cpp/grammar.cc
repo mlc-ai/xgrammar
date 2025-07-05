@@ -170,7 +170,7 @@ std::variant<Grammar, std::runtime_error> Grammar::DeserializeJSON(const std::st
   if (auto err = AutoDeserializeJSON(&result, json_string, true, "Grammar")) {
     return err.value();
   }
-  return std::move(result);
+  return result;
 }
 
 }  // namespace xgrammar

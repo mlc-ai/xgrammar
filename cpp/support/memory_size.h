@@ -83,7 +83,6 @@ inline constexpr std::size_t MemorySize(const T& value) {
     return size;
   } else {
     static_assert(detail::memory_size::false_v<T>, "MemorySize is not implemented for this type");
-    XGRAMMAR_UNREACHABLE();
   }
 }
 
