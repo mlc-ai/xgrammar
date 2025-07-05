@@ -13,6 +13,8 @@
 
 namespace xgrammar {
 
+/******************** Type Traits ********************/
+
 template <typename>
 struct is_std_array : std::false_type {};
 
@@ -49,6 +51,16 @@ struct is_unordered_set : std::false_type {};
 template <typename... R>
 struct is_unordered_set<std::unordered_set<R...>> : std::true_type {};
 
+/******************** Reflection ********************/
+
+/*!
+ * \brief The type of the member trait.
+ */
+enum class member_type {
+  kNone = 0,    // this is default, which has no member trait
+  kConfig = 1,  // this is a config with member pointers
+};
+
 /**
  * \brief Base trait for member traits.
  *
@@ -59,6 +71,8 @@ template <typename T>
 struct member_trait {
   static constexpr auto value = member_type::kNone;
 };
+
+/******************** Macros for Member Registration ********************/
 
 /**
  * \brief Macros to define member traits for types.
@@ -103,11 +117,11 @@ struct member_trait {
  * XGRAMMAR_MEMBER_ARRAY_TEMPLATE(TemplateClass<T>, &TemplateClass<T>::value);
  * \endcode
  */
-#define XGRAMMAR_MEMBER_TABLE_TEMPLATE(Type, ...)                           \
-  struct member_trait<Type> {                                               \
-    static constexpr auto value = member_type::kConfig;                     \
-    static constexpr auto members = detail::make_member_table(__VA_ARGS__); \
-    static constexpr auto names = detail::make_name_table(__VA_ARGS__);     \
+#define XGRAMMAR_MEMBER_TABLE_TEMPLATE(Type, ...)                                       \
+  struct member_trait<Type> {                                                           \
+    static constexpr auto value = member_type::kConfig;                                 \
+    static constexpr auto members = detail::reflection::make_member_table(__VA_ARGS__); \
+    static constexpr auto names = detail::reflection::make_name_table(__VA_ARGS__);     \
   }
 
 #define XGRAMMAR_MEMBER_ARRAY_TEMPLATE(Type, ...)                 \
@@ -125,12 +139,9 @@ struct member_trait {
   template <>                            \
   XGRAMMAR_MEMBER_ARRAY_TEMPLATE(Type, __VA_ARGS__)
 
-namespace detail::reflection {
+/******************** Implementation ********************/
 
-enum class member_type {
-  kNone = 0,    // this is default, which has no member trait
-  kConfig = 1,  // this is a config with member pointers
-};
+namespace detail::reflection {
 
 // We cannot use `static_assert(false)` even in unreachable code in `if constexpr`.
 // See https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2593r1.html
