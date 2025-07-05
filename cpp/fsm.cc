@@ -26,8 +26,7 @@
 
 #include "support/encoding.h"
 #include "support/logging.h"
-#include "support/reflection/json_serializer.h"
-#include "support/reflection/reflection.h"
+#include "support/reflection.h"
 #include "support/union_find_set.h"
 
 namespace xgrammar {
@@ -458,7 +457,7 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
 
   FSM ToFSM() const;
 
-  friend std::size_t MemorySize(const Impl& self) { return MemorySize(self.edges_); }
+  friend std::size_t MemorySize(const Impl& impl) { return MemorySize(impl.edges_); }
 };
 
 XGRAMMAR_MEMBER_ARRAY(CompactFSM::Impl, &CompactFSM::Impl::edges_);
@@ -626,8 +625,6 @@ void CompactFSM::GetReachableStates(const std::vector<int>& from, std::unordered
 }
 
 FSM CompactFSM::ToFSM() const { return pimpl_->ToFSM(); }
-
-std::size_t MemorySize(const CompactFSM& self) { return MemorySize(*self.pimpl_); }
 
 /****************** FSMWithStartEnd ******************/
 
@@ -1595,15 +1592,6 @@ std::size_t MemorySize(const CompactFSMWithStartEnd& self) {
 
 FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
-}
-
-picojson::value CompactFSM::SerializeJSONValue() const { return AutoSerializeJSONValue(**this); }
-
-void DeserializeJSONValue(CompactFSM& fsm, const picojson::value& v) {
-  if (!fsm.pimpl_) {
-    fsm.pimpl_ = std::make_unique<CompactFSM::Impl>();
-  }
-  return AutoDeserializeJSONValue(*fsm, v);
 }
 
 }  // namespace xgrammar

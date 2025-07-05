@@ -10,7 +10,9 @@
 #include <xgrammar/object.h>
 
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace xgrammar {
@@ -33,20 +35,20 @@ struct StructuralTagItem {
  * \details
  * ### Rules
  * The BNF grammar AST consists of a set of rules. Each rule contains a name and a definition, and
- * corresponds to a production in the grammar. The definition of a rule is a RuleExpr. Each rule
+ * corresponds to a production in the grammar. The definition of a rule is a GrammarExpr. Each rule
  * has a rule_id for reference.
  *
- * ### RuleExprs
- * RuleExpr is the definition of a rule or part of the definition of a rule. It can contain
- * elements, empty string, reference to other RuleExprs, or reference to other rules. Each RuleExpr
- * corresponds to an rule_expr_id for reference.
+ * ### GrammarExprs
+ * GrammarExpr is the definition of a rule or part of the definition of a rule. It can contain
+ * elements, empty string, reference to other GrammarExprs, or reference to other rules. Each
+ * GrammarExpr corresponds to an grammar_expr_id for reference.
  *
  * For example, in the following rule: rule ::= ("a" "b") | "c"
- * ("a" "b"), "c", ("a" "b") | "c" are all RuleExprs.
+ * ("a" "b"), "c", ("a" "b") | "c" are all GrammarExprs.
  *
- * #### Types of RuleExprs
- * Every RuleExpr is represented by a type as well as a variable-length array containing its data.
- * RuleExpr has several types:
+ * #### Types of GrammarExprs
+ * Every GrammarExpr is represented by a type as well as a variable-length array containing its
+ * data. GrammarExpr has several types:
  * - Byte string: a string of bytes (0~255). Supports UTF-8 strings.
  * - Character class: a range of characters (each character is a unicode codepoint), e.g. [a-z],
  *   [ac-z]. Can be negated: [^a-z], [^ac-z]. Now only ascii chars is allowed in [], but this
@@ -54,21 +56,23 @@ struct StructuralTagItem {
  * - Character class star: a star quantifier of a character class. e.g. [a-z]*, [^a-z]*.
  * - EmptyStr: an empty string, i.e. ""
  * - Rule reference: a reference to another rule
- * - Sequence: a sequence of rule_exprs, e.g. ("a" "b"). These rule_exprs are concatenated together.
- * - Choices: a choice of rule_exprs, e.g. ("a" "b") | "c". Each rule_expr can be matched.
+ * - Sequence: a sequence of grammar_exprs, e.g. ("a" "b"). These grammar_exprs are concatenated
+ * together.
+ * - Choices: a choice of grammar_exprs, e.g. ("a" "b") | "c". Each grammar_expr can be matched.
  *
- * #### Storage of RuleExprs
- * Each type of RuleExpr has a different data format. For the format of each type of RuleExpr, see
- * docs in Grammar::Impl::RuleExprType.
+ * #### Storage of GrammarExprs
+ * Each type of GrammarExpr has a different data format. For the format of each type of GrammarExpr,
+ * see docs in Grammar::Impl::GrammarExprType.
  *
- * We store all RuleExprs in csr_matrix style. That is, they are stored consecutively in one vector
- * (data vector) and the starting position of each RuleExpr is recorded in the indptr vector.
+ * We store all GrammarExprs in csr_matrix style. That is, they are stored consecutively in one
+ * vector (data vector) and the starting position of each GrammarExpr is recorded in the indptr
+ * vector.
  *
- * \remark The character class star RuleExpr is for the special support for elements like [a-z]*
+ * \remark The character class star GrammarExpr is for the special support for elements like [a-z]*
  * in the grammar. We add it to make the matching more efficient, as we can avoid recursion into
  * rules when matching a sequence of characters. It should be used like:
  * rule1 ::= ((element1 element2 rule2 ...) | ...)
- * rule2 ::= character_class_star_rule_expr(id_of_a_character_class_rule_expr)
+ * rule2 ::= character_class_star_grammar_expr(id_of_a_character_class_grammar_expr)
  */
 class Grammar {
  public:
@@ -131,6 +135,7 @@ class Grammar {
 
   /*!
    * \brief Get the grammar of standard JSON format. We have built-in support for JSON.
+   * \return The grammar of standard JSON format.
    */
   static Grammar BuiltinJSONGrammar();
 
@@ -150,14 +155,27 @@ class Grammar {
    */
   static Grammar Concat(const std::vector<Grammar>& grammars);
 
-  /*! \brief Print a BNF grammar. */
+  /*!
+   * \brief Print a BNF grammar.
+   * \param os The output stream.
+   * \param grammar The grammar to print.
+   * \return The output stream.
+   */
   friend std::ostream& operator<<(std::ostream& os, const Grammar& grammar);
 
-  /*! \brief Return the serialized JSON string of the grammar. */
+  /*!
+   * \brief Return the serialized JSON string of the grammar.
+   * \return The serialized JSON string.
+   */
   std::string SerializeJSON() const;
 
-  /*! \brief Deserialize a grammar from a JSON string. */
-  static Grammar DeserializeJSON(const std::string& json_string);
+  /*!
+   * \brief Deserialize a grammar from a JSON string.
+   * \param json_string The JSON string to deserialize.
+   * \return If the deserialization is successful, return the grammar. Otherwise, return a runtime
+   * error with the error message.
+   */
+  static std::variant<Grammar, std::runtime_error> DeserializeJSON(const std::string& json_string);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(Grammar);
 };
