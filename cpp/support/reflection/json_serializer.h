@@ -75,9 +75,12 @@ std::string AutoSerializeJSON(const T& value, bool add_version = false);
  * generated from the defined members.
  * \param result The result to be deserialized.
  * \param value The JSON value to be deserialized.
+ * \param type_name The name of the type to be deserialized. Used for error message.
  */
 template <typename T>
-void AutoDeserializeJSONValue(T& result, const picojson::value& value);
+std::optional<std::runtime_error> AutoDeserializeJSONValue(
+    T* result, const picojson::value& value, const std::string& type_name = ""
+);
 
 /*!
  * \brief Deserializes a value from a JSON string. The members of T must be defined through
@@ -87,10 +90,14 @@ void AutoDeserializeJSONValue(T& result, const picojson::value& value);
  * \param json_string The JSON string to be deserialized.
  * \param check_version Whether to check the version info in the serialized object. If true, the
  * caller must ensure the serialized result to be a object.
+ * \param type_name The name of the type to be deserialized. Used for error message.
  */
 template <typename T>
 std::optional<std::runtime_error> AutoDeserializeJSON(
-    T& result, const std::string& json_string, bool check_version = false
+    T* result,
+    const std::string& json_string,
+    bool check_version = false,
+    const std::string& type_name = ""
 );
 
 /******************** Implementations ********************/
@@ -189,6 +196,9 @@ inline const picojson::value& json_member(const picojson::object& value, const s
   XGRAMMAR_CHECK(it != value.end()) << "Missing member in DeserializeJSONValue";
   return it->second;
 }
+
+template <typename>
+inline constexpr bool false_v = false;
 
 }  // namespace detail::json_serializer
 
@@ -330,43 +340,64 @@ inline void TraitDeserializeJSONValue(T& result, const picojson::value& value) {
   }
 }
 
+inline std::runtime_error ConstructDeserializeError(
+    const std::string& error_message, const std::string& type_name
+) {
+  if (type_name.empty()) {
+    return std::runtime_error("Deserialize error: " + error_message);
+  } else {
+    return std::runtime_error("Deserialize error for type " + type_name + ": " + error_message);
+  }
+}
+
 template <typename T>
-inline void AutoDeserializeJSONValue(T& result, const picojson::value& value) {
+inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
+    T* result, const picojson::value& value, const std::string& type_name = ""
+) {
   static_assert(!std::is_const_v<T>, "Cannot deserialize into a const type");
-  if constexpr (detail::json_serializer::has_deserialize_json_member<T>::value) {
-    result = T::DeserializeJSONValue(value);
-  } else if constexpr (detail::json_serializer::has_deserialize_json_global<T>::value) {
-    DeserializeJSONValue(result, value);
+  if constexpr (detail::json_serializer::has_deserialize_json_global<T>::value) {
+    return DeserializeJSONValue(result, value, type_name);
   } else if constexpr (std::is_same_v<T, bool>) {
-    result = detail::json_serializer::json_as<bool>(value);
+    if (!value.is<bool>()) {
+      return ConstructDeserializeError("Expect a boolean", type_name);
+    }
+    *result = value.get<bool>();
+    return std::nullopt;
   } else if constexpr (std::is_integral_v<T> || std::is_enum_v<T>) {
-    result = static_cast<T>(detail::json_serializer::json_as<int64_t>(value));
+    if (!value.is<int64_t>()) {
+      return ConstructDeserializeError("Expect an integer", type_name);
+    }
+    *result = static_cast<T>(value.get<int64_t>());
+    return std::nullopt;
   } else if constexpr (std::is_floating_point_v<T>) {
-    result = static_cast<T>(detail::json_serializer::json_as<double>(value));
+    if (!value.is<double>()) {
+      return ConstructDeserializeError("Expect a floating point number", type_name);
+    }
+    *result = static_cast<T>(value.get<double>());
+    return std::nullopt;
   } else if constexpr (std::is_same_v<T, std::string>) {
-    result = detail::json_serializer::json_as<std::string>(value);
+    if (!value.is<std::string>()) {
+      return ConstructDeserializeError("Expect a string", type_name);
+    }
+    *result = value.get<std::string>();
+    return std::nullopt;
   } else if constexpr (detail::json_serializer::is_optional<T>::value) {
+    // for the following container<T>, T must be default constructible
     if (value.is<picojson::null>()) {
-      result.reset();
+      result->reset();
+      return std::nullopt;
     } else {
-      AutoDeserializeJSONValue(result.emplace(), value);
+      return AutoDeserializeJSONValue(&result->emplace(), value, type_name);
     }
   } else if constexpr (detail::json_serializer::is_vector<T>::value) {
-    result.clear();
-    const auto& arr = detail::json_serializer::json_as<picojson::array>(value);
-    result.reserve(arr.size());
-    for (const auto& item : detail::json_serializer::json_as<picojson::array>(value)) {
-      auto& item_value = result.emplace_back();
-      AutoDeserializeJSONValue(item_value, item);
+    result->clear();
+    if (!value.is<picojson::array>()) {
+      return ConstructDeserializeError("Expect an array", type_name);
     }
-  } else if constexpr (detail::json_serializer::is_unordered_set<T>::value) {
-    result.clear();
-    const auto& arr = detail::json_serializer::json_as<picojson::array>(value);
-    result.reserve(arr.size());
+    const auto& arr = value.get<picojson::array>();
+    result->reserve(arr.size());
     for (const auto& item : arr) {
-      typename T::value_type item_value;
-      AutoDeserializeJSONValue(item_value, item);
-      result.emplace(std::move(item_value));
+      AutoDeserializeJSONValue(result->emplace_back(), item);
     }
   } else if constexpr (detail::json_serializer::is_unordered_map<T>::value) {
     const auto& arr = detail::json_serializer::json_as<picojson::array>(value);
@@ -392,7 +423,7 @@ inline void AutoDeserializeJSONValue(T& result, const picojson::value& value) {
 
 template <typename T>
 inline std::optional<std::runtime_error> AutoDeserializeJSON(
-    T& result, const std::string& json_string, bool check_version
+    T* result, const std::string& json_string, bool check_version
 ) {
   picojson::value json_value;
   auto error = picojson::parse(json_value, json_string);

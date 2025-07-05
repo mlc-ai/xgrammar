@@ -112,10 +112,10 @@ class CompiledGrammar::Impl {
 
   std::size_t MemorySize() const;
 
-  std::string SerializeJSON() const;
+  picojson::value SerializeJSONValue() const;
 
-  static std::optional<std::runtime_error> DeserializeJSON(
-      CompiledGrammar::Impl* compiled_grammar, const std::string& json_string
+  static std::optional<std::runtime_error> DeserializeJSONValue(
+      CompiledGrammar::Impl& compiled_grammar, const picojson::value& json_value
   );
 
   friend struct member_trait<Impl>;
