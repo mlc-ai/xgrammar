@@ -11,6 +11,7 @@
 #include "json_schema_converter.h"
 #include "regex_converter.h"
 #include "structural_tag.h"
+#include "support/reflection/json_serializer.h"
 
 namespace xgrammar {
 
@@ -149,6 +150,17 @@ Grammar Grammar::Concat(const std::vector<Grammar>& grammars) {
 std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
   os << grammar.ToString();
   return os;
+}
+
+std::string Grammar::SerializeJSON() const { return AutoSerializeJSON(*this->ImplPtr(), true); }
+
+std::variant<Grammar, std::runtime_error> Grammar::DeserializeJSON(const std::string& json_string) {
+  Grammar grammar(std::make_shared<Grammar::Impl>());
+  auto err = AutoDeserializeJSON(grammar, json_string, true);
+  if (err) {
+    return err.value();
+  }
+  return grammar;
 }
 
 }  // namespace xgrammar

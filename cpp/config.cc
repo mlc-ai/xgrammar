@@ -1,3 +1,8 @@
+/*!
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/config.cc
+ */
+
 #include <xgrammar/config.h>
 
 #include "support/recursion_guard.h"

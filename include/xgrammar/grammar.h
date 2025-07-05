@@ -159,7 +159,7 @@ class Grammar {
   std::string SerializeJSON() const;
 
   /*! \brief Deserialize a grammar from a JSON string. */
-  static Grammar DeserializeJSON(const std::string& json_string);
+  static std::variant<Grammar, std::runtime_error> DeserializeJSON(const std::string& json_string);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(Grammar);
 };

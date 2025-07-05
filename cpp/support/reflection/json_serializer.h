@@ -288,7 +288,7 @@ inline picojson::value AutoSerializeJSONValue(const T& value) {
 }
 
 template <typename T>
-inline std::string AutoSerializeJSON(const T& value, bool add_version = false) {
+inline std::string AutoSerializeJSON(const T& value, bool add_version) {
   picojson::value json_value = AutoSerializeJSONValue(value);
   if (add_version) {
     XGRAMMAR_DCHECK(json_value.is<picojson::object>());

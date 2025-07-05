@@ -3,8 +3,8 @@
  * \file xgrammar/compiled_grammar_impl.h
  * \brief The header for the data structures of the compiled grammar.
  */
-#ifndef XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
-#define XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
+#ifndef XGRAMMAR_COMPILED_GRAMMAR_IMPL_H_
+#define XGRAMMAR_COMPILED_GRAMMAR_IMPL_H_
 
 #include <xgrammar/grammar.h>
 
@@ -137,4 +137,4 @@ XGRAMMAR_MEMBER_TABLE(
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
+#endif  // XGRAMMAR_COMPILED_GRAMMAR_IMPL_H_

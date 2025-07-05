@@ -17,6 +17,7 @@
 
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/reflection/json_serializer.h"
 #include "tokenizer_info_impl.h"
 
 namespace xgrammar {
@@ -422,6 +423,21 @@ TokenizerInfo TokenizerInfo::FromVocabAndMetadata(
 
 std::string TokenizerInfo::DetectMetadataFromHF(const std::string& backend_str) {
   return Impl::DetectMetadataFromHF(backend_str);
+}
+
+std::string TokenizerInfo::SerializeJSON() const {
+  return AutoSerializeJSON(*this->ImplPtr(), true);
+}
+
+std::variant<TokenizerInfo, std::runtime_error> TokenizerInfo::DeserializeJSON(
+    const std::string& json_string
+) {
+  TokenizerInfo tokenizer_info(std::make_shared<TokenizerInfo::Impl>());
+  auto err = AutoDeserializeJSON(tokenizer_info, json_string, true);
+  if (err) {
+    return err.value();
+  }
+  return tokenizer_info;
 }
 
 }  // namespace xgrammar

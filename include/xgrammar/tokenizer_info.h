@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace xgrammar {
@@ -52,7 +53,9 @@ class TokenizerInfo {
   std::string SerializeJSON() const;
 
   /*! \brief Deserialize a tokenizer info from a JSON string. */
-  static TokenizerInfo DeserializeJSON(const std::string& json_string);
+  static std::variant<TokenizerInfo, std::runtime_error> DeserializeJSON(
+      const std::string& json_string
+  );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
 };

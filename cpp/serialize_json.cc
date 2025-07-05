@@ -19,19 +19,6 @@
 
 namespace xgrammar {
 
-bool TokenizerInfo::Impl::operator==(const TokenizerInfo::Impl& other) const {
-  static constexpr auto tie = [](const TokenizerInfo::Impl& impl) {
-    return std::tie(
-        impl.vocab_type_,
-        impl.vocab_size_,
-        impl.add_prefix_space_,
-        impl.stop_token_ids_,
-        impl.special_token_ids_
-    );
-  };
-  return tie(*this) == tie(other);
-}
-
 // static std::string SerializeJSONPython(picojson::object& object) {
 //   object["__VERSION__"] = picojson::value(kXGrammarSerializeVersion);
 //   return picojson::value{object}.serialize(/*prettify=*/false);
@@ -63,34 +50,35 @@ enum class VersionError {
 // }
 
 // Throws an error if the version is missing or mismatched.
-[[noreturn]]
-static void throw_version_error(VersionError error, std::string type) {
-  const auto error_prefix = "Deserialize of type " + type +
-                            " failed: "
-                            " version error: ";
-  const auto error_suffix = " Please remove the cache and serialize it in this version.";
-  switch (error) {
-    case VersionError::kMissingVersion:
-      XGRAMMAR_LOG_FATAL << error_prefix << "missing version in serialized JSON." << error_suffix;
-      break;
-    case VersionError::kVersionMismatch:
-      XGRAMMAR_LOG_FATAL << error_prefix
-                         << "the serialized json is from another version of xgrammar."
-                         << error_suffix;
-      break;
-    default:
-      XGRAMMAR_LOG_FATAL << error_prefix << "internal implementation error." << error_suffix;
-  }
-  XGRAMMAR_UNREACHABLE();
-}
+// [[noreturn]]
+// static void throw_version_error(VersionError error, std::string type) {
+//   const auto error_prefix = "Deserialize of type " + type +
+//                             " failed: "
+//                             " version error: ";
+//   const auto error_suffix = " Please remove the cache and serialize it in this version.";
+//   switch (error) {
+//     case VersionError::kMissingVersion:
+//       XGRAMMAR_LOG_FATAL << error_prefix << "missing version in serialized JSON." <<
+//       error_suffix; break;
+//     case VersionError::kVersionMismatch:
+//       XGRAMMAR_LOG_FATAL << error_prefix
+//                          << "the serialized json is from another version of xgrammar."
+//                          << error_suffix;
+//       break;
+//     default:
+//       XGRAMMAR_LOG_FATAL << error_prefix << "internal implementation error." << error_suffix;
+//   }
+//   XGRAMMAR_UNREACHABLE();
+// }
 
-[[noreturn]]
-static void throw_format_error(std::string type) {
-  // Deserialize of type xxx: format error: the json does not follow the serialization format.
-  XGRAMMAR_LOG_FATAL << "Deserialize of type " << type
-                     << " failed: format error: the json does not follow the serialization format.";
-  XGRAMMAR_UNREACHABLE();
-}
+// [[noreturn]]
+// static void throw_format_error(std::string type) {
+//   // Deserialize of type xxx: format error: the json does not follow the serialization format.
+//   XGRAMMAR_LOG_FATAL << "Deserialize of type " << type
+//                      << " failed: format error: the json does not follow the serialization
+//                      format.";
+//   XGRAMMAR_UNREACHABLE();
+// }
 
 std::string CompiledGrammar::SerializeJSON() const {
   auto result = picojson::object{};
@@ -137,48 +125,27 @@ CompiledGrammar CompiledGrammar::DeserializeJSON(
   throw_format_error("CompiledGrammar");
 }
 
-std::string Grammar::SerializeJSON() const {
-  auto value = AutoSerializeJSONValue(**this);
-  auto& object = value.get<picojson::object>();
-  return SerializeJSONPython(object);
-}
+// std::string TokenizerInfo::SerializeJSON() const {
+//   auto value = AutoSerializeJSONValue(**this);
+//   auto& object = value.get<picojson::object>();
+//   return SerializeJSONPython(object);
+// }
 
-Grammar Grammar::DeserializeJSON(const std::string& json_string) {
-  auto result = DeserializeJSONPython(json_string);
-  if (std::holds_alternative<VersionError>(result))
-    throw_version_error(std::get<VersionError>(result), "Grammar");
-  auto& value = std::get<picojson::value>(result);
-  try {
-    auto grammar = Grammar{std::make_shared<Grammar::Impl>()};
-    AutoDeserializeJSONValue(*grammar, value);
-    return grammar;
-  } catch (const std::exception&) {
-    // pass the exception to the caller
-  }
-  throw_format_error("Grammar");
-}
+// TokenizerInfo TokenizerInfo::DeserializeJSON(const std::string& json_string) {
+//   auto result = DeserializeJSONPython(json_string);
+//   if (std::holds_alternative<VersionError>(result))
+//     throw_version_error(std::get<VersionError>(result), "TokenizerInfo");
 
-std::string TokenizerInfo::SerializeJSON() const {
-  auto value = AutoSerializeJSONValue(**this);
-  auto& object = value.get<picojson::object>();
-  return SerializeJSONPython(object);
-}
-
-TokenizerInfo TokenizerInfo::DeserializeJSON(const std::string& json_string) {
-  auto result = DeserializeJSONPython(json_string);
-  if (std::holds_alternative<VersionError>(result))
-    throw_version_error(std::get<VersionError>(result), "TokenizerInfo");
-
-  auto& value = std::get<picojson::value>(result);
-  try {
-    auto tokenizer_info = TokenizerInfo{std::make_shared<TokenizerInfo::Impl>()};
-    AutoDeserializeJSONValue(*tokenizer_info, value);
-    return tokenizer_info;
-  } catch (const std::exception& e) {
-    // pass the exception to the caller
-    throw_format_error("TokenizerInfo: " + std::string(e.what()));
-  }
-  XGRAMMAR_UNREACHABLE();
-}
+//   auto& value = std::get<picojson::value>(result);
+//   try {
+//     auto tokenizer_info = TokenizerInfo{std::make_shared<TokenizerInfo::Impl>()};
+//     AutoDeserializeJSONValue(*tokenizer_info, value);
+//     return tokenizer_info;
+//   } catch (const std::exception& e) {
+//     // pass the exception to the caller
+//     throw_format_error("TokenizerInfo: " + std::string(e.what()));
+//   }
+//   XGRAMMAR_UNREACHABLE();
+// }
 
 }  // namespace xgrammar
