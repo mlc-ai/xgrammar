@@ -48,9 +48,11 @@ namespace xgrammar {
 
 std::size_t MemorySize(const Grammar::Impl& impl) {
   // we assume strings are not long, so we don't iterate through all the rules
-  return impl.rules_.size() * sizeof(impl.rules_[0]) + MemorySize(impl.grammar_expr_data_) +
-         MemorySize(impl.grammar_expr_indptr_) + MemorySize(impl.root_tag_dispatch_fsm) +
-         MemorySize(impl.tag_dispatch_end_node_to_rule_id) + MemorySize(impl.allow_empty_rule_ids);
+  std::size_t result = impl.rules_.size() * sizeof(impl.rules_[0]) +
+                       MemorySize(impl.grammar_expr_data_) + MemorySize(impl.grammar_expr_indptr_) +
+                       MemorySize(impl.allow_empty_rule_ids) + MemorySize(impl.complete_fsm) +
+                       impl.per_rule_fsms.size() * sizeof(impl.per_rule_fsms[0]);
+  return result;
 }
 
 std::size_t Grammar::Impl::MemorySize() const { return xgrammar::MemorySize(*this); }
@@ -674,9 +676,9 @@ class GrammarCompiler::Impl {
         compile_cache_(static_cast<std::size_t>(max_memory_bytes), *this) {}
 
   /*!
-   * \brief Build the tag dispatch fsm for the root rule and store in the compiled grammar.
+   * \brief Build the fsm for each rule and store in the grammar.
    */
-  void BuildTagDispatchFSM(Grammar grammar, const Grammar::Impl::GrammarExpr& root_grammar_expr);
+  void BuildFSM(Grammar grammar);
 
   /*! \brief Multi-thread compile the grammar. */
   CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
@@ -747,30 +749,6 @@ class GrammarCompiler::Impl {
   ThreadSafeLRUCache<MultipleKey, CompiledGrammar, Computer, SizeEstimator> compile_cache_;
 };
 
-void GrammarCompiler::Impl::BuildTagDispatchFSM(
-    Grammar grammar, const Grammar::Impl::GrammarExpr& root_grammar_expr
-) {
-  std::vector<std::string> tags;
-  std::vector<int32_t> rule_ids;
-  for (int i = 0; i < root_grammar_expr.size(); i += 2) {
-    auto byte_string_expr = grammar->GetGrammarExpr(root_grammar_expr[i]);
-    std::string tag;
-    for (int j = 0; j < byte_string_expr.size(); ++j) {
-      tag += static_cast<char>(byte_string_expr[j]);
-    }
-    tags.push_back(tag);
-    rule_ids.push_back(root_grammar_expr[i + 1]);
-  }
-
-  std::vector<int32_t> end_nodes;
-  TrieFSMBuilder builder;
-  FSMWithStartEnd trie = builder.Build(tags, &end_nodes);
-  grammar->root_tag_dispatch_fsm = trie.ToCompact();
-  for (int i = 0; i < static_cast<int>(end_nodes.size()); ++i) {
-    grammar->tag_dispatch_end_node_to_rule_id[end_nodes[i]] = rule_ids[i];
-  }
-}
-
 CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
 
@@ -780,12 +758,8 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
   // Step 1. Compute the ids of rules that can be empty
   compiled_grammar_impl->grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(grammar);
 
-  // Step 2. Compute the root tag dispatch fsm
-  auto root_rule_id = grammar->GetRootRuleId();
-  auto root_grammar_expr = grammar->GetGrammarExpr(grammar->GetRule(root_rule_id).body_expr_id);
-  if (root_grammar_expr.type == GrammarExprType::kTagDispatch) {
-    BuildTagDispatchFSM(compiled_grammar_impl->grammar, root_grammar_expr);
-  }
+  // Step 2. Build the fsm for each rule
+  GrammarFSMBuilder::Apply(&compiled_grammar_impl->grammar);
 
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
@@ -835,17 +809,21 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
     }
   };
 
-  for (int32_t rule_id = 0; rule_id < static_cast<int>(grammar->NumRules()); ++rule_id) {
-    const auto& rule = grammar->GetRule(rule_id);
-    const auto& rule_body = grammar->GetGrammarExpr(rule.body_expr_id);
+  auto root_rule_id = grammar->GetRootRuleId();
 
-    if (rule_body.type == GrammarExprType::kTagDispatch) {
-      auto state = ParserState(rule_id, rule.body_expr_id, 0, ParserState::kNoPrevInputPos, 0);
-      for (int i = 0; i < grammar->root_tag_dispatch_fsm->NumStates(); ++i) {
-        if (!grammar->root_tag_dispatch_fsm->IsEndState(i)) {
-          state.element_id = i;
-          add_task_adaptive_token_mask(state, rule_id == root_rule_id);
-        }
+  for (int32_t rule_id = 0; rule_id < static_cast<int>(grammar->NumRules()); ++rule_id) {
+    auto rule = grammar->GetRule(rule_id);
+    auto rule_body = grammar->GetGrammarExpr(rule.body_expr_id);
+    const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
+
+    if (rule_fsm.has_value()) {
+      auto cur_stack_element =
+          ParserState(rule_id, rule.body_expr_id, 0, ParserState::kNoPrevInputPos, 0);
+      std::unordered_set<int> reachable_states;
+      rule_fsm->GetReachableStates(&reachable_states);
+      for (int i : reachable_states) {
+        cur_stack_element.element_id = i;
+        add_task_adaptive_token_mask(cur_stack_element, rule_id == root_rule_id);
       }
       continue;
     }

@@ -222,21 +222,6 @@ def test_unicode_escape():
     assert after == expected
 
 
-def test_tag_dispatch():
-    """Test TagDispatch functionality."""
-    before = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2))
-rule1 ::= "a"
-rule2 ::= "b"
-"""
-    expected = """root ::= ((TagDispatch(("tag1", rule1), ("tag2", rule2))))
-rule1 ::= (("a"))
-rule2 ::= (("b"))
-"""
-    grammar = _ebnf_to_grammar_no_normalization(before)
-    after = str(grammar)
-    assert after == expected
-
-
 def test_complex_grammar():
     """Test a more complex grammar with multiple features."""
     before = """root ::= expr
@@ -492,65 +477,6 @@ rule5 ::= (("") | ("g" rule5 "h"))
     assert after == expected
 
 
-def test_lookahead_assertion_analyzer_tag_dispatch():
-    # tag dispatch disables lookahead assertion detection
-    before = r"""root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3), ("tag4", rule4), ("tag5", rule5))
-rule1 ::= "b"
-rule2 ::= "c"
-rule3 ::= "" | "d" rule3
-rule4 ::= "" | "e" rule4 "f"
-rule5 ::= "" | "g" rule5 "h"
-"""
-    expected = r"""root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3), ("tag4", rule4), ("tag5", rule5))
-rule1 ::= (("b"))
-rule2 ::= (("c"))
-rule3 ::= ("" | ("d" rule3))
-rule4 ::= ("" | ("e" rule4 "f"))
-rule5 ::= ("" | ("g" rule5 "h"))
-"""
-    grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.structure_normalizer(grammar)
-    grammar = GrammarFunctor.byte_string_fuser(grammar)
-    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
-    after = str(grammar)
-    assert after == expected
-
-
-def test_tag_dispatch_end_to_end():
-    before = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
-rule1 ::= "a"
-rule2 ::= "b"
-rule3 ::= "c"
-"""
-    expected = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
-rule1 ::= (("a"))
-rule2 ::= (("b"))
-rule3 ::= (("c"))
-"""
-    grammar = xgr.Grammar.from_ebnf(before)
-    after = str(grammar)
-    assert after == expected
-
-
-def test_tag_dispatch_end_to_end_complex():
-    before = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
-rule1 ::= ("a" TagDispatch(("tag1", rule2), ("tag2", rule3)) | "zzz")
-rule2 ::= TagDispatch(("tag1", rule2), ("tag2", rule3)) | TagDispatch(("tag3", rule2), ("tag4", rule3))
-rule3 ::= "c"
-"""
-    expected = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
-rule1 ::= (("a" rule1_1) | ("zzz"))
-rule2 ::= ((rule2_1) | (rule2_2))
-rule3 ::= (("c"))
-rule1_1 ::= TagDispatch(("tag1", rule2), ("tag2", rule3))
-rule2_1 ::= TagDispatch(("tag1", rule2), ("tag2", rule3))
-rule2_2 ::= TagDispatch(("tag3", rule2), ("tag4", rule3))
-"""
-    grammar = xgr.Grammar.from_ebnf(before)
-    after = str(grammar)
-    assert after == expected
-
-
 def test_flatten():
     before = """root ::= or_test sequence_test nested_test empty_test
 or_test ::= ([a] | "b") | "de" | "" | or_test | [^a-z]
@@ -782,21 +708,6 @@ d_1 ::= ("" | ("d"))
     assert output_string_1 == output_string_2
 
 
-def test_e2e_tag_dispatch_roundtrip():
-    """Checks the printed result can be parsed, and the parsing-printing process is idempotent."""
-    before = r"""root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
-rule1 ::= (("a"))
-rule2 ::= (("b"))
-rule3 ::= (("c"))
-"""
-    grammar_1 = xgr.Grammar.from_ebnf(before)
-    output_string_1 = str(grammar_1)
-    grammar_2 = xgr.Grammar.from_ebnf(output_string_1)
-    output_string_2 = str(grammar_2)
-    assert before == output_string_1
-    assert output_string_1 == output_string_2
-
-
 ebnf_str__expected_error_regex__test_lexer_parser_errors = [
     (r'root ::= "a" "', 'EBNF lexer error at line 1, column 15: Expect " in string literal'),
     (
@@ -844,35 +755,6 @@ ebnf_str__expected_error_regex__test_end_to_end_errors = [
 def test_end_to_end_errors(ebnf_str: str, expected_error_regex: Optional[str]):
     with pytest.raises(RuntimeError, match=expected_error_regex):
         xgr.Grammar.from_ebnf(ebnf_str)
-
-
-ebnf_str__expected_error_regex__test_tag_dispatch_parser_errors = [
-    (
-        'root ::= TagDispatch(("", rule1))\nrule1 ::= "a"',
-        "EBNF parser error at line 1, column 21: Tag must be a non-empty string literal",
-    ),
-    (
-        'root ::= TagDispatch(("tag1", undefined_rule))',
-        'EBNF parser error at line 1, column 21: Rule "undefined_rule" is not defined',
-    ),
-    (
-        'root ::= TagDispatch("tag1", rule1)',
-        "EBNF parser error at line 1, column 21: Each tag dispatch element must be a tuple",
-    ),
-    (
-        'root ::= TagDispatch(("tag1" rule1))',
-        "EBNF parser error at line 1, column 30: Expect , or \\) in tuple",
-    ),
-]
-
-
-@pytest.mark.parametrize(
-    "ebnf_str, expected_error_regex",
-    ebnf_str__expected_error_regex__test_tag_dispatch_parser_errors,
-)
-def test_tag_dispatch_parser_errors(ebnf_str: str, expected_error_regex: Optional[str]):
-    with pytest.raises(RuntimeError, match=expected_error_regex):
-        _ebnf_to_grammar_no_normalization(ebnf_str)
 
 
 def test_error_consecutive_quantifiers():

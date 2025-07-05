@@ -2117,9 +2117,9 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
     }
   }
 
-  return Result<ArraySpec, SchemaError>::Ok(ArraySpec{
+  return ResultOk<ArraySpec>(
       prefix_item_schemas, allow_additional_items, additional_item_schema, min_items, max_items
-  });
+  );
 }
 
 std::string JSONSchemaConverter::VisitArray(

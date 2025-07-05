@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "grammar_data_structure.h"
 #include "grammar_parser.h"
 #include "support/encoding.h"
 
@@ -38,6 +39,20 @@ Grammar _EBNFToGrammarNoNormalization(
     const std::string& ebnf_string, const std::string& root_rule_name
 ) {
   return ParseEBNF(ebnf_string, root_rule_name);
+}
+
+std::string _PrintGrammarFSMs(const Grammar& grammar) {
+  std::string result;
+  for (int i = 0; i < grammar->NumRules(); i++) {
+    result += "Rule " + std::to_string(i) + ": " + grammar->GetRule(i).name + ", FSM: ";
+    if (grammar->per_rule_fsms[i].has_value()) {
+      result += grammar->per_rule_fsms[i]->ToString();
+    } else {
+      result += "None";
+    }
+    result += "\n";
+  }
+  return result;
 }
 
 }  // namespace xgrammar

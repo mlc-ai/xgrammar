@@ -170,6 +170,52 @@ class Grammar::Impl {
     return GetByteString(GetGrammarExpr(grammar_expr_id));
   }
 
+  /*! \brief The object representing a tag dispatch. */
+  struct TagDispatch {
+    /*! \brief The tag and rule id pairs. */
+    std::vector<std::pair<std::string, int32_t>> tag_rule_pairs;
+    /*! \brief If true, EOS is allowed to generate and will stop the tag dispatch. */
+    bool stop_eos;
+    /*! \brief The strings that will stop the tag dispatch. Only work if stop_eos is false. */
+    std::vector<std::string> stop_str;
+    /*! \brief If true, the tag dispatch will loop after dispatching. */
+    bool loop_after_dispatch;
+  };
+
+  /*! \brief Get the tag dispatch from the grammar expr. */
+  TagDispatch GetTagDispatch(const GrammarExpr& grammar_expr) {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTagDispatch)
+        << "GrammarExpr is not a tag dispatch";
+
+    TagDispatch result;
+    XGRAMMAR_DCHECK(grammar_expr.size() >= 3);
+    result.tag_rule_pairs.reserve((grammar_expr.size() - 3) / 2);
+
+    for (int i = 0; i < grammar_expr.size() - 3; i += 2) {
+      auto tag_expr_id = grammar_expr[i];
+      auto rule_id = grammar_expr[i + 1];
+      result.tag_rule_pairs.push_back({GetByteString(tag_expr_id), rule_id});
+    }
+
+    result.stop_eos = static_cast<bool>(grammar_expr[grammar_expr.size() - 3]);
+
+    auto stop_str_expr = GetGrammarExpr(grammar_expr[grammar_expr.size() - 2]);
+    XGRAMMAR_DCHECK(stop_str_expr.type == GrammarExprType::kChoices);
+    result.stop_str.reserve(stop_str_expr.size());
+    for (int j = 0; j < stop_str_expr.size(); j++) {
+      result.stop_str.push_back(GetByteString(stop_str_expr[j]));
+    }
+
+    result.loop_after_dispatch = static_cast<bool>(grammar_expr[grammar_expr.size() - 1]);
+
+    return result;
+  }
+
+  /*! \brief Get the tag dispatch from the grammar expr with the given id. */
+  TagDispatch GetTagDispatch(int32_t grammar_expr_id) {
+    return GetTagDispatch(GetGrammarExpr(grammar_expr_id));
+  }
+
  private:
   /*! \brief The rules of the grammar. rule_id corresponds the index of this vector. */
   std::vector<Rule> rules_;
@@ -184,12 +230,15 @@ class Grammar::Impl {
  public:
   /******************* Aux information for matching *******************/
 
-  /*! \brief The fsm for the root tag dispatch rule. If the grammar does not have a root tag
-   * dispatch rule, it is not built. */
-  std::optional<CompactFSMWithStartEnd> root_tag_dispatch_fsm = std::nullopt;
+  /*! \brief The complete FSM for the grammar. It contains the FSMs for all rules. */
+  CompactFSM complete_fsm{NullObj{}};
 
-  /*! \brief The map from the end nodes of the root tag dispatch fsm to the rule ids. */
-  std::unordered_map<int32_t, int32_t> tag_dispatch_end_node_to_rule_id;
+  /*!
+   * \brief The FSM for each rule.
+   * \details The FSM will be used in matching if it exists. If it does not exist (std::nullopt),
+   * the rule will be used in matching, and the rule's body must be a kChoices expr.
+   */
+  std::vector<std::optional<CompactFSMWithStartEnd>> per_rule_fsms;
 
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;

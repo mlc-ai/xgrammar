@@ -10,6 +10,7 @@
 #include <xgrammar/compiler.h>
 #include <xgrammar/grammar.h>
 #include <xgrammar/matcher.h>
+#include <xgrammar/structural_tag.h>
 #include <xgrammar/tokenizer_info.h>
 
 #endif  // XGRAMMAR_XGRAMMAR_H_

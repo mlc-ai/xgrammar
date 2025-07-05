@@ -242,7 +242,8 @@ NB_MODULE(xgrammar_bindings, m) {
           },
           nb::arg("start").none(),
           nb::arg("end").none()
-      );
+      )
+      .def("_print_grammar_fsms", &_PrintGrammarFSMs);
 
   auto pyGrammarFunctorModule = pyTestingModule.def_submodule("grammar_functor");
   pyGrammarFunctorModule.def("structure_normalizer", &StructureNormalizer::Apply)

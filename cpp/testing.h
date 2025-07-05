@@ -21,6 +21,8 @@ Grammar _EBNFToGrammarNoNormalization(
     const std::string& ebnf_string, const std::string& root_rule_name
 );
 
+std::string _PrintGrammarFSMs(const Grammar& grammar);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_TESTING_H_

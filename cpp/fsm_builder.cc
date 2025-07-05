@@ -7,12 +7,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <set>
 #include <stack>
 #include <unordered_set>
 #include <variant>
 #include <vector>
 
 #include "fsm.h"
+#include "grammar_data_structure.h"
 #include "support/logging.h"
 #include "support/utils.h"
 
@@ -747,8 +749,23 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
   return ir.Build();
 }
 
-FSMWithStartEnd TrieFSMBuilder::Build(
-    const std::vector<std::string>& patterns, std::vector<int32_t>* end_states
+class TrieFSMBuilderImpl {
+ public:
+  TrieFSMBuilderImpl() = default;
+  std::optional<FSMWithStartEnd> Build(
+      const std::vector<std::string>& patterns,
+      std::vector<int32_t>* end_states,
+      bool allow_overlap,
+      bool add_back_edges
+  );
+  void AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends);
+};
+
+std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
+    const std::vector<std::string>& patterns,
+    std::vector<int32_t>* end_states,
+    bool allow_overlap,
+    bool add_back_edges
 ) {
   FSM fsm(1);
   int start = 0;
@@ -759,6 +776,11 @@ FSMWithStartEnd TrieFSMBuilder::Build(
   }
 
   for (const auto& pattern : patterns) {
+    // Check for empty patterns
+    if (!allow_overlap && pattern.empty()) {
+      return std::nullopt;
+    }
+
     int current_state = 0;
     for (const auto& ch : pattern) {
       int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
@@ -768,13 +790,273 @@ FSMWithStartEnd TrieFSMBuilder::Build(
         fsm.AddEdge(current_state, next_state, ch_int16, ch_int16);
       }
       current_state = next_state;
+      if (!allow_overlap && ends.count(current_state) > 0) {
+        return std::nullopt;
+      }
+    }
+    if (!allow_overlap && fsm.GetEdges(current_state).size() > 0) {
+      return std::nullopt;
     }
     ends.insert(current_state);
     if (end_states) {
       end_states->push_back(current_state);
     }
   }
-  return FSMWithStartEnd(fsm, start, ends, true);
+  if (add_back_edges) {
+    AddBackEdges(&fsm, start, ends);
+  }
+  return FSMWithStartEnd(fsm, start, ends);
+}
+
+void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends) {
+  // Build an Aho-Corasick automaton by adding back edges.
+  // When matching on the trie fails, we should go back to the start state and
+  // find the next match. Back edges represent such state transitions.
+
+  auto f_add_range_edges = [&](int node, std::set<FSMEdge, FSMEdgeRangeComparator>& cur_edges_set) {
+    cur_edges_set.insert(FSMEdge(-1, -1, 0));
+    cur_edges_set.insert(FSMEdge(256, 256, 0));
+    XGRAMMAR_DCHECK(cur_edges_set.size() >= 2);
+    for (auto it = std::next(cur_edges_set.begin()); it != cur_edges_set.end(); ++it) {
+      FSMEdge prev_edge = *std::prev(it);
+      XGRAMMAR_DCHECK(prev_edge.max < it->min);
+      if (prev_edge.max + 1 != it->min) {
+        auto new_edge = FSMEdge(prev_edge.max + 1, it->min - 1, start);
+        // The new edge should be inserted before the current edge to avoid infinite loop.
+        XGRAMMAR_DCHECK(new_edge < *it);
+        cur_edges_set.insert(new_edge);
+      }
+    }
+
+    // Remove first and last element of cur_edges_set
+    XGRAMMAR_DCHECK(*cur_edges_set.begin() == FSMEdge(-1, -1, 0));
+    XGRAMMAR_DCHECK(*std::prev(cur_edges_set.end()) == FSMEdge(256, 256, 0));
+    cur_edges_set.erase(cur_edges_set.begin());
+    cur_edges_set.erase(std::prev(cur_edges_set.end()));
+
+    XGRAMMAR_DCHECK(cur_edges_set.begin()->min == 0);
+    XGRAMMAR_DCHECK(std::prev(cur_edges_set.end())->max == 255);
+  };
+
+  for (int i = 0; i < fsm->NumStates(); i++) {
+    if (i == start || ends.count(i) > 0) {
+      continue;
+    }
+    std::vector<FSMEdge>& cur_edges = fsm->GetEdges(i);
+    XGRAMMAR_DCHECK(cur_edges.size() > 0);
+    std::set<FSMEdge, FSMEdgeRangeComparator> cur_edges_set(cur_edges.begin(), cur_edges.end());
+
+    // Step 1. Add edges in the edges of the start state.
+    // For start--(c)-->t, add i--(c)-->t.
+    const auto& root_edges = fsm->GetEdges(start);
+    for (const auto& root_edge : root_edges) {
+      XGRAMMAR_DCHECK(root_edge.min == root_edge.max);
+      if (cur_edges_set.count(root_edge) == 0) {
+        cur_edges_set.insert(root_edge);
+      }
+    }
+
+    // Step 2. Add i--(c)-->start for c not in the edge set of i.
+    f_add_range_edges(i, cur_edges_set);
+
+    // Step 3. Update the edges of i.
+    cur_edges.clear();
+    cur_edges.insert(cur_edges.end(), cur_edges_set.begin(), cur_edges_set.end());
+  }
+
+  // Finally, add range edges to the start state.
+  std::vector<FSMEdge>& start_edges = fsm->GetEdges(start);
+  XGRAMMAR_DCHECK(start_edges.size() > 0);
+  std::set<FSMEdge, FSMEdgeRangeComparator> start_edges_set(start_edges.begin(), start_edges.end());
+  f_add_range_edges(start, start_edges_set);
+  start_edges.clear();
+  start_edges.insert(start_edges.end(), start_edges_set.begin(), start_edges_set.end());
+}
+
+std::optional<FSMWithStartEnd> TrieFSMBuilder::Build(
+    const std::vector<std::string>& patterns,
+    std::vector<int32_t>* end_states,
+    bool allow_overlap,
+    bool add_back_edges
+) {
+  return TrieFSMBuilderImpl().Build(patterns, end_states, allow_overlap, add_back_edges);
+}
+
+class TagDispatchFSMBuilderImpl {
+ public:
+  TagDispatchFSMBuilderImpl() = default;
+
+  std::optional<FSMWithStartEnd> Build(const Grammar::Impl::TagDispatch& tag_dispatch);
+
+  std::optional<FSMWithStartEnd> BuildWithEOSStop(
+      const std::vector<std::pair<std::string, int>>& tag_dispatch_rules, bool loop_after_dispatch
+  );
+
+  std::optional<FSMWithStartEnd> BuildWithStopString(
+      const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
+      const std::vector<std::string>& stop_strings,
+      bool loop_after_dispatch
+  );
+};
+
+std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::Build(
+    const Grammar::Impl::TagDispatch& tag_dispatch
+) {
+  if (tag_dispatch.stop_eos) {
+    return BuildWithEOSStop(tag_dispatch.tag_rule_pairs, tag_dispatch.loop_after_dispatch);
+  } else {
+    return BuildWithStopString(
+        tag_dispatch.tag_rule_pairs, tag_dispatch.stop_str, tag_dispatch.loop_after_dispatch
+    );
+  }
+}
+
+std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithEOSStop(
+    const std::vector<std::pair<std::string, int>>& tag_dispatch_rules, bool loop_after_dispatch
+) {
+  XGRAMMAR_DCHECK(tag_dispatch_rules.size() > 0);
+  std::vector<std::string> tag_names;
+  tag_names.reserve(tag_dispatch_rules.size());
+  for (const auto& [tag_name, tag_id] : tag_dispatch_rules) {
+    tag_names.push_back(tag_name);
+  }
+  std::vector<int> end_states;
+  auto trie_result = TrieFSMBuilder::Build(tag_names, &end_states, false, true);
+  if (!trie_result.has_value()) {
+    return std::nullopt;
+  }
+  auto trie_fsm = trie_result->GetFSM();
+  auto start = trie_result->GetStart();
+  auto old_ends = trie_result->GetEnds();
+  std::unordered_set<int> ends;
+
+  // The final end states are all but old_ends.
+  for (int i = 0; i < trie_fsm.NumStates(); i++) {
+    if (old_ends.count(i) == 0) {
+      ends.insert(i);
+    }
+  }
+
+  // Add rule ref edges
+  for (int i = 0; i < static_cast<int>(tag_dispatch_rules.size()); i++) {
+    int next_state;
+    if (loop_after_dispatch) {
+      next_state = start;
+    } else {
+      next_state = trie_fsm.AddState();
+      ends.insert(next_state);
+    }
+    trie_fsm.AddRuleEdge(end_states[i], next_state, tag_dispatch_rules[i].second);
+  }
+
+  return FSMWithStartEnd(trie_fsm, start, ends);
+}
+
+std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithStopString(
+    const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
+    const std::vector<std::string>& stop_strings,
+    bool loop_after_dispatch
+) {
+  XGRAMMAR_DCHECK(tag_dispatch_rules.size() > 0);
+  XGRAMMAR_DCHECK(stop_strings.size() > 0);
+  std::vector<std::string> tag_names;
+  tag_names.reserve(tag_dispatch_rules.size());
+  for (const auto& [tag_name, tag_id] : tag_dispatch_rules) {
+    tag_names.push_back(tag_name);
+  }
+  for (const auto& stop_string : stop_strings) {
+    tag_names.push_back(stop_string);
+  }
+  std::vector<int> trie_end_states;
+  auto trie_result = TrieFSMBuilder::Build(tag_names, &trie_end_states, false, true);
+  if (!trie_result.has_value()) {
+    return std::nullopt;
+  }
+  auto trie_fsm = trie_result->GetFSM();
+  auto start = trie_result->GetStart();
+  auto old_ends = trie_result->GetEnds();
+  std::unordered_set<int> ends;
+
+  // The final end states are the end of each stop string.
+  for (int i = static_cast<int>(tag_dispatch_rules.size());
+       i < static_cast<int>(trie_end_states.size());
+       i++) {
+    ends.insert(trie_end_states[i]);
+  }
+
+  if (loop_after_dispatch) {
+    for (int i = 0; i < static_cast<int>(tag_dispatch_rules.size()); i++) {
+      trie_fsm.AddRuleEdge(trie_end_states[i], start, tag_dispatch_rules[i].second);
+    }
+  } else {
+    // We should first build a new FSM that only contains the stop strings.
+    tag_names.clear();
+    for (const auto& stop_string : stop_strings) {
+      tag_names.push_back(stop_string);
+    }
+    std::vector<int> stop_end_states;
+    auto stop_trie_result = TrieFSMBuilder::Build(tag_names, nullptr, false, false);
+    XGRAMMAR_DCHECK(stop_trie_result.has_value());
+    auto stop_trie_fsm = stop_trie_result->GetFSM();
+    auto stop_trie_start = stop_trie_result->GetStart();
+    auto stop_trie_ends = stop_trie_result->GetEnds();
+
+    std::unordered_map<int, int> stop_trie_to_trie_map;
+    trie_fsm.AddFSM(stop_trie_fsm, &stop_trie_to_trie_map);
+    int start_of_stop_trie = stop_trie_to_trie_map[stop_trie_start];
+    for (auto state : stop_trie_ends) {
+      ends.insert(stop_trie_to_trie_map[state]);
+    }
+
+    for (int i = 0; i < static_cast<int>(tag_dispatch_rules.size()); i++) {
+      trie_fsm.AddRuleEdge(trie_end_states[i], start_of_stop_trie, tag_dispatch_rules[i].second);
+    }
+  }
+
+  return FSMWithStartEnd(trie_fsm, start, ends);
+}
+
+std::optional<FSMWithStartEnd> TagDispatchFSMBuilder::Build(
+    const Grammar::Impl::TagDispatch& tag_dispatch
+) {
+  return TagDispatchFSMBuilderImpl().Build(tag_dispatch);
+}
+
+class WildcardFSMBuilderImpl {
+ public:
+  FSMWithStartEnd Build(const std::vector<std::string>& end_strings);
+
+ private:
+  FSMWithStartEnd BuildEOSFSM();
+  FSMWithStartEnd BuildStopStringFSM(const std::vector<std::string>& stop_strings);
+};
+
+FSMWithStartEnd WildcardFSMBuilderImpl::Build(const std::vector<std::string>& end_strings) {
+  if (end_strings.empty()) {
+    return BuildEOSFSM();
+  }
+  return BuildStopStringFSM(end_strings);
+}
+
+FSMWithStartEnd WildcardFSMBuilderImpl::BuildEOSFSM() {
+  FSM fsm(1);
+  fsm.AddEdge(0, 0, 0, FSMEdge::kMaxChar);
+  int start = 0;
+  std::unordered_set<int> ends = {0};
+  return FSMWithStartEnd(fsm, start, ends);
+}
+
+FSMWithStartEnd WildcardFSMBuilderImpl::BuildStopStringFSM(
+    const std::vector<std::string>& stop_strings
+) {
+  FSM fsm(1);
+  int start = 0;
+  std::unordered_set<int> ends = {0};
+  return FSMWithStartEnd(fsm, start, ends);
+}
+
+FSMWithStartEnd WildcardFSMBuilder::Build(const std::vector<std::string>& end_strings) {
+  return WildcardFSMBuilderImpl().Build(end_strings);
 }
 
 }  // namespace xgrammar
