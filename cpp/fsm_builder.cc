@@ -232,21 +232,22 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& state) const {
   if (state.state.size() != 1) {
     return Result<FSMWithStartEnd>::Err("Invalid symbol");
   }
-  Result<FSMWithStartEnd> child =
+  Result<FSMWithStartEnd> child_result =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, state.state[0]);
-  if (child.IsErr()) {
-    return child;
+  if (child_result.IsErr()) {
+    return child_result;
   }
+  auto child = std::move(child_result).Unwrap();
 
   switch (state.symbol) {
     case RegexIR::RegexSymbol::plus: {
-      return Result<FSMWithStartEnd>::Ok(std::move(child).Unwrap().Plus());
+      return Result<FSMWithStartEnd>::Ok(child.Plus());
     }
     case RegexIR::RegexSymbol::star: {
-      return Result<FSMWithStartEnd>::Ok(std::move(child).Unwrap().Star());
+      return Result<FSMWithStartEnd>::Ok(child.Star());
     }
     case RegexIR::RegexSymbol::optional: {
-      return Result<FSMWithStartEnd>::Ok(std::move(child).Unwrap().Optional());
+      return Result<FSMWithStartEnd>::Ok(child.Optional());
     }
     default: {
       XGRAMMAR_LOG(FATAL) << "Unknown regex symbol: " << static_cast<int>(state.symbol);
@@ -273,12 +274,13 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   if (state.states.size() != 1) {
     return Result<FSMWithStartEnd>::Err("Invalid repeat");
   }
-  Result<FSMWithStartEnd> child =
+  Result<FSMWithStartEnd> child_result =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, state.states[0]);
-  if (child.IsErr()) {
-    return child;
+  if (child_result.IsErr()) {
+    return child_result;
   }
-  FSMWithStartEnd result = std::move(child).Unwrap();
+  FSMWithStartEnd child = std::move(child_result).Unwrap();
+  FSMWithStartEnd result = child.Copy();
   std::unordered_set<int> new_ends;
 
   if (state.lower_bound == 1) {
@@ -289,12 +291,10 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   // Handling {n,}
   if (state.upper_bound == RegexIR::kRepeatNoUpperBound) {
     for (int i = 2; i < state.lower_bound; i++) {
-      result =
-          FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, std::move(child).Unwrap()});
+      result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     }
     int end_state_of_lower_bound_fsm = *result.GetEnds().begin();
-    result =
-        FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, std::move(child).Unwrap()});
+    result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     for (const auto& end : result.GetEnds()) {
       result->AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
     }
@@ -302,8 +302,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   }
   // Handling {n, m} or {n}
   for (int i = 2; i <= state.upper_bound; i++) {
-    result =
-        FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, std::move(child).Unwrap()});
+    result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     if (i >= state.lower_bound) {
       for (const auto& end : result.GetEnds()) {
         new_ends.insert(end);
@@ -698,10 +697,11 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
       if (bounds_result.IsErr()) {
         return Result<FSMWithStartEnd>::Err(std::move(bounds_result).UnwrapErr());
       }
+      auto bounds = std::move(bounds_result).Unwrap();
       auto child = std::get<RegexIR::State>(state);
       RegexIR::Repeat repeat;
-      repeat.lower_bound = std::move(bounds_result).Unwrap().first;
-      repeat.upper_bound = std::move(bounds_result).Unwrap().second;
+      repeat.lower_bound = bounds.first;
+      repeat.upper_bound = bounds.second;
       repeat.states.push_back(child);
       stack.push(repeat);
       continue;
