@@ -99,7 +99,7 @@ TEST(XGrammarFSMTest, ConnectionTest) {
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   std::cout << "--------- Connection Test3 -----------" << std::endl;
   if (builder.Build("(([\\d]|[\\w])|aaa)").IsErr()) {
-    std::cout << builder.Build("(([\\d]|[\\w])|aaa)").UnwrapErr()->what() << std::endl;
+    std::cout << builder.Build("(([\\d]|[\\w])|aaa)").UnwrapErr().what() << std::endl;
   }
   fsm_wse = builder.Build("(([\\d]|[\\w])|aaa)").Unwrap();
   test_str = "aaa";

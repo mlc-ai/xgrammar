@@ -20,6 +20,7 @@
 #include <variant>
 
 #include "logging.h"
+#include "memory_size.h"
 
 namespace xgrammar {
 
@@ -48,46 +49,6 @@ inline uint32_t HashCombine(Args... args) {
 #else
 #define XGRAMMAR_UNREACHABLE()
 #endif
-
-/******************* MemorySize Procotol *******************/
-
-template <typename T, typename = std::enable_if_t<std::is_trivially_copyable_v<T>>>
-inline constexpr std::size_t MemorySize(const T& value) {
-  return 0;
-}
-
-/*!
- * \brief Compute the memory consumption in heap memory. This function is specialized for
- * containers.
- * \tparam Container The container type.
- * \param container The container.
- * \return The memory consumption in heap memory of the container.
- */
-template <typename T>
-inline constexpr std::size_t MemorySize(const std::vector<T>& container) {
-  std::size_t result = sizeof(T) * container.size();
-  for (const auto& item : container) {
-    result += MemorySize(item);
-  }
-  return result;
-}
-
-template <typename T>
-inline constexpr std::size_t MemorySize(const std::unordered_set<T>& container) {
-  return sizeof(T) * container.size();
-}
-
-/*!
- * \brief Compute the memory consumption in heap memory. This function is specialized for
- * std::optional.
- * \tparam Tp The type of the optional.
- * \param range The optional.
- * \return The memory consumption in heap memory of the optional.
- */
-template <typename T>
-inline constexpr std::size_t MemorySize(const std::optional<T>& optional_value) {
-  return optional_value.has_value() ? MemorySize(*optional_value) : 0;
-}
 
 /*!
  * \brief An error class that contains a type. The type can be an enum.
