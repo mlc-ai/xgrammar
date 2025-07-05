@@ -329,6 +329,60 @@ std::string TokenizerInfo::Impl::DumpMetadata() const {
   return picojson::value(obj).serialize(false);
 }
 
+std::optional<std::runtime_error> TokenizerInfo::Impl::CheckMetadataMatch(
+    const picojson::value& metadata
+) const {
+  if (!metadata.is<picojson::object>()) {
+    return std::runtime_error("Expect an object");
+  }
+  const auto& object = metadata.get<picojson::object>();
+  if (object.find("vocab_type") == object.end()) {
+    return std::runtime_error("Missing 'vocab_type' in metadata");
+  }
+  auto vocab_type = object.at("vocab_type").get<int64_t>();
+  if (vocab_type != static_cast<int64_t>(vocab_type_)) {
+    return std::runtime_error(
+        "Vocab type mismatch: " + std::to_string(vocab_type) +
+        " != " + std::to_string(static_cast<int64_t>(vocab_type_))
+    );
+  }
+  if (object.find("vocab_size") == object.end()) {
+    return std::runtime_error("Missing 'vocab_size' in metadata");
+  }
+  auto vocab_size = object.at("vocab_size").get<int64_t>();
+  if (vocab_size != vocab_size_) {
+    return std::runtime_error(
+        "Vocab size mismatch: " + std::to_string(vocab_size) + " != " + std::to_string(vocab_size_)
+    );
+  }
+  if (object.find("add_prefix_space") == object.end()) {
+    return std::runtime_error("Missing 'add_prefix_space' in metadata");
+  }
+  auto add_prefix_space = object.at("add_prefix_space").get<bool>();
+  if (add_prefix_space != add_prefix_space_) {
+    return std::runtime_error(
+        "Add prefix space mismatch: " + std::to_string(add_prefix_space) +
+        " != " + std::to_string(add_prefix_space_)
+    );
+  }
+  if (object.find("stop_token_ids") == object.end()) {
+    return std::runtime_error("Missing 'stop_token_ids' in metadata");
+  }
+  auto stop_token_ids = object.at("stop_token_ids").get<picojson::array>();
+  std::vector<int32_t> stop_token_ids_vec;
+  stop_token_ids_vec.reserve(stop_token_ids.size());
+  for (const auto& id : stop_token_ids) {
+    if (!id.is<int64_t>()) {
+      return std::runtime_error("Stop token id is not an integer");
+    }
+    stop_token_ids_vec.push_back(static_cast<int32_t>(id.get<int64_t>()));
+  }
+  if (stop_token_ids_vec != stop_token_ids_) {
+    return std::runtime_error("Stop token ids mismatch");
+  }
+  return std::nullopt;
+}
+
 std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
     const std::vector<std::string>& encoded_vocab, const std::string& metadata
 ) {

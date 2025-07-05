@@ -43,6 +43,8 @@ class TokenizerInfo::Impl {
       const std::vector<std::string>& encoded_vocab, const std::string& metadata
   );
 
+  std::optional<std::runtime_error> CheckMetadataMatch(const picojson::value& metadata) const;
+
   static std::string DetectMetadataFromHF(const std::string& backend_str);
 
   bool operator==(const Impl& other) const;

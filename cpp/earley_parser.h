@@ -42,22 +42,23 @@ namespace xgrammar {
 struct ParserState {
   constexpr ParserState() = default;
 
-  constexpr ParserState(const ParserState&) = default;
-
-  ParserState& operator=(const ParserState&) = default;
-
   constexpr ParserState(
-      const int32_t& rule_id,
-      const int32_t& sequence_id,
-      const int32_t& element_id,
-      const int32_t& rule_start_pos,
-      const int32_t& sub_element_id
+      int32_t rule_id,
+      int32_t sequence_id,
+      int32_t element_id,
+      int32_t rule_start_pos,
+      int32_t sub_element_id
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
         element_id(element_id),
         rule_start_pos(rule_start_pos),
         sub_element_id(sub_element_id) {}
+
+  constexpr ParserState(const ParserState&) = default;
+  constexpr ParserState(ParserState&&) = default;
+  ParserState& operator=(const ParserState&) = default;
+  ParserState& operator=(ParserState&&) = default;
 
   /*!
    * \brief A sequence_id value of kUnexpandedRuleStartSequenceId means a rule hasn't been
