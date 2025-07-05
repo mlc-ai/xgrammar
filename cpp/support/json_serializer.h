@@ -332,6 +332,14 @@ inline picojson::value AutoSerializeJSONValue(const T& value) {
       arr.push_back(AutoSerializeJSONValue(*ptr));
     }
     return picojson::value(std::move(arr));
+  } else if constexpr (is_unordered_map<T>::value &&
+                       std::is_same_v<typename T::key_type, std::string>) {
+    picojson::object obj;
+    obj.reserve(value.size());
+    for (const auto& item : value) {
+      obj[item.first] = AutoSerializeJSONValue(item.second);
+    }
+    return picojson::value(std::move(obj));
   } else if constexpr (is_unordered_map<T>::value) {
     std::vector<const typename T::value_type*> ptr_vec;
     ptr_vec.reserve(value.size());

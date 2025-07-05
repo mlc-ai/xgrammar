@@ -109,16 +109,17 @@ class CompiledGrammar::Impl {
 
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info_; }
 
-  picojson::value SerializeJSONValue() const;
-
-  static std::optional<std::runtime_error> DeserializeJSONValue(
-      CompiledGrammar::Impl& compiled_grammar, const picojson::value& json_value
-  );
-
   friend struct member_trait<Impl>;
+  friend picojson::value SerializeJSONValue(const Impl& impl);
+  friend std::optional<std::runtime_error> DeserializeJSONValue(
+      CompiledGrammar::Impl* impl, const picojson::value& json_value
+  );
   friend std::size_t MemorySize(const Impl& impl);
 
  private:
+  // For serialization only
+  Impl() = default;
+
   /*! \brief The grammar for the GrammarMatcher. */
   Grammar grammar_{NullObj{}};
 

@@ -62,9 +62,6 @@ struct alignas(8) FSMEdge {
         << "Invalid FSMEdge: min > max. min=" << min << ", max=" << max;
   }
 
-  // for serialization only
-  FSMEdge() = default;
-
   /*!
    * \brief Compare the edges. Used to sort the edges in the FSM.
    */
@@ -107,6 +104,12 @@ struct alignas(8) FSMEdge {
    * \return The rule id of the edge. -1 if the edge is not a rule reference.
    */
   int32_t GetRefRuleId() const { return IsRuleRef() ? max : -1; }
+
+  friend struct member_trait<FSMEdge>;
+
+ private:
+  // for serialization only
+  FSMEdge() = default;
 };
 
 /*!
@@ -345,9 +348,6 @@ class FSM {
  */
 class CompactFSM {
  public:
-  // for serialization only
-  CompactFSM() = default;
-
   CompactFSM(const Compact2DArray<FSMEdge>& edges);
 
   CompactFSM(Compact2DArray<FSMEdge>&& edges);
@@ -446,6 +446,10 @@ class CompactFSM {
   FSM ToFSM() const;
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
+
+ private:
+  // for serialization only
+  CompactFSM() = default;
 };
 
 class CompactFSMWithStartEnd;
@@ -462,9 +466,6 @@ class FSMWithStartEndBase {
   );
 
  public:
-  // for serialization only
-  FSMWithStartEndBase() = default;
-
   /*! \brief Constructs an FSMWithStartEnd with a given FSM, start state, and end states. */
   FSMWithStartEndBase(
       const FSMType& fsm, int start, const std::unordered_set<int>& ends, bool is_dfa = false
@@ -560,6 +561,10 @@ class FSMWithStartEndBase {
   std::unordered_set<int> ends_;
   /*! \brief Whether this FSM is a deterministic finite automaton. */
   bool is_dfa_ = false;
+
+ private:
+  // for serialization only
+  FSMWithStartEndBase() = default;
 
   friend struct member_trait<CompactFSMWithStartEnd>;
 };
@@ -710,11 +715,6 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
   /*!
-   * \brief The default constructor. For serialization only.
-   */
-  CompactFSMWithStartEnd() = default;
-
-  /*!
    * \brief Convert the FSMWithStartEnd to a string. Only considers the nodes approachable from the
    * start state.
    * \return The string representation of the FSMWithStartEnd.
@@ -741,6 +741,12 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    * \return The memory size of the CompactFSMWithStartEnd.
    */
   friend std::size_t MemorySize(const CompactFSMWithStartEnd& self);
+
+  friend struct member_trait<CompactFSMWithStartEnd>;
+
+ private:
+  // For serialization only
+  CompactFSMWithStartEnd() = default;
 };
 
 XGRAMMAR_MEMBER_ARRAY(

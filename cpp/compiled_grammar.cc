@@ -12,17 +12,27 @@ namespace xgrammar {
 
 /************** CompiledGrammar::Impl **************/
 
-picojson::value CompiledGrammar::Impl::SerializeJSONValue() const {
+picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
-  result["grammar"] = AutoSerializeJSONValue(grammar_);
-  result["tokenizer_metadata"] = picojson::value(tokenizer_info_.DumpMetadata());
-  result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(adaptive_token_mask_cache);
+  result["grammar"] = AutoSerializeJSONValue(impl.grammar_);
+  result["tokenizer_metadata"] = picojson::value(impl.tokenizer_info_.DumpMetadata());
+  result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(impl.adaptive_token_mask_cache);
   return picojson::value(result);
 }
 
-std::optional<std::runtime_error> CompiledGrammar::Impl::DeserializeJSONValue(
-    CompiledGrammar::Impl& compiled_grammar, const picojson::value& json_value
+std::optional<std::runtime_error> DeserializeJSONValue(
+    CompiledGrammar::Impl* impl, const picojson::value& json_value
 ) {
+  const auto& type_name = "CompiledGrammar";
+  if (!json_value.is<picojson::object>()) {
+    return ConstructDeserializeError("Expect an object", type_name);
+  }
+  const auto& object = json_value.get<picojson::object>();
+  if (object.find("grammar") == object.end()) {
+    return ConstructDeserializeError("Expect a 'grammar' field", type_name);
+  }
+  AutoDeserializeJSONValue(&impl->grammar_, object["grammar"]);
+
   //   if (!json_value.is<picojson::object>()) {
   //     return std::runtime_error(
   //         "CompiledGrammar Deserialization: Expect an object in the deserialization input"
