@@ -15,6 +15,17 @@
 
 namespace xgrammar {
 
+/******************* Grammar::Impl *******************/
+
+std::size_t MemorySize(const Grammar::Impl& impl) {
+  // we assume strings are not long, so we don't iterate through all the rules
+  return impl.rules_.size() * sizeof(impl.rules_[0]) + MemorySize(impl.grammar_expr_data_) +
+         MemorySize(impl.root_tag_dispatch_fsm) +
+         MemorySize(impl.tag_dispatch_end_node_to_rule_id) + MemorySize(impl.allow_empty_rule_ids);
+}
+
+/******************* Grammar *******************/
+
 std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString(); }
 
 Grammar Grammar::FromEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
@@ -159,7 +170,7 @@ std::variant<Grammar, std::runtime_error> Grammar::DeserializeJSON(const std::st
   if (auto err = AutoDeserializeJSON(&result, json_string, true, "Grammar")) {
     return err.value();
   }
-  return result;
+  return std::move(result);
 }
 
 }  // namespace xgrammar

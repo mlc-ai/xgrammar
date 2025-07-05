@@ -89,7 +89,7 @@ std::optional<std::runtime_error> CompiledGrammar::Impl::DeserializeJSONValue(
 
 std::size_t CompiledGrammar::Impl::MemorySize() const {
   std::size_t sum = 0;
-  sum += grammar->MemorySize();
+  sum += MemorySize(*grammar_);
   sum += adaptive_token_mask_cache.size() * sizeof(*adaptive_token_mask_cache.begin());
   for (auto& [_, mask] : adaptive_token_mask_cache) {
     sum += mask.MemorySize();

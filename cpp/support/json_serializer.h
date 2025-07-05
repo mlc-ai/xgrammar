@@ -210,7 +210,7 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
       if (!value.is<picojson::object>()) {
         return ConstructDeserializeError("Expect an object", type_name);
       }
-      const auto& obj = detail::json_serializer::json_as<picojson::object>(value);
+      const auto& obj = value.get<picojson::object>();
       for (int i = 0; i < static_cast<int>(Functor::member_count); ++i) {
         const auto& name = Functor::names[i];
         const auto& ptr = Functor::members[i];
@@ -422,7 +422,7 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
       }
     }
     return std::nullopt;
-  } else if constexpr (detail::json_serializer::is_unordered_set<T>::value) {
+  } else if constexpr (is_unordered_set<T>::value) {
     if (!value.is<picojson::array>()) {
       return ConstructDeserializeError(
           "Expect an array for deserializing unordered set", type_name

@@ -425,19 +425,16 @@ std::string TokenizerInfo::DetectMetadataFromHF(const std::string& backend_str) 
   return Impl::DetectMetadataFromHF(backend_str);
 }
 
-std::string TokenizerInfo::SerializeJSON() const {
-  return AutoSerializeJSON(*this->ImplPtr(), true);
-}
+std::string TokenizerInfo::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
 
 std::variant<TokenizerInfo, std::runtime_error> TokenizerInfo::DeserializeJSON(
     const std::string& json_string
 ) {
-  TokenizerInfo tokenizer_info(std::make_shared<TokenizerInfo::Impl>());
-  auto err = AutoDeserializeJSON(tokenizer_info, json_string, true);
-  if (err) {
+  TokenizerInfo tokenizer_info{NullObj()};
+  if (auto err = AutoDeserializeJSON(&tokenizer_info, json_string, true, "TokenizerInfo")) {
     return err.value();
   }
-  return tokenizer_info;
+  return std::move(tokenizer_info);
 }
 
 }  // namespace xgrammar

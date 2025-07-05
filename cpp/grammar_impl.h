@@ -189,7 +189,6 @@ class Grammar::Impl {
   friend class GrammarBuilder;
   friend class GrammarCompiler;
 
-  std::size_t MemorySize() const;
   friend std::size_t MemorySize(const Impl& impl);
   friend struct member_trait<Impl>;
 };

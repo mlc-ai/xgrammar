@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -43,16 +44,35 @@ class TokenizerInfo {
   const std::vector<int32_t>& GetTrieSubtreeNodesRange() const;
   std::string DumpMetadata() const;
 
+  /*!
+   * \brief Create a tokenizer info from a vocabulary and metadata.
+   * \param encoded_vocab The encoded vocabulary.
+   * \param metadata The metadata.
+   * \return The tokenizer info.
+   */
   static TokenizerInfo FromVocabAndMetadata(
       const std::vector<std::string>& encoded_vocab, const std::string& metadata
   );
 
+  /*!
+   * \brief Detect the metadata from a Hugging Face backend string.
+   * \param backend_str The Hugging Face backend string.
+   * \return The metadata.
+   */
   static std::string DetectMetadataFromHF(const std::string& backend_str);
 
-  /*! \brief Return the serialized JSON string of the tokenizer info. */
+  /*!
+   * \brief Return the serialized JSON string of the tokenizer info.
+   * \return The serialized JSON string.
+   */
   std::string SerializeJSON() const;
 
-  /*! \brief Deserialize a tokenizer info from a JSON string. */
+  /*!
+   * \brief Deserialize a tokenizer info from a JSON string.
+   * \param json_string The JSON string to deserialize.
+   * \return If the deserialization is successful, return the tokenizer info. Otherwise, return a
+   * runtime error with the error message.
+   */
   static std::variant<TokenizerInfo, std::runtime_error> DeserializeJSON(
       const std::string& json_string
   );

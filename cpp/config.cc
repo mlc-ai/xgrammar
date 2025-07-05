@@ -16,6 +16,6 @@ void SetMaxRecursionDepth(int max_recursion_depth) {
 
 int GetMaxRecursionDepth() { return RecursionGuard::GetMaxRecursionDepth(); }
 
-std::string GetSerializationVersion() { return SerializeVersion::GetVersion(); }
+std::string GetSerializationVersion() { return std::string(SerializeVersion::GetVersion()); }
 
 }  // namespace xgrammar
