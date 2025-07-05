@@ -216,76 +216,42 @@ class DynamicBitset {
   }
 
   picojson::value SerializeJSONValue() const {
-    const auto count_one = Count();
-    const auto count_zero = size_ - count_one;
-    auto result = picojson::array{};
-    if (count_one <= count_zero) {
-      result.reserve(count_one + BITS_PER_BLOCK + HEADER);
-      // 4 header elements
-      result.emplace_back<int64_t>(1);
-      result.emplace_back<int64_t>(count_one);
-      result.emplace_back<int64_t>(size_);
-      result.emplace_back<int64_t>(buffer_size_);
-      for (int i = 0; i < buffer_size_; ++i) {
-        if (data_[i] == 0u) continue;
-        for (int j = 0; j < BITS_PER_BLOCK; ++j) {
-          if (data_[i] & (1u << j)) {
-            result.emplace_back<int64_t>(i * BITS_PER_BLOCK + j);
-          }
-        }
-      }
-    } else {
-      result.reserve(count_zero + BITS_PER_BLOCK + HEADER);
-      // 4 header elements
-      result.emplace_back<int64_t>(0);
-      result.emplace_back<int64_t>(count_zero);
-      result.emplace_back<int64_t>(size_);
-      result.emplace_back<int64_t>(buffer_size_);
-      for (int i = 0; i < buffer_size_; ++i) {
-        if (data_[i] == ~0u) continue;
-        for (int j = 0; j < BITS_PER_BLOCK; ++j) {
-          if (!(data_[i] & (1u << j))) {
-            result.emplace_back<int64_t>(i * BITS_PER_BLOCK + j);
-          }
-        }
-      }
+    XGRAMMAR_DCHECK(buffer_size_ == GetBufferSize(size_));
+    picojson::array result;
+    result.reserve(kSerializeHeaderSize + buffer_size_);
+    result.emplace_back(picojson::value(static_cast<int64_t>(size_)));
+    result.emplace_back(picojson::value(static_cast<int64_t>(buffer_size_)));
+    for (int i = 0; i < buffer_size_; ++i) {
+      result.emplace_back(picojson::value(static_cast<int64_t>(data_[i])));
     }
-    // clean up the last few elements that is out of range
-    while (result.size() > HEADER && result.back().get<int64_t>() >= size_) result.pop_back();
     return picojson::value(std::move(result));
   }
 
   friend void DeserializeJSONValue(DynamicBitset& bitset, const picojson::value& value) {
-    XGRAMMAR_CHECK(value.is<picojson::array>()) << "Invalid JSON value for DynamicBitset";
+    XGRAMMAR_CHECK(value.is<picojson::array>())
+        << "Error in deserializing DynamicBitset: Except an array";
     const auto& arr = value.get<picojson::array>();
-    XGRAMMAR_CHECK(arr.size() >= HEADER) << "Invalid JSON value for DynamicBitset";
-    const bool is_zero = arr[0].get<int64_t>() == 0;
-    const int count = arr[1].get<int64_t>();
-    const int size = arr[2].get<int64_t>();
-    const int buffer_size = arr[3].get<int64_t>();
-    XGRAMMAR_CHECK(static_cast<int>(arr.size()) == count + HEADER)
-        << "Invalid JSON value for DynamicBitset, expected " << count + HEADER << " elements";
-    XGRAMMAR_CHECK(size >= 0 && buffer_size >= 0) << "Invalid JSON value for DynamicBitset";
-    bitset.size_ = size;
-    bitset.buffer_size_ = buffer_size;
-    bitset.is_internal_ = true;
-    bitset.internal_buffer_.resize(buffer_size, is_zero ? ~0u : 0u);
-    bitset.data_ = bitset.internal_buffer_.data();
-    if (is_zero == true) {
-      for (int i = 0; i < count; ++i) {
-        const int index = arr[i + HEADER].get<int64_t>();
-        XGRAMMAR_CHECK(index >= 0 && index < size)
-            << "Invalid JSON value for DynamicBitset, index out of range";
-        bitset.data_[index / BITS_PER_BLOCK] &= ~(1u << (index % BITS_PER_BLOCK));
-      }
-    } else {
-      for (int i = 0; i < count; ++i) {
-        const int index = arr[i + HEADER].get<int64_t>();
-        XGRAMMAR_CHECK(index >= 0 && index < size)
-            << "Invalid JSON value for DynamicBitset, index out of range";
-        bitset.data_[index / BITS_PER_BLOCK] |= (1u << (index % BITS_PER_BLOCK));
-      }
+    XGRAMMAR_CHECK(arr.size() >= kSerializeHeaderSize)
+        << "Error in deserializing DynamicBitset: Except at least " << kSerializeHeaderSize
+        << " elements in the array";
+
+    int size = static_cast<int>(arr[0].get<int64_t>());
+    int buffer_size = static_cast<int>(arr[1].get<int64_t>());
+    XGRAMMAR_CHECK(buffer_size == GetBufferSize(size))
+        << "Error in deserializing DynamicBitset: Invalid buffer_size. Buffer size should be "
+           "ceil(size / 32)";
+
+    DynamicBitset result(size);
+    for (int i = 0; i < buffer_size; ++i) {
+      XGRAMMAR_CHECK(arr[i + kSerializeHeaderSize].is<int64_t>())
+          << "Error in deserializing DynamicBitset: Except an integer in the array";
+      int64_t value = arr[i + kSerializeHeaderSize].get<int64_t>();
+      XGRAMMAR_CHECK(value >= 0 && value <= std::numeric_limits<uint32_t>::max())
+          << "Error in deserializing DynamicBitset: Integer in the array is out of the uint32_t "
+             "range";
+      result.data_[i] = static_cast<uint32_t>(value);
     }
+    bitset = std::move(result);
   }
 
   bool operator==(const DynamicBitset& other) const {
@@ -298,8 +264,10 @@ class DynamicBitset {
   }
 
  private:
-  // header size for JSON (de)serialization
-  inline static constexpr auto HEADER = 4;
+  /*!
+   * \brief The header size for JSON serialization in the number of integers.
+   */
+  inline static constexpr auto kSerializeHeaderSize = 2;
 
   static int LowestBit(uint32_t value) {
 #ifdef __GNUC__

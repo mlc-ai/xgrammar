@@ -1,10 +1,16 @@
-#ifndef XGRAMMAR_REFLECTION_JSON_H_
-#define XGRAMMAR_REFLECTION_JSON_H_
+/**
+ * \file json_serializer.h
+ * \brief A JSON-based serializer. Automatically generates serialization and deserialization logic
+ * from reflection.
+ */
+#ifndef XGRAMMAR_SUPPORT_REFLECTION_JSON_SERIALIZER_H_
+#define XGRAMMAR_SUPPORT_REFLECTION_JSON_SERIALIZER_H_
 
 #include <picojson.h>
 
 #include <algorithm>
 #include <cstddef>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -12,6 +18,104 @@
 #include "reflection.h"
 
 namespace xgrammar {
+
+/******************** Interfaces ********************/
+
+/*!
+ * \brief Manages the version of the serialized object. The version will be added to the serialized
+ * object, and during deserialization, the object's version must match the current serialization
+ * version in xgrammar.
+ */
+class SerializeVersion {
+ public:
+  /*!
+   * \brief Returns the current serialization version.
+   */
+  static std::string_view GetVersion() { return kXGrammarSerializeVersion; }
+
+  /*!
+   * \brief Adds the version info to the serialized object.
+   */
+  static void Apply(picojson::object* object);
+
+  /*!
+   * \brief Checks if the serialized object's version matches the current serialization version.
+   * \return An error if the version does not exist or does not match.
+   */
+  static std::optional<std::runtime_error> Check(const picojson::object& object);
+
+ private:
+  static constexpr const char kXGrammarSerializeVersionKey[] = "__VERSION__";
+  static constexpr const char kXGrammarSerializeVersion[] = "v2";
+};
+
+/*!
+ * \brief Serializes a value to a JSON value. The members of T must be defined through
+ * XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY. The serialization logic is automatically
+ * generated from the defined members.
+ * \param value The value to be serialized.
+ */
+template <typename T>
+picojson::value AutoSerializeJSONValue(const T& value);
+
+/*!
+ * \brief Serializes a value to a JSON string. The members of T must be defined through
+ * XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY. The serialization logic is automatically
+ * generated from the defined members.
+ * \param value The value to be serialized.
+ * \param add_version Whether to add the version info to the serialized object. If true, the caller
+ * must ensure the serialized result to be a object.
+ */
+template <typename T>
+std::string AutoSerializeJSON(const T& value, bool add_version = false);
+
+/*!
+ * \brief Deserializes a value from a JSON value. The members of T must be defined through
+ * XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY. The deserialization logic is automatically
+ * generated from the defined members.
+ * \param result The result to be deserialized.
+ * \param value The JSON value to be deserialized.
+ */
+template <typename T>
+void AutoDeserializeJSONValue(T& result, const picojson::value& value);
+
+/*!
+ * \brief Deserializes a value from a JSON string. The members of T must be defined through
+ * XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY. The deserialization logic is automatically
+ * generated from the defined members.
+ * \param result The result to be deserialized.
+ * \param json_string The JSON string to be deserialized.
+ * \param check_version Whether to check the version info in the serialized object. If true, the
+ * caller must ensure the serialized result to be a object.
+ */
+template <typename T>
+void AutoDeserializeJSON(T& result, const std::string& json_string, bool check_version = false);
+
+/******************** Implementations ********************/
+
+inline void SerializeVersion::Apply(picojson::object* object) {
+  XGRAMMAR_DCHECK(object != nullptr);
+  XGRAMMAR_DCHECK(object->find(kXGrammarSerializeVersionKey) == object->end());
+  (*object)[kXGrammarSerializeVersionKey] = picojson::value(std::string(GetVersion()));
+}
+
+inline std::optional<std::runtime_error> SerializeVersion::Check(const picojson::object& object) {
+  if (object.find(kXGrammarSerializeVersionKey) == object.end()) {
+    return std::runtime_error(
+        std::string("Missing version in serialized object: ") + kXGrammarSerializeVersionKey
+    );
+  }
+  if (object.at(kXGrammarSerializeVersionKey).get<std::string>() != GetVersion()) {
+    return std::runtime_error(
+        std::string("Wrong version in serialized object: Got ") +
+        object.at(kXGrammarSerializeVersionKey).get<std::string>() + ", expected " +
+        std::string(GetVersion())
+    );
+  }
+  return std::nullopt;
+}
+
+/******************** Template Implementations ********************/
 
 namespace details {
 
@@ -87,18 +191,6 @@ inline const picojson::value& json_member(const picojson::object& value, const s
 }  // namespace details
 
 template <typename T>
-inline picojson::value AutoSerializeJSONValue(const T& value);
-
-template <typename T>
-inline void AutoDeserializeJSONValue(T& result, const picojson::value& value);
-
-template <typename T>
-inline picojson::value TraitSerializeJSONValue(const T& value);
-
-template <typename T>
-inline void TraitDeserializeJSONValue(T& result, const picojson::value& value);
-
-template <typename T>
 inline picojson::value TraitSerializeJSONValue(const T& value) {
   using Functor = details::member_functor<T>;
   if constexpr (Functor::value == member_type::kConfig) {
@@ -127,39 +219,6 @@ inline picojson::value TraitSerializeJSONValue(const T& value) {
     // should give an error in this case
     static_assert(details::false_v<T>, "Invalid trait type");
     return picojson::value{};
-  }
-}
-
-template <typename T>
-inline void TraitDeserializeJSONValue(T& result, const picojson::value& value) {
-  using Functor = details::member_functor<T>;
-  if constexpr (Functor::value == member_type::kConfig) {
-    if constexpr (Functor::has_names) {
-      // normal named struct
-      const auto& obj = details::json_as<picojson::object>(value);
-      XGRAMMAR_CHECK(obj.size() == Functor::member_count)
-          << "Wrong number of members in object in DeserializeJSONValue" << " expected "
-          << Functor::member_count << " but got " << obj.size();
-      details::visit_config<T>([&](auto ptr, const char* name, std::size_t) {
-        AutoDeserializeJSONValue(result.*ptr, details::json_member(obj, name));
-      });
-    } else if constexpr (Functor::member_count == 1) {
-      // optimize for single member unnamed structs
-      constexpr auto member_ptr = std::get<0>(Functor::members);
-      AutoDeserializeJSONValue(result.*member_ptr, value);
-    } else {
-      // normal unnamed struct
-      const auto& arr = details::json_as<picojson::array>(value);
-      XGRAMMAR_CHECK(arr.size() == Functor::member_count)
-          << "Wrong number of elements in array in DeserializeJSONValue" << " expected "
-          << Functor::member_count << " but got " << arr.size();
-      details::visit_config<T>([&arr, &result](auto ptr, const char*, size_t idx) {
-        AutoDeserializeJSONValue(result.*ptr, arr[idx]);
-      });
-    }
-  } else {
-    // should give an error in this case
-    static_assert(details::false_v<T>, "Invalid trait type");
   }
 }
 
@@ -221,8 +280,51 @@ inline picojson::value AutoSerializeJSONValue(const T& value) {
     return TraitSerializeJSONValue(value);
   } else {
     // should give an error in this case
-    static_assert(details::false_v<T>, "Cannot serialize this type");
-    return picojson::value{};
+    XGRAMMAR_LOG(FATAL) << "Cannot serialize this type: " << typeid(T).name();
+    XGRAMMAR_UNREACHABLE();
+  }
+}
+
+template <typename T>
+inline std::string AutoSerializeJSON(const T& value, bool add_version = false) {
+  picojson::value json_value = AutoSerializeJSONValue(value);
+  if (add_version) {
+    XGRAMMAR_DCHECK(json_value.is<picojson::object>());
+    SerializeVersion::Apply(&json_value.get<picojson::object>());
+  }
+  return picojson::value(json_value).serialize();
+}
+
+template <typename T>
+inline void TraitDeserializeJSONValue(T& result, const picojson::value& value) {
+  using Functor = details::member_functor<T>;
+  if constexpr (Functor::value == member_type::kConfig) {
+    if constexpr (Functor::has_names) {
+      // normal named struct
+      const auto& obj = details::json_as<picojson::object>(value);
+      XGRAMMAR_CHECK(obj.size() == Functor::member_count)
+          << "Wrong number of members in object in DeserializeJSONValue" << " expected "
+          << Functor::member_count << " but got " << obj.size();
+      details::visit_config<T>([&](auto ptr, const char* name, std::size_t) {
+        AutoDeserializeJSONValue(result.*ptr, details::json_member(obj, name));
+      });
+    } else if constexpr (Functor::member_count == 1) {
+      // optimize for single member unnamed structs
+      constexpr auto member_ptr = std::get<0>(Functor::members);
+      AutoDeserializeJSONValue(result.*member_ptr, value);
+    } else {
+      // normal unnamed struct
+      const auto& arr = details::json_as<picojson::array>(value);
+      XGRAMMAR_CHECK(arr.size() == Functor::member_count)
+          << "Wrong number of elements in array in DeserializeJSONValue" << " expected "
+          << Functor::member_count << " but got " << arr.size();
+      details::visit_config<T>([&arr, &result](auto ptr, const char*, size_t idx) {
+        AutoDeserializeJSONValue(result.*ptr, arr[idx]);
+      });
+    }
+  } else {
+    // should give an error in this case
+    static_assert(details::false_v<T>, "Invalid trait type");
   }
 }
 
@@ -286,6 +388,14 @@ inline void AutoDeserializeJSONValue(T& result, const picojson::value& value) {
   }
 }
 
+template <typename T>
+inline void AutoDeserializeJSON(
+    T& result, const std::string& json_string, bool check_version = false
+) {
+  picojson::value json_value;
+  auto error = picojson::parse(json_value, json_string);
+}
+
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_REFLECTION_JSON_H_
+#endif  // XGRAMMAR_SUPPORT_REFLECTION_JSON_SERIALIZER_H_

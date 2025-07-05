@@ -1,48 +1,52 @@
-#ifndef XGRAMMAR_REFLECTION_H_
-#define XGRAMMAR_REFLECTION_H_
+#ifndef XGRAMMAR_SUPPORT_REFLECTION_REFLECTION_H_
+#define XGRAMMAR_SUPPORT_REFLECTION_REFLECTION_H_
 
 #include "reflection_details.h"  // IWYU pragma: export
 
 namespace xgrammar {
 
-// base trait for member traits
+/**
+ * \brief Base trait for member traits.
+ *
+ * \tparam T the type whose members are being reflected
+ * \details Provides a default trait indicating no members.
+ */
 template <typename T>
 struct member_trait {
   static constexpr auto value = member_type::kNone;
 };
 
-/*!
- * @brief Macros to define member traits for types.
- *
- * These macros are used to define the structural information of types
+/**
+ * \brief Macros to define member traits for types.
+ * \details These macros are used to define the structural information of types
  * for serialization and reflection purposes.
  *
- * - `XGRAMMAR_MEMBER_TABLE`: Defines a type with a table of (name, member pointer) pairs.
- * - `XGRAMMAR_MEMBER_ARRAY`: Defines a type with an array of member pointer.
+ * Macros:
+ *   - \c XGRAMMAR_MEMBER_TABLE: Defines a type with a table of (name, member pointer) pairs.
+ *   - \c XGRAMMAR_MEMBER_ARRAY: Defines a type with an array of member pointers.
  *
- * For template types, use the version with `_TEMPLATE` suffix instead.
+ * Use the `_TEMPLATE` variants for template types.
  *
- * @example
- *
- * ```cpp
- * // @note Example of using XGRAMMAR_MEMBER_TABLE to register (name, member pointer) pairs
- * // You can use any string as the name, and it will be used in serialization.
+ * \example
+ * \code{.cpp}
+ * // Example of using XGRAMMAR_MEMBER_TABLE to register (name, member pointer) pairs
  * struct SimpleClass {
  *   int a;
  *   double b;
  * };
  * XGRAMMAR_MEMBER_TABLE(SimpleClass, "name_a", &SimpleClass::a, "name_b", &SimpleClass::b);
  *
+ * // Or register members as an array with XGRAMMAR_MEMBER_ARRAY
+ * XGRAMMAR_MEMBER_ARRAY(SimpleClass, &SimpleClass::a, &SimpleClass::b);
  *
- * // @note Example of using XGRAMMAR_MEMBER_ARRAY to register member pointers
- * // In a derived class, you can use the same macro to register members from the base class
- * struct Derived: SimpleClass {
+ * // Example of using XGRAMMAR_MEMBER_ARRAY to register members from a derived class
+ * struct Derived : SimpleClass {
  *   std::string c;
  * };
- * XGRAMMAR_MEMBER_ARRAY(Derived, &Derived::a, &Derived::b, &Derived::c);
+ * XGRAMMAR_MEMBER_TABLE(Derived, "name_a", &Derived::a, "name_b", &Derived::b, "name_c",
+ * &Derived::c);
  *
- *
- * // @note Example of using XGRAMMAR_MEMBER_ARRAY_TEMPLATE to register members in a template type
+ * // Example of using XGRAMMAR_MEMBER_ARRAY_TEMPLATE for a template type
  * // If the default constructor/member is private, you need to declare a friend for member_trait.
  * template <typename T>
  * struct TemplateClass {
@@ -53,7 +57,7 @@ struct member_trait {
  * };
  * template <typename T>
  * XGRAMMAR_MEMBER_ARRAY_TEMPLATE(TemplateClass<T>, &TemplateClass<T>::value);
- * ```
+ * \endcode
  */
 
 #define XGRAMMAR_MEMBER_TABLE_TEMPLATE(Type, ...)                            \
@@ -80,4 +84,4 @@ struct member_trait {
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_REFLECTION_H_
+#endif  // XGRAMMAR_SUPPORT_REFLECTION_REFLECTION_H_

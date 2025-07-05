@@ -35,7 +35,7 @@ class TokenizerInfo::Impl {
   const std::vector<std::pair<int32_t, std::string>>& GetSortedDecodedVocab() const {
     return sorted_decoded_vocab_;
   }
-  const std::vector<int32_t>& GetTrieSubtreeNodesRange() const { return trie_subtree_nodes_range; }
+  const std::vector<int32_t>& GetTrieSubtreeNodesRange() const { return trie_subtree_nodes_range_; }
 
   std::string DumpMetadata() const;
 
@@ -64,7 +64,7 @@ class TokenizerInfo::Impl {
   std::vector<std::pair<int32_t, std::string>> sorted_decoded_vocab_;
   /*! \brief A pesudo-trie. trie_subtree_nodes_range[i] stores how many nodes there are in the
    * subtree. */
-  std::vector<int32_t> trie_subtree_nodes_range;
+  std::vector<int32_t> trie_subtree_nodes_range_;
   /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
   std::vector<int32_t> stop_token_ids_;
@@ -95,7 +95,6 @@ class TokenizerInfo::Impl {
   friend struct member_trait<Impl>;
 };
 
-// we ignore the vocab here and only store the metadata
 XGRAMMAR_MEMBER_TABLE(
     TokenizerInfo::Impl,
     "vocab_type",
@@ -107,7 +106,13 @@ XGRAMMAR_MEMBER_TABLE(
     "stop_token_ids",
     &TokenizerInfo::Impl::stop_token_ids_,
     "special_token_ids",
-    &TokenizerInfo::Impl::special_token_ids_
+    &TokenizerInfo::Impl::special_token_ids_,
+    "decoded_vocab",
+    &TokenizerInfo::Impl::decoded_vocab_,
+    "sorted_decoded_vocab",
+    &TokenizerInfo::Impl::sorted_decoded_vocab_,
+    "trie_subtree_nodes_range",
+    &TokenizerInfo::Impl::trie_subtree_nodes_range_
 );
 
 }  // namespace xgrammar

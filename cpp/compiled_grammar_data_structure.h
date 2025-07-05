@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/compiled_grammar_data_structure.h
+ * \file xgrammar/compiled_grammar_impl.h
  * \brief The header for the data structures of the compiled grammar.
  */
 #ifndef XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
@@ -51,7 +51,7 @@ struct AdaptiveTokenMask {
   };
   StoreType store_type;
 
-  static constexpr int USE_BITSET_THRESHOLD = 200;
+  static constexpr int USE_BITSET_THRESHOLD = 1000;
 
   std::vector<int32_t> accepted_indices;
   std::vector<int32_t> rejected_indices;
@@ -82,12 +82,17 @@ struct AdaptiveTokenMask {
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask);
 };
 
-XGRAMMAR_MEMBER_ARRAY(
+XGRAMMAR_MEMBER_TABLE(
     AdaptiveTokenMask,
+    "store_type",
     &AdaptiveTokenMask::store_type,
+    "accepted_indices",
     &AdaptiveTokenMask::accepted_indices,
+    "rejected_indices",
     &AdaptiveTokenMask::rejected_indices,
+    "accepted_bitset",
     &AdaptiveTokenMask::accepted_bitset,
+    "uncertain_indices",
     &AdaptiveTokenMask::uncertain_indices
 );
 

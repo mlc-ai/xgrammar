@@ -7,8 +7,8 @@
 #include <variant>
 #include <vector>
 
-#include "compiled_grammar_data_structure.h"
-#include "grammar_data_structure.h"
+#include "compiled_grammar_impl.h"
+#include "grammar_impl.h"
 #include "support/logging.h"
 #include "support/reflection/json_serializer.h"
 #include "support/utils.h"
@@ -18,8 +18,6 @@
 #include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
-
-static constexpr const char kXGrammarSerializeVersion[] = "v2";
 
 bool TokenizerInfo::Impl::operator==(const TokenizerInfo::Impl& other) const {
   static constexpr auto tie = [](const TokenizerInfo::Impl& impl) {
@@ -34,36 +32,35 @@ bool TokenizerInfo::Impl::operator==(const TokenizerInfo::Impl& other) const {
   return tie(*this) == tie(other);
 }
 
-// C++ picojson::value -> Python str
-static std::string SerializeJSONPython(picojson::object& object) {
-  object["__VERSION__"] = picojson::value(kXGrammarSerializeVersion);
-  return picojson::value{object}.serialize(/*prettify=*/false);
-}
+// static std::string SerializeJSONPython(picojson::object& object) {
+//   object["__VERSION__"] = picojson::value(kXGrammarSerializeVersion);
+//   return picojson::value{object}.serialize(/*prettify=*/false);
+// }
 
 enum class VersionError {
   kMissingVersion,
   kVersionMismatch,
 };
 
-// Python str -> C++ picojson::value
-static std::variant<picojson::value, VersionError> DeserializeJSONPython(const std::string& str) {
-  picojson::value v;
-  std::string err;
-  picojson::parse(v, str.begin(), str.end(), &err);
-  XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err;
-  XGRAMMAR_CHECK(v.is<picojson::object>()) << "Expected a JSON object, but got: " << v.serialize();
-  auto& object = v.get<picojson::object>();
-  auto version_it = object.find("__VERSION__");
-  if (version_it == object.end()) {
-    return VersionError::kMissingVersion;
-  }
-  const auto& version = version_it->second;
-  if (!version.is<std::string>() || version.get<std::string>() != kXGrammarSerializeVersion) {
-    return VersionError::kVersionMismatch;
-  }
-  object.erase(version_it);  // Remove the version field from the object.
-  return v;
-}
+// // Python str -> C++ picojson::value
+// static std::variant<picojson::value, VersionError> DeserializeJSONPython(const std::string& str)
+// {
+//   picojson::value v;
+//   std::string err;
+//   picojson::parse(v, str.begin(), str.end(), &err);
+//   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err;
+//   XGRAMMAR_CHECK(v.is<picojson::object>()) << "Expected a JSON object, but got: " <<
+//   v.serialize(); auto& object = v.get<picojson::object>(); auto version_it =
+//   object.find("__VERSION__"); if (version_it == object.end()) {
+//     return VersionError::kMissingVersion;
+//   }
+//   const auto& version = version_it->second;
+//   if (!version.is<std::string>() || version.get<std::string>() != kXGrammarSerializeVersion) {
+//     return VersionError::kVersionMismatch;
+//   }
+//   object.erase(version_it);  // Remove the version field from the object.
+//   return v;
+// }
 
 // Throws an error if the version is missing or mismatched.
 [[noreturn]]
@@ -167,9 +164,7 @@ std::string TokenizerInfo::SerializeJSON() const {
   return SerializeJSONPython(object);
 }
 
-TokenizerInfo TokenizerInfo::DeserializeJSON(
-    const std::string& json_string, const std::vector<std::string>& encoded_vocab
-) {
+TokenizerInfo TokenizerInfo::DeserializeJSON(const std::string& json_string) {
   auto result = DeserializeJSONPython(json_string);
   if (std::holds_alternative<VersionError>(result))
     throw_version_error(std::get<VersionError>(result), "TokenizerInfo");
@@ -178,23 +173,12 @@ TokenizerInfo TokenizerInfo::DeserializeJSON(
   try {
     auto tokenizer_info = TokenizerInfo{std::make_shared<TokenizerInfo::Impl>()};
     AutoDeserializeJSONValue(*tokenizer_info, value);
-    if (!encoded_vocab.empty()) {
-      // construct the tokenizer info with the encoded vocab
-      return TokenizerInfo{
-          encoded_vocab,
-          tokenizer_info->GetVocabType(),
-          tokenizer_info->GetVocabSize(),
-          tokenizer_info->GetStopTokenIds(),
-          tokenizer_info->GetAddPrefixSpace(),
-      };
-    } else {
-      // return the tokenizer info with only metadata
-      return tokenizer_info;
-    }
-  } catch (const std::exception&) {
+    return tokenizer_info;
+  } catch (const std::exception& e) {
     // pass the exception to the caller
+    throw_format_error("TokenizerInfo: " + std::string(e.what()));
   }
-  throw_format_error("TokenizerInfo");
+  XGRAMMAR_UNREACHABLE();
 }
 
 }  // namespace xgrammar

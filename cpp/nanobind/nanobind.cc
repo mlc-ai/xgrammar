@@ -92,13 +92,7 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def_static("_detect_metadata_from_hf", &TokenizerInfo::DetectMetadataFromHF)
       .def("serialize_json", &TokenizerInfo::SerializeJSON)
-      .def_static(
-          "deserialize_json",
-          [](const std::string& str,
-             const nb::typed<nb::list, std::variant<std::string, nb::bytes>>& encoded_vocab) {
-            return TokenizerInfo::DeserializeJSON(str, CommonEncodedVocabType(encoded_vocab));
-          }
-      );
+      .def_static("deserialize_json", &TokenizerInfo::DeserializeJSON);
 
   auto pyGrammar = nb::class_<Grammar>(m, "Grammar");
   pyGrammar.def("to_string", &Grammar::ToString)
@@ -267,13 +261,14 @@ NB_MODULE(xgrammar_bindings, m) {
   auto pyConfigModule = m.def_submodule("config");
   pyConfigModule
       .def(
-          "set_max_recursion_depth",
-          &RecursionGuard::SetMaxRecursionDepth,
-          nb::call_guard<nb::gil_scoped_release>()
+          "set_max_recursion_depth", &SetMaxRecursionDepth, nb::call_guard<nb::gil_scoped_release>()
       )
       .def(
-          "get_max_recursion_depth",
-          &RecursionGuard::GetMaxRecursionDepth,
+          "get_max_recursion_depth", &GetMaxRecursionDepth, nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def(
+          "get_serialization_version",
+          &GetSerializationVersion,
           nb::call_guard<nb::gil_scoped_release>()
       );
 }

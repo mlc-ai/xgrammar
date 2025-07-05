@@ -1,6 +1,7 @@
 // IWYU pragma: private
-#ifndef XGRAMMAR_REFLECTION_DETAILS_H_
-#define XGRAMMAR_REFLECTION_DETAILS_H_
+#ifndef XGRAMMAR_SUPPORT_REFLECTION_REFLECTION_DETAILS_H_
+#define XGRAMMAR_SUPPORT_REFLECTION_REFLECTION_DETAILS_H_
+
 #include <array>
 #include <cstddef>
 #include <optional>
@@ -24,6 +25,7 @@ enum class member_type {
 }  // namespace xgrammar
 
 namespace xgrammar::details {
+
 // We cannot use `static_assert(false)` even in unreachable code in `if constexpr`.
 // See https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2593r1.html
 // for more details.
@@ -153,4 +155,4 @@ inline void visit_config(Fn&& fn) {
 
 }  // namespace xgrammar::details
 
-#endif  // XGRAMMAR_REFLECTION_DETAILS_H_
+#endif  // XGRAMMAR_SUPPORT_REFLECTION_REFLECTION_DETAILS_H_

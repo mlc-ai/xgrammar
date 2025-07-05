@@ -12,7 +12,7 @@
 #include <iostream>
 #include <vector>
 
-#include "../grammar_data_structure.h"
+#include "../grammar_impl.h"
 #include "../support/logging.h"
 
 namespace xgrammar {
