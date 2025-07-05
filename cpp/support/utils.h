@@ -58,23 +58,6 @@ class TypedError : public std::runtime_error {
   T type_;
 };
 
-namespace detail {
-
-/*!
- * \brief Check if the parameter pack has exactly one type X. The generic version is false.
- */
-template <typename X, typename... Args>
-constexpr bool is_exactly_one_type = false;
-
-/*!
- * \brief Partial specialization of is_exactly_one_type that returns true if the parameter pack
- * has exactly one type Arg when it is exactly one X.
- */
-template <typename X, typename Arg>
-constexpr bool is_exactly_one_type<X, Arg> = std::is_same_v<std::decay_t<Arg>, X>;
-
-}  // namespace detail
-
 template <typename T, bool IsOk>
 struct PartialResult {
   template <typename... Args>
@@ -82,12 +65,12 @@ struct PartialResult {
   T value;
 };
 
-template <typename E = std::runtime_error, typename..., typename... Args>
+template <typename E = std::runtime_error, typename... Args>
 inline PartialResult<E, false> ResultErr(Args&&... args) {
   return PartialResult<E, false>{std::forward<Args>(args)...};
 }
 
-template <typename T, typename..., typename... Args>
+template <typename T, typename... Args>
 inline PartialResult<T, true> ResultOk(Args&&... args) {
   return PartialResult<T, true>{std::forward<Args>(args)...};
 }
