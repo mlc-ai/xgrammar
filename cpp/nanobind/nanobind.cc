@@ -4,6 +4,7 @@
  */
 
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
@@ -22,6 +23,8 @@
 namespace nb = nanobind;
 using namespace xgrammar;
 
+namespace {
+
 std::vector<std::string> CommonEncodedVocabType(
     const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab
 ) {
@@ -39,6 +42,32 @@ std::vector<std::string> CommonEncodedVocabType(
   return encoded_vocab_strs;
 }
 
+bool GrammarMatcher_FillNextTokenBitmask(
+    GrammarMatcher& matcher,
+    nb::ndarray<int32_t, nb::device::cpu> arr,
+    int32_t index,
+    bool debug_print
+) {
+  if (arr.ndim() != 1 && arr.ndim() != 2) {
+    throw nb::type_error("token_bitmask tensor must be 1D or 2D");
+  }
+
+  // Under the hood these are stored with the same standard (DLPack), but nanobind
+  // defines its own types, and doesn't expose a way to just get the object directly.
+  // We'll just do some pointer hackery to get there, rather than build the type back up manually:
+
+  // The data in an ndarray is defined as:
+  // detail::ndarray_handle* m_handle = nullptr;
+  // dlpack::dltensor m_dltensor;
+  // Assert this, then skip over m_handle and reinterpret m_dltensor.
+  static_assert(sizeof(arr) == sizeof(void*) + sizeof(nb::dlpack::dltensor));
+
+  const DLTensor& bitmask_dltensor =
+      *reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
+
+  return matcher.FillNextTokenBitmask(bitmask_dltensor, index, debug_print);
+}
+
 std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
   const auto& decoded_vocab = tokenizer.GetDecodedVocab();
   std::vector<nanobind::bytes> py_result;
@@ -48,6 +77,8 @@ std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& 
   }
   return py_result;
 }
+
+}  // namespace
 
 NB_MODULE(xgrammar_bindings, m) {
   auto pyTokenizerInfo = nb::class_<TokenizerInfo>(m, "TokenizerInfo");
