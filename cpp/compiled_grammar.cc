@@ -12,12 +12,12 @@ namespace xgrammar {
 
 /************** CompiledGrammar::Impl **************/
 
-std::string CompiledGrammar::SerializeJSON() const {
+std::string CompiledGrammar::Impl::SerializeJSON() const {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(grammar_);
-  result["tokenizer_metadata"] = AutoSerializeJSONValue(*this->GetTokenizerInfo());
-  result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(this->GetAdaptiveTokenMaskCache());
-  return SerializeJSONPython(result);
+  result["tokenizer_metadata"] = picojson::value(tokenizer_info_.DumpMetadata());
+  result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(adaptive_token_mask_cache);
+  return result;
 }
 
 CompiledGrammar CompiledGrammar::DeserializeJSON(
