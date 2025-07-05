@@ -1,5 +1,6 @@
-/**
- * \file json_serializer.h
+/*!
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/support/json_serializer.h
  * \brief A JSON-based serializer. Automatically generates serialization and deserialization logic
  * from reflection.
  */
@@ -96,8 +97,8 @@ template <typename T>
 std::optional<std::runtime_error> AutoDeserializeJSON(
     T* result,
     const std::string& json_string,
-    const std::string& type_name = "",
-    bool check_version = false
+    bool check_version = false,
+    const std::string& type_name = ""
 );
 
 inline std::runtime_error ConstructDeserializeError(
@@ -495,7 +496,7 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
 
 template <typename T>
 inline std::optional<std::runtime_error> AutoDeserializeJSON(
-    T* result, const std::string& json_string, const std::string& type_name, bool check_version
+    T* result, const std::string& json_string, bool check_version, const std::string& type_name
 ) {
   picojson::value json_value;
   if (auto error = picojson::parse(json_value, json_string)) {

@@ -445,10 +445,6 @@ class CompactFSM {
    */
   FSM ToFSM() const;
 
-  friend std::optional<std::runtime_error> DeserializeJSONValue(
-      CompactFSM* fsm, const picojson::value& v
-  );
-
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
 };
 

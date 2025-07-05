@@ -152,15 +152,14 @@ std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
   return os;
 }
 
-std::string Grammar::SerializeJSON() const { return AutoSerializeJSON(*this->ImplPtr(), true); }
+std::string Grammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
 
 std::variant<Grammar, std::runtime_error> Grammar::DeserializeJSON(const std::string& json_string) {
-  Grammar grammar(std::make_shared<Grammar::Impl>());
-  auto err = AutoDeserializeJSON(grammar, json_string, true);
-  if (err) {
+  Grammar result{NullObj()};
+  if (auto err = AutoDeserializeJSON(&result, json_string, true, "Grammar")) {
     return err.value();
   }
-  return grammar;
+  return result;
 }
 
 }  // namespace xgrammar

@@ -1,5 +1,6 @@
 /*!
- * \file memory_size.h
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/support/memory_size.h
  * \brief Compute the memory consumption of a container in heap memory.
  */
 

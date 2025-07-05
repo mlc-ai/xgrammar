@@ -1,3 +1,9 @@
+/*!
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/support/reflection.h
+ * \brief The header for compile-time reflection.
+ */
+
 #ifndef XGRAMMAR_SUPPORT_REFLECTION_H_
 #define XGRAMMAR_SUPPORT_REFLECTION_H_
 

@@ -25,7 +25,6 @@
 #include <vector>
 
 #include "support/encoding.h"
-#include "support/json_serializer.h"
 #include "support/logging.h"
 #include "support/reflection.h"
 #include "support/union_find_set.h"
@@ -1595,13 +1594,6 @@ std::size_t MemorySize(const CompactFSMWithStartEnd& self) {
 
 FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
-}
-
-std::optional<std::runtime_error> DeserializeJSONValue(CompactFSM* fsm, const picojson::value& v) {
-  if (!fsm->pimpl_) {
-    fsm->pimpl_ = std::make_unique<CompactFSM::Impl>();
-  }
-  return AutoDeserializeJSONValue(fsm, v);
 }
 
 }  // namespace xgrammar
