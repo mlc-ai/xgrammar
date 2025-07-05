@@ -78,7 +78,6 @@ struct AdaptiveTokenMask {
 
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
-  std::size_t MemorySize() const;
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask);
 };
 
@@ -110,8 +109,6 @@ class CompiledGrammar::Impl {
 
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info_; }
 
-  std::size_t MemorySize() const;
-
   picojson::value SerializeJSONValue() const;
 
   static std::optional<std::runtime_error> DeserializeJSONValue(
@@ -119,6 +116,7 @@ class CompiledGrammar::Impl {
   );
 
   friend struct member_trait<Impl>;
+  friend std::size_t MemorySize(const Impl& impl);
 
  private:
   /*! \brief The grammar for the GrammarMatcher. */

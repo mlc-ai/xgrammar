@@ -51,8 +51,6 @@ std::size_t MemorySize(const AdaptiveTokenMask& mask) {
          MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset);
 }
 
-std::size_t AdaptiveTokenMask::MemorySize() const { return xgrammar::MemorySize(*this); }
-
 /******************* AdaptiveTokenMask and CompiledGrammar *******************/
 
 AdaptiveTokenMask::AdaptiveTokenMask(

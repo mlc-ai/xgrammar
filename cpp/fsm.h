@@ -709,7 +709,9 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
  public:
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
-  // for serialization only
+  /*!
+   * \brief The default constructor. For serialization only.
+   */
   CompactFSMWithStartEnd() = default;
 
   /*!
@@ -719,6 +721,18 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    */
   std::string ToString() const;
 
+  /*!
+   * \brief Transform the CompactFSMWithStartEnd to a FSMWithStartEnd.
+   * \return The FSMWithStartEnd.
+   */
+  FSMWithStartEnd ToFSM() const;
+
+  /*!
+   * \brief Print the CompactFSMWithStartEnd.
+   * \param os The output stream.
+   * \param fsm The CompactFSMWithStartEnd.
+   * \return The output stream.
+   */
   friend std::ostream& operator<<(std::ostream& os, const CompactFSMWithStartEnd& fsm);
 
   /*!
@@ -727,12 +741,6 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    * \return The memory size of the CompactFSMWithStartEnd.
    */
   friend std::size_t MemorySize(const CompactFSMWithStartEnd& self);
-
-  /*!
-   * \brief Transform the CompactFSMWithStartEnd to a FSMWithStartEnd.
-   * \return The FSMWithStartEnd.
-   */
-  FSMWithStartEnd ToFSM() const;
 };
 
 XGRAMMAR_MEMBER_ARRAY(
