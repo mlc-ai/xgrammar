@@ -9,8 +9,8 @@
 
 #include "compiled_grammar_impl.h"
 #include "grammar_impl.h"
+#include "support/json_serializer.h"
 #include "support/logging.h"
-#include "support/reflection/json_serializer.h"
 #include "support/utils.h"
 #include "tokenizer_info_impl.h"
 #include "xgrammar/compiler.h"

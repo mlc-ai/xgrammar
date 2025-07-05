@@ -21,7 +21,7 @@
 #include <vector>
 
 #include "support/compact_2d_array.h"
-#include "support/reflection/reflection.h"
+#include "support/reflection.h"
 #include "support/utils.h"
 
 namespace xgrammar {

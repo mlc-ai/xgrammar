@@ -3,8 +3,8 @@
  * \brief A JSON-based serializer. Automatically generates serialization and deserialization logic
  * from reflection.
  */
-#ifndef XGRAMMAR_SUPPORT_REFLECTION_JSON_SERIALIZER_H_
-#define XGRAMMAR_SUPPORT_REFLECTION_JSON_SERIALIZER_H_
+#ifndef XGRAMMAR_SUPPORT_JSON_SERIALIZER_H_
+#define XGRAMMAR_SUPPORT_JSON_SERIALIZER_H_
 
 #include <picojson.h>
 
@@ -447,4 +447,4 @@ inline std::optional<std::runtime_error> AutoDeserializeJSON(
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_SUPPORT_REFLECTION_JSON_SERIALIZER_H_
+#endif  // XGRAMMAR_SUPPORT_JSON_SERIALIZER_H_

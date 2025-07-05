@@ -17,7 +17,7 @@
 
 #include "earley_parser.h"
 #include "support/dynamic_bitset.h"
-#include "support/reflection/reflection.h"
+#include "support/reflection.h"
 #include "support/utils.h"
 #include "xgrammar/compiler.h"
 

@@ -1,5 +1,5 @@
-#ifndef XGRAMMAR_SUPPORT_REFLECTION_REFLECTION_H_
-#define XGRAMMAR_SUPPORT_REFLECTION_REFLECTION_H_
+#ifndef XGRAMMAR_SUPPORT_REFLECTION_H_
+#define XGRAMMAR_SUPPORT_REFLECTION_H_
 
 #include <array>
 #include <cstddef>
@@ -227,4 +227,4 @@ inline void visit_config(Fn&& fn) {
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_SUPPORT_REFLECTION_REFLECTION_H_
+#endif  // XGRAMMAR_SUPPORT_REFLECTION_H_

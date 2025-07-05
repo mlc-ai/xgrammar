@@ -9,7 +9,7 @@
 
 #include "fsm.h"
 #include "support/compact_2d_array.h"
-#include "support/reflection/json_serializer.h"
+#include "support/json_serializer.h"
 
 namespace xgrammar {
 

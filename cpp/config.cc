@@ -5,8 +5,8 @@
 
 #include <xgrammar/config.h>
 
+#include "support/json_serializer.h"
 #include "support/recursion_guard.h"
-#include "support/reflection/json_serializer.h"
 
 namespace xgrammar {
 

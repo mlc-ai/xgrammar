@@ -25,9 +25,9 @@
 #include <vector>
 
 #include "support/encoding.h"
+#include "support/json_serializer.h"
 #include "support/logging.h"
-#include "support/reflection/json_serializer.h"
-#include "support/reflection/reflection.h"
+#include "support/reflection.h"
 #include "support/union_find_set.h"
 
 namespace xgrammar {

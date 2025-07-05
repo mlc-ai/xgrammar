@@ -6,7 +6,7 @@
 #include <xgrammar/compiler.h>
 
 #include "compiled_grammar_impl.h"
-#include "support/reflection/json_serializer.h"
+#include "support/json_serializer.h"
 
 namespace xgrammar {
 

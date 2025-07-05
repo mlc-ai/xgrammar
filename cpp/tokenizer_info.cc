@@ -16,8 +16,8 @@
 #include <vector>
 
 #include "support/encoding.h"
+#include "support/json_serializer.h"
 #include "support/logging.h"
-#include "support/reflection/json_serializer.h"
 #include "tokenizer_info_impl.h"
 
 namespace xgrammar {
