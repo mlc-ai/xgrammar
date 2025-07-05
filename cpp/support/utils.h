@@ -45,6 +45,13 @@ inline uint32_t HashCombine(Args... args) {
 #define XGRAMMAR_UNREACHABLE()
 #endif
 
+/******************* MemorySize Procotol *******************/
+
+template <typename T, typename = std::enable_if_t<std::is_trivially_copyable_v<T>>>
+inline constexpr std::size_t MemorySize(const T& value) {
+  return 0;
+}
+
 /*!
  * \brief An error class that contains a type. The type can be an enum.
  */
@@ -58,6 +65,12 @@ class TypedError : public std::runtime_error {
   T type_;
 };
 
+/*!
+ * \brief A partial result type that can be used to construct a Result. Holds a result value or an
+ * error value.
+ * \tparam T The type of the value
+ * \tparam IsOk Whether the result is ok
+ */
 template <typename T, bool IsOk>
 struct PartialResult {
   template <typename... Args>
@@ -134,9 +147,6 @@ class Result {
   template <typename U, typename = std::enable_if_t<std::is_same_v<std::decay_t<U>, T>>>
   Result(PartialResult<U, true>&& partial_result)
       : data_(std::in_place_type<T>, std::forward<U>(partial_result.value)) {}
-
-  /*! \brief Construct a success Result by moving T */
-  static Result Ok(T&& value) { return Result(std::in_place_type<T>, std::move(value)); }
 
   /*! \brief Check if Result contains success value */
   bool IsOk() const { return std::holds_alternative<T>(data_); }

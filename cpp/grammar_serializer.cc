@@ -44,6 +44,7 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintTagDispatch(grammar_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected GrammarExpr type: " << static_cast<int>(grammar_expr.type);
+      XGRAMMAR_UNREACHABLE();
   }
 }
 
@@ -118,15 +119,29 @@ std::string GrammarPrinter::PrintChoices(const GrammarExpr& grammar_expr) {
   return result;
 }
 
+std::string GrammarPrinter::PrintString(const std::string& str) {
+  return "\"" + PrintAsEscapedUTF8(str) + "\"";
+}
+
+std::string GrammarPrinter::PrintBoolean(bool value) { return value ? "true" : "false"; }
+
 std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
-  std::string result = "TagDispatch(";
-  for (int i = 0; i < grammar_expr.data_len; i += 2) {
-    result += "(" + PrintGrammarExpr(grammar_expr[i]) + ", " +
-              grammar_->GetRule(grammar_expr[i + 1]).name + ")";
-    if (i + 2 != grammar_expr.data_len) {
+  auto tag_dispatch = grammar_->GetTagDispatch(grammar_expr);
+  std::string result = "TagDispatch(\n";
+  std::string indent = "  ";
+  for (const auto& [tag, rule_id] : tag_dispatch.tag_rule_pairs) {
+    result += indent + "(" + PrintString(tag) + ", " + grammar_->GetRule(rule_id).name + "),\n";
+  }
+  result += indent + "stop_eos=" + PrintBoolean(tag_dispatch.stop_eos) + ",\n";
+  result += indent + "stop_str=(";
+  for (int i = 0; i < static_cast<int>(tag_dispatch.stop_str.size()); ++i) {
+    result += PrintString(tag_dispatch.stop_str[i]);
+    if (i + 1 != static_cast<int>(tag_dispatch.stop_str.size())) {
       result += ", ";
     }
   }
+  result += "),\n";
+  result += indent + "loop_after_dispatch=" + PrintBoolean(tag_dispatch.loop_after_dispatch) + "\n";
   result += ")";
   return result;
 }

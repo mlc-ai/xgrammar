@@ -13,6 +13,7 @@
 
 #include "grammar_builder.h"
 #include "grammar_data_structure.h"
+#include "grammar_serializer.h"
 
 namespace xgrammar {
 
@@ -39,7 +40,7 @@ class GrammarFunctor {
    */
   virtual ReturnType Apply(const Grammar& grammar) {
     // The initializer MUST be called at first when overriding the Apply() function.
-    Init(grammar);
+    InitGrammar(grammar);
     if constexpr (std::is_same<T, void>::value) {
       for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
         auto rule = base_grammar_->GetRule(i);
@@ -50,20 +51,21 @@ class GrammarFunctor {
       return ReturnType();
     } else if constexpr (std::is_same<T, int32_t>::value &&
                          std::is_same<ReturnType, Grammar>::value) {
+      InitBuilder();
       // First add empty rules to ensure the new rule ids the same as the old ones, then update
       // the rule bodies
       for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
-        builder_.AddEmptyRule(base_grammar_->GetRule(i).name);
+        builder_->AddEmptyRule(base_grammar_->GetRule(i).name);
       }
       for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
         auto rule = base_grammar_->GetRule(i);
         cur_rule_name_ = rule.name;
         auto new_body_expr_id = VisitExpr(rule.body_expr_id);
-        builder_.UpdateRuleBody(i, new_body_expr_id);
+        builder_->UpdateRuleBody(i, new_body_expr_id);
         // Handle lookahead assertion
-        builder_.UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+        builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       }
-      return builder_.Get(base_grammar_->GetRootRule().name);
+      return builder_->Get(base_grammar_->GetRootRule().name);
     } else {
       return ReturnType();
     }
@@ -78,15 +80,43 @@ class GrammarFunctor {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
 
   /*! \brief Initialize the functor. Should be called at the beginning of Apply(). */
-  virtual void Init(const Grammar& grammar) {
-    base_grammar_ = grammar;
-    builder_ = GrammarBuilder();
+  virtual void InitGrammar() {}
+
+  virtual void InitGrammar(const Grammar& grammar) { base_grammar_ = grammar; }
+
+  virtual void InitBuilder() {
+    owned_builder_ = GrammarBuilder();
+    builder_ = &owned_builder_;
   }
 
-  virtual void InitWithCopy(const Grammar& grammar) {
-    base_grammar_ = grammar;
-    builder_ = GrammarBuilder(grammar);
+  virtual void InitBuilder(const Grammar& grammar) {
+    owned_builder_ = GrammarBuilder(grammar);
+    builder_ = &owned_builder_;
   }
+
+  virtual void InitBuilder(GrammarBuilder* builder) { builder_ = builder; }
+
+  //     virtual void Init(const Grammar& grammar) {
+  //   base_grammar_ = grammar;
+  //   owned_builder_ = GrammarBuilder();
+  //   builder_ = &builder_value_;
+  // }
+
+  // virtual void InitWithCopy(const Grammar& grammar) {
+  //   base_grammar_ = grammar;
+  //   owned_builder_ = GrammarBuilder(grammar);
+  //   builder_ = &builder_value_;
+  // }
+
+  // virtual void InitWithBuilder(const Grammar& grammar, GrammarBuilder* builder) {
+  //   base_grammar_ = grammar;
+  //   builder_ = builder;
+  // }
+
+  // virtual void InitNoGrammar() {
+  //   owned_builder_ = GrammarBuilder();
+  //   builder_ = &owned_builder_;
+  // }
 
   /*! \brief Visit a lookahead assertion expr referred by id. */
   virtual T VisitLookaheadAssertion(int32_t lookahead_assertion_id) {
@@ -126,6 +156,7 @@ class GrammarFunctor {
         return VisitTagDispatch(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
+        XGRAMMAR_UNREACHABLE();
     }
   }
 
@@ -140,7 +171,7 @@ class GrammarFunctor {
       for (int32_t i : grammar_expr) {
         choice_ids.push_back(VisitExpr(i));
       }
-      return builder_.AddChoices(choice_ids);
+      return builder_->AddChoices(choice_ids);
     } else {
       return T();
     }
@@ -157,7 +188,7 @@ class GrammarFunctor {
       for (int32_t i : grammar_expr) {
         sequence_ids.push_back(VisitExpr(i));
       }
-      return builder_.AddSequence(sequence_ids);
+      return builder_->AddSequence(sequence_ids);
     } else {
       return T();
     }
@@ -165,15 +196,10 @@ class GrammarFunctor {
 
   virtual T VisitTagDispatch(const GrammarExpr& grammar_expr) {
     if constexpr (std::is_same<T, void>::value) {
-      for (int i = 0; i < grammar_expr.size(); i += 2) {
-        VisitExpr(grammar_expr[i]);
-      }
+      return;
     } else if constexpr (std::is_same<T, int32_t>::value) {
-      std::vector<std::pair<int32_t, int32_t>> tag_dispatch_list;
-      for (int i = 0; i < grammar_expr.size(); i += 2) {
-        tag_dispatch_list.push_back({VisitExpr(grammar_expr[i]), grammar_expr[i + 1]});
-      }
-      return builder_.AddTagDispatch(tag_dispatch_list);
+      Grammar::Impl::TagDispatch tag_dispatch = base_grammar_->GetTagDispatch(grammar_expr);
+      return builder_->AddTagDispatch(tag_dispatch);
     } else {
       return T();
     }
@@ -184,7 +210,7 @@ class GrammarFunctor {
     if constexpr (std::is_same<T, void>::value) {
       return;
     } else if constexpr (std::is_same<T, int32_t>::value) {
-      return builder_.AddGrammarExpr(grammar_expr);
+      return builder_->AddGrammarExpr(grammar_expr);
     } else {
       return T();
     }
@@ -216,7 +242,9 @@ class GrammarFunctor {
    * \brief The builder to build the new grammar. It is empty when the mutator is constructed, and
    * can be used to build a new grammar in subclasses.
    */
-  GrammarBuilder builder_;
+  GrammarBuilder* builder_ = nullptr;
+
+  GrammarBuilder owned_builder_;
 
   /*! \brief The name of the current rule being visited. */
   std::string cur_rule_name_;
@@ -326,6 +354,19 @@ class DeadCodeEliminator {
 class LookaheadAssertionAnalyzer {
  public:
   static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Build the FSMs of the grammar.
+ */
+class GrammarFSMBuilder {
+ public:
+  static void Apply(Grammar* grammar);
+};
+
+class SubGrammarAdder {
+ public:
+  static int32_t Apply(GrammarBuilder* builder, const Grammar& sub_grammar);
 };
 
 }  // namespace xgrammar
