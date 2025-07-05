@@ -25,7 +25,6 @@
 #include "support/thread_safe_cache.h"
 #include "support/utils.h"
 #include "testing.h"
-#include "xgrammar/grammar.h"
 
 namespace std {
 
@@ -723,6 +722,7 @@ class GrammarCompiler::Impl {
   long long CacheLimitBytes() const;
 
  private:
+  using RuleExprType = Grammar::Impl::RuleExprType;
   using MultipleKey = std::variant<SchemaKey, StructuralTagKey, std::string, GrammarKey>;
 
   struct Computer {
@@ -772,8 +772,6 @@ void GrammarCompiler::Impl::BuildTagDispatchFSM(
 }
 
 CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar) {
-  using RuleExprType = Grammar::Impl::RuleExprType;
-
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
 
   compiled_grammar_impl->grammar = grammar;

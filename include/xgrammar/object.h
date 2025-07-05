@@ -36,6 +36,7 @@ struct NullObj {};
   TypeName(TypeName&& other) noexcept = default;                               \
   TypeName& operator=(const TypeName& other) = default;                        \
   TypeName& operator=(TypeName&& other) noexcept = default;                    \
+  bool IsNull() const { return pimpl_ == nullptr; }                            \
   /* Access the impl pointer. Useful in implementation. */                     \
   Impl* operator->() { return pimpl_.get(); }                                  \
   const Impl* operator->() const { return pimpl_.get(); }                      \

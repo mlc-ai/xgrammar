@@ -22,19 +22,12 @@
 
 namespace xgrammar {
 
-/**
- * \brief Error for invalid schema: wrong type, invalid keyword, etc.
- */
-struct InvalidSchemaError : public Error {
-  InvalidSchemaError(const std::string& msg) : Error(msg, "InvalidSchemaError") {}
+enum class SchemaErrorType : int {
+  kInvalidSchema = 0,
+  kUnsatisfiableSchema = 1,
 };
 
-/**
- * \brief Error for unsatisfiable schema: conflict in constraints, the whole schema is false, etc.
- */
-struct UnsatisfiableSchemaError : public Error {
-  UnsatisfiableSchemaError(const std::string& msg) : Error(msg, "UnsatisfiableSchemaError") {}
-};
+using SchemaError = TypedError<SchemaErrorType>;
 
 /*!
  * \brief Manage the indent and separator for the generation of EBNF grammar.
@@ -323,7 +316,7 @@ class JSONSchemaConverter {
     int64_t max_items;
   };
 
-  Result<ArraySpec> ParseArraySchema(const picojson::object& schema);
+  Result<ArraySpec, SchemaError> ParseArraySchema(const picojson::object& schema);
 
   /*!
    * \brief Visit an array schema.
@@ -1985,7 +1978,7 @@ std::string JSONSchemaConverter::VisitNull(
   return "\"null\"";
 }
 
-Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
+Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseArraySchema(
     const picojson::object& schema
 ) {
   XGRAMMAR_DCHECK(
@@ -2002,22 +1995,22 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
 
   if (schema.count("prefixItems")) {
     if (!schema.at("prefixItems").is<picojson::array>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("prefixItems must be an array")
+      return Result<ArraySpec, SchemaError>::Err(
+          SchemaErrorType::kInvalidSchema, "prefixItems must be an array"
       );
     }
     prefix_item_schemas = schema.at("prefixItems").get<picojson::array>();
     for (const auto& item : prefix_item_schemas) {
       if (item.is<bool>()) {
         if (!item.get<bool>()) {
-          return Result<ArraySpec>::Err(
-              std::make_shared<UnsatisfiableSchemaError>("prefixItems contains false")
+          return Result<ArraySpec, SchemaError>::Err(
+              SchemaErrorType::kUnsatisfiableSchema, "prefixItems contains false"
           );
         }
       } else if (!item.is<picojson::object>()) {
-        return Result<ArraySpec>::Err(std::make_shared<InvalidSchemaError>(
-            "prefixItems must be an array of objects or booleans"
-        ));
+        return Result<ArraySpec, SchemaError>::Err(
+            SchemaErrorType::kInvalidSchema, "prefixItems must be an array of objects or booleans"
+        );
       }
     }
   }
@@ -2025,8 +2018,8 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   if (schema.count("items")) {
     auto items_value = schema.at("items");
     if (!items_value.is<bool>() && !items_value.is<picojson::object>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("items must be a boolean or an object")
+      return Result<ArraySpec, SchemaError>::Err(
+          SchemaErrorType::kInvalidSchema, "items must be a boolean or an object"
       );
     }
     if (items_value.is<bool>() && !items_value.get<bool>()) {
@@ -2038,8 +2031,8 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   } else if (schema.count("unevaluatedItems")) {
     auto unevaluated_items_value = schema.at("unevaluatedItems");
     if (!unevaluated_items_value.is<bool>() && !unevaluated_items_value.is<picojson::object>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("unevaluatedItems must be a boolean or an object")
+      return Result<ArraySpec, SchemaError>::Err(
+          SchemaErrorType::kInvalidSchema, "unevaluatedItems must be a boolean or an object"
       );
     }
     if (unevaluated_items_value.is<bool>() && !unevaluated_items_value.get<bool>()) {
@@ -2057,8 +2050,8 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
 
   if (schema.count("minItems")) {
     if (!schema.at("minItems").is<int64_t>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("minItems must be an integer")
+      return Result<ArraySpec, SchemaError>::Err(
+          SchemaErrorType::kInvalidSchema, "minItems must be an integer"
       );
     }
     min_items = std::max(static_cast<int64_t>(0), schema.at("minItems").get<int64_t>());
@@ -2066,8 +2059,8 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
 
   if (schema.count("minContains")) {
     if (!schema.at("minContains").is<int64_t>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("minContains must be an integer")
+      return Result<ArraySpec, SchemaError>::Err(
+          SchemaErrorType::kInvalidSchema, "minContains must be an integer"
       );
     }
     min_items = std::max(min_items, schema.at("minContains").get<int64_t>());
@@ -2075,8 +2068,8 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
 
   if (schema.count("maxItems")) {
     if (!schema.at("maxItems").is<int64_t>() || schema.at("maxItems").get<int64_t>() < 0) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("maxItems must be a non-negative integer")
+      return Result<ArraySpec, SchemaError>::Err(
+          SchemaErrorType::kInvalidSchema, "maxItems must be a non-negative integer"
       );
     }
     max_items = schema.at("maxItems").get<int64_t>();
@@ -2084,38 +2077,42 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
 
   // Check if the schema is unsatisfiable
   if (max_items != -1 && min_items > max_items) {
-    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+    return Result<ArraySpec, SchemaError>::Err(
+        SchemaErrorType::kUnsatisfiableSchema,
         "minItems is greater than maxItems: " + std::to_string(min_items) + " > " +
-        std::to_string(max_items)
-    ));
+            std::to_string(max_items)
+    );
   }
 
   if (max_items != -1 && max_items < static_cast<int64_t>(prefix_item_schemas.size())) {
-    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+    return Result<ArraySpec, SchemaError>::Err(
+        SchemaErrorType::kUnsatisfiableSchema,
         "maxItems is less than the number of prefixItems: " + std::to_string(max_items) + " < " +
-        std::to_string(prefix_item_schemas.size())
-    ));
+            std::to_string(prefix_item_schemas.size())
+    );
   }
 
   if (!allow_additional_items) {
     // [len, len] must be in [min, max]
     if (static_cast<int64_t>(prefix_item_schemas.size()) < min_items) {
-      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+      return Result<ArraySpec, SchemaError>::Err(
+          SchemaErrorType::kUnsatisfiableSchema,
           "minItems is greater than the number of prefixItems, but additional items are not "
           "allowed: " +
-          std::to_string(min_items) + " > " + std::to_string(prefix_item_schemas.size())
-      ));
+              std::to_string(min_items) + " > " + std::to_string(prefix_item_schemas.size())
+      );
     }
     if (max_items != -1 && static_cast<int64_t>(prefix_item_schemas.size()) > max_items) {
-      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+      return Result<ArraySpec, SchemaError>::Err(
+          SchemaErrorType::kUnsatisfiableSchema,
           "maxItems is less than the number of prefixItems, but additional items are not "
           "allowed: " +
-          std::to_string(max_items) + " < " + std::to_string(prefix_item_schemas.size())
-      ));
+              std::to_string(max_items) + " < " + std::to_string(prefix_item_schemas.size())
+      );
     }
   }
 
-  return Result<ArraySpec>::Ok(ArraySpec{
+  return Result<ArraySpec, SchemaError>::Ok(ArraySpec{
       prefix_item_schemas, allow_additional_items, additional_item_schema, min_items, max_items
   });
 }
@@ -2125,7 +2122,7 @@ std::string JSONSchemaConverter::VisitArray(
 ) {
   auto array_spec_result = ParseArraySchema(schema);
   if (array_spec_result.IsErr()) {
-    XGRAMMAR_LOG(FATAL) << array_spec_result.UnwrapErr()->what();
+    XGRAMMAR_LOG(FATAL) << std::move(array_spec_result).UnwrapErr().what();
   }
 
   auto array_spec = std::move(array_spec_result).Unwrap();

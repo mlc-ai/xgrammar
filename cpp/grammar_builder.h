@@ -185,7 +185,7 @@ class GrammarBuilder {
     );
   }
 
-  size_t NumRuleExprs() const { return grammar_->NumRuleExprs(); }
+  int32_t NumRuleExprs() const { return grammar_->NumRuleExprs(); }
   /*! \brief Get the rule_expr with the given id. */
   RuleExpr GetRuleExpr(int32_t rule_expr_id) { return grammar_->GetRuleExpr(rule_expr_id); }
 
@@ -209,7 +209,7 @@ class GrammarBuilder {
     return AddRule({GetNewRuleName(name_hint), body_expr_id});
   }
 
-  size_t NumRules() const { return grammar_->NumRules(); }
+  int32_t NumRules() const { return grammar_->NumRules(); }
 
   /*! \brief Get the rule with the given id. */
   const Rule& GetRule(int32_t rule_id) const { return grammar_->rules_[rule_id]; }

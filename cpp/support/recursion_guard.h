@@ -2,6 +2,8 @@
 #define XGRAMMAR_SUPPORT_RECURSION_GUARD_H_
 
 #include <atomic>
+#include <optional>
+#include <stdexcept>
 
 #include "logging.h"
 
@@ -24,15 +26,8 @@ class RecursionGuard {
    */
   explicit RecursionGuard(int* current_recursion_depth)
       : current_depth_ptr_(current_recursion_depth) {
-    XGRAMMAR_DCHECK(current_depth_ptr_ != nullptr);
-
-    int current_depth = ++(*current_depth_ptr_);
-    int max_depth = max_recursion_depth_.load(std::memory_order_relaxed);
-
-    if (current_depth > max_depth) {
-      XGRAMMAR_LOG(FATAL) << "RecursionGuard: Maximum recursion depth exceeded. "
-                          << "Current depth: " << current_depth << ", Max allowed: " << max_depth;
-    }
+    auto error = AddRecursionDepth(current_depth_ptr_);
+    XGRAMMAR_CHECK(error == std::nullopt) << error.value().what();
   }
 
   /*!
@@ -47,10 +42,7 @@ class RecursionGuard {
   /*!
    * \brief Destructor that decrements recursion depth
    */
-  ~RecursionGuard() {
-    XGRAMMAR_DCHECK(current_depth_ptr_ != nullptr);
-    --(*current_depth_ptr_);
-  }
+  ~RecursionGuard() { SubtractRecursionDepth(current_depth_ptr_); }
 
   /*!
    * \brief Get the maximum allowed recursion depth
@@ -69,6 +61,25 @@ class RecursionGuard {
         << kMaxReasonableDepth << ", got: " << max_depth;
     }
     max_recursion_depth_.store(max_depth, std::memory_order_relaxed);
+  }
+
+  static std::optional<std::runtime_error> AddRecursionDepth(int* current_recursion_depth) {
+    XGRAMMAR_DCHECK(current_recursion_depth != nullptr);
+    int current_depth = ++(*current_recursion_depth);
+    int max_depth = max_recursion_depth_.load(std::memory_order_relaxed);
+    if (current_depth > max_depth) {
+      return std::runtime_error(
+          "RecursionGuard: Maximum recursion depth exceeded. "
+          "Current depth: " +
+          std::to_string(current_depth) + ", Max allowed: " + std::to_string(max_depth)
+      );
+    }
+    return std::nullopt;
+  }
+
+  static void SubtractRecursionDepth(int* current_recursion_depth) {
+    XGRAMMAR_DCHECK(current_recursion_depth != nullptr && *current_recursion_depth > 0);
+    --(*current_recursion_depth);
   }
 
  private:

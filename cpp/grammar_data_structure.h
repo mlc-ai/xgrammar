@@ -79,7 +79,7 @@ class Grammar::Impl {
   };
 
   /*! \brief Get the number of rules. */
-  size_t NumRules() const { return rules_.size(); }
+  int32_t NumRules() const { return rules_.size(); }
   /*! \brief Get the rule with the given id. */
   const Rule& GetRule(int32_t rule_id) const {
     XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(rules_.size()))
@@ -136,7 +136,7 @@ class Grammar::Impl {
   };
 
   /*! \brief Get the number of rule_exprs. */
-  size_t NumRuleExprs() const { return rule_expr_indptr_.size(); }
+  int32_t NumRuleExprs() const { return rule_expr_indptr_.size(); }
   /*! \brief Get the rule_expr with the given id. */
   RuleExpr GetRuleExpr(int32_t rule_expr_id) const {
     XGRAMMAR_DCHECK(
@@ -149,6 +149,23 @@ class Grammar::Impl {
     auto data_ptr = start_ptr + 2;
     auto data_len = start_ptr[1];
     return {type, data_ptr, data_len};
+  }
+
+  /******************* RuleExpr Getters *******************/
+
+  /*! \brief Get the string of the byte string rule expr. */
+  std::string GetByteString(const RuleExpr& rule_expr) const {
+    std::string str;
+    str.reserve(rule_expr.size());
+    for (int i = 0; i < rule_expr.size(); ++i) {
+      str.push_back(static_cast<char>(static_cast<uint8_t>(rule_expr[i])));
+    }
+    return str;
+  }
+
+  /*! \brief Get the string of the byte string rule expr. */
+  std::string GetByteString(int32_t rule_expr_id) const {
+    return GetByteString(GetRuleExpr(rule_expr_id));
   }
 
  private:

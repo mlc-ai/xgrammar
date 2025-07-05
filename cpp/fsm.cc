@@ -54,7 +54,7 @@ class FSMImplBase {
 
   int NumStates() const { return edges_.size(); }
 
-  std::string PrintEdges() const;
+  std::string EdgesToString(std::optional<std::vector<int>> states = std::nullopt) const;
 
   const ContainerType& GetEdges() const { return edges_; }
 
@@ -65,7 +65,7 @@ class FSMImplBase {
 
   void GetEpsilonClosure(std::unordered_set<int>* state_set) const;
 
-  void GetPossibleRules(const int& state_num, std::unordered_set<int>* rules) const;
+  void GetPossibleRules(int state_num, std::unordered_set<int>* rules) const;
 
   void GetReachableStates(const std::vector<int>& from, std::unordered_set<int>* result) const;
 
@@ -75,30 +75,42 @@ class FSMImplBase {
 };
 
 template <typename ContainerType>
-std::string FSMImplBase<ContainerType>::PrintEdges() const {
+std::string FSMImplBase<ContainerType>::EdgesToString(std::optional<std::vector<int>> states
+) const {
   std::string result = "[\n";
-  for (int i = 0; i < int(NumStates()); ++i) {
+  auto f_print_one = [&, this](int i) {
     result += std::to_string(i) + ": [";
     const auto& edges = edges_[i];
     for (int j = 0; j < static_cast<int>(edges.size()); ++j) {
       const auto& edge = edges[j];
-      if (edge.min == -1 && edge.max == -1) {
-        result += "eps->" + std::to_string(edge.target);
-      } else if (edge.min == -1 && edge.max >= 0) {
-        result += "rule(" + std::to_string(edge.max) + ")->" + std::to_string(edge.target);
-      } else if (edge.min == edge.max) {
-        std::string char_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.min));
-        result += "(" + char_str + ")->" + std::to_string(edge.target);
-      } else {
+      if (edge.min >= 0 && edge.min != edge.max) {
         std::string char_min_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.min));
         std::string char_max_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.max));
-        result += "(" + char_min_str + ", " + char_max_str + ")->" + std::to_string(edge.target);
+        result += "[" + char_min_str + "-" + char_max_str + "]->" + std::to_string(edge.target);
+      } else if (edge.min >= 0 && edge.min == edge.max) {
+        std::string char_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.min));
+        result += "'" + char_str + "'->" + std::to_string(edge.target);
+      } else if (edge.min == FSMEdge::EdgeType::kRuleRef) {
+        result += "Rule(" + std::to_string(edge.max) + ")->" + std::to_string(edge.target);
+      } else if (edge.min == FSMEdge::EdgeType::kEpsilon) {
+        result += "Eps->" + std::to_string(edge.target);
+      } else if (edge.min == FSMEdge::EdgeType::kEOS) {
+        result += "EOS->" + std::to_string(edge.target);
       }
-      if (j < static_cast<int>(edges_.size()) - 1) {
+      if (j < static_cast<int>(edges.size()) - 1) {
         result += ", ";
       }
     }
     result += "]\n";
+  };
+  if (states.has_value()) {
+    for (int i : states.value()) {
+      f_print_one(i);
+    }
+  } else {
+    for (int i = 0; i < int(NumStates()); ++i) {
+      f_print_one(i);
+    }
   }
   result += "]";
   return result;
@@ -127,8 +139,7 @@ void FSMImplBase<ContainerType>::GetEpsilonClosure(std::unordered_set<int>* stat
 }
 
 template <typename ContainerType>
-void FSMImplBase<ContainerType>::GetPossibleRules(const int& state, std::unordered_set<int>* rules)
-    const {
+void FSMImplBase<ContainerType>::GetPossibleRules(int state, std::unordered_set<int>* rules) const {
   rules->clear();
   for (const auto& edge : edges_[state]) {
     if (edge.IsRuleRef()) {
@@ -163,6 +174,8 @@ void FSMImplBase<ContainerType>::GetReachableStates(
 /****************** FSM::Impl ******************/
 
 class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
+  using EdgeType = FSMEdge::EdgeType;
+
  public:
   Impl() = default;
 
@@ -170,13 +183,19 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   using FSMImplBase<std::vector<std::vector<FSMEdge>>>::FSMImplBase;
 
-  int GetNextState(int from, int16_t character) const;
+  int GetNextState(int from, int value, EdgeType edge_type) const;
+
+  using FSMImplBase<std::vector<std::vector<FSMEdge>>>::GetEdges;
+
+  std::vector<std::vector<FSMEdge>>& GetEdges() { return edges_; }
+
+  std::vector<FSMEdge>& GetEdges(int state) { return edges_[state]; }
 
   void Advance(
       const std::unordered_set<int>& from,
       int value,
       std::unordered_set<int>* result,
-      bool value_is_rule,
+      EdgeType edge_type,
       bool from_is_closure
   ) const;
 
@@ -185,38 +204,70 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
     return edges_.size() - 1;
   }
 
-  void AddEdge(int from, int to, int16_t min_ch, int16_t max_ch) {
+  void AddEdge(int from, int to, int16_t min, int16_t max) {
     XGRAMMAR_DCHECK(
         from < static_cast<int>(edges_.size()) && to <= static_cast<int>(edges_.size())
     );
-    edges_[from].push_back({min_ch, max_ch, to});
+    edges_[from].push_back({min, max, to});
   }
 
-  void AddEpsilonEdge(int from, int to) { AddEdge(from, to, -1, -1); }
+  void AddRuleEdge(int from, int to, int16_t rule_id) {
+    AddEdge(from, to, FSMEdge::EdgeType::kRuleRef, rule_id);
+  }
+
+  void AddEpsilonEdge(int from, int to) { AddEdge(from, to, FSMEdge::EdgeType::kEpsilon, 0); }
+
+  void AddEOSEdge(int from, int to) { AddEdge(from, to, FSMEdge::EdgeType::kEOS, 0); }
 
   void AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping);
 
-  FSM RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states);
+  FSM RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) const;
+
+  void SortEdges();
 
   CompactFSM ToCompact();
 };
 
-int FSM::Impl::GetNextState(int from, int16_t character) const {
-  for (const auto& edge : edges_[from]) {
-    if (edge.min != -1 && edge.min <= character && edge.max >= character) {
-      return edge.target;
+int FSM::Impl::GetNextState(int from, int value, EdgeType edge_type) const {
+  XGRAMMAR_DCHECK(edge_type != EdgeType::kEpsilon)
+      << "Should not call GetNextState with edge type kEpsilon.";
+  if (edge_type == EdgeType::kCharRange) {
+    for (const auto& edge : edges_[from]) {
+      if (edge.min >= EdgeType::kCharRange && edge.min <= value && edge.max >= value) {
+        return edge.target;
+      }
     }
+    return FSM::kNoNextState;
+  } else if (edge_type == EdgeType::kRuleRef) {
+    for (const auto& edge : edges_[from]) {
+      if (edge.min == EdgeType::kRuleRef && edge.max == value) {
+        return edge.target;
+      }
+    }
+    return FSM::kNoNextState;
+  } else if (edge_type == EdgeType::kEOS) {
+    for (const auto& edge : edges_[from]) {
+      if (edge.min == EdgeType::kEOS) {
+        return edge.target;
+      }
+    }
+    return FSM::kNoNextState;
+  } else {
+    XGRAMMAR_DCHECK(false) << "Invalid edge type: " << static_cast<int>(edge_type);
   }
-  return FSM::kNoNextState;
+  XGRAMMAR_UNREACHABLE();
 }
 
 void FSM::Impl::Advance(
     const std::unordered_set<int>& from,
     int value,
     std::unordered_set<int>* result,
-    bool value_is_rule,
+    EdgeType edge_type,
     bool from_is_closure
 ) const {
+  XGRAMMAR_DCHECK(edge_type != EdgeType::kEpsilon)
+      << "Should not call Advance with edge type kEpsilon.";
+
   const std::unordered_set<int>* start_closure;
   std::unordered_set<int> start_closure_tmp;
 
@@ -229,20 +280,33 @@ void FSM::Impl::Advance(
   }
 
   result->clear();
-  for (const auto& state : *start_closure) {
-    if (value_is_rule) {
-      for (const auto& edge : edges_[state]) {
-        if (edge.IsRuleRef() && edge.GetRefRuleId() == value) {
-          result->insert(edge.target);
-        }
-      }
-    } else {
+
+  if (edge_type == EdgeType::kCharRange) {
+    for (const auto& state : *start_closure) {
       for (const auto& edge : edges_[state]) {
         if (edge.IsCharRange() && edge.min <= value && edge.max >= value) {
           result->insert(edge.target);
         }
       }
     }
+  } else if (edge_type == EdgeType::kRuleRef) {
+    for (const auto& state : *start_closure) {
+      for (const auto& edge : edges_[state]) {
+        if (edge.IsRuleRef() && edge.GetRefRuleId() == value) {
+          result->insert(edge.target);
+        }
+      }
+    }
+  } else if (edge_type == EdgeType::kEOS) {
+    for (const auto& state : *start_closure) {
+      for (const auto& edge : edges_[state]) {
+        if (edge.IsEOS()) {
+          result->insert(edge.target);
+        }
+      }
+    }
+  } else {
+    XGRAMMAR_DCHECK(false) << "Invalid edge type: " << static_cast<int>(edge_type);
   }
 
   // Get the epsilon closure of the result.
@@ -268,7 +332,8 @@ void FSM::Impl::AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mappi
   }
 }
 
-FSM FSM::Impl::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) {
+FSM FSM::Impl::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states)
+    const {
   std::vector<std::set<FSMEdge>> new_edges_set(new_num_states);
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     for (const auto& edge : edges_[i]) {
@@ -283,10 +348,16 @@ FSM FSM::Impl::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, i
   return FSM(std::move(new_edges));
 }
 
-CompactFSM FSM::Impl::ToCompact() {
-  Compact2DArray<FSMEdge> edges;
+void FSM::Impl::SortEdges() {
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     std::sort(edges_[i].begin(), edges_[i].end());
+  }
+}
+
+CompactFSM FSM::Impl::ToCompact() {
+  SortEdges();
+  Compact2DArray<FSMEdge> edges;
+  for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     edges.PushBack(edges_[i]);
   }
   return CompactFSM(edges);
@@ -305,44 +376,49 @@ int FSM::NumStates() const { return pimpl_->NumStates(); }
 
 int FSM::AddState() { return pimpl_->AddState(); }
 
-void FSM::AddEdge(int from, int to, int16_t min_ch, int16_t max_ch) {
-  pimpl_->AddEdge(from, to, min_ch, max_ch);
-}
-
-void FSM::AddRuleEdge(int from, int to, int16_t rule_id) {
-  // Rule edges are represented as a special case of character range edges.
-  pimpl_->AddEdge(from, to, -1, rule_id);
+void FSM::AddEdge(int from, int to, int16_t min, int16_t max) {
+  pimpl_->AddEdge(from, to, min, max);
 }
 
 void FSM::AddEpsilonEdge(int from, int to) { pimpl_->AddEpsilonEdge(from, to); }
+
+void FSM::AddRuleEdge(int from, int to, int16_t rule_id) { pimpl_->AddRuleEdge(from, to, rule_id); }
+
+void FSM::AddEOSEdge(int from, int to) { pimpl_->AddEOSEdge(from, to); }
 
 void FSM::AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping) {
   pimpl_->AddFSM(fsm, state_mapping);
 }
 
-std::string FSM::PrintEdges() const { return pimpl_->PrintEdges(); }
+std::string FSM::EdgesToString(std::optional<std::vector<int>> states) const {
+  return pimpl_->EdgesToString(states);
+}
 
 const std::vector<FSMEdge>& FSM::GetEdges(int state) const { return pimpl_->GetEdges(state); }
 
+std::vector<std::vector<FSMEdge>>& FSM::GetEdges() { return pimpl_->GetEdges(); }
+
 const std::vector<std::vector<FSMEdge>>& FSM::GetEdges() const { return pimpl_->GetEdges(); }
+
+std::vector<FSMEdge>& FSM::GetEdges(int state) { return pimpl_->GetEdges(state); }
 
 FSM FSM::Copy() const { return FSM(std::make_shared<Impl>(*pimpl_)); }
 
-int FSM::GetNextState(int from, int16_t character) const {
-  return pimpl_->GetNextState(from, character);
+int FSM::GetNextState(int from, int value, FSMEdge::EdgeType edge_type) const {
+  return pimpl_->GetNextState(from, value, edge_type);
 }
 
 void FSM::Advance(
     const std::unordered_set<int>& from,
     int value,
     std::unordered_set<int>* result,
-    bool value_is_rule,
+    FSMEdge::EdgeType edge_type,
     bool from_is_closure
 ) const {
-  pimpl_->Advance(from, value, result, value_is_rule, from_is_closure);
+  pimpl_->Advance(from, value, result, edge_type, from_is_closure);
 }
 
-void FSM::GetPossibleRules(const int& state, std::unordered_set<int>* rules) const {
+void FSM::GetPossibleRules(int state, std::unordered_set<int>* rules) const {
   pimpl_->GetPossibleRules(state, rules);
 }
 
@@ -354,25 +430,29 @@ void FSM::GetReachableStates(const std::vector<int>& from, std::unordered_set<in
   pimpl_->GetReachableStates(from, result);
 }
 
-FSM FSM::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) {
+FSM FSM::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) const {
   return pimpl_->RebuildWithMapping(state_mapping, new_num_states);
 }
+
+void FSM::SortEdges() { pimpl_->SortEdges(); }
 
 CompactFSM FSM::ToCompact() { return pimpl_->ToCompact(); }
 
 /****************** CompactFSM::Impl ******************/
 
 class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
+  using EdgeType = FSMEdge::EdgeType;
+
  public:
   using FSMImplBase<Compact2DArray<FSMEdge>>::FSMImplBase;
 
-  int GetNextState(int from, int16_t character) const;
+  int GetNextState(int from, int value, EdgeType edge_type) const;
 
   void Advance(
       const std::unordered_set<int>& from,
       int value,
       std::unordered_set<int>* result,
-      bool value_is_rule,
+      FSMEdge::EdgeType edge_type,
       bool from_is_closure
   ) const;
 
@@ -383,24 +463,53 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
 
 XGRAMMAR_MEMBER_ARRAY(CompactFSM::Impl, &CompactFSM::Impl::edges_);
 
-int CompactFSM::Impl::GetNextState(int from, int16_t character) const {
-  for (const auto& edge : edges_[from]) {
-    if (edge.min == -1) {
-      continue;
-    } else if (edge.min <= character && edge.max >= character) {
-      return edge.target;
-    } else if (edge.min > character) {
-      return CompactFSM::kNoNextState;
+int CompactFSM::Impl::GetNextState(int from, int value, EdgeType edge_type) const {
+  XGRAMMAR_DCHECK(edge_type != EdgeType::kEpsilon)
+      << "Should not call GetNextState with edge type kEpsilon.";
+  if (edge_type == EdgeType::kCharRange) {
+    for (const auto& edge : edges_[from]) {
+      if (edge.min < EdgeType::kCharRange) {
+        continue;
+      } else if (edge.min > value) {
+        break;
+      } else if (edge.max >= value) {
+        return edge.target;
+      }
     }
+    return CompactFSM::kNoNextState;
+  } else if (edge_type == EdgeType::kRuleRef) {
+    for (const auto& edge : edges_[from]) {
+      if (edge.min < EdgeType::kRuleRef) {
+        continue;
+      } else if (edge.min > EdgeType::kRuleRef) {
+        break;
+      } else if (edge.max == value) {
+        return edge.target;
+      }
+    }
+    return CompactFSM::kNoNextState;
+  } else if (edge_type == EdgeType::kEOS) {
+    for (const auto& edge : edges_[from]) {
+      if (edge.min < EdgeType::kEOS) {
+        continue;
+      } else if (edge.min > EdgeType::kEOS) {
+        break;
+      } else if (edge.max >= EdgeType::kEOS) {
+        return edge.target;
+      }
+    }
+    return CompactFSM::kNoNextState;
+  } else {
+    XGRAMMAR_DCHECK(false) << "Invalid edge type: " << static_cast<int>(edge_type);
   }
-  return CompactFSM::kNoNextState;
+  XGRAMMAR_UNREACHABLE();
 }
 
 void CompactFSM::Impl::Advance(
     const std::unordered_set<int>& from,
     int value,
     std::unordered_set<int>* result,
-    bool value_is_rule,
+    FSMEdge::EdgeType edge_type,
     bool from_is_closure
 ) const {
   const std::unordered_set<int>* start_closure;
@@ -415,26 +524,45 @@ void CompactFSM::Impl::Advance(
   }
 
   result->clear();
-  for (const auto& state : *start_closure) {
-    if (value_is_rule) {
+
+  if (edge_type == EdgeType::kCharRange) {
+    for (const auto& state : *start_closure) {
       for (const auto& edge : edges_[state]) {
-        if (edge.min == -1 && edge.max == value) {
-          result->insert(edge.target);
-        } else if (edge.min >= 0) {
-          break;
-        }
-      }
-    } else {
-      for (const auto& edge : edges_[state]) {
-        if (edge.min == -1) {
+        if (edge.min < EdgeType::kCharRange) {
           continue;
-        } else if (edge.min <= value && edge.max >= value) {
-          result->insert(edge.target);
         } else if (edge.min > value) {
           break;
+        } else if (edge.max >= value) {
+          result->insert(edge.target);
         }
       }
     }
+  } else if (edge_type == EdgeType::kRuleRef) {
+    for (const auto& state : *start_closure) {
+      for (const auto& edge : edges_[state]) {
+        if (edge.min < EdgeType::kRuleRef) {
+          continue;
+        } else if (edge.min > EdgeType::kRuleRef) {
+          break;
+        } else if (edge.max == value) {
+          result->insert(edge.target);
+        }
+      }
+    }
+  } else if (edge_type == EdgeType::kEOS) {
+    for (const auto& state : *start_closure) {
+      for (const auto& edge : edges_[state]) {
+        if (edge.min < EdgeType::kEOS) {
+          continue;
+        } else if (edge.min > EdgeType::kEOS) {
+          break;
+        } else if (edge.max >= EdgeType::kEOS) {
+          result->insert(edge.target);
+        }
+      }
+    }
+  } else {
+    XGRAMMAR_DCHECK(false) << "Invalid edge type: " << static_cast<int>(edge_type);
   }
 
   // Get the epsilon closure of the result.
@@ -466,23 +594,25 @@ Compact2DArray<FSMEdge>::Row CompactFSM::GetEdges(int state) const {
   return pimpl_->GetEdges(state);
 }
 
-std::string CompactFSM::PrintEdges() const { return pimpl_->PrintEdges(); }
+std::string CompactFSM::EdgesToString(std::optional<std::vector<int>> states) const {
+  return pimpl_->EdgesToString(states);
+}
 
-int CompactFSM::GetNextState(int from, int16_t character) const {
-  return pimpl_->GetNextState(from, character);
+int CompactFSM::GetNextState(int from, int value, FSMEdge::EdgeType edge_type) const {
+  return pimpl_->GetNextState(from, value, edge_type);
 }
 
 void CompactFSM::Advance(
     const std::unordered_set<int>& from,
     int value,
     std::unordered_set<int>* result,
-    bool value_is_rule,
+    FSMEdge::EdgeType edge_type,
     bool from_is_closure
 ) const {
-  pimpl_->Advance(from, value, result, value_is_rule, from_is_closure);
+  pimpl_->Advance(from, value, result, edge_type, from_is_closure);
 }
 
-void CompactFSM::GetPossibleRules(const int& state_num, std::unordered_set<int>* rules) const {
+void CompactFSM::GetPossibleRules(int state_num, std::unordered_set<int>* rules) const {
   pimpl_->GetPossibleRules(state_num, rules);
 }
 
@@ -501,26 +631,72 @@ std::size_t MemorySize(const CompactFSM& self) { return MemorySize(*self.pimpl_)
 
 /****************** FSMWithStartEnd ******************/
 
-std::string FSMWithStartEnd::Print() const {
+std::string FSMWithStartEnd::ToString() const {
   std::string result;
   result += "FSM(num_states=" + std::to_string(NumStates()) + ", start=" + std::to_string(start_) +
             ", end=[";
+
+  std::unordered_set<int> reachable_states;
+  GetReachableStates(&reachable_states);
+  std::vector<int> reachable_states_vec(reachable_states.begin(), reachable_states.end());
+  std::sort(reachable_states_vec.begin(), reachable_states_vec.end());
+
+  std::vector<int> ends_vec;
+  ends_vec.reserve(ends_.size());
   for (const auto& end : ends_) {
-    XGRAMMAR_DCHECK(end >= 0 && end < NumStates())
-        << "End state " << end << " is out of bounds for FSM with " << NumStates() << " states.";
-    result += std::to_string(end) + ", ";
+    if (reachable_states.count(end)) {
+      ends_vec.push_back(end);
+    }
   }
-  result += "], edges=" + fsm_.PrintEdges() + ")";
+  std::sort(ends_vec.begin(), ends_vec.end());
+  for (int i = 0; i < static_cast<int>(ends_vec.size()); ++i) {
+    if (i > 0) {
+      result += ", ";
+    }
+    result += std::to_string(ends_vec[i]);
+  }
+
+  result += "], edges=" + fsm_.EdgesToString(reachable_states_vec) + ")";
   return result;
+}
+
+std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
+  os << fsm.ToString();
+  return os;
 }
 
 FSMWithStartEnd FSMWithStartEnd::Copy() const {
   return FSMWithStartEnd(fsm_.Copy(), start_, ends_, is_dfa_);
 }
 
-std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm) {
-  os << fsm.Print();
-  return os;
+FSMWithStartEnd FSMWithStartEnd::RebuildWithMapping(
+    std::unordered_map<int, int>& state_mapping, int new_num_states
+) {
+  FSM new_fsm = fsm_.RebuildWithMapping(state_mapping, new_num_states);
+  auto new_start = state_mapping[start_];
+  std::unordered_set<int> new_ends;
+  for (const auto& end : ends_) {
+    new_ends.insert(state_mapping[end]);
+  }
+
+  return FSMWithStartEnd(new_fsm, new_start, new_ends);
+}
+
+CompactFSMWithStartEnd FSMWithStartEnd::ToCompact() {
+  return CompactFSMWithStartEnd(fsm_.ToCompact(), start_, ends_);
+}
+
+FSMWithStartEnd FSMWithStartEnd::AddToCompleteFSM(
+    FSM* complete_fsm, std::unordered_map<int, int>* state_mapping
+) {
+  XGRAMMAR_DCHECK(state_mapping != nullptr) << "state_mapping cannot be nullptr";
+  complete_fsm->AddFSM(fsm_, state_mapping);
+  int new_start = (*state_mapping)[start_];
+  std::unordered_set<int> new_ends;
+  for (const auto& end : ends_) {
+    new_ends.insert((*state_mapping)[end]);
+  }
+  return FSMWithStartEnd(*complete_fsm, new_start, new_ends, is_dfa_);
 }
 
 FSMWithStartEnd FSMWithStartEnd::Star() const {
@@ -693,11 +869,10 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
-    const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, const int& num_of_states_limited
+    const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, int num_of_states_limited
 ) {
   if (!lhs.IsLeaf() || !rhs.IsLeaf()) {
-    return Result<FSMWithStartEnd>::Err(std::make_shared<Error>("Intersect only support leaf fsm!")
-    );
+    return Result<FSMWithStartEnd>::Err("Intersect only support leaf fsm!");
   }
   auto lhs_dfa = lhs.ToDFA();
   auto rhs_dfa = rhs.ToDFA();
@@ -746,9 +921,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   state_map[{lhs_dfa.GetStart(), rhs_dfa.GetStart()}] = 0;
   while (!queue.empty()) {
     if (int(state_map.size()) > num_of_states_limited) {
-      return Result<FSMWithStartEnd>::Err(
-          std::make_shared<Error>("Intersection have too many states!")
-      );
+      return Result<FSMWithStartEnd>::Err("Intersection have too many states!");
     }
     auto state = queue.front();
     queue.pop();
@@ -821,7 +994,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
       result.AddEndState(state_map[state]);
     }
   }
-  return Result<FSMWithStartEnd>::Ok(result);
+  return Result<FSMWithStartEnd>::Ok(std::move(result));
 }
 
 bool FSMWithStartEnd::IsDFA() {
@@ -959,7 +1132,6 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
       }
     }
     // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
-    changed = false;
     bool change_case1 = false;
     for (const auto& edges : result->GetEdges()) {
       for (size_t i = 0; i < edges.size(); i++) {
@@ -1381,38 +1553,39 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
   return dfa;
 }
 
-FSMWithStartEnd FSMWithStartEnd::RebuildWithMapping(
-    std::unordered_map<int, int>& state_mapping, int new_num_states
-) {
-  FSM new_fsm = fsm_.RebuildWithMapping(state_mapping, new_num_states);
-  auto new_start = state_mapping[start_];
-  std::unordered_set<int> new_ends;
-  for (const auto& end : ends_) {
-    new_ends.insert(state_mapping[end]);
-  }
-
-  return FSMWithStartEnd(new_fsm, new_start, new_ends);
-}
-
-CompactFSMWithStartEnd FSMWithStartEnd::ToCompact() {
-  return CompactFSMWithStartEnd(fsm_.ToCompact(), start_, ends_);
-}
-
 /****************** CompactFSMWithStartEnd ******************/
 
-std::string CompactFSMWithStartEnd::Print() const {
+std::string CompactFSMWithStartEnd::ToString() const {
   std::string result;
   result += "CompactFSM(num_states=" + std::to_string(NumStates()) +
             ", start=" + std::to_string(start_) + ", end=[";
+
+  std::unordered_set<int> reachable_states;
+  GetReachableStates(&reachable_states);
+  std::vector<int> reachable_states_vec(reachable_states.begin(), reachable_states.end());
+  std::sort(reachable_states_vec.begin(), reachable_states_vec.end());
+
+  std::vector<int> ends_vec;
+  ends_vec.reserve(ends_.size());
   for (const auto& end : ends_) {
-    result += std::to_string(end) + ", ";
+    if (reachable_states.count(end)) {
+      ends_vec.push_back(end);
+    }
   }
-  result += "], edges=" + fsm_.PrintEdges() + ")";
+  std::sort(ends_vec.begin(), ends_vec.end());
+  for (int i = 0; i < static_cast<int>(ends_vec.size()); ++i) {
+    if (i > 0) {
+      result += ", ";
+    }
+    result += std::to_string(ends_vec[i]);
+  }
+
+  result += "], edges=" + fsm_.EdgesToString(reachable_states_vec) + ")";
   return result;
 }
 
 std::ostream& operator<<(std::ostream& os, const CompactFSMWithStartEnd& fsm) {
-  os << fsm.Print();
+  os << fsm.ToString();
   return os;
 }
 
