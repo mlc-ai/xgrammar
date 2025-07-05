@@ -51,6 +51,18 @@ struct is_unordered_set : std::false_type {};
 template <typename... R>
 struct is_unordered_set<std::unordered_set<R...>> : std::true_type {};
 
+/*!
+ * \brief XGrammar specific: Check if a class is a PImpl class.
+ */
+template <typename T, typename = void>
+struct is_pimpl_class : std::false_type {};
+
+/*!
+ * \brief XGrammar specific: Check if a class is a PImpl class.
+ */
+template <typename T>
+struct is_pimpl_class<T, std::void_t<decltype(&T::pimpl_)>> : std::true_type {};
+
 /******************** Reflection ********************/
 
 /*!

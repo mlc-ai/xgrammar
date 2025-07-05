@@ -100,6 +100,10 @@ std::optional<std::runtime_error> AutoDeserializeJSON(
     bool check_version = false
 );
 
+inline std::runtime_error ConstructDeserializeError(
+    const std::string& error_message, const std::string& type_name
+);
+
 /******************** Implementations ********************/
 
 inline void SerializeVersion::Apply(picojson::object* object) {
@@ -194,16 +198,6 @@ inline picojson::value TraitSerializeJSONValue(const T& value) {
   }
 }
 
-inline std::runtime_error ConstructDeserializeError(
-    const std::string& error_message, const std::string& type_name
-) {
-  if (type_name.empty()) {
-    return std::runtime_error("Deserialize error: " + error_message);
-  } else {
-    return std::runtime_error("Deserialize error for type " + type_name + ": " + error_message);
-  }
-}
-
 template <typename T>
 inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
     T* result, const picojson::value& value, const std::string& type_name
@@ -259,14 +253,51 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
   }
 }
 
+/******************** Customized Serialization ********************/
+
+template <typename T, typename = is_pimpl_class<T>>
+inline picojson::value AutoSerializeJSONValuePImpl(const T& value) {
+  return AutoSerializeJSONValue(*value.ImplPtr());
+}
+
+template <typename T, typename = is_pimpl_class<T>>
+inline std::optional<std::runtime_error> AutoDeserializeJSONValuePImpl(
+    T* result, const picojson::value& value, const std::string& type_name
+) {
+  XGRAMMAR_DCHECK(result->IsNull());
+  auto ptr = std::make_shared<typename T::Impl>();
+  if (auto error = AutoDeserializeJSONValue(ptr.get(), value, type_name)) {
+    return error;
+  }
+  *result = T(std::move(ptr));
+  return std::nullopt;
+}
+
 }  // namespace detail::json_serializer
+
+inline std::runtime_error ConstructDeserializeError(
+    const std::string& error_message, const std::string& type_name
+) {
+  if (type_name.empty()) {
+    return std::runtime_error("Deserialize error: " + error_message);
+  } else {
+    return std::runtime_error("Deserialize error for type " + type_name + ": " + error_message);
+  }
+}
 
 template <typename T>
 inline picojson::value AutoSerializeJSONValue(const T& value) {
-  // always prefer user-defined SerializeJSONValue
   if constexpr (detail::json_serializer::has_serialize_json<T>::value) {
+    // User-defined SerializeJSONValue (highest priority)
     return SerializeJSONValue(value);
+  } else if constexpr (is_pimpl_class<T>::value) {
+    // Library-customized serialization methods
+    return AutoSerializeJSONValuePImpl(value);
+  } else if constexpr (member_trait<T>::value != member_type::kNone) {
+    // Trait serialization methods
+    return TraitSerializeJSONValue(value);
   } else if constexpr (std::is_same_v<T, bool>) {
+    // Below is primitive types
     return picojson::value(value);
   } else if constexpr (std::is_integral_v<T> || std::is_enum_v<T>) {
     return picojson::value(static_cast<int64_t>(value));
@@ -317,8 +348,6 @@ inline picojson::value AutoSerializeJSONValue(const T& value) {
       arr.push_back(picojson::value(std::move(sub_arr)));
     }
     return picojson::value(std::move(arr));
-  } else if constexpr (member_trait<T>::value != member_type::kNone) {
-    return TraitSerializeJSONValue(value);
   } else {
     // should give an error in this case
     XGRAMMAR_LOG(FATAL) << "Cannot serialize this type: " << typeid(T).name();
@@ -343,6 +372,10 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
   static_assert(!std::is_const_v<T>, "Cannot deserialize into a const type");
   if constexpr (detail::json_serializer::has_deserialize_json<T>::value) {
     return DeserializeJSONValue(result, value, type_name);
+  } else if constexpr (is_pimpl_class<T>::value) {
+    return detail::json_serializer::AutoDeserializeJSONValuePImpl(result, value, type_name);
+  } else if constexpr (member_trait<T>::value != member_type::kNone) {
+    return detail::json_serializer::TraitDeserializeJSONValue(result, value, type_name);
   } else if constexpr (std::is_same_v<T, bool>) {
     if (!value.is<bool>()) {
       return ConstructDeserializeError("Expect a boolean", type_name);
@@ -453,8 +486,6 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
       result->emplace(std::move(key_value), std::move(item_value));
     }
     return std::nullopt;
-  } else if constexpr (member_trait<T>::value != member_type::kNone) {
-    return TraitDeserializeJSONValue(result, value, type_name);
   } else {
     // should give an error in this case
     static_assert(detail::json_serializer::false_v<T>, "Cannot deserialize this type");

@@ -1597,13 +1597,11 @@ FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
 }
 
-picojson::value CompactFSM::SerializeJSONValue() const { return AutoSerializeJSONValue(**this); }
-
-void DeserializeJSONValue(CompactFSM& fsm, const picojson::value& v) {
-  if (!fsm.pimpl_) {
-    fsm.pimpl_ = std::make_unique<CompactFSM::Impl>();
+std::optional<std::runtime_error> DeserializeJSONValue(CompactFSM* fsm, const picojson::value& v) {
+  if (!fsm->pimpl_) {
+    fsm->pimpl_ = std::make_unique<CompactFSM::Impl>();
   }
-  return AutoDeserializeJSONValue(*fsm, v);
+  return AutoDeserializeJSONValue(fsm, v);
 }
 
 }  // namespace xgrammar
