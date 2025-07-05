@@ -374,6 +374,7 @@ window.addEventListener("load", () => mermaid.run());
     <span class="o">*</span><span class="p">,</span>
     <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">print_time</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">require_termination</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Check if a grammar accepts a string. For test purposes.</span>
 
@@ -406,6 +407,10 @@ window.addEventListener("load", () => mermaid.run());
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">accepted</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">require_termination</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
     <span class="k">return</span> <span class="n">grammar_matcher</span><span class="o">.</span><span class="n">is_terminated</span><span class="p">()</span></div>
 
 
