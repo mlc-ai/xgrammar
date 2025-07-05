@@ -62,18 +62,6 @@ std::size_t MemorySize(const AdaptiveTokenMask& mask) {
 
 std::size_t AdaptiveTokenMask::MemorySize() const { return xgrammar::MemorySize(*this); }
 
-std::size_t CompiledGrammar::Impl::MemorySize() const {
-  std::size_t sum = 0;
-  sum += grammar->MemorySize();
-  sum += adaptive_token_mask_cache.size() * sizeof(*adaptive_token_mask_cache.begin());
-  for (auto& [_, mask] : adaptive_token_mask_cache) {
-    sum += mask.MemorySize();
-  }
-  return sum;
-}
-
-std::size_t CompiledGrammar::MemorySizeBytes() const { return pimpl_->MemorySize(); }
-
 /******************* AdaptiveTokenMask and CompiledGrammar *******************/
 
 AdaptiveTokenMask::AdaptiveTokenMask(
@@ -222,10 +210,6 @@ std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const 
      << "\n)";
   return ss.str();
 }
-
-Grammar CompiledGrammar::GetGrammar() const { return pimpl_->GetGrammar(); }
-
-TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetTokenizerInfo(); }
 
 /************** Use GrammarMatcher to generate the AdaptiveTokenMaskCache **************/
 

@@ -103,34 +103,37 @@ XGRAMMAR_MEMBER_TABLE(
  */
 class CompiledGrammar::Impl {
  public:
-  /******************* The grammar and tokenizer info *******************/
-
-  /*! \brief The grammar for the GrammarMatcher. */
-  Grammar grammar{NullObj{}};
-
-  /*! \brief The tokenizer information. */
-  TokenizerInfo tokenizer_info{NullObj{}};
-
-  /******************* The adaptive token mask cache *******************/
-
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache> adaptive_token_mask_cache;
 
-  Grammar GetGrammar() const { return grammar; }
+  Grammar GetGrammar() const { return grammar_; }
 
-  TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
+  TokenizerInfo GetTokenizerInfo() const { return tokenizer_info_; }
 
   std::size_t MemorySize() const;
 
+  std::string SerializeJSON() const;
+
+  static std::optional<std::runtime_error> DeserializeJSON(
+      CompiledGrammar::Impl* compiled_grammar, const std::string& json_string
+  );
+
   friend struct member_trait<Impl>;
+
+ private:
+  /*! \brief The grammar for the GrammarMatcher. */
+  Grammar grammar_{NullObj{}};
+
+  /*! \brief The tokenizer information. */
+  TokenizerInfo tokenizer_info_{NullObj{}};
 };
 
 XGRAMMAR_MEMBER_TABLE(
     CompiledGrammar::Impl,
     "grammar",
-    &CompiledGrammar::Impl::grammar,
+    &CompiledGrammar::Impl::grammar_,
     "tokenizer_info",
-    &CompiledGrammar::Impl::tokenizer_info,
+    &CompiledGrammar::Impl::tokenizer_info_,
     "adaptive_token_mask_cache",
     &CompiledGrammar::Impl::adaptive_token_mask_cache
 );

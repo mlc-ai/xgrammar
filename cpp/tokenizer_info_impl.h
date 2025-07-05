@@ -1,5 +1,5 @@
-#ifndef XGRAMMAR_TOKENIZER_INTERNAL_H_
-#define XGRAMMAR_TOKENIZER_INTERNAL_H_
+#ifndef XGRAMMAR_TOKENIZER_INFO_IMPL_H_
+#define XGRAMMAR_TOKENIZER_INFO_IMPL_H_
 
 #include <picojson.h>
 
@@ -117,4 +117,4 @@ XGRAMMAR_MEMBER_TABLE(
 
 }  // namespace xgrammar
 
-#endif
+#endif  // XGRAMMAR_TOKENIZER_INFO_IMPL_H_

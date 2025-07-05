@@ -80,51 +80,6 @@ enum class VersionError {
 //   XGRAMMAR_UNREACHABLE();
 // }
 
-std::string CompiledGrammar::SerializeJSON() const {
-  auto result = picojson::object{};
-  result["grammar"] = AutoSerializeJSONValue(*(*this)->grammar);
-  result["tokenizer_metadata"] = AutoSerializeJSONValue(*(*this)->tokenizer_info);
-  result["adaptive_token_mask_cache"] = AutoSerializeJSONValue((*this)->adaptive_token_mask_cache);
-  return SerializeJSONPython(result);
-}
-
-CompiledGrammar CompiledGrammar::DeserializeJSON(
-    const std::string& json_string, TokenizerInfo tokenizer_info
-) {
-  auto compiler_grammar = CompiledGrammar{std::make_shared<CompiledGrammar::Impl>()};
-  auto result = DeserializeJSONPython(json_string);
-  if (std::holds_alternative<VersionError>(result))
-    throw_version_error(std::get<VersionError>(result), "CompiledGrammar");
-
-  auto& value = std::get<picojson::value>(result);
-  try {
-    const auto& object = details::json_as<picojson::object>(value);
-    auto grammar = std::make_shared<Grammar::Impl>();
-    compiler_grammar->grammar = Grammar{grammar};
-    AutoDeserializeJSONValue(
-        *grammar,  // grammar pimpl
-        details::json_member(object, "grammar")
-    );
-    auto tokenizer_metadata = std::make_shared<TokenizerInfo::Impl>();
-    compiler_grammar->tokenizer_info = TokenizerInfo{tokenizer_metadata};
-    AutoDeserializeJSONValue(
-        *tokenizer_metadata,  // tokenizer info pimpl
-        details::json_member(object, "tokenizer_metadata")
-    );
-    AutoDeserializeJSONValue(
-        compiler_grammar->adaptive_token_mask_cache,
-        details::json_member(object, "adaptive_token_mask_cache")
-    );
-    XGRAMMAR_CHECK(*compiler_grammar->tokenizer_info == *tokenizer_metadata)
-        << "The tokenizer info in the compiled grammar does not match the provided one.";
-    compiler_grammar->tokenizer_info = std::move(tokenizer_info);
-    return compiler_grammar;
-  } catch (const std::exception&) {
-    // pass the exception to the caller
-  }
-  throw_format_error("CompiledGrammar");
-}
-
 // std::string TokenizerInfo::SerializeJSON() const {
 //   auto value = AutoSerializeJSONValue(**this);
 //   auto& object = value.get<picojson::object>();
