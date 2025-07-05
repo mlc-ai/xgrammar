@@ -161,8 +161,6 @@ struct has_deserialize_json<
 template <typename>
 inline constexpr bool false_v = false;
 
-}  // namespace detail::json_serializer
-
 template <typename T>
 inline picojson::value TraitSerializeJSONValue(const T& value) {
   using Functor = detail::reflection::member_functor<T>;
@@ -172,6 +170,7 @@ inline picojson::value TraitSerializeJSONValue(const T& value) {
       picojson::object obj;
       obj.reserve(Functor::member_count);
       detail::reflection::visit_config<T>([&](auto ptr, const char* name, std::size_t) {
+        XGRAMMAR_DCHECK(obj.find(name) == obj.end());
         obj[name] = AutoSerializeJSONValue(value.*ptr);
       });
       return picojson::value(std::move(obj));
@@ -193,77 +192,6 @@ inline picojson::value TraitSerializeJSONValue(const T& value) {
     static_assert(detail::json_serializer::false_v<T>, "Invalid trait type");
     return picojson::value{};
   }
-}
-
-template <typename T>
-inline picojson::value AutoSerializeJSONValue(const T& value) {
-  // always prefer user-defined SerializeJSONValue
-  if constexpr (detail::json_serializer::has_serialize_json<T>::value) {
-    return SerializeJSONValue(value);
-  } else if constexpr (std::is_same_v<T, bool>) {
-    return picojson::value(value);
-  } else if constexpr (std::is_integral_v<T> || std::is_enum_v<T>) {
-    return picojson::value(static_cast<int64_t>(value));
-  } else if constexpr (std::is_floating_point_v<T>) {
-    return picojson::value(static_cast<double>(value));
-  } else if constexpr (std::is_same_v<T, std::string>) {
-    return picojson::value(value);
-  } else if constexpr (is_optional<T>::value) {
-    if (value.has_value()) {
-      return AutoSerializeJSONValue(*value);
-    } else {
-      return picojson::value{};
-    }
-  } else if constexpr (is_vector<T>::value) {
-    picojson::array arr;
-    arr.reserve(value.size());
-    for (const auto& item : value) {
-      arr.push_back(AutoSerializeJSONValue(item));
-    }
-    return picojson::value(std::move(arr));
-  } else if constexpr (is_unordered_set<T>::value) {
-    std::vector<const typename T::value_type*> ptr_vec;
-    ptr_vec.reserve(value.size());
-    for (const auto& item : value) ptr_vec.push_back(&item);
-    std::sort(ptr_vec.begin(), ptr_vec.end(), [](const auto* a, const auto* b) { return *a < *b; });
-    picojson::array arr;
-    arr.reserve(value.size());
-    for (const auto* ptr : ptr_vec) {
-      arr.push_back(AutoSerializeJSONValue(*ptr));
-    }
-    return picojson::value(std::move(arr));
-  } else if constexpr (is_unordered_map<T>::value) {
-    std::vector<const typename T::value_type*> ptr_vec;
-    ptr_vec.reserve(value.size());
-    for (const auto& item : value) ptr_vec.push_back(&item);
-    std::sort(ptr_vec.begin(), ptr_vec.end(), [](const auto* a, const auto* b) {
-      return a->first < b->first;
-    });
-    picojson::array arr;
-    arr.reserve(value.size() * 2);
-    for (const auto* ptr : ptr_vec) {
-      const auto& [key, item] = *ptr;
-      arr.push_back(AutoSerializeJSONValue(key));
-      arr.push_back(AutoSerializeJSONValue(item));
-    }
-    return picojson::value(std::move(arr));
-  } else if constexpr (member_trait<T>::value != member_type::kNone) {
-    return TraitSerializeJSONValue(value);
-  } else {
-    // should give an error in this case
-    XGRAMMAR_LOG(FATAL) << "Cannot serialize this type: " << typeid(T).name();
-    XGRAMMAR_UNREACHABLE();
-  }
-}
-
-template <typename T>
-inline std::string AutoSerializeJSON(const T& value, bool add_version) {
-  picojson::value json_value = AutoSerializeJSONValue(value);
-  if (add_version) {
-    XGRAMMAR_DCHECK(json_value.is<picojson::object>());
-    SerializeVersion::Apply(&json_value.get<picojson::object>());
-  }
-  return picojson::value(json_value).serialize();
 }
 
 inline std::runtime_error ConstructDeserializeError(
@@ -294,11 +222,15 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
         if (obj.find(name) == obj.end()) {
           return ConstructDeserializeError("Missing member " + std::string(name), type_name);
         }
-        if (auto error = AutoDeserializeJSONValue(result.*ptr, obj.at(name), type_name)) {
+        if (auto error = AutoDeserializeJSONValue(result->*ptr, obj.at(name), type_name)) {
           return error;
         }
       }
       return std::nullopt;
+    } else if constexpr (Functor::member_count == 1) {
+      // optimize for single member unnamed structs
+      constexpr auto member_ptr = std::get<0>(Functor::members);
+      return AutoDeserializeJSONValue(result->*member_ptr, value, type_name);
     } else {
       // normal unnamed struct
       if (!value.is<picojson::array>()) {
@@ -314,7 +246,7 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
       }
       for (int i = 0; i < static_cast<int>(Functor::member_count); ++i) {
         const auto& ptr = Functor::members[i];
-        if (auto error = AutoDeserializeJSONValue(result.*ptr, arr[i], type_name)) {
+        if (auto error = AutoDeserializeJSONValue(result->*ptr, arr[i], type_name)) {
           return error;
         }
       }
@@ -323,7 +255,85 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
   } else {
     // should give an error in this case
     static_assert(detail::json_serializer::false_v<T>, "Invalid trait type");
+    XGRAMMAR_UNREACHABLE();
   }
+}
+
+}  // namespace detail::json_serializer
+
+template <typename T>
+inline picojson::value AutoSerializeJSONValue(const T& value) {
+  // always prefer user-defined SerializeJSONValue
+  if constexpr (detail::json_serializer::has_serialize_json<T>::value) {
+    return SerializeJSONValue(value);
+  } else if constexpr (std::is_same_v<T, bool>) {
+    return picojson::value(value);
+  } else if constexpr (std::is_integral_v<T> || std::is_enum_v<T>) {
+    return picojson::value(static_cast<int64_t>(value));
+  } else if constexpr (std::is_floating_point_v<T>) {
+    return picojson::value(static_cast<double>(value));
+  } else if constexpr (std::is_same_v<T, std::string>) {
+    return picojson::value(value);
+  } else if constexpr (is_optional<T>::value) {
+    if (value.has_value()) {
+      return AutoSerializeJSONValue(*value);
+    } else {
+      return picojson::value{};
+    }
+  } else if constexpr (is_vector<T>::value) {
+    picojson::array arr;
+    arr.reserve(value.size());
+    for (const auto& item : value) {
+      arr.push_back(AutoSerializeJSONValue(item));
+    }
+    return picojson::value(std::move(arr));
+  } else if constexpr (is_unordered_set<T>::value) {
+    std::vector<const typename T::value_type*> ptr_vec;
+    ptr_vec.reserve(value.size());
+    for (const auto& item : value) {
+      ptr_vec.push_back(&item);
+    }
+    std::sort(ptr_vec.begin(), ptr_vec.end(), [](const auto* a, const auto* b) { return *a < *b; });
+    picojson::array arr;
+    arr.reserve(value.size());
+    for (const auto* ptr : ptr_vec) {
+      arr.push_back(AutoSerializeJSONValue(*ptr));
+    }
+    return picojson::value(std::move(arr));
+  } else if constexpr (is_unordered_map<T>::value) {
+    std::vector<const typename T::value_type*> ptr_vec;
+    ptr_vec.reserve(value.size());
+    for (const auto& item : value) {
+      ptr_vec.push_back(&item);
+    }
+    std::sort(ptr_vec.begin(), ptr_vec.end(), [](const auto* a, const auto* b) {
+      return a->first < b->first;
+    });
+    picojson::array arr;
+    arr.reserve(value.size());
+    for (const auto* ptr : ptr_vec) {
+      const auto& [key, item] = *ptr;
+      picojson::array sub_arr{AutoSerializeJSONValue(key), AutoSerializeJSONValue(item)};
+      arr.push_back(picojson::value(std::move(sub_arr)));
+    }
+    return picojson::value(std::move(arr));
+  } else if constexpr (member_trait<T>::value != member_type::kNone) {
+    return TraitSerializeJSONValue(value);
+  } else {
+    // should give an error in this case
+    XGRAMMAR_LOG(FATAL) << "Cannot serialize this type: " << typeid(T).name();
+    XGRAMMAR_UNREACHABLE();
+  }
+}
+
+template <typename T>
+inline std::string AutoSerializeJSON(const T& value, bool add_version) {
+  picojson::value json_value = AutoSerializeJSONValue(value);
+  if (add_version) {
+    XGRAMMAR_DCHECK(json_value.is<picojson::object>());
+    SerializeVersion::Apply(&json_value.get<picojson::object>());
+  }
+  return picojson::value(json_value).serialize();
 }
 
 template <typename T>
@@ -366,17 +376,35 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
       return AutoDeserializeJSONValue(&result->emplace(), value, type_name);
     }
   } else if constexpr (is_vector<T>::value) {
-    result->clear();
     if (!value.is<picojson::array>()) {
       return ConstructDeserializeError("Expect an array", type_name);
     }
     const auto& arr = value.get<picojson::array>();
+    result->clear();
     result->reserve(arr.size());
     for (const auto& item : arr) {
-      if (auto error = AutoDeserializeJSONValue(result->emplace_back(), item)) {
+      if (auto error = AutoDeserializeJSONValue(result->emplace_back(), item, type_name)) {
         return error;
       }
     }
+    return std::nullopt;
+  } else if constexpr (detail::json_serializer::is_unordered_set<T>::value) {
+    if (!value.is<picojson::array>()) {
+      return ConstructDeserializeError(
+          "Expect an array for deserializing unordered set", type_name
+      );
+    }
+    const auto& arr = value.get<picojson::array>();
+    result.clear();
+    result.reserve(arr.size());
+    for (const auto& item : arr) {
+      typename T::value_type item_value;
+      if (auto error = AutoDeserializeJSONValue(&item_value, item, type_name)) {
+        return error;
+      }
+      result.emplace(std::move(item_value));
+    }
+    return std::nullopt;
   } else if constexpr (is_unordered_map<T>::value &&
                        std::is_same_v<typename T::key_type, std::string>) {
     if (!value.is<picojson::object>()) {
@@ -384,19 +412,53 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
     }
     const auto& obj = value.get<picojson::object>();
     result->clear();
+    result->reserve(obj.size());
     for (const auto& [key, item] : obj) {
       typename T::value_type item_value;
-      if (auto error = AutoDeserializeJSONValue(&item_value, item)) {
+      if (auto error = AutoDeserializeJSONValue(&item_value, item, type_name)) {
         return error;
       }
       result->emplace(key, std::move(item_value));
     }
     return std::nullopt;
+  } else if constexpr (is_unordered_map<T>::value) {
+    if (!value.is<picojson::array>()) {
+      return ConstructDeserializeError(
+          "Expect an array for deserializing unordered map", type_name
+      );
+    }
+    const auto& arr = value.get<picojson::array>();
+    result->clear();
+    result->reserve(arr.size());
+    for (const auto& item : arr) {
+      if (!item.is<picojson::array>()) {
+        return ConstructDeserializeError(
+            "Expect an array of array of size 2 for deserializing unordered map", type_name
+        );
+      }
+      const auto& sub_arr = item.get<picojson::array>();
+      if (sub_arr.size() != 2) {
+        return ConstructDeserializeError(
+            "Expect an array of array of size 2 for deserializing unordered map", type_name
+        );
+      }
+      typename T::key_type key_value;
+      if (auto error = AutoDeserializeJSONValue(&key_value, sub_arr[0], type_name)) {
+        return error;
+      }
+      typename T::mapped_type item_value;
+      if (auto error = AutoDeserializeJSONValue(&item_value, sub_arr[1], type_name)) {
+        return error;
+      }
+      result->emplace(std::move(key_value), std::move(item_value));
+    }
+    return std::nullopt;
   } else if constexpr (member_trait<T>::value != member_type::kNone) {
-    return TraitDeserializeJSONValue(result, value);
+    return TraitDeserializeJSONValue(result, value, type_name);
   } else {
     // should give an error in this case
     static_assert(detail::json_serializer::false_v<T>, "Cannot deserialize this type");
+    XGRAMMAR_UNREACHABLE();
   }
 }
 
