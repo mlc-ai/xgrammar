@@ -14,7 +14,7 @@
 
 namespace xgrammar {
 
-namespace detail {
+namespace detail::memory_size {
 
 /*!
  * \brief Get the element type of a container.
@@ -25,7 +25,7 @@ using Element_t = std::decay_t<decltype(*std::begin(Container()))>;
 template <typename>
 inline constexpr bool false_v = false;
 
-}  // namespace detail
+}  // namespace detail::memory_size
 
 /******************* MemorySize Procotol *******************/
 
@@ -39,16 +39,16 @@ template <typename T>
 inline constexpr std::size_t MemorySize(const T& value) {
   if constexpr (std::is_trivially_copyable_v<T>) {
     return 0;
-  } else if constexpr (std::is_trivially_copyable_v<detail::Element_t<T>>) {
-    return sizeof(detail::Element_t<T>) * std::size(value);
-  } else if constexpr (std::is_trivially_copyable_v<detail::Element_t<T>>) {
-    std::size_t size = sizeof(detail::Element_t<T>) * std::size(value);
+  } else if constexpr (std::is_trivially_copyable_v<detail::memory_size::Element_t<T>>) {
+    return sizeof(detail::memory_size::Element_t<T>) * std::size(value);
+  } else if constexpr (!std::is_trivially_copyable_v<detail::memory_size::Element_t<T>>) {
+    std::size_t size = sizeof(detail::memory_size::Element_t<T>) * std::size(value);
     for (const auto& element : value) {
       size += MemorySize(element);
     }
     return size;
   } else {
-    static_assert(detail::false_v<T>, "MemorySize is not implemented for this type");
+    static_assert(detail::memory_size::false_v<T>, "MemorySize is not implemented for this type");
   }
 }
 
