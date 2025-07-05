@@ -1995,7 +1995,7 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
 
   if (schema.count("prefixItems")) {
     if (!schema.at("prefixItems").is<picojson::array>()) {
-      return Result<ArraySpec, SchemaError>::Err(
+      return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "prefixItems must be an array"
       );
     }
@@ -2003,12 +2003,12 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
     for (const auto& item : prefix_item_schemas) {
       if (item.is<bool>()) {
         if (!item.get<bool>()) {
-          return Result<ArraySpec, SchemaError>::Err(
+          return ResultErr<SchemaError>(
               SchemaErrorType::kUnsatisfiableSchema, "prefixItems contains false"
           );
         }
       } else if (!item.is<picojson::object>()) {
-        return Result<ArraySpec, SchemaError>::Err(
+        return ResultErr<SchemaError>(
             SchemaErrorType::kInvalidSchema, "prefixItems must be an array of objects or booleans"
         );
       }
@@ -2018,7 +2018,7 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
   if (schema.count("items")) {
     auto items_value = schema.at("items");
     if (!items_value.is<bool>() && !items_value.is<picojson::object>()) {
-      return Result<ArraySpec, SchemaError>::Err(
+      return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "items must be a boolean or an object"
       );
     }
@@ -2031,7 +2031,7 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
   } else if (schema.count("unevaluatedItems")) {
     auto unevaluated_items_value = schema.at("unevaluatedItems");
     if (!unevaluated_items_value.is<bool>() && !unevaluated_items_value.is<picojson::object>()) {
-      return Result<ArraySpec, SchemaError>::Err(
+      return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "unevaluatedItems must be a boolean or an object"
       );
     }
@@ -2050,16 +2050,14 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
 
   if (schema.count("minItems")) {
     if (!schema.at("minItems").is<int64_t>()) {
-      return Result<ArraySpec, SchemaError>::Err(
-          SchemaErrorType::kInvalidSchema, "minItems must be an integer"
-      );
+      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "minItems must be an integer");
     }
     min_items = std::max(static_cast<int64_t>(0), schema.at("minItems").get<int64_t>());
   }
 
   if (schema.count("minContains")) {
     if (!schema.at("minContains").is<int64_t>()) {
-      return Result<ArraySpec, SchemaError>::Err(
+      return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "minContains must be an integer"
       );
     }
@@ -2068,7 +2066,7 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
 
   if (schema.count("maxItems")) {
     if (!schema.at("maxItems").is<int64_t>() || schema.at("maxItems").get<int64_t>() < 0) {
-      return Result<ArraySpec, SchemaError>::Err(
+      return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "maxItems must be a non-negative integer"
       );
     }
@@ -2077,7 +2075,7 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
 
   // Check if the schema is unsatisfiable
   if (max_items != -1 && min_items > max_items) {
-    return Result<ArraySpec, SchemaError>::Err(
+    return ResultErr<SchemaError>(
         SchemaErrorType::kUnsatisfiableSchema,
         "minItems is greater than maxItems: " + std::to_string(min_items) + " > " +
             std::to_string(max_items)
@@ -2085,7 +2083,7 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
   }
 
   if (max_items != -1 && max_items < static_cast<int64_t>(prefix_item_schemas.size())) {
-    return Result<ArraySpec, SchemaError>::Err(
+    return ResultErr<SchemaError>(
         SchemaErrorType::kUnsatisfiableSchema,
         "maxItems is less than the number of prefixItems: " + std::to_string(max_items) + " < " +
             std::to_string(prefix_item_schemas.size())
@@ -2095,7 +2093,7 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
   if (!allow_additional_items) {
     // [len, len] must be in [min, max]
     if (static_cast<int64_t>(prefix_item_schemas.size()) < min_items) {
-      return Result<ArraySpec, SchemaError>::Err(
+      return ResultErr<SchemaError>(
           SchemaErrorType::kUnsatisfiableSchema,
           "minItems is greater than the number of prefixItems, but additional items are not "
           "allowed: " +
@@ -2103,7 +2101,7 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
       );
     }
     if (max_items != -1 && static_cast<int64_t>(prefix_item_schemas.size()) > max_items) {
-      return Result<ArraySpec, SchemaError>::Err(
+      return ResultErr<SchemaError>(
           SchemaErrorType::kUnsatisfiableSchema,
           "maxItems is less than the number of prefixItems, but additional items are not "
           "allowed: " +

@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -21,6 +22,7 @@
 
 #include "support/compact_2d_array.h"
 #include "support/reflection/reflection.h"
+#include "support/utils.h"
 
 namespace xgrammar {
 

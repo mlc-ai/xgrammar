@@ -9,18 +9,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <iterator>
-#include <memory>
-#include <optional>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
-#include <unordered_set>
 #include <utility>
 #include <variant>
 
 #include "logging.h"
-#include "memory_size.h"
 
 namespace xgrammar {
 
@@ -80,6 +75,28 @@ constexpr bool is_exactly_one_type<X, Arg> = std::is_same_v<std::decay_t<Arg>, X
 
 }  // namespace detail
 
+template <typename T, bool IsOk>
+struct PartialResult {
+  template <typename... Args>
+  PartialResult(Args&&... args) : value(std::forward<Args>(args)...) {}
+  T value;
+};
+
+template <typename E = std::runtime_error, typename..., typename... Args>
+inline PartialResult<E, false> ResultErr(Args&&... args) {
+  return PartialResult<E, false>{std::forward<Args>(args)...};
+}
+
+template <typename T, typename..., typename... Args>
+inline PartialResult<T, true> ResultOk(Args&&... args) {
+  return PartialResult<T, true>{std::forward<Args>(args)...};
+}
+
+template <typename T>
+inline PartialResult<T&&, true> ResultOk(T&& value) {
+  return PartialResult<T&&, true>{std::forward<T>(value)};
+}
+
 /*!
  * \brief An always-move Result type similar to Rust's Result, representing either success (Ok) or
  * failure (Err). It always uses move semantics for the success and error values.
@@ -122,31 +139,21 @@ class Result {
   static_assert(!std::is_same_v<T, E>, "T and E cannot be the same type");
 
  public:
+  /*! \brief Default constructor is deleted to avoid accidental use */
+  Result() = delete;
+
+  /*! \brief Construct from Result::Err */
+  template <typename V, typename = std::enable_if_t<std::is_same_v<std::decay_t<V>, E>>>
+  Result(PartialResult<V, false>&& partial_result)
+      : data_(std::in_place_type<E>, std::forward<V>(partial_result.value)) {}
+
+  /*! \brief Construct from Result::Ok */
+  template <typename U, typename = std::enable_if_t<std::is_same_v<std::decay_t<U>, T>>>
+  Result(PartialResult<U, true>&& partial_result)
+      : data_(std::in_place_type<T>, std::forward<U>(partial_result.value)) {}
+
   /*! \brief Construct a success Result by moving T */
   static Result Ok(T&& value) { return Result(std::in_place_type<T>, std::move(value)); }
-
-  /*!
-   * \brief Construct a success Result by invoking T's constructor.
-   * \note This method cannot accept T as the only argument, therefore avoiding user passing const
-   * T& and invoke the copy constructor.
-   */
-  template <typename... Args, typename = std::enable_if_t<!detail::is_exactly_one_type<T, Args...>>>
-  static Result Ok(Args&&... args) {
-    return Result(std::in_place_type<T>, std::forward<Args>(args)...);
-  }
-
-  /*! \brief Construct an error Result by moving E */
-  static Result Err(E&& value) { return Result(std::in_place_type<E>, std::move(value)); }
-
-  /*!
-   * \brief Construct an error Result by invoking E's constructor.
-   * \note This method cannot accept E as the only argument, therefore avoiding user passing const
-   * E& and invoke the copy constructor.
-   */
-  template <typename... Args, typename = std::enable_if_t<!detail::is_exactly_one_type<E, Args...>>>
-  static Result Err(Args&&... args) {
-    return Result(std::in_place_type<E>, std::forward<Args>(args)...);
-  }
 
   /*! \brief Check if Result contains success value */
   bool IsOk() const { return std::holds_alternative<T>(data_); }
@@ -186,18 +193,18 @@ class Result {
   template <typename F, typename U = std::decay_t<std::invoke_result_t<F, T>>>
   Result<U, E> Map(F&& f) && {
     if (IsOk()) {
-      return Result<U, E>::Ok(f(std::get<T>(std::move(data_))));
+      return ResultOk(f(std::get<T>(std::move(data_))));
     }
-    return Result<U, E>::Err(std::get<E>(std::move(data_)));
+    return ResultErr(std::get<E>(std::move(data_)));
   }
 
   /*! \brief Map error value to new type using provided function */
   template <typename F, typename V = std::decay_t<std::invoke_result_t<F, E>>>
   Result<T, V> MapErr(F&& f) && {
     if (IsErr()) {
-      return Result<T, V>::Err(f(std::get<E>(std::move(data_))));
+      return ResultErr(f(std::get<E>(std::move(data_))));
     }
-    return Result<T, V>::Ok(std::get<T>(std::move(data_)));
+    return ResultOk(std::get<T>(std::move(data_)));
   }
 
   /*!
@@ -207,9 +214,9 @@ class Result {
   template <typename U, typename V>
   static Result<T, E> Convert(Result<U, V>&& result) {
     if (result.IsOk()) {
-      return Result<T, E>::Ok(std::move(result).Unwrap());
+      return ResultOk(std::move(result).Unwrap());
     }
-    return Result<T, E>::Err(std::move(result).UnwrapErr());
+    return ResultErr(std::move(result).UnwrapErr());
   }
 
   /*! \brief Get a std::variant<T, E> from the result. */

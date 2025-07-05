@@ -12,8 +12,8 @@
 #include <vector>
 
 #include "logging.h"
+#include "memory_size.h"
 #include "reflection/reflection.h"
-#include "utils.h"
 
 namespace xgrammar {
 

@@ -7,14 +7,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <set>
 #include <stack>
 #include <unordered_set>
 #include <variant>
 #include <vector>
 
 #include "fsm.h"
-#include "grammar_data_structure.h"
 #include "support/logging.h"
 #include "support/utils.h"
 
@@ -129,7 +127,7 @@ class RegexIR {
 
 Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& start) {
   if (regex[start] != '{') {
-    return Result<std::pair<int, int>>::Err("Invalid repeat format1");
+    return ResultErr("Invalid repeat format1");
   }
   int lower_bound = 0;
   int upper_bound = RegexIR::kRepeatNoUpperBound;
@@ -144,7 +142,7 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
     start++;
   }
   if (num_str.empty()) {
-    return Result<std::pair<int, int>>::Err("Invalid repeat format2");
+    return ResultErr("Invalid repeat format2");
   }
   lower_bound = std::stoi(num_str);
   while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
@@ -153,10 +151,10 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
   // The format is {n}
   if (regex[start] == '}') {
     upper_bound = lower_bound;
-    return Result<std::pair<int, int>>::Ok(std::make_pair(lower_bound, upper_bound));
+    return ResultOk(std::make_pair(lower_bound, upper_bound));
   }
   if (regex[start] != ',') {
-    return Result<std::pair<int, int>>::Err("Invalid repeat format3");
+    return ResultErr("Invalid repeat format3");
   }
   XGRAMMAR_DCHECK(regex[start] == ',');
   start++;
@@ -165,7 +163,7 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
   }
   // The format is {n,}
   if (regex[start] == '}') {
-    return Result<std::pair<int, int>>::Ok(std::make_pair(lower_bound, upper_bound));
+    return ResultOk(std::make_pair(lower_bound, upper_bound));
   }
   num_str.clear();
   while (static_cast<size_t>(start) < regex.size() && std::isdigit(regex[start])) {
@@ -173,24 +171,24 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
     start++;
   }
   if (num_str.empty()) {
-    return Result<std::pair<int, int>>::Err("Invalid repeat format4");
+    return ResultErr("Invalid repeat format4");
   }
   upper_bound = std::stoi(num_str);
   while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
     start++;
   }
   if (regex[start] != '}') {
-    return Result<std::pair<int, int>>::Err("Invalid repeat format5");
+    return ResultErr("Invalid repeat format5");
   }
   XGRAMMAR_DCHECK(regex[start] == '}');
-  return Result<std::pair<int, int>>::Ok(std::make_pair(lower_bound, upper_bound));
+  return ResultOk(std::make_pair(lower_bound, upper_bound));
 }
 
 Result<FSMWithStartEnd> RegexIR::Build() const {
   if (states.empty()) {
     FSM empty_fsm(1);
     FSMWithStartEnd result(empty_fsm, 0, std::unordered_set<int>{0}, false);
-    return Result<FSMWithStartEnd>::Ok(std::move(result));
+    return ResultOk(std::move(result));
   }
   std::vector<FSMWithStartEnd> fsm_list;
   for (const auto& state : states) {
@@ -201,16 +199,16 @@ Result<FSMWithStartEnd> RegexIR::Build() const {
     fsm_list.push_back(std::move(visited).Unwrap());
   }
   if (fsm_list.size() > 1) {
-    return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Concat(fsm_list));
+    return ResultOk(FSMWithStartEnd::Concat(fsm_list));
   } else {
     // If there is only one FSM, return it directly.
-    return Result<FSMWithStartEnd>::Ok(std::move(fsm_list[0]));
+    return ResultOk(std::move(fsm_list[0]));
   }
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Leaf& state) const {
   FSMWithStartEnd result = BuildLeafFSMFromRegex(state.regex);
-  return Result<FSMWithStartEnd>::Ok(std::move(result));
+  return ResultOk(std::move(result));
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Union& state) const {
@@ -223,14 +221,14 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Union& state) const {
     fsm_list.push_back(std::move(visited).Unwrap());
   }
   if (fsm_list.size() <= 1) {
-    return Result<FSMWithStartEnd>::Err("Invalid union");
+    return ResultErr("Invalid union");
   }
-  return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Union(fsm_list));
+  return ResultOk(FSMWithStartEnd::Union(fsm_list));
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& state) const {
   if (state.state.size() != 1) {
-    return Result<FSMWithStartEnd>::Err("Invalid symbol");
+    return ResultErr("Invalid symbol");
   }
   Result<FSMWithStartEnd> child_result =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, state.state[0]);
@@ -241,13 +239,13 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& state) const {
 
   switch (state.symbol) {
     case RegexIR::RegexSymbol::plus: {
-      return Result<FSMWithStartEnd>::Ok(child.Plus());
+      return ResultOk(child.Plus());
     }
     case RegexIR::RegexSymbol::star: {
-      return Result<FSMWithStartEnd>::Ok(child.Star());
+      return ResultOk(child.Star());
     }
     case RegexIR::RegexSymbol::optional: {
-      return Result<FSMWithStartEnd>::Ok(child.Optional());
+      return ResultOk(child.Optional());
     }
     default: {
       XGRAMMAR_LOG(FATAL) << "Unknown regex symbol: " << static_cast<int>(state.symbol);
@@ -265,14 +263,14 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Bracket& state) const {
     fsm_list.push_back(std::move(visited).Unwrap());
   }
   if (fsm_list.empty()) {
-    return Result<FSMWithStartEnd>::Err("Invalid bracket");
+    return ResultErr("Invalid bracket");
   }
-  return Result<FSMWithStartEnd>::Ok(FSMWithStartEnd::Concat(fsm_list));
+  return ResultOk(FSMWithStartEnd::Concat(fsm_list));
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   if (state.states.size() != 1) {
-    return Result<FSMWithStartEnd>::Err("Invalid repeat");
+    return ResultErr("Invalid repeat");
   }
   Result<FSMWithStartEnd> child_result =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, state.states[0]);
@@ -298,7 +296,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
     for (const auto& end : result.GetEnds()) {
       result->AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
     }
-    return Result<FSMWithStartEnd>::Ok(std::move(result));
+    return ResultOk(std::move(result));
   }
   // Handling {n, m} or {n}
   for (int i = 2; i <= state.upper_bound; i++) {
@@ -312,7 +310,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   for (const auto& end : new_ends) {
     result.AddEndState(end);
   }
-  return Result<FSMWithStartEnd>::Ok(std::move(result));
+  return ResultOk(std::move(result));
 }
 
 FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
@@ -550,14 +548,14 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
     // Handle The class.
     if (regex[i] == '[') {
       if (left_middle_bracket != -1) {
-        return Result<FSMWithStartEnd>::Err("Nested middle bracket!");
+        return ResultErr("Nested middle bracket!");
       }
       left_middle_bracket = i;
       continue;
     }
     if (regex[i] == ']') {
       if (left_middle_bracket == -1) {
-        return Result<FSMWithStartEnd>::Err("Invalid middle bracket!");
+        return ResultErr("Invalid middle bracket!");
       }
       RegexIR::Leaf leaf;
       leaf.regex = regex.substr(left_middle_bracket, i - left_middle_bracket + 1);
@@ -573,11 +571,11 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
     }
     if (regex[i] == '+' || regex[i] == '*' || regex[i] == '?') {
       if (stack.empty()) {
-        return Result<FSMWithStartEnd>::Err("Invalid regex: no state before operator!");
+        return ResultErr("Invalid regex: no state before operator!");
       }
       auto state = stack.top();
       if (std::holds_alternative<char>(state)) {
-        return Result<FSMWithStartEnd>::Err("Invalid regex: no state before operator!");
+        return ResultErr("Invalid regex: no state before operator!");
       }
       stack.pop();
       auto child = std::get<RegexIR::State>(state);
@@ -637,9 +635,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
         }
       }
       if (!paired) {
-        return Result<FSMWithStartEnd>::Err(
-            "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
-        );
+        return ResultErr("Invalid regex: no paired bracket!" + std::to_string(__LINE__));
       }
       if (states.empty()) {
         continue;
@@ -666,18 +662,14 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
               bracket.states.clear();
               continue;
             }
-            return Result<FSMWithStartEnd>::Err(
-                "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
-            );
+            return ResultErr("Invalid regex: no paired bracket!" + std::to_string(__LINE__));
           }
           if (std::holds_alternative<RegexIR::State>(state)) {
             auto child = std::get<RegexIR::State>(state);
             bracket.states.push_back(child);
             continue;
           }
-          return Result<FSMWithStartEnd>::Err(
-              "Invalid regex: no paired bracket!" + std::to_string(__LINE__)
-          );
+          return ResultErr("Invalid regex: no paired bracket!" + std::to_string(__LINE__));
         }
         union_state.states.push_back(bracket);
         stack.push(union_state);
@@ -686,16 +678,16 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
     }
     if (regex[i] == '{') {
       if (stack.empty()) {
-        return Result<FSMWithStartEnd>::Err("Invalid regex: no state before repeat!");
+        return ResultErr("Invalid regex: no state before repeat!");
       }
       auto state = stack.top();
       if (std::holds_alternative<char>(state)) {
-        return Result<FSMWithStartEnd>::Err("Invalid regex: no state before repeat!");
+        return ResultErr("Invalid regex: no state before repeat!");
       }
       stack.pop();
       auto bounds_result = RegexIR::CheckRepeat(regex, i);
       if (bounds_result.IsErr()) {
-        return Result<FSMWithStartEnd>::Err(std::move(bounds_result).UnwrapErr());
+        return ResultErr(std::move(bounds_result).UnwrapErr());
       }
       auto bounds = std::move(bounds_result).Unwrap();
       auto child = std::get<RegexIR::State>(state);
@@ -729,7 +721,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
         stack.pop();
         continue;
       }
-      return Result<FSMWithStartEnd>::Err("Invalid regex: no paired!");
+      return ResultErr("Invalid regex: no paired!");
     }
     auto state = stack.top();
     stack.pop();
