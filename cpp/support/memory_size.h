@@ -47,14 +47,6 @@ using Element_t = std::decay_t<decltype(*std::begin(Container()))>;
 template <typename>
 inline constexpr bool false_v = false;
 
-/*!
- * \brief Customized MemorySize implementation for pimpl classes.
- */
-template <typename T, typename = is_pimpl_class<T>>
-inline constexpr std::size_t MemorySize(const T& value) {
-  return MemorySize(*value.ImplPtr());
-}
-
 }  // namespace detail::memory_size
 
 /*!

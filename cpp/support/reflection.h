@@ -34,28 +34,28 @@ template <typename... R>
 struct is_std_tuple<std::tuple<R...>> : std::true_type {};
 
 template <typename>
-struct is_optional : std::false_type {};
+struct is_std_optional : std::false_type {};
 
 template <typename T>
-struct is_optional<std::optional<T>> : std::true_type {};
+struct is_std_optional<std::optional<T>> : std::true_type {};
 
 template <typename>
-struct is_vector : std::false_type {};
+struct is_std_vector : std::false_type {};
 
 template <typename... R>
-struct is_vector<std::vector<R...>> : std::true_type {};
+struct is_std_vector<std::vector<R...>> : std::true_type {};
 
 template <typename>
-struct is_unordered_map : std::false_type {};
+struct is_std_unordered_map : std::false_type {};
 
 template <typename... R>
-struct is_unordered_map<std::unordered_map<R...>> : std::true_type {};
+struct is_std_unordered_map<std::unordered_map<R...>> : std::true_type {};
 
 template <typename T>
-struct is_unordered_set : std::false_type {};
+struct is_std_unordered_set : std::false_type {};
 
 template <typename... R>
-struct is_unordered_set<std::unordered_set<R...>> : std::true_type {};
+struct is_std_unordered_set<std::unordered_set<R...>> : std::true_type {};
 
 /*!
  * \brief XGrammar specific: Check if a class is a PImpl class.
@@ -157,7 +157,7 @@ struct member_trait {
   template <>                            \
   XGRAMMAR_MEMBER_ARRAY_TEMPLATE(Type, __VA_ARGS__)
 
-/******************** Implementation ********************/
+/******************** Detail Implementation ********************/
 
 namespace detail::reflection {
 
@@ -193,8 +193,23 @@ inline constexpr auto make_name_table(Args... args) {
   return make_name_table_aux(std::make_index_sequence<N / 2>{}, std::make_tuple(args...));
 }
 
+template <typename Ftor, typename Fn, std::size_t... Idx>
+inline void visit_config_impl(Fn&& fn, std::index_sequence<Idx...>) {
+  // This is a helper function to visit each member of the config.
+  // It uses fold expression to apply the function to each member.
+  static_assert(Ftor::value == member_type::kConfig, "T must be a config type");
+  static constexpr auto get_name = [](std::size_t idx) {
+    return Ftor::has_names ? Ftor::names[idx] : "";
+  };
+  return (fn(std::get<Idx>(Ftor::members), get_name(Idx), Idx), ...);
+}
+
+}  // namespace detail::reflection
+
+/******************** Member Functor and Visitor ********************/
+
 /*!
- * @brief A functor that provides access to the members of a config type.
+ * \brief A functor that provides access to the members of a config type.
  * It extracts the members from the `member_trait` specialization for the type `T`.
  * A valid `member_trait` specialization must meet the following requirements:
  * - It must have a static member `value` of type `member_type`,
@@ -202,11 +217,11 @@ inline constexpr auto make_name_table(Args... args) {
  */
 template <typename T, member_type = member_trait<T>::value>
 struct member_functor {
-  static_assert(false_v<T>, "This specialization should never be used");
+  static_assert(detail::reflection::false_v<T>, "This specialization should never be used");
 };
 
 /*!
- * @brief A specialization of `member_functor` for config types.
+ * \brief A specialization of `member_functor` for config types.
  * A valid `member_trait` specialization for a config type must meet the following:
  * - It must have a static member `value` of type `member_type::kConfig`.
  * - It must have a static tuple `members` that contains the member pointers.
@@ -217,12 +232,15 @@ struct member_functor {
  */
 template <typename T>
 struct member_functor<T, member_type::kConfig> {
-  using _trait_type = member_trait<T>;
-  using _members_t = std::decay_t<decltype(_trait_type::members)>;
-  using _names_t = std::decay_t<decltype(_trait_type::names)>;
+ private:
+  using _trait_t = member_trait<T>;
+  using _members_t = std::decay_t<decltype(_trait_t::members)>;
+  using _names_t = std::decay_t<decltype(_trait_t::names)>;
+
+ public:
   static constexpr auto value = member_type::kConfig;
-  static constexpr auto members = _trait_type::members;
-  static constexpr auto names = _trait_type::names;
+  static constexpr auto members = _trait_t::members;
+  static constexpr auto names = _trait_t::names;
   static constexpr auto member_count = std::tuple_size_v<_members_t>;
   static constexpr auto has_names = names.size() == member_count;
   // some static_asserts to check the member list and name list
@@ -235,24 +253,24 @@ struct member_functor<T, member_type::kConfig> {
   );
 };
 
-template <typename Ftor, typename Fn, std::size_t... Idx>
-inline void _visit_config_impl(Fn&& fn, std::index_sequence<Idx...>) {
-  // This is a helper function to visit each member of the config.
-  // It uses fold expression to apply the function to each member.
-  static_assert(Ftor::value == member_type::kConfig, "T must be a config type");
-  static constexpr auto get_name = [](std::size_t idx) {
-    return Ftor::has_names ? Ftor::names[idx] : "";
-  };
-  return (fn(std::get<Idx>(Ftor::members), get_name(Idx), Idx), ...);
-}
-
+/*!
+ * \brief Visit the members of a config type.
+ * \tparam T The type of the config.
+ * \tparam Fn The type of the function to visit the members.
+ * \param fn The function to visit the members. fn's signature should be:
+ * \code{.cpp}
+ * (auto ptr, const char* name, size_t idx) -> void
+ * \endcode
+ * where `ptr` is the pointer to the member, `name` is the name of the member, and `idx` is the
+ * index of the member.
+ */
 template <typename T, typename Fn>
 inline void visit_config(Fn&& fn) {
   using Ftor = member_functor<T>;
-  return _visit_config_impl<Ftor>(fn, std::make_index_sequence<Ftor::member_count>{});
+  return detail::reflection::visit_config_impl<Ftor>(
+      fn, std::make_index_sequence<Ftor::member_count>{}
+  );
 }
-
-}  // namespace detail::reflection
 
 }  // namespace xgrammar
 

@@ -488,7 +488,7 @@ std::variant<TokenizerInfo, std::runtime_error> TokenizerInfo::DeserializeJSON(
   if (auto err = AutoDeserializeJSON(&tokenizer_info, json_string, true, "TokenizerInfo")) {
     return err.value();
   }
-  return std::move(tokenizer_info);
+  return tokenizer_info;
 }
 
 }  // namespace xgrammar
