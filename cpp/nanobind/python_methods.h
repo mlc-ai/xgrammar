@@ -64,6 +64,12 @@ CompiledGrammar GrammarCompiler_CompileStructuralTag(
     const std::vector<std::string>& triggers
 );
 
+Grammar Grammar_DeserializeJSON(const std::string& json_string);
+
+TokenizerInfo TokenizerInfo_DeserializeJSON(const std::string& json_string);
+
+CompiledGrammar CompiledGrammar_DeserializeJSON(const std::string& json_string);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_NANOBIND_PYTHON_METHODS_H_
