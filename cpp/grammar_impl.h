@@ -214,6 +214,8 @@ XGRAMMAR_MEMBER_TABLE(
     "rules",
     &Grammar::Impl::rules_,
     "grammar_expr_data",
+    &Grammar::Impl::grammar_expr_indptr_,
+    "grammar_expr_indptr",
     &Grammar::Impl::grammar_expr_data_,
     "root_rule_id",
     &Grammar::Impl::root_rule_id_,
