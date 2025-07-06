@@ -56,8 +56,10 @@ class SerializeVersion {
 };
 
 /*!
- * \brief Serializes a value to a JSON value. The members of T must be defined through
- * XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY. The serialization logic is automatically
+ * \brief Serializes a value to a JSON value.
+ * \details It supports STL types, PImpl types, reflection-based types (whose members are defined
+ * through XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY), and types who have defined a global
+ * SerializeJSONValue function. For reflection-based types, the serialization logic is automatically
  * generated from the defined members.
  * \param value The value to be serialized.
  */
@@ -65,21 +67,25 @@ template <typename T>
 picojson::value AutoSerializeJSONValue(const T& value);
 
 /*!
- * \brief Serializes a value to a JSON string. The members of T must be defined through
- * XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY. The serialization logic is automatically
+ * \brief Serializes a value to a JSON string.
+ * \details It supports STL types, PImpl types, reflection-based types (whose members are defined
+ * through XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY), and types who have defined a global
+ * SerializeJSONValue function. For reflection-based types, the serialization logic is automatically
  * generated from the defined members.
  * \param value The value to be serialized.
- * \param add_version Whether to add the version info to the serialized object. If true, the caller
- * must ensure the serialized result to be a object.
+ * \param add_version Whether to add the version info to the serialized object. The addition is
+ * valid only when the serialized result is an object.
  */
 template <typename T>
 std::string AutoSerializeJSON(const T& value, bool add_version = false);
 
 /*!
- * \brief Deserializes a value from a JSON value. The members of T must be defined through
- * XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY. The deserialization logic is automatically
- * generated from the defined members.
- * \param result The result to be deserialized.
+ * \brief Deserializes a value from a JSON value.
+ * \details It supports STL types, PImpl types, reflection-based types (whose members are defined
+ * through XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY), and types who have defined a global
+ * DeserializeJSONValue function. For reflection-based types, the deserialization logic is
+ * automatically generated from the defined members.
+ * \param result The pointer to the result to be deserialized.
  * \param value The JSON value to be deserialized.
  * \param type_name The name of the type to be deserialized. Used for error message.
  */
@@ -89,13 +95,15 @@ std::optional<std::runtime_error> AutoDeserializeJSONValue(
 );
 
 /*!
- * \brief Deserializes a value from a JSON string. The members of T must be defined through
- * XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY. The deserialization logic is automatically
- * generated from the defined members.
- * \param result The result to be deserialized.
+ * \brief Deserializes a value from a JSON string.
+ * \details It supports STL types, PImpl types, reflection-based types (whose members are defined
+ * through XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY), and types who have defined a global
+ * DeserializeJSONValue function. For reflection-based types, the deserialization logic is
+ * automatically generated from the defined members.
+ * \param result The pointer to the result to be deserialized.
  * \param json_string The JSON string to be deserialized.
- * \param check_version Whether to check the version info in the serialized object. If true, the
- * caller must ensure the serialized result to be a object.
+ * \param check_version Whether to check the version info in the serialized object. The check is
+ * valid only when the serialized object is an object.
  * \param type_name The name of the type to be deserialized. Used for error message.
  */
 template <typename T>
@@ -106,6 +114,12 @@ std::optional<std::runtime_error> AutoDeserializeJSON(
     const std::string& type_name = ""
 );
 
+/*!
+ * \brief Constructs a deserialize error with the given error message and type name.
+ * \param error_message The error message.
+ * \param type_name The name of the type.
+ * \return The constructed runtime error.
+ */
 inline std::runtime_error ConstructDeserializeError(
     const std::string& error_message, const std::string& type_name
 );
