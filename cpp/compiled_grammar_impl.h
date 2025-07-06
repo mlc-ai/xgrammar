@@ -79,7 +79,10 @@ struct AdaptiveTokenMask {
 
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
-  friend std::size_t MemorySize(const AdaptiveTokenMask& mask);
+  friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
+    return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
+           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset);
+  }
 };
 
 XGRAMMAR_MEMBER_TABLE(
