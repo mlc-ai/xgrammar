@@ -62,6 +62,7 @@ class SerializeVersion {
  * SerializeJSONValue function. For reflection-based types, the serialization logic is automatically
  * generated from the defined members.
  * \param value The value to be serialized.
+ * \return The serialized JSON value.
  */
 template <typename T>
 picojson::value AutoSerializeJSONValue(const T& value);
@@ -75,6 +76,7 @@ picojson::value AutoSerializeJSONValue(const T& value);
  * \param value The value to be serialized.
  * \param add_version Whether to add the version info to the serialized object. The addition is
  * valid only when the serialized result is an object.
+ * \return The serialized JSON string.
  */
 template <typename T>
 std::string AutoSerializeJSON(const T& value, bool add_version = false);
@@ -88,6 +90,7 @@ std::string AutoSerializeJSON(const T& value, bool add_version = false);
  * \param result The pointer to the result to be deserialized.
  * \param value The JSON value to be deserialized.
  * \param type_name The name of the type to be deserialized. Used for error message.
+ * \return The deserialization error if any.
  */
 template <typename T>
 std::optional<std::runtime_error> AutoDeserializeJSONValue(
@@ -105,6 +108,7 @@ std::optional<std::runtime_error> AutoDeserializeJSONValue(
  * \param check_version Whether to check the version info in the serialized object. The check is
  * valid only when the serialized object is an object.
  * \param type_name The name of the type to be deserialized. Used for error message.
+ * \return The deserialization error if any.
  */
 template <typename T>
 std::optional<std::runtime_error> AutoDeserializeJSON(
