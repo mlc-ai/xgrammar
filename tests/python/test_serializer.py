@@ -7,6 +7,140 @@ from transformers import AutoTokenizer  # type: ignore
 
 import xgrammar as xgr
 
+# def test_serialize_type():
+#     obj = construct_type()
+#     serialized = xgr.JSONSerializer.serialize_type(obj)
+#     expected = """{...}"""
+#     assert expected == serialized
+
+# def test_serialize_type_roundtrip():
+#     obj = construct_type()
+#     serialized = xgr.JSONSerializer.serialize_type(obj)
+#     recovered = xgr.JSONSerializer.deserialize_type(serialized)
+#     serialized_new = xgr.JSONSerializer.serialize_type(recovered)
+#     assert serialized == serialized_new
+
+# def test_serialize_type_functional():
+#     obj = construct_type()
+#     serialized = xgr.JSONSerializer.serialize_type(obj)
+#     recovered = xgr.JSONSerializer.deserialize_type(serialized)
+#     result = some_code_use_type(recovered)
+#     assert result is correct
+# 7:33
+# 这种
+
+
+def test_serialize_tokenizer_info():
+    # test masks in grammar serialization
+    tokenizer_info = xgr.TokenizerInfo(
+        ["1", "212", "a", "A", "b", "一", "-", "aBc", "abc"],
+        vocab_type=xgr.VocabType.BYTE_FALLBACK,
+        vocab_size=10,
+        stop_token_ids=[0, 1],
+        add_prefix_space=True,
+    )
+    expected_json = (
+        '{"vocab_type":1,"vocab_size":10,"add_prefix_space":true,'
+        '"stop_token_ids":[0,1],"special_token_ids":[9],"__VERSION__":"v2"}'
+    )
+    serialized = tokenizer_info.serialize_json()
+    assert serialized == expected_json
+
+
+def test_serialize_grammar():
+    grammar = xgr.Grammar.from_ebnf(
+        """rule1 ::= (([^0-9] rule1))
+root_rule ::= ((rule1 "a"))
+""",
+        root_rule_name="root_rule",
+    )
+    print(grammar)
+    expected_json = (
+        '{"rules_":[["rule1",3,8],["root_rule",7,-1]],'
+        '"grammar_expr_data_":{"data_":[1,1,48,57,4,0,5,0,1,6,2,4,0,0,97,5,4,5,6,6,5,5],'
+        '"indptr_":[0,4,6,9,11,13,15,18,20,22]},"root_rule_id_":1,"root_tag_dispatch_fsm":null,'
+        '"tag_dispatch_end_node_to_rule_id":[],"allow_empty_rule_ids":[],"__VERSION__":"v2"}'
+    )
+    serialized = grammar.serialize_json()
+    assert serialized == expected_json
+
+
+def test_serialize_compiled_grammar():
+    tokenizer_info = xgr.TokenizerInfo(
+        ["1", "212", "a", "A", "b", "一", "-", "aBc", "abc"],
+        vocab_type=xgr.VocabType.BYTE_FALLBACK,
+        vocab_size=10,
+        stop_token_ids=[0, 1],
+        add_prefix_space=True,
+    )
+    grammar = xgr.Grammar.from_ebnf(
+        """rule1 ::= (([^0-9] rule1))
+root_rule ::= ((rule1 "a"))
+""",
+        root_rule_name="root_rule",
+    )
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+    compiled_grammar = grammar_compiler.compile_grammar(grammar)
+    serialized = compiled_grammar.serialize_json()
+    print(serialized)
+
+
+test_serialize_compiled_grammar()
+exit()
+
+#     test_grammar = """
+#         root ::= rule1 | rule2
+#         rule1 ::= [^0-9] rule1
+#         rule2 ::= ("AB" | "1" | "") rule2
+#     """
+#     expected_mask = "[[1,7,0,-1,0],[1,[],[1,2],[1,0,0,0],[]],[1,7,0,-1,1],[0,[],\
+# [],[1,0,0,0],[]],[1,7,0,-1,2],[0,[],[],[1,0,0,0],[]],[1,7,0,-1,3],[0,[],[],[1,0,\
+# 0,0],[]],[3,15,0,-1,0],[0,[3],[],[1,0,0,0],[]],[3,15,0,-1,1],[0,[],[],[1,0,0,0],\
+# []],[3,17,0,-1,0],[0,[1],[],[1,0,0,0],[]]]"
+
+#     grammar_compiler = xgr.GrammarCompiler(tokenizer)
+#     compiled_grammar = grammar_compiler.compile_grammar(test_grammar)
+#     serial_json = compiled_grammar.serialize_json()
+#     mask_idx = serial_json.find('"adaptive_token_mask_cache":')
+#     assert mask_idx != -1
+#     mask_idx += len('"adaptive_token_mask_cache":')
+#     assert serial_json[mask_idx : mask_idx + len(expected_mask)] == expected_mask, (
+#         serial_json[mask_idx : mask_idx + len(expected_mask)],
+#         expected_mask,
+#     )
+
+#     # test bitset
+#     test_list = []
+#     for i in range(201):
+#         test_list.append("1")
+#     for i in range(201):
+#         test_list.append("2")
+#     tokenizer = xgr.TokenizerInfo(test_list)
+
+#     test_grammar = 'root ::= "1"'
+#     expected_mask = "[[0,1,0,-1,0],[2,[],[],[1,201,402,13,0,1,2,3,4,5,6,7,8,9,10\
+# ,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,3\
+# 7,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,\
+# 64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90\
+# ,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,\
+# 113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,\
+# 133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,\
+# 153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,\
+# 173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,\
+# 193,194,195,196,197,198,199,200],[]]]"
+
+#     grammar_compiler = xgr.GrammarCompiler(tokenizer)
+#     compiled_grammar = grammar_compiler.compile_grammar(test_grammar)
+#     serial_json = compiled_grammar.serialize_json()
+#     mask_idx = serial_json.find('"adaptive_token_mask_cache":')
+#     assert mask_idx != -1
+#     mask_idx += len('"adaptive_token_mask_cache":')
+#     assert serial_json[mask_idx : mask_idx + len(expected_mask)] == expected_mask, (
+#         serial_json[mask_idx : mask_idx + len(expected_mask)],
+#         expected_mask,
+#     )
+
+
 TOKENIZER_PATH = "meta-llama/Llama-3.1-8B-Instruct"
 
 
@@ -213,7 +347,6 @@ def test_serializer_correctness_functional(
 
 
 def test_serializer_correctness_in_mask_cache():
-
     # test masks in grammar serialization
     tokenizer = xgr.TokenizerInfo(["1", "212", "a", "A", "b", "一", "-", "aBc", "abc"])
     test_grammar = """

@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 #include "support/compact_2d_array.h"
 #include "support/utils.h"
 #include "xgrammar/grammar.h"
@@ -28,13 +28,13 @@ namespace xgrammar {
  * In the ksequence, every element in the sequence must be a kbytestring, a
  * kcharacterclass, a kcharacterclassstar, or a rule reference.
  *
- * -rule_id: The id of the rule.
- * -sequence_id: The id of the sequence in the rule.
- * -element_id: The id of the element in the sequence, or the id of the node in
- * the tag dispatch fsm.
- * -rule_start_pos: The id of the parent node in the Earley parser. i.e. the rule
- * is predicted from the k-th character.
- * -sub_element_id: The id of the sub element in the current element, i.e.:
+ * - rule_id: The id of the rule.
+ * - sequence_id: The id of the sequence in the rule.
+ * - element_id: The id of the element in the sequence, or the id of the node in
+ *   the tag dispatch fsm.
+ * - rule_start_pos: The id of the parent node in the Earley parser. i.e. the rule
+ *   is predicted from the k-th character.
+ * - sub_element_id: The id of the sub element in the current element, i.e.:
  *   - kbytestring: the id of the byte in the string.
  *   - kcharacterclass: How many bytes are left to be read in the utf8 character.
  *   - kcharacterclassstar: How many bytes are left to be read in the utf8 character.
@@ -42,22 +42,23 @@ namespace xgrammar {
 struct ParserState {
   constexpr ParserState() = default;
 
-  constexpr ParserState(const ParserState&) = default;
-
-  ParserState& operator=(const ParserState&) = default;
-
   constexpr ParserState(
-      const int32_t& rule_id,
-      const int32_t& sequence_id,
-      const int32_t& element_id,
-      const int32_t& rule_start_pos,
-      const int32_t& sub_element_id
+      int32_t rule_id,
+      int32_t sequence_id,
+      int32_t element_id,
+      int32_t rule_start_pos,
+      int32_t sub_element_id
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
         element_id(element_id),
         rule_start_pos(rule_start_pos),
         sub_element_id(sub_element_id) {}
+
+  constexpr ParserState(const ParserState&) = default;
+  constexpr ParserState(ParserState&&) = default;
+  ParserState& operator=(const ParserState&) = default;
+  ParserState& operator=(ParserState&&) = default;
 
   /*!
    * \brief A sequence_id value of kUnexpandedRuleStartSequenceId means a rule hasn't been

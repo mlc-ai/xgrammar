@@ -4,8 +4,8 @@
  * \brief The header for the support of grammar-guided generation.
  */
 
-#ifndef XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
-#define XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
+#ifndef XGRAMMAR_GRAMMAR_IMPL_H_
+#define XGRAMMAR_GRAMMAR_IMPL_H_
 
 #include <xgrammar/xgrammar.h>
 
@@ -15,7 +15,7 @@
 
 #include "fsm.h"
 #include "support/logging.h"
-#include "support/reflection/reflection.h"
+#include "support/reflection.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -139,6 +139,7 @@ class Grammar::Impl {
 
   /*! \brief Get the number of grammar_exprs. */
   int32_t NumGrammarExprs() const { return grammar_expr_indptr_.size(); }
+
   /*! \brief Get the grammar_expr with the given id. */
   GrammarExpr GetGrammarExpr(int32_t grammar_expr_id) const {
     XGRAMMAR_DCHECK(
@@ -197,7 +198,6 @@ class Grammar::Impl {
   friend class GrammarBuilder;
   friend class GrammarCompiler;
 
-  std::size_t MemorySize() const;
   friend std::size_t MemorySize(const Impl& impl);
   friend struct member_trait<Impl>;
 };
@@ -211,13 +211,11 @@ XGRAMMAR_MEMBER_ARRAY(
 
 XGRAMMAR_MEMBER_TABLE(
     Grammar::Impl,
-    "rules_",
+    "rules",
     &Grammar::Impl::rules_,
-    "grammar_expr_data_",
+    "grammar_expr_data",
     &Grammar::Impl::grammar_expr_data_,
-    "grammar_expr_indptr_",
-    &Grammar::Impl::grammar_expr_indptr_,
-    "root_rule_id_",
+    "root_rule_id",
     &Grammar::Impl::root_rule_id_,
     "root_tag_dispatch_fsm",
     &Grammar::Impl::root_tag_dispatch_fsm,
@@ -229,4 +227,4 @@ XGRAMMAR_MEMBER_TABLE(
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
+#endif  // XGRAMMAR_GRAMMAR_IMPL_H_

@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "fsm.h"
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 #include "support/encoding.h"
 #include "support/logging.h"
 #include "xgrammar/grammar.h"

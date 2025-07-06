@@ -1,9 +1,9 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_serializer.cc
+ * \file xgrammar/grammar_printer.cc
  */
 
-#include "grammar_serializer.h"
+#include "grammar_printer.h"
 
 #include <picojson.h>
 
@@ -44,6 +44,7 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintTagDispatch(grammar_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected GrammarExpr type: " << static_cast<int>(grammar_expr.type);
+      XGRAMMAR_UNREACHABLE();
   }
 }
 

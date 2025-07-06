@@ -12,9 +12,9 @@
 #include <utility>
 #include <vector>
 
-#include "compiled_grammar_data_structure.h"
+#include "compiled_grammar_impl.h"
 #include "earley_parser.h"
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
 #include "support/int_set.h"

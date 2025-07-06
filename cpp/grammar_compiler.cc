@@ -14,12 +14,12 @@
 #include <variant>
 #include <vector>
 
-#include "compiled_grammar_data_structure.h"
+#include "compiled_grammar_impl.h"
 #include "earley_parser.h"
 #include "fsm.h"
 #include "fsm_builder.h"
-#include "grammar_data_structure.h"
 #include "grammar_functor.h"
+#include "grammar_impl.h"
 #include "support/logging.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
@@ -46,31 +46,10 @@ namespace xgrammar {
 
 /******************* MemorySize *******************/
 
-std::size_t MemorySize(const Grammar::Impl& impl) {
-  // we assume strings are not long, so we don't iterate through all the rules
-  return impl.rules_.size() * sizeof(impl.rules_[0]) + MemorySize(impl.grammar_expr_data_) +
-         MemorySize(impl.grammar_expr_indptr_) + MemorySize(impl.root_tag_dispatch_fsm) +
-         MemorySize(impl.tag_dispatch_end_node_to_rule_id) + MemorySize(impl.allow_empty_rule_ids);
-}
-
-std::size_t Grammar::Impl::MemorySize() const { return xgrammar::MemorySize(*this); }
-
 std::size_t MemorySize(const AdaptiveTokenMask& mask) {
   return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
          MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset);
 }
-
-std::size_t AdaptiveTokenMask::MemorySize() const { return xgrammar::MemorySize(*this); }
-
-std::size_t CompiledGrammar::Impl::MemorySize() const {
-  std::size_t sum = 0;
-  sum += grammar->MemorySize();
-  sum += adaptive_token_mask_cache.size() * sizeof(*adaptive_token_mask_cache.begin());
-  for (auto& [_, mask] : adaptive_token_mask_cache) sum += mask.MemorySize();
-  return sum;
-}
-
-std::size_t CompiledGrammar::MemorySizeBytes() const { return pimpl_->MemorySize(); }
 
 /******************* AdaptiveTokenMask and CompiledGrammar *******************/
 
@@ -220,10 +199,6 @@ std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const 
      << "\n)";
   return ss.str();
 }
-
-Grammar CompiledGrammar::GetGrammar() const { return pimpl_->GetGrammar(); }
-
-TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetTokenizerInfo(); }
 
 /************** Use GrammarMatcher to generate the AdaptiveTokenMaskCache **************/
 

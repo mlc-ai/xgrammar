@@ -13,7 +13,7 @@
 
 #include "logging.h"
 #include "memory_size.h"
-#include "reflection/reflection.h"
+#include "reflection.h"
 
 namespace xgrammar {
 
@@ -155,7 +155,7 @@ class Compact2DArray {
   /*! \brief Get a pointer to the underlying index pointer array. */
   const int32_t* indptr() const { return indptr_.data(); }
 
-  /****************** Serialization ******************/
+  /****************** Printing ******************/
 
   friend std::ostream& operator<<(std::ostream& os, const Compact2DArray& compact_2d_array) {
     os << "Compact2DArray([";

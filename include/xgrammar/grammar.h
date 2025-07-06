@@ -10,7 +10,9 @@
 #include <xgrammar/object.h>
 
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace xgrammar {
@@ -39,7 +41,7 @@ struct StructuralTagItem {
  * ### GrammarExprs
  * GrammarExpr is the definition of a rule or part of the definition of a rule. It can contain
  * elements, empty string, reference to other GrammarExprs, or reference to other rules. Each
- * GrammarExpr corresponds to a grammar_expr_id for reference.
+ * GrammarExpr corresponds to an grammar_expr_id for reference.
  *
  * For example, in the following rule: rule ::= ("a" "b") | "c"
  * ("a" "b"), "c", ("a" "b") | "c" are all GrammarExprs.
@@ -133,6 +135,7 @@ class Grammar {
 
   /*!
    * \brief Get the grammar of standard JSON format. We have built-in support for JSON.
+   * \return The grammar of standard JSON format.
    */
   static Grammar BuiltinJSONGrammar();
 
@@ -152,14 +155,27 @@ class Grammar {
    */
   static Grammar Concat(const std::vector<Grammar>& grammars);
 
-  /*! \brief Print a BNF grammar. */
+  /*!
+   * \brief Print a BNF grammar.
+   * \param os The output stream.
+   * \param grammar The grammar to print.
+   * \return The output stream.
+   */
   friend std::ostream& operator<<(std::ostream& os, const Grammar& grammar);
 
-  /*! \brief Return the serialized JSON string of the grammar. */
+  /*!
+   * \brief Return the serialized JSON string of the grammar.
+   * \return The serialized JSON string.
+   */
   std::string SerializeJSON() const;
 
-  /*! \brief Deserialize a grammar from a JSON string. */
-  static Grammar DeserializeJSON(const std::string& json_string);
+  /*!
+   * \brief Deserialize a grammar from a JSON string.
+   * \param json_string The JSON string to deserialize.
+   * \return If the deserialization is successful, return the grammar. Otherwise, return a runtime
+   * error with the error message.
+   */
+  static std::variant<Grammar, std::runtime_error> DeserializeJSON(const std::string& json_string);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(Grammar);
 };
