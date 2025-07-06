@@ -36,6 +36,11 @@ def construct_compiled_grammar():
     return grammar_compiler.compile_grammar(grammar), tokenizer_info
 
 
+def test_get_serialization_version():
+    """Test the version of the serialized JSON string."""
+    assert xgr.get_serialization_version() == "v2"
+
+
 def test_serialize_grammar():
     """Test Grammar serialization produces expected JSON string."""
     grammar = construct_grammar()

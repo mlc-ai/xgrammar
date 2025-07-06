@@ -232,18 +232,18 @@ class DynamicBitset {
       DynamicBitset* bitset, const picojson::value& value, const std::string& type_name
   ) {
     if (!value.is<picojson::array>()) {
-      return ConstructDeserializeError("Except an array", type_name);
+      return ConstructDeserializeError("Expect an array", type_name);
     }
     const auto& arr = value.get<picojson::array>();
     if (arr.size() < 2) {
       return ConstructDeserializeError("Except at least 2 elements in the array", type_name);
     }
     if (!arr[0].is<int64_t>()) {
-      return ConstructDeserializeError("Except an integer for size", type_name);
+      return ConstructDeserializeError("Expect an integer for size", type_name);
     }
     int size = static_cast<int>(arr[0].get<int64_t>());
     if (!arr[1].is<int64_t>()) {
-      return ConstructDeserializeError("Except an integer for buffer_size", type_name);
+      return ConstructDeserializeError("Expect an integer for buffer_size", type_name);
     }
     int buffer_size = static_cast<int>(arr[1].get<int64_t>());
     if (buffer_size != GetBufferSize(size)) {
@@ -255,7 +255,7 @@ class DynamicBitset {
     DynamicBitset result(size);
     for (int i = 0; i < buffer_size; ++i) {
       if (!arr[i + 2].is<int64_t>()) {
-        return ConstructDeserializeError("Except an integer in the array", type_name);
+        return ConstructDeserializeError("Expect an integer in the array", type_name);
       }
       int64_t value = arr[i + 2].get<int64_t>();
       if (value < 0 || value > std::numeric_limits<uint32_t>::max()) {

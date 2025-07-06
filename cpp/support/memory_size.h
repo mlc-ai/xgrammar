@@ -39,7 +39,7 @@ namespace detail::memory_size {
  * \brief Get the element type of a container.
  */
 template <typename Container>
-using Element_t = std::decay_t<decltype(*std::begin(Container()))>;
+using ElementType = std::decay_t<decltype(*std::begin(Container()))>;
 
 /*!
  * \brief A false value for static_assert.
@@ -63,12 +63,12 @@ inline constexpr std::size_t MemorySize(const T& value) {
   } else if constexpr (std::is_trivially_copyable_v<T>) {
     // Primitive type
     return 0;
-  } else if constexpr (std::is_trivially_copyable_v<detail::memory_size::Element_t<T>>) {
+  } else if constexpr (std::is_trivially_copyable_v<detail::memory_size::ElementType<T>>) {
     // Container of primitive type
-    return sizeof(detail::memory_size::Element_t<T>) * std::size(value);
-  } else if constexpr (!std::is_trivially_copyable_v<detail::memory_size::Element_t<T>>) {
+    return sizeof(detail::memory_size::ElementType<T>) * std::size(value);
+  } else if constexpr (!std::is_trivially_copyable_v<detail::memory_size::ElementType<T>>) {
     // Container of non-primitive type: sum up the memory size of all elements
-    std::size_t size = sizeof(detail::memory_size::Element_t<T>) * std::size(value);
+    std::size_t size = sizeof(detail::memory_size::ElementType<T>) * std::size(value);
     for (const auto& element : value) {
       size += MemorySize(element);
     }

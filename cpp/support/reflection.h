@@ -40,7 +40,7 @@ struct member_trait {
   static constexpr auto value = member_type::kNone;
 };
 
-/******************** Standard Library Type Traits ********************/
+/******************** STL and Custom Type Traits ********************/
 
 template <typename>
 struct is_std_array : std::false_type {};
@@ -101,10 +101,10 @@ struct is_pimpl_class<
     : std::true_type {};
 
 /*!
- * \brief A debug assert macro. It can help to print the value when the condition is false.
+ * \brief A helper class to print the value when the condition is false.
  */
 template <auto condition, auto value>
-struct debug_assert {
+struct DebugAssert {
   static_assert(condition);
 };
 
