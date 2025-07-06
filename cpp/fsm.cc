@@ -25,9 +25,9 @@
 #include <vector>
 
 #include "support/encoding.h"
+#include "support/json_serializer.h"
 #include "support/logging.h"
-#include "support/reflection/json_serializer.h"
-#include "support/reflection/reflection.h"
+#include "support/reflection.h"
 #include "support/union_find_set.h"
 
 namespace xgrammar {
@@ -84,11 +84,11 @@ std::string FSMImplBase<ContainerType>::EdgesToString(std::optional<std::vector<
     for (int j = 0; j < static_cast<int>(edges.size()); ++j) {
       const auto& edge = edges[j];
       if (edge.min >= 0 && edge.min != edge.max) {
-        std::string char_min_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.min));
-        std::string char_max_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.max));
+        std::string char_min_str = EscapeString(static_cast<TCodepoint>(edge.min));
+        std::string char_max_str = EscapeString(static_cast<TCodepoint>(edge.max));
         result += "[" + char_min_str + "-" + char_max_str + "]->" + std::to_string(edge.target);
       } else if (edge.min >= 0 && edge.min == edge.max) {
-        std::string char_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.min));
+        std::string char_str = EscapeString(static_cast<TCodepoint>(edge.min));
         result += "'" + char_str + "'->" + std::to_string(edge.target);
       } else if (edge.min == FSMEdge::EdgeType::kRuleRef) {
         result += "Rule(" + std::to_string(edge.max) + ")->" + std::to_string(edge.target);
@@ -456,7 +456,7 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
 
   FSM ToFSM() const;
 
-  friend std::size_t MemorySize(const Impl& self) { return MemorySize(self.edges_); }
+  friend std::size_t MemorySize(const Impl& impl) { return MemorySize(impl.edges_); }
 };
 
 XGRAMMAR_MEMBER_ARRAY(CompactFSM::Impl, &CompactFSM::Impl::edges_);
@@ -626,7 +626,15 @@ void CompactFSM::GetReachableStates(const std::vector<int>& from, std::unordered
 
 FSM CompactFSM::ToFSM() const { return pimpl_->ToFSM(); }
 
-std::size_t MemorySize(const CompactFSM& self) { return MemorySize(*self.pimpl_); }
+picojson::value SerializeJSONValue(const CompactFSM& value) {
+  return detail::json_serializer::AutoSerializeJSONValuePImpl(value);
+}
+
+std::optional<std::runtime_error> DeserializeJSONValue(
+    CompactFSM* result, const picojson::value& value, const std::string& type_name
+) {
+  return detail::json_serializer::AutoDeserializeJSONValuePImpl(result, value, type_name);
+}
 
 /****************** FSMWithStartEnd ******************/
 
@@ -1588,21 +1596,14 @@ std::ostream& operator<<(std::ostream& os, const CompactFSMWithStartEnd& fsm) {
   return os;
 }
 
+std::size_t MemorySize(const CompactFSM& self) { return MemorySize(*self.ImplPtr()); }
+
 std::size_t MemorySize(const CompactFSMWithStartEnd& self) {
   return MemorySize(self.fsm_) + MemorySize(self.ends_);
 }
 
 FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
-}
-
-picojson::value CompactFSM::SerializeJSONValue() const { return AutoSerializeJSONValue(**this); }
-
-void DeserializeJSONValue(CompactFSM& fsm, const picojson::value& v) {
-  if (!fsm.pimpl_) {
-    fsm.pimpl_ = std::make_unique<CompactFSM::Impl>();
-  }
-  return AutoDeserializeJSONValue(*fsm, v);
 }
 
 }  // namespace xgrammar

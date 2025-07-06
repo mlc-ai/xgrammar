@@ -1,17 +1,17 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_serializer.h
+ * \file xgrammar/grammar_printer.h
  * \brief The header for printing the AST of a BNF grammar.
  */
 
-#ifndef XGRAMMAR_GRAMMAR_SERIALIZER_H_
-#define XGRAMMAR_GRAMMAR_SERIALIZER_H_
+#ifndef XGRAMMAR_GRAMMAR_PRINTER_H_
+#define XGRAMMAR_GRAMMAR_PRINTER_H_
 
 #include <xgrammar/xgrammar.h>
 
 #include <string>
 
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 
 namespace xgrammar {
 
@@ -70,4 +70,4 @@ class GrammarPrinter {
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_SERIALIZER_H_
+#endif  // XGRAMMAR_GRAMMAR_PRINTER_H_

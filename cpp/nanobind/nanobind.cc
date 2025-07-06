@@ -15,7 +15,6 @@
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
-#include "../support/recursion_guard.h"
 #include "../testing.h"
 #include "python_methods.h"
 
@@ -92,13 +91,7 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def_static("_detect_metadata_from_hf", &TokenizerInfo::DetectMetadataFromHF)
       .def("serialize_json", &TokenizerInfo::SerializeJSON)
-      .def_static(
-          "deserialize_json",
-          [](const std::string& str,
-             const nb::typed<nb::list, std::variant<std::string, nb::bytes>>& encoded_vocab) {
-            return TokenizerInfo::DeserializeJSON(str, CommonEncodedVocabType(encoded_vocab));
-          }
-      );
+      .def_static("deserialize_json", &TokenizerInfo_DeserializeJSON);
 
   auto pyGrammar = nb::class_<Grammar>(m, "Grammar");
   pyGrammar.def("to_string", &Grammar::ToString)
@@ -124,14 +117,14 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_static("union", &Grammar::Union, nb::call_guard<nb::gil_scoped_release>())
       .def_static("concat", &Grammar::Concat, nb::call_guard<nb::gil_scoped_release>())
       .def("serialize_json", &Grammar::SerializeJSON)
-      .def_static("deserialize_json", &Grammar::DeserializeJSON);
+      .def_static("deserialize_json", &Grammar_DeserializeJSON);
 
   auto pyCompiledGrammar = nb::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_prop_ro("grammar", &CompiledGrammar::GetGrammar)
       .def_prop_ro("tokenizer_info", &CompiledGrammar::GetTokenizerInfo)
       .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes)
       .def("serialize_json", &CompiledGrammar::SerializeJSON)
-      .def_static("deserialize_json", &CompiledGrammar::DeserializeJSON);
+      .def_static("deserialize_json", &CompiledGrammar_DeserializeJSON);
 
   auto pyGrammarCompiler = nb::class_<GrammarCompiler>(m, "GrammarCompiler");
   pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, long long>())
@@ -268,13 +261,14 @@ NB_MODULE(xgrammar_bindings, m) {
   auto pyConfigModule = m.def_submodule("config");
   pyConfigModule
       .def(
-          "set_max_recursion_depth",
-          &RecursionGuard::SetMaxRecursionDepth,
-          nb::call_guard<nb::gil_scoped_release>()
+          "set_max_recursion_depth", &SetMaxRecursionDepth, nb::call_guard<nb::gil_scoped_release>()
       )
       .def(
-          "get_max_recursion_depth",
-          &RecursionGuard::GetMaxRecursionDepth,
+          "get_max_recursion_depth", &GetMaxRecursionDepth, nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def(
+          "get_serialization_version",
+          &GetSerializationVersion,
           nb::call_guard<nb::gil_scoped_release>()
       );
 }

@@ -7,13 +7,25 @@
 
 #include "grammar_functor.h"
 #include "grammar_parser.h"
-#include "grammar_serializer.h"
+#include "grammar_printer.h"
 #include "json_schema_converter.h"
 #include "regex_converter.h"
 #include "structural_tag.h"
 #include "support/logging.h"
+#include "support/json_serializer.h"
 
 namespace xgrammar {
+
+/******************* Grammar::Impl *******************/
+
+std::size_t MemorySize(const Grammar::Impl& impl) {
+  // we assume strings are not long, so we don't iterate through all the rules
+  return impl.rules_.size() * sizeof(impl.rules_[0]) + MemorySize(impl.grammar_expr_data_) +
+         MemorySize(impl.root_tag_dispatch_fsm) +
+         MemorySize(impl.tag_dispatch_end_node_to_rule_id) + MemorySize(impl.allow_empty_rule_ids);
+}
+
+/******************* Grammar *******************/
 
 std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString(); }
 
@@ -150,6 +162,16 @@ Grammar Grammar::Concat(const std::vector<Grammar>& grammars) {
 std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
   os << grammar.ToString();
   return os;
+}
+
+std::string Grammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
+
+std::variant<Grammar, std::runtime_error> Grammar::DeserializeJSON(const std::string& json_string) {
+  Grammar result{NullObj()};
+  if (auto err = AutoDeserializeJSON(&result, json_string, true, "Grammar")) {
+    return err.value();
+  }
+  return result;
 }
 
 }  // namespace xgrammar

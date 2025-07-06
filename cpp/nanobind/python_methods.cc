@@ -12,7 +12,7 @@
 #include <iostream>
 #include <vector>
 
-#include "../grammar_data_structure.h"
+#include "../grammar_impl.h"
 #include "../support/logging.h"
 
 namespace xgrammar {
@@ -163,6 +163,32 @@ CompiledGrammar GrammarCompiler_CompileStructuralTag(
     );
   }
   return compiler.CompileStructuralTag(tags_objects, triggers);
+}
+
+Grammar Grammar_DeserializeJSON(const std::string& json_string) {
+  auto result = Grammar::DeserializeJSON(json_string);
+  if (std::holds_alternative<std::runtime_error>(result)) {
+    throw std::get<std::runtime_error>(result);
+  }
+  return std::get<Grammar>(result);
+}
+
+TokenizerInfo TokenizerInfo_DeserializeJSON(const std::string& json_string) {
+  auto result = TokenizerInfo::DeserializeJSON(json_string);
+  if (std::holds_alternative<std::runtime_error>(result)) {
+    throw std::get<std::runtime_error>(result);
+  }
+  return std::get<TokenizerInfo>(result);
+}
+
+CompiledGrammar CompiledGrammar_DeserializeJSON(
+    const std::string& json_string, const TokenizerInfo& tokenizer
+) {
+  auto result = CompiledGrammar::DeserializeJSON(json_string, tokenizer);
+  if (std::holds_alternative<std::runtime_error>(result)) {
+    throw std::get<std::runtime_error>(result);
+  }
+  return std::get<CompiledGrammar>(result);
 }
 
 }  // namespace xgrammar

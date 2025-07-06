@@ -1,5 +1,5 @@
-#ifndef XGRAMMAR_TOKENIZER_INTERNAL_H_
-#define XGRAMMAR_TOKENIZER_INTERNAL_H_
+#ifndef XGRAMMAR_TOKENIZER_INFO_IMPL_H_
+#define XGRAMMAR_TOKENIZER_INFO_IMPL_H_
 
 #include <picojson.h>
 
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "support/reflection/reflection.h"
+#include "support/reflection.h"
 #include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
@@ -35,13 +35,16 @@ class TokenizerInfo::Impl {
   const std::vector<std::pair<int32_t, std::string>>& GetSortedDecodedVocab() const {
     return sorted_decoded_vocab_;
   }
-  const std::vector<int32_t>& GetTrieSubtreeNodesRange() const { return trie_subtree_nodes_range; }
+  const std::vector<int32_t>& GetTrieSubtreeNodesRange() const { return trie_subtree_nodes_range_; }
 
   std::string DumpMetadata() const;
+  picojson::value DumpMetadataValue() const;
 
   static std::shared_ptr<TokenizerInfo::Impl> FromVocabAndMetadata(
       const std::vector<std::string>& encoded_vocab, const std::string& metadata
   );
+
+  std::optional<std::runtime_error> CheckMetadataMatch(const picojson::value& metadata) const;
 
   static std::string DetectMetadataFromHF(const std::string& backend_str);
 
@@ -64,7 +67,7 @@ class TokenizerInfo::Impl {
   std::vector<std::pair<int32_t, std::string>> sorted_decoded_vocab_;
   /*! \brief A pesudo-trie. trie_subtree_nodes_range[i] stores how many nodes there are in the
    * subtree. */
-  std::vector<int32_t> trie_subtree_nodes_range;
+  std::vector<int32_t> trie_subtree_nodes_range_;
   /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
   std::vector<int32_t> stop_token_ids_;
@@ -95,7 +98,6 @@ class TokenizerInfo::Impl {
   friend struct member_trait<Impl>;
 };
 
-// we ignore the vocab here and only store the metadata
 XGRAMMAR_MEMBER_TABLE(
     TokenizerInfo::Impl,
     "vocab_type",
@@ -107,9 +109,15 @@ XGRAMMAR_MEMBER_TABLE(
     "stop_token_ids",
     &TokenizerInfo::Impl::stop_token_ids_,
     "special_token_ids",
-    &TokenizerInfo::Impl::special_token_ids_
+    &TokenizerInfo::Impl::special_token_ids_,
+    "decoded_vocab",
+    &TokenizerInfo::Impl::decoded_vocab_,
+    "sorted_decoded_vocab",
+    &TokenizerInfo::Impl::sorted_decoded_vocab_,
+    "trie_subtree_nodes_range",
+    &TokenizerInfo::Impl::trie_subtree_nodes_range_
 );
 
 }  // namespace xgrammar
 
-#endif
+#endif  // XGRAMMAR_TOKENIZER_INFO_IMPL_H_

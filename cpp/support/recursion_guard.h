@@ -1,3 +1,9 @@
+/*!
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/support/recursion_guard.h
+ * \brief The header for recursion depth guard.
+ */
+
 #ifndef XGRAMMAR_SUPPORT_RECURSION_GUARD_H_
 #define XGRAMMAR_SUPPORT_RECURSION_GUARD_H_
 

@@ -22,8 +22,7 @@ std::string PrintTokenByIds(
   ss << "[";
   int print_num = std::min(static_cast<int>(token_ids.size()), max_print_num);
   for (int i = 0; i < print_num; ++i) {
-    ss << "#" << token_ids[i] << " <" << PrintAsEscapedUTF8(sorted_decoded_vocab[token_ids[i]])
-       << ">";
+    ss << "#" << token_ids[i] << " <" << EscapeString(sorted_decoded_vocab[token_ids[i]]) << ">";
     if (i < print_num - 1) {
       ss << ", ";
     }

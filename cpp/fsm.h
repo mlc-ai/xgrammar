@@ -21,7 +21,7 @@
 #include <vector>
 
 #include "support/compact_2d_array.h"
-#include "support/reflection/reflection.h"
+#include "support/reflection.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -57,13 +57,13 @@ struct alignas(8) FSMEdge {
    */
   int32_t target;
 
+  // for serialization only
+  FSMEdge() = default;
+
   FSMEdge(int16_t min, int16_t max, int32_t target) : min(min), max(max), target(target) {
     XGRAMMAR_DCHECK(!IsCharRange() || min <= max)
         << "Invalid FSMEdge: min > max. min=" << min << ", max=" << max;
   }
-
-  // for serialization only
-  FSMEdge() = default;
 
   /*!
    * \brief Compare the edges. Used to sort the edges in the FSM.
@@ -107,6 +107,10 @@ struct alignas(8) FSMEdge {
    * \return The rule id of the edge. -1 if the edge is not a rule reference.
    */
   int32_t GetRefRuleId() const { return IsRuleRef() ? max : -1; }
+
+  friend struct member_trait<FSMEdge>;
+
+ private:
 };
 
 /*!
@@ -450,11 +454,17 @@ class CompactFSM {
    */
   FSM ToFSM() const;
 
-  picojson::value SerializeJSONValue() const;
-  friend void DeserializeJSONValue(CompactFSM& fsm, const picojson::value& v);
+  friend picojson::value SerializeJSONValue(const CompactFSM& value);
+  friend std::optional<std::runtime_error> DeserializeJSONValue(
+      CompactFSM* result, const picojson::value& value, const std::string& type_name
+  );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
 };
+
+std::optional<std::runtime_error> DeserializeJSONValue(
+    CompactFSM* result, const picojson::value& value, const std::string& type_name = ""
+);
 
 class CompactFSMWithStartEnd;
 
@@ -470,7 +480,7 @@ class FSMWithStartEndBase {
   );
 
  public:
-  // for serialization only
+  // For serialization only
   FSMWithStartEndBase() = default;
 
   /*! \brief Constructs an FSMWithStartEnd with a given FSM, start state, and end states. */
@@ -582,8 +592,6 @@ class FSMWithStartEndBase {
   std::unordered_set<int> ends_;
   /*! \brief Whether this FSM is a deterministic finite automaton. */
   bool is_dfa_ = false;
-
-  friend struct member_trait<CompactFSMWithStartEnd>;
 };
 
 /*!
@@ -729,10 +737,10 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
  */
 class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
  public:
-  using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
-
-  // for serialization only
+  // For serialization only
   CompactFSMWithStartEnd() = default;
+
+  using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
   /*!
    * \brief Convert the FSMWithStartEnd to a string. Only considers the nodes approachable from the
@@ -741,6 +749,18 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    */
   std::string ToString() const;
 
+  /*!
+   * \brief Transform the CompactFSMWithStartEnd to a FSMWithStartEnd.
+   * \return The FSMWithStartEnd.
+   */
+  FSMWithStartEnd ToFSM() const;
+
+  /*!
+   * \brief Print the CompactFSMWithStartEnd.
+   * \param os The output stream.
+   * \param fsm The CompactFSMWithStartEnd.
+   * \return The output stream.
+   */
   friend std::ostream& operator<<(std::ostream& os, const CompactFSMWithStartEnd& fsm);
 
   /*!
@@ -750,11 +770,7 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    */
   friend std::size_t MemorySize(const CompactFSMWithStartEnd& self);
 
-  /*!
-   * \brief Transform the CompactFSMWithStartEnd to a FSMWithStartEnd.
-   * \return The FSMWithStartEnd.
-   */
-  FSMWithStartEnd ToFSM() const;
+  friend struct member_trait<CompactFSMWithStartEnd>;
 };
 
 XGRAMMAR_MEMBER_ARRAY(

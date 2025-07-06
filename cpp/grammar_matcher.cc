@@ -12,9 +12,9 @@
 #include <utility>
 #include <vector>
 
-#include "compiled_grammar_data_structure.h"
+#include "compiled_grammar_impl.h"
 #include "earley_parser.h"
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
 #include "support/int_set.h"
@@ -387,7 +387,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       states_str += "  " + state.ToString() + "\n";
     }
     XGRAMMAR_LOG(INFO) << "Accepting token id " << token_id << ", string: \""
-                       << PrintAsEscapedUTF8(tokenizer_info_.GetDecodedVocab()[token_id])
+                       << EscapeString(tokenizer_info_.GetDecodedVocab()[token_id])
                        << "\", current scannable states:\n"
                        << states_str;
   }
@@ -417,9 +417,9 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   for (auto char_value : token) {
     if (!Advance(char_value)) {
       if (debug_print) {
-        XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << PrintAsEscapedUTF8(token)
+        XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token)
                            << "> rejected at position " << pos << ", char "
-                           << PrintAsEscapedUTF8(char_value);
+                           << EscapeString(char_value);
       }
       PopLastStates(pos);
       return false;
@@ -433,7 +433,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
 
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<"
-                       << PrintAsEscapedUTF8(tokenizer_info_.GetDecodedVocab()[token_id])
+                       << EscapeString(tokenizer_info_.GetDecodedVocab()[token_id])
                        << "> accepted.";
   }
   return true;
@@ -453,9 +453,8 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
   for (auto char_value : input_str) {
     if (!Advance(char_value)) {
       if (debug_print) {
-        XGRAMMAR_LOG(INFO) << "String \"" << PrintAsEscapedUTF8(input_str)
-                           << "\" rejected at position " << accepted_cnt << ", char "
-                           << PrintAsEscapedUTF8(char_value);
+        XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" rejected at position "
+                           << accepted_cnt << ", char " << EscapeString(char_value);
       }
       PopLastStates(accepted_cnt);
       return false;
@@ -471,7 +470,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     for (const auto& state : GetLatestScanableStates()) {
       states_str += "  " + state.ToString() + "\n";
     }
-    XGRAMMAR_LOG(INFO) << "String \"" << PrintAsEscapedUTF8(input_str)
+    XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str)
                        << "\" is accepted. Current scannable states:\n"
                        << states_str;
   }

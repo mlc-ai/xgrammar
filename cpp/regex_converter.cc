@@ -90,7 +90,7 @@ std::string RegexConverter::HandleCharacterClass() {
     if (*current_ == '\\') {
       char_class += HandleEscapeInCharClass();
     } else {
-      char_class += PrintAsUTF8(*current_);
+      char_class += CharToUTF8(*current_);
       ++current_;
     }
   }
@@ -154,7 +154,7 @@ std::string RegexConverter::HandleCharEscape() {
   auto [codepoint, len] = ParseNextEscaped(current_, CUSTOM_ESCAPE_MAP);
   if (codepoint != CharHandlingError::kInvalidEscape) {
     current_ += len;
-    return PrintAsEscapedUTF8(codepoint);
+    return EscapeString(codepoint);
   } else if (current_[1] == 'u' && current_[2] == '{') {
     current_ += 3;
     int len = 0;
@@ -167,21 +167,21 @@ std::string RegexConverter::HandleCharEscape() {
       RaiseError("Invalid Unicode escape sequence.");
     }
     current_ += len + 1;
-    return PrintAsEscapedUTF8(value);
+    return EscapeString(value);
   } else if (current_[1] == 'c') {
     current_ += 2;
     if (!std::isalpha(*current_)) {
       RaiseError("Invalid control character escape sequence.");
     }
     ++current_;
-    return PrintAsEscapedUTF8((*(current_ - 1)) % 32);
+    return EscapeString((*(current_ - 1)) % 32);
   } else {
     RaiseWarning(
-        "Escape sequence '\\" + PrintAsEscapedUTF8(current_[1]) +
+        "Escape sequence '\\" + EscapeString(current_[1]) +
         "' is not recognized. The character itself will be matched"
     );
     current_ += 2;
-    return PrintAsEscapedUTF8(current_[-1]);
+    return EscapeString(current_[-1]);
   }
 }
 
@@ -359,7 +359,7 @@ std::string RegexConverter::Convert() {
       ++current_;
     } else {
       // Non-special characters are matched literally.
-      AddEBNFSegment("\"" + PrintAsEscapedUTF8(*current_) + "\"");
+      AddEBNFSegment("\"" + EscapeString(*current_) + "\"");
       ++current_;
     }
   }
