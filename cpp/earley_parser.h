@@ -221,7 +221,7 @@ class EarleyParser {
    * it will be discarded.
    */
  protected:
-  using RuleExpr = Grammar::Impl::RuleExpr;
+  using GrammarExpr = Grammar::Impl::GrammarExpr;
 
   /*! \brief The grammar to be parsed. */
   Grammar grammar_;
@@ -280,7 +280,7 @@ class EarleyParser {
    * of the grammar is used to check if the grammar is completed,
    * so it should be added into the next states.
    */
-  void Complete(const ParserState& state, const RuleExpr& rule_expr);
+  void Complete(const ParserState& state, const GrammarExpr& grammar_expr);
 
   /*!
    * \brief The prediction operation of the Earley parser.
@@ -288,7 +288,7 @@ class EarleyParser {
    * then return true, otherwise return false.
    * \return Second: If the state is completable, then return true, otherwise return false.
    */
-  std::pair<bool, bool> Predict(const ParserState& state, const RuleExpr& rule_expr);
+  std::pair<bool, bool> Predict(const ParserState& state, const GrammarExpr& grammar_expr);
 
   /*!
    * \brief Handle the unexpanded rule, used for pushing initial state.
@@ -303,12 +303,12 @@ class EarleyParser {
    * The type of the state is kTagDispatch or kSequence. Moreover, the
    * element of the sequence should be a rule reference; the node in
    * the kTagDispatch should be an end node.
-   * \param rule_expr The rule expression to be expanded.
-   * \param sub_rule_expr The sub rule expression to be expanded, especially
+   * \param grammar_expr The grammar expression to be expanded.
+   * \param sub_grammar_expr The sub grammar expression to be expanded, especially
    * when the rule is a kSequence, and the sub rule is a kRuleRef.
    */
   void ExpandNextRuleRefElement(
-      const ParserState& state, const RuleExpr& rule_expr, const RuleExpr* sub_rule_expr
+      const ParserState& state, const GrammarExpr& grammar_expr, const GrammarExpr* sub_grammar_expr
   );
 
   /*!
@@ -319,7 +319,7 @@ class EarleyParser {
    * \return The next state, Invalid state if the character is not accepted.
    */
   void AdvanceCharacterClass(
-      const ParserState& state, const uint8_t ch, const RuleExpr& sub_sequence
+      const ParserState& state, const uint8_t ch, const GrammarExpr& sub_sequence
   );
 
   /*!
@@ -329,7 +329,9 @@ class EarleyParser {
    * \param sub_sequence The sub sequence to be checked.
    * \return The next state, Invalid state if the character is not accepted.
    */
-  void AdvanceByteString(const ParserState& state, const uint8_t ch, const RuleExpr& sub_sequence);
+  void AdvanceByteString(
+      const ParserState& state, const uint8_t ch, const GrammarExpr& sub_sequence
+  );
 
   /*!
    * \brief Advance the parser to the next state, with the sub sequence is kCharacterClassStar.
@@ -339,7 +341,7 @@ class EarleyParser {
    * \return The next state, Invalid state if the character is not accepted.
    */
   void AdvanceCharacterClassStar(
-      const ParserState& state, const uint8_t ch, const RuleExpr& sub_sequence
+      const ParserState& state, const uint8_t ch, const GrammarExpr& sub_sequence
   );
 
   /*!
@@ -349,7 +351,9 @@ class EarleyParser {
    * \param cur_sequence The sequence of the current state.
    * \return The next state, Invalid state if the character is not accepted.
    */
-  void AdvanceTagDispatch(const ParserState& state, const uint8_t ch, const RuleExpr& cur_sequence);
+  void AdvanceTagDispatch(
+      const ParserState& state, const uint8_t ch, const GrammarExpr& cur_sequence
+  );
 
   /*!
    * \brief Enqueue the state into the queue.

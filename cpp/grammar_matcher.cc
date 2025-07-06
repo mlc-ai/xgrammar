@@ -24,7 +24,7 @@
 namespace xgrammar {
 
 /******************* Tool functions for token mask *******************/
-using RuleExprType = Grammar::Impl::RuleExprType;
+using GrammarExprType = Grammar::Impl::GrammarExprType;
 
 int32_t GetBitmaskSize(int vocab_size) { return DynamicBitset::GetBufferSize(vocab_size); }
 
@@ -538,13 +538,14 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    auto cur_sequence = grammar_->GetRuleExpr(state.sequence_id);
-    XGRAMMAR_DCHECK(!(
-        cur_sequence.type == RuleExprType::kRuleRef ||
-        cur_sequence.type == RuleExprType::kChoices || cur_sequence.type == RuleExprType::kEmptyStr
-    ));
-    have_tag_dispatch = cur_sequence.type == RuleExprType::kTagDispatch;
-    XGRAMMAR_DCHECK(have_tag_dispatch || cur_sequence.type == RuleExprType::kSequence);
+    auto cur_sequence = grammar_->GetGrammarExpr(state.sequence_id);
+    XGRAMMAR_DCHECK(
+        !(cur_sequence.type == GrammarExprType::kRuleRef ||
+          cur_sequence.type == GrammarExprType::kChoices ||
+          cur_sequence.type == GrammarExprType::kEmptyStr)
+    );
+    have_tag_dispatch = cur_sequence.type == GrammarExprType::kTagDispatch;
+    XGRAMMAR_DCHECK(have_tag_dispatch || cur_sequence.type == GrammarExprType::kSequence);
     auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
     XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
@@ -690,20 +691,20 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
         can_find_next_char = false;
         break;
       }
-      auto cur_sequence = grammar_->GetRuleExpr(ParserState.sequence_id);
+      auto cur_sequence = grammar_->GetGrammarExpr(ParserState.sequence_id);
       // We cannot deduce the next char for tag dispatch
-      if (cur_sequence.type == RuleExprType::kTagDispatch) {
+      if (cur_sequence.type == GrammarExprType::kTagDispatch) {
         can_find_next_char = false;
         break;
       }
       // The ParserState comes to the end of the grammar
       XGRAMMAR_DCHECK(ParserState.element_id != cur_sequence.size());
       XGRAMMAR_DCHECK(
-          cur_sequence.type != RuleExprType::kChoices &&
-          cur_sequence.type != RuleExprType::kEmptyStr
+          cur_sequence.type != GrammarExprType::kChoices &&
+          cur_sequence.type != GrammarExprType::kEmptyStr
       );
-      const auto& cur_element = grammar_->GetRuleExpr(cur_sequence[ParserState.element_id]);
-      if (cur_element.type == RuleExprType::kByteString) {
+      const auto& cur_element = grammar_->GetGrammarExpr(cur_sequence[ParserState.element_id]);
+      if (cur_element.type == GrammarExprType::kByteString) {
         XGRAMMAR_DCHECK(ParserState.sub_element_id < cur_element.size());
         if (next_char == -1) {
           next_char = cur_element[ParserState.sub_element_id];
@@ -713,13 +714,13 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
         }
         continue;
       }
-      if (cur_element.type == RuleExprType::kRuleRef) {
+      if (cur_element.type == GrammarExprType::kRuleRef) {
         continue;
       }
 
       XGRAMMAR_DCHECK(
-          cur_element.type == RuleExprType::kCharacterClass ||
-          cur_element.type == RuleExprType::kCharacterClassStar
+          cur_element.type == GrammarExprType::kCharacterClass ||
+          cur_element.type == GrammarExprType::kCharacterClassStar
       );
       if (ParserState.sub_element_id > 0 || cur_element.size() != 3 || cur_element[0] != 0 ||
           cur_element[1] != cur_element[2]) {

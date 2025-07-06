@@ -21,8 +21,8 @@ namespace xgrammar {
 class GrammarPrinter {
  private:
   using Rule = Grammar::Impl::Rule;
-  using RuleExprType = Grammar::Impl::RuleExprType;
-  using RuleExpr = Grammar::Impl::RuleExpr;
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  using GrammarExpr = Grammar::Impl::GrammarExpr;
 
  public:
   /*!
@@ -38,28 +38,28 @@ class GrammarPrinter {
   std::string PrintRule(const Rule& rule);
   /*! \brief Print a rule corresponding to the given id. */
   std::string PrintRule(int32_t rule_id);
-  /*! \brief Print a RuleExpr. */
-  std::string PrintRuleExpr(const RuleExpr& rule_expr);
-  /*! \brief Print a RuleExpr corresponding to the given id. */
-  std::string PrintRuleExpr(int32_t rule_expr_id);
+  /*! \brief Print a GrammarExpr. */
+  std::string PrintGrammarExpr(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr corresponding to the given id. */
+  std::string PrintGrammarExpr(int32_t grammar_expr_id);
 
  private:
-  /*! \brief Print a RuleExpr for byte string. */
-  std::string PrintByteString(const RuleExpr& rule_expr);
-  /*! \brief Print a RuleExpr for character class. */
-  std::string PrintCharacterClass(const RuleExpr& rule_expr);
-  /*! \brief Print a RuleExpr for a star quantifier of a character class. */
-  std::string PrintCharacterClassStar(const RuleExpr& rule_expr);
-  /*! \brief Print a RuleExpr for empty string. */
-  std::string PrintEmptyStr(const RuleExpr& rule_expr);
-  /*! \brief Print a RuleExpr for rule reference. */
-  std::string PrintRuleRef(const RuleExpr& rule_expr);
-  /*! \brief Print a RuleExpr for rule_expr sequence. */
-  std::string PrintSequence(const RuleExpr& rule_expr);
-  /*! \brief Print a RuleExpr for rule_expr choices. */
-  std::string PrintChoices(const RuleExpr& rule_expr);
-  /*! \brief Print a RuleExpr for tag dispatch. */
-  std::string PrintTagDispatch(const RuleExpr& rule_expr);
+  /*! \brief Print a GrammarExpr for byte string. */
+  std::string PrintByteString(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for character class. */
+  std::string PrintCharacterClass(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for a star quantifier of a character class. */
+  std::string PrintCharacterClassStar(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for empty string. */
+  std::string PrintEmptyStr(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for rule reference. */
+  std::string PrintRuleRef(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for grammar_expr sequence. */
+  std::string PrintSequence(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for grammar_expr choices. */
+  std::string PrintChoices(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for tag dispatch. */
+  std::string PrintTagDispatch(const GrammarExpr& grammar_expr);
 
   Grammar grammar_;
 };

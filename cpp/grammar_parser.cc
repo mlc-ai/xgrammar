@@ -426,7 +426,7 @@ class EBNFParser {
 
  private:
   using Rule = Grammar::Impl::Rule;
-  using RuleExprType = Grammar::Impl::RuleExprType;
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
   using Token = EBNFLexer::Token;
   using TokenType = EBNFLexer::TokenType;
 
@@ -485,10 +485,10 @@ class EBNFParser {
   // Helper functions
 
   // Helper for ParseElementWithQuantifier
-  int32_t HandleStarQuantifier(int32_t rule_expr_id);
-  int32_t HandlePlusQuantifier(int32_t rule_expr_id);
-  int32_t HandleQuestionQuantifier(int32_t rule_expr_id);
-  int32_t HandleRepetitionRange(int32_t rule_expr_id, int64_t lower, int64_t upper);
+  int32_t HandleStarQuantifier(int32_t grammar_expr_id);
+  int32_t HandlePlusQuantifier(int32_t grammar_expr_id);
+  int32_t HandleQuestionQuantifier(int32_t grammar_expr_id);
+  int32_t HandleRepetitionRange(int32_t grammar_expr_id, int64_t lower, int64_t upper);
 
   // When parsing, we first find the names of all rules, and build the mapping from name to rule id.
   void InitRuleNames();
@@ -647,9 +647,9 @@ int32_t EBNFParser::ParseElement() {
       Consume();
       return builder_.AddEmptyStr();
     }
-    auto rule_expr_id = ParseChoices();
+    auto grammar_expr_id = ParseChoices();
     PeekAndConsume(TokenType::RParen, "Expect )");
-    return rule_expr_id;
+    return grammar_expr_id;
   } else if (Peek().type == TokenType::LBracket) {
     return ParseCharClass();
   } else if (Peek().type == TokenType::StringLiteral) {
@@ -708,57 +708,60 @@ std::pair<int64_t, int64_t> EBNFParser::ParseRepetitionRange() {
   ReportParseError("Expect ',' or '}' in repetition range");
 }
 
-int32_t EBNFParser::HandleStarQuantifier(int32_t rule_expr_id) {
-  Grammar::Impl::RuleExpr rule_expr = builder_.GetRuleExpr(rule_expr_id);
-  if (rule_expr.type == GrammarBuilder::RuleExprType::kCharacterClass) {
+int32_t EBNFParser::HandleStarQuantifier(int32_t grammar_expr_id) {
+  Grammar::Impl::GrammarExpr grammar_expr = builder_.GetGrammarExpr(grammar_expr_id);
+  if (grammar_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass) {
     // We have special handling for character class star, e.g. [a-z]*
-    rule_expr.type = GrammarBuilder::RuleExprType::kCharacterClassStar;
-    // Copy rule expr because the grammar may change during insertion, and rule_expr is in the
+    grammar_expr.type = GrammarBuilder::GrammarExprType::kCharacterClassStar;
+    // Copy grammar expr because the grammar may change during insertion, and grammar_expr is in the
     // grammar, so it may become invalid
-    std::vector<int32_t> rule_expr_data(rule_expr.begin(), rule_expr.end());
-    return builder_.AddRuleExpr({rule_expr.type, rule_expr_data.data(), rule_expr.data_len});
+    std::vector<int32_t> grammar_expr_data(grammar_expr.begin(), grammar_expr.end());
+    return builder_.AddGrammarExpr(
+        {grammar_expr.type, grammar_expr_data.data(), grammar_expr.data_len}
+    );
   } else {
     // For other star quantifiers, we transform it into a rule:
     // a*  -->  rule ::= a rule | ""
     auto new_rule_name = builder_.GetNewRuleName(cur_rule_name_);
     auto new_rule_id = builder_.AddEmptyRule(new_rule_name);
     auto ref_to_new_rule = builder_.AddRuleRef(new_rule_id);
-    auto new_rule_expr_id = builder_.AddChoices(
-        {builder_.AddEmptyStr(), builder_.AddSequence({rule_expr_id, ref_to_new_rule})}
+    auto new_grammar_expr_id = builder_.AddChoices(
+        {builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id, ref_to_new_rule})}
     );
-    builder_.UpdateRuleBody(new_rule_id, new_rule_expr_id);
+    builder_.UpdateRuleBody(new_rule_id, new_grammar_expr_id);
 
     // Return the reference to the new rule
     return builder_.AddRuleRef(new_rule_id);
   }
 }
 
-int32_t EBNFParser::HandlePlusQuantifier(int32_t rule_expr_id) {
+int32_t EBNFParser::HandlePlusQuantifier(int32_t grammar_expr_id) {
   // a+  -->  rule ::= a rule | a
   auto new_rule_name = builder_.GetNewRuleName(cur_rule_name_);
   auto new_rule_id = builder_.AddEmptyRule(new_rule_name);
   auto ref_to_new_rule = builder_.AddRuleRef(new_rule_id);
-  auto new_rule_expr_id =
-      builder_.AddChoices({builder_.AddSequence({rule_expr_id, ref_to_new_rule}), rule_expr_id});
-  builder_.UpdateRuleBody(new_rule_id, new_rule_expr_id);
+  auto new_grammar_expr_id = builder_.AddChoices(
+      {builder_.AddSequence({grammar_expr_id, ref_to_new_rule}), grammar_expr_id}
+  );
+  builder_.UpdateRuleBody(new_rule_id, new_grammar_expr_id);
 
   // Return the reference to the new rule
   return builder_.AddRuleRef(new_rule_id);
 }
 
-int32_t EBNFParser::HandleQuestionQuantifier(int32_t rule_expr_id) {
+int32_t EBNFParser::HandleQuestionQuantifier(int32_t grammar_expr_id) {
   // a?  -->  rule ::= a | empty
   auto new_rule_name = builder_.GetNewRuleName(cur_rule_name_);
-  auto new_rule_expr_id = builder_.AddChoices({builder_.AddEmptyStr(), rule_expr_id});
-  auto new_rule_id = builder_.AddRule({new_rule_name, new_rule_expr_id});
+  auto new_grammar_expr_id = builder_.AddChoices({builder_.AddEmptyStr(), grammar_expr_id});
+  auto new_rule_id = builder_.AddRule({new_rule_name, new_grammar_expr_id});
   return builder_.AddRuleRef(new_rule_id);
 }
 
-int32_t EBNFParser::HandleRepetitionRange(int32_t rule_expr_id, int64_t lower, int64_t upper) {
+int32_t EBNFParser::HandleRepetitionRange(int32_t grammar_expr_id, int64_t lower, int64_t upper) {
   // Construct expr expr ... expr (l times)
   std::vector<int32_t> elements;
   for (int64_t i = 0; i < lower; ++i) {
-    elements.push_back(rule_expr_id);
+    elements.push_back(grammar_expr_id);
   }
 
   // Case 1: {l}:
@@ -774,10 +777,10 @@ int32_t EBNFParser::HandleRepetitionRange(int32_t rule_expr_id, int64_t lower, i
     auto new_rule_name = builder_.GetNewRuleName(cur_rule_name_);
     auto new_rule_id = builder_.AddEmptyRule(new_rule_name);
     auto ref_to_new_rule = builder_.AddRuleRef(new_rule_id);
-    auto new_rule_expr_id = builder_.AddChoices(
-        {builder_.AddEmptyStr(), builder_.AddSequence({rule_expr_id, ref_to_new_rule})}
+    auto new_grammar_expr_id = builder_.AddChoices(
+        {builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id, ref_to_new_rule})}
     );
-    builder_.UpdateRuleBody(new_rule_id, new_rule_expr_id);
+    builder_.UpdateRuleBody(new_rule_id, new_grammar_expr_id);
     elements.push_back(builder_.AddRuleRef(new_rule_id));
     return builder_.AddSequence(elements);
   }
@@ -796,36 +799,36 @@ int32_t EBNFParser::HandleRepetitionRange(int32_t rule_expr_id, int64_t lower, i
   }
   for (int64_t i = 0; i < upper - lower - 1; ++i) {
     auto ref_to_next_rule = builder_.AddRuleRef(rest_rule_ids[i + 1]);
-    auto new_rule_expr_id = builder_.AddChoices(
-        {builder_.AddEmptyStr(), builder_.AddSequence({rule_expr_id, ref_to_next_rule})}
+    auto new_grammar_expr_id = builder_.AddChoices(
+        {builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id, ref_to_next_rule})}
     );
-    builder_.UpdateRuleBody(rest_rule_ids[i], new_rule_expr_id);
+    builder_.UpdateRuleBody(rest_rule_ids[i], new_grammar_expr_id);
   }
-  auto last_rule_expr_id = builder_.AddChoices({builder_.AddEmptyStr(), rule_expr_id});
-  builder_.UpdateRuleBody(rest_rule_ids.back(), last_rule_expr_id);
+  auto last_grammar_expr_id = builder_.AddChoices({builder_.AddEmptyStr(), grammar_expr_id});
+  builder_.UpdateRuleBody(rest_rule_ids.back(), last_grammar_expr_id);
 
   elements.push_back(builder_.AddRuleRef(rest_rule_ids[0]));
   return builder_.AddSequence(elements);
 }
 
 int32_t EBNFParser::ParseElementWithQuantifier() {
-  int32_t rule_expr_id = ParseElement();
+  int32_t grammar_expr_id = ParseElement();
 
   if (Peek().type == TokenType::Star) {
     Consume();
-    return HandleStarQuantifier(rule_expr_id);
+    return HandleStarQuantifier(grammar_expr_id);
   } else if (Peek().type == TokenType::Plus) {
     Consume();
-    return HandlePlusQuantifier(rule_expr_id);
+    return HandlePlusQuantifier(grammar_expr_id);
   } else if (Peek().type == TokenType::Question) {
     Consume();
-    return HandleQuestionQuantifier(rule_expr_id);
+    return HandleQuestionQuantifier(grammar_expr_id);
   } else if (Peek().type == TokenType::LBrace) {
     auto [lower, upper] = ParseRepetitionRange();
-    return HandleRepetitionRange(rule_expr_id, lower, upper);
+    return HandleRepetitionRange(grammar_expr_id, lower, upper);
   }
 
-  return rule_expr_id;
+  return grammar_expr_id;
 }
 
 int32_t EBNFParser::ParseSequence() {
