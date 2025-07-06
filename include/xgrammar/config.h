@@ -1,3 +1,9 @@
+/*!
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/config.h
+ * \brief Global configuration for XGrammar.
+ */
+
 #ifndef XGRAMMAR_CONFIG_H_
 #define XGRAMMAR_CONFIG_H_
 
