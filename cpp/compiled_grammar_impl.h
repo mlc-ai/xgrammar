@@ -60,6 +60,7 @@ struct AdaptiveTokenMask {
 
   std::vector<int32_t> uncertain_indices;
 
+  /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;
 
   AdaptiveTokenMask(
@@ -112,6 +113,7 @@ class CompiledGrammar::Impl {
   /*! \brief The tokenizer information. */
   TokenizerInfo tokenizer_info{NullObj{}};
 
+  /*! \brief Default constructor. */
   Impl() = default;
 
   /*! \brief Mapping from the parser state to the adaptive token mask. */
@@ -129,8 +131,6 @@ class CompiledGrammar::Impl {
       const TokenizerInfo& tokenizer_info
   );
   friend std::size_t MemorySize(const Impl& impl);
-
- private:
 };
 
 XGRAMMAR_MEMBER_TABLE(
