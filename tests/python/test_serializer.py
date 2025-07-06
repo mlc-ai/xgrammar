@@ -105,8 +105,8 @@ def test_serialize_compiled_grammar_string():
 
     class GrammarModel(BaseModel):
         rules_: List[Any]
-        rule_expr_data_: List[int]
-        rule_expr_indptr_: List[int]
+        grammar_expr_data_: List[int]
+        grammar_expr_indptr_: List[int]
         root_rule_id_: int
         root_tag_dispatch_fsm: Any
         tag_dispatch_end_node_to_rule_id: List[int]

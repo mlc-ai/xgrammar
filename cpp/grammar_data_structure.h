@@ -34,7 +34,7 @@ namespace xgrammar {
  * ### GrammarExprs
  * GrammarExpr is the definition of a rule or part of the definition of a rule. It can contain
  * elements, empty string, reference to other GrammarExprs, or reference to other rules. Each
- * GrammarExpr corresponds to an grammar_expr_id for reference.
+ * GrammarExpr corresponds to a grammar_expr_id for reference.
  *
  * For example, in the following rule: rule ::= ("a" "b") | "c"
  * ("a" "b"), "c", ("a" "b") | "c" are all GrammarExprs.
