@@ -216,22 +216,21 @@ class DynamicBitset {
     return bitset.buffer_size_ * sizeof(bitset.data_[0]);
   }
 
-  picojson::value SerializeJSONValue() const {
-    XGRAMMAR_DCHECK(buffer_size_ == GetBufferSize(size_));
+  friend picojson::value SerializeJSONValue(const DynamicBitset& bitset) {
+    XGRAMMAR_DCHECK(bitset.buffer_size_ == GetBufferSize(bitset.size_));
     picojson::array result;
-    result.reserve(2 + buffer_size_);
-    result.emplace_back(picojson::value(static_cast<int64_t>(size_)));
-    result.emplace_back(picojson::value(static_cast<int64_t>(buffer_size_)));
-    for (int i = 0; i < buffer_size_; ++i) {
-      result.emplace_back(picojson::value(static_cast<int64_t>(data_[i])));
+    result.reserve(2 + bitset.buffer_size_);
+    result.emplace_back(picojson::value(static_cast<int64_t>(bitset.size_)));
+    result.emplace_back(picojson::value(static_cast<int64_t>(bitset.buffer_size_)));
+    for (int i = 0; i < bitset.buffer_size_; ++i) {
+      result.emplace_back(picojson::value(static_cast<int64_t>(bitset.data_[i])));
     }
     return picojson::value(std::move(result));
   }
 
   friend std::optional<std::runtime_error> DeserializeJSONValue(
-      DynamicBitset* bitset, const picojson::value& value
+      DynamicBitset* bitset, const picojson::value& value, const std::string& type_name
   ) {
-    const std::string& type_name = "DynamicBitset";
     if (!value.is<picojson::array>()) {
       return ConstructDeserializeError("Except an array", type_name);
     }

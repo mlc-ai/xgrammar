@@ -57,6 +57,9 @@ struct alignas(8) FSMEdge {
    */
   int32_t target;
 
+  // for serialization only
+  FSMEdge() = default;
+
   FSMEdge(int16_t min, int16_t max, int32_t target) : min(min), max(max), target(target) {
     XGRAMMAR_DCHECK(!IsCharRange() || min <= max)
         << "Invalid FSMEdge: min > max. min=" << min << ", max=" << max;
@@ -108,8 +111,6 @@ struct alignas(8) FSMEdge {
   friend struct member_trait<FSMEdge>;
 
  private:
-  // for serialization only
-  FSMEdge() = default;
 };
 
 /*!
@@ -348,6 +349,9 @@ class FSM {
  */
 class CompactFSM {
  public:
+  // for serialization only
+  CompactFSM() = default;
+
   CompactFSM(const Compact2DArray<FSMEdge>& edges);
 
   CompactFSM(Compact2DArray<FSMEdge>&& edges);
@@ -445,12 +449,17 @@ class CompactFSM {
    */
   FSM ToFSM() const;
 
-  XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
+  friend picojson::value SerializeJSONValue(const CompactFSM& value);
+  friend std::optional<std::runtime_error> DeserializeJSONValue(
+      CompactFSM* result, const picojson::value& value, const std::string& type_name
+  );
 
- private:
-  // for serialization only
-  CompactFSM() = default;
+  XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
 };
+
+std::optional<std::runtime_error> DeserializeJSONValue(
+    CompactFSM* result, const picojson::value& value, const std::string& type_name = ""
+);
 
 class CompactFSMWithStartEnd;
 
@@ -466,6 +475,9 @@ class FSMWithStartEndBase {
   );
 
  public:
+  // For serialization only
+  FSMWithStartEndBase() = default;
+
   /*! \brief Constructs an FSMWithStartEnd with a given FSM, start state, and end states. */
   FSMWithStartEndBase(
       const FSMType& fsm, int start, const std::unordered_set<int>& ends, bool is_dfa = false
@@ -561,12 +573,6 @@ class FSMWithStartEndBase {
   std::unordered_set<int> ends_;
   /*! \brief Whether this FSM is a deterministic finite automaton. */
   bool is_dfa_ = false;
-
- private:
-  // for serialization only
-  FSMWithStartEndBase() = default;
-
-  friend struct member_trait<CompactFSMWithStartEnd>;
 };
 
 /*!
@@ -712,6 +718,9 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
  */
 class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
  public:
+  // For serialization only
+  CompactFSMWithStartEnd() = default;
+
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
   /*!
@@ -743,10 +752,6 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   friend std::size_t MemorySize(const CompactFSMWithStartEnd& self);
 
   friend struct member_trait<CompactFSMWithStartEnd>;
-
- private:
-  // For serialization only
-  CompactFSMWithStartEnd() = default;
 };
 
 XGRAMMAR_MEMBER_ARRAY(

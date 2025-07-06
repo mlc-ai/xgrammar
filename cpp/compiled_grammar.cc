@@ -34,7 +34,7 @@ std::optional<std::runtime_error> DeserializeJSONValue(
   if (object.find("grammar") == object.end()) {
     return ConstructDeserializeError("Expect a 'grammar' field", type_name);
   }
-  AutoDeserializeJSONValue(&impl->grammar, object["grammar"]);
+  AutoDeserializeJSONValue(&(impl->grammar), object["grammar"], type_name);
   if (object.find("tokenizer_metadata") == object.end()) {
     return ConstructDeserializeError("Expect a 'tokenizer_metadata' field", type_name);
   }
@@ -48,7 +48,7 @@ std::optional<std::runtime_error> DeserializeJSONValue(
   if (object.find("adaptive_token_mask_cache") == object.end()) {
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
-  AutoDeserializeJSONValue(&impl->adaptive_token_mask_cache, object["adaptive_token_mask_cache"]);
+  AutoDeserializeJSONValue(&(impl->adaptive_token_mask_cache), object["adaptive_token_mask_cache"]);
   return std::nullopt;
 }
 

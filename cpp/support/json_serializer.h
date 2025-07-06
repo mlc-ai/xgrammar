@@ -139,11 +139,12 @@ inline std::optional<std::runtime_error> SerializeVersion::Check(const picojson:
 namespace detail::json_serializer {
 
 template <typename, typename = void>
-struct has_serialize_json : std::false_type {};
+struct has_serialize_json_global : std::false_type {};
 
 template <typename T>
-struct has_serialize_json<T, std::void_t<decltype(SerializeJSONValue(std::declval<const T&>()))>>
-    : std::true_type {
+struct has_serialize_json_global<
+    T,
+    std::void_t<decltype(SerializeJSONValue(std::declval<const T&>()))>> : std::true_type {
   static_assert(
       std::is_same_v<decltype(SerializeJSONValue(std::declval<const T&>())), picojson::value>,
       "SerializeJSONValue must be a global function returning picojson::value"
@@ -151,16 +152,18 @@ struct has_serialize_json<T, std::void_t<decltype(SerializeJSONValue(std::declva
 };
 
 template <typename T, typename = void>
-struct has_deserialize_json : std::false_type {};
+struct has_deserialize_json_global : std::false_type {};
 
 template <typename T>
-struct has_deserialize_json<
+struct has_deserialize_json_global<
     T,
-    std::void_t<decltype(DeserializeJSONValue(std::declval<T&>(), picojson::value{}))>>
-    : std::true_type {
+    std::void_t<decltype(DeserializeJSONValue(std::declval<T*>(), picojson::value{}, std::string{})
+    )>> : std::true_type {
   static_assert(
-      std::is_same_v<decltype(DeserializeJSONValue(std::declval<T&>(), picojson::value{})), void>,
-      "DeserializeJSONValue must be a global function returning void"
+      std::is_same_v<
+          decltype(DeserializeJSONValue(std::declval<T*>(), picojson::value{}, std::string{})),
+          std::optional<std::runtime_error>>,
+      "DeserializeJSONValue must be a global function returning std::optional<std::runtime_error>"
   );
   static_assert(
       std::is_default_constructible_v<T>,
@@ -222,7 +225,7 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
           return;
         } else if (obj.find(name) == obj.end()) {
           err = ConstructDeserializeError("Missing member " + std::string(name), type_name);
-        } else if (auto e = AutoDeserializeJSONValue(result->*ptr, obj.at(name), type_name)) {
+        } else if (auto e = AutoDeserializeJSONValue(&(result->*ptr), obj.at(name), type_name)) {
           err = e;
         }
       });
@@ -230,7 +233,7 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
     } else if constexpr (Functor::member_count == 1) {
       // optimize for single member unnamed structs
       constexpr auto member_ptr = std::get<0>(Functor::members);
-      return AutoDeserializeJSONValue(result->*member_ptr, value, type_name);
+      return AutoDeserializeJSONValue(&(result->*member_ptr), value, type_name);
     } else {
       // normal unnamed struct
       if (!value.is<picojson::array>()) {
@@ -248,7 +251,7 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
       visit_config<T>([&](auto ptr, const char*, std::size_t idx) {
         if (err) {
           return;
-        } else if (auto e = AutoDeserializeJSONValue(result->*ptr, arr[idx], type_name)) {
+        } else if (auto e = AutoDeserializeJSONValue(&(result->*ptr), arr[idx], type_name)) {
           err = e;
         }
       });
@@ -295,15 +298,15 @@ inline std::runtime_error ConstructDeserializeError(
 
 template <typename T>
 inline picojson::value AutoSerializeJSONValue(const T& value) {
-  if constexpr (detail::json_serializer::has_serialize_json<T>::value) {
+  if constexpr (detail::json_serializer::has_serialize_json_global<T>::value) {
     // User-defined SerializeJSONValue (highest priority)
     return SerializeJSONValue(value);
   } else if constexpr (is_pimpl_class<T>::value) {
     // Library-customized serialization methods
-    return AutoSerializeJSONValuePImpl(value);
+    return detail::json_serializer::AutoSerializeJSONValuePImpl(value);
   } else if constexpr (member_trait<T>::value != member_type::kNone) {
     // Trait serialization methods
-    return TraitSerializeJSONValue(value);
+    return detail::json_serializer::TraitSerializeJSONValue(value);
   } else if constexpr (std::is_same_v<T, bool>) {
     // Below is primitive types
     return picojson::value(value);
@@ -319,6 +322,13 @@ inline picojson::value AutoSerializeJSONValue(const T& value) {
     } else {
       return picojson::value{};
     }
+  } else if constexpr (is_std_pair<T>::value) {
+    // std::pair<T1, T2>: serialize as an array of size 2
+    picojson::array arr;
+    arr.resize(2);
+    arr[0] = AutoSerializeJSONValue(value.first);
+    arr[1] = AutoSerializeJSONValue(value.second);
+    return picojson::value(std::move(arr));
   } else if constexpr (is_std_vector<T>::value) {
     picojson::array arr;
     arr.reserve(value.size());
@@ -389,7 +399,7 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
     T* result, const picojson::value& value, const std::string& type_name
 ) {
   static_assert(!std::is_const_v<T>, "Cannot deserialize into a const type");
-  if constexpr (detail::json_serializer::has_deserialize_json<T>::value) {
+  if constexpr (detail::json_serializer::has_deserialize_json_global<T>::value) {
     return DeserializeJSONValue(result, value, type_name);
   } else if constexpr (is_pimpl_class<T>::value) {
     return detail::json_serializer::AutoDeserializeJSONValuePImpl(result, value, type_name);
@@ -425,8 +435,26 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
       result->reset();
       return std::nullopt;
     } else {
-      return AutoDeserializeJSONValue(&result->emplace(), value, type_name);
+      return AutoDeserializeJSONValue(&(result->emplace()), value, type_name);
     }
+  } else if constexpr (is_std_pair<T>::value) {
+    // std::pair<T1, T2>: deserialize from an array of size 2
+    if (!value.is<picojson::array>()) {
+      return ConstructDeserializeError("Expect an array for deserializing pair", type_name);
+    }
+    const auto& arr = value.get<picojson::array>();
+    if (arr.size() != 2) {
+      return ConstructDeserializeError(
+          "Expect an array of size 2 for deserializing pair", type_name
+      );
+    }
+    if (auto error = AutoDeserializeJSONValue(&(result->first), arr[0], type_name)) {
+      return error;
+    }
+    if (auto error = AutoDeserializeJSONValue(&(result->second), arr[1], type_name)) {
+      return error;
+    }
+    return std::nullopt;
   } else if constexpr (is_std_vector<T>::value) {
     if (!value.is<picojson::array>()) {
       return ConstructDeserializeError("Expect an array", type_name);
@@ -435,7 +463,7 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
     result->clear();
     result->reserve(arr.size());
     for (const auto& item : arr) {
-      if (auto error = AutoDeserializeJSONValue(result->emplace_back(), item, type_name)) {
+      if (auto error = AutoDeserializeJSONValue(&(result->emplace_back()), item, type_name)) {
         return error;
       }
     }
@@ -447,14 +475,14 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
       );
     }
     const auto& arr = value.get<picojson::array>();
-    result.clear();
-    result.reserve(arr.size());
+    result->clear();
+    result->reserve(arr.size());
     for (const auto& item : arr) {
       typename T::value_type item_value;
       if (auto error = AutoDeserializeJSONValue(&item_value, item, type_name)) {
         return error;
       }
-      result.emplace(std::move(item_value));
+      result->emplace(std::move(item_value));
     }
     return std::nullopt;
   } else if constexpr (is_std_unordered_map<T>::value) {

@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "support/encoding.h"
+#include "support/json_serializer.h"
 #include "support/logging.h"
 #include "support/reflection.h"
 #include "support/union_find_set.h"
@@ -625,6 +626,16 @@ void CompactFSM::GetReachableStates(const std::vector<int>& from, std::unordered
 }
 
 FSM CompactFSM::ToFSM() const { return pimpl_->ToFSM(); }
+
+picojson::value SerializeJSONValue(const CompactFSM& value) {
+  return detail::json_serializer::AutoSerializeJSONValuePImpl(value);
+}
+
+std::optional<std::runtime_error> DeserializeJSONValue(
+    CompactFSM* result, const picojson::value& value, const std::string& type_name
+) {
+  return detail::json_serializer::AutoDeserializeJSONValuePImpl(result, value, type_name);
+}
 
 /****************** FSMWithStartEnd ******************/
 

@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "earley_parser.h"
+#include "grammar_impl.h"
 #include "support/dynamic_bitset.h"
 #include "support/reflection.h"
 #include "support/utils.h"
