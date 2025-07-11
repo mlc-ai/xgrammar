@@ -4,8 +4,15 @@ import json
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-import sentencepiece
-import tiktoken
+try:
+    import sentencepiece
+except ImportError:
+    sentencepiece = None
+try:
+    import tiktoken
+except ImportError:
+    tiktoken = None
+
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
 from .base import XGRObject, _core
@@ -17,30 +24,34 @@ logger = logging.getLogger(__name__)
 
 class VocabType(Enum):
     """The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of
-    vocabularies:
-
-    RAW
-        The vocabulary is in the raw format. The tokens in the vocabulary are kept in their
-        original form without any processing. This kind of tokenizer includes the tiktoken
-        tokenizer, e.g. microsoft/Phi-3-small-8k-instruct, Qwen/Qwen-7B-Chat, etc.
-
-    BYTE_FALLBACK
-        The vocabulary used in the byte fallback BPE tokenizer. The tokens are encoded through
-        the byte-fallback conversion. E.g. "\u001b" -> "<0x1B>", " apple" -> "▁apple". This kind of
-        tokenizer includes meta-llama/Llama-2-7b-chat, microsoft/Phi-3.5-mini-instruct, etc.
-
-    BYTE_LEVEL
-        The vocabulary used in the byte level BPE tokenizer. The tokens are encoded through
-        the byte-to-unicode conversion, as in
-        https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59
-
-        This kind of tokenizer includes meta-llama/Meta-Llama-3-8B-Instruct,
-        meta-llama/Meta-Llama-3.1-8B-Instruct, etc.
+    vocabularies: RAW, BYTE_FALLBACK, BYTE_LEVEL.
     """
 
     RAW = 0
+    """The vocabulary is in the raw format.
+
+    The tokens in the vocabulary are kept in their original form without any processing. This kind
+    of tokenizer includes the tiktoken tokenizer, e.g. microsoft/Phi-3-small-8k-instruct,
+    Qwen/Qwen-7B-Chat, etc.
+    """
+
     BYTE_FALLBACK = 1
+    """The vocabulary used in the byte fallback BPE tokenizer.
+
+    The tokens are encoded through the byte-fallback conversion. E.g. "\u001b" -> "<0x1B>",
+    " apple" -> "▁apple". This kind of tokenizer includes meta-llama/Llama-2-7b-chat,
+    microsoft/Phi-3.5-mini-instruct, etc.
+    """
+
     BYTE_LEVEL = 2
+    """The vocabulary used in the byte level BPE tokenizer.
+
+    The tokens are encoded through the byte-to-unicode conversion, as in
+    https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59
+
+    This kind of tokenizer includes meta-llama/Meta-Llama-3-8B-Instruct,
+    meta-llama/Meta-Llama-3.1-8B-Instruct, etc.
+    """
 
 
 class TokenizerInfo(XGRObject):
@@ -56,24 +67,6 @@ class TokenizerInfo(XGRObject):
     of 32. In this case, the model's vocab_size is larger than the tokenizer's vocabulary size.
     Please pass the model's vocab_size to the vocab_size parameter in the constructor, because
     this information is used to determine the size of the token mask.
-
-    Parameters
-    ----------
-    encoded_vocab : Union[List[bytes], List[str]]
-        The encoded vocabulary of the tokenizer.
-
-    vocab_type : VocabType, default: VocabType.RAW
-        The type of the vocabulary. See also VocabType.
-
-    vocab_size : Optional[int], default: None
-        The size of the vocabulary. If not provided, the vocabulary size will be len(encoded_vocab).
-
-    stop_token_ids : Optional[List[int]], default: None
-        The stop token ids. If not provided, the stop token ids will be auto detected (but may not
-        be correct).
-
-    add_prefix_space : bool, default: False
-        Whether the tokenizer will prepend a space before the text in the tokenization process.
     """
 
     def __init__(
@@ -85,6 +78,26 @@ class TokenizerInfo(XGRObject):
         stop_token_ids: Optional[Union[List[int], int]] = None,
         add_prefix_space: bool = False,
     ) -> None:
+        """Construct the tokenizer info.
+
+        Parameters
+        ----------
+        encoded_vocab : Union[List[bytes], List[str]]
+            The encoded vocabulary of the tokenizer.
+
+        vocab_type : VocabType, default: VocabType.RAW
+            The type of the vocabulary. See also VocabType.
+
+        vocab_size : Optional[int], default: None
+            The size of the vocabulary. If not provided, the vocabulary size will be len(encoded_vocab).
+
+        stop_token_ids : Optional[List[int]], default: None
+            The stop token ids. If not provided, the stop token ids will be auto detected (but may not
+            be correct).
+
+        add_prefix_space : bool, default: False
+            Whether the tokenizer will prepend a space before the text in the tokenization process.
+        """
         if isinstance(stop_token_ids, int):
             stop_token_ids = [stop_token_ids]
         self._init_handle(
@@ -95,6 +108,9 @@ class TokenizerInfo(XGRObject):
 
     @staticmethod
     def _is_tiktoken_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
+        if tiktoken is None:
+            return False
+
         # helper to check if tokenizer is a tiktoken tokenizer
         has_tiktoken_encoding = hasattr(tokenizer, "tokenizer") and isinstance(
             tokenizer.tokenizer, tiktoken.Encoding
@@ -110,6 +126,9 @@ class TokenizerInfo(XGRObject):
 
     @staticmethod
     def _is_sentencepiece_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
+        if sentencepiece is None:
+            return False
+
         # helper to check if tokenizer is a sentence piece tokenizer
         has_sp_model_attr = hasattr(tokenizer, "sp_model") and isinstance(
             tokenizer.sp_model, sentencepiece.SentencePieceProcessor
@@ -151,13 +170,14 @@ class TokenizerInfo(XGRObject):
             vocab dimention of the model's lm_head. This is the size of the token mask.
 
             It can be:
+
             1. the same as the tokenizer's vocabulary size. This is the most common case.
             2. larger than the tokenizer's vocabulary size. This happens when the model has padding
                to lm_head, possibly due to aligning lm_head to the power of 2.
                E.g. Phi-3 and Deepseek-V2.
             3. smaller than the tokenizer's vocabulary size. This happens when the tokenizer has
                some added tokens that will not supported by the model. E.g.
-               Llama-3.2 Vision and Molmo-72B-0924 has padded <|image|> tokens, but they will not
+               Llama-3.2 Vision and Molmo-72B-0924 has padded `<|image|>` tokens, but they will not
                be considered in lm_head or generated by the model.
 
             model_vocab_size need to be provided for case 2 and 3. If not provided, it will be
@@ -368,3 +388,16 @@ class TokenizerInfo(XGRObject):
             "vocab_type": VocabType(metadata["vocab_type"]),
             "add_prefix_space": metadata["add_prefix_space"],
         }
+
+    def serialize_json(self) -> str:
+        """Serialize the tokenizer_info to a JSON string."""
+        return self._handle.serialize_json()
+
+    @staticmethod
+    def deserialize_json(
+        json_string: str, encoded_vocab: List[Union[bytes, str]]
+    ) -> "TokenizerInfo":
+        """Deserialize a grammar from a JSON string."""
+        return TokenizerInfo._create_from_handle(
+            _core.TokenizerInfo.deserialize_json(json_string, encoded_vocab)
+        )

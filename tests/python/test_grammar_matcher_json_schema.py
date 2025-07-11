@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 
 import pytest
 from pydantic import BaseModel, Field
-from transformers import AutoTokenizer
+from transformers import AutoConfig, AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
@@ -60,7 +60,7 @@ def test_json_schema_debug_accept_string():
     matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
 
     for c in instance_str:
-        assert matcher._debug_accept_string(c)
+        assert matcher.accept_string(c)
     assert matcher.accept_token(2)
     assert matcher.is_terminated()
 
@@ -72,7 +72,7 @@ def test_json_schema_find_jump_forward_string():
     for i, c in enumerate(instance_str):
         jump_forward_str = matcher.find_jump_forward_string()
         assert instance_str[i : i + len(jump_forward_str)] == jump_forward_str
-        assert matcher._debug_accept_string(c)
+        assert matcher.accept_string(c)
     assert matcher.find_jump_forward_string() == ""
 
 
@@ -106,7 +106,7 @@ def test_fill_next_token_bitmask(tokenizer_path: str):
         # 2. accept_string
         print("Accepting char:", bytes([c]))
         time_start = time.monotonic_ns()
-        assert matcher._debug_accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
         time_end = time.monotonic_ns()
         print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
 
@@ -130,6 +130,10 @@ class NegativeRangeSchema(BaseModel):
 
 class LargeRangeSchema(BaseModel):
     value: int = Field(ge=-99999, le=99999)
+
+
+class LargeRangeSchemaStartZero(BaseModel):
+    value: int = Field(ge=0, le=20_000_000_000)
 
 
 class FloatRangeSchema(BaseModel):
@@ -159,6 +163,34 @@ class MixedTypeRangeSchema(BaseModel):
     float_value: float = Field(ge=-10.0, le=10.0)
 
 
+class VeryLargeFloatRangeSchema(BaseModel):
+    value: float = Field(ge=-20_000_000_000.123123, le=20_000_000_000.456789)
+
+
+class ExceedsInt64MaxSchema(BaseModel):
+    value: int = Field(ge=0, le=18446744073709551615)
+
+
+class ExceedsInt64MinSchema(BaseModel):
+    value: int = Field(ge=-9223372036854775809, le=100)
+
+
+class ExceedsInt64RangeSchema(BaseModel):
+    value: int = Field(ge=-18446744073709551616, le=18446744073709551616)
+
+
+class ValidInt64MaxSchema(BaseModel):
+    value: int = Field(ge=0, le=9223372036854775807)
+
+
+class ValidInt64MinSchema(BaseModel):
+    value: int = Field(ge=-9223372036854775808, le=0)
+
+
+class ValidLargeIntSchema(BaseModel):
+    value: int = Field(ge=0, le=1000000000000000000)
+
+
 @pytest.mark.parametrize("tokenizer_path", tokenizer_path)
 @pytest.mark.parametrize(
     "schema_class,test_value",
@@ -177,6 +209,10 @@ class MixedTypeRangeSchema(BaseModel):
         (LargeRangeSchema, 0),
         (LargeRangeSchema, 5678),
         (LargeRangeSchema, 99999),
+        (LargeRangeSchemaStartZero, 20000000000),
+        (LargeRangeSchemaStartZero, 0),
+        (LargeRangeSchemaStartZero, 10000000000),
+        (LargeRangeSchemaStartZero, 19999999999),
         # Float test cases
         (FloatRangeSchema, 0.0),
         (FloatRangeSchema, 0.5),
@@ -192,6 +228,15 @@ class MixedTypeRangeSchema(BaseModel):
         (ComplexFloatRangeSchema, (-1234.1234)),
         (ComplexFloatRangeSchema, (0)),
         (ComplexFloatRangeSchema, (5671.123456)),
+        (VeryLargeFloatRangeSchema, (20_000_000_000.456788)),
+        (VeryLargeFloatRangeSchema, (-19_999_999_999.456789)),
+        # Signed 64-bit boundary test cases (should succeed)
+        (ValidInt64MaxSchema, 9223372036854775807),
+        (ValidInt64MaxSchema, 1000),
+        (ValidInt64MinSchema, -9223372036854775808),
+        (ValidInt64MinSchema, -1000),
+        (ValidLargeIntSchema, 1000000000000000000),
+        (ValidLargeIntSchema, 1000),
     ],
 )
 @pytest.mark.hf_token_required
@@ -220,11 +265,72 @@ def test_fill_next_token_bitmask_intfloat_range(tokenizer_path: str, schema_clas
         time_end = time.monotonic_ns()
         print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
-        assert matcher._debug_accept_string(bytes([c]))
+        assert matcher.accept_string(bytes([c]))
 
     matcher.fill_next_token_bitmask(token_bitmask)
     rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
     assert tokenizer.eos_token_id not in rejected_token_ids
+
+
+@pytest.mark.parametrize("tokenizer_path", tokenizer_path)
+@pytest.mark.parametrize(
+    "schema_class,should_fail,error_pattern",
+    [
+        (ExceedsInt64MaxSchema, True, "exceeds"),
+        (ExceedsInt64MinSchema, True, "exceeds"),
+        (ExceedsInt64RangeSchema, True, "exceeds"),
+    ],
+)
+@pytest.mark.hf_token_required
+def test_64bit_limit_validation(
+    tokenizer_path: str, schema_class, should_fail: bool, error_pattern: str
+):
+    """Test that schemas exceeding signed 64-bit integer limits are properly rejected"""
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    if should_fail:
+        with pytest.raises((ValueError, OverflowError, RuntimeError)) as exc_info:
+            compiler.compile_json_schema(schema_class)
+
+        assert error_pattern.lower() in str(exc_info.value).lower()
+
+
+@pytest.mark.parametrize("tokenizer_path", tokenizer_path)
+@pytest.mark.parametrize(
+    "boundary_value,schema_class",
+    [
+        (9223372036854775807, ValidInt64MaxSchema),
+        (-9223372036854775808, ValidInt64MinSchema),
+        (1000000000000000000, ValidLargeIntSchema),
+    ],
+)
+@pytest.mark.hf_token_required
+def test_signed_64bit_boundary_values_work(tokenizer_path: str, boundary_value: int, schema_class):
+    """Test that signed 64-bit boundary values work correctly"""
+
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    try:
+        compiled_grammar = compiler.compile_json_schema(schema_class)
+        matcher = xgr.GrammarMatcher(compiled_grammar)
+
+        test_value = min(abs(boundary_value), 1000) if boundary_value != 0 else 1000
+        if boundary_value < 0:
+            test_value = -test_value
+        test_instance = schema_class(value=test_value)
+        instance_str = test_instance.model_dump_json()
+
+        token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        for c in instance_str.encode("utf-8"):
+            matcher.fill_next_token_bitmask(token_bitmask)
+            assert matcher.accept_string(bytes([c]))
+
+    except Exception as e:
+        pytest.fail(f"Signed 64-bit boundary value {boundary_value} unexpectedly failed: {e}")
 
 
 @pytest.mark.hf_token_required
@@ -262,7 +368,7 @@ def test_mixed_type_range_schema(tokenizer_path: str):
             time_end = time.monotonic_ns()
             print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
-            assert matcher._debug_accept_string(bytes([c]))
+            assert matcher.accept_string(bytes([c]))
 
         matcher.fill_next_token_bitmask(token_bitmask)
         rejected_token_ids = _get_masked_tokens_from_bitmask(
@@ -310,7 +416,7 @@ def test_multiple_boundaries_schema(tokenizer_path: str):
             time_end = time.monotonic_ns()
             print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
 
-            assert matcher._debug_accept_string(bytes([c]))
+            assert matcher.accept_string(bytes([c]))
 
         matcher.fill_next_token_bitmask(token_bitmask)
         rejected_token_ids = _get_masked_tokens_from_bitmask(
@@ -372,7 +478,7 @@ def test_mask_generation_format(value: str, format: str):
         time_end = time.monotonic_ns()
         delta_us = (time_end - time_start) / 1e3
         print(f"Time for fill_next_token_bitmask: {delta_us} us before accepting char {bytes([c])}")
-        accepted = matcher._debug_accept_string(bytes([c]))
+        accepted = matcher.accept_string(bytes([c]))
         assert accepted
 
     time_start = time.monotonic_ns()
@@ -382,6 +488,27 @@ def test_mask_generation_format(value: str, format: str):
 
     assert matcher.accept_token(tokenizer.eos_token_id)
     assert matcher.is_terminated()
+
+
+@pytest.mark.hf_token_required
+def test_implicit_left_recursion_schema():
+    model_name = "meta-llama/Llama-3.2-1B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    config = AutoConfig.from_pretrained(model_name)
+
+    json_schema = {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "pattern": "^(https?://)?([\\da-z\\.-]+)\\.([a-z\\.]{2,6})([/\\w \\.-]*)*/?",
+            }
+        },
+    }
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+    _ = grammar_compiler.compile_json_schema(schema=json.dumps(json_schema))
 
 
 if __name__ == "__main__":

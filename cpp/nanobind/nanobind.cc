@@ -15,6 +15,7 @@
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
+#include "../support/recursion_guard.h"
 #include "../testing.h"
 #include "python_methods.h"
 
@@ -89,7 +90,15 @@ NB_MODULE(xgrammar_bindings, m) {
             );
           }
       )
-      .def_static("_detect_metadata_from_hf", &TokenizerInfo::DetectMetadataFromHF);
+      .def_static("_detect_metadata_from_hf", &TokenizerInfo::DetectMetadataFromHF)
+      .def("serialize_json", &TokenizerInfo::SerializeJSON)
+      .def_static(
+          "deserialize_json",
+          [](const std::string& str,
+             const nb::typed<nb::list, std::variant<std::string, nb::bytes>>& encoded_vocab) {
+            return TokenizerInfo::DeserializeJSON(str, CommonEncodedVocabType(encoded_vocab));
+          }
+      );
 
   auto pyGrammar = nb::class_<Grammar>(m, "Grammar");
   pyGrammar.def("to_string", &Grammar::ToString)
@@ -113,12 +122,16 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)
       .def_static("union", &Grammar::Union, nb::call_guard<nb::gil_scoped_release>())
-      .def_static("concat", &Grammar::Concat, nb::call_guard<nb::gil_scoped_release>());
+      .def_static("concat", &Grammar::Concat, nb::call_guard<nb::gil_scoped_release>())
+      .def("serialize_json", &Grammar::SerializeJSON)
+      .def_static("deserialize_json", &Grammar::DeserializeJSON);
 
   auto pyCompiledGrammar = nb::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_prop_ro("grammar", &CompiledGrammar::GetGrammar)
       .def_prop_ro("tokenizer_info", &CompiledGrammar::GetTokenizerInfo)
-      .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes);
+      .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes)
+      .def("serialize_json", &CompiledGrammar::SerializeJSON)
+      .def_static("deserialize_json", &CompiledGrammar::DeserializeJSON);
 
   auto pyGrammarCompiler = nb::class_<GrammarCompiler>(m, "GrammarCompiler");
   pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, long long>())
@@ -164,6 +177,14 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("max_rollback_tokens")
       )
       .def("accept_token", &GrammarMatcher::AcceptToken, nb::call_guard<nb::gil_scoped_release>())
+      .def("accept_string", &GrammarMatcher::AcceptString, nb::call_guard<nb::gil_scoped_release>())
+      .def(
+          "accept_string",
+          [](GrammarMatcher& self, const nb::bytes& input_str, bool debug_print) {
+            return self.AcceptString(input_str.c_str(), debug_print);
+          },
+          nb::call_guard<nb::gil_scoped_release>()
+      )
       .def(
           "fill_next_token_bitmask",
           &GrammarMatcher_FillNextTokenBitmask,
@@ -179,18 +200,7 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("reset", &GrammarMatcher::Reset, nb::call_guard<nb::gil_scoped_release>())
       .def_prop_ro("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens)
       .def_prop_ro("stop_token_ids", &GrammarMatcher::GetStopTokenIds)
-      .def(
-          "_debug_accept_string",
-          &GrammarMatcher::_DebugAcceptString,
-          nb::call_guard<nb::gil_scoped_release>()
-      )
-      .def(
-          "_debug_accept_string",
-          [](GrammarMatcher& self, const nb::bytes& input_str, bool debug_print) {
-            return self._DebugAcceptString(input_str.c_str(), debug_print);
-          },
-          nb::call_guard<nb::gil_scoped_release>()
-      );
+      .def("_debug_print_internal_state", &GrammarMatcher::_DebugPrintInternalState);
 
   auto pyTestingModule = m.def_submodule("testing");
   pyTestingModule
@@ -253,4 +263,17 @@ NB_MODULE(xgrammar_bindings, m) {
       nb::arg("indices").none(),
       nb::call_guard<nb::gil_scoped_release>()
   );
+
+  auto pyConfigModule = m.def_submodule("config");
+  pyConfigModule
+      .def(
+          "set_max_recursion_depth",
+          &RecursionGuard::SetMaxRecursionDepth,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def(
+          "get_max_recursion_depth",
+          &RecursionGuard::GetMaxRecursionDepth,
+          nb::call_guard<nb::gil_scoped_release>()
+      );
 }

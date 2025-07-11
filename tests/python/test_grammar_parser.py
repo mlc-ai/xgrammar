@@ -1,4 +1,5 @@
 import sys
+from typing import Optional
 
 import pytest
 
@@ -6,14 +7,286 @@ import xgrammar as xgr
 from xgrammar.testing import GrammarFunctor, _ebnf_to_grammar_no_normalization
 
 
-def test_bnf_simple():
-    before = """root ::= b c
-b ::= "b"
-c ::= "c"
+def test_basic_string_literal():
+    """Test basic string literals in grammar rules."""
+    before = """root ::= "hello"
 """
-    expected = """root ::= ((b c))
-b ::= (("b"))
-c ::= (("c"))
+    expected = """root ::= (("hello"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_empty_string():
+    """Test empty string literals."""
+    before = """root ::= ""
+"""
+    expected = """root ::= ((""))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_character_class():
+    """Test character class expressions."""
+    before = """root ::= [a-z]
+"""
+    expected = """root ::= (([a-z]))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_negated_character_class():
+    """Test negated character class expressions."""
+    before = """root ::= [^a-z]
+"""
+    expected = """root ::= (([^a-z]))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_complex_character_class():
+    """Test complex character class with multiple ranges and individual characters."""
+    before = r"""root ::= [a-zA-Z0-9_-] [\r\n$\x10-o\]\--]
+"""
+    expected = r"""root ::= (([a-zA-Z0-9_\-] [\r\n$\x10-o\]\-\-]))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_sequence():
+    """Test sequence of expressions."""
+    before = """root ::= "a" "b" "c"
+"""
+    expected = """root ::= (("a" "b" "c"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_choice():
+    """Test choice between expressions."""
+    before = """root ::= "a" | "b" | "c"
+"""
+    expected = """root ::= (("a") | ("b") | ("c"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_grouping():
+    """Test grouping with parentheses."""
+    before = """root ::= ("a" "b") | ("c" "d")
+"""
+    expected = """root ::= (((("a" "b"))) | ((("c" "d"))))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_star_quantifier_simple():
+    """Test star (*) quantifier."""
+    before = """root ::= "a"*
+"""
+    expected = """root ::= ((root_1))
+root_1 ::= ("" | ("a" root_1))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_plus_quantifier():
+    """Test plus (+) quantifier."""
+    before = """root ::= "a"+
+"""
+    expected = """root ::= ((root_1))
+root_1 ::= (("a" root_1) | "a")
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_question_quantifier():
+    """Test question (?) quantifier."""
+    before = """root ::= "a"?
+"""
+    expected = """root ::= ((root_1))
+root_1 ::= ("" | "a")
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_character_class_star():
+    """Test star (*) quantifier with character class."""
+    before = """root ::= [a-z]*
+"""
+    expected = """root ::= (([a-z]*))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_repetition_range_exact():
+    """Test repetition range with exact count {n}."""
+    before = """root ::= "a"{3}
+"""
+    expected = """root ::= ((("a" "a" "a")))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_repetition_range_min_max():
+    """Test repetition range with min and max {n,m}."""
+    before = """root ::= "a"{2,4}
+"""
+    expected = """root ::= ((("a" "a" root_1)))
+root_1 ::= ("" | ("a" root_2))
+root_2 ::= ("" | "a")
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_repetition_range_min_only():
+    """Test repetition range with only min {n,}."""
+    before = """root ::= "a"{2,}
+"""
+    expected = """root ::= ((("a" "a" root_1)))
+root_1 ::= ("" | ("a" root_1))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_lookahead_assertion_simple():
+    """Test lookahead assertion."""
+    before = """root ::= "a" (="b")
+"""
+    expected = """root ::= (("a")) (=(("b")))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_complex_lookahead():
+    """Test complex lookahead assertion."""
+    before = """root ::= "a" (="b" "c" [0-9])
+"""
+    expected = """root ::= (("a")) (=(("b" "c" [0-9])))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_escape_sequences():
+    """Test escape sequences in string literals."""
+    before = r"""root ::= "\n\t\r\"\\"
+"""
+    expected = r"""root ::= (("\n\t\r\"\\"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_unicode_escape():
+    """Test Unicode escape sequences."""
+    before = r"""root ::= "\u0041\u0042\u0043\u00A9\u2603"
+"""
+    expected = r"""root ::= (("ABC\xa9\u2603"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_tag_dispatch():
+    """Test TagDispatch functionality."""
+    before = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2))
+rule1 ::= "a"
+rule2 ::= "b"
+"""
+    expected = """root ::= ((TagDispatch(("tag1", rule1), ("tag2", rule2))))
+rule1 ::= (("a"))
+rule2 ::= (("b"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_complex_grammar():
+    """Test a more complex grammar with multiple features."""
+    before = """root ::= expr
+expr ::= term ("+" term | "-" term)*
+term ::= factor ("*" factor | "/" factor)*
+factor ::= number | "(" expr ")"
+number ::= [0-9]+ ("." [0-9]+)?
+"""
+    expected = """root ::= ((expr))
+expr ::= ((term expr_1))
+term ::= ((factor term_1))
+factor ::= ((number) | ("(" expr ")"))
+number ::= ((number_1 number_3))
+expr_1 ::= ("" | ((("+" term) | ("-" term)) expr_1))
+term_1 ::= ("" | ((("*" factor) | ("/" factor)) term_1))
+number_1 ::= (([0-9] number_1) | [0-9])
+number_2 ::= (([0-9] number_2) | [0-9])
+number_3 ::= ("" | (("." number_2)))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_nested_quantifiers():
+    """Test nested quantifiers in expressions."""
+    before = """root ::= ("a"*)+
+"""
+    expected = """root ::= ((root_2))
+root_1 ::= ("" | ("a" root_1))
+root_2 ::= ((((root_1)) root_2) | ((root_1)))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_combined_features():
+    """Test combination of various grammar features."""
+    before = """root ::= "start" (rule1 | rule2)+ "end"
+rule1 ::= [a-z]{1,3} (=":")
+rule2 ::= [0-9]+ "." [0-9]*
+"""
+    expected = """root ::= (("start" root_1 "end"))
+rule1 ::= ((([a-z] rule1_1))) (=((":")))
+rule2 ::= ((rule2_1 "." [0-9]*))
+root_1 ::= ((((rule1) | (rule2)) root_1) | ((rule1) | (rule2)))
+rule1_1 ::= ("" | ([a-z] rule1_2))
+rule1_2 ::= ("" | [a-z])
+rule2_1 ::= (([0-9] rule2_1) | [0-9])
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
@@ -36,25 +309,6 @@ b ::= (("b"))
     assert after == expected
 
 
-def test_ebnf():
-    before = """root ::= b c | b root
-b ::= "ab"*
-c ::= [acep-z]+
-d ::= "d"?
-"""
-    expected = """root ::= ((b c) | (b root))
-b ::= ((b_1))
-c ::= ((c_1))
-d ::= ((d_1))
-b_1 ::= ("" | ("ab" b_1))
-c_1 ::= (([acep-z] c_1) | [acep-z])
-d_1 ::= ("" | "d")
-"""
-    grammar = _ebnf_to_grammar_no_normalization(before)
-    after = str(grammar)
-    assert after == expected
-
-
 def test_star_quantifier():
     before = """root ::= b c d
 b ::= [b]*
@@ -69,8 +323,8 @@ c ::= ((c_1))
 d ::= ((d_1))
 e ::= (([e]* [f]*) | ([g]*))
 c_1 ::= ("" | ("b" c_1))
-d_1 ::= ("" | (d_1_choice d_1))
-d_1_choice ::= (("bcd") | ("pq"))
+d_1 ::= ("" | (d_1_1 d_1))
+d_1_1 ::= (("bcd") | ("pq"))
 """
 
     grammar = _ebnf_to_grammar_no_normalization(before)
@@ -93,32 +347,6 @@ rule1 ::= (([abc]* [def]*))
     assert after == expected
 
 
-def test_consecutive_quantifiers():
-    grammar_str = """root ::= "a"{1,3}{1,3}
-"""
-    with pytest.raises(
-        RuntimeError,
-        match="EBNF parse error at line 1, column 18: Expect element, but got character: {",
-    ):
-        xgr.Grammar.from_ebnf(grammar_str)
-
-    grammar_str = """root ::= "a"++
-"""
-    with pytest.raises(
-        RuntimeError,
-        match="EBNF parse error at line 1, column 14: Expect element, but got character: +",
-    ):
-        xgr.Grammar.from_ebnf(grammar_str)
-
-    grammar_str = """root ::= "a"??
-"""
-    with pytest.raises(
-        RuntimeError,
-        match="EBNF parse error at line 1, column 14: Expect element, but got character: ?",
-    ):
-        xgr.Grammar.from_ebnf(grammar_str)
-
-
 def test_repetition_range():
     before = """root ::= a b c d e f g
 a ::= [a]{1,2}
@@ -132,25 +360,25 @@ g ::= "g" {0}
 
     expected = """root ::= ((a b c d e f g))
 a ::= (("a" a_1))
-b ::= ((b_choice b_1))
+b ::= ((b_5 b_1))
 c ::= ((c_1))
 d ::= ((d_1))
 e ::= (("ee" e_1))
 f ::= (("fff"))
 g ::= (())
 a_1 ::= ("" | ("a"))
-b_1 ::= ("" | (b_1_choice b_2))
-b_2 ::= ("" | (b_2_choice b_3))
-b_3 ::= ("" | (b_3_choice b_4))
+b_1 ::= ("" | (b_1_1 b_2))
+b_2 ::= ("" | (b_2_1 b_3))
+b_3 ::= ("" | (b_3_1 b_4))
 b_4 ::= ("" | (a) | ("b"))
 c_1 ::= ("" | ("c" c_2))
 c_2 ::= ("" | ("c"))
 d_1 ::= ("" | ("d" d_1))
 e_1 ::= ("" | ("e" e_1))
-b_choice ::= ((a) | ("b"))
-b_1_choice ::= ((a) | ("b"))
-b_2_choice ::= ((a) | ("b"))
-b_3_choice ::= ((a) | ("b"))
+b_5 ::= ((a) | ("b"))
+b_1_1 ::= ((a) | ("b"))
+b_2_1 ::= ((a) | ("b"))
+b_3_1 ::= ((a) | ("b"))
 """
 
     grammar = _ebnf_to_grammar_no_normalization(before)
@@ -160,11 +388,11 @@ b_3_choice ::= ((a) | ("b"))
     assert after == expected
 
 
-def test_lookahead_assertion():
+def test_lookahead_assertion_with_normalizer():
     before = """root ::= ((b c d))
 b ::= (("abc" [a-z])) (=("abc"))
-c ::= (("a") | ("b")) (=([a-z] "b"))
-d ::= (("ac") | ("b" d_choice)) (=("abc"))
+c ::= (("a") | ("b")) (=[a-z] "b")
+d ::= (("ac") | ("b" d_choice)) (="abc")
 d_choice ::= (("e") | ("d"))
 """
     expected = """root ::= ((b c d))
@@ -215,8 +443,8 @@ root::="a"  "b" ("c""d"
 def test_nest():
     before = """root::= "a" ("b" | "c" "d") | (("e" "f"))
 """
-    expected = """root ::= (("a" root_choice) | ("ef"))
-root_choice ::= (("b") | ("cd"))
+    expected = """root ::= (("a" root_1) | ("ef"))
+root_1 ::= (("b") | ("cd"))
 """
     grammar = xgr.Grammar.from_ebnf(before)
     after = str(grammar)
@@ -276,17 +504,19 @@ rule5 ::= "" | "g" rule5 "h"
     expected = r"""root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3), ("tag4", rule4), ("tag5", rule5))
 rule1 ::= (("b"))
 rule2 ::= (("c"))
-rule3 ::= (("") | ("d" rule3))
-rule4 ::= (("") | ("e" rule4 "f"))
-rule5 ::= (("") | ("g" rule5 "h"))
+rule3 ::= ("" | ("d" rule3))
+rule4 ::= ("" | ("e" rule4 "f"))
+rule5 ::= ("" | ("g" rule5 "h"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.structure_normalizer(grammar)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
     after = str(grammar)
     assert after == expected
 
 
-def test_tag_dispatch():
+def test_tag_dispatch_end_to_end():
     before = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
 rule1 ::= "a"
 rule2 ::= "b"
@@ -296,6 +526,25 @@ rule3 ::= "c"
 rule1 ::= (("a"))
 rule2 ::= (("b"))
 rule3 ::= (("c"))
+"""
+    grammar = xgr.Grammar.from_ebnf(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_tag_dispatch_end_to_end_complex():
+    before = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
+rule1 ::= ("a" TagDispatch(("tag1", rule2), ("tag2", rule3)) | "zzz")
+rule2 ::= TagDispatch(("tag1", rule2), ("tag2", rule3)) | TagDispatch(("tag3", rule2), ("tag4", rule3))
+rule3 ::= "c"
+"""
+    expected = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2), ("tag3", rule3))
+rule1 ::= (("a" rule1_1) | ("zzz"))
+rule2 ::= ((rule2_1) | (rule2_2))
+rule3 ::= (("c"))
+rule1_1 ::= TagDispatch(("tag1", rule2), ("tag2", rule3))
+rule2_1 ::= TagDispatch(("tag1", rule2), ("tag2", rule3))
+rule2_2 ::= TagDispatch(("tag3", rule2), ("tag4", rule3))
 """
     grammar = xgr.Grammar.from_ebnf(before)
     after = str(grammar)
@@ -312,11 +561,11 @@ empty_test ::= "d" | (("" | "" "") "" | "a" "") | ("" ("" | "")) "" ""
 """
     expected = """root ::= ((or_test sequence_test nested_test empty_test))
 or_test ::= ("" | ("a") | ("b") | ("de") | (or_test) | ([^a-z]))
-sequence_test ::= (("aab" sequence_test_choice "de" sequence_test))
+sequence_test ::= (("aab" sequence_test_1 "de" sequence_test))
 nested_test ::= (("abcd") | ("a") | ("b") | ("c") | (nested_rest))
 nested_rest ::= (("a") | ("bc") | ("d") | ("ef") | ("g"))
 empty_test ::= ("" | ("d") | ("a"))
-sequence_test_choice ::= (("c") | ("d"))
+sequence_test_1 ::= (("c") | ("d"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     grammar = GrammarFunctor.structure_normalizer(grammar)
@@ -548,113 +797,105 @@ rule3 ::= (("c"))
     assert output_string_1 == output_string_2
 
 
-def test_error():
-    with pytest.raises(
-        RuntimeError, match='EBNF parse error at line 1, column 11: Rule "a" is not defined'
-    ):
-        xgr.Grammar.from_ebnf("root ::= a b")
-
-    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 15: Expect element"):
-        xgr.Grammar.from_ebnf('root ::= "a" |')
-
-    with pytest.raises(RuntimeError, match='EBNF parse error at line 1, column 15: Expect "'):
-        xgr.Grammar.from_ebnf('root ::= "a" "')
-
-    with pytest.raises(
-        RuntimeError, match="EBNF parse error at line 1, column 1: Expect rule name"
-    ):
-        xgr.Grammar.from_ebnf('::= "a"')
-
-    with pytest.raises(
-        RuntimeError,
-        match="EBNF parse error at line 1, column 12: Character class should not contain newline",
-    ):
-        xgr.Grammar.from_ebnf("root ::= [a\n]")
-
-    with pytest.raises(
-        RuntimeError, match="EBNF parse error at line 1, column 11: Invalid escape sequence"
-    ):
-        xgr.Grammar.from_ebnf(r'root ::= "\@"')
-
-    with pytest.raises(
-        RuntimeError, match="EBNF parse error at line 1, column 11: Invalid escape sequence"
-    ):
-        xgr.Grammar.from_ebnf(r'root ::= "\uFF"')
-
-    with pytest.raises(
-        RuntimeError,
-        match="EBNF parse error at line 1, column 14: Invalid character class: "
-        "lower bound is larger than upper bound",
-    ):
-        xgr.Grammar.from_ebnf(r"root ::= [Z-A]")
-
-    with pytest.raises(RuntimeError, match="EBNF parse error at line 1, column 6: Expect ::="):
-        xgr.Grammar.from_ebnf(r'root := "a"')
-
-    with pytest.raises(
-        RuntimeError,
-        match='EBNF parse error at line 2, column 9: Rule "root" is defined multiple times',
-    ):
-        xgr.Grammar.from_ebnf('root ::= "a"\nroot ::= "b"')
-
-    with pytest.raises(
-        RuntimeError,
-        match='EBNF parse error at line 1, column 10: The root rule with name "root" is not found.',
-    ):
-        xgr.Grammar.from_ebnf('a ::= "a"')
-
-    with pytest.raises(
-        RuntimeError, match="EBNF parse error at line 1, column 21: Unexpected lookahead assertion"
-    ):
-        xgr.Grammar.from_ebnf('root ::= "a" (="a") (="b")')
+ebnf_str__expected_error_regex__test_lexer_parser_errors = [
+    (r'root ::= "a" "', 'EBNF lexer error at line 1, column 15: Expect " in string literal'),
+    (
+        "root ::= [a\n]",
+        "EBNF lexer error at line 1, column 12: Character class should not contain newline",
+    ),
+    (r'root ::= "\@"', "EBNF lexer error at line 1, column 11: Invalid escape sequence"),
+    (r'root ::= "\uFF"', "EBNF lexer error at line 1, column 11: Invalid escape sequence"),
+    (r'::= "a"', "EBNF lexer error at line 1, column 1: Assign should not be the first token"),
+    (r"root ::= a b", 'EBNF parser error at line 1, column 10: Rule "a" is not defined'),
+    (r'root ::= "a" |', "EBNF parser error at line 1, column 15: Expect element"),
+    (
+        r"root ::= [Z-A]",
+        "EBNF parser error at line 1, column 11: Invalid character class: lower bound is larger "
+        "than upper bound",
+    ),
+    (
+        'root ::= "a"\nroot ::= "b"',
+        'EBNF parser error at line 2, column 1: Rule "root" is defined multiple times',
+    ),
+    (
+        r'a ::= "a"',
+        'EBNF parser error at line 1, column 1: The root rule with name "root" is not found',
+    ),
+    (r'root ::= "a" (="a") (="b")', "EBNF parser error at line 1, column 21: Expect rule name"),
+]
 
 
-def test_error_tag_dispatch():
-    # Test empty tag
-    with pytest.raises(RuntimeError):
-        xgr.Grammar.from_ebnf(
-            """root ::= TagDispatch(("", rule1))
-rule1 ::= "a"
+@pytest.mark.parametrize(
+    "ebnf_str, expected_error_regex", ebnf_str__expected_error_regex__test_lexer_parser_errors
+)
+def test_lexer_parser_errors(ebnf_str: str, expected_error_regex: Optional[str]):
+    with pytest.raises(RuntimeError, match=expected_error_regex):
+        _ebnf_to_grammar_no_normalization(ebnf_str)
+
+
+ebnf_str__expected_error_regex__test_end_to_end_errors = [
+    (r'root ::= "a" (=("a" | "b"))', "Choices in lookahead assertion are not supported yet")
+]
+
+
+@pytest.mark.parametrize(
+    "ebnf_str, expected_error_regex", ebnf_str__expected_error_regex__test_end_to_end_errors
+)
+def test_end_to_end_errors(ebnf_str: str, expected_error_regex: Optional[str]):
+    with pytest.raises(RuntimeError, match=expected_error_regex):
+        xgr.Grammar.from_ebnf(ebnf_str)
+
+
+ebnf_str__expected_error_regex__test_tag_dispatch_parser_errors = [
+    (
+        'root ::= TagDispatch(("", rule1))\nrule1 ::= "a"',
+        "EBNF parser error at line 1, column 21: Tag must be a non-empty string literal",
+    ),
+    (
+        'root ::= TagDispatch(("tag1", undefined_rule))',
+        'EBNF parser error at line 1, column 21: Rule "undefined_rule" is not defined',
+    ),
+    (
+        'root ::= TagDispatch("tag1", rule1)',
+        "EBNF parser error at line 1, column 21: Each tag dispatch element must be a tuple",
+    ),
+    (
+        'root ::= TagDispatch(("tag1" rule1))',
+        "EBNF parser error at line 1, column 30: Expect , or \\) in tuple",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "ebnf_str, expected_error_regex",
+    ebnf_str__expected_error_regex__test_tag_dispatch_parser_errors,
+)
+def test_tag_dispatch_parser_errors(ebnf_str: str, expected_error_regex: Optional[str]):
+    with pytest.raises(RuntimeError, match=expected_error_regex):
+        _ebnf_to_grammar_no_normalization(ebnf_str)
+
+
+def test_error_consecutive_quantifiers():
+    grammar_str = """root ::= "a"{1,3}{1,3}
 """
-        )
+    with pytest.raises(
+        RuntimeError, match="EBNF parser error at line 1, column 18: Expect element, but got {"
+    ):
+        xgr.Grammar.from_ebnf(grammar_str)
 
-    # Test undefined rule
-    with pytest.raises(RuntimeError):
-        xgr.Grammar.from_ebnf(
-            """root ::= TagDispatch(("tag1", undefined_rule))
+    grammar_str = """root ::= "a"++
 """
-        )
+    with pytest.raises(
+        RuntimeError, match="EBNF parser error at line 1, column 14: Expect element, but got +"
+    ):
+        xgr.Grammar.from_ebnf(grammar_str)
 
-    # Test using root rule as tag target
-    with pytest.raises(RuntimeError):
-        xgr.Grammar.from_ebnf(
-            """root ::= TagDispatch(("tag1", root))
+    grammar_str = """root ::= "a"??
 """
-        )
-
-    # Test invalid TagDispatch syntax
-    with pytest.raises(RuntimeError):
-        xgr.Grammar.from_ebnf(
-            """root ::= TagDispatch("tag1", rule1)
-rule1 ::= "a"
-"""
-        )
-
-    with pytest.raises(RuntimeError):
-        xgr.Grammar.from_ebnf(
-            """root ::= TagDispatch(("tag1" rule1))
-rule1 ::= "a"
-"""
-        )
-
-    # Test TagDispatch in non-root rule
-    with pytest.raises(RuntimeError):
-        xgr.Grammar.from_ebnf(
-            """root ::= rule1
-rule1 ::= TagDispatch(("tag1", rule2))
-rule2 ::= "a"
-"""
-        )
+    with pytest.raises(
+        RuntimeError, match="EBNF parser error at line 1, column 14: Expect element, but got ?"
+    ):
+        xgr.Grammar.from_ebnf(grammar_str)
 
 
 if __name__ == "__main__":

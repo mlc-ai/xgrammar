@@ -17,10 +17,11 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Configuring build Environment
-        run: |
-          sudo apt-get update
-          python -m pip install -U pip wheel setuptools
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -33,7 +34,7 @@ jobs:
           gem install jekyll jekyll-remote-theme
 
       - name: Deploying on GitHub Pages
-        if: github.ref == 'refs/heads/main'&& github.repository_owner == 'mlc-ai'
+        if: github.ref == 'refs/heads/main' && github.repository_owner == 'mlc-ai'
         run: |
           git remote set-url origin https://x-access-token:${{ secrets.MLC_GITHUB_TOKEN }}@github.com/$GITHUB_REPOSITORY
           git config --global user.email "mlc-gh-actions-bot@nomail"

@@ -456,7 +456,7 @@ def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
         matcher.fill_next_token_bitmask(token_bitmask)
         time_end = time.monotonic_ns()
         print(f"Time for fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
-        accepted = matcher._debug_accept_string(bytes([c]))
+        accepted = matcher.accept_string(bytes([c]))
         assert accepted
         print(f"Accepting {c}")
 

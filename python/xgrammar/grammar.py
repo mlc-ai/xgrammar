@@ -9,23 +9,14 @@ from .base import XGRObject, _core
 
 
 class StructuralTagItem(BaseModel):
-    """A structural tag item. See Grammar.from_structural_tag() for more details.
-
-    Attributes
-    ----------
-    begin : str
-        The begin tag.
-
-    schema_ : Union[str, Type[BaseModel]]
-        The schema.
-
-    end : str
-        The end tag.
-    """
+    """A structural tag item. See :meth:`xgrammar.Grammar.from_structural_tag` for more details."""
 
     begin: str
+    """The begin tag."""
     schema_: Union[str, Type[BaseModel], Dict[str, Any]] = Field(alias="schema")
+    """The schema."""
     end: str
+    """The end tag."""
 
 
 def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
@@ -254,18 +245,23 @@ class Grammar(XGRObject):
         triggers : List[str]
             The triggers.
 
+        Returns
+        -------
+        grammar : Grammar
+            The constructed grammar.
+
         Examples
         --------
         >>> class Schema1(BaseModel):
-        >>>     arg1: str
-        >>>     arg2: int
+        ...     arg1: str
+        ...     arg2: int
         >>> class Schema2(BaseModel):
-        >>>     arg3: float
-        >>>     arg4: List[str]
+        ...     arg3: float
+        ...     arg4: List[str]
         >>> tags = [
-        >>>     StructuralTagItem(begin="<function=f>", schema=Schema1, end="</function>"),
-        >>>     StructuralTagItem(begin="<function=g>", schema=Schema2, end="</function>"),
-        >>> ]
+        ...     StructuralTagItem(begin="<function=f>", schema=Schema1, end="</function>"),
+        ...     StructuralTagItem(begin="<function=g>", schema=Schema2, end="</function>"),
+        ... ]
         >>> triggers = ["<function="]
         >>> grammar = Grammar.from_structural_tag(tags, triggers)
         """
@@ -319,3 +315,12 @@ class Grammar(XGRObject):
         """
         grammar_handles = [grammar._handle for grammar in grammars]
         return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
+
+    def serialize_json(self) -> str:
+        """Serialize the grammar to a JSON string."""
+        return self._handle.serialize_json()
+
+    @staticmethod
+    def deserialize_json(json_string: str) -> "Grammar":
+        """Deserialize a grammar from a JSON string."""
+        return Grammar._create_from_handle(_core.Grammar.deserialize_json(json_string))

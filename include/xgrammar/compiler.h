@@ -28,6 +28,14 @@ class CompiledGrammar {
   /*! \brief Return the approximate memory usage of the grammar in bytes. */
   std::size_t MemorySizeBytes() const;
 
+  /*! \brief Return the serialized JSON string of the compiled grammar. */
+  std::string SerializeJSON() const;
+
+  /*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
+  static CompiledGrammar DeserializeJSON(
+      const std::string& json_string, TokenizerInfo tokenizer_info
+  );
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);
 };
 

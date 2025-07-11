@@ -70,7 +70,7 @@ std::string JSONSchemaToEBNF(
  * \param end The end of the range (inclusive). If null assume infinity.
  * \returns The regex pattern that matches integers/floats in the given range.
  */
-std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end);
+std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
 
 std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<double> end);
 

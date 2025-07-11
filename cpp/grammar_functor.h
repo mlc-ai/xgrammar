@@ -19,7 +19,7 @@ namespace xgrammar {
 /*!
  * \brief Base class for visitors and mutators of the BNF grammar.
  * \tparam T The type of the return value of visitor functions. Typical values:
- * - int32_t: the id of the new rule_expr
+ * - int32_t: the id of the new grammar_expr
  * - void: no return value
  * \tparam ReturnType The type of the return value of the transform function Apply(). Typical values
  * are void (for visitor) and Grammar (for mutator).
@@ -61,7 +61,7 @@ class GrammarFunctor {
         auto new_body_expr_id = VisitExpr(rule.body_expr_id);
         builder_.UpdateRuleBody(i, new_body_expr_id);
         // Handle lookahead assertion
-        builder_.AddLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+        builder_.UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       }
       return builder_.Get(base_grammar_->GetRootRule().name);
     } else {
@@ -74,8 +74,8 @@ class GrammarFunctor {
 
  protected:
   using Rule = Grammar::Impl::Rule;
-  using RuleExpr = Grammar::Impl::RuleExpr;
-  using RuleExprType = Grammar::Impl::RuleExprType;
+  using GrammarExpr = Grammar::Impl::GrammarExpr;
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
 
   /*! \brief Initialize the functor. Should be called at the beginning of Apply(). */
   virtual void Init(const Grammar& grammar) {
@@ -100,44 +100,44 @@ class GrammarFunctor {
     return VisitExpr(lookahead_assertion_id);
   }
 
-  /*! \brief Visit a RuleExpr by id. */
-  virtual T VisitExpr(int32_t old_rule_expr_id) {
-    return VisitExpr(base_grammar_->GetRuleExpr(old_rule_expr_id));
+  /*! \brief Visit a GrammarExpr by id. */
+  virtual T VisitExpr(int32_t old_grammar_expr_id) {
+    return VisitExpr(base_grammar_->GetGrammarExpr(old_grammar_expr_id));
   }
 
-  /*! \brief Visit a RuleExpr. Dispatch to the corresponding Visit function. */
-  virtual T VisitExpr(const RuleExpr& rule_expr) {
-    switch (rule_expr.type) {
-      case RuleExprType::kSequence:
-        return VisitSequence(rule_expr);
-      case RuleExprType::kChoices:
-        return VisitChoices(rule_expr);
-      case RuleExprType::kEmptyStr:
-        return VisitEmptyStr(rule_expr);
-      case RuleExprType::kByteString:
-        return VisitByteString(rule_expr);
-      case RuleExprType::kCharacterClass:
-        return VisitCharacterClass(rule_expr);
-      case RuleExprType::kCharacterClassStar:
-        return VisitCharacterClassStar(rule_expr);
-      case RuleExprType::kRuleRef:
-        return VisitRuleRef(rule_expr);
-      case RuleExprType::kTagDispatch:
-        return VisitTagDispatch(rule_expr);
+  /*! \brief Visit a GrammarExpr. Dispatch to the corresponding Visit function. */
+  virtual T VisitExpr(const GrammarExpr& grammar_expr) {
+    switch (grammar_expr.type) {
+      case GrammarExprType::kSequence:
+        return VisitSequence(grammar_expr);
+      case GrammarExprType::kChoices:
+        return VisitChoices(grammar_expr);
+      case GrammarExprType::kEmptyStr:
+        return VisitEmptyStr(grammar_expr);
+      case GrammarExprType::kByteString:
+        return VisitByteString(grammar_expr);
+      case GrammarExprType::kCharacterClass:
+        return VisitCharacterClass(grammar_expr);
+      case GrammarExprType::kCharacterClassStar:
+        return VisitCharacterClassStar(grammar_expr);
+      case GrammarExprType::kRuleRef:
+        return VisitRuleRef(grammar_expr);
+      case GrammarExprType::kTagDispatch:
+        return VisitTagDispatch(grammar_expr);
       default:
-        XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(rule_expr.type);
+        XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
     }
   }
 
-  /*! \brief Visit a choices RuleExpr. */
-  virtual T VisitChoices(const RuleExpr& rule_expr) {
+  /*! \brief Visit a choices GrammarExpr. */
+  virtual T VisitChoices(const GrammarExpr& grammar_expr) {
     if constexpr (std::is_same<T, void>::value) {
-      for (auto i : rule_expr) {
+      for (auto i : grammar_expr) {
         VisitExpr(i);
       }
     } else if constexpr (std::is_same<T, int32_t>::value) {
       std::vector<int32_t> choice_ids;
-      for (int32_t i : rule_expr) {
+      for (int32_t i : grammar_expr) {
         choice_ids.push_back(VisitExpr(i));
       }
       return builder_.AddChoices(choice_ids);
@@ -146,15 +146,15 @@ class GrammarFunctor {
     }
   }
 
-  /*! \brief Visit a sequence RuleExpr. */
-  virtual T VisitSequence(const RuleExpr& rule_expr) {
+  /*! \brief Visit a sequence GrammarExpr. */
+  virtual T VisitSequence(const GrammarExpr& grammar_expr) {
     if constexpr (std::is_same<T, void>::value) {
-      for (auto i : rule_expr) {
+      for (auto i : grammar_expr) {
         VisitExpr(i);
       }
     } else if constexpr (std::is_same<T, int32_t>::value) {
       std::vector<T> sequence_ids;
-      for (int32_t i : rule_expr) {
+      for (int32_t i : grammar_expr) {
         sequence_ids.push_back(VisitExpr(i));
       }
       return builder_.AddSequence(sequence_ids);
@@ -163,15 +163,15 @@ class GrammarFunctor {
     }
   }
 
-  virtual T VisitTagDispatch(const RuleExpr& rule_expr) {
+  virtual T VisitTagDispatch(const GrammarExpr& grammar_expr) {
     if constexpr (std::is_same<T, void>::value) {
-      for (int i = 0; i < rule_expr.size(); i += 2) {
-        VisitExpr(rule_expr[i]);
+      for (int i = 0; i < grammar_expr.size(); i += 2) {
+        VisitExpr(grammar_expr[i]);
       }
     } else if constexpr (std::is_same<T, int32_t>::value) {
       std::vector<std::pair<int32_t, int32_t>> tag_dispatch_list;
-      for (int i = 0; i < rule_expr.size(); i += 2) {
-        tag_dispatch_list.push_back({VisitExpr(rule_expr[i]), rule_expr[i + 1]});
+      for (int i = 0; i < grammar_expr.size(); i += 2) {
+        tag_dispatch_list.push_back({VisitExpr(grammar_expr[i]), grammar_expr[i + 1]});
       }
       return builder_.AddTagDispatch(tag_dispatch_list);
     } else {
@@ -179,34 +179,38 @@ class GrammarFunctor {
     }
   }
 
-  /*! \brief Visit an element RuleExpr, including empty string, character class, and rule ref. */
-  virtual T VisitElement(const RuleExpr& rule_expr) {
+  /*! \brief Visit an element GrammarExpr, including empty string, character class, and rule ref. */
+  virtual T VisitElement(const GrammarExpr& grammar_expr) {
     if constexpr (std::is_same<T, void>::value) {
       return;
     } else if constexpr (std::is_same<T, int32_t>::value) {
-      return builder_.AddRuleExpr(rule_expr);
+      return builder_.AddGrammarExpr(grammar_expr);
     } else {
       return T();
     }
   }
 
-  /*! \brief Visit an empty string RuleExpr. */
-  virtual T VisitEmptyStr(const RuleExpr& rule_expr) { return VisitElement(rule_expr); }
+  /*! \brief Visit an empty string GrammarExpr. */
+  virtual T VisitEmptyStr(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
 
-  /*! \brief Visit a character class RuleExpr. */
-  virtual T VisitByteString(const RuleExpr& rule_expr) { return VisitElement(rule_expr); }
+  /*! \brief Visit a character class GrammarExpr. */
+  virtual T VisitByteString(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
 
-  /*! \brief Visit a character class RuleExpr. */
-  virtual T VisitCharacterClass(const RuleExpr& rule_expr) { return VisitElement(rule_expr); }
+  /*! \brief Visit a character class GrammarExpr. */
+  virtual T VisitCharacterClass(const GrammarExpr& grammar_expr) {
+    return VisitElement(grammar_expr);
+  }
 
-  /*! \brief Visit a star quantifier RuleExpr. */
-  virtual T VisitCharacterClassStar(const RuleExpr& rule_expr) { return VisitElement(rule_expr); }
+  /*! \brief Visit a star quantifier GrammarExpr. */
+  virtual T VisitCharacterClassStar(const GrammarExpr& grammar_expr) {
+    return VisitElement(grammar_expr);
+  }
 
-  /*! \brief Visit a rule reference RuleExpr. */
-  virtual T VisitRuleRef(const RuleExpr& rule_expr) { return VisitElement(rule_expr); }
+  /*! \brief Visit a rule reference GrammarExpr. */
+  virtual T VisitRuleRef(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
 
   /*! \brief The grammar to visit or mutate. */
-  Grammar base_grammar_;
+  Grammar base_grammar_{NullObj{}};
 
   /*!
    * \brief The builder to build the new grammar. It is empty when the mutator is constructed, and

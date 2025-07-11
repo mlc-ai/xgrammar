@@ -1,9 +1,17 @@
 .. _apixgrammar:
 
-xgrammar
-========
+XGrammar Python API
+===================
 
-.. automodule:: xgrammar
-   :members:
-   :imported-members:
-   :autosummary:
+.. toctree::
+   :maxdepth: 2
+
+   grammar
+   tokenizer_info
+   grammar_compiler
+   compiled_grammar
+   grammar_matcher
+   testing
+   structural_tag
+   bitmask_ops
+   configuration

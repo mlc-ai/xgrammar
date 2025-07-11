@@ -15,8 +15,6 @@ keywords = ["machine learning", "inference"]
 requires-python = ">=3.8, <4"
 dependencies = [
   "pydantic",
-  "sentencepiece",
-  "tiktoken",
   "torch>=1.10.0",
   "transformers>=4.38.0",
   "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
@@ -31,9 +29,11 @@ GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
 test = [
-  "pytest",
-  "protobuf",
   "huggingface-hub[cli]",
+  "protobuf",
+  "pytest",
+  "sentencepiece",
+  "tiktoken",
   # transformers==4.50.0 has error on MacOS.
   # https://github.com/huggingface/transformers/issues/36906
   "transformers<4.50.0; platform_system == 'Darwin'",
@@ -101,6 +101,7 @@ editable.rebuild = true
 editable.verbose = true
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 addopts = "-rA --durations=0 --ignore=3rdparty"
 markers = ["hf_token_required: mark test as requiring a huggingface token"]
 

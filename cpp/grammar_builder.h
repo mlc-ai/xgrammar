@@ -22,8 +22,8 @@ namespace xgrammar {
 class GrammarBuilder {
  public:
   using Rule = Grammar::Impl::Rule;
-  using RuleExprType = Grammar::Impl::RuleExprType;
-  using RuleExpr = Grammar::Impl::RuleExpr;
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  using GrammarExpr = Grammar::Impl::GrammarExpr;
 
   /*! \brief Default constructor. Creates a new grammar object. */
   GrammarBuilder() : grammar_(std::make_shared<Grammar::Impl>()) {}
@@ -64,40 +64,40 @@ class GrammarBuilder {
     return Grammar(grammar_);
   }
 
-  /****************** RuleExpr handling ******************/
+  /****************** GrammarExpr handling ******************/
 
-  /*! \brief Add a rule_expr and return the rule_expr id. */
-  int32_t AddRuleExpr(const RuleExpr& rule_expr) {
-    grammar_->rule_expr_indptr_.push_back(grammar_->rule_expr_data_.size());
-    grammar_->rule_expr_data_.push_back(static_cast<int32_t>(rule_expr.type));
-    grammar_->rule_expr_data_.push_back(rule_expr.data_len);
-    grammar_->rule_expr_data_.insert(
-        grammar_->rule_expr_data_.end(), rule_expr.data, rule_expr.data + rule_expr.data_len
+  /*! \brief Add a grammar_expr and return the grammar_expr id. */
+  int32_t AddGrammarExpr(const GrammarExpr& grammar_expr) {
+    grammar_->grammar_expr_indptr_.push_back(grammar_->grammar_expr_data_.size());
+    grammar_->grammar_expr_data_.push_back(static_cast<int32_t>(grammar_expr.type));
+    grammar_->grammar_expr_data_.push_back(grammar_expr.data_len);
+    grammar_->grammar_expr_data_.insert(
+        grammar_->grammar_expr_data_.end(),
+        grammar_expr.data,
+        grammar_expr.data + grammar_expr.data_len
     );
-    return static_cast<int32_t>(grammar_->rule_expr_indptr_.size()) - 1;
+    return static_cast<int32_t>(grammar_->grammar_expr_indptr_.size()) - 1;
   }
 
   /*!
-   * \brief Add a RuleExpr for string stored in bytes.
+   * \brief Add a GrammarExpr for string stored in bytes.
    * \param bytes A vector of int32_t, each representing a byte (0~255) in the string.
    * The string is stored in int32 vector to match the storage format of the grammar.
    */
   int32_t AddByteString(const std::vector<int32_t>& bytes) {
-    return AddRuleExpr({RuleExprType::kByteString, bytes.data(), static_cast<int32_t>(bytes.size())}
+    return AddGrammarExpr(
+        {GrammarExprType::kByteString, bytes.data(), static_cast<int32_t>(bytes.size())}
     );
   }
 
   /*!
-   * \brief Add a RuleExpr for string stored in bytes.
+   * \brief Add a GrammarExpr for string stored in bytes.
    * \param str The string to be added.
    */
   int32_t AddByteString(const std::string& str) {
-    std::vector<int32_t> bytes;
-    bytes.reserve(str.size());
-    for (char c : str) {
-      bytes.push_back(static_cast<int32_t>(c));
-    }
-    return AddRuleExpr({RuleExprType::kByteString, bytes.data(), static_cast<int32_t>(bytes.size())}
+    std::vector<int32_t> bytes(str.begin(), str.end());
+    return AddGrammarExpr(
+        {GrammarExprType::kByteString, bytes.data(), static_cast<int32_t>(bytes.size())}
     );
   }
 
@@ -111,7 +111,7 @@ class GrammarBuilder {
   };
 
   /*!
-   * \brief Add a RuleExpr for a character class.
+   * \brief Add a GrammarExpr for a character class.
    * \param elements A vector of CharacterClassElement, each containing a lower and a upper bound.
    * \param is_negative Whether the character class is negated.
    */
@@ -125,13 +125,13 @@ class GrammarBuilder {
       data.push_back(range.lower);
       data.push_back(range.upper);
     }
-    return AddRuleExpr(
-        {RuleExprType::kCharacterClass, data.data(), static_cast<int32_t>(data.size())}
+    return AddGrammarExpr(
+        {GrammarExprType::kCharacterClass, data.data(), static_cast<int32_t>(data.size())}
     );
   }
 
   /*!
-   * \brief Add a RuleExpr for a star quantifier of a character class.
+   * \brief Add a GrammarExpr for a star quantifier of a character class.
    * \param elements A vector of CharacterClassElement, each containing a lower and a upper bound.
    * \param is_negative Whether the character class is negated.
    */
@@ -145,37 +145,39 @@ class GrammarBuilder {
       data.push_back(range.lower);
       data.push_back(range.upper);
     }
-    return AddRuleExpr(
-        {RuleExprType::kCharacterClassStar, data.data(), static_cast<int32_t>(data.size())}
+    return AddGrammarExpr(
+        {GrammarExprType::kCharacterClassStar, data.data(), static_cast<int32_t>(data.size())}
     );
   }
 
-  /*! \brief Add a RuleExpr for empty string.*/
-  int32_t AddEmptyStr() { return AddRuleExpr({RuleExprType::kEmptyStr, nullptr, 0}); }
+  /*! \brief Add a GrammarExpr for empty string.*/
+  int32_t AddEmptyStr() { return AddGrammarExpr({GrammarExprType::kEmptyStr, nullptr, 0}); }
 
-  /*! \brief Add a RuleExpr for rule reference.*/
+  /*! \brief Add a GrammarExpr for rule reference.*/
   int32_t AddRuleRef(int32_t rule_id) {
     std::vector<int32_t> data;
     data.push_back(rule_id);
-    return AddRuleExpr({RuleExprType::kRuleRef, data.data(), static_cast<int32_t>(data.size())});
-  }
-
-  /*! \brief Add a RuleExpr for RuleExpr sequence.*/
-  int32_t AddSequence(const std::vector<int32_t>& elements) {
-    return AddRuleExpr(
-        {RuleExprType::kSequence, elements.data(), static_cast<int32_t>(elements.size())}
+    return AddGrammarExpr(
+        {GrammarExprType::kRuleRef, data.data(), static_cast<int32_t>(data.size())}
     );
   }
 
-  /*! \brief Add a RuleExpr for RuleExpr choices.*/
+  /*! \brief Add a GrammarExpr for GrammarExpr sequence.*/
+  int32_t AddSequence(const std::vector<int32_t>& elements) {
+    return AddGrammarExpr(
+        {GrammarExprType::kSequence, elements.data(), static_cast<int32_t>(elements.size())}
+    );
+  }
+
+  /*! \brief Add a GrammarExpr for GrammarExpr choices.*/
   int32_t AddChoices(const std::vector<int32_t>& choices) {
-    return AddRuleExpr(
-        {RuleExprType::kChoices, choices.data(), static_cast<int32_t>(choices.size())}
+    return AddGrammarExpr(
+        {GrammarExprType::kChoices, choices.data(), static_cast<int32_t>(choices.size())}
     );
   }
 
   /*!
-   * \brief Add a RuleExpr for tag dispatch.
+   * \brief Add a GrammarExpr for tag dispatch.
    * \param tag_dispatch_list A list of pairs of tag_expr_id and rule_id.
    */
   int32_t AddTagDispatch(const std::vector<std::pair<int32_t, int32_t>>& tag_dispatch_list) {
@@ -185,13 +187,16 @@ class GrammarBuilder {
       data.push_back(tag_expr_id);
       data.push_back(rule_id);
     }
-    return AddRuleExpr({RuleExprType::kTagDispatch, data.data(), static_cast<int32_t>(data.size())}
+    return AddGrammarExpr(
+        {GrammarExprType::kTagDispatch, data.data(), static_cast<int32_t>(data.size())}
     );
   }
 
-  size_t NumRuleExprs() const { return grammar_->NumRuleExprs(); }
-  /*! \brief Get the rule_expr with the given id. */
-  RuleExpr GetRuleExpr(int32_t rule_expr_id) { return grammar_->GetRuleExpr(rule_expr_id); }
+  int32_t NumGrammarExprs() const { return grammar_->NumGrammarExprs(); }
+  /*! \brief Get the grammar_expr with the given id. */
+  GrammarExpr GetGrammarExpr(int32_t grammar_expr_id) {
+    return grammar_->GetGrammarExpr(grammar_expr_id);
+  }
 
   /****************** Rule handling ******************/
 
@@ -213,7 +218,7 @@ class GrammarBuilder {
     return AddRule({GetNewRuleName(name_hint), body_expr_id});
   }
 
-  size_t NumRules() const { return grammar_->NumRules(); }
+  int32_t NumRules() const { return grammar_->NumRules(); }
 
   /*! \brief Get the rule with the given id. */
   const Rule& GetRule(int32_t rule_id) const { return grammar_->rules_[rule_id]; }
@@ -248,24 +253,22 @@ class GrammarBuilder {
 
   /*!
    * \brief Add a lookahead assertion to a rule referred by the given rule_id. The lookahead
-   * assertion should be a sequence RuleExpr id. An id of -1 means no lookahead assertion.
+   * assertion should be a sequence GrammarExpr id. An id of -1 means no lookahead assertion.
    */
-  void AddLookaheadAssertion(int32_t rule_id, int32_t lookahead_assertion_id) {
+  void UpdateLookaheadAssertion(int32_t rule_id, int32_t lookahead_assertion_id) {
     XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(grammar_->rules_.size()))
         << "Rule id " << rule_id << " is out of range.";
-    XGRAMMAR_CHECK(grammar_->rules_[rule_id].lookahead_assertion_id == -1)
-        << "Rule " << rule_id << " already has a lookahead assertion.";
     grammar_->rules_[rule_id].lookahead_assertion_id = lookahead_assertion_id;
   }
 
   /*!
    * \brief Add a lookahead assertion to a rule referred by the given name. The lookahead
-   * assertion should be a sequence RuleExpr id. An id of -1 means no lookahead assertion.
+   * assertion should be a sequence GrammarExpr id. An id of -1 means no lookahead assertion.
    */
-  void AddLookaheadAssertion(std::string rule_name, int32_t lookahead_assertion_id) {
+  void UpdateLookaheadAssertion(std::string rule_name, int32_t lookahead_assertion_id) {
     int32_t rule_id = GetRuleId(rule_name);
     XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
-    AddLookaheadAssertion(rule_id, lookahead_assertion_id);
+    UpdateLookaheadAssertion(rule_id, lookahead_assertion_id);
   }
 
   /*!

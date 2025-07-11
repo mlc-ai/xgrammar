@@ -15,8 +15,8 @@ class CompiledGrammar(XGRObject):
     A CompiledGrammar can be used to construct GrammarMatcher
     to generate token masks efficiently.
 
-    Note
-    ----
+    Notes
+    -----
     Do not construct this class directly, instead
     use :class:`GrammarCompiler` to construct the object.
     """
@@ -36,27 +36,23 @@ class CompiledGrammar(XGRObject):
         """The approximate memory usage of the compiled grammar in bytes."""
         return self._handle.memory_size_bytes
 
+    def serialize_json(self) -> str:
+        """Serialize the compiled grammar to a JSON string."""
+        return self._handle.serialize_json()
+
+    @staticmethod
+    def deserialize_json(json_str: str, tokenizer_info: TokenizerInfo) -> "CompiledGrammar":
+        """Deserialize the compiled grammar from a JSON string and tokenizer info."""
+        return CompiledGrammar._create_from_handle(
+            _core.CompiledGrammar.deserialize_json(json_str, tokenizer_info._handle)
+        )
+
 
 class GrammarCompiler(XGRObject):
     """The compiler for grammars. It is associated with a certain tokenizer info, and compiles
     grammars into CompiledGrammar with the tokenizer info. It allows parallel compilation with
     multiple threads, and has a cache to store the compilation result, avoiding compiling the
     same grammar multiple times.
-
-    Parameters
-    ----------
-    tokenizer_info : TokenizerInfo
-        The tokenizer info.
-
-    max_threads : int, default: 8
-        The maximum number of threads used to compile the grammar.
-
-    cache_enabled : bool, default: True
-        Whether to enable the cache.
-
-    cache_limit_bytes : int, default: -1
-        The maximum memory usage for the cache in the specified unit.
-        Note that the actual memory usage may slightly exceed this value.
     """
 
     def __init__(
@@ -67,6 +63,23 @@ class GrammarCompiler(XGRObject):
         cache_enabled: bool = True,
         cache_limit_bytes: int = -1,
     ):
+        """Construct the compiler.
+
+        Parameters
+        ----------
+        tokenizer_info : TokenizerInfo
+            The tokenizer info.
+
+        max_threads : int, default: 8
+            The maximum number of threads used to compile the grammar.
+
+        cache_enabled : bool, default: True
+            Whether to enable the cache.
+
+        cache_limit_bytes : int, default: -1
+            The maximum memory usage for the cache in the specified unit.
+            Note that the actual memory usage may slightly exceed this value.
+        """
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(
                 "Please convert the tokenizer to TokenizerInfo before passing it "
@@ -174,39 +187,41 @@ class GrammarCompiler(XGRObject):
         )
 
     @overload
-    def compile_grammar(self, ebnf_string: str, *, root_rule_name: str = "root") -> CompiledGrammar:
-        """Compile a grammar from EBNF string. The EBNF string should follow the format
-        in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.
+    def compile_grammar(
+        self, ebnf_string: str, *, root_rule_name: str = "root"
+    ) -> CompiledGrammar: ...
+
+    @overload
+    def compile_grammar(self, grammar: Grammar) -> CompiledGrammar: ...
+
+    def compile_grammar(
+        self, grammar: Union[str, Grammar], *, root_rule_name: str = "root"
+    ) -> CompiledGrammar:
+        """Compile a grammar object.
+
+        Overloads:
+
+        1. ``compile_grammar(ebnf_string: str, *, root_rule_name: str = "root") -> CompiledGrammar``
+            - Compile a grammar from an EBNF string. The string should follow the format described
+              in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.
+
+        2. ``compile_grammar(grammar: Grammar) -> CompiledGrammar``
+            - Compile a grammar from a Grammar object.
 
         Parameters
         ----------
         ebnf_string : str
             The grammar string in EBNF format.
-
         root_rule_name : str, default: "root"
             The name of the root rule in the grammar.
+        grammar : Union[str, Grammar]
+            The grammar string or Grammar object.
 
         Returns
         -------
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        ...
-
-    @overload
-    def compile_grammar(self, grammar: Grammar) -> CompiledGrammar:
-        """Compile a grammar object.
-
-        Returns
-        -------
-        compiled_grammar : CompiledGrammar
-            The compiled grammar.
-        """
-        ...
-
-    def compile_grammar(
-        self, grammar: Union[str, Grammar], *, root_rule_name: str = "root"
-    ) -> CompiledGrammar:
         if isinstance(grammar, str):
             grammar = Grammar.from_ebnf(grammar, root_rule_name=root_rule_name)
         return CompiledGrammar._create_from_handle(self._handle.compile_grammar(grammar._handle))

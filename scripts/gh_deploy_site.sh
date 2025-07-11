@@ -1,10 +1,13 @@
 #!/bin/bash
+
+# Build the docs and the site, then deploy to github pages
+
 # NOTE: this script is triggered by github action automatically
 # when megred into main
 
 set -euxo pipefail
 
-scripts/build_site.sh
+scripts/support/build_site.sh
 
 git fetch
 git checkout -B gh-pages origin/gh-pages

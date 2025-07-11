@@ -39,6 +39,7 @@ class TokenizerInfo {
   const std::vector<int32_t>& GetStopTokenIds() const;
   const std::vector<int32_t>& GetSpecialTokenIds() const;
   const std::vector<std::pair<int32_t, std::string>>& GetSortedDecodedVocab() const;
+  const std::vector<int32_t>& GetTrieSubtreeNodesRange() const;
   std::string DumpMetadata() const;
 
   static TokenizerInfo FromVocabAndMetadata(
@@ -46,6 +47,14 @@ class TokenizerInfo {
   );
 
   static std::string DetectMetadataFromHF(const std::string& backend_str);
+
+  /*! \brief Return the serialized JSON string of the tokenizer info. */
+  std::string SerializeJSON() const;
+
+  /*! \brief Deserialize a tokenizer info from a JSON string (and encoded_vocab). */
+  static TokenizerInfo DeserializeJSON(
+      const std::string& json_string, const std::vector<std::string>& encoded_vocab
+  );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(TokenizerInfo);
 };

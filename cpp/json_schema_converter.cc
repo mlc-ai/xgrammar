@@ -22,19 +22,12 @@
 
 namespace xgrammar {
 
-/**
- * \brief Error for invalid schema: wrong type, invalid keyword, etc.
- */
-struct InvalidSchemaError : public Error {
-  InvalidSchemaError(const std::string& msg) : Error(msg, "InvalidSchemaError") {}
+enum class SchemaErrorType : int {
+  kInvalidSchema = 0,
+  kUnsatisfiableSchema = 1,
 };
 
-/**
- * \brief Error for unsatisfiable schema: conflict in constraints, the whole schema is false, etc.
- */
-struct UnsatisfiableSchemaError : public Error {
-  UnsatisfiableSchemaError(const std::string& msg) : Error(msg, "UnsatisfiableSchemaError") {}
-};
+using SchemaError = TypedError<SchemaErrorType>;
 
 /*!
  * \brief Manage the indent and separator for the generation of EBNF grammar.
@@ -106,9 +99,9 @@ class IndentManager {
  private:
   bool any_whitespace_;
   bool enable_newline_;
-  int indent_;
+  int64_t indent_;
   std::string separator_;
-  int total_indent_;
+  int64_t total_indent_;
   std::vector<bool> is_first_;
   friend class JSONSchemaConverter;
 };
@@ -201,7 +194,7 @@ class JSONSchemaConverter {
   std::string Convert();
 
   /*! \brief Generate the regex for integer range. Public for testing. */
-  static std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end);
+  static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
 
   /*! \brief Generate the regex for float range. Public for testing. */
   static std::string GenerateFloatRangeRegex(
@@ -241,9 +234,9 @@ class JSONSchemaConverter {
   /*! \brief Helpers for GenerateRangeRegex and GenerateFloatRangeRegex */
   static std::string MakePatternForDigitRange(char start, char end, int remainingDigits);
 
-  static std::vector<std::string> GenerateNumberPatterns(int lower, int upper);
+  static std::vector<std::string> GenerateNumberPatterns(int64_t lower, int64_t upper);
 
-  static std::string GenerateSubRangeRegex(int lower, int upper);
+  static std::string GenerateSubRangeRegex(int64_t lower, int64_t upper);
 
   static std::string FormatFloat(double value, int precision);
 
@@ -319,11 +312,11 @@ class JSONSchemaConverter {
     std::vector<picojson::value> prefix_item_schemas;
     bool allow_additional_items;
     picojson::value additional_item_schema;
-    int min_items;
-    int max_items;
+    int64_t min_items;
+    int64_t max_items;
   };
 
-  Result<ArraySpec> ParseArraySchema(const picojson::object& schema);
+  Result<ArraySpec, SchemaError> ParseArraySchema(const picojson::object& schema);
 
   /*!
    * \brief Visit an array schema.
@@ -418,7 +411,7 @@ class JSONSchemaConverter {
       const std::string& prop_name,
       const picojson::value& prop_schema,
       const std::string& rule_name,
-      int idx
+      int64_t idx
   );
 
   /*! \brief Get the pattern for the additional/unevaluated properties in the object schema. */
@@ -555,8 +548,8 @@ void JSONSchemaConverter::AddHelperRules() {
   );
   ebnf_script_creator_.AddRule(
       kBasicStringSub,
-      "(\"\\\"\" | [^\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " + kBasicEscape + " " +
-          kBasicStringSub + ") (= [ \\n\\t]* [,}\\]:])"
+      "(\"\\\"\" | [^\\0-\\x1f\\\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " + kBasicEscape +
+          " " + kBasicStringSub + ") (= [ \\n\\t]* [,}\\]:])"
   );
 }
 
@@ -637,7 +630,7 @@ std::string JSONSchemaConverter::GetSchemaCacheIndex(const picojson::value& sche
     std::sort(sorted_kv.begin(), sorted_kv.end(), [](const auto& lhs, const auto& rhs) {
       return lhs.first < rhs.first;
     });
-    int idx = 0;
+    int64_t idx = 0;
     for (const auto& [key, value] : sorted_kv) {
       if (idx != 0) {
         result += ",";
@@ -648,7 +641,7 @@ std::string JSONSchemaConverter::GetSchemaCacheIndex(const picojson::value& sche
     return result + "}";
   } else if (schema.is<picojson::array>()) {
     std::string result = "[";
-    int idx = 0;
+    int64_t idx = 0;
     for (const auto& item : schema.get<picojson::array>()) {
       if (idx != 0) {
         result += ",";
@@ -801,7 +794,7 @@ std::string JSONSchemaConverter::VisitEnum(
 ) {
   XGRAMMAR_CHECK(schema.count("enum"));
   std::string result = "";
-  int idx = 0;
+  int64_t idx = 0;
   for (auto value : schema.at("enum").get<picojson::array>()) {
     if (idx != 0) {
       result += " | ";
@@ -832,7 +825,7 @@ std::string JSONSchemaConverter::VisitAnyOf(
 ) {
   XGRAMMAR_CHECK(schema.count("anyOf") || schema.count("oneOf"));
   std::string result = "";
-  int idx = 0;
+  int64_t idx = 0;
   auto anyof_schema = schema.count("anyOf") ? schema.at("anyOf") : schema.at("oneOf");
   XGRAMMAR_CHECK(anyof_schema.is<picojson::array>()) << "anyOf or oneOf must be an array";
   for (auto anyof_schema : anyof_schema.get<picojson::array>()) {
@@ -891,18 +884,18 @@ std::string JSONSchemaConverter::MakePatternForDigitRange(
   return oss.str();
 }
 
-std::vector<std::string> JSONSchemaConverter::GenerateNumberPatterns(int lower, int upper) {
+std::vector<std::string> JSONSchemaConverter::GenerateNumberPatterns(int64_t lower, int64_t upper) {
   std::vector<std::string> patterns;
 
   int lower_len = static_cast<int>(std::to_string(lower).size());
   int upper_len = static_cast<int>(std::to_string(upper).size());
 
   for (int len = lower_len; len <= upper_len; ++len) {
-    const int digit_min = static_cast<int>(std::pow(10, len - 1));
-    const int digit_max = static_cast<int>(std::pow(10, len)) - 1;
+    const int64_t digit_min = static_cast<int64_t>(std::pow(10, len - 1));
+    const int64_t digit_max = static_cast<int64_t>(std::pow(10, len)) - 1;
 
-    int start = (len == lower_len) ? lower : digit_min;
-    int end = (len == upper_len) ? upper : digit_max;
+    int64_t start = (len == lower_len) ? lower : digit_min;
+    int64_t end = (len == upper_len) ? upper : digit_max;
 
     std::string start_str = std::to_string(start);
     std::string end_str = std::to_string(end);
@@ -1101,7 +1094,7 @@ std::vector<std::string> JSONSchemaConverter::GenerateNumberPatterns(int lower, 
   return patterns;
 }
 
-std::string JSONSchemaConverter::GenerateSubRangeRegex(int lower, int upper) {
+std::string JSONSchemaConverter::GenerateSubRangeRegex(int64_t lower, int64_t upper) {
   std::vector<std::string> patterns = GenerateNumberPatterns(lower, upper);
   std::ostringstream oss;
   for (size_t i = 0; i < patterns.size(); ++i) {
@@ -1114,7 +1107,7 @@ std::string JSONSchemaConverter::GenerateSubRangeRegex(int lower, int upper) {
 }
 
 std::string JSONSchemaConverter::GenerateRangeRegex(
-    std::optional<int> start, std::optional<int> end
+    std::optional<int64_t> start, std::optional<int64_t> end
 ) {
   std::vector<std::string> parts;
   std::ostringstream result;
@@ -1210,16 +1203,16 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
   }
 
   if (start && end) {
-    int range_start = start.value();
-    int range_end = end.value();
+    int64_t range_start = start.value();
+    int64_t range_end = end.value();
 
     if (range_start > range_end) {
       return "^()$";  // Invalid input
     }
 
     if (range_start < 0) {
-      int neg_start = range_start;
-      int neg_end = std::min(-1, range_end);
+      int64_t neg_start = range_start;
+      int64_t neg_end = std::min(static_cast<int64_t>(-1), range_end);
       parts.push_back("-" + GenerateSubRangeRegex(-neg_end, -neg_start));
     }
 
@@ -1228,7 +1221,7 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
     }
 
     if (range_end > 0) {
-      int pos_start = std::max(1, range_start);
+      int64_t pos_start = std::max(static_cast<int64_t>(1), range_start);
       parts.push_back(GenerateSubRangeRegex(pos_start, range_end));
     }
   }
@@ -1246,6 +1239,11 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
 }
 
 std::string JSONSchemaConverter::FormatFloat(double value, int precision = 6) {
+  // Special handling for integer values to avoid float representation issues
+  if (value == static_cast<int64_t>(value)) {
+    return std::to_string(static_cast<int64_t>(value));
+  }
+
   std::ostringstream oss;
   oss << std::fixed << std::setprecision(precision) << value;
   std::string result = oss.str();
@@ -1277,8 +1275,8 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
 
   std::vector<std::string> parts;
 
-  int startInt = 0;
-  int endInt = 0;
+  int64_t startInt = 0;
+  int64_t endInt = 0;
   double startFrac = 0.0;
   double endFrac = 0.0;
   bool isStartNegative = false;
@@ -1286,13 +1284,13 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
 
   if (start) {
     isStartNegative = start.value() < 0;
-    startInt = static_cast<int>(floor(start.value()));
+    startInt = static_cast<int64_t>(floor(start.value()));
     startFrac = start.value() - startInt;
   }
 
   if (end) {
     isEndNegative = end.value() < 0;
-    endInt = static_cast<int>(floor(end.value()));
+    endInt = static_cast<int64_t>(floor(end.value()));
     endFrac = end.value() - endInt;
   }
 
@@ -1351,7 +1349,7 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
     }
 
     // For all integers > startInt
-    if (startInt < INT_MAX - 1) {
+    if (startInt < INT64_MAX - 1) {
       std::string intRangeRegex = GenerateRangeRegex(startInt + 1, std::nullopt);
       intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
       parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
@@ -1412,7 +1410,7 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
     }
 
     // For all integers < endInt
-    if (endInt > INT_MIN + 1) {
+    if (endInt > INT64_MIN + 1) {
       std::string intRangeRegex = GenerateRangeRegex(std::nullopt, endInt - 1);
       intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
       parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
@@ -1641,47 +1639,69 @@ std::string JSONSchemaConverter::VisitInteger(
           "multipleOf",
       }
   );
+
+  auto checkAndConvertIntegerBound = [](const picojson::value& value) -> int64_t {
+    XGRAMMAR_CHECK(value.is<int64_t>() || value.is<double>()) << "Value must be a number";
+
+    if (value.is<int64_t>()) {
+      return value.get<int64_t>();
+    } else {
+      double val = value.get<double>();
+
+      XGRAMMAR_CHECK(val == std::floor(val)) << "Integer constraint must be a whole number";
+
+      static const double PROBLEMATIC_MIN = -9223372036854776000.0;
+      static const double PROBLEMATIC_MAX = 9223372036854776000.0;
+
+      if (val == PROBLEMATIC_MIN) {
+        XGRAMMAR_CHECK(false
+        ) << "Integer exceeds minimum limit due to precision loss at 64-bit boundary";
+      }
+
+      if (val == PROBLEMATIC_MAX) {
+        XGRAMMAR_CHECK(false
+        ) << "Integer exceeds maximum limit due to precision loss at 64-bit boundary";
+      }
+
+      static const double MAX_INT64_AS_DOUBLE =
+          static_cast<double>(std::numeric_limits<int64_t>::max());
+      static const double MIN_INT64_AS_DOUBLE =
+          static_cast<double>(std::numeric_limits<int64_t>::min());
+
+      XGRAMMAR_CHECK(val <= MAX_INT64_AS_DOUBLE) << "Integer exceeds maximum limit";
+      XGRAMMAR_CHECK(val >= MIN_INT64_AS_DOUBLE) << "Integer exceeds minimum limit";
+
+      return static_cast<int64_t>(val);
+    }
+  };
+
   std::string range_regex = "";
   if (schema.count("minimum") || schema.count("maximum") || schema.count("exclusiveMinimum") ||
       schema.count("exclusiveMaximum")) {
-    std::optional<int> start, end;
+    std::optional<int64_t> start, end;
     if (schema.count("minimum")) {
-      XGRAMMAR_CHECK(schema.at("minimum").is<double>() || schema.at("minimum").is<int64_t>())
-          << "minimum must be a number";
-      double start_double = schema.at("minimum").get<double>();
-      XGRAMMAR_CHECK(start_double == static_cast<int>(start_double))
-          << "minimum must be an integer";
-      start = static_cast<int>(start_double);
+      start = checkAndConvertIntegerBound(schema.at("minimum"));
     }
     if (schema.count("exclusiveMinimum")) {
-      XGRAMMAR_CHECK(
-          schema.at("exclusiveMinimum").is<double>() || schema.at("exclusiveMinimum").is<int64_t>()
-      ) << "exclusiveMinimum must be a number";
-      double start_double = schema.at("exclusiveMinimum").get<double>();
-      XGRAMMAR_CHECK(start_double == static_cast<int>(start_double))
-          << "exclusiveMinimum must be an integer";
-      start = static_cast<int>(start_double);
+      int64_t exclusive_min = checkAndConvertIntegerBound(schema.at("exclusiveMinimum"));
+      XGRAMMAR_CHECK(exclusive_min != std::numeric_limits<int64_t>::max())
+          << "exclusiveMinimum would cause integer overflow";
+      start = exclusive_min + 1;
     }
     if (schema.count("maximum")) {
-      XGRAMMAR_CHECK(schema.at("maximum").is<double>() || schema.at("maximum").is<int64_t>())
-          << "maximum must be a number";
-      double end_double = schema.at("maximum").get<double>();
-      XGRAMMAR_CHECK(end_double == static_cast<int>(end_double)) << "maximum must be an integer";
-      end = static_cast<int>(end_double);
+      end = checkAndConvertIntegerBound(schema.at("maximum"));
     }
     if (schema.count("exclusiveMaximum")) {
-      XGRAMMAR_CHECK(
-          schema.at("exclusiveMaximum").is<double>() || schema.at("exclusiveMaximum").is<int64_t>()
-      ) << "exclusiveMaximum must be a number";
-      double end_double = schema.at("exclusiveMaximum").get<double>();
-      XGRAMMAR_CHECK(end_double == static_cast<int>(end_double))
-          << "exclusiveMaximum must be an integer";
-      end = static_cast<int>(end_double);
+      int64_t exclusive_max = checkAndConvertIntegerBound(schema.at("exclusiveMaximum"));
+      XGRAMMAR_CHECK(exclusive_max != std::numeric_limits<int64_t>::min())
+          << "exclusiveMaximum would cause integer underflow";
+      end = exclusive_max - 1;
     }
     XGRAMMAR_CHECK(!(start && end) || *start <= *end)
-        << "Invalid range, start value greater than end value";
+        << "Invalid range: minimum greater than maximum";
     range_regex = GenerateRangeRegex(start, end);
   }
+
   if (!range_regex.empty()) {
     std::string converted_regex = RegexToEBNF(range_regex, false);
     return converted_regex;  // not " " for numbers
@@ -1714,7 +1734,10 @@ std::string JSONSchemaConverter::VisitNumber(
       XGRAMMAR_CHECK(
           schema.at("exclusiveMinimum").is<double>() || schema.at("exclusiveMinimum").is<int64_t>()
       ) << "exclusiveMinimum must be a number";
-      start = schema.at("exclusiveMinimum").get<double>();
+      double exclusive_min = schema.at("exclusiveMinimum").get<double>();
+      // For exclusive minimum with floats, we can't easily add 1, so we'll handle that
+      // in the regex generation if needed
+      start = exclusive_min;
     }
     if (schema.count("maximum")) {
       XGRAMMAR_CHECK(schema.at("maximum").is<double>() || schema.at("maximum").is<int64_t>())
@@ -1725,7 +1748,10 @@ std::string JSONSchemaConverter::VisitNumber(
       XGRAMMAR_CHECK(
           schema.at("exclusiveMaximum").is<double>() || schema.at("exclusiveMaximum").is<int64_t>()
       ) << "exclusiveMaximum must be a number";
-      end = schema.at("exclusiveMaximum").get<double>();
+      double exclusive_max = schema.at("exclusiveMaximum").get<double>();
+      // For exclusive maximum with floats, we can't easily subtract 1, so we'll handle that
+      // in the regex generation if needed
+      end = exclusive_max;
     }
     XGRAMMAR_CHECK(!(start && end) || *start <= *end)
         << "Invalid range, start value greater than end value";
@@ -1924,8 +1950,8 @@ std::string JSONSchemaConverter::VisitString(
     return "\"\\\"\" " + converted_regex + " \"\\\"\"";
   }
   if (schema.count("minLength") || schema.count("maxLength")) {
-    int min_length = schema.count("minLength") ? schema.at("minLength").get<int64_t>() : 0;
-    int max_length = schema.count("maxLength") ? schema.at("maxLength").get<int64_t>() : -1;
+    int64_t min_length = schema.count("minLength") ? schema.at("minLength").get<int64_t>() : 0;
+    int64_t max_length = schema.count("maxLength") ? schema.at("maxLength").get<int64_t>() : -1;
     XGRAMMAR_CHECK(max_length == -1 || min_length <= max_length)
         << "In string schema, minLength " << min_length << " is greater than " << "maxLength "
         << max_length;
@@ -1952,7 +1978,7 @@ std::string JSONSchemaConverter::VisitNull(
   return "\"null\"";
 }
 
-Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
+Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseArraySchema(
     const picojson::object& schema
 ) {
   XGRAMMAR_DCHECK(
@@ -1964,27 +1990,27 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   std::vector<picojson::value> prefix_item_schemas;
   bool allow_additional_items = true;
   picojson::value additional_item_schema;
-  int min_items = 0;
-  int max_items = -1;
+  int64_t min_items = 0;
+  int64_t max_items = -1;
 
   if (schema.count("prefixItems")) {
     if (!schema.at("prefixItems").is<picojson::array>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("prefixItems must be an array")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "prefixItems must be an array"
       );
     }
     prefix_item_schemas = schema.at("prefixItems").get<picojson::array>();
     for (const auto& item : prefix_item_schemas) {
       if (item.is<bool>()) {
         if (!item.get<bool>()) {
-          return Result<ArraySpec>::Err(
-              std::make_shared<UnsatisfiableSchemaError>("prefixItems contains false")
+          return ResultErr<SchemaError>(
+              SchemaErrorType::kUnsatisfiableSchema, "prefixItems contains false"
           );
         }
       } else if (!item.is<picojson::object>()) {
-        return Result<ArraySpec>::Err(std::make_shared<InvalidSchemaError>(
-            "prefixItems must be an array of objects or booleans"
-        ));
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "prefixItems must be an array of objects or booleans"
+        );
       }
     }
   }
@@ -1992,8 +2018,8 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   if (schema.count("items")) {
     auto items_value = schema.at("items");
     if (!items_value.is<bool>() && !items_value.is<picojson::object>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("items must be a boolean or an object")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "items must be a boolean or an object"
       );
     }
     if (items_value.is<bool>() && !items_value.get<bool>()) {
@@ -2005,8 +2031,8 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
   } else if (schema.count("unevaluatedItems")) {
     auto unevaluated_items_value = schema.at("unevaluatedItems");
     if (!unevaluated_items_value.is<bool>() && !unevaluated_items_value.is<picojson::object>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("unevaluatedItems must be a boolean or an object")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "unevaluatedItems must be a boolean or an object"
       );
     }
     if (unevaluated_items_value.is<bool>() && !unevaluated_items_value.get<bool>()) {
@@ -2024,26 +2050,24 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
 
   if (schema.count("minItems")) {
     if (!schema.at("minItems").is<int64_t>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("minItems must be an integer")
-      );
+      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "minItems must be an integer");
     }
-    min_items = std::max(0, static_cast<int>(schema.at("minItems").get<int64_t>()));
+    min_items = std::max(static_cast<int64_t>(0), schema.at("minItems").get<int64_t>());
   }
 
   if (schema.count("minContains")) {
     if (!schema.at("minContains").is<int64_t>()) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("minContains must be an integer")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "minContains must be an integer"
       );
     }
-    min_items = std::max(min_items, static_cast<int>(schema.at("minContains").get<int64_t>()));
+    min_items = std::max(min_items, schema.at("minContains").get<int64_t>());
   }
 
   if (schema.count("maxItems")) {
     if (!schema.at("maxItems").is<int64_t>() || schema.at("maxItems").get<int64_t>() < 0) {
-      return Result<ArraySpec>::Err(
-          std::make_shared<InvalidSchemaError>("maxItems must be a non-negative integer")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "maxItems must be a non-negative integer"
       );
     }
     max_items = schema.at("maxItems").get<int64_t>();
@@ -2051,38 +2075,42 @@ Result<JSONSchemaConverter::ArraySpec> JSONSchemaConverter::ParseArraySchema(
 
   // Check if the schema is unsatisfiable
   if (max_items != -1 && min_items > max_items) {
-    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema,
         "minItems is greater than maxItems: " + std::to_string(min_items) + " > " +
-        std::to_string(max_items)
-    ));
+            std::to_string(max_items)
+    );
   }
 
-  if (max_items != -1 && max_items < static_cast<int>(prefix_item_schemas.size())) {
-    return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+  if (max_items != -1 && max_items < static_cast<int64_t>(prefix_item_schemas.size())) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema,
         "maxItems is less than the number of prefixItems: " + std::to_string(max_items) + " < " +
-        std::to_string(prefix_item_schemas.size())
-    ));
+            std::to_string(prefix_item_schemas.size())
+    );
   }
 
   if (!allow_additional_items) {
     // [len, len] must be in [min, max]
-    if (static_cast<int>(prefix_item_schemas.size()) < min_items) {
-      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+    if (static_cast<int64_t>(prefix_item_schemas.size()) < min_items) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
           "minItems is greater than the number of prefixItems, but additional items are not "
           "allowed: " +
-          std::to_string(min_items) + " > " + std::to_string(prefix_item_schemas.size())
-      ));
+              std::to_string(min_items) + " > " + std::to_string(prefix_item_schemas.size())
+      );
     }
-    if (max_items != -1 && static_cast<int>(prefix_item_schemas.size()) > max_items) {
-      return Result<ArraySpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+    if (max_items != -1 && static_cast<int64_t>(prefix_item_schemas.size()) > max_items) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
           "maxItems is less than the number of prefixItems, but additional items are not "
           "allowed: " +
-          std::to_string(max_items) + " < " + std::to_string(prefix_item_schemas.size())
-      ));
+              std::to_string(max_items) + " < " + std::to_string(prefix_item_schemas.size())
+      );
     }
   }
 
-  return Result<ArraySpec>::Ok(ArraySpec{
+  return Result<ArraySpec, SchemaError>::Ok(ArraySpec{
       prefix_item_schemas, allow_additional_items, additional_item_schema, min_items, max_items
   });
 }
@@ -2092,7 +2120,7 @@ std::string JSONSchemaConverter::VisitArray(
 ) {
   auto array_spec_result = ParseArraySchema(schema);
   if (array_spec_result.IsErr()) {
-    XGRAMMAR_LOG(FATAL) << array_spec_result.UnwrapErr()->what();
+    XGRAMMAR_LOG(FATAL) << std::move(array_spec_result).UnwrapErr().what();
   }
 
   auto array_spec = std::move(array_spec_result).Unwrap();
@@ -2109,7 +2137,7 @@ std::string JSONSchemaConverter::VisitArray(
 
   // 1. Handle prefix items
   if (array_spec.prefix_item_schemas.size() > 0) {
-    for (int i = 0; i < static_cast<int>(array_spec.prefix_item_schemas.size()); ++i) {
+    for (int64_t i = 0; i < static_cast<int64_t>(array_spec.prefix_item_schemas.size()); ++i) {
       XGRAMMAR_DCHECK(
           array_spec.prefix_item_schemas[i].is<picojson::object>() ||
           array_spec.prefix_item_schemas[i].is<bool>()
@@ -2130,19 +2158,19 @@ std::string JSONSchemaConverter::VisitArray(
 
   // 3. Construct the result with given format
   // clang-format off
-  /*
-   * prefix empty, additional items not allowed: [empty_separator]
-   * prefix empty, additional items allowed:
-   *   if min == 0, max == 0:
-   *     [empty_separator]
-   *   if min == 0, max > 0:
-   *     ([start_separator additional_rule_name (mid_separator additional_rule_name){0, max - 1}) end_separator] | [empty_separator]
-   *   if min > 0:
-   *     ([start_separator additional_rule_name (mid_separator additional_rule_name){min - 1, max - 1}) end_separator]
-   * prefix non-empty, additional items not allowed: [start_separator item0 mid_separator item1 end_separator]
-   * prefix non-empty, additional items allowed:
-   *   [start_separator item0 mid_separator item1 (mid_separator additional_rule_name){max(0, min - len(prefix)), max - len(prefix)} end_separator]
-   */
+   /*
+    * prefix empty, additional items not allowed: [empty_separator]
+    * prefix empty, additional items allowed:
+    *   if min == 0, max == 0:
+    *     [empty_separator]
+    *   if min == 0, max > 0:
+    *     ([start_separator additional_rule_name (mid_separator additional_rule_name){0, max - 1}) end_separator] | [empty_separator]
+    *   if min > 0:
+    *     ([start_separator additional_rule_name (mid_separator additional_rule_name){min - 1, max - 1}) end_separator]
+    * prefix non-empty, additional items not allowed: [start_separator item0 mid_separator item1 end_separator]
+    * prefix non-empty, additional items allowed:
+    *   [start_separator item0 mid_separator item1 (mid_separator additional_rule_name){max(0, min - len(prefix)), max - len(prefix)} end_separator]
+    */
   // clang-format on
   std::string result;
   const std::string& left_bracket = EBNFScriptCreator::Str("[");
@@ -2187,7 +2215,7 @@ std::string JSONSchemaConverter::VisitArray(
     }
   } else {
     std::vector<std::string> prefix_part;
-    for (int i = 0; i < static_cast<int>(item_rule_names.size()); ++i) {
+    for (int64_t i = 0; i < static_cast<int64_t>(item_rule_names.size()); ++i) {
       if (i > 0) {
         prefix_part.push_back(mid_separator);
       }
@@ -2199,7 +2227,10 @@ std::string JSONSchemaConverter::VisitArray(
           {left_bracket, start_separator, prefix_part_str, end_separator, right_bracket}
       );
     } else {
-      int min_items = std::max(0, array_spec.min_items - static_cast<int>(item_rule_names.size()));
+      int64_t min_items = std::max(
+          static_cast<int64_t>(0),
+          array_spec.min_items - static_cast<int64_t>(item_rule_names.size())
+      );
       return EBNFScriptCreator::Concat(
           {left_bracket,
            start_separator,
@@ -2209,7 +2240,7 @@ std::string JSONSchemaConverter::VisitArray(
                min_items,
                array_spec.max_items == -1
                    ? -1
-                   : array_spec.max_items - static_cast<int>(item_rule_names.size())
+                   : array_spec.max_items - static_cast<int64_t>(item_rule_names.size())
            ),
            end_separator,
            right_bracket}
@@ -2222,7 +2253,7 @@ std::string JSONSchemaConverter::GetPropertyPattern(
     const std::string& prop_name,
     const picojson::value& prop_schema,
     const std::string& rule_name,
-    int idx
+    int64_t idx  // Changed to int64_t
 ) {
   // the outer quote is for the string in EBNF grammar, and the inner quote is for
   // the string in JSON
@@ -2256,7 +2287,7 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
   std::string res = "";
 
   std::vector<std::string> prop_patterns;
-  int idx = 0;
+  int64_t idx = 0;  // Changed to int64_t
   for (const auto& [prop_name, prop_schema] : properties) {
     prop_patterns.push_back(GetPropertyPattern(prop_name, prop_schema, rule_name, idx));
     ++idx;
@@ -2271,7 +2302,8 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
         GetOtherPropertyPattern(kBasicString, additional, rule_name, additional_suffix);
     std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
     std::string last_rule_name =
-        rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1);
+        rule_name + "_part_" +
+        std::to_string(static_cast<int64_t>(properties.size()) - 1);  // Changed to int64_t
     last_rule_name = ebnf_script_creator_.AddRule(last_rule_name, last_rule_body);
     rule_names.back() = last_rule_name;
   } else {
@@ -2279,7 +2311,7 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
   }
 
   // construct 0~(len(properties) - 2) rules
-  for (int i = properties.size() - 2; i >= 0; --i) {
+  for (int64_t i = properties.size() - 2; i >= 0; --i) {  // Changed to int64_t
     const std::string& prop_pattern = prop_patterns[i + 1];
     const std::string& last_rule_name = rule_names[i + 1];
     std::string cur_rule_body =
@@ -2290,7 +2322,7 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesAllOptional(
   }
 
   // construct the root rule
-  for (int i = 0; i < static_cast<int>(properties.size()); ++i) {
+  for (int64_t i = 0; i < static_cast<int64_t>(properties.size()); ++i) {  // Changed to int64_t
     if (i != 0) {
       res += " | ";
     }
@@ -2312,19 +2344,21 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesContainRequired(
     const std::string& rule_name
 ) {
   // Find the index of the first required property
-  int first_required_idx = properties.size();
-  for (int i = 0; i < static_cast<int>(properties.size()); ++i) {
+  int64_t first_required_idx = properties.size();                          // Changed to int64_t
+  for (int64_t i = 0; i < static_cast<int64_t>(properties.size()); ++i) {  // Changed to int64_t
     if (required.count(properties[i].first)) {
       first_required_idx = i;
       break;
     }
   }
-  XGRAMMAR_CHECK(first_required_idx < static_cast<int>(properties.size()));
+  XGRAMMAR_CHECK(
+      first_required_idx < static_cast<int64_t>(properties.size())
+  );  // Changed to int64_t
 
   std::string res = NextSeparator();
 
   // Handle the properties before the first required property
-  for (int i = 0; i < first_required_idx; ++i) {
+  for (int64_t i = 0; i < first_required_idx; ++i) {  // Changed to int64_t
     const auto& [prop_name, prop_schema] = properties[i];
     XGRAMMAR_CHECK(!prop_schema.is<bool>() || prop_schema.get<bool>());
     std::string property_pattern = GetPropertyPattern(prop_name, prop_schema, rule_name, i);
@@ -2338,7 +2372,8 @@ std::string JSONSchemaConverter::GetPartialRuleForPropertiesContainRequired(
   res += " " + property_pattern;
 
   // Handle the properties after the first required property
-  for (int i = first_required_idx + 1; i < static_cast<int>(properties.size()); ++i) {
+  for (int64_t i = first_required_idx + 1; i < static_cast<int64_t>(properties.size());
+       ++i) {  // Changed to int64_t
     const auto& [prop_name, prop_schema] = properties[i];
     XGRAMMAR_CHECK(!prop_schema.is<bool>() || prop_schema.get<bool>());
     std::string property_pattern = GetPropertyPattern(prop_name, prop_schema, rule_name, i);
@@ -2511,7 +2546,7 @@ std::string JSONSchemaToEBNF(
 }
 
 // Wrapper function for testing
-std::string GenerateRangeRegex(std::optional<int> start, std::optional<int> end) {
+std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end) {
   return JSONSchemaConverter::GenerateRangeRegex(start, end);
 }
 
