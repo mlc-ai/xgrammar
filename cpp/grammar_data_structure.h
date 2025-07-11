@@ -268,10 +268,10 @@ XGRAMMAR_MEMBER_TABLE(
     &Grammar::Impl::grammar_expr_indptr_,
     "root_rule_id_",
     &Grammar::Impl::root_rule_id_,
-    "root_tag_dispatch_fsm",
-    &Grammar::Impl::root_tag_dispatch_fsm,
-    "tag_dispatch_end_node_to_rule_id",
-    &Grammar::Impl::tag_dispatch_end_node_to_rule_id,
+    "complete_fsm",
+    &Grammar::Impl::complete_fsm,
+    "per_rule_fsms",
+    &Grammar::Impl::per_rule_fsms,
     "allow_empty_rule_ids",
     &Grammar::Impl::allow_empty_rule_ids
 );
