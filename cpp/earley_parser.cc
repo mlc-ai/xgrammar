@@ -287,11 +287,11 @@ bool EarleyParser::ExpandAndEnqueueUnexpandedState(const ParserState& state) {
   // There are two types of an unexpanded rule:
   // 1. The rule is a tag dispatch rule.
   // 2. The rule is a choice, consisting of multiple sequences.
-  if (cur_rule_body.type == GrammarExprType::kTagDispatch) {
+  if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
     Enqueue(ParserState{
         cur_rule_id,
         cur_rule_body_id,
-        grammar_->root_tag_dispatch_fsm->GetStart(),
+        grammar_->per_rule_fsms[state.rule_id].value().GetStart(),
         ParserState::kNoPrevInputPos,
         0
     });
