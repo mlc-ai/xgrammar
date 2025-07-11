@@ -129,9 +129,7 @@ class Grammar {
    */
   static Grammar FromStructuralTag(
       const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
-  ) {
-    throw("Not implemented yet");
-  }
+  );
 
   /*!
    * \brief Get the grammar of standard JSON format. We have built-in support for JSON.

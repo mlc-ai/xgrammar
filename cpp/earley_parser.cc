@@ -367,14 +367,14 @@ void EarleyParser::ExpandNextRuleRefElement(
               }
             }
             tmp_accept_stop_token_ = true;
-            return;
+            continue;
           }
           XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
           Enqueue(ParserState{
               state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
           });
         }
-        return;
+        continue;
       }
 
       // If the reference rule is not visited, we need to add it to the queue.
