@@ -45,8 +45,6 @@ void EarleyParser::Complete(const ParserState& state, const GrammarExpr& grammar
   // Check if a rule is completed.
   if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
     // assert: if a root rule can achieve here, then it must be completed.
-    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
-    XGRAMMAR_DCHECK(grammar_expr.size() == state.element_id);
     tmp_accept_stop_token_ = true;
     return;
   }
@@ -57,9 +55,8 @@ void EarleyParser::Complete(const ParserState& state, const GrammarExpr& grammar
        parent_state_iter++) {
     const auto& parent_state = parent_state_iter->second;
     const auto& parent_expr = grammar_->GetGrammarExpr(parent_state.sequence_id);
-    if (parent_expr.type == GrammarExprType::kSequence) {
-      // These two types can predict other new rules. We need to
-      // to move to the next element.
+    if (parent_state.rule_id == -1 || !grammar_->per_rule_fsms[parent_state.rule_id].has_value()) {
+      // The new rule is not referenced by a fsm.
       XGRAMMAR_DCHECK(
           grammar_->GetGrammarExpr(parent_expr[parent_state.element_id]).type ==
           GrammarExprType::kRuleRef
@@ -73,14 +70,20 @@ void EarleyParser::Complete(const ParserState& state, const GrammarExpr& grammar
       });
       continue;
     }
-    XGRAMMAR_DCHECK(parent_expr.type == GrammarExprType::kTagDispatch);
-    Enqueue(
-        {parent_state.rule_id,
-         parent_state.sequence_id,
-         grammar_->root_tag_dispatch_fsm->GetStart(),
-         parent_state.rule_start_pos,
-         0}
-    );
+    // If the rule is referenced by a fsm, we need to advance the fsm.
+    XGRAMMAR_DCHECK(grammar_->per_rule_fsms[parent_state.rule_id].has_value());
+    const auto& current_fsm = grammar_->per_rule_fsms[parent_state.rule_id].value();
+    for (const auto edge : current_fsm->GetEdges(parent_state.element_id)) {
+      if (edge.IsRuleRef() && edge.GetRefRuleId() == state.rule_id) {
+        Enqueue(
+            {parent_state.rule_id,
+             parent_state.sequence_id,
+             edge.target,
+             parent_state.rule_start_pos,
+             0}
+        );
+      }
+    }
   }
 }
 
