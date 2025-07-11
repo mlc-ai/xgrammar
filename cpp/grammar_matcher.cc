@@ -525,13 +525,6 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   // {-1} means the universal set, i.e. all tokens initially
   tmp_rejected_indices_.assign({-1});
 
-<<<<<<< HEAD
-  // If there is a leaf ParserState that is a tag dispatch, we allow special tokens to be accepted
-  // because in function calling cases, only the part within the tag is constrained
-  bool have_tag_dispatch = false;
-
-=======
->>>>>>> 2f5675ca (finish)
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "FillNextTokenBitmask: index=" << index
                        << ", num of states=" << latest_states.size();
@@ -540,7 +533,6 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
       latest_states_with_masks;
 
-<<<<<<< HEAD
   for (const auto& state : latest_states) {
     auto cur_sequence = grammar_->GetGrammarExpr(state.sequence_id);
     XGRAMMAR_DCHECK(
@@ -548,8 +540,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
           cur_sequence.type == GrammarExprType::kChoices ||
           cur_sequence.type == GrammarExprType::kEmptyStr)
     );
-    have_tag_dispatch = cur_sequence.type == GrammarExprType::kTagDispatch;
-    XGRAMMAR_DCHECK(have_tag_dispatch || cur_sequence.type == GrammarExprType::kSequence);
+    XGRAMMAR_DCHECK(cur_sequence.type == GrammarExprType::kSequence);
     auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
     XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
@@ -564,26 +555,6 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   }
 
   for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
-=======
-  for (auto top : latest_stack_tops) {
-    ++stack_top_cnt;
-    auto cur_stack_element = persistent_stack_[top];
-    if (cur_stack_element.rule_id == -1 ||
-        !grammar_->per_rule_fsms[cur_stack_element.rule_id].has_value()) {
-      auto cur_sequence = grammar_->GetRuleExpr(cur_stack_element.sequence_id);
-      XGRAMMAR_DCHECK(cur_sequence.type == RuleExprType::kSequence);
-      if (cur_stack_element.parent_id == StackElement::kNoParent &&
-          cur_stack_element.element_id == cur_sequence.size()) {
-        continue;
-      }
-    }
-
-    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(cur_stack_element);
-    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end())
-        << "The adaptive token mask is not found for stack element: "
-        << persistent_stack_.PrintStackElement(cur_stack_element);
-
->>>>>>> 2f5675ca (finish)
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
@@ -706,47 +677,37 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
     // 1. Check that for every leaf ParserState, the next possible char is unique and the same
     // -1 means not found yet; 0~255 means the next char
     int next_char = -1;
-<<<<<<< HEAD
-    for (const auto& ParserState : states) {
-      if (IsCompleted()) {
-=======
-    for (auto stack_top : stack_tops) {
-      auto stack_element = persistent_stack_[stack_top];
-
+    for (const auto& state : states) {
       // We cannot deduce the next char for tag dispatch
-      if (stack_element.rule_id != -1 &&
-          grammar_->per_rule_fsms[stack_element.rule_id].has_value()) {
+      if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
         can_find_next_char = false;
         continue;
       }
 
-      auto cur_sequence = grammar_->GetRuleExpr(stack_element.sequence_id);
+      auto cur_sequence = grammar_->GetGrammarExpr(state.sequence_id);
 
       // The state comes to the end of the grammar
-      if (stack_element.parent_id == StackElement::kNoParent &&
-          stack_element.element_id == cur_sequence.size()) {
->>>>>>> 2f5675ca (finish)
+      if (IsCompleted()) {
         can_find_next_char = false;
         break;
       }
-      auto cur_sequence = grammar_->GetGrammarExpr(ParserState.sequence_id);
       // We cannot deduce the next char for tag dispatch
       if (cur_sequence.type == GrammarExprType::kTagDispatch) {
         can_find_next_char = false;
         break;
       }
       // The ParserState comes to the end of the grammar
-      XGRAMMAR_DCHECK(ParserState.element_id != cur_sequence.size());
+      XGRAMMAR_DCHECK(state.element_id != cur_sequence.size());
       XGRAMMAR_DCHECK(
           cur_sequence.type != GrammarExprType::kChoices &&
           cur_sequence.type != GrammarExprType::kEmptyStr
       );
-      const auto& cur_element = grammar_->GetGrammarExpr(cur_sequence[ParserState.element_id]);
+      const auto& cur_element = grammar_->GetGrammarExpr(cur_sequence[state.element_id]);
       if (cur_element.type == GrammarExprType::kByteString) {
-        XGRAMMAR_DCHECK(ParserState.sub_element_id < cur_element.size());
+        XGRAMMAR_DCHECK(state.sub_element_id < cur_element.size());
         if (next_char == -1) {
-          next_char = cur_element[ParserState.sub_element_id];
-        } else if (next_char != cur_element[ParserState.sub_element_id]) {
+          next_char = cur_element[state.sub_element_id];
+        } else if (next_char != cur_element[state.sub_element_id]) {
           can_find_next_char = false;
           break;
         }
@@ -760,7 +721,7 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
           cur_element.type == GrammarExprType::kCharacterClass ||
           cur_element.type == GrammarExprType::kCharacterClassStar
       );
-      if (ParserState.sub_element_id > 0 || cur_element.size() != 3 || cur_element[0] != 0 ||
+      if (state.sub_element_id > 0 || cur_element.size() != 3 || cur_element[0] != 0 ||
           cur_element[1] != cur_element[2]) {
         can_find_next_char = false;
         break;
