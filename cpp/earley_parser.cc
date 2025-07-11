@@ -118,10 +118,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
 
 void EarleyParser::Scan(const ParserState& state, const uint8_t ch) {
   const auto& cur_rule = grammar_->GetGrammarExpr(state.sequence_id);
-  XGRAMMAR_DCHECK(
-      state.element_id != cur_rule.size() || cur_rule.type == GrammarExprType::kTagDispatch
-  );
-  if (cur_rule.type == GrammarExprType::kSequence) {
+
+  if (state.rule_id == -1 || (!grammar_->per_rule_fsms[state.rule_id].has_value())) {
     const auto& element_expr = grammar_->GetGrammarExpr(cur_rule[state.element_id]);
     // The element is a rule reference, we do not need to scan it.
     switch (element_expr.type) {
@@ -144,7 +142,7 @@ void EarleyParser::Scan(const ParserState& state, const uint8_t ch) {
     }
   } else {
     XGRAMMAR_DCHECK(cur_rule.type == GrammarExprType::kTagDispatch);
-    AdvanceTagDispatch(state, ch, cur_rule);
+    AdvanceFsm(state, ch, cur_rule);
   }
 }
 
@@ -309,8 +307,8 @@ bool EarleyParser::ExpandAndEnqueueUnexpandedState(const ParserState& state) {
 void EarleyParser::ExpandNextRuleRefElement(
     const ParserState& state, const GrammarExpr& grammar_expr, const GrammarExpr* sub_grammar_expr
 ) {
-  // Get the reference rule id.
   int ref_rule_id;
+  // Path A. The rule has a corresponding FSM.
   if (grammar_expr.type == GrammarExprType::kTagDispatch) {
     XGRAMMAR_DCHECK(grammar_->root_tag_dispatch_fsm->IsEndState(state.element_id));
     ref_rule_id = grammar_->tag_dispatch_end_node_to_rule_id[state.element_id];
@@ -532,40 +530,22 @@ void EarleyParser::AdvanceCharacterClassStar(
   }
 }
 
-void EarleyParser::AdvanceTagDispatch(
+void EarleyParser::AdvanceFsm(
     const ParserState& state, const uint8_t ch, const GrammarExpr& cur_sequence
 ) {
-  auto root_tag_dispatch_fsm_optional = grammar_->root_tag_dispatch_fsm;
-  if (!root_tag_dispatch_fsm_optional) {
-    XGRAMMAR_LOG(FATAL) << "The grammar does not have a root tag dispatch rule; it is not built.";
-    XGRAMMAR_UNREACHABLE();
-  }
-  auto root_tag_dispatch_fsm = root_tag_dispatch_fsm_optional.value();
-  auto start_node = root_tag_dispatch_fsm.GetStart();
-  auto next_node = root_tag_dispatch_fsm->GetNextState(state.element_id, ch);
+  XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
+  auto current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
+  auto next_node = current_fsm->GetNextState(state.element_id, ch);
   auto new_state = state;
   if (next_node == CompactFSM::kNoNextState) {
-    // Case 1. The new char cannot continue to be accepted by the tag dispatch fsm.
-    // We try to accept the new char from the start node. If accepted, we go to the target
-    // node. If it still cannot be accepted, we stay at the start node.
-    auto new_next_node = root_tag_dispatch_fsm->GetNextState(start_node, ch);
-    new_state.element_id = new_next_node == CompactFSM::kNoNextState ? start_node : new_next_node;
-    if (root_tag_dispatch_fsm.IsEndState(new_state.element_id)) {
-      tmp_process_state_queue_.push(new_state);
-    } else {
-      tmp_accept_stop_token_ = true;
-      tmp_states_to_be_added_.push_back(new_state);
-    }
+    return;
+  }
+  new_state.element_id = next_node;
+  if (current_fsm.IsEndState(next_node)) {
+    tmp_process_state_queue_.push(new_state);
   } else {
-    // Case 2. The new char can continue to be accepted by the tag dispatch fsm.
-    // We need to update the element id to the next node.
-    new_state.element_id = next_node;
-    if (root_tag_dispatch_fsm.IsEndState(next_node)) {
-      tmp_process_state_queue_.push(new_state);
-    } else {
-      tmp_accept_stop_token_ = true;
-      tmp_states_to_be_added_.push_back(new_state);
-    }
+    tmp_accept_stop_token_ = true;
+    tmp_states_to_be_added_.push_back(new_state);
   }
 }
 
