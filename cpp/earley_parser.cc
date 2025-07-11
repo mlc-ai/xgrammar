@@ -88,15 +88,14 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
     const ParserState& state, const GrammarExpr& grammar_expr
 ) {
   //  If the current state is the end of the rule, we do not need to predict.
-  if (grammar_expr.type == GrammarExprType::kTagDispatch) {
-    // The rule can be scanned, but can't be completed.
-    if (!grammar_->root_tag_dispatch_fsm->IsEndState(state.element_id)) {
+  if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
+    // The rule is completed, then we can accept the stop token.
+    if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
       tmp_accept_stop_token_ = true;
-      return std::make_pair(true, false);
     }
-    // A tag has is dispatched.
+    // Try to expand the fsm.
     ExpandNextRuleRefElement(state, grammar_expr, nullptr);
-    return std::make_pair(false, false);
+    return std::make_pair(true, false);
   }
   XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
   if (state.element_id == grammar_expr.size()) {
