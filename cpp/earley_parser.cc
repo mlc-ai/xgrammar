@@ -550,12 +550,7 @@ void EarleyParser::AdvanceFsm(
     return;
   }
   new_state.element_id = next_node;
-  if (current_fsm.IsEndState(next_node)) {
-    tmp_process_state_queue_.push(new_state);
-  } else {
-    tmp_accept_stop_token_ = true;
-    tmp_states_to_be_added_.push_back(new_state);
-  }
+  tmp_process_state_queue_.push(new_state);
 }
 
 bool RepeatDetector::IsVisited(const ParserState& state) const {
