@@ -368,7 +368,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   if (IsStopTokenAccepted()) {
     if (debug_print) {
       XGRAMMAR_LOG(WARNING) << "The matcher has terminated after accepting the stop token, but is "
-                          << "trying to accept new token with id " << token_id << ".";
+                            << "trying to accept new token with id " << token_id << ".";
     }
     return false;
   }
