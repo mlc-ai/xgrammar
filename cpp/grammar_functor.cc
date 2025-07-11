@@ -664,7 +664,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
    * \param grammar The subgrammar to visit.
    * \return The new id of the root rule of this subgrammar.
    */
-  int32_t Apply(GrammarBuilder* builder, const Grammar& sub_grammar) {
+  int32_t ApplyWithBuilder(GrammarBuilder* builder, const Grammar& sub_grammar) {
     InitGrammar(sub_grammar);
     InitBuilder(builder);
     new_rule_ids_names.reserve(base_grammar_->NumRules());
@@ -712,7 +712,7 @@ class GrammarUnionFunctorImpl : public GrammarMutator {
     new_root_choices.reserve(grammars.size());
 
     for (const auto& grammar : grammars) {
-      auto new_root_id_for_grammar = SubGrammarAdderImpl().Apply(builder_, grammar);
+      auto new_root_id_for_grammar = SubGrammarAdderImpl().ApplyWithBuilder(builder_, grammar);
       auto new_rule_ref = builder_->AddRuleRef(new_root_id_for_grammar);
       auto new_rule_ref_seq = builder_->AddSequence({new_rule_ref});
       new_root_choices.push_back(new_rule_ref_seq);
@@ -749,7 +749,7 @@ class GrammarConcatFunctorImpl : public GrammarMutator {
     new_root_sequence.reserve(grammars.size());
 
     for (const auto& grammar : grammars) {
-      auto new_root_id_for_grammar = SubGrammarAdderImpl().Apply(builder_, grammar);
+      auto new_root_id_for_grammar = SubGrammarAdderImpl().ApplyWithBuilder(builder_, grammar);
       auto new_rule_ref = builder_->AddRuleRef(new_root_id_for_grammar);
       new_root_sequence.push_back(new_rule_ref);
     }
@@ -961,7 +961,7 @@ class StructuralTagGrammarCreatorImpl : public GrammarMutator {
         }
 
         // Create and visit schema grammar for this tag
-        auto schema_rule_id = SubGrammarAdderImpl().Apply(builder_, schema_grammar);
+        auto schema_rule_id = SubGrammarAdderImpl().ApplyWithBuilder(builder_, schema_grammar);
         seq_elements.push_back(builder_->AddRuleRef(schema_rule_id));
 
         // Add end string
@@ -1067,7 +1067,7 @@ Grammar LookaheadAssertionAnalyzer::Apply(const Grammar& grammar) {
 }
 
 int32_t SubGrammarAdder::Apply(GrammarBuilder* builder, const Grammar& sub_grammar) {
-  return SubGrammarAdderImpl().Apply(builder, sub_grammar);
+  return SubGrammarAdderImpl().ApplyWithBuilder(builder, sub_grammar);
 }
 
 void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl().Apply(grammar); }
