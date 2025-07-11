@@ -9,7 +9,6 @@
 #include <cctype>
 #include <cstdint>
 #include <ctime>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -143,7 +142,6 @@ void EarleyParser::Scan(const ParserState& state, const uint8_t ch) {
       }
     }
   } else {
-    XGRAMMAR_DCHECK(cur_rule.type == GrammarExprType::kTagDispatch);
     AdvanceFsm(state, ch, cur_rule);
   }
 }
