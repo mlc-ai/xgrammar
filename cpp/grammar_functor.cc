@@ -16,6 +16,7 @@
 #include "fsm_builder.h"
 #include "grammar_data_structure.h"
 #include "support/encoding.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -998,7 +999,7 @@ class GrammarFSMBuilderImpl {
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
       auto rule = (*grammar)->GetRule(i);
       auto grammar_expr = (*grammar)->GetGrammarExpr(rule.body_expr_id);
-      if (grammar_expr.type == GrammarExprType::kTagDispatch) {
+      if (grammar_expr.type == Grammar::Impl::GrammarExprType::kTagDispatch) {
         auto rule_fsm = TagDispatchFSMBuilder::Build((*grammar)->GetTagDispatch(grammar_expr));
         XGRAMMAR_CHECK(rule_fsm.has_value()) << "Failed to build tag dispatch fsm for rule " << i;
         per_rule_fsms[i] = rule_fsm->AddToCompleteFSM(&complete_fsm, &state_mapping);

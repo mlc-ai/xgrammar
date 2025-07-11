@@ -51,44 +51,43 @@ Result<StructuralTag> StructuralTagImpl::FromJSON(const std::string& json) {
   picojson::value value;
   std::string err = picojson::parse(value, json);
   if (!err.empty()) {
-    return Result<StructuralTag>::Err("Failed to parse JSON: " + err);
+    return ResultErr("Failed to parse JSON: " + err);
   }
   return ParseStructuralTag(value);
 }
 
 Result<StructuralTag> StructuralTagImpl::ParseStructuralTag(const picojson::value& value) {
   if (!value.is<picojson::object>()) {
-    return Result<StructuralTag>::Err("Structural tag must be an object");
+    return ResultErr("Structural tag must be an object");
   }
   const auto& obj = value.get<picojson::object>();
   // The type field is optional but must be "structural_tag" if present.
   if (obj.find("type") != obj.end()) {
     if (!obj["type"].is<std::string>() || obj["type"].get<std::string>() != "structural_tag") {
-      return Result<StructuralTag>::Err("Structural tag's type must be a string \"structural_tag\""
-      );
+      return ResultErr("Structural tag's type must be a string \"structural_tag\"");
     }
   }
   // The format field is required.
   if (obj.find("format") == obj.end()) {
-    return Result<StructuralTag>::Err("Structural tag must have a format field");
+    return ResultErr("Structural tag must have a format field");
   }
   auto format = ParseFormat(obj["format"]);
   if (format.IsErr()) {
-    return Result<StructuralTag>::Err(std::move(format).UnwrapErr());
+    return ResultErr(std::move(format).UnwrapErr());
   }
-  return Result<StructuralTag>::Ok(StructuralTag{std::move(format).Unwrap()});
+  return ResultOk(StructuralTag{std::move(format).Unwrap()});
 }
 
 Result<Format> StructuralTagImpl::ParseFormat(const picojson::value& value) {
   RecursionGuard guard(&parse_format_recursion_depth_);
   if (!value.is<picojson::object>()) {
-    return Result<Format>::Err("Format must be an object");
+    return ResultErr("Format must be an object");
   }
   const auto& obj = value.get<picojson::object>();
   // If type is present, use it to determine the format.
   if (obj.find("type") != obj.end()) {
     if (!obj["type"].is<std::string>()) {
-      return Result<Format>::Err("Format's type must be a string");
+      return ResultErr("Format's type must be a string");
     }
     auto type = obj["type"].get<std::string>();
     if (type == "literal") {
@@ -106,39 +105,39 @@ Result<Format> StructuralTagImpl::ParseFormat(const picojson::value& value) {
     } else if (type == "tags_with_separator") {
       return Result<Format>::Convert(ParseTagsWithSeparatorFormat(obj));
     } else {
-      return Result<Format>::Err("Invalid format type: " + type);
+      return ResultErr("Invalid format type: " + type);
     }
   }
   // If type is not present, try every format type one by one. Tag is prioritized.
   auto tag_format = ParseTagFormat(obj);
   if (!tag_format.IsErr()) {
-    return Result<Format>::Ok(std::move(tag_format).Unwrap());
+    return ResultOk<Format>(std::move(tag_format).Unwrap());
   }
   auto literal_format = ParseLiteralFormat(obj);
   if (!literal_format.IsErr()) {
-    return Result<Format>::Ok(std::move(literal_format).Unwrap());
+    return ResultOk<Format>(std::move(literal_format).Unwrap());
   }
   auto json_schema_format = ParseJSONSchemaFormat(obj);
   if (!json_schema_format.IsErr()) {
-    return Result<Format>::Ok(std::move(json_schema_format).Unwrap());
+    return ResultOk<Format>(std::move(json_schema_format).Unwrap());
   }
   auto wildcard_text_format = ParseWildcardTextFormat(obj);
   if (!wildcard_text_format.IsErr()) {
-    return Result<Format>::Ok(std::move(wildcard_text_format).Unwrap());
+    return ResultOk<Format>(std::move(wildcard_text_format).Unwrap());
   }
   auto sequence_format = ParseSequenceFormat(obj);
   if (!sequence_format.IsErr()) {
-    return Result<Format>::Ok(std::move(sequence_format).Unwrap());
+    return ResultOk<Format>(std::move(sequence_format).Unwrap());
   }
   auto triggered_tags_format = ParseTriggeredTagsFormat(obj);
   if (!triggered_tags_format.IsErr()) {
-    return Result<Format>::Ok(std::move(triggered_tags_format).Unwrap());
+    return ResultOk<Format>(std::move(triggered_tags_format).Unwrap());
   }
   auto tags_with_separator_format = ParseTagsWithSeparatorFormat(obj);
   if (!tags_with_separator_format.IsErr()) {
-    return Result<Format>::Ok(std::move(tags_with_separator_format).Unwrap());
+    return ResultOk<Format>(std::move(tags_with_separator_format).Unwrap());
   }
-  return Result<Format>::Err("Invalid format: " + value.serialize(false));
+  return ResultErr("Invalid format: " + value.serialize(false));
 }
 
 Result<LiteralFormat> StructuralTagImpl::ParseLiteralFormat(const picojson::object& obj) {
@@ -146,40 +145,34 @@ Result<LiteralFormat> StructuralTagImpl::ParseLiteralFormat(const picojson::obje
   auto text_it = obj.find("text");
   if (text_it == obj.end() || !text_it->second.is<std::string>() ||
       text_it->second.get<std::string>().empty()) {
-    return Result<LiteralFormat>::Err(
-        "Literal format must have a text field with a non-empty string"
-    );
+    return ResultErr("Literal format must have a text field with a non-empty string");
   }
-  return Result<LiteralFormat>::Ok({text_it->second.get<std::string>()});
+  return ResultOk<LiteralFormat>({text_it->second.get<std::string>()});
 }
 
 Result<JSONSchemaFormat> StructuralTagImpl::ParseJSONSchemaFormat(const picojson::object& obj) {
   // json_schema is required.
   auto json_schema_it = obj.find("json_schema");
   if (json_schema_it == obj.end() || !json_schema_it->second.is<picojson::object>()) {
-    return Result<JSONSchemaFormat>::Err(
-        "JSON schema format must have a json_schema field with a JSON object"
-    );
+    return ResultErr("JSON schema format must have a json_schema field with a JSON object");
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
-  return Result<JSONSchemaFormat>::Ok({json_schema_it->second.serialize(false)});
+  return ResultOk<JSONSchemaFormat>({json_schema_it->second.serialize(false)});
 }
 
 Result<WildcardTextFormat> StructuralTagImpl::ParseWildcardTextFormat(const picojson::object& obj) {
   // obj should not have any fields other than "type"
   if (obj.size() > 1 || (obj.size() == 1 && obj.begin()->first != "type")) {
-    return Result<WildcardTextFormat>::Err(
-        "Wildcard text format should not have any fields other than type"
-    );
+    return ResultErr("Wildcard text format should not have any fields other than type");
   }
-  return Result<WildcardTextFormat>::Ok({});
+  return ResultOk<WildcardTextFormat>({});
 }
 
 Result<SequenceFormat> StructuralTagImpl::ParseSequenceFormat(const picojson::object& obj) {
   // elements is required.
   auto elements_it = obj.find("elements");
   if (elements_it == obj.end() || !elements_it->second.is<picojson::array>()) {
-    return Result<SequenceFormat>::Err("Sequence format must have an elements field with an array");
+    return ResultErr("Sequence format must have an elements field with an array");
   }
   const auto& elements_array = elements_it->second.get<picojson::array>();
   std::vector<Format> elements;
@@ -187,24 +180,24 @@ Result<SequenceFormat> StructuralTagImpl::ParseSequenceFormat(const picojson::ob
   for (const auto& element : elements_array) {
     auto format = ParseFormat(element);
     if (format.IsErr()) {
-      return Result<SequenceFormat>::Err(std::move(format).UnwrapErr());
+      return ResultErr(std::move(format).UnwrapErr());
     }
     elements.push_back(std::move(format).Unwrap());
   }
   if (elements.size() == 0) {
-    return Result<SequenceFormat>::Err("Empty sequence format is not allowed");
+    return ResultErr("Empty sequence format is not allowed");
   }
-  return Result<SequenceFormat>::Ok({std::move(elements)});
+  return ResultOk<SequenceFormat>({std::move(elements)});
 }
 
 Result<TagFormat> StructuralTagImpl::ParseTagFormat(const picojson::value& value) {
   if (!value.is<picojson::object>()) {
-    return Result<TagFormat>::Err("Tag format must be an object");
+    return ResultErr("Tag format must be an object");
   }
   const auto& obj = value.get<picojson::object>();
   if (obj.find("type") != obj.end() &&
       (!obj["type"].is<std::string>() || obj["type"].get<std::string>() != "tag")) {
-    return Result<TagFormat>::Err("Tag format's type must be a string \"tag\"");
+    return ResultErr("Tag format's type must be a string \"tag\"");
   }
   return ParseTagFormat(obj);
 }
@@ -214,24 +207,24 @@ Result<TagFormat> StructuralTagImpl::ParseTagFormat(const picojson::object& obj)
   auto begin_it = obj.find("begin");
   if (begin_it == obj.end() || !begin_it->second.is<std::string>() ||
       begin_it->second.get<std::string>().empty()) {
-    return Result<TagFormat>::Err("Tag format must have a begin field with a non-empty string");
+    return ResultErr("Tag format must have a begin field with a non-empty string");
   }
   // content is required.
   auto content_it = obj.find("content");
   if (content_it == obj.end()) {
-    return Result<TagFormat>::Err("Tag format must have a content field");
+    return ResultErr("Tag format must have a content field");
   }
   auto content = ParseFormat(content_it->second);
   if (content.IsErr()) {
-    return Result<TagFormat>::Err(std::move(content).UnwrapErr());
+    return ResultErr(std::move(content).UnwrapErr());
   }
   // end is required.
   auto end_it = obj.find("end");
   if (end_it == obj.end() || !end_it->second.is<std::string>() ||
       end_it->second.get<std::string>().empty()) {
-    return Result<TagFormat>::Err("Tag format must have an end field with a non-empty string");
+    return ResultErr("Tag format must have an end field with a non-empty string");
   }
-  return Result<TagFormat>::Ok(
+  return ResultOk<TagFormat>(
       {begin_it->second.get<std::string>(),
        std::make_shared<Format>(std::move(content).Unwrap()),
        end_it->second.get<std::string>()}
@@ -243,30 +236,24 @@ Result<TriggeredTagsFormat> StructuralTagImpl::ParseTriggeredTagsFormat(const pi
   // triggers is required.
   auto triggers_it = obj.find("triggers");
   if (triggers_it == obj.end() || !triggers_it->second.is<picojson::array>()) {
-    return Result<TriggeredTagsFormat>::Err(
-        "Triggered tags format must have a triggers field with an array"
-    );
+    return ResultErr("Triggered tags format must have a triggers field with an array");
   }
   const auto& triggers_array = triggers_it->second.get<picojson::array>();
   std::vector<std::string> triggers;
   triggers.reserve(triggers_array.size());
   for (const auto& trigger : triggers_array) {
     if (!trigger.is<std::string>() || trigger.get<std::string>().empty()) {
-      return Result<TriggeredTagsFormat>::Err("Triggers must be non-empty strings");
+      return ResultErr("Triggers must be non-empty strings");
     }
     triggers.push_back(trigger.get<std::string>());
   }
   if (triggers.size() == 0) {
-    return Result<TriggeredTagsFormat>::Err(
-        "Empty triggers are not allowed in triggered tags format"
-    );
+    return ResultErr("Empty triggers are not allowed in triggered tags format");
   }
   // tags is required.
   auto tags_it = obj.find("tags");
   if (tags_it == obj.end() || !tags_it->second.is<picojson::array>()) {
-    return Result<TriggeredTagsFormat>::Err(
-        "Triggered tags format must have a tags field with an array"
-    );
+    return ResultErr("Triggered tags format must have a tags field with an array");
   }
   const auto& tags_array = tags_it->second.get<picojson::array>();
   std::vector<TagFormat> tags;
@@ -274,19 +261,19 @@ Result<TriggeredTagsFormat> StructuralTagImpl::ParseTriggeredTagsFormat(const pi
   for (const auto& tag : tags_array) {
     auto tag_format = ParseTagFormat(tag);
     if (tag_format.IsErr()) {
-      return Result<TriggeredTagsFormat>::Err(std::move(tag_format).UnwrapErr());
+      return ResultErr(std::move(tag_format).UnwrapErr());
     }
     tags.push_back(std::move(tag_format).Unwrap());
   }
   if (tags.size() == 0) {
-    return Result<TriggeredTagsFormat>::Err("Empty tags are not allowed in triggered tags format");
+    return ResultErr("Empty tags are not allowed in triggered tags format");
   }
   // at_least_one is optional.
   bool at_least_one = false;
   auto at_least_one_it = obj.find("at_least_one");
   if (at_least_one_it != obj.end()) {
     if (!at_least_one_it->second.is<bool>()) {
-      return Result<TriggeredTagsFormat>::Err("at_least_one must be a boolean");
+      return ResultErr("at_least_one must be a boolean");
     }
     at_least_one = at_least_one_it->second.get<bool>();
   }
@@ -295,11 +282,11 @@ Result<TriggeredTagsFormat> StructuralTagImpl::ParseTriggeredTagsFormat(const pi
   auto stop_after_first_it = obj.find("stop_after_first");
   if (stop_after_first_it != obj.end()) {
     if (!stop_after_first_it->second.is<bool>()) {
-      return Result<TriggeredTagsFormat>::Err("stop_after_first must be a boolean");
+      return ResultErr("stop_after_first must be a boolean");
     }
     stop_after_first = stop_after_first_it->second.get<bool>();
   }
-  return Result<TriggeredTagsFormat>::Ok(
+  return ResultOk<TriggeredTagsFormat>(
       {std::move(triggers), std::move(tags), at_least_one, stop_after_first}
   );
 }
@@ -310,9 +297,7 @@ Result<TagsWithSeparatorFormat> StructuralTagImpl::ParseTagsWithSeparatorFormat(
   // tags is required.
   auto tags_it = obj.find("tags");
   if (tags_it == obj.end() || !tags_it->second.is<picojson::array>()) {
-    return Result<TagsWithSeparatorFormat>::Err(
-        "Tags with separator format must have a tags field with an array"
-    );
+    return ResultErr("Tags with separator format must have a tags field with an array");
   }
   const auto& tags_array = tags_it->second.get<picojson::array>();
   std::vector<TagFormat> tags;
@@ -320,20 +305,18 @@ Result<TagsWithSeparatorFormat> StructuralTagImpl::ParseTagsWithSeparatorFormat(
   for (const auto& tag : tags_array) {
     auto tag_format = ParseTagFormat(tag);
     if (tag_format.IsErr()) {
-      return Result<TagsWithSeparatorFormat>::Err(std::move(tag_format).UnwrapErr());
+      return ResultErr(std::move(tag_format).UnwrapErr());
     }
     tags.push_back(std::move(tag_format).Unwrap());
   }
   if (tags.size() == 0) {
-    return Result<TagsWithSeparatorFormat>::Err(
-        "Empty tags are not allowed in tags with separator format"
-    );
+    return ResultErr("Empty tags are not allowed in tags with separator format");
   }
   // separator is required.
   auto separator_it = obj.find("separator");
   if (separator_it == obj.end() || !separator_it->second.is<std::string>() ||
       separator_it->second.get<std::string>().empty()) {
-    return Result<TagsWithSeparatorFormat>::Err(
+    return ResultErr(
         "Tags with separator format must have a separator field with a non-empty string"
     );
   }
@@ -342,7 +325,7 @@ Result<TagsWithSeparatorFormat> StructuralTagImpl::ParseTagsWithSeparatorFormat(
   auto at_least_one_it = obj.find("at_least_one");
   if (at_least_one_it != obj.end()) {
     if (!at_least_one_it->second.is<bool>()) {
-      return Result<TagsWithSeparatorFormat>::Err("at_least_one must be a boolean");
+      return ResultErr("at_least_one must be a boolean");
     }
     at_least_one = at_least_one_it->second.get<bool>();
   }
@@ -351,11 +334,11 @@ Result<TagsWithSeparatorFormat> StructuralTagImpl::ParseTagsWithSeparatorFormat(
   auto stop_after_first_it = obj.find("stop_after_first");
   if (stop_after_first_it != obj.end()) {
     if (!stop_after_first_it->second.is<bool>()) {
-      return Result<TagsWithSeparatorFormat>::Err("stop_after_first must be a boolean");
+      return ResultErr("stop_after_first must be a boolean");
     }
     stop_after_first = stop_after_first_it->second.get<bool>();
   }
-  return Result<TagsWithSeparatorFormat>::Ok(
+  return ResultOk<TagsWithSeparatorFormat>(
       {std::move(tags), separator_it->second.get<std::string>(), at_least_one, stop_after_first}
   );
 }
@@ -513,19 +496,19 @@ Result<STIIR::FormatInternal> STIIRConverter::VisitFormat(const Format& format) 
 
 Result<STIIR::LiteralFormatInternal> STIIRConverter::VisitLiteralFormat(const LiteralFormat& format
 ) {
-  return Result<STIIR::LiteralFormatInternal>::Ok({format.text});
+  return ResultOk<STIIR::LiteralFormatInternal>({format.text});
 }
 
 Result<STIIR::JSONSchemaFormatInternal> STIIRConverter::VisitJSONSchemaFormat(
     const JSONSchemaFormat& format
 ) {
-  return Result<STIIR::JSONSchemaFormatInternal>::Ok({format.json_schema});
+  return ResultOk<STIIR::JSONSchemaFormatInternal>({format.json_schema});
 }
 
 Result<STIIR::WildcardTextFormatInternal> STIIRConverter::VisitWildcardTextFormat(
     const WildcardTextFormat& format
 ) {
-  return Result<STIIR::WildcardTextFormatInternal>::Ok({});
+  return ResultOk<STIIR::WildcardTextFormatInternal>({});
 }
 
 Result<STIIR::SequenceFormatInternal> STIIRConverter::VisitSequenceFormat(
@@ -535,19 +518,19 @@ Result<STIIR::SequenceFormatInternal> STIIRConverter::VisitSequenceFormat(
   for (const auto& element : format.elements) {
     auto result = VisitFormat(element);
     if (result.IsErr()) {
-      return Result<STIIR::SequenceFormatInternal>::Err(std::move(result).UnwrapErr());
+      return ResultErr(std::move(result).UnwrapErr());
     }
     elements.push_back(std::move(result).Unwrap());
   }
-  return Result<STIIR::SequenceFormatInternal>::Ok({std::move(elements)});
+  return ResultOk<STIIR::SequenceFormatInternal>({std::move(elements)});
 }
 
 Result<STIIR::TagFormatInternal> STIIRConverter::VisitTagFormat(const TagFormat& format) {
   auto content_result = VisitFormat(*format.content);
   if (content_result.IsErr()) {
-    return Result<STIIR::TagFormatInternal>::Err(std::move(content_result).UnwrapErr());
+    return ResultErr(std::move(content_result).UnwrapErr());
   }
-  return Result<STIIR::TagFormatInternal>::Ok(
+  return ResultOk<STIIR::TagFormatInternal>(
       {format.begin,
        std::make_shared<STIIR::FormatInternal>(std::move(content_result).Unwrap()),
        format.end}
@@ -562,11 +545,11 @@ Result<STIIR::TriggeredTagsFormatInternal> STIIRConverter::VisitTriggeredTagsFor
   for (const auto& tag : format.tags) {
     auto result = VisitTagFormat(tag);
     if (result.IsErr()) {
-      return Result<STIIR::TriggeredTagsFormatInternal>::Err(std::move(result).UnwrapErr());
+      return ResultErr(std::move(result).UnwrapErr());
     }
     tags.push_back(std::move(result).Unwrap());
   }
-  return Result<STIIR::TriggeredTagsFormatInternal>::Ok(
+  return ResultOk<STIIR::TriggeredTagsFormatInternal>(
       {format.triggers, std::move(tags), format.at_least_one, format.stop_after_first}
   );
 }
@@ -579,11 +562,11 @@ Result<STIIR::TagsWithSeparatorFormatInternal> STIIRConverter::VisitTagsWithSepa
   for (const auto& tag : format.tags) {
     auto result = VisitTagFormat(tag);
     if (result.IsErr()) {
-      return Result<STIIR::TagsWithSeparatorFormatInternal>::Err(std::move(result).UnwrapErr());
+      return ResultErr(std::move(result).UnwrapErr());
     }
     tags.push_back(std::move(result).Unwrap());
   }
-  return Result<STIIR::TagsWithSeparatorFormatInternal>::Ok(
+  return ResultOk<STIIR::TagsWithSeparatorFormatInternal>(
       {std::move(tags), format.separator, format.at_least_one, format.stop_after_first}
   );
 }
@@ -732,12 +715,10 @@ Result<std::optional<std::string>> StructuralTagAnalyzer::DetectEndString() {
   for (int i = static_cast<int>(stack_.size()) - 2; i >= 0; --i) {
     if (auto tag_format = std::get_if<TagFormatInternal>(stack_[i].format)) {
       if (tag_format->end_deprived_) {
-        return Result<std::optional<std::string>>::Err(
-            "StructuralTagAnalyzer Internal: End string is already deprived"
-        );
+        return ResultErr("StructuralTagAnalyzer Internal: End string is already deprived");
       }
       tag_format->end_deprived_ = true;
-      return Result<std::optional<std::string>>::Ok(tag_format->end);
+      return ResultOk<std::optional<std::string>>(tag_format->end);
     } else if (auto sequence_format = std::get_if<SequenceFormatInternal>(stack_[i].format)) {
       XGRAMMAR_DCHECK(sequence_format->elements.size() > 0);
       if (stack_[i].element_id == static_cast<int>(sequence_format->elements.size()) - 1) {
@@ -746,20 +727,16 @@ Result<std::optional<std::string>> StructuralTagAnalyzer::DetectEndString() {
       auto next_element = sequence_format->elements[stack_[i].element_id + 1];
       if (auto next_element_tag = std::get_if<TagFormatInternal>(&next_element)) {
         if (next_element_tag->begin_deprived_) {
-          return Result<std::optional<std::string>>::Err(
-              "StructuralTagAnalyzer Internal: Begin string is already deprived"
-          );
+          return ResultErr("StructuralTagAnalyzer Internal: Begin string is already deprived");
         }
         next_element_tag->begin_deprived_ = true;
-        return Result<std::optional<std::string>>::Ok(next_element_tag->begin);
+        return ResultOk<std::optional<std::string>>(next_element_tag->begin);
       } else if (auto next_element_literal = std::get_if<LiteralFormatInternal>(&next_element)) {
         if (next_element_literal->deprived_) {
-          return Result<std::optional<std::string>>::Err(
-              "StructuralTagAnalyzer Internal: Literal string is already deprived"
-          );
+          return ResultErr("StructuralTagAnalyzer Internal: Literal string is already deprived");
         }
         next_element_literal->deprived_ = true;
-        return Result<std::optional<std::string>>::Ok(next_element_literal->text);
+        return ResultOk<std::optional<std::string>>(next_element_literal->text);
       } else {
         // Nested sequence should be flattened by the nested seq remover.
         XGRAMMAR_DCHECK(!std::holds_alternative<SequenceFormatInternal>(next_element));
@@ -772,7 +749,7 @@ Result<std::optional<std::string>> StructuralTagAnalyzer::DetectEndString() {
         );
         auto type_name =
             std::visit([](auto&& fmt) -> std::string_view { return fmt.type; }, next_element);
-        return Result<std::optional<std::string>>::Err(
+        return ResultErr(
             std::string("StructuralTagAnalyzer: Cannot detect end string from type ") +
             std::string(type_name)
         );
@@ -791,7 +768,7 @@ Result<std::optional<std::string>> StructuralTagAnalyzer::DetectEndString() {
           std::holds_alternative<TagsWithSeparatorFormatInternal>(fmt)
       );
       auto type_name = std::visit([](auto&& fmt) -> std::string_view { return fmt.type; }, fmt);
-      return Result<std::optional<std::string>>::Err(
+      return ResultErr(
           std::string("StructuralTagAnalyzer: Cannot detect end string from type ") +
           std::string(type_name)
       );
@@ -799,7 +776,7 @@ Result<std::optional<std::string>> StructuralTagAnalyzer::DetectEndString() {
   }
   // If we reach the root, means the element is at the end of the structural tag, so there is no
   // end string.
-  return Result<std::optional<std::string>>::Ok(std::nullopt);
+  return ResultOk<std::optional<std::string>>(std::nullopt);
 }
 
 std::optional<std::runtime_error> StructuralTagAnalyzer::VisitFormat(FormatInternal* format) {
@@ -973,14 +950,14 @@ Result<int32_t> StructuralTagInternalToGrammarConverter::VisitLiteralFormat(
     const LiteralFormatInternal& format
 ) {
   auto rule_expr_id = builder_.AddByteString(format.text);
-  return Result<int32_t>::Ok(builder_.AddRuleWithHint("literal", rule_expr_id));
+  return ResultOk<int32_t>(builder_.AddRuleWithHint("literal", rule_expr_id));
 }
 
 Result<int32_t> StructuralTagInternalToGrammarConverter::VisitJSONSchemaFormat(
     const JSONSchemaFormatInternal& format
 ) {
   auto schema_grammar = Grammar::FromJSONSchema(format.schema, true);
-  return Result<int32_t>::Ok(SubGrammarAdder::Apply(&builder_, schema_grammar));
+  return ResultOk<int32_t>(SubGrammarAdder::Apply(&builder_, schema_grammar));
 }
 
 Result<int32_t> StructuralTagInternalToGrammarConverter::VisitWildcardTextFormat(
@@ -988,10 +965,9 @@ Result<int32_t> StructuralTagInternalToGrammarConverter::VisitWildcardTextFormat
 ) {
   if (format.detected_end_string_.has_value()) {
     auto rule_expr_id = builder_.AddByteString(*format.detected_end_string_);
-    return Result<int32_t>::Ok(builder_.AddRuleWithHint("wildcard_text", rule_expr_id));
+    return ResultOk<int32_t>(builder_.AddRuleWithHint("wildcard_text", rule_expr_id));
   }
-  return Result<int32_t>::Err(std::runtime_error("Wildcard text format has no detected end string")
-  );
+  return ResultErr(std::runtime_error("Wildcard text format has no detected end string"));
 }
 
 // Result<Grammar> StructuralTagGrammarConverter::Convert(const std::string& structural_tag_json) {
@@ -1003,10 +979,10 @@ Result<int32_t> StructuralTagInternalToGrammarConverter::VisitWildcardTextFormat
 // }
 
 // Result<Grammar> StructuralTagGrammarConverter::Convert(const StructuralTag& structural_tag) {
-//   return Result<Grammar>::Err("Not implemented");
+//   return ResultErr("Not implemented");
 //   // auto structural_tag_internal = STIIR::FromStructuralTag(structural_tag);
 //   // if (structural_tag_internal.IsErr()) {
-//   //   return Result<Grammar>::Err(std::move(structural_tag_internal).UnwrapErr());
+//   //   return ResultErr(std::move(structural_tag_internal).UnwrapErr());
 //   // }
 //   // return Convert(std::move(structural_tag_internal).Unwrap());
 // }
@@ -1014,7 +990,7 @@ Result<int32_t> StructuralTagInternalToGrammarConverter::VisitWildcardTextFormat
 // Result<Grammar> StructuralTagGrammarConverter::Convert(
 //     const StructuralTagInternal& structural_tag_internal
 // ) {
-//   return Result<Grammar>::Err("Not implemented");
+//   return ResultErr("Not implemented");
 // }
 
 /************** StructuralTag to Grammar Converter **************/
@@ -1040,13 +1016,13 @@ Result<Grammar> StructuralTagToGrammarConverter::Convert(const std::string& stru
 Result<Grammar> StructuralTagToGrammarConverter::Convert(const StructuralTag& structural_tag) {
   auto structural_tag_internal_result = STIIRConverter().Convert(structural_tag);
   if (structural_tag_internal_result.IsErr()) {
-    return Result<Grammar>::Err(std::move(structural_tag_internal_result).UnwrapErr());
+    return ResultErr(std::move(structural_tag_internal_result).UnwrapErr());
   }
   auto structural_tag_internal = std::move(structural_tag_internal_result).Unwrap();
   StructuralTagNestedSeqRemover().RemoveNestedSeq(&structural_tag_internal);
   auto analyzer_result = StructuralTagAnalyzer().Analyze(&structural_tag_internal);
   if (analyzer_result.has_value()) {
-    return Result<Grammar>::Err(std::move(*analyzer_result));
+    return ResultErr(std::move(*analyzer_result));
   }
   return StructuralTagInternalToGrammarConverter().Convert(structural_tag_internal);
 }
