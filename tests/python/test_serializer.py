@@ -108,8 +108,8 @@ def test_serialize_compiled_grammar_string():
         grammar_expr_data_: List[int]
         grammar_expr_indptr_: List[int]
         root_rule_id_: int
-        root_tag_dispatch_fsm: Any
-        tag_dispatch_end_node_to_rule_id: List[int]
+        complete_fsm: Any
+        per_rule_fsms: List[int]
         allow_empty_rule_ids: List[int]
 
     class TokenizerInfoMetaData(BaseModel):
