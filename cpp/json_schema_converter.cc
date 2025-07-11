@@ -332,7 +332,7 @@ class JSONSchemaConverter {
     int max_properties;
   };
 
-  Result<ObjectSpec> ParseObjectSchema(const picojson::object& schema);
+  Result<ObjectSpec, SchemaError> ParseObjectSchema(const picojson::object& schema);
 
   /*!
    * \brief Visit an array schema.
@@ -2628,10 +2628,10 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
   return res;
 }
 
-Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
+Result<JSONSchemaConverter::ObjectSpec, SchemaError> JSONSchemaConverter::ParseObjectSchema(
     const picojson::object& schema
 ) {
-  XGRAMMAR_CHECK(
+  XGRAMMAR_DCHECK(
       (schema.count("type") && schema.at("type").get<std::string>() == "object") ||
       schema.count("properties") || schema.count("additionalProperties") ||
       schema.count("unevaluatedProperties")
@@ -2649,8 +2649,8 @@ Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
 
   if (schema.count("properties")) {
     if (!schema.at("properties").is<picojson::object>()) {
-      return Result<ObjectSpec>::Err(
-          std::make_shared<InvalidSchemaError>("properties must be an object")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "properties must be an object"
       );
     }
     auto properties_obj = schema.at("properties").get<picojson::object>();
@@ -2661,9 +2661,7 @@ Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
 
   if (schema.count("required")) {
     if (!schema.at("required").is<picojson::array>()) {
-      return Result<ObjectSpec>::Err(
-          std::make_shared<InvalidSchemaError>("required must be an array")
-      );
+      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "required must be an array");
     }
     for (const auto& required_prop : schema.at("required").get<picojson::array>()) {
       required_properties.insert(required_prop.get<std::string>());
@@ -2672,8 +2670,8 @@ Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
 
   if (schema.count("patternProperties")) {
     if (!schema.at("patternProperties").is<picojson::object>()) {
-      return Result<ObjectSpec>::Err(
-          std::make_shared<InvalidSchemaError>("patternProperties must be an object")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "patternProperties must be an object"
       );
     }
     auto pattern_properties_obj = schema.at("patternProperties").get<picojson::object>();
@@ -2684,25 +2682,20 @@ Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
 
   if (schema.count("propertyNames")) {
     if (!schema.at("propertyNames").is<picojson::object>()) {
-      return Result<ObjectSpec>::Err(
-          std::make_shared<InvalidSchemaError>("propertyNames must be an object")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "propertyNames must be an object"
       );
     }
     property_names = schema.at("propertyNames");
-    if (!property_names.is<picojson::object>()) {
-      return Result<ObjectSpec>::Err(
-          std::make_shared<InvalidSchemaError>("propertyNames must be an object schema")
+    picojson::object& property_names_obj = property_names.get<picojson::object>();
+    if (property_names_obj.count("type") && property_names_obj.at("type").is<std::string>() &&
+        property_names_obj.at("type").get<std::string>() != "string") {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
+          "propertyNames must be an object that validates string"
       );
-    } else {
-      picojson::object& property_names_obj = property_names.get<picojson::object>();
-      if (property_names_obj.count("type") && property_names_obj.at("type").is<std::string>() &&
-          property_names_obj.at("type").get<std::string>() != "string") {
-        return Result<ObjectSpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
-            "propertyNames must be an object that validates string"
-        ));
-      }
-      property_names_obj["type"] = picojson::value("string");
     }
+    property_names_obj["type"] = picojson::value("string");
   }
 
   if (schema.count("additionalProperties") && (!schema.at("additionalProperties").is<bool>() ||
@@ -2711,6 +2704,10 @@ Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
     allow_additional_properties = true;
   } else {
     allow_additional_properties = false;
+  }
+
+  if (schema.count("additionalProperties")) {
+    allow_unevaluated_properties = allow_additional_properties;
   }
 
   // Here we ignore the effect of unevaluatedProperties after setting additionalProperties
@@ -2727,57 +2724,60 @@ Result<JSONSchemaConverter::ObjectSpec> JSONSchemaConverter::ParseObjectSchema(
 
   if (schema.count("minProperties")) {
     if (!schema.at("minProperties").is<int64_t>()) {
-      return Result<ObjectSpec>::Err(
-          std::make_shared<InvalidSchemaError>("minProperties must be an integer")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "minProperties must be an integer"
       );
     }
     min_properties = static_cast<int>(schema.at("minProperties").get<int64_t>());
     if (min_properties < 0) {
-      return Result<ObjectSpec>::Err(
-          std::make_shared<InvalidSchemaError>("minProperties must be a non-negative integer")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema, "minProperties must be a non-negative integer"
       );
     }
   }
 
   if (schema.count("maxProperties")) {
     if (!schema.at("maxProperties").is<int64_t>()) {
-      return Result<ObjectSpec>::Err(
-          std::make_shared<InvalidSchemaError>("maxProperties must be an integer")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "maxProperties must be an integer"
       );
     }
     max_properties = static_cast<int>(schema.at("maxProperties").get<int64_t>());
     if (max_properties < 0) {
-      return Result<ObjectSpec>::Err(
-          std::make_shared<InvalidSchemaError>("maxProperties must be a non-negative integer")
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema, "maxProperties must be a non-negative integer"
       );
     }
   }
 
   if (max_properties != -1 && min_properties > max_properties) {
-    return Result<ObjectSpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema,
         "minxPropertiesmax is greater than maxProperties: " + std::to_string(min_properties) +
-        " > " + std::to_string(max_properties)
-    ));
+            " > " + std::to_string(max_properties)
+    );
   }
 
   if (max_properties != -1 && static_cast<int>(required_properties.size()) > max_properties) {
-    return Result<ObjectSpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema,
         "maxProperties is less than the number of required properties: " +
-        std::to_string(max_properties) + " < " + std::to_string(required_properties.size())
-    ));
+            std::to_string(max_properties) + " < " + std::to_string(required_properties.size())
+    );
   }
 
   if (pattern_properties.empty() && property_names.is<picojson::null>() &&
       !allow_additional_properties && !allow_unevaluated_properties &&
       min_properties > static_cast<int>(properties.size())) {
-    return Result<ObjectSpec>::Err(std::make_shared<UnsatisfiableSchemaError>(
-        "min_properties is greater than the number of properties, but additional "
-        "properties aren't allowed: " +
-        std::to_string(min_properties) + " > " + std::to_string(properties.size())
-    ));
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema,
+        "minProperties is greater than the number of properties, but additional properties aren't "
+        "allowed: " +
+            std::to_string(min_properties) + " > " + std::to_string(properties.size())
+    );
   }
 
-  return Result<ObjectSpec>::Ok(ObjectSpec{
+  return Result<ObjectSpec, SchemaError>::Ok(ObjectSpec{
       properties,
       pattern_properties,
       allow_additional_properties,
@@ -2797,7 +2797,7 @@ std::string JSONSchemaConverter::VisitObject(
   // Parse the object schema
   auto object_spec_result = ParseObjectSchema(schema);
   if (object_spec_result.IsErr()) {
-    XGRAMMAR_LOG(FATAL) << object_spec_result.UnwrapErr()->what();
+    XGRAMMAR_LOG(FATAL) << std::move(object_spec_result).UnwrapErr().what();
   }
 
   auto object_spec = std::move(object_spec_result).Unwrap();

@@ -1415,6 +1415,75 @@ def test_object_with_property_numbers():
                 )
 
 
+def test_object_error_handle():
+    # Test error handling for invalid object schemas
+
+    def compile_from_schema(schema):
+        xgr.Grammar.from_json_schema(
+            json.dumps(schema), any_whitespace=True, indent=None, separators=None, strict_mode=True
+        )
+
+    schema = {"type": "object", "properties": "not an object"}
+    with pytest.raises(Exception) as e:
+        compile_from_schema(schema)
+    assert "properties must be an object" in str(e.value)
+
+    schema = {"type": "object", "required": {"key": "not an array"}}
+    with pytest.raises(Exception) as e:
+        compile_from_schema(schema)
+    assert "required must be an array" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "patternProperties": ["not an object"]})
+    assert "patternProperties must be an object" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "propertyNames": "not an object"})
+    assert "propertyNames must be an object" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "propertyNames": {"type": "object"}})
+    assert "propertyNames must be an object that validates string" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "minProperties": "not an integer"})
+    assert "minProperties must be an integer" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "maxProperties": "not an integer"})
+    assert "maxProperties must be an integer" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "minProperties": -1})
+    assert "minProperties must be a non-negative integer" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "maxProperties": -1})
+    assert "maxProperties must be a non-negative integer" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "minProperties": 5, "maxProperties": 3})
+    assert "minxPropertiesmax is greater than maxProperties" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "maxProperties": 1, "required": ["key1", "key2"]})
+    assert "maxProperties is less than the number of required properties" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema(
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"key": {"type": "string"}},
+                "minProperties": 2,
+            }
+        )
+    assert (
+        "minProperties is greater than the number of properties, but additional properties aren't allowed"
+        in str(e.value)
+    )
+
+
 def test_generate_range_regex():
     # Basic range tests
     assert _generate_range_regex(12, 16) == r"^((1[2-6]))$"
