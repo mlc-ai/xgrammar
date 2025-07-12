@@ -89,15 +89,16 @@ void EarleyParser::Complete(const ParserState& state, const GrammarExpr& grammar
 std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
     const ParserState& state, const GrammarExpr& grammar_expr
 ) {
-  //  If the current state is the end of the rule, we do not need to predict.
+  // Check if it's the tag dispatch.
   if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
-    // The rule is completed, then we can accept the stop token.
     if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
       tmp_accept_stop_token_ = true;
     }
     // Try to expand the fsm.
     ExpandNextRuleRefElement(state, grammar_expr, nullptr);
-    return std::make_pair(true, false);
+    return std::make_pair(
+        true, grammar_->per_rule_fsms[state.rule_id].value().IsEndState(state.element_id)
+    );
   }
   XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
   if (state.element_id == grammar_expr.size()) {
@@ -185,7 +186,8 @@ bool EarleyParser::Advance(const uint8_t ch) {
     auto [scanable, completable] = Predict(state, grammar_expr);
     if (completable) {
       Complete(state, grammar_expr);
-    } else if (scanable) {  // A completable state can be scanned.
+    }
+    if (scanable) {
       tmp_states_to_be_added_.push_back(state);
     }
   }

@@ -485,7 +485,7 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
   }
 
   void VisitTagDispatch(const GrammarExpr& grammar_expr) {
-    for (int i = 0; i < grammar_expr.size(); i += 2) {
+    for (int i = 0; i < grammar_expr.size() - 3; i += 2) {
       visit_queue_.push(grammar_expr[i + 1]);
     }
   }
