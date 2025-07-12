@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 #include "support/encoding.h"
 
 namespace xgrammar {

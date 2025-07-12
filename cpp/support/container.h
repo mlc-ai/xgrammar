@@ -1,3 +1,8 @@
+/*!
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/support/container.h
+ * \brief The header for container.
+ */
 #ifndef XGRAMMAR_SUPPORT_CONTAINER_H_
 #define XGRAMMAR_SUPPORT_CONTAINER_H_
 #include <vector>

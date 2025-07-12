@@ -1,3 +1,8 @@
+/*!
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/support/recursion_guard.cc
+ */
+
 #include "recursion_guard.h"
 
 #include <charconv>
