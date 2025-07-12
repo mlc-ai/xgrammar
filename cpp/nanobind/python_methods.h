@@ -26,14 +26,6 @@ TokenizerInfo TokenizerInfo_Init(
 
 int TokenizerInfo_GetVocabType(const TokenizerInfo& tokenizer);
 
-bool GrammarMatcher_FillNextTokenBitmask(
-    GrammarMatcher& matcher,
-    intptr_t token_bitmask_ptr,
-    std::vector<int64_t> shape,
-    int32_t index,
-    bool debug_print
-);
-
 std::vector<int> Testing_DebugGetMaskedTokensFromBitmask(
     intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
 );
