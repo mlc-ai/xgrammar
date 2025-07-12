@@ -123,7 +123,7 @@ def test_serialize_compiled_grammar_string():
         grammar: GrammarModel
         tokenizer_metadata: TokenizerInfoMetaData
         adaptive_token_mask_cache: List
-        __VERSION__: Literal["v1"]
+        __VERSION__: Literal["v3"]
 
     # test serialization and deserialization in practice
     grammar = grammar_compiler.compile_regex(date_regex)
