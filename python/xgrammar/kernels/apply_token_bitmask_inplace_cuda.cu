@@ -183,7 +183,6 @@ void ApplyTokenBitmaskInplace(
     at::Tensor logits, at::Tensor bitmask, at::optional<at::Tensor> indices = at::nullopt
 ) {
   TORCH_CHECK(logits.is_cuda(), "logits must be a CUDA tensor.");
-  TORCH_CHECK(logits.is_contiguous(), "logits must be contiguous.");
   TORCH_CHECK(logits.dim() == 1 || logits.dim() == 2, "logits must be a 1D or 2D tensor.");
   std::pair<int32_t, int32_t> logits_shape =
       logits.dim() == 2
@@ -193,7 +192,6 @@ void ApplyTokenBitmaskInplace(
           : std::make_pair(1, static_cast<int32_t>(logits.size(0)));
 
   TORCH_CHECK(bitmask.is_cuda(), "bitmask must be a CUDA tensor.");
-  TORCH_CHECK(bitmask.is_contiguous(), "bitmask must be contiguous.");
   TORCH_CHECK(bitmask.dim() == 1 || bitmask.dim() == 2, "bitmask must be a 1D or 2D tensor.");
   std::pair<int32_t, int32_t> bitmask_shape =
       bitmask.dim() == 2
@@ -212,6 +210,9 @@ void ApplyTokenBitmaskInplace(
       " vs bitmask size ",
       bitmask_shape.second
   );
+
+  TORCH_CHECK(logits.dim() == 1 or logits.stride(1) == 1, "logits's stride(1) must be 1");
+  TORCH_CHECK(bitmask.dim() == 1 or bitmask.stride(1) == 1, "bitmask's stride(1) must be 1");
 
   int vocab_size = std::min(logits_shape.second, bitmask_shape.second * BITS_PER_BLOCK);
 
@@ -238,8 +239,8 @@ void ApplyTokenBitmaskInplace(
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocab_size,
-          logits_shape.second,
-          bitmask_shape.second,
+          bitmask.stride(0),
+          logits.stride(0),
           num_rows
       );
       break;
@@ -250,8 +251,8 @@ void ApplyTokenBitmaskInplace(
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocab_size,
-          logits_shape.second,
-          bitmask_shape.second,
+          bitmask.stride(0),
+          logits.stride(0),
           num_rows
       );
       break;
@@ -262,8 +263,8 @@ void ApplyTokenBitmaskInplace(
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocab_size,
-          logits_shape.second,
-          bitmask_shape.second,
+          bitmask.stride(0),
+          logits.stride(0),
           num_rows
       );
       break;
