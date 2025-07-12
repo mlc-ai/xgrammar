@@ -1,7 +1,8 @@
 import json
-from typing import Annotated, Any, Dict, List, Literal, Type, Union
+from typing import Any, Dict, List, Literal, Type, Union
 
 from pydantic import BaseModel, Field
+from typing_extensions import Annotated
 
 # ---------- Basic Formats ----------
 
