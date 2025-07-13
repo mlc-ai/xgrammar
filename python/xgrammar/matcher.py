@@ -282,7 +282,7 @@ class GrammarMatcher(XGRObject):
         return self._handle.accept_string(input_str, debug_print)
 
     def fill_next_token_bitmask(
-        self, bitmask: ArrayLike, index: int = 0, *, debug_print: bool = False
+        self, bitmask: Union[torch.Tensor, ArrayLike], index: int = 0, *, debug_print: bool = False
     ) -> bool:
         """Fill the bitmask for the next token prediction. The input bitmask can be generated
         by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the
@@ -310,6 +310,8 @@ class GrammarMatcher(XGRObject):
         Raises
         ------
         RuntimeError
+            If the bitmask is invalid (not on CPU, not int32, shape mismatch).
+
             If the recursion depth is exceeded.
         """
         return self._handle.fill_next_token_bitmask(bitmask, index, debug_print)

@@ -21,9 +21,8 @@
 #include "python_methods.h"
 
 namespace nb = nanobind;
-using namespace xgrammar;
 
-namespace {
+namespace xgrammar {
 
 std::vector<std::string> CommonEncodedVocabType(
     const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab
@@ -43,13 +42,20 @@ std::vector<std::string> CommonEncodedVocabType(
 }
 
 bool GrammarMatcher_FillNextTokenBitmask(
-    GrammarMatcher& matcher,
-    nb::ndarray<int32_t, nb::device::cpu> arr,
-    int32_t index,
-    bool debug_print
+    GrammarMatcher& matcher, nb::ndarray<> arr, int32_t index, bool debug_print
 ) {
   if (arr.ndim() != 1 && arr.ndim() != 2) {
-    throw nb::type_error("token_bitmask tensor must be 1D or 2D");
+    throw std::runtime_error("token_bitmask tensor must be 1D or 2D");
+  }
+
+  // 2. Device: ensure the tensor is on CPU
+  if (arr.device_type() != nb::device::cpu::value) {
+    throw std::runtime_error("token_bitmask array must be on CPU");
+  }
+
+  // 3. Data type: ensure 32-bit integers
+  if (arr.dtype() != nb::dtype<int32_t>()) {
+    throw std::runtime_error("token_bitmask array must be int32");
   }
 
   // Under the hood these are stored with the same standard (DLPack), but nanobind
@@ -62,10 +68,10 @@ bool GrammarMatcher_FillNextTokenBitmask(
   // Assert this, then skip over m_handle and reinterpret m_dltensor.
   static_assert(sizeof(arr) == sizeof(void*) + sizeof(nb::dlpack::dltensor));
 
-  const DLTensor& bitmask_dltensor =
-      *reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
+  DLTensor* bitmask_dltensor_ptr =
+      reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
 
-  return matcher.FillNextTokenBitmask(bitmask_dltensor, index, debug_print);
+  return matcher.FillNextTokenBitmask(bitmask_dltensor_ptr, index, debug_print);
 }
 
 std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
@@ -78,7 +84,9 @@ std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& 
   return py_result;
 }
 
-}  // namespace
+}  // namespace xgrammar
+
+using namespace xgrammar;
 
 NB_MODULE(xgrammar_bindings, m) {
   auto pyTokenizerInfo = nb::class_<TokenizerInfo>(m, "TokenizerInfo");

@@ -274,9 +274,7 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   bool AcceptString(const std::string& input_str, bool debug_print = false);
 
-  bool FillNextTokenBitmask(
-      const DLTensor& next_token_bitmask, int index, bool debug_print = false
-  );
+  bool FillNextTokenBitmask(DLTensor* next_token_bitmask, int index, bool debug_print = false);
 
   std::string FindJumpForwardString();
 
@@ -511,13 +509,13 @@ bool GrammarMatcher::Impl::IsTokenBitmaskAllTrue(int32_t* bitmask_data_ptr) {
 }
 
 bool GrammarMatcher::Impl::FillNextTokenBitmask(
-    const DLTensor& next_token_bitmask, int index, bool debug_print
+    DLTensor* next_token_bitmask, int index, bool debug_print
 ) {
   XGRAMMAR_CHECK(!IsStopTokenAccepted())
       << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
          "find the next token mask";
   int32_t* bitmask_data_ptr =
-      CheckAndGetBitmaskPtr(next_token_bitmask, tokenizer_info_.GetVocabSize(), index);
+      CheckAndGetBitmaskPtr(*next_token_bitmask, tokenizer_info_.GetVocabSize(), index);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
   const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
@@ -874,7 +872,7 @@ bool GrammarMatcher::AcceptString(const std::string& input_str, bool debug_print
 }
 
 bool GrammarMatcher::FillNextTokenBitmask(
-    const DLTensor& next_token_bitmask, int index, bool debug_print
+    DLTensor* next_token_bitmask, int index, bool debug_print
 ) {
   return pimpl_->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
 }
