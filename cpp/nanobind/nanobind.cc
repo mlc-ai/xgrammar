@@ -4,6 +4,7 @@
  */
 
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
@@ -20,7 +21,8 @@
 #include "python_methods.h"
 
 namespace nb = nanobind;
-using namespace xgrammar;
+
+namespace xgrammar {
 
 std::vector<std::string> CommonEncodedVocabType(
     const nb::typed<nb::list, std::variant<std::string, nb::bytes>> encoded_vocab
@@ -39,6 +41,39 @@ std::vector<std::string> CommonEncodedVocabType(
   return encoded_vocab_strs;
 }
 
+bool GrammarMatcher_FillNextTokenBitmask(
+    GrammarMatcher& matcher, nb::ndarray<> arr, int32_t index, bool debug_print
+) {
+  if (arr.ndim() != 1 && arr.ndim() != 2) {
+    throw std::runtime_error("token_bitmask tensor must be 1D or 2D");
+  }
+
+  // 2. Device: ensure the tensor is on CPU
+  if (arr.device_type() != nb::device::cpu::value) {
+    throw std::runtime_error("token_bitmask array must be on CPU");
+  }
+
+  // 3. Data type: ensure 32-bit integers
+  if (arr.dtype() != nb::dtype<int32_t>()) {
+    throw std::runtime_error("token_bitmask array must be int32");
+  }
+
+  // Under the hood these are stored with the same standard (DLPack), but nanobind
+  // defines its own types, and doesn't expose a way to just get the object directly.
+  // We'll just do some pointer hackery to get there, rather than build the type back up manually:
+
+  // The data in an ndarray is defined as:
+  // detail::ndarray_handle* m_handle = nullptr;
+  // dlpack::dltensor m_dltensor;
+  // Assert this, then skip over m_handle and reinterpret m_dltensor.
+  static_assert(sizeof(arr) == sizeof(void*) + sizeof(nb::dlpack::dltensor));
+
+  DLTensor* bitmask_dltensor_ptr =
+      reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
+
+  return matcher.FillNextTokenBitmask(bitmask_dltensor_ptr, index, debug_print);
+}
+
 std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
   const auto& decoded_vocab = tokenizer.GetDecodedVocab();
   std::vector<nanobind::bytes> py_result;
@@ -48,6 +83,10 @@ std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& 
   }
   return py_result;
 }
+
+}  // namespace xgrammar
+
+using namespace xgrammar;
 
 NB_MODULE(xgrammar_bindings, m) {
   auto pyTokenizerInfo = nb::class_<TokenizerInfo>(m, "TokenizerInfo");
