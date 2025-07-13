@@ -7,43 +7,63 @@
 #ifndef XGRAMMAR_FSM_H_
 #define XGRAMMAR_FSM_H_
 
+#include <picojson.h>
 #include <xgrammar/object.h>
 
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <variant>
 #include <vector>
 
-#include "../cpp/support/csr_array.h"
+#include "support/compact_2d_array.h"
+#include "support/reflection/reflection.h"
+#include "support/utils.h"
 
 namespace xgrammar {
 
 /*!
  * \brief The edge of a FSM.
  */
-struct FSMEdge {
+struct alignas(8) FSMEdge {
   /*!
-   * \brief The min and max are used to represent the range of characters.
-   * \details When min == -1 and max == -1, it means the edge is an epsilon transition.
-   * When min == -1 and max >= 0, then max represents the rule id.
-   * When min >= 0 and max >= 0, then it represents a range of characters.
+   * \brief The min field of the edge stores the type of the edge. When min >= 0, it represents a
+   * range of characters [min, max]. When min < 0, it represents a special edge type.
    */
-  short min, max;
+  enum EdgeType : int16_t {
+    kCharRange = 0,  // When min >= kCharRange, it represents a range of characters.
+    kEpsilon = -1,
+    kRuleRef = -2,
+    kEOS = -3,
+  };
+
+  inline static constexpr int kMaxChar = 255;
+
+  /*!
+   * \brief The information of the edge.
+   * \details When min >= 0, then it represents a range of characters [min, max].
+   * When min == EdgeType::kRuleRef, it represents a reference to a rule. max is the rule id.
+   * When min == EdgeType::kEpsilon, it means the edge is an epsilon transition.
+   * When min == EdgeType::kEOS, it means the edge accepts an EOS token.
+   */
+  int16_t min, max;
 
   /*!
    * \brief The target state id of the edge.
    */
-  int target;
+  int32_t target;
 
-  FSMEdge(short min, short max, int target) : min(min), max(max), target(target) {
+  FSMEdge(int16_t min, int16_t max, int32_t target) : min(min), max(max), target(target) {
     XGRAMMAR_DCHECK(!IsCharRange() || min <= max)
         << "Invalid FSMEdge: min > max. min=" << min << ", max=" << max;
   }
+
+  // for serialization only
+  FSMEdge() = default;
 
   /*!
    * \brief Compare the edges. Used to sort the edges in the FSM.
@@ -65,24 +85,40 @@ struct FSMEdge {
   /*!
    * \brief Check if the edge is a character range.
    */
-  bool IsCharRange() const { return min >= 0 && max >= 0; }
+  bool IsCharRange() const { return min >= 0; }
 
   /*!
    * \brief Check if the edge is an epsilon transition.
    */
-  bool IsEpsilon() const { return min == -1 && max == -1; }
+  bool IsEpsilon() const { return min == EdgeType::kEpsilon; }
 
   /*!
    * \brief Check if the edge is a rule reference.
    */
-  bool IsRuleRef() const { return min == -1 && max >= 0; }
+  bool IsRuleRef() const { return min == EdgeType::kRuleRef; }
+
+  /*!
+   * \brief Check if the edge is an EOS transition.
+   */
+  bool IsEOS() const { return min == EdgeType::kEOS; }
 
   /*!
    * \brief Get the rule id of the edge.
    * \return The rule id of the edge. -1 if the edge is not a rule reference.
    */
-  int GetRefRuleId() const { return IsRuleRef() ? max : -1; }
+  int32_t GetRefRuleId() const { return IsRuleRef() ? max : -1; }
 };
+
+/*!
+ * \brief Comparator for FSMEdge. Only compare the min and max.
+ */
+struct FSMEdgeRangeComparator {
+  bool operator()(const FSMEdge& lhs, const FSMEdge& rhs) const {
+    return std::make_tuple(lhs.min, lhs.max) < std::make_tuple(rhs.min, rhs.max);
+  }
+};
+
+XGRAMMAR_MEMBER_ARRAY(FSMEdge, &FSMEdge::min, &FSMEdge::max, &FSMEdge::target);
 
 }  // namespace xgrammar
 
@@ -94,7 +130,7 @@ namespace std {
 template <>
 struct hash<xgrammar::FSMEdge> {
   size_t operator()(const xgrammar::FSMEdge& edge) const {
-    return std::hash<std::tuple<short, short, int>>()(
+    return std::hash<std::tuple<int16_t, int16_t, int32_t>>()(
         std::make_tuple(edge.min, edge.max, edge.target)
     );
   }
@@ -136,11 +172,37 @@ class FSM {
    */
   int NumStates() const;
 
+  /*!
+   * \brief Get the edges of the FSM.
+   * \return The edges of the FSM.
+   */
   const std::vector<std::vector<FSMEdge>>& GetEdges() const;
 
+  /*!
+   * \brief Get the edges of the FSM.
+   * \return The edges of the FSM.
+   */
+  std::vector<std::vector<FSMEdge>>& GetEdges();
+
+  /*!
+   * \brief Get the edges of the FSM.
+   * \param state The state to get the edges from.
+   * \return The edges of the FSM.
+   */
+  std::vector<FSMEdge>& GetEdges(int state);
+
+  /*!
+   * \brief Get the edges of the FSM.
+   * \param state The state to get the edges from.
+   * \return The edges of the FSM.
+   */
   const std::vector<FSMEdge>& GetEdges(int state) const;
 
-  std::string PrintEdges() const;
+  /*!
+   * \brief Convert the edges of the FSM to a string. Used in printing the FSM.
+   * \return The string representation of the edges of the FSM.
+   */
+  std::string EdgesToString(std::optional<std::vector<int>> states = std::nullopt) const;
 
   /****************** FSM Traversal Visitors ******************/
 
@@ -153,7 +215,8 @@ class FSM {
    * \param character The input character.
    * \return The target state if a valid transition exists, kNoNextState otherwise.
    */
-  int GetNextState(int from, int16_t character) const;
+  int GetNextState(int from, int value, FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange)
+      const;
 
   /*!
    * \brief Advance the FSM to the next state.
@@ -167,7 +230,7 @@ class FSM {
       const std::unordered_set<int>& from,
       int value,
       std::unordered_set<int>* result,
-      bool value_is_rule = false,
+      FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange,
       bool from_is_closure = false
   ) const;
 
@@ -176,7 +239,7 @@ class FSM {
    * \param state_num The state number.
    * \param rules The set of possible rule numbers. The result is cleared at the beginning.
    */
-  void GetPossibleRules(const int& state_num, std::unordered_set<int>* rules) const;
+  void GetPossibleRules(int state_num, std::unordered_set<int>* rules) const;
 
   /*!
    * \brief Get the epsilon closure of a set of states, i.e. those can be reached by epsilon
@@ -201,13 +264,14 @@ class FSM {
   int AddState();
 
   /*!
-   * \brief Adds a transition edge between states with a character range.
+   * \brief Adds a transition edge between states with given min and max values. For character
+   * transitions, it accepts any character in range [min, max].
    * \param from The source state.
    * \param to The target state.
-   * \param min_ch The minimum character in the range (inclusive).
-   * \param max_ch The maximum character in the range (inclusive).
+   * \param min The min value of the range.
+   * \param max The max value of the range.
    */
-  void AddEdge(int from, int to, int16_t min_ch, int16_t max_ch);
+  void AddEdge(int from, int to, int16_t min, int16_t max);
 
   /*!
    * \brief Add an epsilon transition between two states.
@@ -225,6 +289,13 @@ class FSM {
   void AddRuleEdge(int from, int to, int16_t rule_id);
 
   /*!
+   * \brief Add an EOS transition between two states.
+   * \param from The source state.
+   * \param to The target state.
+   */
+  void AddEOSEdge(int from, int to);
+
+  /*!
    * \brief Add a whole FSM to the current FSM.
    * \param fsm The FSM to be added.
    * \param state_mapping The mapping from the state ids of the added FSM to the new ids in the
@@ -232,7 +303,7 @@ class FSM {
    */
   void AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping = nullptr);
 
-  /****************** FSM Construction Algorithms ******************/
+  /****************** FSM Construction Methods ******************/
 
   /*!
     \brief Return a copy of the FSM.
@@ -245,10 +316,16 @@ class FSM {
    * \param new_num_states The new number of states.
    * \return The rebuilt FSM.
    */
-  FSM RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states);
+  FSM RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) const;
 
   /*!
-   * \brief Transform a FSM to a compact FSM.
+   * \brief Sort the edges of the FSM by their min, max and target.
+   */
+  void SortEdges();
+
+  /*!
+   * \brief Transform a FSM to a compact FSM. This method will first sort the edges of the FSM,
+   * then put all the edges into a compact array.
    * \return The compact FSM.
    */
   CompactFSM ToCompact();
@@ -258,8 +335,8 @@ class FSM {
 
 /*!
  * \brief CompactFSM is the compact from of FSM.
- * \details It uses CSRArray to store the edges, ensuring memory contiguity. It sorts all outgoing
- * edges from a node according to their min and max values, so traversal can be faster.
+ * \details It uses Compact2DArray to store the edges, ensuring memory contiguity. It sorts all
+ * outgoing edges from a node according to their min and max values, so traversal can be faster.
  *
  * CompactFSM is immutable. If you need to modify a CompactFSM, you need to convert it to a FSM
  * first, and convert it back after modification.
@@ -268,9 +345,12 @@ class FSM {
  */
 class CompactFSM {
  public:
-  CompactFSM(const CSRArray<FSMEdge>& edges);
+  // for serialization only
+  CompactFSM() = default;
 
-  CompactFSM(CSRArray<FSMEdge>&& edges);
+  CompactFSM(const Compact2DArray<FSMEdge>& edges);
+
+  CompactFSM(Compact2DArray<FSMEdge>&& edges);
 
   /****************** CompactFSM Visitors ******************/
 
@@ -280,12 +360,30 @@ class CompactFSM {
    */
   int NumStates() const;
 
-  const CSRArray<FSMEdge>& GetEdges() const;
+  /*!
+   * \brief Get the edges of the CompactFSM.
+   * \return The edges of the CompactFSM.
+   */
+  const Compact2DArray<FSMEdge>& GetEdges() const;
 
-  CSRArray<FSMEdge>::Row GetEdges(int state) const;
+  /*!
+   * \brief Get the edges of the CompactFSM.
+   * \param state The state to get the edges from.
+   * \return The edges of the CompactFSM.
+   */
+  Compact2DArray<FSMEdge>::Row GetEdges(int state) const;
 
-  std::string PrintEdges() const;
+  /*!
+   * \brief Convert the edges of the CompactFSM to a string. Used in printing the CompactFSM.
+   * \return The string representation of the edges of the CompactFSM.
+   */
+  std::string EdgesToString(std::optional<std::vector<int>> states = std::nullopt) const;
 
+  /*!
+   * \brief Get the memory size of the CompactFSM.
+   * \param self The CompactFSM.
+   * \return The memory size of the CompactFSM.
+   */
   friend std::size_t MemorySize(const CompactFSM& self);
 
   /****************** CompactFSM Traversal Visitors ******************/
@@ -299,7 +397,8 @@ class CompactFSM {
    * \param character The input character.
    * \return The target state if a valid transition exists, kNoNextState otherwise.
    */
-  int GetNextState(int from, int16_t character) const;
+  int GetNextState(int from, int value, FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange)
+      const;
 
   /*!
    * \brief Advance the FSM to the next state.
@@ -313,7 +412,7 @@ class CompactFSM {
       const std::unordered_set<int>& from,
       int value,
       std::unordered_set<int>* result,
-      bool value_is_rule = false,
+      FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange,
       bool from_is_closure = false
   ) const;
 
@@ -322,7 +421,7 @@ class CompactFSM {
    * \param state_num The state number.
    * \param rules The set of possible rule numbers. The result is cleared at the beginning.
    */
-  void GetPossibleRules(const int& state_num, std::unordered_set<int>* rules) const;
+  void GetPossibleRules(int state_num, std::unordered_set<int>* rules) const;
 
   /*!
    * \brief Get the epsilon closure of a set of states, i.e. those can be reached by epsilon
@@ -338,7 +437,7 @@ class CompactFSM {
    */
   void GetReachableStates(const std::vector<int>& from, std::unordered_set<int>* result) const;
 
-  /****************** CompactFSM Construction Algorithms ******************/
+  /****************** CompactFSM Construction Methods ******************/
 
   /*!
    * \brief Transform the compact FSM to a FSM.
@@ -346,8 +445,13 @@ class CompactFSM {
    */
   FSM ToFSM() const;
 
+  picojson::value SerializeJSONValue() const;
+  friend void DeserializeJSONValue(CompactFSM& fsm, const picojson::value& v);
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
 };
+
+class CompactFSMWithStartEnd;
 
 /*!
  * \brief The base class for FSMWithStartEnd and CompactFSMWithStartEnd. It defines the
@@ -361,6 +465,9 @@ class FSMWithStartEndBase {
   );
 
  public:
+  // for serialization only
+  FSMWithStartEndBase() = default;
+
   /*! \brief Constructs an FSMWithStartEnd with a given FSM, start state, and end states. */
   FSMWithStartEndBase(
       const FSMType& fsm, int start, const std::unordered_set<int>& ends, bool is_dfa = false
@@ -456,9 +563,9 @@ class FSMWithStartEndBase {
   std::unordered_set<int> ends_;
   /*! \brief Whether this FSM is a deterministic finite automaton. */
   bool is_dfa_ = false;
-};
 
-class CompactFSMWithStartEnd;
+  friend struct member_trait<CompactFSMWithStartEnd>;
+};
 
 /*!
  * \brief FSMWithStartEnd represents a FSM with start and end states.
@@ -470,19 +577,48 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
   using FSMWithStartEndBase<FSM>::FSMWithStartEndBase;
 
   /*!
+   * \brief Convert the FSMWithStartEnd to a string. Only considers the nodes approachable from the
+   * start state.
+   * \return The string representation of the FSMWithStartEnd.
+   */
+  std::string ToString() const;
+
+  friend std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
+
+  /****************** FSM Construction Methods ******************/
+
+  /*!
    * \brief Return a copy of the FSMWithStartEnd.
    */
   FSMWithStartEnd Copy() const;
 
   /*!
-   * \brief Print the FSM.
-   * \return The string representation of the FSMWithStartEnd.
+   * \brief Rebuild the FSM with the new state ids.
+   * \param state_mapping The mapping from old state ids to new state ids.
+   * \param new_num_states The new number of states.
    */
-  std::string Print() const;
+  FSMWithStartEnd RebuildWithMapping(
+      std::unordered_map<int, int>& state_mapping, int new_num_states
+  );
 
-  friend std::ostream& operator<<(std::ostream& os, const FSMWithStartEnd& fsm);
+  /*!
+   * \brief Add the underlying FSM to another complete FSM that could contain multiple FSMs.
+   * Return a new FSMWithStartEnd that points to the complete FSM and whose start and ends are
+   * mapped to the states in the complete FSM.
+   * \param complete_fsm The complete FSM.
+   * \param state_mapping The mapping from the old state ids to the new state ids. The result is
+   * cleared at the beginning. Should not be nullptr.
+   * \return The FSMWithStartEnd that points to the complete FSM.
+   */
+  FSMWithStartEnd AddToCompleteFSM(FSM* complete_fsm, std::unordered_map<int, int>* state_mapping);
 
-  /****************** FSM Construction Algorithms ******************/
+  /*!
+   * \brief Transform the FSMWithStartEnd to a CompactFSMWithStartEnd.
+   * \return The CompactFSMWithStartEnd.
+   */
+  CompactFSMWithStartEnd ToCompact();
+
+  /****************** FSM Algorithms ******************/
 
   /*!
    * \brief Return a new FSM representing FSM*
@@ -515,7 +651,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \return The intersection of the FSMs.
    */
   static Result<FSMWithStartEnd> Intersect(
-      const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, const int& num_of_states_limited = 1e6
+      const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, int num_of_states_limited = 1e6
   );
 
   /*!
@@ -564,21 +700,6 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \return The minimized DFA.
    */
   FSMWithStartEnd MinimizeDFA() const;
-
-  /*!
-   * \brief Rebuild the FSM with the new state ids.
-   * \param state_mapping The mapping from old state ids to new state ids.
-   * \param new_num_states The new number of states.
-   */
-  FSMWithStartEnd RebuildWithMapping(
-      std::unordered_map<int, int>& state_mapping, int new_num_states
-  );
-
-  /*!
-   * \brief Transform the FSMWithStartEnd to a CompactFSMWithStartEnd.
-   * \return The CompactFSMWithStartEnd.
-   */
-  CompactFSMWithStartEnd ToCompact();
 };
 
 /*!
@@ -591,11 +712,15 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
  public:
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
+  // for serialization only
+  CompactFSMWithStartEnd() = default;
+
   /*!
-   * \brief Print the FSM.
-   * \return The string representation of the FSM.
+   * \brief Convert the FSMWithStartEnd to a string. Only considers the nodes approachable from the
+   * start state.
+   * \return The string representation of the FSMWithStartEnd.
    */
-  std::string Print() const;
+  std::string ToString() const;
 
   friend std::ostream& operator<<(std::ostream& os, const CompactFSMWithStartEnd& fsm);
 
@@ -613,6 +738,14 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   FSMWithStartEnd ToFSM() const;
 };
 
+XGRAMMAR_MEMBER_ARRAY(
+    CompactFSMWithStartEnd,
+    &CompactFSMWithStartEnd::fsm_,
+    &CompactFSMWithStartEnd::start_,
+    &CompactFSMWithStartEnd::ends_,
+    &CompactFSMWithStartEnd::is_dfa_
+);
+
 /****************** FSMWithStartEndBase Template Implementation ******************/
 
 template <typename FSMType>
@@ -623,7 +756,11 @@ inline bool FSMWithStartEndBase<FSMType>::AcceptString(const std::string& str) c
   for (const auto& character : str) {
     result_states.clear();
     fsm_.Advance(
-        start_states, static_cast<int>(static_cast<unsigned char>(character)), &result_states, false
+        start_states,
+        static_cast<int>(static_cast<unsigned char>(character)),
+        &result_states,
+        FSMEdge::EdgeType::kCharRange,
+        false
     );
     if (result_states.empty()) {
       return false;

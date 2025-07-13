@@ -36,6 +36,7 @@ def test_error_set_recursion_depth():
 
 
 def test_recursion_exceed():
+    # In Earley Parser, the recursion depth can't be exceeded.
     with xgr.max_recursion_depth(1000):
         grammar_ebnf = r"""
     root ::= "\"" basic_string "\""
@@ -46,8 +47,7 @@ def test_recursion_exceed():
 
         matcher = _get_matcher_from_grammar(grammar_ebnf)
 
-        with pytest.raises(RuntimeError):
-            matcher.accept_string(input_str)
+        matcher.accept_string(input_str)
 
 
 if __name__ == "__main__":

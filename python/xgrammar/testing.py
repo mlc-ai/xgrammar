@@ -1,4 +1,7 @@
-"""Testing utilities."""
+"""Testing utilities.
+
+The APIs in this module are used for testing and debugging and are prone to
+change. Don't use them in production."""
 
 import time
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
@@ -128,6 +131,7 @@ def _is_grammar_accept_string(
     *,
     debug_print: bool = False,
     print_time: bool = False,
+    require_termination: bool = True,
 ) -> bool:
     """Check if a grammar accepts a string. For test purposes.
 
@@ -160,6 +164,10 @@ def _is_grammar_accept_string(
 
     if not accepted:
         return False
+
+    if not require_termination:
+        return True
+
     return grammar_matcher.is_terminated()
 
 

@@ -121,7 +121,15 @@ NB_MODULE(xgrammar_bindings, m) {
             );
           }
       )
-      .def_static("_detect_metadata_from_hf", &TokenizerInfo::DetectMetadataFromHF);
+      .def_static("_detect_metadata_from_hf", &TokenizerInfo::DetectMetadataFromHF)
+      .def("serialize_json", &TokenizerInfo::SerializeJSON)
+      .def_static(
+          "deserialize_json",
+          [](const std::string& str,
+             const nb::typed<nb::list, std::variant<std::string, nb::bytes>>& encoded_vocab) {
+            return TokenizerInfo::DeserializeJSON(str, CommonEncodedVocabType(encoded_vocab));
+          }
+      );
 
   auto pyGrammar = nb::class_<Grammar>(m, "Grammar");
   pyGrammar.def("to_string", &Grammar::ToString)
@@ -145,12 +153,16 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)
       .def_static("union", &Grammar::Union, nb::call_guard<nb::gil_scoped_release>())
-      .def_static("concat", &Grammar::Concat, nb::call_guard<nb::gil_scoped_release>());
+      .def_static("concat", &Grammar::Concat, nb::call_guard<nb::gil_scoped_release>())
+      .def("serialize_json", &Grammar::SerializeJSON)
+      .def_static("deserialize_json", &Grammar::DeserializeJSON);
 
   auto pyCompiledGrammar = nb::class_<CompiledGrammar>(m, "CompiledGrammar");
   pyCompiledGrammar.def_prop_ro("grammar", &CompiledGrammar::GetGrammar)
       .def_prop_ro("tokenizer_info", &CompiledGrammar::GetTokenizerInfo)
-      .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes);
+      .def_prop_ro("memory_size_bytes", &CompiledGrammar::MemorySizeBytes)
+      .def("serialize_json", &CompiledGrammar::SerializeJSON)
+      .def_static("deserialize_json", &CompiledGrammar::DeserializeJSON);
 
   auto pyGrammarCompiler = nb::class_<GrammarCompiler>(m, "GrammarCompiler");
   pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, long long>())

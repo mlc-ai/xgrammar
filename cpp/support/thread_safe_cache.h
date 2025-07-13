@@ -289,14 +289,21 @@ class ThreadSafeLRUCache {
   void Clear() {
     // Remove all the ready entries.
     const auto lock_map = std::lock_guard{map_mutex_};
-    cache_.LRUEvict(
-        [] { return true; },
-        [&](const std::shared_future<SizedValue>& value) {
-          // always evict and block until the value is ready
-          current_size_ -= value.get().size;
-          return true;
-        }
-    );
+    if (this->max_size_ == UNLIMITED_SIZE)
+      cache_.GetMap().clear();
+    else
+      cache_.LRUEvict(
+          [] { return true; },
+          [&](const std::shared_future<SizedValue>& value) {
+            // always evict and block until the value is ready
+            try {
+              current_size_ -= value.get().size;
+            } catch (...) {
+              // fine, just ignore the exception, size is not updated
+            }
+            return true;
+          }
+      );
   }
 
  private:
@@ -338,7 +345,11 @@ class ThreadSafeLRUCache {
           using namespace std::chrono_literals;
           // if not ready, then do not wait and block here
           if (value.wait_for(0s) != std::future_status::ready) return false;
-          current_size_ -= value.get().size;
+          try {
+            current_size_ -= value.get().size;
+          } catch (...) {
+            // fine, just ignore the exception, size is not updated
+          }
           return true;
         }
     );

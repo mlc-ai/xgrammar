@@ -106,7 +106,14 @@ root_prop_5 ::= ("[" "" (basic_string ", " basic_integer ", " root_prop_5_item_2
 root_prop_6 ::= ("{" "" basic_string ": " basic_integer (", " basic_string ": " basic_integer)* "" "}") | "{" "}"
 root_prop_7_addl ::= ("{" "" basic_string ": " basic_integer (", " basic_string ": " basic_integer)* "" "}") | "{" "}"
 root_prop_7 ::= ("{" "" basic_string ": " root_prop_7_addl (", " basic_string ": " root_prop_7_addl)* "" "}") | "{" "}"
-root ::= "{" "" "\"integer_field\"" ": " basic_integer ", " "\"number_field\"" ": " basic_number ", " "\"boolean_field\"" ": " basic_boolean ", " "\"any_array_field\"" ": " root_prop_3 ", " "\"array_field\"" ": " root_prop_4 ", " "\"tuple_field\"" ": " root_prop_5 ", " "\"object_field\"" ": " root_prop_6 ", " "\"nested_object_field\"" ": " root_prop_7 "" "}"
+root_part_6 ::= ", " "\"nested_object_field\"" ": " root_prop_7 ""
+root_part_5 ::= ", " "\"object_field\"" ": " root_prop_6 root_part_6
+root_part_4 ::= ", " "\"tuple_field\"" ": " root_prop_5 root_part_5
+root_part_3 ::= ", " "\"array_field\"" ": " root_prop_4 root_part_4
+root_part_2 ::= ", " "\"any_array_field\"" ": " root_prop_3 root_part_3
+root_part_1 ::= ", " "\"boolean_field\"" ": " basic_boolean root_part_2
+root_part_0 ::= ", " "\"number_field\"" ": " basic_number root_part_1
+root ::= "{" "" (("\"integer_field\"" ": " basic_integer root_part_0)) "" "}"
 """
     )
 
@@ -137,7 +144,9 @@ def test_indent():
 root_prop_1_item_2 ::= (("[" "\n      " basic_string (",\n      " basic_string)* "\n    " "]") | ("[" "" "]"))
 root_prop_1 ::= ("[" "\n    " (basic_string ",\n    " basic_integer ",\n    " root_prop_1_item_2) "\n  " "]")
 root_prop_2 ::= ("{" "\n    " basic_string ": " basic_integer (",\n    " basic_string ": " basic_integer)* "\n  " "}") | "{" "}"
-root ::= "{" "\n  " "\"array_field\"" ": " root_prop_0 ",\n  " "\"tuple_field\"" ": " root_prop_1 ",\n  " "\"object_field\"" ": " root_prop_2 "\n" "}"
+root_part_1 ::= ",\n  " "\"object_field\"" ": " root_prop_2 ""
+root_part_0 ::= ",\n  " "\"tuple_field\"" ": " root_prop_1 root_part_1
+root ::= "{" "\n  " (("\"array_field\"" ": " root_prop_0 root_part_0)) "\n" "}"
 """
     )
 
@@ -171,7 +180,9 @@ schema__grammar__accepted_instances__rejected_instances__test_non_strict = [
             "required": ["foo", "bar"],
         },
         basic_json_rules_ebnf
-        + r"""root ::= "{" [ \n\t]* "\"foo\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "," [ \n\t]* "\"bar\"" [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}"
+        + r"""root_part_1 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)*
+root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"bar\"" [ \n\t]* ":" [ \n\t]* basic_integer root_part_1
+root ::= "{" [ \n\t]* (("\"foo\"" [ \n\t]* ":" [ \n\t]* basic_integer root_part_0)) [ \n\t]* "}"
 """,
         [{"foo": 1, "bar": 2}, {"foo": 1, "bar": 2, "baz": 3}],
         [{"foo": 1}],
@@ -215,7 +226,11 @@ root_prop_2 ::= ("\"a\"") | ("\"b\"") | ("\"c\"")
 root_prop_3 ::= ("1") | ("\"a\"") | ("true")
 defs_Field ::= ("\"foo\"") | ("\"bar\"")
 root_prop_4 ::= defs_Field
-root ::= "{" "" "\"bars\"" ": " root_prop_0 ", " "\"str_values\"" ": " root_prop_1 ", " "\"foo\"" ": " root_prop_2 ", " "\"values\"" ": " root_prop_3 ", " "\"field\"" ": " root_prop_4 "" "}"
+root_part_3 ::= ", " "\"field\"" ": " root_prop_4 ""
+root_part_2 ::= ", " "\"values\"" ": " root_prop_3 root_part_3
+root_part_1 ::= ", " "\"foo\"" ": " root_prop_2 root_part_2
+root_part_0 ::= ", " "\"str_values\"" ": " root_prop_1 root_part_1
+root ::= "{" "" (("\"bars\"" ": " root_prop_0 root_part_0)) "" "}"
 """
     )
 
@@ -235,7 +250,10 @@ def test_optional():
     ebnf_grammar = basic_json_rules_ebnf_no_space + (
         r"""root_prop_1 ::= basic_boolean | basic_null
 root_prop_2 ::= basic_number | basic_null
-root ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " root_prop_1 ", ")? "\"size\"" ": " root_prop_2 (", " "\"name\"" ": " basic_string)? "" "}"
+root_part_2 ::= "" | ", " "\"name\"" ": " basic_string ""
+root_part_1 ::= ", " "\"size\"" ": " root_prop_2 root_part_2
+root_part_0 ::= root_part_1 | ", " "\"opt_bool\"" ": " root_prop_1 root_part_1
+root ::= "{" "" (("\"num\"" ": " basic_integer root_part_0) | ("\"opt_bool\"" ": " root_prop_1 root_part_1) | ("\"size\"" ": " root_prop_2 root_part_2)) "" "}"
 """
     )
 
@@ -340,13 +358,15 @@ def test_reference():
 
     ebnf_grammar = basic_json_rules_ebnf_no_space + (
         r"""defs_Foo_prop_1 ::= basic_number | basic_null
-defs_Foo ::= "{" "" "\"count\"" ": " basic_integer (", " "\"size\"" ": " defs_Foo_prop_1)? "" "}"
+defs_Foo_part_0 ::= "" | ", " "\"size\"" ": " defs_Foo_prop_1 ""
+defs_Foo ::= "{" "" (("\"count\"" ": " basic_integer defs_Foo_part_0)) "" "}"
 root_prop_0 ::= defs_Foo
 defs_Bar_part_0 ::= "" | ", " "\"banana\"" ": " basic_string ""
 defs_Bar ::= ("{" "" (("\"apple\"" ": " basic_string defs_Bar_part_0) | ("\"banana\"" ": " basic_string "")) "" "}") | "{" "}"
 root_prop_1_additional ::= defs_Bar
 root_prop_1 ::= (("[" "" root_prop_1_additional (", " root_prop_1_additional)* "" "]") | ("[" "" "]"))
-root ::= "{" "" "\"foo\"" ": " root_prop_0 ", " "\"bars\"" ": " root_prop_1 "" "}"
+root_part_0 ::= ", " "\"bars\"" ": " root_prop_1 ""
+root ::= "{" "" (("\"foo\"" ": " root_prop_0 root_part_0)) "" "}"
 """
     )
 
@@ -561,9 +581,11 @@ def test_union():
     model_schema = ta.json_schema()
 
     ebnf_grammar = basic_json_rules_ebnf_no_space + (
-        r"""defs_Cat ::= "{" "" "\"name\"" ": " basic_string ", " "\"color\"" ": " basic_string "" "}"
+        r"""defs_Cat_part_0 ::= ", " "\"color\"" ": " basic_string ""
+defs_Cat ::= "{" "" (("\"name\"" ": " basic_string defs_Cat_part_0)) "" "}"
 root_case_0 ::= defs_Cat
-defs_Dog ::= "{" "" "\"name\"" ": " basic_string ", " "\"breed\"" ": " basic_string "" "}"
+defs_Dog_part_0 ::= ", " "\"breed\"" ": " basic_string ""
+defs_Dog ::= "{" "" (("\"name\"" ": " basic_string defs_Dog_part_0)) "" "}"
 root_case_1 ::= defs_Dog
 root ::= root_case_0 | root_case_1
 """
@@ -610,7 +632,7 @@ def test_alias():
         test: str = Field(..., alias="name")
 
     ebnf_grammar = basic_json_rules_ebnf_no_space + (
-        r"""root ::= "{" "" "\"name\"" ": " basic_string "" "}"
+        r"""root ::= "{" "" (("\"name\"" ": " basic_string "")) "" "}"
 """
     )
 
@@ -633,7 +655,7 @@ def test_alias():
 
     ebnf_grammar_space = basic_json_rules_ebnf_no_space + (
         r"""root_prop_0 ::= "\"abc\""
-root ::= "{" "" "\"name 1\"" ": " root_prop_0 "" "}"
+root ::= "{" "" (("\"name 1\"" ": " root_prop_0 "")) "" "}"
 """
     )
 
@@ -719,7 +741,9 @@ def test_any_whitespace():
     ebnf_grammar = basic_json_rules_ebnf + (
         r"""root_prop_1 ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 [ \n\t]* "}"
+root_part_1 ::= [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 ""
+root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 root_part_1
+root ::= "{" [ \n\t]* (("\"value\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0)) [ \n\t]* "}"
 """
     )
 
@@ -728,7 +752,10 @@ root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* ",
     ebnf_grammar = basic_json_rules_ebnf + (
         r"""root_prop_1 ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-root ::= "{" [ \n\t]* "\"value\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}"
+root_part_2 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)*
+root_part_1 ::= [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 root_part_2
+root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 root_part_1
+root ::= "{" [ \n\t]* (("\"value\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0)) [ \n\t]* "}"
 """
     )
 
@@ -791,7 +818,8 @@ schema__expected_grammar__instances__test_array_schema = [
         },
         (
             basic_json_rules_ebnf
-            + r"""root_additional ::= "{" [ \n\t]* "\"name\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "}"
+            + r"""root_additional_part_0 ::= [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer ""
+root_additional ::= "{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string root_additional_part_0)) [ \n\t]* "}"
 root ::= (("[" [ \n\t]* root_additional ([ \n\t]* "," [ \n\t]* root_additional)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 """
         ),
@@ -816,7 +844,8 @@ root ::= (("[" [ \n\t]* root_additional ([ \n\t]* "," [ \n\t]* root_additional)*
         },
         (
             basic_json_rules_ebnf
-            + r"""root_item_0 ::= "{" [ \n\t]* "\"name\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "}"
+            + r"""root_item_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer ""
+root_item_0 ::= "{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string root_item_0_part_0)) [ \n\t]* "}"
 root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer [ \n\t]* "," [ \n\t]* basic_string) [ \n\t]* "]")
 """
         ),
@@ -846,8 +875,9 @@ root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer [ \n\t]*
         },
         (
             basic_json_rules_ebnf
-            + r"""root_item_0 ::= "{" [ \n\t]* "\"name\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer [ \n\t]* "}"
-root_additional ::= "{" [ \n\t]* "\"name\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}"
+            + r"""root_item_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer ""
+root_item_0 ::= "{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string root_item_0_part_0)) [ \n\t]* "}"
+root_additional ::= "{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string "")) [ \n\t]* "}"
 root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* root_additional)* [ \n\t]* "]")
 """
         ),
@@ -867,9 +897,8 @@ root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t
 def test_array_schema(
     schema: Dict[str, Any], expected_grammar: str, instances: List[Tuple[Any, bool]]
 ):
-    grammar_ebnf = _json_schema_to_ebnf(schema)
-    print(grammar_ebnf)
-    assert grammar_ebnf == expected_grammar
+    check_schema_with_grammar(schema, expected_grammar)
+
     for instance, is_accepted in instances:
         check_schema_with_instance(schema, instance, is_accepted=is_accepted)
 
@@ -1059,6 +1088,399 @@ def test_object_with_only_properties_keyword():
     )
     check_schema_with_instance(
         schema_unevaluated_properties, instance_rejected, is_accepted=False, any_whitespace=False
+    )
+
+
+def test_object_with_pattern_properties_and_property_names():
+    schema = {
+        "type": "object",
+        "patternProperties": {
+            "^[a-zA-Z]+$": {"type": "string"},
+            "^[0-9]+$": {"type": "integer"},
+            "^[a-zA-Z]*_[0-9]*$": {"type": "object"},
+        },
+    }
+
+    instance_accepted = [
+        {"aBcDe": "aaa"},
+        {"12345": 12345},
+        {"abc_123": {"key": "value"}},
+        {"_": {"key": "value"}},
+        {"a": "value", "b": "another_value", "000": 12345, "abc_123": {"key": "value"}},
+        {"000": 12345, "a": "value", "abc_123": {"key": "value"}, "b": "another_value"},
+    ]
+
+    instance_rejected = [
+        {"233A": "adfa"},
+        {"aBcDe": 12345},
+        {"12345": "aaa"},
+        {"abc_123": 12345},
+        {"a": "value", "b": "another_value", "000": 12345, "abc_123": "aaa"},
+        {
+            "a": "value",
+            "b": "another_value",
+            "000": 12345,
+            "???": {"key": "value"},
+            "abc_123": {"key": "value"},
+        },
+        {"000": 12345, "a": "value", "abc_123": {"key": "value"}, "b": 12345},
+    ]
+
+    for instance in instance_accepted:
+        check_schema_with_instance(schema, instance, any_whitespace=False)
+    for instance in instance_rejected:
+        check_schema_with_instance(schema, instance, is_accepted=False, any_whitespace=False)
+
+    schema = {"type": "object", "propertyNames": {"pattern": "^[a-zA-Z0-9_]+$"}}
+
+    instance_accepted = [
+        {"aBcDe": "aaa"},
+        {"12345": 12345},
+        {"abc_123": {"key": "value"}},
+        {"_": {"key": "value"}},
+        {"a": "value", "b": "another_value", "000": 12345, "abc_123": {"key": "value"}},
+        {"000": 12345, "a": "value", "abc_123": {"key": "value"}, "b": "another_value"},
+    ]
+
+    instance_rejected = [
+        {"aBc?De": "aaa"},
+        {"1234|5": 12345},
+        {"abc_1.23": {"key": "value"}},
+        {"_/": {"key": "value"}},
+        {"a&": "value", "b": "another_value", "000": 12345, "abc_123": {"key": "value"}},
+        {"00(0": 12345, "a": "value", "abc_123": {"key": "value"}, "b": "another_value"},
+    ]
+
+    for instance in instance_accepted:
+        check_schema_with_instance(schema, instance, any_whitespace=False)
+    for instance in instance_rejected:
+        check_schema_with_instance(schema, instance, is_accepted=False, any_whitespace=False)
+
+
+def test_object_with_property_numbers():
+    base_schema = {
+        "properties": {
+            "key1": {"type": "string"},
+            "key2": {"type": "string"},
+            "key3": {"type": "string"},
+            "key4": {"type": "string"},
+        }
+    }
+    # fmt: off
+    instances = [
+        ({}, 0 , False),
+        ({"key1": "value1"}, 1, False),
+        ({"key4": "value4"}, 1, False),
+        ({"additional_key": "value"}, 1, True),
+        ({"key1": "value1", "additional_key": "value"}, 2, True),
+        ({"key1": "value1", "key2": "value2"}, 2, False),
+        ({"key1": "value1", "key4": "value4"}, 2, False),
+        ({"key2": "value2", "key3": "value3"}, 2, False),
+        ({"key1": "value1", "key2": "value2", "additional_key": "value"}, 3, True),
+        ({"key1": "value1", "key4": "value4", "additional_key": "value"}, 3, True),
+        ({"key3": "value3", "key4": "value4", "additional_key": "value"}, 3, True),
+        ({"key1": "value1", "key2": "value2", "key3": "value3"}, 3, False),
+        ({"key2": "value2", "key3": "value3", "key4": "value4"}, 3, False),
+        ({"key1": "value1", "key2": "value2", "key3": "value3", "additional_key": "value"}, 4, True),
+        ({"key2": "value2", "key3": "value3", "key4": "value4", "additional_key": "value"}, 4, True),
+        ({"key1": "value1", "key2": "value2", "key3": "value3", "key4": "value4"}, 4, False),
+        ({"key1": "value1", "key2": "value2", "key3": "value3", "key4": "value4", "additional_key": "value"}, 5, True),
+        ({"additional_key1": "value1", "additional_key2": "value2"}, 2, True),
+        ({"key1": "value1", "key2": "value2", "additional_key1": "value", "additional_key2": "value2"}, 4 , True),
+        ({"key1": "value1", "key2": "value2", "key3": "value3", "additional_key1": "value", "additional_key2": "value2"}, 5, True),
+        ({"key1": "value1", "key2": "value2", "key3": "value3", "key4": "value4", "additional_key1": "value", "additional_key2": "value2"}, 6, True),
+        ({"additional_key1": "value1", "additional_key2": "value2", "additional_key3": "value3"}, 3, True),
+        ({"additional_key1": "value1", "additional_key2": "value2", "additional_key3": "value3", "additional_key4": "value4", "additional_key5": "value5", "additional_key6": "value6"}, 6, True),
+    ]
+    # fmt: on
+
+    # Case 1. all properties are optional
+    # Case 1.1. no additional properties
+    schema = {**base_schema}
+    for instance, num_properties, have_additional in instances:
+        check_schema_with_instance(
+            schema, instance, is_accepted=not have_additional, any_whitespace=False
+        )
+
+    for lower_bound in range(8):
+        schema = {**base_schema, "minProperties": lower_bound}
+        for instance, num_properties, have_additional in instances:
+            if lower_bound > len(base_schema["properties"]):
+                continue
+            if num_properties < lower_bound:
+                is_accepted = False
+            else:
+                is_accepted = not have_additional
+            check_schema_with_instance(
+                schema, instance, is_accepted=is_accepted, any_whitespace=False
+            )
+
+        for upper_bound in range(lower_bound, 8):
+            schema = {**base_schema, "minProperties": lower_bound, "maxProperties": upper_bound}
+            for instance, num_properties, have_additional in instances:
+                if lower_bound > len(base_schema["properties"]):
+                    continue
+                if num_properties < lower_bound or num_properties > upper_bound:
+                    is_accepted = False
+                else:
+                    is_accepted = not have_additional
+                check_schema_with_instance(
+                    schema, instance, is_accepted=is_accepted, any_whitespace=False
+                )
+
+    # Case 1.2. additional properties allowed
+    schema = {**base_schema, "additionalProperties": {"type": "string"}}
+    for instance, num_properties, have_additional in instances:
+        check_schema_with_instance(schema, instance, any_whitespace=False)
+
+    for lower_bound in range(8):
+        schema = {
+            **base_schema,
+            "minProperties": lower_bound,
+            "additionalProperties": {"type": "string"},
+        }
+        for instance, num_properties, have_additional in instances:
+            if num_properties < lower_bound:
+                is_accepted = False
+            else:
+                is_accepted = True
+            check_schema_with_instance(
+                schema, instance, is_accepted=is_accepted, any_whitespace=False
+            )
+
+        for upper_bound in range(lower_bound, 8):
+            schema = {
+                **base_schema,
+                "minProperties": lower_bound,
+                "maxProperties": upper_bound,
+                "additionalProperties": {"type": "string"},
+            }
+            for instance, num_properties, have_additional in instances:
+                if lower_bound > len(base_schema["properties"]):
+                    continue
+                if num_properties < lower_bound or num_properties > upper_bound:
+                    is_accepted = False
+                else:
+                    is_accepted = True
+                check_schema_with_instance(
+                    schema, instance, is_accepted=is_accepted, any_whitespace=False
+                )
+
+    # Case 2. required properties are defined
+    # Case 2.1. no additional properties
+    required_properties_instance = [
+        [],
+        ["key1"],
+        ["key3"],
+        ["key4"],
+        ["key1", "key2"],
+        ["key1", "key4"],
+        ["key3", "key4"],
+        ["key1", "key2", "key3"],
+        ["key2", "key3", "key4"],
+        ["key1", "key2", "key3", "key4"],
+    ]
+
+    for required_properties in required_properties_instance:
+        schema = {**base_schema, "required": required_properties}
+        for instance, num_properties, have_additional in instances:
+            is_accepted = (
+                all(prop in instance for prop in required_properties) and not have_additional
+            )
+            check_schema_with_instance(
+                schema, instance, is_accepted=is_accepted, any_whitespace=False
+            )
+
+        for lower_bound in range(8):
+            schema = {**base_schema, "minProperties": lower_bound, "required": required_properties}
+            for instance, num_properties, have_additional in instances:
+                if lower_bound > len(base_schema["properties"]):
+                    continue
+                if num_properties < lower_bound:
+                    is_accepted = False
+                else:
+                    is_accepted = (
+                        all(prop in instance for prop in required_properties)
+                        and not have_additional
+                    )
+                check_schema_with_instance(
+                    schema, instance, is_accepted=is_accepted, any_whitespace=False
+                )
+
+            for upper_bound in range(lower_bound, 8):
+                schema = {
+                    **base_schema,
+                    "minProperties": lower_bound,
+                    "maxProperties": upper_bound,
+                    "required": required_properties,
+                }
+                for instance, num_properties, have_additional in instances:
+                    if lower_bound > len(base_schema["properties"]) or upper_bound < len(
+                        required_properties
+                    ):
+                        continue
+                    if num_properties < lower_bound or num_properties > upper_bound:
+                        is_accepted = False
+                    else:
+                        is_accepted = (
+                            all(prop in instance for prop in required_properties)
+                            and not have_additional
+                        )
+                    check_schema_with_instance(
+                        schema, instance, is_accepted=is_accepted, any_whitespace=False
+                    )
+
+    # Case 2.2. additional properties allowed
+    for required_properties in required_properties_instance:
+        schema = {
+            **base_schema,
+            "required": required_properties,
+            "additionalProperties": {"type": "string"},
+        }
+        for instance, num_properties, have_additional in instances:
+            is_accepted = all(prop in instance for prop in required_properties)
+            check_schema_with_instance(
+                schema, instance, is_accepted=is_accepted, any_whitespace=False
+            )
+
+        for lower_bound in range(8):
+            schema = {
+                **base_schema,
+                "minProperties": lower_bound,
+                "required": required_properties,
+                "additionalProperties": {"type": "string"},
+            }
+            for instance, num_properties, have_additional in instances:
+                if lower_bound > len(base_schema["properties"]):
+                    continue
+                if num_properties < lower_bound:
+                    is_accepted = False
+                else:
+                    is_accepted = all(prop in instance for prop in required_properties)
+                check_schema_with_instance(
+                    schema, instance, is_accepted=is_accepted, any_whitespace=False
+                )
+
+            for upper_bound in range(lower_bound, 8):
+                schema = {
+                    **base_schema,
+                    "minProperties": lower_bound,
+                    "maxProperties": upper_bound,
+                    "required": required_properties,
+                    "additionalProperties": {"type": "string"},
+                }
+                for instance, num_properties, have_additional in instances:
+                    if lower_bound > len(base_schema["properties"]) or upper_bound < len(
+                        required_properties
+                    ):
+                        continue
+                    if num_properties < lower_bound or num_properties > upper_bound:
+                        is_accepted = False
+                    else:
+                        is_accepted = all(prop in instance for prop in required_properties)
+                    check_schema_with_instance(
+                        schema, instance, is_accepted=is_accepted, any_whitespace=False
+                    )
+
+    # Case 3. No properties defined
+    for lower_bound in range(8):
+        schema = {
+            "type": "object",
+            "minProperties": lower_bound,
+            "additionalProperties": {"type": "string"},
+        }
+        for instance, num_properties, have_additional in instances:
+            if num_properties < lower_bound:
+                is_accepted = False
+            else:
+                is_accepted = True
+            check_schema_with_instance(
+                schema, instance, is_accepted=is_accepted, any_whitespace=False
+            )
+
+        for upper_bound in range(lower_bound, 8):
+            schema = {
+                "type": "object",
+                "minProperties": lower_bound,
+                "maxProperties": upper_bound,
+                "additionalProperties": {"type": "string"},
+            }
+            for instance, num_properties, have_additional in instances:
+                if num_properties < lower_bound or num_properties > upper_bound:
+                    is_accepted = False
+                else:
+                    is_accepted = True
+                check_schema_with_instance(
+                    schema, instance, is_accepted=is_accepted, any_whitespace=False
+                )
+
+
+def test_object_error_handle():
+    # Test error handling for invalid object schemas
+
+    def compile_from_schema(schema):
+        xgr.Grammar.from_json_schema(
+            json.dumps(schema), any_whitespace=True, indent=None, separators=None, strict_mode=True
+        )
+
+    schema = {"type": "object", "properties": "not an object"}
+    with pytest.raises(Exception) as e:
+        compile_from_schema(schema)
+    assert "properties must be an object" in str(e.value)
+
+    schema = {"type": "object", "required": {"key": "not an array"}}
+    with pytest.raises(Exception) as e:
+        compile_from_schema(schema)
+    assert "required must be an array" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "patternProperties": ["not an object"]})
+    assert "patternProperties must be an object" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "propertyNames": "not an object"})
+    assert "propertyNames must be an object" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "propertyNames": {"type": "object"}})
+    assert "propertyNames must be an object that validates string" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "minProperties": "not an integer"})
+    assert "minProperties must be an integer" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "maxProperties": "not an integer"})
+    assert "maxProperties must be an integer" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "minProperties": -1})
+    assert "minProperties must be a non-negative integer" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "maxProperties": -1})
+    assert "maxProperties must be a non-negative integer" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "minProperties": 5, "maxProperties": 3})
+    assert "minxPropertiesmax is greater than maxProperties" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema({"type": "object", "maxProperties": 1, "required": ["key1", "key2"]})
+    assert "maxProperties is less than the number of required properties" in str(e.value)
+
+    with pytest.raises(Exception) as e:
+        compile_from_schema(
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"key": {"type": "string"}},
+                "minProperties": 2,
+            }
+        )
+    assert (
+        "minProperties is greater than the number of properties, but additional properties aren't allowed"
+        in str(e.value)
     )
 
 
