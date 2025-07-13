@@ -7,6 +7,7 @@ import warnings
 from typing import List, Optional, Tuple, Union
 
 import torch
+from numpy.typing import ArrayLike
 
 from .base import XGRObject, _core
 from .compiler import CompiledGrammar
@@ -281,7 +282,7 @@ class GrammarMatcher(XGRObject):
         return self._handle.accept_string(input_str, debug_print)
 
     def fill_next_token_bitmask(
-        self, bitmask: torch.Tensor, index: int = 0, *, debug_print: bool = False
+        self, bitmask: Union[torch.Tensor, ArrayLike], index: int = 0, *, debug_print: bool = False
     ) -> bool:
         """Fill the bitmask for the next token prediction. The input bitmask can be generated
         by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the
@@ -309,15 +310,11 @@ class GrammarMatcher(XGRObject):
         Raises
         ------
         RuntimeError
+            If the bitmask is invalid (not on CPU, not int32, shape mismatch).
+
             If the recursion depth is exceeded.
         """
-        if bitmask.device.type != "cpu":
-            raise ValueError("bitmask should be on CPU.")
-        if bitmask.dtype != bitmask_dtype:
-            raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
-        return self._handle.fill_next_token_bitmask(
-            bitmask.data_ptr(), list(bitmask.shape), index, debug_print
-        )
+        return self._handle.fill_next_token_bitmask(bitmask, index, debug_print)
 
     def find_jump_forward_string(self) -> str:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that
