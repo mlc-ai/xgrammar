@@ -120,10 +120,10 @@ std::string GrammarPrinter::PrintChoices(const GrammarExpr& grammar_expr) {
 
 std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
   std::string result = "TagDispatch(";
-  for (int i = 0; i < grammar_expr.data_len; i += 2) {
+  for (int i = 0; i < grammar_expr.data_len - 3; i += 2) {
     result += "(" + PrintGrammarExpr(grammar_expr[i]) + ", " +
               grammar_->GetRule(grammar_expr[i + 1]).name + ")";
-    if (i + 2 != grammar_expr.data_len) {
+    if (i + 2 != grammar_expr.data_len - 3) {
       result += ", ";
     }
   }

@@ -351,9 +351,7 @@ class EarleyParser {
    * \param cur_sequence The sequence of the current state.
    * \return The next state, Invalid state if the character is not accepted.
    */
-  void AdvanceTagDispatch(
-      const ParserState& state, const uint8_t ch, const GrammarExpr& cur_sequence
-  );
+  void AdvanceFsm(const ParserState& state, const uint8_t ch, const GrammarExpr& cur_sequence);
 
   /*!
    * \brief Enqueue the state into the queue.
