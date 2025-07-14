@@ -3,16 +3,9 @@
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
-from typing_extensions import deprecated
 
 from .base import XGRObject, _core
-from .grammar import (
-    Grammar,
-    StructuralTagItem,
-    _convert_schema_to_str,
-    _get_structural_tag_str_from_args,
-)
-from .structural_tag import StructuralTag
+from .grammar import Grammar, StructuralTagItem, _convert_schema_to_str
 from .tokenizer_info import TokenizerInfo
 
 
@@ -169,18 +162,6 @@ class GrammarCompiler(XGRObject):
         """
         return CompiledGrammar._create_from_handle(self._handle.compile_regex(regex))
 
-    @overload
-    def compile_structural_tag(
-        self, structural_tag: Union[StructuralTag, str, Dict[str, Any]]
-    ) -> CompiledGrammar:
-        """Compile a grammar from a structural tag."""
-        ...
-
-    @overload
-    @deprecated(
-        "compile_structural_tag(tags, triggers) is deprecated. Compile structural tag with the "
-        "StructuralTag class instead."
-    )
     def compile_structural_tag(
         self, tags: List[StructuralTagItem], triggers: List[str]
     ) -> CompiledGrammar:
@@ -200,13 +181,9 @@ class GrammarCompiler(XGRObject):
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        ...
-
-    def compile_structural_tag(self, *args, **kwargs) -> CompiledGrammar:
-        """Compile a grammar from structural tag."""
-        structural_tag_str = _get_structural_tag_str_from_args(args, kwargs)
+        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
         return CompiledGrammar._create_from_handle(
-            self._handle.compile_structural_tag(structural_tag_str)
+            self._handle.compile_structural_tag(tags_tuple, triggers)
         )
 
     @overload
