@@ -2777,7 +2777,7 @@ Result<JSONSchemaConverter::ObjectSpec, SchemaError> JSONSchemaConverter::ParseO
     );
   }
 
-  return Result<ObjectSpec, SchemaError>::Ok(ObjectSpec{
+  return ResultOk(ObjectSpec{
       properties,
       pattern_properties,
       allow_additional_properties,
