@@ -81,7 +81,7 @@ struct ParserState {
 
   /*!
    * \brief Which element of the choice sequence is to be visited. When the current sequence is
-   * a tag dispatch rule, this element id is the currently visited node.
+   * a tag dispatch rule, this element id is the current node.
    */
   int32_t element_id = -1;
 
