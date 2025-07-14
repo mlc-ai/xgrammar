@@ -4,13 +4,14 @@
  */
 
 #include <xgrammar/grammar.h>
-#include <xgrammar/structural_tag.h>
 
 #include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_serializer.h"
 #include "json_schema_converter.h"
 #include "regex_converter.h"
+#include "structural_tag.h"
+#include "support/logging.h"
 
 namespace xgrammar {
 
@@ -45,11 +46,11 @@ Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) 
   return FromEBNF(ebnf_string);
 }
 
-// Grammar Grammar::FromStructuralTag(
-//     const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
-// ) {
-//   return StructuralTagToGrammar(tags, triggers);
-// }
+Grammar Grammar::FromStructuralTag(
+    const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
+) {
+  return StructuralTagToGrammar(tags, triggers);
+}
 
 // Optimized json grammar for the speed of the grammar matcher
 const std::string kJSONGrammarString = R"(
