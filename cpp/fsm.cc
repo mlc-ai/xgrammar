@@ -446,7 +446,7 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
  public:
   using FSMImplBase<Compact2DArray<FSMEdge>>::FSMImplBase;
 
-  int GetNextState(int from, int value, EdgeType edge_type) const;
+  void GetNextStates(int from, int value, std::vector<int>& targets, EdgeType edge_type) const;
 
   void Advance(
       const std::unordered_set<int>& from,
@@ -463,7 +463,10 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
 
 XGRAMMAR_MEMBER_ARRAY(CompactFSM::Impl, &CompactFSM::Impl::edges_);
 
-int CompactFSM::Impl::GetNextState(int from, int value, EdgeType edge_type) const {
+void CompactFSM::Impl::GetNextStates(
+    int from, int value, std::vector<int>& targets, EdgeType edge_type
+) const {
+  targets.clear();
   XGRAMMAR_DCHECK(edge_type != EdgeType::kEpsilon)
       << "Should not call GetNextState with edge type kEpsilon.";
   if (edge_type == EdgeType::kCharRange) {
@@ -473,10 +476,9 @@ int CompactFSM::Impl::GetNextState(int from, int value, EdgeType edge_type) cons
       } else if (edge.min > value) {
         break;
       } else if (edge.max >= value) {
-        return edge.target;
+        targets.push_back(edge.target);
       }
     }
-    return CompactFSM::kNoNextState;
   } else if (edge_type == EdgeType::kRuleRef) {
     for (const auto& edge : edges_[from]) {
       if (edge.min < EdgeType::kRuleRef) {
@@ -484,10 +486,9 @@ int CompactFSM::Impl::GetNextState(int from, int value, EdgeType edge_type) cons
       } else if (edge.min > EdgeType::kRuleRef) {
         break;
       } else if (edge.max == value) {
-        return edge.target;
+        targets.push_back(edge.target);
       }
     }
-    return CompactFSM::kNoNextState;
   } else if (edge_type == EdgeType::kEOS) {
     for (const auto& edge : edges_[from]) {
       if (edge.min < EdgeType::kEOS) {
@@ -495,14 +496,12 @@ int CompactFSM::Impl::GetNextState(int from, int value, EdgeType edge_type) cons
       } else if (edge.min > EdgeType::kEOS) {
         break;
       } else if (edge.max >= EdgeType::kEOS) {
-        return edge.target;
+        targets.push_back(edge.target);
       }
     }
-    return CompactFSM::kNoNextState;
   } else {
     XGRAMMAR_DCHECK(false) << "Invalid edge type: " << static_cast<int>(edge_type);
   }
-  XGRAMMAR_UNREACHABLE();
 }
 
 void CompactFSM::Impl::Advance(
@@ -598,8 +597,10 @@ std::string CompactFSM::EdgesToString(std::optional<std::vector<int>> states) co
   return pimpl_->EdgesToString(states);
 }
 
-int CompactFSM::GetNextState(int from, int value, FSMEdge::EdgeType edge_type) const {
-  return pimpl_->GetNextState(from, value, edge_type);
+void CompactFSM::GetNextStates(
+    int from, int value, std::vector<int>& targets, FSMEdge::EdgeType edge_type
+) const {
+  return pimpl_->GetNextStates(from, value, targets, edge_type);
 }
 
 void CompactFSM::Advance(

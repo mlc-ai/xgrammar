@@ -256,6 +256,9 @@ class EarleyParser {
   /*! \brief The class is used to check if a state has been added into the queue. */
   RepeatDetector tmp_states_visited_in_queue_;
 
+  /*! \brief The targets of the fsm edges, used in AdvanceFsm. */
+  std::vector<int> tmp_fsm_targets_;
+
   /*! \brief Check if the stop token is accepted. */
   bool stop_token_is_accepted_ = false;
 

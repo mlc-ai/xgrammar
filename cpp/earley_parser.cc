@@ -546,13 +546,12 @@ void EarleyParser::AdvanceFsm(
 ) {
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
   auto current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
-  auto next_node = current_fsm->GetNextState(state.element_id, ch);
-  auto new_state = state;
-  if (next_node == CompactFSM::kNoNextState) {
-    return;
+  current_fsm->GetNextStates(state.element_id, ch, tmp_fsm_targets_);
+  for (const auto& next_node : tmp_fsm_targets_) {
+    auto new_state = state;
+    new_state.element_id = next_node;
+    tmp_process_state_queue_.push(new_state);
   }
-  new_state.element_id = next_node;
-  tmp_process_state_queue_.push(new_state);
 }
 
 bool RepeatDetector::IsVisited(const ParserState& state) const {
