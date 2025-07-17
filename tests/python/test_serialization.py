@@ -83,7 +83,7 @@ def test_serialize_grammar_functional():
     matcher_recovered = xgr.GrammarMatcher(compiled_recovered)
 
     # Test that both matchers accept the same input
-    test_input = "a"
+    test_input = "aaa"
     assert matcher_original.accept_string(test_input) == matcher_recovered.accept_string(test_input)
 
 
@@ -134,7 +134,7 @@ def test_serialize_tokenizer_info_functional():
     matcher_original = xgr.GrammarMatcher(compiled_original)
     matcher_recovered = xgr.GrammarMatcher(compiled_recovered)
 
-    test_input = "a"
+    test_input = "aaa"
     assert matcher_original.accept_string(test_input) == matcher_recovered.accept_string(test_input)
 
 
@@ -181,7 +181,7 @@ def test_serialize_compiled_grammar_functional():
     torch.testing.assert_close(token_bitmask_original, token_bitmask_recovered)
 
     # Test input acceptance
-    test_input = "a"
+    test_input = "aaa"
     assert matcher_original.accept_string(test_input) == matcher_recovered.accept_string(test_input)
     assert matcher_original.is_terminated() == matcher_recovered.is_terminated()
 
