@@ -45,13 +45,6 @@ inline uint32_t HashCombine(Args... args) {
 #define XGRAMMAR_UNREACHABLE()
 #endif
 
-/******************* MemorySize Procotol *******************/
-
-template <typename T, typename = std::enable_if_t<std::is_trivially_copyable_v<T>>>
-inline constexpr std::size_t MemorySize(const T& value) {
-  return 0;
-}
-
 /*!
  * \brief An error class that contains a type. The type can be an enum.
  */
