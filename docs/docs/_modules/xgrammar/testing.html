@@ -538,6 +538,12 @@ window.addEventListener("load", () => mermaid.run());
     <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_generate_float_regex</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span></div>
 
 
+<div class="viewcode-block" id="_print_grammar_fsms"><a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing._print_grammar_fsms">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">_print_grammar_fsms</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Print the FSMs of the grammar. Now the fsms are initialized in the grammar compilation</span>
+<span class="sd">    process.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_print_grammar_fsms</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
+
+
 <div class="viewcode-block" id="GrammarFunctor"><a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarFunctor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A utility class for transforming grammars. These methods are called during grammar parsing.</span>
 <span class="sd">    For test purposes.&quot;&quot;&quot;</span>

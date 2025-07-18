@@ -178,6 +178,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._get_allow_empty_rule_ids"><code class="docutils literal notranslate"><span class="pre">_get_allow_empty_rule_ids()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._generate_range_regex"><code class="docutils literal notranslate"><span class="pre">_generate_range_regex()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._generate_float_regex"><code class="docutils literal notranslate"><span class="pre">_generate_float_regex()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._print_grammar_fsms"><code class="docutils literal notranslate"><span class="pre">_print_grammar_fsms()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing.GrammarFunctor"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.structure_normalizer"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor.structure_normalizer()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.rule_inliner"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor.rule_inliner()</span></code></a></li>
@@ -319,6 +320,9 @@ change. Don’t use them in production.</p>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.testing._generate_float_regex" title="xgrammar.testing._generate_float_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_generate_float_regex</span></code></a>([start, end])</p></td>
 <td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing._print_grammar_fsms" title="xgrammar.testing._print_grammar_fsms"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_print_grammar_fsms</span></code></a>(grammar)</p></td>
+<td><p>Print the FSMs of the grammar.</p></td>
 </tr>
 </tbody>
 </table>
@@ -545,6 +549,13 @@ TokenizerInfo will be created.</p></li>
 <dt class="sig sig-object py" id="xgrammar.testing._generate_float_regex">
 <span class="sig-prename descclassname"><span class="pre">xgrammar.testing.</span></span><span class="sig-name descname"><span class="pre">_generate_float_regex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/testing.html#_generate_float_regex"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.testing._generate_float_regex" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.testing._print_grammar_fsms">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.testing.</span></span><span class="sig-name descname"><span class="pre">_print_grammar_fsms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">grammar</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/testing.html#_print_grammar_fsms"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.testing._print_grammar_fsms" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print the FSMs of the grammar. Now the fsms are initialized in the grammar compilation
+process.</p>
+</dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.testing.GrammarFunctor">
