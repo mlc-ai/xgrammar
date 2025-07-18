@@ -546,7 +546,9 @@ void EarleyParser::AdvanceFsm(
 ) {
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
   auto current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
-  current_fsm->GetNextStates(state.element_id, ch, tmp_fsm_targets_);
+  current_fsm->GetNextStates(
+      state.element_id, ch, FSMEdge::EdgeType::kCharRange, &tmp_fsm_targets_
+  );
   for (const auto& next_node : tmp_fsm_targets_) {
     auto new_state = state;
     new_state.element_id = next_node;

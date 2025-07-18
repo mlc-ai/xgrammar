@@ -1022,41 +1022,4 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilder::Build(
   return TagDispatchFSMBuilderImpl().Build(tag_dispatch);
 }
 
-class WildcardFSMBuilderImpl {
- public:
-  FSMWithStartEnd Build(const std::vector<std::string>& end_strings);
-
- private:
-  FSMWithStartEnd BuildEOSFSM();
-  FSMWithStartEnd BuildStopStringFSM(const std::vector<std::string>& stop_strings);
-};
-
-FSMWithStartEnd WildcardFSMBuilderImpl::Build(const std::vector<std::string>& end_strings) {
-  if (end_strings.empty()) {
-    return BuildEOSFSM();
-  }
-  return BuildStopStringFSM(end_strings);
-}
-
-FSMWithStartEnd WildcardFSMBuilderImpl::BuildEOSFSM() {
-  FSM fsm(1);
-  fsm.AddEdge(0, 0, 0, FSMEdge::kMaxChar);
-  int start = 0;
-  std::unordered_set<int> ends = {0};
-  return FSMWithStartEnd(fsm, start, ends);
-}
-
-FSMWithStartEnd WildcardFSMBuilderImpl::BuildStopStringFSM(
-    const std::vector<std::string>& stop_strings
-) {
-  FSM fsm(1);
-  int start = 0;
-  std::unordered_set<int> ends = {0};
-  return FSMWithStartEnd(fsm, start, ends);
-}
-
-FSMWithStartEnd WildcardFSMBuilder::Build(const std::vector<std::string>& end_strings) {
-  return WildcardFSMBuilderImpl().Build(end_strings);
-}
-
 }  // namespace xgrammar

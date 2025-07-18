@@ -446,7 +446,7 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
  public:
   using FSMImplBase<Compact2DArray<FSMEdge>>::FSMImplBase;
 
-  void GetNextStates(int from, int value, std::vector<int>& targets, EdgeType edge_type) const;
+  void GetNextStates(int from, int value, EdgeType edge_type, std::vector<int>* target) const;
 
   void Advance(
       const std::unordered_set<int>& from,
@@ -464,9 +464,9 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
 XGRAMMAR_MEMBER_ARRAY(CompactFSM::Impl, &CompactFSM::Impl::edges_);
 
 void CompactFSM::Impl::GetNextStates(
-    int from, int value, std::vector<int>& targets, EdgeType edge_type
+    int from, int value, EdgeType edge_type, std::vector<int>* targets
 ) const {
-  targets.clear();
+  targets->clear();
   XGRAMMAR_DCHECK(edge_type != EdgeType::kEpsilon)
       << "Should not call GetNextState with edge type kEpsilon.";
   if (edge_type == EdgeType::kCharRange) {
@@ -476,7 +476,7 @@ void CompactFSM::Impl::GetNextStates(
       } else if (edge.min > value) {
         break;
       } else if (edge.max >= value) {
-        targets.push_back(edge.target);
+        targets->push_back(edge.target);
       }
     }
   } else if (edge_type == EdgeType::kRuleRef) {
@@ -486,7 +486,7 @@ void CompactFSM::Impl::GetNextStates(
       } else if (edge.min > EdgeType::kRuleRef) {
         break;
       } else if (edge.max == value) {
-        targets.push_back(edge.target);
+        targets->push_back(edge.target);
       }
     }
   } else if (edge_type == EdgeType::kEOS) {
@@ -496,7 +496,7 @@ void CompactFSM::Impl::GetNextStates(
       } else if (edge.min > EdgeType::kEOS) {
         break;
       } else if (edge.max >= EdgeType::kEOS) {
-        targets.push_back(edge.target);
+        targets->push_back(edge.target);
       }
     }
   } else {
@@ -598,9 +598,9 @@ std::string CompactFSM::EdgesToString(std::optional<std::vector<int>> states) co
 }
 
 void CompactFSM::GetNextStates(
-    int from, int value, std::vector<int>& targets, FSMEdge::EdgeType edge_type
+    int from, int value, FSMEdge::EdgeType edge_type, std::vector<int>* targets
 ) const {
-  return pimpl_->GetNextStates(from, value, targets, edge_type);
+  return pimpl_->GetNextStates(from, value, edge_type, targets);
 }
 
 void CompactFSM::Advance(

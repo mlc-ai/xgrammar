@@ -63,11 +63,6 @@ class TagDispatchFSMBuilder {
   static std::optional<FSMWithStartEnd> Build(const Grammar::Impl::TagDispatch& tag_dispatch);
 };
 
-class WildcardFSMBuilder {
- public:
-  static FSMWithStartEnd Build(const std::vector<std::string>& end_strings);
-};
-
 // stop token
 // eos string
 

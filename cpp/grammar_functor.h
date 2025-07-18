@@ -96,28 +96,6 @@ class GrammarFunctor {
 
   virtual void InitBuilder(GrammarBuilder* builder) { builder_ = builder; }
 
-  //     virtual void Init(const Grammar& grammar) {
-  //   base_grammar_ = grammar;
-  //   owned_builder_ = GrammarBuilder();
-  //   builder_ = &builder_value_;
-  // }
-
-  // virtual void InitWithCopy(const Grammar& grammar) {
-  //   base_grammar_ = grammar;
-  //   owned_builder_ = GrammarBuilder(grammar);
-  //   builder_ = &builder_value_;
-  // }
-
-  // virtual void InitWithBuilder(const Grammar& grammar, GrammarBuilder* builder) {
-  //   base_grammar_ = grammar;
-  //   builder_ = builder;
-  // }
-
-  // virtual void InitNoGrammar() {
-  //   owned_builder_ = GrammarBuilder();
-  //   builder_ = &owned_builder_;
-  // }
-
   /*! \brief Visit a lookahead assertion expr referred by id. */
   virtual T VisitLookaheadAssertion(int32_t lookahead_assertion_id) {
     if (lookahead_assertion_id == -1) {

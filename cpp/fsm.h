@@ -401,8 +401,8 @@ class CompactFSM {
   void GetNextStates(
       int from,
       int value,
-      std::vector<int>& targets,
-      FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange
+      FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange,
+      std::vector<int>* targets = nullptr
   ) const;
 
   /*!
