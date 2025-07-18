@@ -38,10 +38,10 @@ struct NullObj {};
   TypeName& operator=(TypeName&& other) noexcept = default;                    \
   bool IsNull() const { return pimpl_ == nullptr; }                            \
   /* Access the impl pointer. Useful in implementation. */                     \
+  Impl* ImplPtr() { return pimpl_.get(); }                                     \
+  const Impl* ImplPtr() const { return pimpl_.get(); }                         \
   Impl* operator->() { return pimpl_.get(); }                                  \
   const Impl* operator->() const { return pimpl_.get(); }                      \
-  Impl& operator*() { return *pimpl_; }                                        \
-  const Impl& operator*() const { return *pimpl_; }                            \
                                                                                \
  private:                                                                      \
   std::shared_ptr<Impl> pimpl_

@@ -12,7 +12,7 @@
 #include <string>
 
 #include "grammar_builder.h"
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 
 namespace xgrammar {
 

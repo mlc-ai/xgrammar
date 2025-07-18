@@ -1,6 +1,6 @@
 /*!
  * Copyright (c) 2023 by Contributors
- * \file support/thread_pool.h
+ * \file xgrammar/support/thread_pool.h
  * \brief Thread pool.
  */
 #ifndef XGRAMMAR_SUPPORT_THREAD_POOL_H_
