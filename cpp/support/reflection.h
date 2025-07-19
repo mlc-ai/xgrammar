@@ -150,7 +150,11 @@ inline void visit_config_impl(Fn&& fn, std::index_sequence<Idx...>) {
   // It uses fold expression to apply the function to each member.
   static_assert(Ftor::value == member_type::kConfig, "T must be a config type");
   static constexpr auto get_name = [](std::size_t idx) {
-    return Ftor::has_names ? Ftor::names[idx] : "";
+    if constexpr (Ftor::has_names) {
+      return Ftor::names[idx];
+    } else {
+      return "";
+    }
   };
   return (fn(std::get<Idx>(Ftor::members), get_name(Idx), Idx), ...);
 }

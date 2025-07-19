@@ -181,8 +181,10 @@ TokenizerInfo TokenizerInfo_DeserializeJSON(const std::string& json_string) {
   return std::get<TokenizerInfo>(result);
 }
 
-CompiledGrammar CompiledGrammar_DeserializeJSON(const std::string& json_string) {
-  auto result = CompiledGrammar::DeserializeJSON(json_string);
+CompiledGrammar CompiledGrammar_DeserializeJSON(
+    const std::string& json_string, const TokenizerInfo& tokenizer
+) {
+  auto result = CompiledGrammar::DeserializeJSON(json_string, tokenizer);
   if (std::holds_alternative<std::runtime_error>(result)) {
     throw std::get<std::runtime_error>(result);
   }

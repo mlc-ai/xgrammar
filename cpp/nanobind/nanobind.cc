@@ -15,7 +15,6 @@
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
-#include "../support/recursion_guard.h"
 #include "../testing.h"
 #include "python_methods.h"
 

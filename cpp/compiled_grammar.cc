@@ -166,7 +166,7 @@ std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const 
 picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(impl.grammar);
-  result["tokenizer_metadata"] = picojson::value(impl.tokenizer_info.DumpMetadata());
+  result["tokenizer_metadata"] = impl.tokenizer_info->DumpMetadataValue();
   result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(impl.adaptive_token_mask_cache);
   return picojson::value(result);
 }
@@ -218,7 +218,7 @@ TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetToke
 std::string CompiledGrammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
 
 /*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
-std::variant<CompiledGrammar, std::runtime_error> DeserializeJSON(
+std::variant<CompiledGrammar, std::runtime_error> CompiledGrammar::DeserializeJSON(
     const std::string& json_string, const TokenizerInfo& tokenizer_info
 ) {
   picojson::value json_value;

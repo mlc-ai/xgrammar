@@ -496,7 +496,7 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
     result->clear();
     result->reserve(arr.size());
     for (const auto& item : arr) {
-      typename T::value_type item_value;
+      typename T::value_type item_value{};
       if (auto error = AutoDeserializeJSONValue(&item_value, item, type_name)) {
         return error;
       }
@@ -513,7 +513,7 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
       result->clear();
       result->reserve(obj.size());
       for (const auto& [key, item] : obj) {
-        typename T::value_type item_value;
+        typename T::mapped_type item_value{};
         if (auto error = AutoDeserializeJSONValue(&item_value, item, type_name)) {
           return error;
         }
@@ -542,11 +542,11 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
               "Expect an array of array of size 2 for deserializing unordered map", type_name
           );
         }
-        typename T::key_type key_value;
+        typename T::key_type key_value{};
         if (auto error = AutoDeserializeJSONValue(&key_value, sub_arr[0], type_name)) {
           return error;
         }
-        typename T::mapped_type item_value;
+        typename T::mapped_type item_value{};
         if (auto error = AutoDeserializeJSONValue(&item_value, sub_arr[1], type_name)) {
           return error;
         }

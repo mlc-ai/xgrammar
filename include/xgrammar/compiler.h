@@ -39,7 +39,7 @@ class CompiledGrammar {
 
   /*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
   static std::variant<CompiledGrammar, std::runtime_error> DeserializeJSON(
-      const std::string& json_string, TokenizerInfo tokenizer_info
+      const std::string& json_string, const TokenizerInfo& tokenizer_info
   );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);

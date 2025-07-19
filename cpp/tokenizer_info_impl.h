@@ -38,6 +38,7 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetTrieSubtreeNodesRange() const { return trie_subtree_nodes_range_; }
 
   std::string DumpMetadata() const;
+  picojson::value DumpMetadataValue() const;
 
   static std::shared_ptr<TokenizerInfo::Impl> FromVocabAndMetadata(
       const std::vector<std::string>& encoded_vocab, const std::string& metadata

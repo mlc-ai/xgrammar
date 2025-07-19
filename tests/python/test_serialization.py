@@ -1,7 +1,9 @@
+import json
 import sys
+from typing import Any, List, Tuple
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 from transformers import AutoTokenizer  # type: ignore
 
 import xgrammar as xgr
@@ -45,13 +47,21 @@ def test_serialize_grammar():
     """Test Grammar serialization produces expected JSON string."""
     grammar = construct_grammar()
     serialized = grammar.serialize_json()
-    expected_json = (
-        '{"rules_":[["rule1",3,8],["root_rule",7,-1]],'
-        '"grammar_expr_data_":{"data_":[1,1,48,57,4,0,5,0,1,6,2,4,0,0,97,5,4,5,6,6,5,5],'
-        '"indptr_":[0,4,6,9,11,13,15,18,20,22]},"root_rule_id_":1,"root_tag_dispatch_fsm":null,'
-        '"tag_dispatch_end_node_to_rule_id":[],"allow_empty_rule_ids":[],"__VERSION__":"v2"}'
-    )
-    assert serialized == expected_json
+    expected_json = {
+        "rules": [["rule1", 4, 9], ["root_rule", 8, -1]],
+        "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
+        "grammar_expr_indptr": [
+            # fmt: off
+            3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7,5,1,6
+            # fmt: on
+        ],
+        "root_rule_id": 1,
+        "root_tag_dispatch_fsm": None,
+        "tag_dispatch_end_node_to_rule_id": [],
+        "allow_empty_rule_ids": [],
+        "__VERSION__": "v2",
+    }
+    assert json.loads(serialized) == expected_json
 
 
 def test_serialize_grammar_roundtrip():
@@ -83,7 +93,7 @@ def test_serialize_grammar_functional():
     matcher_recovered = xgr.GrammarMatcher(compiled_recovered)
 
     # Test that both matchers accept the same input
-    test_input = "a"
+    test_input = "aaa"
     assert matcher_original.accept_string(test_input) == matcher_recovered.accept_string(test_input)
 
 
@@ -93,9 +103,13 @@ def test_serialize_tokenizer_info():
     serialized = tokenizer_info.serialize_json()
     expected_json = (
         '{"vocab_type":1,"vocab_size":10,"add_prefix_space":true,'
-        '"stop_token_ids":[0,1],"special_token_ids":[9],"__VERSION__":"v2"}'
+        '"stop_token_ids":[0,1],"special_token_ids":[9],'
+        '"decoded_vocab":["1","212","a","A","b","���","-","aBc","abc"],'
+        '"sorted_decoded_vocab":[[6,"-"],[3,"A"],[2,"a"],[7,"aBc"],[8,"abc"],[4,"b"],[5,"���"]],'
+        '"trie_subtree_nodes_range":[1,2,5,4,5,6,7],'
+        '"__VERSION__":"v2"}'
     )
-    assert serialized == expected_json
+    assert json.loads(serialized) == expected_json
 
 
 def test_serialize_tokenizer_info_roundtrip():
@@ -134,17 +148,55 @@ def test_serialize_tokenizer_info_functional():
     matcher_original = xgr.GrammarMatcher(compiled_original)
     matcher_recovered = xgr.GrammarMatcher(compiled_recovered)
 
-    test_input = "a"
+    test_input = "aaa"
     assert matcher_original.accept_string(test_input) == matcher_recovered.accept_string(test_input)
 
 
 def test_serialize_compiled_grammar():
-    """Test CompiledGrammar serialization produces expected JSON string."""
+    """Test CompiledGrammar serialization produces expected JSON string. We verify the adaptive
+    token mask part separately.
+    """
     compiled_grammar, tokenizer_info = construct_compiled_grammar()
     serialized = compiled_grammar.serialize_json()
 
-    expected_json = "TODO"
-    assert serialized == expected_json
+    expected_json = {
+        "grammar": {
+            "rules": [["rule1", 4, 6], ["root_rule", 10, -1]],
+            "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 27, 30, 34],
+            "grammar_expr_indptr": [
+                # fmt: off
+                3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,0,1,97,5,1,5,4,1,0,0,1,97,5,2,7,8,6,1,9
+                # fmt: on
+            ],
+            "root_rule_id": 1,
+            "root_tag_dispatch_fsm": None,
+            "tag_dispatch_end_node_to_rule_id": [],
+            "allow_empty_rule_ids": [0],
+        },
+        "tokenizer_metadata": {
+            "vocab_type": 1,
+            "vocab_size": 10,
+            "add_prefix_space": True,
+            "stop_token_ids": [0, 1],
+        },
+        "__VERSION__": "v2",
+    }
+
+    class AdaptiveTokenMask(BaseModel):
+        store_type: int
+        accepted_indices: List[int]
+        rejected_indices: List[int]
+        accepted_bitset: Any
+        uncertain_indices: List[int]
+
+    class AdaptiveTokenMaskCache(RootModel):
+        root: List[Tuple[List[int], AdaptiveTokenMask]]
+
+    recovered_obj = json.loads(serialized)
+    adaptive_token_mask_cache = recovered_obj.pop("adaptive_token_mask_cache", None)
+
+    assert recovered_obj == expected_json
+    AdaptiveTokenMaskCache.model_validate(adaptive_token_mask_cache)
 
 
 def test_serialize_compiled_grammar_roundtrip():
@@ -181,7 +233,7 @@ def test_serialize_compiled_grammar_functional():
     torch.testing.assert_close(token_bitmask_original, token_bitmask_recovered)
 
     # Test input acceptance
-    test_input = "a"
+    test_input = "aaa"
     assert matcher_original.accept_string(test_input) == matcher_recovered.accept_string(test_input)
     assert matcher_original.is_terminated() == matcher_recovered.is_terminated()
 

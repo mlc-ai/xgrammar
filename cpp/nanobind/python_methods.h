@@ -14,6 +14,8 @@
 #include <tuple>
 #include <vector>
 
+#include "xgrammar/tokenizer_info.h"
+
 namespace xgrammar {
 
 TokenizerInfo TokenizerInfo_Init(
@@ -68,7 +70,9 @@ Grammar Grammar_DeserializeJSON(const std::string& json_string);
 
 TokenizerInfo TokenizerInfo_DeserializeJSON(const std::string& json_string);
 
-CompiledGrammar CompiledGrammar_DeserializeJSON(const std::string& json_string);
+CompiledGrammar CompiledGrammar_DeserializeJSON(
+    const std::string& json_string, const TokenizerInfo& tokenizer
+);
 
 }  // namespace xgrammar
 

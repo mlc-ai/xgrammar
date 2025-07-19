@@ -316,6 +316,10 @@ TokenizerInfo::Impl::Impl(
 }
 
 std::string TokenizerInfo::Impl::DumpMetadata() const {
+  return DumpMetadataValue().serialize(false);
+}
+
+picojson::value TokenizerInfo::Impl::DumpMetadataValue() const {
   picojson::object obj;
   obj["vocab_type"] = picojson::value(static_cast<int64_t>(vocab_type_));
   obj["vocab_size"] = picojson::value(static_cast<int64_t>(vocab_size_));
@@ -324,9 +328,9 @@ std::string TokenizerInfo::Impl::DumpMetadata() const {
   for (auto id : stop_token_ids_) {
     stop_token_ids_array.push_back(picojson::value(static_cast<int64_t>(id)));
   }
-  obj["stop_token_ids"] = picojson::value(stop_token_ids_array);
+  obj["stop_token_ids"] = picojson::value(std::move(stop_token_ids_array));
 
-  return picojson::value(obj).serialize(false);
+  return picojson::value(std::move(obj));
 }
 
 std::optional<std::runtime_error> TokenizerInfo::Impl::CheckMetadataMatch(
