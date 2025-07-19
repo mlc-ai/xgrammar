@@ -56,7 +56,7 @@ class SingleElementExprEliminator : public GrammarMutator {
 
   int32_t VisitCharacterClass(const GrammarExpr& grammar_expr) final {
     if (grammar_expr.data_len == 3 && grammar_expr[0] == 0 && grammar_expr[1] == grammar_expr[2]) {
-      std::string str = PrintAsUTF8(grammar_expr[1]);
+      std::string str = CharToUTF8(grammar_expr[1]);
       std::vector<int32_t> bytes;
       bytes.reserve(str.size());
       for (char c : str) {

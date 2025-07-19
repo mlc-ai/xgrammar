@@ -116,7 +116,7 @@ class EBNFScriptCreator {
    */
   static std::string Str(const std::string& str) {
     std::stringstream ss;
-    ss << "\"" << PrintAsEscapedUTF8(str) << "\"";
+    ss << "\"" << EscapeString(str) << "\"";
     return ss.str();
   }
 

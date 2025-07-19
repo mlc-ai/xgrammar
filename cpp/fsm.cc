@@ -84,11 +84,11 @@ std::string FSMImplBase<ContainerType>::EdgesToString(std::optional<std::vector<
     for (int j = 0; j < static_cast<int>(edges.size()); ++j) {
       const auto& edge = edges[j];
       if (edge.min >= 0 && edge.min != edge.max) {
-        std::string char_min_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.min));
-        std::string char_max_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.max));
+        std::string char_min_str = EscapeString(static_cast<TCodepoint>(edge.min));
+        std::string char_max_str = EscapeString(static_cast<TCodepoint>(edge.max));
         result += "[" + char_min_str + "-" + char_max_str + "]->" + std::to_string(edge.target);
       } else if (edge.min >= 0 && edge.min == edge.max) {
-        std::string char_str = PrintAsEscapedUTF8(static_cast<TCodepoint>(edge.min));
+        std::string char_str = EscapeString(static_cast<TCodepoint>(edge.min));
         result += "'" + char_str + "'->" + std::to_string(edge.target);
       } else if (edge.min == FSMEdge::EdgeType::kRuleRef) {
         result += "Rule(" + std::to_string(edge.max) + ")->" + std::to_string(edge.target);

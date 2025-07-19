@@ -19,6 +19,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "encoding.h"
 #include "logging.h"
 #include "reflection.h"
 #include "utils.h"

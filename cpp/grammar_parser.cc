@@ -173,7 +173,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseStringToken() {
   // Convert codepoints to UTF-8 string value
   std::string value;
   for (auto codepoint : codepoints) {
-    value += PrintAsUTF8(codepoint);
+    value += CharToUTF8(codepoint);
   }
 
   return {TokenType::StringLiteral, lexeme, value, start_line, start_column};

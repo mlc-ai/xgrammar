@@ -58,7 +58,7 @@ std::string GrammarPrinter::PrintByteString(const GrammarExpr& grammar_expr) {
   for (int i = 0; i < grammar_expr.data_len; ++i) {
     internal_str += static_cast<char>(grammar_expr[i]);
   }
-  return "\"" + PrintAsEscapedUTF8(internal_str) + "\"";
+  return "\"" + EscapeString(internal_str) + "\"";
 }
 
 std::string GrammarPrinter::PrintCharacterClass(const GrammarExpr& grammar_expr) {
@@ -71,12 +71,12 @@ std::string GrammarPrinter::PrintCharacterClass(const GrammarExpr& grammar_expr)
     result += "^";
   }
   for (auto i = 1; i < grammar_expr.data_len; i += 2) {
-    result += PrintAsEscapedUTF8(grammar_expr[i], kCustomEscapeMap);
+    result += EscapeString(grammar_expr[i], kCustomEscapeMap);
     if (grammar_expr[i] == grammar_expr[i + 1]) {
       continue;
     }
     result += "-";
-    result += PrintAsEscapedUTF8(grammar_expr[i + 1], kCustomEscapeMap);
+    result += EscapeString(grammar_expr[i + 1], kCustomEscapeMap);
   }
   result += "]";
   return result;
