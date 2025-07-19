@@ -50,7 +50,7 @@ bool operator==(const Compact2DArray<FSMEdge>& lhs, const Compact2DArray<FSMEdge
 
 }  // namespace xgrammar
 
-TEST(XGrammarReflectionTest, TestSTLAndBuiltinTypes) {
+TEST(XGrammarSerializationTest, TestSTLAndBuiltinTypes) {
   using namespace xgrammar;
 
   // Test basic types
@@ -234,7 +234,43 @@ TEST(XGrammarReflectionTest, TestSTLAndBuiltinTypes) {
   }
 }
 
-TEST(XGrammarReflectionTest, TestFSMEdge) {
+TEST(XGrammarSerializationTest, TestString) {
+  using namespace xgrammar;
+  {
+    std::string value = "hello\nworld";
+    auto json_value = AutoSerializeJSONValue(value);
+    ASSERT_EQ(json_value.serialize(), "\"hello\\nworld\"");
+
+    std::string deserialized;
+    auto error = AutoDeserializeJSONValue(&deserialized, json_value);
+    ASSERT_FALSE(error.has_value());
+    ASSERT_EQ(deserialized, value);
+  }
+
+  {
+    std::string value = "\xC3\x28";
+    auto json_value = AutoSerializeJSON(value);
+    ASSERT_EQ(json_value, "\"\\u00c3(\"");
+
+    std::string deserialized;
+    auto error = AutoDeserializeJSON(&deserialized, json_value);
+    ASSERT_FALSE(error.has_value());
+    ASSERT_EQ(deserialized, value);
+  }
+  {
+    std::string value = "我";
+    auto json_value = AutoSerializeJSON(value);
+    std::cout << json_value << std::endl;
+    ASSERT_EQ(json_value, "\"\\u00e6\\u0088\\u0091\"");
+
+    std::string deserialized;
+    auto error = AutoDeserializeJSON(&deserialized, json_value);
+    ASSERT_FALSE(error.has_value());
+    ASSERT_EQ(deserialized, value);
+  }
+}
+
+TEST(XGrammarSerializationTest, TestFSMEdge) {
   using namespace xgrammar;
 
   // Test basic FSMEdge
@@ -298,7 +334,7 @@ TEST(XGrammarReflectionTest, TestFSMEdge) {
   }
 }
 
-TEST(XGrammarReflectionTest, TestCompact2DArray) {
+TEST(XGrammarSerializationTest, TestCompact2DArray) {
   using namespace xgrammar;
 
   // Test empty array
@@ -380,7 +416,7 @@ TEST(XGrammarReflectionTest, TestCompact2DArray) {
   }
 }
 
-TEST(XGrammarReflectionTest, TestDynamicBitset) {
+TEST(XGrammarSerializationTest, TestDynamicBitset) {
   using namespace xgrammar;
 
   // Test empty bitset
@@ -466,7 +502,7 @@ TEST(XGrammarReflectionTest, TestDynamicBitset) {
   }
 }
 
-TEST(XGrammarReflectionTest, TestCompactFSM) {
+TEST(XGrammarSerializationTest, TestCompactFSM) {
   using namespace xgrammar;
 
   // Test simple FSM
@@ -526,7 +562,7 @@ TEST(XGrammarReflectionTest, TestCompactFSM) {
   }
 }
 
-TEST(XGrammarReflectionTest, TestComplexStructures) {
+TEST(XGrammarSerializationTest, TestComplexStructures) {
   using namespace xgrammar;
 
   // Test vector of FSMEdges

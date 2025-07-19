@@ -446,7 +446,15 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
     if (!value.is<std::string>()) {
       return ConstructDeserializeError("Expect a string", type_name);
     }
-    *result = value.get<std::string>();
+    // Now PicoJSON will convert byte sequence to latin-1 string. Convert it back to byte sequence.
+    auto error = Latin1ToBytes(value.get<std::string>(), result);
+    if (error) {
+      return ConstructDeserializeError(
+          "XGramamr serializer will serialize byte sequence as latin-1 string, but got invalid "
+          "latin-1 string",
+          type_name
+      );
+    }
     return std::nullopt;
   } else if constexpr (is_std_optional<T>::value) {
     // for the following container<T>, T must be default constructible

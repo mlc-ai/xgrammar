@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -29,6 +30,8 @@ enum CharHandlingError : TCodepoint {
   kInvalidUTF8 = -10,
   /*! \brief The escape sequence is invalid. */
   kInvalidEscape = -11,
+  /*! \brief The Latin-1 string is invalid. */
+  kInvalidLatin1 = -12,
 };
 
 /******************** UTF-8 Handling ********************/
@@ -64,16 +67,23 @@ std::vector<TCodepoint> ParseUTF8(const char* utf8, bool perserve_invalid_bytes 
  */
 std::pair<TCodepoint, int32_t> ParseNextUTF8(const char* utf8);
 
+/*!
+ * \brief Convert a Latin-1 string to a byte sequence.
+ * \param latin1 The Latin-1 string.
+ * \return The byte sequence.
+ */
+std::optional<CharHandlingError> Latin1ToBytes(const std::string& latin1, std::string* result);
+
 /******************** Escape Handling ********************/
 
 /*!
  * \brief Convert a codepoint to a escaped string. If the codepoint is not printable, it will be
- * escaped. By default the function support escape sequences in C ("\n", "\t", "\u0123"). User can
- * specify more escape sequences using additional_escape_map.
+ * escaped. By default the function support escape sequences in C ("\n", "\t", "\u0123"). User
+ * can specify more escape sequences using additional_escape_map.
  * \param codepoint The codepoint.
- * \param additional_escape_map A map from codepoint to escape sequence. If the codepoint is in the
- * map, it will be escaped using the corresponding escape sequence. e.g. {{'-', "\\-"}}. \return The
- * printable string.
+ * \param additional_escape_map A map from codepoint to escape sequence. If the codepoint is in
+ * the map, it will be escaped using the corresponding escape sequence. e.g. {{'-', "\\-"}}.
+ * \return The printable string.
  */
 std::string EscapeString(
     TCodepoint codepoint,
@@ -220,6 +230,40 @@ inline std::vector<TCodepoint> ParseUTF8(const char* utf8, bool perserve_invalid
     utf8 += num_bytes;
   }
   return codepoints;
+}
+
+inline std::optional<CharHandlingError> Latin1ToBytes(
+    const std::string& latin1, std::string* result
+) {
+  result->clear();
+  result->reserve(latin1.size());
+
+  const size_t len = latin1.size();
+  for (size_t i = 0; i < len; ++i) {
+    unsigned char c1 = static_cast<unsigned char>(latin1[i]);
+    if (c1 < 0x80) {
+      result->push_back(static_cast<char>(c1));
+    } else {
+      if (i + 1 >= len) {
+        return CharHandlingError::kInvalidLatin1;
+      }
+
+      unsigned char c2 = static_cast<unsigned char>(latin1[i + 1]);
+      if ((c2 & 0xC0) != 0x80) {
+        return CharHandlingError::kInvalidLatin1;
+      }
+
+      int code = ((c1 & 0x1F) << 6) | (c2 & 0x3F);
+      if (code < 0x80 || code > 0xFF) {
+        return CharHandlingError::kInvalidLatin1;
+      }
+
+      result->push_back(static_cast<char>(code));
+      ++i;
+    }
+  }
+
+  return std::nullopt;
 }
 
 inline int HexCharToInt(char c) {

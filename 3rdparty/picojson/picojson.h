@@ -497,9 +497,10 @@ GET(std::string, *u_.string_)
 GET(array, *u_.array_)
 GET(object, *u_.object_)
 #ifdef PICOJSON_USE_INT64
-GET(double, (type_ == int64_type && (const_cast<value*>(this)->type_ = number_type,
-                                     (const_cast<value*>(this)->u_.number_ = u_.int64_)),
-             u_.number_))
+GET(double,
+    (type_ == int64_type && (const_cast<value*>(this)->type_ = number_type,
+                             (const_cast<value*>(this)->u_.number_ = u_.int64_)),
+     u_.number_))
 GET(int64_t, u_.int64_)
 #else
 GET(double, u_.number_)
@@ -609,9 +610,12 @@ inline std::string value::to_str() const {
     case number_type: {
       char buf[256];
       double tmp;
-      SNPRINTF(buf, sizeof(buf),
-               fabs(u_.number_) < (1ULL << 53) && modf(u_.number_, &tmp) == 0 ? "%.f" : "%.17g",
-               u_.number_);
+      SNPRINTF(
+          buf,
+          sizeof(buf),
+          fabs(u_.number_) < (1ULL << 53) && modf(u_.number_, &tmp) == 0 ? "%.f" : "%.17g",
+          u_.number_
+      );
 #if PICOJSON_USE_LOCALE
       char* decimal_point = localeconv()->decimal_point;
       if (strcmp(decimal_point, ".") != 0) {
@@ -664,9 +668,9 @@ struct serialize_str_char {
       MAP('\t', "\\t");
 #undef MAP
       default:
-        if (static_cast<unsigned char>(c) < 0x20 || c == 0x7f) {
+        if (static_cast<unsigned char>(c) < 0x20 || static_cast<unsigned char>(c) >= 0x7f) {
           char buf[7];
-          SNPRINTF(buf, sizeof(buf), "\\u%04x", c & 0xff);
+          SNPRINTF(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
           copy(buf, buf + 6, oi);
         } else {
           *oi++ = c;
