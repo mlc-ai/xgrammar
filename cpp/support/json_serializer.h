@@ -52,7 +52,15 @@ class SerializeVersion {
   static std::optional<std::runtime_error> Check(const picojson::object& object);
 
  private:
+  /*!
+   * \brief The key of the version info in the serialized object.
+   */
   static constexpr const char kXGrammarSerializeVersionKey[] = "__VERSION__";
+
+  /*!
+   * \brief The current serialization version. When the serialization result of any object in
+   * XGrammar is changed, this version should be bumped.
+   */
   static constexpr const char kXGrammarSerializeVersion[] = "v2";
 };
 
