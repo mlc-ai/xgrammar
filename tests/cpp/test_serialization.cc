@@ -257,6 +257,7 @@ TEST(XGrammarSerializationTest, TestString) {
     ASSERT_FALSE(error.has_value());
     ASSERT_EQ(deserialized, value);
   }
+
   {
     std::string value = "我";
     auto json_value = AutoSerializeJSON(value);

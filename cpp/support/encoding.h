@@ -111,7 +111,8 @@ std::string EscapeString(std::string raw_str);
 int HexCharToInt(char c);
 
 /*!
- * \brief Parse the first codepoint from a escaped string. It doesn't consider the UTF-8 sequences.
+ * \brief Parse the first escaped codepoint from a escaped string. data must start with a '\'
+ * character.
  * \param data The escaped string. Can be TCodepoint* (e.g. string decoded from UTF-8) or char*.
  * \param additional_escape_map A map from escape sequence to codepoint. If the escape sequence is
  * in the map, it will be converted to the corresponding codepoint. e.g. {{"\\-", '-'}}.
