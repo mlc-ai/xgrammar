@@ -510,6 +510,20 @@ class FSMWithStartEndBase {
     start_ = state;
   }
 
+  /*! \brief Checks if a given state is a scanable state.
+   * \param state The state to check.
+   * \return True if the state is scanable, false otherwise.
+   */
+  bool IsScanableState(int state) const {
+    XGRAMMAR_DCHECK(state < NumStates());
+    for (const auto& edge : fsm_.GetEdges(state)) {
+      if (edge.IsCharRange()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /*!
    * \brief Adds an end/accepting state to the FSM.
    * \param state The state to add as an end state.
