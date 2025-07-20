@@ -391,19 +391,29 @@ void EarleyParser::ExpandNextRuleRefElement(
           ref_grammar_expr.type == GrammarExprType::kChoices ||
           grammar_->per_rule_fsms[ref_rule_id].has_value()
       );
-      for (const auto& sequence_id : ref_grammar_expr) {
-        const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
-        if (sequence.type == GrammarExprType::kEmptyStr) {
-          Enqueue(ParserState{
-              state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
-          });
-          continue;
-        }
-        // Assert: the state can't be repeated. Since the rule_start_pos is the current
-        // position, and the rule can only be predicted once.
+      if (grammar_->per_rule_fsms[ref_rule_id].has_value()) {
         tmp_process_state_queue_.push(ParserState{
-            ref_rule_id, sequence_id, 0, int32_t(rule_id_to_completeable_states_.size()) - 1, 0
+            ref_rule_id,
+            ref_grammar_expr_id,
+            grammar_->per_rule_fsms[ref_rule_id]->GetStart(),
+            int32_t(rule_id_to_completeable_states_.size()) - 1,
+            0
         });
+      } else {
+        for (const auto& sequence_id : ref_grammar_expr) {
+          const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
+          if (sequence.type == GrammarExprType::kEmptyStr) {
+            Enqueue(ParserState{
+                state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
+            });
+            continue;
+          }
+          // Assert: the state can't be repeated. Since the rule_start_pos is the current
+          // position, and the rule can only be predicted once.
+          tmp_process_state_queue_.push(ParserState{
+              ref_rule_id, sequence_id, 0, int32_t(rule_id_to_completeable_states_.size()) - 1, 0
+          });
+        }
       }
     }
   }
