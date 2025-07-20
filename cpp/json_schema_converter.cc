@@ -2416,7 +2416,6 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     if (allow_additional) {
       key_matched_min.back() = std::max(1, key_matched_min.back());
     } else {
-      XGRAMMAR_DCHECK(key_matched_min.back() <= max_properties);
       key_matched_min.back() = std::max(min_properties, key_matched_min.back());
     }
     for (int i = properties_size - 2; i >= 0; --i) {
