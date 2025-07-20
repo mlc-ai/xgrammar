@@ -178,7 +178,6 @@ bool EarleyParser::Advance(const uint8_t ch) {
   while (!tmp_process_state_queue_.empty()) {
     const auto state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
-    // XGRAMMAR_LOG(INFO) << "Process state: " << state.ToString();
     GrammarExpr grammar_expr = grammar_->GetGrammarExpr(state.sequence_id);
     auto [scanable, completable] = Predict(state, grammar_expr);
     if (completable) {
