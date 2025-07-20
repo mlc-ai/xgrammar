@@ -187,6 +187,7 @@ bool EarleyParser::Advance(const uint8_t ch) {
   while (!tmp_process_state_queue_.empty()) {
     const auto state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
+    // XGRAMMAR_LOG(INFO) << "Process state: " << state.ToString();
     GrammarExpr grammar_expr = grammar_->GetGrammarExpr(state.sequence_id);
     auto [scanable, completable] = Predict(state, grammar_expr);
     if (completable) {
@@ -349,14 +350,31 @@ void EarleyParser::ExpandNextRuleRefElement(
                    return StateEqualForParsing()(s.second, state_);
                  }) != range.second;
         };
+
+        bool no_fsm_parent = true;
         for (auto parent_state_iter = parent_states_map.lower_bound(state.rule_id);
              parent_state_iter != parent_states_map.end() &&
              parent_state_iter->first == state.rule_id;
              parent_state_iter++) {
           const auto& parent_state = parent_state_iter->second;
-          if (!in_vec(parent_state)) {
-            states_map.insert({ref_rule_id, parent_state});
+          if (grammar_->per_rule_fsms[parent_state.rule_id].has_value()) {
+            no_fsm_parent = false;
+            break;
           }
+        }
+        if (no_fsm_parent) {
+          for (auto parent_state_iter = parent_states_map.lower_bound(state.rule_id);
+               parent_state_iter != parent_states_map.end() &&
+               parent_state_iter->first == state.rule_id;
+               parent_state_iter++) {
+            const auto& parent_state = parent_state_iter->second;
+            if (!in_vec(parent_state)) {
+              states_map.insert({ref_rule_id, parent_state});
+            }
+          }
+        } else {
+          auto& states_map = rule_id_to_completeable_states_.back();
+          states_map.insert({ref_rule_id, state});
         }
       }
 

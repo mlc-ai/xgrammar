@@ -232,6 +232,7 @@ def test_serializer_correctness_in_mask_cache():
     mask_idx = serial_json.find('"adaptive_token_mask_cache":')
     assert mask_idx != -1
     mask_idx += len('"adaptive_token_mask_cache":')
+    print(serial_json[mask_idx:])
     assert serial_json[mask_idx : mask_idx + len(expected_mask)] == expected_mask, (
         serial_json[mask_idx : mask_idx + len(expected_mask)],
         expected_mask,
@@ -269,5 +270,4 @@ def test_serializer_correctness_in_mask_cache():
     )
 
 
-if __name__ == "__main__":
-    pytest.main(sys.argv)
+test_serializer_correctness_in_mask_cache()
