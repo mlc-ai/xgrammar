@@ -93,17 +93,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
   if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
     // Try to expand the fsm.
     ExpandNextRuleRefElement(state, grammar_expr, nullptr);
-    bool scanable = false;
-    for (const auto& edge :
-         grammar_->per_rule_fsms[state.rule_id].value()->GetEdges(state.element_id)) {
-      if (edge.IsCharRange()) {
-        scanable = true;
-        break;
-      }
-    }
-    return std::make_pair(
-        scanable, grammar_->per_rule_fsms[state.rule_id].value().IsEndState(state.element_id)
-    );
+    const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
+    return std::make_pair(fsm.IsScanableState(state.element_id), fsm.IsEndState(state.element_id));
   }
   XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
   if (state.element_id == grammar_expr.size()) {

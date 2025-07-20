@@ -501,6 +501,19 @@ class FSMWithStartEndBase {
     });
   }
 
+  /*! \brief Check if a state is scanable.
+   *  \param state The state to check.
+   *  \return True if the state is scanable, false otherwise.
+   */
+  bool IsScanableState(int state) const {
+    for (const auto& edge : fsm_.GetEdges(state)) {
+      if (edge.IsCharRange()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /*!
    * \brief Sets the start state of the FSM.
    * \param state The state to set as the start state.

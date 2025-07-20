@@ -829,6 +829,9 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
       rule_fsm->GetReachableStates(&reachable_states);
       for (int i : reachable_states) {
         cur_stack_element.element_id = i;
+        if (!rule_fsm->IsScanableState(i)) {
+          continue;
+        }
         add_task_adaptive_token_mask(cur_stack_element, rule_id == root_rule_id);
       }
       continue;
