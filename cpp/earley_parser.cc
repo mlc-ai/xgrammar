@@ -91,13 +91,18 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
 ) {
   // Check if it's the tag dispatch.
   if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
-    if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
-      tmp_accept_stop_token_ = true;
-    }
     // Try to expand the fsm.
     ExpandNextRuleRefElement(state, grammar_expr, nullptr);
+    bool scanable = false;
+    for (const auto& edge :
+         grammar_->per_rule_fsms[state.rule_id].value()->GetEdges(state.element_id)) {
+      if (edge.IsCharRange()) {
+        scanable = true;
+        break;
+      }
+    }
     return std::make_pair(
-        true, grammar_->per_rule_fsms[state.rule_id].value().IsEndState(state.element_id)
+        scanable, grammar_->per_rule_fsms[state.rule_id].value().IsEndState(state.element_id)
     );
   }
   XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
@@ -370,7 +375,6 @@ void EarleyParser::ExpandNextRuleRefElement(
                 });
               }
             }
-            tmp_accept_stop_token_ = true;
             continue;
           }
           XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);

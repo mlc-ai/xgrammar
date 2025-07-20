@@ -682,6 +682,11 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
   while (can_find_next_char) {
     const auto& states = scanable_state_history_[scanable_state_history_.size() - 1];
 
+    // The state comes to the end of the grammar
+    if (IsCompleted()) {
+      can_find_next_char = false;
+      break;
+    }
     // 1. Check that for every leaf ParserState, the next possible char is unique and the same
     // -1 means not found yet; 0~255 means the next char
     int next_char = -1;
@@ -691,7 +696,10 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
         const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
         const auto& current_edges = fsm->GetEdges(state.element_id);
         for (const auto& edge : current_edges) {
-          if (!edge.IsCharRange() || edge.min != edge.max) {
+          if (!edge.IsCharRange()) {
+            continue;
+          }
+          if (edge.min != edge.max) {
             can_find_next_char = false;
             break;
           }
@@ -707,11 +715,6 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
 
       auto cur_sequence = grammar_->GetGrammarExpr(state.sequence_id);
 
-      // The state comes to the end of the grammar
-      if (IsCompleted()) {
-        can_find_next_char = false;
-        break;
-      }
       // We cannot deduce the next char for tag dispatch
       if (cur_sequence.type == GrammarExprType::kTagDispatch) {
         can_find_next_char = false;
