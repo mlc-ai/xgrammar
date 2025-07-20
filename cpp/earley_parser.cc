@@ -334,7 +334,8 @@ void EarleyParser::ExpandNextRuleRefElement(
   for (const auto& ref_rule_id : ref_rule_ids) {
     {  // Add the reference rule to map.
       if ((state.element_id != grammar_expr.size() - 1) ||
-          state.rule_start_pos == ParserState::kNoPrevInputPos) {
+          state.rule_start_pos == ParserState::kNoPrevInputPos ||
+          grammar_->per_rule_fsms[state.rule_id].has_value()) {
         // It's not the right recursion, or it's the root rule.
         auto& states_map = rule_id_to_completeable_states_.back();
         states_map.insert({ref_rule_id, state});
