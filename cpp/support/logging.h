@@ -12,7 +12,7 @@
 #include <sstream>
 #include <string>
 
-#include "cpptrace.h"
+#include "cpptrace.h"  // IWYU pragma: keep
 
 /*!
  * \brief Whether or not customize the logging output.
@@ -224,12 +224,12 @@ class LogMessage {
  * efficiency. This should be used in preference to XGRAMMAR_ICHECK.
  * \param x The condition to check.
  */
-#ifndef NDEBUG
+#if XGRAMMAR_ENABLE_INTERNAL_CHECK
 #define XGRAMMAR_DCHECK(x) XGRAMMAR_ICHECK(x)
 #else
 #define XGRAMMAR_DCHECK(x) \
   while (false) XGRAMMAR_ICHECK(x)
-#endif  // NDEBUG
+#endif  // XGRAMMAR_ENABLE_DCHECK
 
 }  // namespace xgrammar
 
