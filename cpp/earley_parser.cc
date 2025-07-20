@@ -100,7 +100,10 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
         true, grammar_->per_rule_fsms[state.rule_id].value().IsEndState(state.element_id)
     );
   }
-  XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
+  XGRAMMAR_DCHECK(
+      grammar_expr.type == GrammarExprType::kSequence ||
+      grammar_expr.type == GrammarExprType::kEmptyStr
+  );
   if (state.element_id == grammar_expr.size()) {
     // The rule is completed.
     return std::make_pair(false, true);
@@ -384,7 +387,10 @@ void EarleyParser::ExpandNextRuleRefElement(
       const auto& ref_rule = grammar_->GetRule(ref_rule_id);
       const auto& ref_grammar_expr_id = ref_rule.body_expr_id;
       const auto& ref_grammar_expr = grammar_->GetGrammarExpr(ref_grammar_expr_id);
-      XGRAMMAR_DCHECK(ref_grammar_expr.type == GrammarExprType::kChoices);
+      XGRAMMAR_DCHECK(
+          ref_grammar_expr.type == GrammarExprType::kChoices ||
+          grammar_->per_rule_fsms[ref_rule_id].has_value()
+      );
       for (const auto& sequence_id : ref_grammar_expr) {
         const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
         if (sequence.type == GrammarExprType::kEmptyStr) {
