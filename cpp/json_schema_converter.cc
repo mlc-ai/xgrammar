@@ -2282,7 +2282,7 @@ std::string JSONSchemaConverter::GetOtherPropertyPattern(
 std::string JSONSchemaConverter::GetPropertyWithNumberConstrains(
     const std::string& pattern, int min_properties, int max_properties, int already_repeated_times
 ) {
-  XGRAMMAR_DCHECK(max_properties >= already_repeated_times);
+  XGRAMMAR_DCHECK(max_properties >= already_repeated_times || max_properties == -1);
   if (max_properties == already_repeated_times) {
     return "\"\"";
   }
