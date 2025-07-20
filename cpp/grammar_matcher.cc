@@ -688,7 +688,20 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
     for (const auto& state : states) {
       // We cannot deduce the next char for tag dispatch
       if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
-        can_find_next_char = false;
+        const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
+        const auto& current_edges = fsm->GetEdges(state.element_id);
+        for (const auto& edge : current_edges) {
+          if (!edge.IsCharRange() || edge.min != edge.max) {
+            can_find_next_char = false;
+            break;
+          }
+          if (next_char == -1) {
+            next_char = edge.min;
+          } else if (next_char != edge.min) {
+            can_find_next_char = false;
+            break;
+          }
+        }
         continue;
       }
 

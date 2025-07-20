@@ -63,8 +63,15 @@ class TagDispatchFSMBuilder {
   static std::optional<FSMWithStartEnd> Build(const Grammar::Impl::TagDispatch& tag_dispatch);
 };
 
-// stop token
-// eos string
+class GeneralFSMBuilder {
+ public:
+  /*!
+   * \brief Build a FSM from a general grammar rule.
+   * \param rule The grammar rule.
+   * \return The FSM with start and end states.
+   */
+  static std::optional<FSMWithStartEnd> Build(int rule_id, const Grammar& grammar);
+};
 
 }  // namespace xgrammar
 

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <set>
 #include <stack>
 #include <unordered_set>
@@ -17,6 +18,7 @@
 #include "grammar_data_structure.h"
 #include "support/logging.h"
 #include "support/utils.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -1020,6 +1022,59 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilder::Build(
     const Grammar::Impl::TagDispatch& tag_dispatch
 ) {
   return TagDispatchFSMBuilderImpl().Build(tag_dispatch);
+}
+
+std::optional<FSMWithStartEnd> GeneralFSMBuilder::Build(int rule_id, const Grammar& grammar) {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  const auto& rule = grammar->GetRule(rule_id);
+  const auto& rule_expr_id = rule.body_expr_id;
+  const auto& rule_body_expr = grammar->GetGrammarExpr(rule_expr_id);
+  if (rule_body_expr.type == GrammarExprType::kTagDispatch) {
+    return std::nullopt;  // Tag dispatch is handled separately.
+  }
+  XGRAMMAR_DCHECK(rule_body_expr.type == GrammarExprType::kChoices);
+
+  // Initialize an empty FSM.
+  FSMWithStartEnd fsm_with_start_end;
+  fsm_with_start_end->AddState();
+  fsm_with_start_end.SetStartState(0);
+
+  for (const auto& choice : rule_body_expr) {
+    const auto& choice_expr = grammar->GetGrammarExpr(choice);
+    if (choice_expr.type == GrammarExprType::kEmptyStr) {
+      // Empty string, thus the start state can be an end state.
+      fsm_with_start_end.AddEndState(0);
+      continue;
+    }
+    XGRAMMAR_DCHECK(choice_expr.type == GrammarExprType::kSequence);
+    int current_state = 0;
+    for (const auto& sub_expr_id : choice_expr) {
+      const auto& sub_expr = grammar->GetGrammarExpr(sub_expr_id);
+      switch (sub_expr.type) {
+        case GrammarExprType::kRuleRef: {
+          int next_state = fsm_with_start_end->AddState();
+          fsm_with_start_end->AddRuleEdge(current_state, next_state, sub_expr[0]);
+          current_state = next_state;
+          break;
+        }
+        case GrammarExprType::kByteString: {
+          for (const auto& byte : sub_expr) {
+            int next_state = fsm_with_start_end->AddState();
+            fsm_with_start_end->AddEdge(
+                current_state, next_state, static_cast<uint8_t>(byte), static_cast<uint8_t>(byte)
+            );
+            current_state = next_state;
+          }
+          break;
+        }
+        default: {
+          return std::nullopt;  // Unsupported expression type.
+        }
+      }
+    }
+    fsm_with_start_end.AddEndState(current_state);
+  }
+  return fsm_with_start_end;
 }
 
 }  // namespace xgrammar

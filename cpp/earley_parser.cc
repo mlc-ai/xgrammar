@@ -312,11 +312,13 @@ void EarleyParser::ExpandNextRuleRefElement(
   std::vector<int32_t> ref_rule_ids;
   // Path A. The rule has a corresponding FSM.
   if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
-    // If the rule is a tag dispatch rule, we need to add the tag dispatch FSM.
     const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
     for (const auto& edge : current_fsm->GetEdges(state.element_id)) {
       if (edge.IsRuleRef()) {
         ref_rule_ids.push_back(edge.GetRefRuleId());
+      } else if (edge.IsEpsilon()) {
+        Enqueue(ParserState{state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, 0}
+        );
       }
     }
   } else {
@@ -384,20 +386,29 @@ void EarleyParser::ExpandNextRuleRefElement(
       const auto& ref_rule = grammar_->GetRule(ref_rule_id);
       const auto& ref_grammar_expr_id = ref_rule.body_expr_id;
       const auto& ref_grammar_expr = grammar_->GetGrammarExpr(ref_grammar_expr_id);
-      XGRAMMAR_DCHECK(ref_grammar_expr.type == GrammarExprType::kChoices);
-      for (const auto& sequence_id : ref_grammar_expr) {
-        const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
-        if (sequence.type == GrammarExprType::kEmptyStr) {
-          Enqueue(ParserState{
-              state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
-          });
-          continue;
-        }
-        // Assert: the state can't be repeated. Since the rule_start_pos is the current
-        // position, and the rule can only be predicted once.
+      if (grammar_->per_rule_fsms[ref_rule_id].has_value()) {
         tmp_process_state_queue_.push(ParserState{
-            ref_rule_id, sequence_id, 0, int32_t(rule_id_to_completeable_states_.size()) - 1, 0
+            ref_rule_id,
+            ref_grammar_expr_id,
+            grammar_->per_rule_fsms[ref_rule_id]->GetStart(),
+            int32_t(rule_id_to_completeable_states_.size()) - 1,
+            0
         });
+      } else {
+        for (const auto& sequence_id : ref_grammar_expr) {
+          const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
+          if (sequence.type == GrammarExprType::kEmptyStr) {
+            Enqueue(ParserState{
+                state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
+            });
+            continue;
+          }
+          // Assert: the state can't be repeated. Since the rule_start_pos is the current
+          // position, and the rule can only be predicted once.
+          tmp_process_state_queue_.push(ParserState{
+              ref_rule_id, sequence_id, 0, int32_t(rule_id_to_completeable_states_.size()) - 1, 0
+          });
+        }
       }
     }
   }
