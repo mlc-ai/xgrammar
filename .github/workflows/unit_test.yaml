@@ -60,7 +60,7 @@ jobs:
       - name: Build xgrammar from source
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
-          echo "set(XGRAMMAR_ENABLE_INTERNAL_CHECK OFF)" >> cmake/config.cmake
+          echo "set(XGRAMMAR_ENABLE_INTERNAL_CHECK ON)" >> cmake/config.cmake
           python -m pip install --upgrade pip
           pip install -v ".[test]"
 
