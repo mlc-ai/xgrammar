@@ -1005,7 +1005,7 @@ class GrammarFSMBuilderImpl {
         per_rule_fsms[i] = rule_fsm->AddToCompleteFSM(&complete_fsm, &state_mapping);
       } else {
         XGRAMMAR_DCHECK(grammar_expr.type == Grammar::Impl::GrammarExprType::kChoices);
-        auto rule_fsm = GeneralFSMBuilder::Build(i, *grammar);
+        auto rule_fsm = ChoiceFSMBuilder::Build(grammar_expr, *grammar);
         if (rule_fsm.has_value()) {
           per_rule_fsms[i] = rule_fsm->AddToCompleteFSM(&complete_fsm, &state_mapping);
         }

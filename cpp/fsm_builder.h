@@ -12,8 +12,11 @@
 #include "fsm.h"
 #include "grammar_data_structure.h"
 #include "support/utils.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
+
+using GrammarExpr = Grammar::Impl::GrammarExpr;
 
 /*!
  * \brief A builder that converts a regex string to a FSM.
@@ -63,14 +66,59 @@ class TagDispatchFSMBuilder {
   static std::optional<FSMWithStartEnd> Build(const Grammar::Impl::TagDispatch& tag_dispatch);
 };
 
-class GeneralFSMBuilder {
+class ChoiceFSMBuilder {
  public:
   /*!
    * \brief Build a FSM from a general grammar rule.
-   * \param rule The grammar rule.
+   * \param expr the grammar expression to build the FSM from.
+   * \param grammar The grammar that contains the rule.
    * \return The FSM with start and end states.
    */
-  static std::optional<FSMWithStartEnd> Build(int rule_id, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+};
+
+class ByteStringFSMBuilder {
+ public:
+  /*!
+   * \brief Build a FSM from a byte string.
+   * \param expr The grammar expression that contains the byte string.
+   * \param grammar The grammar that contains the rule.
+   * \return The FSM with start and end states.
+   */
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+};
+
+class SequenceFSMBuilder {
+ public:
+  /*!
+   * \brief Build a FSM from a sequence of grammar expressions.
+   * \param expr The grammar expression that contains a sequence of expressions.
+   * \param grammar The grammar that contains the expressions.
+   * \return The FSM with start and end states.
+   */
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+};
+
+class CharacterClassFSMBuilder {
+ public:
+  /*!
+   * \brief Build a FSM from a character class.
+   * \param expr The grammar expression that contains the character class.
+   * \param grammar The grammar that contains the rule.
+   * \return The FSM with start and end states.
+   */
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+};
+
+class RuleRefFSMBuilder {
+ public:
+  /*!
+   * \brief Build a FSM from a rule reference.
+   * \param expr_id The expression id of the rule reference.
+   * \param grammar The grammar that contains the rule.
+   * \return The FSM with start and end states.
+   */
+  static std::optional<FSMWithStartEnd> Build(int expr_id, const Grammar& grammar);
 };
 
 }  // namespace xgrammar
