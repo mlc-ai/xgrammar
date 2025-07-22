@@ -171,7 +171,6 @@ bool EarleyParser::Advance(const uint8_t ch) {
   while (!tmp_process_state_queue_.empty()) {
     const auto state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
-    // XGRAMMAR_LOG(INFO) << "Process state: " << state.ToString();
     GrammarExpr grammar_expr = grammar_->GetGrammarExpr(state.sequence_id);
     auto [scanable, completable] = Predict(state, grammar_expr);
     if (completable) {
@@ -460,9 +459,13 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state) {
         Enqueue(ParserState{state.rule_id, state.sequence_id, target, state.rule_start_pos, 0});
       }
       const auto& ref_fsm = grammar_->per_rule_fsms[ref_rule_id].value();
-      Enqueue(
-          ParserState{ref_rule_id, ref_grammar_expr_id, ref_fsm.GetStart(), state.rule_start_pos, 0}
-      );
+      Enqueue(ParserState{
+          ref_rule_id,
+          ref_grammar_expr_id,
+          ref_fsm.GetStart(),
+          int32_t(rule_id_to_completeable_states_.size()) - 1,
+          0
+      });
     } else {
       for (const auto& sequence_id : ref_grammar_expr) {
         const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
