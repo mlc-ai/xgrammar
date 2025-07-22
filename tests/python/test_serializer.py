@@ -221,7 +221,7 @@ def test_serializer_correctness_in_mask_cache():
         rule1 ::= [^0-9] rule1
         rule2 ::= ("AB" | "1" | "") rule2
     """
-    expected_mask = "[[1,7,0,-1,0],[1,[],[1,2],[1,0,0,0],[]],[1,7,0,-1,1],[0,[],[],[1,0,0,0],[]],[1,7,0,-1,2],[0,[],[],[1,0,0,0],[]],[1,7,0,-1,3],[0,[],[],[1,0,0,0],[]],[3,18,6,-1,0],[0,[1,3],[],[1,0,0,0],[]],[3,18,7,-1,0],[0,[],[],[1,0,0,0],[]]]"
+    expected_mask = "[[1,8,3,-1,0],[1,[],[1,2],[1,0,0,0],[]],[1,8,4,-1,0],[0,[],[],[1,0,0,0],[]],[1,8,5,-1,0],[0,[],[],[1,0,0,0],[]],[1,8,6,-1,0],[0,[],[],[1,0,0,0],[]],[3,18,12,-1,0],[0,[1,3],[],[1,0,0,0],[]],[3,18,13,-1,0],[0,[],[],[1,0,0,0],[]]]"
 
     grammar_compiler = xgr.GrammarCompiler(tokenizer)
     compiled_grammar = grammar_compiler.compile_grammar(test_grammar)
@@ -260,7 +260,6 @@ def test_serializer_correctness_in_mask_cache():
     mask_idx = serial_json.find('"adaptive_token_mask_cache":')
     assert mask_idx != -1
     mask_idx += len('"adaptive_token_mask_cache":')
-    print(serial_json[mask_idx:])
     assert serial_json[mask_idx : mask_idx + len(expected_mask)] == expected_mask, (
         serial_json[mask_idx : mask_idx + len(expected_mask)],
         expected_mask,

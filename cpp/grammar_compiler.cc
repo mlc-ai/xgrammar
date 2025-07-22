@@ -598,7 +598,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
   tmp_can_reach_end_prefix_or_stack_.assign({tmp_can_reach_end_stack_.back()});
   std::bitset<256> first_character_mask;
   const auto& sequence = grammar_->GetGrammarExpr(initial_state.sequence_id);
-  if (sequence.type == Grammar::Impl::GrammarExprType::kSequence) {
+  if (!grammar_->per_rule_fsms[init_rule_id].has_value()) {
     const auto& sub_sequence = grammar_->GetGrammarExpr(sequence[initial_state.element_id]);
     switch (sub_sequence.type) {
       case Grammar::Impl::GrammarExprType::kByteString: {
@@ -633,8 +633,15 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
       }
     }
   } else {
-    XGRAMMAR_DCHECK(grammar_->per_rule_fsms[init_rule_id].has_value());
-    first_character_mask.set();
+    const auto& fsm = grammar_->per_rule_fsms[init_rule_id].value();
+    const auto& edges = fsm->GetEdges(initial_state.element_id);
+    for (const auto& edge : edges) {
+      if (edge.IsCharRange()) {
+        for (int c = edge.min; c <= edge.max; ++c) {
+          first_character_mask[c] = true;
+        }
+      }
+    }
   }
   bool rejected_indices_are_filled = GetTokenMaskWithFirstCharacterCheck(
       sorted_decoded_vocab, first_character_mask, subtree_nodes_range, is_root_rule
