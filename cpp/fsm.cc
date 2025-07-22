@@ -1183,6 +1183,8 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
     for (int i = 0; i < result->NumStates(); i++) {
       for (int j = i + 1; j < result->NumStates(); j++) {
         bool equivalent = true;
+
+        // Check if all the edges of state i are in the edges of state j.
         for (const auto& edge_i : result->GetEdges(i)) {
           bool same = false;
           for (const auto& edge_j : result->GetEdges(j)) {
