@@ -205,9 +205,7 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
   }
 
   void AddEdge(int from, int to, int16_t min, int16_t max) {
-    XGRAMMAR_DCHECK(
-        from < static_cast<int>(edges_.size()) && to <= static_cast<int>(edges_.size())
-    );
+    XGRAMMAR_DCHECK(from < static_cast<int>(edges_.size()));
     edges_[from].push_back({min, max, to});
   }
 
