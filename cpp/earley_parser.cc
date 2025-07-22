@@ -329,7 +329,7 @@ void EarleyParser::ExpandNextRuleRefElement(
     {  // Add the reference rule to map.
       if ((state.element_id != grammar_expr.size() - 1) ||
           state.rule_start_pos == ParserState::kNoPrevInputPos ||
-          grammar_->per_rule_fsms[state.rule_id].has_value()) {
+          (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value())) {
         // It's not the right recursion, or it's the root rule.
         auto& states_map = rule_id_to_completeable_states_.back();
         states_map.insert({ref_rule_id, state});
@@ -350,6 +350,7 @@ void EarleyParser::ExpandNextRuleRefElement(
              parent_state_iter->first == state.rule_id;
              parent_state_iter++) {
           const auto& parent_state = parent_state_iter->second;
+          XGRAMMAR_DCHECK(ref_rule_id != -1);
           if (grammar_->per_rule_fsms[parent_state.rule_id].has_value()) {
             no_fsm_parent = false;
             break;
@@ -418,8 +419,9 @@ void EarleyParser::ExpandNextRuleRefElement(
         for (const auto& sequence_id : ref_grammar_expr) {
           const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
           if (sequence.type == GrammarExprType::kEmptyStr) {
-            if (grammar_->per_rule_fsms[state.rule_id].has_value()) {
+            if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
               const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
+              XGRAMMAR_DCHECK(state.element_id < current_fsm->NumStates());
               const auto& current_edges = current_fsm->GetEdges(state.element_id);
               for (const auto& edge : current_edges) {
                 if (edge.IsRuleRef() && edge.GetRefRuleId() == ref_rule_id) {
