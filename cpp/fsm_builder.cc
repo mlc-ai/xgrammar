@@ -1053,6 +1053,42 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithStopString(
   return FSMWithStartEnd(trie_fsm, start, ends);
 }
 
+std::optional<FSMWithStartEnd> ChoiceFSMBuilderImpl::Build(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kChoices);
+  std::vector<FSMWithStartEnd> fsm_list;
+  bool nullable = false;
+  for (const auto& choice_id : expr) {
+    const auto& choice_expr = grammar->GetGrammarExpr(choice_id);
+    // The choice expression should be either a sequence or an empty string.
+    if (choice_expr.type == ExprType::kEmptyStr) {
+      nullable = true;
+      continue;
+    }
+    XGRAMMAR_DCHECK(choice_expr.type == ExprType::kSequence);
+    auto fsm_result = SequenceFSMBuilderImpl::Build(choice_expr, grammar);
+    if (!fsm_result.has_value()) {
+      return std::nullopt;
+    }
+    fsm_list.push_back(std::move(fsm_result.value()));
+  }
+
+  if (fsm_list.empty()) {
+    // It's an empty rule.
+    FSMWithStartEnd empty_fsm;
+    empty_fsm->AddState();
+    empty_fsm.AddEndState(0);
+    return empty_fsm;
+  }
+
+  auto result = FSMWithStartEnd::Union(fsm_list);
+  if (nullable) {
+    result.AddEndState(result.GetStart());
+  }
+  return result;
+}
+
 std::optional<FSMWithStartEnd> TagDispatchFSMBuilder::Build(
     const Grammar::Impl::TagDispatch& tag_dispatch
 ) {
@@ -1081,6 +1117,12 @@ std::optional<FSMWithStartEnd> CharacterClassFSMBuilder::Build(
     const GrammarExpr& expr, const Grammar& grammar
 ) {
   return CharacterClassFSMBuilderImpl::Build(expr, grammar);
+}
+
+std::optional<FSMWithStartEnd> RuleRefFSMBuilder::Build(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  return RuleRefFSMBuilderImpl().Build(expr, grammar);
 }
 
 }  // namespace xgrammar

@@ -18,6 +18,8 @@ namespace xgrammar {
 
 using GrammarExpr = Grammar::Impl::GrammarExpr;
 
+using ExprType = Grammar::Impl::GrammarExprType;
+
 /*!
  * \brief A builder that converts a regex string to a FSM.
  */
@@ -114,11 +116,11 @@ class RuleRefFSMBuilder {
  public:
   /*!
    * \brief Build a FSM from a rule reference.
-   * \param expr_id The expression id of the rule reference.
+   * \param expr The grammar expression that contains the rule reference.
    * \param grammar The grammar that contains the rule.
    * \return The FSM with start and end states.
    */
-  static std::optional<FSMWithStartEnd> Build(int expr_id, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
 };
 
 }  // namespace xgrammar
