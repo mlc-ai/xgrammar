@@ -1099,6 +1099,8 @@ std::optional<FSMWithStartEnd> ChoiceFSMBuilderImpl::Build(
   auto result = FSMWithStartEnd::Union(fsm_list);
   result = result.SimplifyEpsilon();
   result = result.MergeEquivalentSuccessors();
+  result = result.ToDFA();
+  result = result.MinimizeDFA();
   return result;
 }
 
