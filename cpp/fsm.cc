@@ -1136,7 +1136,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
       }
     }
     // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
-    bool change_case1 = false;
+    bool is_equiv_successor = false;
     for (const auto& edges : result->GetEdges()) {
       for (size_t i = 0; i < edges.size(); i++) {
         for (size_t j = i + 1; j < edges.size(); j++) {
@@ -1156,11 +1156,11 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
           union_find_set.Make(edges[i].target);
           union_find_set.Make(edges[j].target);
           union_find_set.Union(edges[i].target, edges[j].target);
-          change_case1 = true;
+          is_equiv_successor = true;
         }
       }
     }
-    if (change_case1) {
+    if (is_equiv_successor) {
       auto eq_classes = union_find_set.GetAllSets();
       std::unordered_map<int, int> old_to_new;
       for (size_t i = 0; i < eq_classes.size(); i++) {
@@ -1179,11 +1179,13 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
     }
     union_find_set.Clear();
     // Case 2: Like ba | ca | da, then they can be merged into (b | c | d)a.
-    bool change_case2 = false;
+    bool is_equiv_precursor = false;
     for (int i = 0; i < result->NumStates(); i++) {
       for (int j = i + 1; j < result->NumStates(); j++) {
+        if (IsEndState(i) != IsEndState(j)) {
+          break;
+        }
         bool equivalent = true;
-
         // Check if all the edges of state i are in the edges of state j.
         for (const auto& edge_i : result->GetEdges(i)) {
           bool same = false;
@@ -1220,11 +1222,11 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
           union_find_set.Make(i);
           union_find_set.Make(j);
           union_find_set.Union(i, j);
-          change_case2 = true;
+          is_equiv_precursor = true;
         }
       }
     }
-    if (change_case2) {
+    if (is_equiv_precursor) {
       auto eq_classes = union_find_set.GetAllSets();
       std::unordered_map<int, int> old_to_new;
       for (size_t i = 0; i < eq_classes.size(); i++) {
@@ -1241,7 +1243,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
       }
       result = result.RebuildWithMapping(old_to_new, cnt);
     }
-    changed = change_case1 || change_case2;
+    changed = is_equiv_successor || is_equiv_precursor;
   }
   return result;
 }
