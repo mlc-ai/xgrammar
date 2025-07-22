@@ -10,6 +10,7 @@
 
 #include "fsm.h"
 #include "fsm_builder.h"
+#include "support/logging.h"
 
 using namespace xgrammar;
 
@@ -242,21 +243,23 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = RegexFSMBuilder::Build("abc|abd").Unwrap();
   test_str = "abc";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   fsm_wse = fsm_wse.SimplifyEpsilon();
+  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
+  XGRAMMAR_LOG(INFO) << fsm_wse;
   EXPECT_EQ(fsm_wse->NumStates(), 4);
   std::cout << "--------- Function Test8 -----------" << std::endl;
   fsm_wse = RegexFSMBuilder::Build("acd|bcd").Unwrap();
   test_str = "acd";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   fsm_wse = fsm_wse.SimplifyEpsilon();
+  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
+  XGRAMMAR_LOG(INFO) << fsm_wse;
   EXPECT_EQ(fsm_wse->NumStates(), 4);
   std::cout << "--------- Function Test9 -----------" << std::endl;
   fsm_wse = RegexFSMBuilder::Build("ab*").Unwrap();
