@@ -415,10 +415,22 @@ void EarleyParser::ExpandNextRuleRefElement(
         for (const auto& sequence_id : ref_grammar_expr) {
           const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
           if (sequence.type == GrammarExprType::kEmptyStr) {
-            Enqueue(ParserState{
-                state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
-            });
-            continue;
+            if (grammar_->per_rule_fsms[state.rule_id].has_value()) {
+              const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
+              const auto& current_edges = current_fsm->GetEdges(state.element_id);
+              for (const auto& edge : current_edges) {
+                if (edge.IsRuleRef() && edge.GetRefRuleId() == ref_rule_id) {
+                  Enqueue(ParserState{
+                      state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, 0
+                  });
+                }
+              }
+            } else {
+              Enqueue(ParserState{
+                  state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
+              });
+              continue;
+            }
           }
           // Assert: the state can't be repeated. Since the rule_start_pos is the current
           // position, and the rule can only be predicted once.

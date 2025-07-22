@@ -1053,7 +1053,7 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon() const {
       }
       previous_states[edge.target].insert(i);
       if (edge.IsEpsilon()) {
-        if (edges.size() != 1 || edge.target == GetStart()) {
+        if (edges.size() != 1) {
           has_epsilon.insert(i);
         } else {
           // a -- epsilon --> b, and a doesn't have other outward edges.

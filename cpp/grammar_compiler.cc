@@ -761,12 +761,6 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
   // Step 2. Build the fsm for each rule
   GrammarFSMBuilder::Apply(&compiled_grammar_impl->grammar);
 
-  // for (auto& rule : compiled_grammar_impl->grammar->per_rule_fsms) {
-  //   if (rule.has_value()) {
-  //     XGRAMMAR_LOG(INFO) << rule->ToString();
-  //   }
-  // }
-
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
