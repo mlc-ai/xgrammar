@@ -429,8 +429,8 @@ void EarleyParser::ExpandNextRuleRefElement(
               Enqueue(ParserState{
                   state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
               });
-              continue;
             }
+            continue;
           }
           // Assert: the state can't be repeated. Since the rule_start_pos is the current
           // position, and the rule can only be predicted once.
