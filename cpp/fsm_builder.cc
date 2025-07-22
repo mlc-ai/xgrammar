@@ -11,6 +11,7 @@
 #include <set>
 #include <stack>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -919,21 +920,21 @@ class ByteStringFSMBuilderImpl {
  public:
   ByteStringFSMBuilderImpl() = default;
 
-  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr);
 };
 
 class CharacterClassFSMBuilderImpl {
  public:
   CharacterClassFSMBuilderImpl() = default;
 
-  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr);
 };
 
 class RuleRefFSMBuilderImpl {
  public:
   RuleRefFSMBuilderImpl() = default;
 
-  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr);
 };
 
 std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::Build(
@@ -1078,6 +1079,7 @@ std::optional<FSMWithStartEnd> ChoiceFSMBuilderImpl::Build(
     // It's an empty rule.
     FSMWithStartEnd empty_fsm;
     empty_fsm->AddState();
+    empty_fsm.SetStartState(0);
     empty_fsm.AddEndState(0);
     return empty_fsm;
   }
@@ -1086,7 +1088,91 @@ std::optional<FSMWithStartEnd> ChoiceFSMBuilderImpl::Build(
   if (nullable) {
     result.AddEndState(result.GetStart());
   }
+  result.SimplifyEpsilon();
+  result.MergeEquivalentSuccessors();
   return result;
+}
+
+std::optional<FSMWithStartEnd> ByteStringFSMBuilderImpl::Build(const GrammarExpr& expr) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kByteString);
+  FSMWithStartEnd result_fsm;
+  int current_state = result_fsm->AddState();
+  result_fsm.SetStartState(current_state);
+  for (const auto& byte : expr) {
+    int next_state = result_fsm->AddState();
+    result_fsm->AddEdge(
+        current_state, next_state, static_cast<uint8_t>(byte), static_cast<uint8_t>(byte)
+    );
+    current_state = next_state;
+  }
+  result_fsm.AddEndState(current_state);
+  return result_fsm;
+}
+
+std::optional<FSMWithStartEnd> RuleRefFSMBuilderImpl::Build(const GrammarExpr& expr) {
+  FSMWithStartEnd result_fsm;
+  result_fsm->AddState();
+  result_fsm->AddState();
+  result_fsm.SetStartState(0);
+  result_fsm.AddEndState(1);
+  result_fsm->AddRuleEdge(0, 1, expr[0]);
+  return result_fsm;
+}
+
+std::optional<FSMWithStartEnd> SequenceFSMBuilderImpl::Build(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  std::vector<FSMWithStartEnd> fsm_lists;
+
+  // Build the fsm of sub-expressions.
+  for (const auto& sequence_id : expr) {
+    const auto& sequence_expr = grammar->GetGrammarExpr(sequence_id);
+    switch (sequence_expr.type) {
+      case (ExprType::kByteString): {
+        auto fsm = ByteStringFSMBuilder::Build(sequence_expr);
+        if (!fsm.has_value()) {
+          return std::nullopt;
+        }
+        fsm_lists.push_back(std::move(fsm.value()));
+        break;
+      }
+      case (ExprType::kRuleRef): {
+        auto fsm = RuleRefFSMBuilder::Build(sequence_expr);
+        if (!fsm.has_value()) {
+          return std::nullopt;
+        }
+        fsm_lists.push_back(std::move(fsm.value()));
+        break;
+      }
+      case (ExprType::kCharacterClass):
+      case (ExprType::kCharacterClassStar): {
+        auto fsm = CharacterClassFSMBuilder::Build(sequence_expr);
+        if (!fsm.has_value()) {
+          return std::nullopt;
+        }
+        fsm_lists.push_back(std::move(fsm.value()));
+        break;
+      }
+      default: {
+        return std::nullopt;
+      }
+    }
+  }
+
+  // Check if the sequence is empty.
+  if (fsm_lists.empty()) {
+    FSMWithStartEnd empty_fsm;
+    empty_fsm->AddState();
+    empty_fsm.SetStartState(0);
+    empty_fsm.AddEndState(0);
+    return empty_fsm;
+  }
+
+  return FSMWithStartEnd::Concat(fsm_lists);
+}
+
+std::optional<FSMWithStartEnd> CharacterClassFSMBuilderImpl::Build(const GrammarExpr& expr) {
+  return std::nullopt;
 }
 
 std::optional<FSMWithStartEnd> TagDispatchFSMBuilder::Build(
@@ -1107,22 +1193,16 @@ std::optional<FSMWithStartEnd> SequenceFSMBuilder::Build(
   return SequenceFSMBuilderImpl::Build(expr, grammar);
 }
 
-std::optional<FSMWithStartEnd> ByteStringFSMBuilder::Build(
-    const GrammarExpr& expr, const Grammar& grammar
-) {
-  return ByteStringFSMBuilderImpl::Build(expr, grammar);
+std::optional<FSMWithStartEnd> ByteStringFSMBuilder::Build(const GrammarExpr& expr) {
+  return ByteStringFSMBuilderImpl::Build(expr);
 }
 
-std::optional<FSMWithStartEnd> CharacterClassFSMBuilder::Build(
-    const GrammarExpr& expr, const Grammar& grammar
-) {
-  return CharacterClassFSMBuilderImpl::Build(expr, grammar);
+std::optional<FSMWithStartEnd> CharacterClassFSMBuilder::Build(const GrammarExpr& expr) {
+  return CharacterClassFSMBuilderImpl::Build(expr);
 }
 
-std::optional<FSMWithStartEnd> RuleRefFSMBuilder::Build(
-    const GrammarExpr& expr, const Grammar& grammar
-) {
-  return RuleRefFSMBuilderImpl().Build(expr, grammar);
+std::optional<FSMWithStartEnd> RuleRefFSMBuilder::Build(const GrammarExpr& expr) {
+  return RuleRefFSMBuilderImpl().Build(expr);
 }
 
 }  // namespace xgrammar

@@ -84,10 +84,9 @@ class ByteStringFSMBuilder {
   /*!
    * \brief Build a FSM from a byte string.
    * \param expr The grammar expression that contains the byte string.
-   * \param grammar The grammar that contains the rule.
    * \return The FSM with start and end states.
    */
-  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr);
 };
 
 class SequenceFSMBuilder {
@@ -106,10 +105,9 @@ class CharacterClassFSMBuilder {
   /*!
    * \brief Build a FSM from a character class.
    * \param expr The grammar expression that contains the character class.
-   * \param grammar The grammar that contains the rule.
    * \return The FSM with start and end states.
    */
-  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr);
 };
 
 class RuleRefFSMBuilder {
@@ -117,10 +115,9 @@ class RuleRefFSMBuilder {
   /*!
    * \brief Build a FSM from a rule reference.
    * \param expr The grammar expression that contains the rule reference.
-   * \param grammar The grammar that contains the rule.
    * \return The FSM with start and end states.
    */
-  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr);
 };
 
 }  // namespace xgrammar

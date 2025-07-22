@@ -633,7 +633,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
       }
     }
   } else {
-    XGRAMMAR_DCHECK(sequence.type == Grammar::Impl::GrammarExprType::kTagDispatch);
+    XGRAMMAR_DCHECK(grammar_->per_rule_fsms[init_rule_id].has_value());
     first_character_mask.set();
   }
   bool rejected_indices_are_filled = GetTokenMaskWithFirstCharacterCheck(
