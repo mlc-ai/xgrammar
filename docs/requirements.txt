@@ -28,4 +28,4 @@ tiktoken
 tlcpack-sphinx-addon==0.2.2
 torch
 transformers
-urllib3<2.0.0
+urllib3>=2.5.0
