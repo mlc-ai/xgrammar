@@ -315,6 +315,12 @@ class EarleyParser {
   );
 
   /*!
+   * \brief Expand the rule, used for RuleRef and kTagDispatch.
+   * \param state The state to be expanded, and it's should be on the FSM.
+   */
+  void ExpandNextRuleRefElementOnFSM(const ParserState& state);
+
+  /*!
    * \brief Advance the parser to the next state, with the sub sequence is kCharacterClass.
    * \param state The state to be advanced.
    * \param ch The character to be advanced.
