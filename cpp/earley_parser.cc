@@ -91,15 +91,16 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
 ) {
   // Check if it's the tag dispatch.
   if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
+    if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
+      tmp_accept_stop_token_ = true;
+    }
     // Try to expand the fsm.
     ExpandNextRuleRefElement(state, grammar_expr, nullptr);
-    const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
-    return std::make_pair(fsm.IsScanableState(state.element_id), fsm.IsEndState(state.element_id));
+    return std::make_pair(
+        true, grammar_->per_rule_fsms[state.rule_id].value().IsEndState(state.element_id)
+    );
   }
-  XGRAMMAR_DCHECK(
-      grammar_expr.type == GrammarExprType::kSequence ||
-      grammar_expr.type == GrammarExprType::kEmptyStr
-  );
+  XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
   if (state.element_id == grammar_expr.size()) {
     // The rule is completed.
     return std::make_pair(false, true);
@@ -311,13 +312,11 @@ void EarleyParser::ExpandNextRuleRefElement(
   std::vector<int32_t> ref_rule_ids;
   // Path A. The rule has a corresponding FSM.
   if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
+    // If the rule is a tag dispatch rule, we need to add the tag dispatch FSM.
     const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
     for (const auto& edge : current_fsm->GetEdges(state.element_id)) {
       if (edge.IsRuleRef()) {
         ref_rule_ids.push_back(edge.GetRefRuleId());
-      } else if (edge.IsEpsilon()) {
-        Enqueue(ParserState{state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, 0}
-        );
       }
     }
   } else {
@@ -328,8 +327,7 @@ void EarleyParser::ExpandNextRuleRefElement(
   for (const auto& ref_rule_id : ref_rule_ids) {
     {  // Add the reference rule to map.
       if ((state.element_id != grammar_expr.size() - 1) ||
-          state.rule_start_pos == ParserState::kNoPrevInputPos ||
-          grammar_->per_rule_fsms[state.rule_id].has_value()) {
+          state.rule_start_pos == ParserState::kNoPrevInputPos) {
         // It's not the right recursion, or it's the root rule.
         auto& states_map = rule_id_to_completeable_states_.back();
         states_map.insert({ref_rule_id, state});
@@ -343,31 +341,14 @@ void EarleyParser::ExpandNextRuleRefElement(
                    return StateEqualForParsing()(s.second, state_);
                  }) != range.second;
         };
-
-        bool no_fsm_parent = true;
         for (auto parent_state_iter = parent_states_map.lower_bound(state.rule_id);
              parent_state_iter != parent_states_map.end() &&
              parent_state_iter->first == state.rule_id;
              parent_state_iter++) {
           const auto& parent_state = parent_state_iter->second;
-          if (grammar_->per_rule_fsms[parent_state.rule_id].has_value()) {
-            no_fsm_parent = false;
-            break;
+          if (!in_vec(parent_state)) {
+            states_map.insert({ref_rule_id, parent_state});
           }
-        }
-        if (no_fsm_parent) {
-          for (auto parent_state_iter = parent_states_map.lower_bound(state.rule_id);
-               parent_state_iter != parent_states_map.end() &&
-               parent_state_iter->first == state.rule_id;
-               parent_state_iter++) {
-            const auto& parent_state = parent_state_iter->second;
-            if (!in_vec(parent_state)) {
-              states_map.insert({ref_rule_id, parent_state});
-            }
-          }
-        } else {
-          auto& states_map = rule_id_to_completeable_states_.back();
-          states_map.insert({ref_rule_id, state});
         }
       }
 
@@ -387,6 +368,7 @@ void EarleyParser::ExpandNextRuleRefElement(
                 });
               }
             }
+            tmp_accept_stop_token_ = true;
             continue;
           }
           XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
@@ -402,45 +384,20 @@ void EarleyParser::ExpandNextRuleRefElement(
       const auto& ref_rule = grammar_->GetRule(ref_rule_id);
       const auto& ref_grammar_expr_id = ref_rule.body_expr_id;
       const auto& ref_grammar_expr = grammar_->GetGrammarExpr(ref_grammar_expr_id);
-      XGRAMMAR_DCHECK(
-          ref_grammar_expr.type == GrammarExprType::kChoices ||
-          grammar_->per_rule_fsms[ref_rule_id].has_value()
-      );
-      if (grammar_->per_rule_fsms[ref_rule_id].has_value()) {
-        tmp_process_state_queue_.push(ParserState{
-            ref_rule_id,
-            ref_grammar_expr_id,
-            grammar_->per_rule_fsms[ref_rule_id]->GetStart(),
-            int32_t(rule_id_to_completeable_states_.size()) - 1,
-            0
-        });
-      } else {
-        for (const auto& sequence_id : ref_grammar_expr) {
-          const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
-          if (sequence.type == GrammarExprType::kEmptyStr) {
-            if (grammar_->per_rule_fsms[state.rule_id].has_value()) {
-              const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
-              const auto& current_edges = current_fsm->GetEdges(state.element_id);
-              for (const auto& edge : current_edges) {
-                if (edge.IsRuleRef() && edge.GetRefRuleId() == ref_rule_id) {
-                  Enqueue(ParserState{
-                      state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, 0
-                  });
-                }
-              }
-            } else {
-              Enqueue(ParserState{
-                  state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
-              });
-            }
-            continue;
-          }
-          // Assert: the state can't be repeated. Since the rule_start_pos is the current
-          // position, and the rule can only be predicted once.
-          tmp_process_state_queue_.push(ParserState{
-              ref_rule_id, sequence_id, 0, int32_t(rule_id_to_completeable_states_.size()) - 1, 0
+      XGRAMMAR_DCHECK(ref_grammar_expr.type == GrammarExprType::kChoices);
+      for (const auto& sequence_id : ref_grammar_expr) {
+        const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
+        if (sequence.type == GrammarExprType::kEmptyStr) {
+          Enqueue(ParserState{
+              state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
           });
+          continue;
         }
+        // Assert: the state can't be repeated. Since the rule_start_pos is the current
+        // position, and the rule can only be predicted once.
+        tmp_process_state_queue_.push(ParserState{
+            ref_rule_id, sequence_id, 0, int32_t(rule_id_to_completeable_states_.size()) - 1, 0
+        });
       }
     }
   }
