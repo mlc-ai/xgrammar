@@ -96,7 +96,10 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
     const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
     return std::make_pair(fsm.IsScanableState(state.element_id), fsm.IsEndState(state.element_id));
   }
-  XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
+  XGRAMMAR_DCHECK(
+      grammar_expr.type == GrammarExprType::kSequence ||
+      grammar_expr.type == GrammarExprType::kEmptyStr
+  );
   if (state.element_id == grammar_expr.size()) {
     // The rule is completed.
     return std::make_pair(false, true);
