@@ -1099,8 +1099,8 @@ std::optional<FSMWithStartEnd> ChoiceFSMBuilderImpl::Build(
   auto result = FSMWithStartEnd::Union(fsm_list);
   result = result.SimplifyEpsilon();
   result = result.MergeEquivalentSuccessors();
-  result = result.ToDFA();
-  result = result.MinimizeDFA();
+  // result = result.ToDFA();
+  // result = result.MinimizeDFA();
   return result;
 }
 
@@ -1184,27 +1184,28 @@ std::optional<FSMWithStartEnd> SequenceFSMBuilderImpl::Build(
 
 std::optional<FSMWithStartEnd> CharacterClassFSMBuilderImpl::Build(const GrammarExpr& expr) {
   bool is_negative = expr[0];
-  bool is_star = expr.type == ExprType::kCharacterClassStar;
   FSMWithStartEnd result_fsm;
   if (is_negative) {
     auto optional_fsm = BuildNegative(expr);
     if (!optional_fsm.has_value()) {
       return std::nullopt;
     }
-    result_fsm = std::move(optional_fsm.value());
-  } else {
-    int current_state = result_fsm->AddState();
-    result_fsm.SetStartState(current_state);
-    int next_state = result_fsm->AddState();
-    result_fsm.AddEndState(next_state);
-    for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
-      uint8_t byte_min = static_cast<uint8_t>(expr[i]);
-      uint8_t byte_max = static_cast<uint8_t>(expr[i + 1]);
-      result_fsm->AddEdge(current_state, next_state, byte_min, byte_max);
-    }
+    return result_fsm = std::move(optional_fsm.value());
   }
+  int start_state = result_fsm->AddState();
+  result_fsm.SetStartState(start_state);
+  bool is_star = expr.type == ExprType::kCharacterClassStar;
+  int end_state = -1;
   if (is_star) {
-    return result_fsm.Star();
+    end_state = start_state;
+  } else {
+    end_state = result_fsm->AddState();
+  }
+  result_fsm.AddEndState(end_state);
+  for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
+    uint8_t byte_min = static_cast<uint8_t>(expr[i]);
+    uint8_t byte_max = static_cast<uint8_t>(expr[i + 1]);
+    result_fsm->AddEdge(start_state, end_state, byte_min, byte_max);
   }
   return result_fsm;
 }
@@ -1232,10 +1233,15 @@ std::optional<FSMWithStartEnd> CharacterClassFSMBuilderImpl::BuildNegative(const
   // Construct the basic FSM.
   FSMWithStartEnd result_fsm;
   int start_state = result_fsm->AddState();
+  bool is_star = expr.type == ExprType::kCharacterClassStar;
   result_fsm.SetStartState(start_state);
-  int end_state = result_fsm->AddState();
+  int end_state = -1;
+  if (is_star) {
+    end_state = start_state;
+  } else {
+    end_state = result_fsm->AddState();
+  }
   result_fsm.AddEndState(end_state);
-
   int left_bound = -1;
   for (int i = 0; i < 128; ++i) {
     if (!char_set[i]) {
