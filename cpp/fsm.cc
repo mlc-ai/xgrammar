@@ -337,6 +337,9 @@ FSM FSM::Impl::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, i
   std::vector<std::set<FSMEdge>> new_edges_set(new_num_states);
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     for (const auto& edge : edges_[i]) {
+      if (edge.IsEpsilon() && state_mapping[i] == state_mapping[edge.target]) {
+        continue;  // Skip self-loops for epsilon edges.
+      }
       new_edges_set[state_mapping[i]].insert(FSMEdge(edge.min, edge.max, state_mapping[edge.target])
       );
     }

@@ -4,6 +4,8 @@
  */
 #include "fsm_builder.h"
 
+#include <sys/types.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -1083,13 +1085,17 @@ std::optional<FSMWithStartEnd> ChoiceFSMBuilderImpl::Build(
     empty_fsm.AddEndState(0);
     return empty_fsm;
   }
+  if (nullable) {
+    FSMWithStartEnd null_fsm;
+    null_fsm->AddState();
+    null_fsm.SetStartState(0);
+    null_fsm.AddEndState(0);
+    fsm_list.push_back(std::move(null_fsm));
+  }
 
   auto result = FSMWithStartEnd::Union(fsm_list);
-  if (nullable) {
-    result.AddEndState(result.GetStart());
-  }
-  result.SimplifyEpsilon();
-  result.MergeEquivalentSuccessors();
+  // result = result.SimplifyEpsilon();
+  // result = result.MergeEquivalentSuccessors();
   return result;
 }
 
@@ -1172,7 +1178,26 @@ std::optional<FSMWithStartEnd> SequenceFSMBuilderImpl::Build(
 }
 
 std::optional<FSMWithStartEnd> CharacterClassFSMBuilderImpl::Build(const GrammarExpr& expr) {
-  return std::nullopt;
+  bool is_negative = expr[0];
+  bool is_star = expr.type == ExprType::kCharacterClassStar;
+  if (is_negative) {
+    return std::nullopt;
+    // TODO: Implement negative character class later.
+  }
+  FSMWithStartEnd result_fsm;
+  int current_state = result_fsm->AddState();
+  result_fsm.SetStartState(current_state);
+  int next_state = result_fsm->AddState();
+  result_fsm.AddEndState(next_state);
+  for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
+    uint8_t byte_min = static_cast<uint8_t>(expr[i]);
+    uint8_t byte_max = static_cast<uint8_t>(expr[i + 1]);
+    result_fsm->AddEdge(current_state, next_state, byte_min, byte_max);
+  }
+  if (is_star) {
+    return result_fsm.Star();
+  }
+  return result_fsm;
 }
 
 std::optional<FSMWithStartEnd> TagDispatchFSMBuilder::Build(

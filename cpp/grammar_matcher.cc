@@ -542,13 +542,6 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    auto cur_sequence = grammar_->GetGrammarExpr(state.sequence_id);
-    XGRAMMAR_DCHECK(
-        !(cur_sequence.type == GrammarExprType::kRuleRef ||
-          cur_sequence.type == GrammarExprType::kChoices ||
-          cur_sequence.type == GrammarExprType::kEmptyStr)
-    );
-    XGRAMMAR_DCHECK(cur_sequence.type == GrammarExprType::kSequence);
     auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
     XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
