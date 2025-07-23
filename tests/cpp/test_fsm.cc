@@ -210,8 +210,10 @@ TEST(XGrammarFSMTest, FunctionTest) {
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   EXPECT_EQ(fsm_wse->GetEdges().size(), 2);
   std::cout << "--------- Function Test4 -----------" << std::endl;
+  XGRAMMAR_LOG(INFO) << fsm_wse;
   fsm_wse = fsm_wse.Not();
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
+  XGRAMMAR_LOG(INFO) << fsm_wse;
   test_str = "abcd";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   std::cout << "--------- Function Test5 -----------" << std::endl;

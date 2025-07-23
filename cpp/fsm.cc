@@ -709,7 +709,7 @@ FSMWithStartEnd FSMWithStartEnd::Star() const {
     }
   }
   fsm.AddEpsilonEdge(new_start, start_);
-  std::vector<bool> is_end(NumStates(), false);
+  std::vector<bool> is_end(NumStates() + 1, false);
   is_end[new_start] = true;
   return FSMWithStartEnd(fsm, new_start, is_end);
 }
@@ -728,7 +728,7 @@ FSMWithStartEnd FSMWithStartEnd::Optional() const {
   FSM fsm = fsm_.Copy();
   for (int end = 0; end < NumStates(); ++end) {
     if (IsEndState(end)) {
-      fsm.AddEpsilonEdge(end, start_);
+      fsm.AddEpsilonEdge(start_, end);
       break;
     }
   }
@@ -757,8 +757,7 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
   }
 
   // Add a new state to avoid the blocking.
-  result.AddState();
-  final_states.insert(result.NumStates() - 1);
+  final_states.insert(result.AddState());
   for (auto rule : rules) {
     result->AddRuleEdge(result.NumStates() - 1, result.NumStates() - 1, rule);
   }
@@ -808,9 +807,11 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
       }
     }
   }
+  std::vector<bool> new_end_states(result.NumStates(), false);
   for (const auto& final_state : final_states) {
-    result.AddEndState(final_state);
+    new_end_states[final_state] = true;
   }
+  result.SetEndStates(new_end_states);
   return result;
 }
 

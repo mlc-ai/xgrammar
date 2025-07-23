@@ -568,7 +568,7 @@ class FSMWithStartEndBase {
    * \brief Sets the end states of the FSM.
    * \param ends The new end states.
    */
-  // void SetEndStates(const std::unordered_set<int>& ends) { ends_ = ends; }
+  void SetEndStates(const std::vector<bool>& ends) { ends_ = ends; }
 
   /*! \brief Returns the total number of states in the FSM. */
   int NumStates() const { return fsm_.NumStates(); }
