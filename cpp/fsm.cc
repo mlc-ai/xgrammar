@@ -709,7 +709,7 @@ FSMWithStartEnd FSMWithStartEnd::Star() const {
     }
   }
   fsm.AddEpsilonEdge(new_start, start_);
-  std::vector<bool> is_end(NumStates() + 1, false);
+  std::vector<uint8_t> is_end(NumStates() + 1, false);
   is_end[new_start] = true;
   return FSMWithStartEnd(fsm, new_start, is_end);
 }
@@ -807,7 +807,7 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
       }
     }
   }
-  std::vector<bool> new_end_states(result.NumStates(), false);
+  std::vector<uint8_t> new_end_states(result.NumStates(), false);
   for (const auto& final_state : final_states) {
     new_end_states[final_state] = true;
   }
@@ -933,7 +933,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
 
   // Initialize the result FSM.
   FSM result_fsm(0);
-  FSMWithStartEnd result(result_fsm, 0, std::vector<bool>(), true);
+  FSMWithStartEnd result(result_fsm, 0, std::vector<uint8_t>(), true);
   std::unordered_map<std::pair<int, int>, int> state_map;
   std::unordered_set<std::pair<int, int>> visited;
   std::queue<std::pair<int, int>> queue;
@@ -1266,7 +1266,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
 }
 
 FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
-  FSMWithStartEnd now_fsm(FSM(0), 0, std::vector<bool>(), true);
+  FSMWithStartEnd now_fsm(FSM(0), 0, std::vector<uint8_t>(), true);
 
   // To perform the algorithm, we must make sure the FSM is
   // a DFA.
@@ -1387,7 +1387,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
 }
 
 FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
-  FSMWithStartEnd dfa(FSM(0), 0, std::vector<bool>(), true);
+  FSMWithStartEnd dfa(FSM(0), 0, std::vector<uint8_t>(), true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
   int now_process = 0;

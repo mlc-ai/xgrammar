@@ -488,7 +488,7 @@ class FSMWithStartEndBase {
   }
 
   FSMWithStartEndBase(
-      const FSMType& fsm, int start, const std::vector<bool>& ends, bool is_dfa = false
+      const FSMType& fsm, int start, const std::vector<uint8_t>& ends, bool is_dfa = false
   )
       : fsm_(fsm), start_(start), ends_(ends), is_dfa_(is_dfa) {}
 
@@ -501,7 +501,7 @@ class FSMWithStartEndBase {
   int GetStart() const { return start_; }
 
   /*! \brief Returns the end states of the FSM. */
-  const std::vector<bool>& GetEnds() const { return ends_; }
+  const std::vector<uint8_t>& GetEnds() const { return ends_; }
 
   /*!
    * \brief Checks if a given state is an end/accepting state.
@@ -568,7 +568,7 @@ class FSMWithStartEndBase {
    * \brief Sets the end states of the FSM.
    * \param ends The new end states.
    */
-  void SetEndStates(const std::vector<bool>& ends) { ends_ = ends; }
+  void SetEndStates(const std::vector<uint8_t>& ends) { ends_ = ends; }
 
   /*! \brief Returns the total number of states in the FSM. */
   int NumStates() const { return fsm_.NumStates(); }
@@ -611,7 +611,7 @@ class FSMWithStartEndBase {
   int start_;
 
   /*! \brief The set of accepting/end states. */
-  std::vector<bool> ends_;
+  std::vector<uint8_t> ends_;
 
  protected:
   /*! \brief Whether this FSM is a deterministic finite automaton. */
