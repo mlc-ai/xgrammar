@@ -809,6 +809,12 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
   // Step 2. Build the fsm for each rule
   GrammarFSMBuilder::Apply(&compiled_grammar_impl->grammar);
 
+  // XGRAMMAR_LOG(INFO) << grammar;
+  // for (int rule_id = 0; rule_id < static_cast<int>(grammar->NumRules()); ++rule_id) {
+  //   if (compiled_grammar_impl->grammar->per_rule_fsms[rule_id].has_value()) {
+  //     XGRAMMAR_LOG(INFO) << compiled_grammar_impl->grammar->per_rule_fsms[rule_id].value();
+  //   }
+  // }
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }

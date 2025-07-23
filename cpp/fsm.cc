@@ -644,7 +644,7 @@ std::string FSMWithStartEnd::ToString() const {
 
   bool first = true;
   for (int i = 0; i < NumStates(); ++i) {
-    if (!IsEndState(i) || !reachable_states.count(i)) {
+    if (!IsEndState(i)) {
       continue;
     }
     if (!first) {

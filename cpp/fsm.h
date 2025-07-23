@@ -508,11 +508,7 @@ class FSMWithStartEndBase {
    * \param state The state to check.
    * \return True if the state is an end state, false otherwise.
    */
-  bool IsEndState(int state) const {
-    return std::any_of(ends_.begin(), ends_.end(), [state](int end_state) {
-      return end_state == state;
-    });
-  }
+  bool IsEndState(int state) const { return ends_[state]; }
 
   /*! \brief Check if a state is scanable.
    *  \param state The state to check.
