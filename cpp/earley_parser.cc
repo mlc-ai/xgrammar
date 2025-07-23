@@ -364,9 +364,13 @@ void EarleyParser::ExpandNextRuleRefElement(
       });
     }
     const auto& ref_fsm = grammar_->per_rule_fsms[ref_rule_id].value();
-    Enqueue(
-        ParserState{ref_rule_id, ref_grammar_expr_id, ref_fsm.GetStart(), state.rule_start_pos, 0}
-    );
+    Enqueue(ParserState{
+        ref_rule_id,
+        ref_grammar_expr_id,
+        ref_fsm.GetStart(),
+        static_cast<int>(rule_id_to_completeable_states_.size() - 1),
+        0
+    });
     return;
   }
 
