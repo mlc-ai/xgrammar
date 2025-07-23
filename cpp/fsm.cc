@@ -13,7 +13,6 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
-#include <list>
 #include <memory>
 #include <queue>
 #include <set>
@@ -1256,195 +1255,115 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
   } else {
     now_fsm = Copy();
   }
-  // Initialize the set.
-  std::list<std::unordered_set<int>> blocks;
-  std::list<std::unordered_set<int>> queue;
-  std::unordered_set<int> not_end;
-  for (int i = 0; i < now_fsm->NumStates(); i++) {
-    if (!now_fsm.IsEndState(i)) {
-      not_end.insert(i);
-    }
-  }
-  queue.push_back(not_end);
-  queue.push_back(now_fsm.GetEnds());
-  blocks.push_back(not_end);
-  blocks.push_back(now_fsm.GetEnds());
-  std::set<int> interval_ends;
-  std::unordered_set<std::pair<int, int>> intervals;
-  std::unordered_set<int> rules;
-  std::unordered_map<int, std::unordered_set<int>> previous_mapping;
-  for (int i = 0; i < now_fsm->NumStates(); i++) {
+
+  // Initialize the precursors of nodes.
+  std::unordered_map<int, std::unordered_multimap<std::pair<int16_t, int16_t>, int>> precursors;
+  for (int i = 0; i < now_fsm.NumStates(); ++i) {
     const auto& edges = now_fsm->GetEdges(i);
     for (const auto& edge : edges) {
-      if (previous_mapping.find(edge.target) == previous_mapping.end()) {
-        previous_mapping[edge.target] = std::unordered_set<int>();
+      XGRAMMAR_DCHECK(!edge.IsEpsilon());
+      if (precursors.find(edge.target) == precursors.end()) {
+        precursors[edge.target] = std::unordered_multimap<std::pair<int16_t, int16_t>, int>();
       }
-      previous_mapping[edge.target].insert(i);
-      if (edge.IsCharRange()) {
-        interval_ends.insert(edge.min);
-        interval_ends.insert(edge.max + 1);
-        continue;
-      }
-      if (edge.IsRuleRef()) {
-        rules.insert(edge.GetRefRuleId());
-      }
-    }
-  }
-  for (auto it = interval_ends.begin(); it != interval_ends.end(); ++it) {
-    auto next_it = std::next(it);
-    if (next_it != interval_ends.end()) {
-      intervals.insert(std::make_pair(*it, *next_it - 1));
+      precursors[edge.target].emplace(std::make_pair(edge.min, edge.max), i);
     }
   }
 
-  while (!queue.empty()) {
-    // Initial the alphabet.
-    auto block_x = *queue.begin();
-    queue.erase(queue.begin());
-    std::unordered_set<int> prev_nodes;
-    for (const auto& node : block_x) {
-      if (previous_mapping.find(node) != previous_mapping.end()) {
-        prev_nodes.insert(previous_mapping[node].begin(), previous_mapping[node].end());
-      }
-    }
-    // Check the intervals.
-    std::list<std::unordered_set<int>> blocks_copy = blocks;
-    for (const auto& interval : intervals) {
-      std::unordered_set<int> from_block;
-      for (const auto& node : prev_nodes) {
-        const auto& edges = now_fsm->GetEdges(node);
-        for (const auto& edge : edges) {
-          if (block_x.find(edge.target) == block_x.end()) {
-            continue;
-          }
-          if (edge.IsCharRange()) {
-            if (interval.first >= edge.min && interval.second <= edge.max) {
-              from_block.insert(node);
-            }
-          }
-        }
-      }
-      for (const auto& block : blocks_copy) {
-        std::unordered_set<int> intersection;
-        for (const auto& prev : from_block) {
-          if (block.find(prev) != block.end()) {
-            intersection.insert(prev);
-          }
-        }
-        // The intersection is empty, or the intersection == block.
-        if (intersection.empty() || intersection.size() == block.size()) {
-          continue;
-        }
-        std::unordered_set<int> difference;
-        for (const auto& node : block) {
-          if (intersection.find(node) == intersection.end()) {
-            difference.insert(node);
-          }
-        }
-        blocks.remove(block);
-        blocks.remove(intersection);
-        blocks.remove(difference);
-        blocks.push_back(intersection);
-        blocks.push_back(difference);
-        bool found = false;
-        for (auto iter = queue.begin(); iter != queue.end(); ++iter) {
-          if (*iter == block) {
-            found = true;
-            break;
-          }
-        }
-        if (found) {
-          queue.remove(block);
-          queue.push_back(intersection);
-          queue.push_back(difference);
-        } else {
-          queue.push_back(intersection.size() < difference.size() ? intersection : difference);
-        }
-      }
-    }
-    // Do the same thing for the rules.
-    blocks_copy = blocks;
-    for (const auto& rule : rules) {
-      std::unordered_set<int> from_block;
-      for (const auto& node : prev_nodes) {
-        const auto& edges = now_fsm->GetEdges(node);
-        for (const auto& edge : edges) {
-          if (block_x.find(edge.target) == block_x.end()) {
-            continue;
-          }
-          if (edge.IsRuleRef()) {
-            if (rule == edge.GetRefRuleId()) {
-              from_block.insert(node);
-            }
-          }
-        }
-      }
-      for (const auto& block : blocks_copy) {
-        std::unordered_set<int> intersection;
-        for (const auto& prev : from_block) {
-          if (block.find(prev) != block.end()) {
-            intersection.insert(prev);
-          }
-        }
-        // The intersection is empty, or the intersection == block.
-        if (intersection.empty() || intersection.size() == block.size()) {
-          continue;
-        }
-        std::unordered_set<int> difference;
-        for (const auto& node : from_block) {
-          if (intersection.find(node) == intersection.end()) {
-            difference.insert(node);
-          }
-        }
-        blocks.remove(block);
-        blocks.remove(intersection);
-        blocks.remove(difference);
-        blocks.push_back(intersection);
-        blocks.push_back(difference);
-        bool found = false;
-        for (auto iter = queue.begin(); iter != queue.end(); ++iter) {
-          if (*iter == block) {
-            found = true;
-            break;
-          }
-        }
-        if (found) {
-          queue.remove(block);
-          queue.push_back(intersection);
-          queue.push_back(difference);
-        } else {
-          queue.push_back(intersection.size() < difference.size() ? intersection : difference);
-        }
-      }
+  // Initialize the partitions and working set.
+  std::vector<std::unordered_set<int>> partitions;
+  std::vector<std::unordered_set<int>> working_set;
+  std::unordered_set<int> final_states;
+  std::unordered_set<int> non_final_states;
+  for (int i = 0; i < now_fsm.NumStates(); ++i) {
+    if (now_fsm.IsEndState(i)) {
+      final_states.insert(i);
+    } else {
+      non_final_states.insert(i);
     }
   }
+  partitions.push_back(final_states);
+  partitions.push_back(non_final_states);
+  working_set.push_back(std::move(final_states));
+  working_set.push_back(std::move(non_final_states));
 
-  std::unordered_map<int, int> old_to_new;
-  int cnt = 0;
-  for (const auto& block : blocks) {
-    for (const auto& node : block) {
-      old_to_new[node] = cnt;
+  while (!working_set.empty()) {
+    std::unordered_map<std::pair<int16_t, int16_t>, std::unordered_set<int>> possible_transitions;
+    auto current_partition = std::move(working_set.back());
+    working_set.pop_back();
+
+    // Get the possible transitions from the current partition.
+    for (const auto& state : current_partition) {
+      const auto& precursor_map = precursors[state];
+      for (const auto& precursor : precursor_map) {
+        if (possible_transitions.find(precursor.first) == possible_transitions.end()) {
+          possible_transitions[precursor.first] = std::unordered_set<int>();
+        }
+        possible_transitions[precursor.first].insert(precursor.second);
+      }
     }
-    cnt++;
-  }
-  FSMWithStartEnd new_fsm(FSM(0), old_to_new[now_fsm.GetStart()], {}, true);
-  for (int i = 0; i < cnt; i++) {
-    new_fsm->AddState();
-  }
-  for (const auto& end : now_fsm.GetEnds()) {
-    new_fsm.AddEndState(old_to_new[end]);
-  }
-  std::unordered_set<int> been_built;
-  for (int i = 0; i < now_fsm->NumStates(); i++) {
-    if (been_built.find(old_to_new[i]) != been_built.end()) {
-      continue;
+
+    // Check each possible transition.
+    std::vector<int> intersection;
+    std::vector<int> difference;
+    for (const auto& [transition, precursors] : possible_transitions) {
+      for (size_t i = 0; i < partitions.size(); i++) {
+        const auto& partition = partitions[i];
+        intersection.clear();  // partition \cap precursors
+        difference.clear();    // partition - precursors
+        for (const auto& partition_state : partition) {
+          if (precursors.find(partition_state) != precursors.end()) {
+            intersection.push_back(partition_state);
+          } else {
+            difference.push_back(partition_state);
+          }
+        }
+
+        // the states in the partition is not equivalent. We need to
+        // update the working set and the partitions.
+        if ((!intersection.empty()) && (!difference.empty())) {
+          bool in_working_set = false;
+          for (size_t i = 0; i < working_set.size(); i++) {
+            if (partition == working_set[i]) {
+              in_working_set = true;
+              working_set[i].clear();
+              for (const auto& state : intersection) {
+                working_set[i].insert(state);
+              }
+              working_set.emplace_back();
+              for (const auto& state : difference) {
+                working_set.back().insert(state);
+              }
+              break;
+            }
+          }
+          if (!in_working_set) {
+            const auto& smaller_set =
+                difference.size() < intersection.size() ? difference : intersection;
+            working_set.emplace_back();
+            for (const auto& state : smaller_set) {
+              working_set.back().insert(state);
+            }
+          }
+          partitions[i].clear();
+          for (const auto& state : intersection) {
+            partitions[i].insert(state);
+          }
+          partitions.emplace_back();
+          for (const auto& state : difference) {
+            partitions.back().insert(state);
+          }
+        }
+      }
     }
-    been_built.insert(old_to_new[i]);
-    for (const auto& edge : now_fsm->GetEdges(i)) {
-      new_fsm->AddEdge(old_to_new[i], old_to_new[edge.target], edge.min, edge.max);
+  }
+  std::unordered_map<int, int> state_mapping;
+  for (size_t i = 0; i < partitions.size(); ++i) {
+    for (const auto& state : partitions[i]) {
+      state_mapping[state] = i;
     }
   }
-  return new_fsm;
+  int new_num_states = partitions.size();
+  return now_fsm.RebuildWithMapping(state_mapping, new_num_states);
 }
 
 FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
