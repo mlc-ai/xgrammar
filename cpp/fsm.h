@@ -261,7 +261,7 @@ class FSM {
    * \brief Adds a new state to the FSM.
    * \return The index of the newly added state.
    */
-  int AddState();
+  int AddStateWithoutEnd();
 
   /*!
    * \brief Adds a transition edge between states with given min and max values. For character
@@ -477,6 +477,19 @@ class FSMWithStartEndBase {
   FSMWithStartEndBase(
       const FSMType& fsm, int start, const std::unordered_set<int>& ends, bool is_dfa = false
   )
+      : fsm_(fsm), start_(start), is_dfa_(is_dfa) {
+    ends_.resize(fsm.NumStates(), false);
+    for (const auto& end : ends) {
+      XGRAMMAR_DCHECK(end < fsm.NumStates())
+          << "End state " << end << " is out of bounds for FSM with " << fsm.NumStates()
+          << " states.";
+      ends_[end] = true;
+    }
+  }
+
+  FSMWithStartEndBase(
+      const FSMType& fsm, int start, const std::vector<bool>& ends, bool is_dfa = false
+  )
       : fsm_(fsm), start_(start), ends_(ends), is_dfa_(is_dfa) {}
 
   /****************** Member Accessors and Mutators ******************/
@@ -488,7 +501,7 @@ class FSMWithStartEndBase {
   int GetStart() const { return start_; }
 
   /*! \brief Returns the end states of the FSM. */
-  const std::unordered_set<int>& GetEnds() const { return ends_; }
+  // const std::unordered_set<int>& GetEnds() const { return ends_; }
 
   /*!
    * \brief Checks if a given state is an end/accepting state.
@@ -543,14 +556,23 @@ class FSMWithStartEndBase {
    */
   void AddEndState(int state) {
     XGRAMMAR_DCHECK(state < NumStates());
-    ends_.insert(state);
+    ends_[state] = true;
+  }
+
+  /*!
+   * \brief Adds a new state to the FSM and marks it as non-end.
+   * \return The index of the newly added state.
+   */
+  int AddState() {
+    ends_.push_back(false);
+    return fsm_.AddStateWithoutEnd();
   }
 
   /*!
    * \brief Sets the end states of the FSM.
    * \param ends The new end states.
    */
-  void SetEndStates(const std::unordered_set<int>& ends) { ends_ = ends; }
+  // void SetEndStates(const std::unordered_set<int>& ends) { ends_ = ends; }
 
   /*! \brief Returns the total number of states in the FSM. */
   int NumStates() const { return fsm_.NumStates(); }
@@ -592,7 +614,7 @@ class FSMWithStartEndBase {
   /*! \brief The start state of the FSM. */
   int start_;
   /*! \brief The set of accepting/end states. */
-  std::unordered_set<int> ends_;
+  std::vector<bool> ends_;
   /*! \brief Whether this FSM is a deterministic finite automaton. */
   bool is_dfa_ = false;
 
@@ -800,7 +822,7 @@ inline bool FSMWithStartEndBase<FSMType>::AcceptString(const std::string& str) c
     start_states = result_states;
   }
   return std::any_of(start_states.begin(), start_states.end(), [&](int state) {
-    return ends_.find(state) != ends_.end();
+    return ends_[state];
   });
 }
 
