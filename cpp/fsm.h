@@ -613,8 +613,12 @@ class FSMWithStartEndBase {
   FSMType fsm_;
   /*! \brief The start state of the FSM. */
   int start_;
+
+ private:
   /*! \brief The set of accepting/end states. */
   std::vector<bool> ends_;
+
+ protected:
   /*! \brief Whether this FSM is a deterministic finite automaton. */
   bool is_dfa_ = false;
 

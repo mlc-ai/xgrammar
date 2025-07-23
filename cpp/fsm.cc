@@ -374,7 +374,7 @@ FSM::FSM(std::vector<std::vector<FSMEdge>>&& edges)
 
 int FSM::NumStates() const { return pimpl_->NumStates(); }
 
-int FSM::AddStateWithoutEnd() { return pimpl_->AddState(); }
+// int FSM::AddState() { return pimpl_->AddState(); }
 
 void FSM::AddEdge(int from, int to, int16_t min, int16_t max) {
   pimpl_->AddEdge(from, to, min, max);
@@ -642,19 +642,16 @@ std::string FSMWithStartEnd::ToString() const {
   std::vector<int> reachable_states_vec(reachable_states.begin(), reachable_states.end());
   std::sort(reachable_states_vec.begin(), reachable_states_vec.end());
 
-  std::vector<int> ends_vec;
-  ends_vec.reserve(ends_.size());
-  for (const auto& end : ends_) {
-    if (reachable_states.count(end)) {
-      ends_vec.push_back(end);
+  bool first = true;
+  for (int i = 0; i < NumStates(); ++i) {
+    if (!IsEndState(i) || !reachable_states.count(i)) {
+      continue;
     }
-  }
-  std::sort(ends_vec.begin(), ends_vec.end());
-  for (int i = 0; i < static_cast<int>(ends_vec.size()); ++i) {
-    if (i > 0) {
+    if (!first) {
       result += ", ";
     }
-    result += std::to_string(ends_vec[i]);
+    first = false;
+    result += std::to_string(i);
   }
 
   result += "], edges=" + fsm_.EdgesToString(reachable_states_vec) + ")";
@@ -676,10 +673,11 @@ FSMWithStartEnd FSMWithStartEnd::RebuildWithMapping(
   FSM new_fsm = fsm_.RebuildWithMapping(state_mapping, new_num_states);
   auto new_start = state_mapping[start_];
   std::unordered_set<int> new_ends;
-  for (const auto& end : ends_) {
-    new_ends.insert(state_mapping[end]);
+  for (int end = 0; end < NumStates(); ++end) {
+    if (IsEndState(end)) {
+      new_ends.insert(state_mapping[end]);
+    }
   }
-
   return FSMWithStartEnd(new_fsm, new_start, new_ends);
 }
 
@@ -694,33 +692,46 @@ FSMWithStartEnd FSMWithStartEnd::AddToCompleteFSM(
   complete_fsm->AddFSM(fsm_, state_mapping);
   int new_start = (*state_mapping)[start_];
   std::unordered_set<int> new_ends;
-  for (const auto& end : ends_) {
-    new_ends.insert((*state_mapping)[end]);
+  for (int end = 0; end < NumStates(); ++end) {
+    if (IsEndState(end)) {
+      new_ends.insert((*state_mapping)[end]);
+    }
   }
   return FSMWithStartEnd(*complete_fsm, new_start, new_ends, is_dfa_);
 }
 
 FSMWithStartEnd FSMWithStartEnd::Star() const {
   FSM fsm = fsm_.Copy();
-  auto new_start = fsm.AddState();
-  for (const auto& end : ends_) {
-    fsm.AddEpsilonEdge(end, new_start);
+  auto new_start = fsm.AddStateWithoutEnd();
+  for (int end = 0; end < NumStates(); ++end) {
+    if (IsEndState(end)) {
+      fsm.AddEpsilonEdge(end, new_start);
+    }
   }
   fsm.AddEpsilonEdge(new_start, start_);
-  return FSMWithStartEnd(fsm, new_start, {new_start});
+  std::vector<bool> is_end(NumStates(), false);
+  is_end[new_start] = true;
+  return FSMWithStartEnd(fsm, new_start, is_end);
 }
 
 FSMWithStartEnd FSMWithStartEnd::Plus() const {
   FSM fsm = fsm_.Copy();
-  for (const auto& end : ends_) {
-    fsm.AddEpsilonEdge(end, start_);
+  for (int end = 0; end < NumStates(); ++end) {
+    if (IsEndState(end)) {
+      fsm.AddEpsilonEdge(end, start_);
+    }
   }
   return FSMWithStartEnd(fsm, start_, ends_);
 }
 
 FSMWithStartEnd FSMWithStartEnd::Optional() const {
   FSM fsm = fsm_.Copy();
-  fsm.AddEpsilonEdge(start_, *ends_.begin());
+  for (int end = 0; end < NumStates(); ++end) {
+    if (IsEndState(end)) {
+      fsm.AddEpsilonEdge(end, start_);
+      break;
+    }
+  }
   return FSMWithStartEnd(fsm, start_, ends_);
 }
 
@@ -746,7 +757,7 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
   }
 
   // Add a new state to avoid the blocking.
-  result->AddState();
+  result.AddState();
   final_states.insert(result.NumStates() - 1);
   for (auto rule : rules) {
     result->AddRuleEdge(result.NumStates() - 1, result.NumStates() - 1, rule);
@@ -797,7 +808,9 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
       }
     }
   }
-  result.SetEndStates(final_states);
+  for (const auto& final_state : final_states) {
+    result.AddEndState(final_state);
+  }
   return result;
 }
 
@@ -819,8 +832,10 @@ FSMWithStartEnd FSMWithStartEnd::Union(const std::vector<FSMWithStartEnd>& fsms)
   for (const auto& fsm_with_se : fsms) {
     fsm.AddFSM(fsm_with_se.GetFSM(), &state_mapping);
     fsm.AddEpsilonEdge(start, state_mapping[fsm_with_se.GetStart()]);
-    for (const auto& end : fsm_with_se.GetEnds()) {
-      ends.insert(state_mapping[end]);
+    for (int end = 0; end < fsm_with_se.NumStates(); ++end) {
+      if (fsm_with_se.IsEndState(end)) {
+        ends.insert(state_mapping[end]);
+      }
     }
   }
 
@@ -854,14 +869,18 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
       }
     }
     if (i == static_cast<int>(fsms.size()) - 1) {
-      for (const auto& end : fsms[i].GetEnds()) {
-        ends.insert(state_mapping[end]);
+      for (int end = 0; end < fsms[i].NumStates(); ++end) {
+        if (fsms[i].IsEndState(end)) {
+          ends.insert(state_mapping[end]);
+        }
       }
     } else {
       previous_ends.clear();
-      previous_ends.reserve(fsms[i].GetEnds().size());
-      for (const auto& end : fsms[i].GetEnds()) {
-        previous_ends.push_back(state_mapping[end]);
+      previous_ends.reserve(fsms[i]->NumStates());
+      for (int end = 0; end < fsms[i].NumStates(); ++end) {
+        if (fsms[i].IsEndState(end)) {
+          previous_ends.push_back(state_mapping[end]);
+        }
       }
     }
   }
@@ -913,12 +932,12 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
 
   // Initialize the result FSM.
   FSM result_fsm(0);
-  FSMWithStartEnd result(result_fsm, 0, {}, true);
+  FSMWithStartEnd result(result_fsm, 0, std::vector<bool>(), true);
   std::unordered_map<std::pair<int, int>, int> state_map;
   std::unordered_set<std::pair<int, int>> visited;
   std::queue<std::pair<int, int>> queue;
   queue.push({lhs_dfa.GetStart(), rhs_dfa.GetStart()});
-  result->AddState();
+  result.AddState();
   state_map[{lhs_dfa.GetStart(), rhs_dfa.GetStart()}] = 0;
   while (!queue.empty()) {
     if (int(state_map.size()) > num_of_states_limited) {
@@ -951,7 +970,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
           if (state_map.find(next_state) == state_map.end()) {
             state_map[next_state] = state_map.size();
             queue.push(next_state);
-            result->AddState();
+            result.AddState();
           }
           result->AddEdge(
               state_map[{lhs_state, rhs_state}],
@@ -982,7 +1001,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
           if (state_map.find(next_state) == state_map.end()) {
             state_map[next_state] = state_map.size();
             queue.push(next_state);
-            result->AddState();
+            result.AddState();
           }
           result->AddRuleEdge(state_map[{lhs_state, rhs_state}], state_map[next_state], rule);
           break;
@@ -1246,7 +1265,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
 }
 
 FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
-  FSMWithStartEnd now_fsm(FSM(0), 0, {}, true);
+  FSMWithStartEnd now_fsm(FSM(0), 0, std::vector<bool>(), true);
 
   // To perform the algorithm, we must make sure the FSM is
   // a DFA.
@@ -1367,7 +1386,7 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
 }
 
 FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
-  FSMWithStartEnd dfa(FSM(0), 0, {}, true);
+  FSMWithStartEnd dfa(FSM(0), 0, std::vector<bool>(), true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
   int now_process = 0;
@@ -1379,7 +1398,7 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
     rules.clear();
     std::set<int> interval_ends;
     std::bitset<256> allowed_characters;
-    dfa->AddState();
+    dfa->AddStateWithoutEnd();
     // Check if the closure is a final state.
     for (const auto& state : closures[now_process]) {
       if (IsEndState(state)) {
@@ -1498,20 +1517,15 @@ std::string CompactFSMWithStartEnd::ToString() const {
   GetReachableStates(&reachable_states);
   std::vector<int> reachable_states_vec(reachable_states.begin(), reachable_states.end());
   std::sort(reachable_states_vec.begin(), reachable_states_vec.end());
-
-  std::vector<int> ends_vec;
-  ends_vec.reserve(ends_.size());
-  for (const auto& end : ends_) {
-    if (reachable_states.count(end)) {
-      ends_vec.push_back(end);
+  bool first = true;
+  for (int end = 0; end < NumStates(); end++) {
+    if (reachable_states.count(end) && IsEndState(end)) {
+      if (!first) {
+        result += ", ";
+      }
+      first = false;
+      result += std::to_string(end);
     }
-  }
-  std::sort(ends_vec.begin(), ends_vec.end());
-  for (int i = 0; i < static_cast<int>(ends_vec.size()); ++i) {
-    if (i > 0) {
-      result += ", ";
-    }
-    result += std::to_string(ends_vec[i]);
   }
 
   result += "], edges=" + fsm_.EdgesToString(reachable_states_vec) + ")";
