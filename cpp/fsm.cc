@@ -1451,20 +1451,15 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
   FSMWithStartEnd dfa(FSM(0), 0, {}, true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
-  for (const auto& edges : fsm_->GetEdges()) {
-    for (const auto& edge : edges) {
-      if (edge.IsRuleRef()) {
-        rules.insert(edge.GetRefRuleId());
-      }
-    }
-  }
   int now_process = 0;
   std::unordered_set<int> closure;
   closure.insert(start_);
   fsm_.GetEpsilonClosure(&closure);
   closures.push_back(closure);
   while (now_process < static_cast<int>(closures.size())) {
+    rules.clear();
     std::set<int> interval_ends;
+    std::bitset<256> allowed_characters;
     dfa->AddState();
     // Check if the closure is a final state.
     for (const auto& state : closures[now_process]) {
@@ -1476,7 +1471,12 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
         if (edge.IsCharRange()) {
           interval_ends.insert(edge.min);
           interval_ends.insert(edge.max + 1);
+          for (int i = edge.min; i <= edge.max; ++i) {
+            allowed_characters.set(i);
+          }
           continue;
+        } else if (edge.IsRuleRef()) {
+          rules.insert(edge.GetRefRuleId());
         }
       }
     }
@@ -1491,7 +1491,16 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
         last = end;
         continue;
       }
-      intervals.emplace_back(last, end - 1);
+      bool allowed = true;
+      for (int i = last; i < end; ++i) {
+        if (!allowed_characters[i]) {
+          allowed = false;
+          break;
+        }
+      }
+      if (allowed) {
+        intervals.emplace_back(last, end - 1);
+      }
       last = end;
     }
     for (const auto& interval : intervals) {

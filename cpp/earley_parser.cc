@@ -158,6 +158,7 @@ bool EarleyParser::Advance(const uint8_t ch) {
 
   // Scan all the scanable states.
   for (const auto& state : latest_states) {
+    // XGRAMMAR_LOG(INFO) << "Scanning state: " << state.ToString();
     Scan(state, ch);
   }
 
@@ -169,6 +170,7 @@ bool EarleyParser::Advance(const uint8_t ch) {
   // execute Predict and Complete for all states in the queue until empty.
   rule_id_to_completeable_states_.emplace_back();
   while (!tmp_process_state_queue_.empty()) {
+    // XGRAMMAR_LOG(INFO) << "Processing state: " << tmp_process_state_queue_.front().ToString();
     const auto state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
     GrammarExpr grammar_expr = grammar_->GetGrammarExpr(state.sequence_id);
