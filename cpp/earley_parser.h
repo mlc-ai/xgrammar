@@ -374,6 +374,17 @@ class EarleyParser {
     }
   }
 
+  /*!
+   * \brief Enqueue the state into the queue, without prediction and completion.
+   * \param state The state to be enqueued.
+   */
+  void EnqueueWithoutProcessing(const ParserState& state) {
+    if (!IsStateVisitedInQueue(state)) {
+      tmp_states_visited_in_queue_.Insert(state);
+      tmp_states_to_be_added_.push_back(state);
+    }
+  }
+
  public:
   /*!
    * \brief Constructor of the Earley parser.

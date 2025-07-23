@@ -636,7 +636,12 @@ void EarleyParser::AdvanceFsm(
   for (const auto& next_node : tmp_fsm_targets_) {
     auto new_state = state;
     new_state.element_id = next_node;
-    tmp_process_state_queue_.push(new_state);
+    if ((!current_fsm.IsNonTerminalState(next_node)) &&
+        (!current_fsm.IsEndState(next_node) && current_fsm.IsScanableState(next_node))) {
+      EnqueueWithoutProcessing(new_state);
+    } else {
+      Enqueue(new_state);
+    }
   }
 }
 

@@ -515,6 +515,20 @@ class FSMWithStartEndBase {
   }
 
   /*!
+   * \brief Check if a state is not terminal.
+   * \param state The state to check.
+   * \return True if the state is scanable, false otherwise.
+   */
+  bool IsNonTerminalState(int state) const {
+    for (const auto& edge : fsm_.GetEdges(state)) {
+      if (edge.IsRuleRef() || edge.IsEpsilon()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /*!
    * \brief Sets the start state of the FSM.
    * \param state The state to set as the start state.
    */
