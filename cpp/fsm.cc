@@ -1398,7 +1398,7 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
     rules.clear();
     std::set<int> interval_ends;
     std::bitset<256> allowed_characters;
-    dfa->AddStateWithoutEnd();
+    dfa.AddState();
     // Check if the closure is a final state.
     for (const auto& state : closures[now_process]) {
       if (IsEndState(state)) {
