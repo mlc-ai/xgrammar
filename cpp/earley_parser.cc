@@ -630,14 +630,14 @@ void EarleyParser::AdvanceFsm(
 ) {
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
   auto current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
-  current_fsm->GetNextStates(
-      state.element_id, ch, FSMEdge::EdgeType::kCharRange, &tmp_fsm_targets_
-  );
-  for (const auto& next_node : tmp_fsm_targets_) {
+  for (const auto& edge : current_fsm->GetEdges(state.element_id)) {
+    if ((!edge.IsCharRange()) || ch < edge.min || ch > edge.max) {
+      continue;
+    }
     auto new_state = state;
-    new_state.element_id = next_node;
-    if ((!current_fsm.IsNonTerminalState(next_node)) &&
-        (!current_fsm.IsEndState(next_node) && current_fsm.IsScanableState(next_node))) {
+    new_state.element_id = edge.target;
+    if ((!current_fsm.IsNonTerminalState(edge.target)) &&
+        (!current_fsm.IsEndState(edge.target) && current_fsm.IsScanableState(edge.target))) {
       EnqueueWithoutProcessing(new_state);
     } else {
       Enqueue(new_state);
