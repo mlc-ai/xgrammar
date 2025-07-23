@@ -374,7 +374,7 @@ FSM::FSM(std::vector<std::vector<FSMEdge>>&& edges)
 
 int FSM::NumStates() const { return pimpl_->NumStates(); }
 
-// int FSM::AddState() { return pimpl_->AddState(); }
+int FSM::AddStateWithoutEnd() { return pimpl_->AddState(); }
 
 void FSM::AddEdge(int from, int to, int16_t min, int16_t max) {
   pimpl_->AddEdge(from, to, min, max);

@@ -501,7 +501,7 @@ class FSMWithStartEndBase {
   int GetStart() const { return start_; }
 
   /*! \brief Returns the end states of the FSM. */
-  // const std::unordered_set<int>& GetEnds() const { return ends_; }
+  const std::vector<bool>& GetEnds() const { return ends_; }
 
   /*!
    * \brief Checks if a given state is an end/accepting state.
@@ -614,7 +614,6 @@ class FSMWithStartEndBase {
   /*! \brief The start state of the FSM. */
   int start_;
 
- private:
   /*! \brief The set of accepting/end states. */
   std::vector<bool> ends_;
 

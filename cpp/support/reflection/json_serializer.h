@@ -252,8 +252,9 @@ inline void AutoDeserializeJSONValue(T& result, const picojson::value& value) {
     const auto& arr = details::json_as<picojson::array>(value);
     result.reserve(arr.size());
     for (const auto& item : details::json_as<picojson::array>(value)) {
-      auto& item_value = result.emplace_back();
+      typename T::value_type item_value{};
       AutoDeserializeJSONValue(item_value, item);
+      result.push_back(std::move(item_value));
     }
   } else if constexpr (details::is_unordered_set<T>::value) {
     result.clear();
