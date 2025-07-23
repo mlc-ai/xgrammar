@@ -19,7 +19,7 @@
 
 namespace xgrammar {
 
-static constexpr const char kXGrammarSerializeVersion[] = "v3";
+static constexpr const char kXGrammarSerializeVersion[] = "v4";
 
 bool TokenizerInfo::Impl::operator==(const TokenizerInfo::Impl& other) const {
   static constexpr auto tie = [](const TokenizerInfo::Impl& impl) {

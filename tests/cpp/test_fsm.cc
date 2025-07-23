@@ -10,7 +10,6 @@
 
 #include "fsm.h"
 #include "fsm_builder.h"
-#include "support/logging.h"
 
 using namespace xgrammar;
 
@@ -210,10 +209,8 @@ TEST(XGrammarFSMTest, FunctionTest) {
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   EXPECT_EQ(fsm_wse->GetEdges().size(), 2);
   std::cout << "--------- Function Test4 -----------" << std::endl;
-  XGRAMMAR_LOG(INFO) << fsm_wse;
   fsm_wse = fsm_wse.Not();
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
-  XGRAMMAR_LOG(INFO) << fsm_wse;
   test_str = "abcd";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   std::cout << "--------- Function Test5 -----------" << std::endl;
@@ -250,7 +247,6 @@ TEST(XGrammarFSMTest, FunctionTest) {
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
-  XGRAMMAR_LOG(INFO) << fsm_wse;
   EXPECT_EQ(fsm_wse->NumStates(), 4);
   std::cout << "--------- Function Test8 -----------" << std::endl;
   fsm_wse = RegexFSMBuilder::Build("acd|bcd").Unwrap();
@@ -261,7 +257,6 @@ TEST(XGrammarFSMTest, FunctionTest) {
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
-  XGRAMMAR_LOG(INFO) << fsm_wse;
   EXPECT_EQ(fsm_wse->NumStates(), 4);
   std::cout << "--------- Function Test9 -----------" << std::endl;
   fsm_wse = RegexFSMBuilder::Build("ab*").Unwrap();
