@@ -273,9 +273,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   );
 
   /*! \brief Check if speculative calculation will be applied.*/
-  bool IsSpeculativeCalculationApplied(
-      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
-      int possible_token_num
+  std::pair<bool, std::bitset<256>> GetSpeculativeCalculation(
+      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab
   );
 
   // The id of the initial rule.
@@ -401,35 +400,68 @@ int GetPossibleTokenIntervals(
   return possible_token_num;
 }
 
-bool GrammarMatcherForTokenMaskCache::IsSpeculativeCalculationApplied(
-    const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab, int possible_token_num
+std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativeCalculation(
+    const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab
 ) {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   // Check if the initial state is self-recursive-like. If the state is self-recursive-like,
   // and it covers a large part of the vocabulary, we will do speculative calculation in compiling.
-  if (initial_state.sub_element_id == 0 &&
-      possible_token_num > static_cast<int>(sorted_decoded_vocab.size() / 4)) {
-    const auto& sequence_expr = grammar_->GetGrammarExpr(initial_state.sequence_id);
-    // A self-recursive-like rule must be a sequence.
-    if (sequence_expr.type == GrammarExprType::kSequence) {
-      const auto& current_element_expr =
-          grammar_->GetGrammarExpr(sequence_expr[initial_state.element_id]);
-      // If the current element is a character class star, then it's self-recursive without doubt.
-      if (current_element_expr.type == GrammarExprType::kCharacterClassStar) {
-        return true;
-        // If the current element is a character class, and the next element is a rule ref to
-        // itself, and the rule only has 2 elements, then it's self-recursive-like.
-      } else if (current_element_expr.type == GrammarExprType::kCharacterClass &&
-                 sequence_expr.size() == 2 && initial_state.element_id == 0) {
-        const auto& end_element_expr = grammar_->GetGrammarExpr(sequence_expr[1]);
-        if (end_element_expr.type == GrammarExprType::kRuleRef &&
-            end_element_expr[0] == initial_state.rule_id) {
-          return true;
+  if (init_rule_id == -1 || !grammar_->per_rule_fsms[init_rule_id].has_value()) {
+    if (initial_state.sub_element_id == 0) {
+      const auto& sequence_expr = grammar_->GetGrammarExpr(initial_state.sequence_id);
+      // A self-recursive-like rule must be a sequence.
+      if (sequence_expr.type == GrammarExprType::kSequence) {
+        const auto& current_element_expr =
+            grammar_->GetGrammarExpr(sequence_expr[initial_state.element_id]);
+        // If the current element is a character class star, then it's self-recursive without doubt.
+        if (current_element_expr.type == GrammarExprType::kCharacterClassStar) {
+          return {true, {}};
+          // If the current element is a character class, and the next element is a rule ref to
+          // itself, and the rule only has 2 elements, then it's self-recursive-like.
+        } else if (current_element_expr.type == GrammarExprType::kCharacterClass &&
+                   sequence_expr.size() == 2 && initial_state.element_id == 0) {
+          const auto& end_element_expr = grammar_->GetGrammarExpr(sequence_expr[1]);
+          if (end_element_expr.type == GrammarExprType::kRuleRef &&
+              end_element_expr[0] == initial_state.rule_id) {
+            return {true, {}};
+          }
+        }
+      }
+    }
+    return {false, {}};
+  }
+  // If the initial state is a FSM, we will check if the FSM is self-recursive-like.
+  bool can_be_applied = false;
+  std::bitset<256> speculative_mask;
+  const auto& fsm = grammar_->per_rule_fsms[init_rule_id].value();
+  XGRAMMAR_DCHECK(initial_state.element_id < fsm->NumStates());
+  for (const auto& edge : fsm->GetEdges(initial_state.element_id)) {
+    if (edge.IsCharRange()) {
+      // Case A: The edge is towards itself.
+      if (edge.target == initial_state.element_id) {
+        can_be_applied = true;
+        for (int ch = edge.min; ch <= edge.max; ++ch) {
+          speculative_mask.set(ch);
+        }
+        continue;
+      }
+
+      // Case B: The state is the start state, and there's an edge to another state,
+      // which calls the fsm itself.
+      if (fsm.GetStart() == initial_state.element_id) {
+        for (const auto& next_edge : fsm->GetEdges(edge.target)) {
+          if (next_edge.IsRuleRef() && next_edge.GetRefRuleId() == init_rule_id) {
+            can_be_applied = true;
+            for (int ch = edge.min; ch <= edge.max; ++ch) {
+              speculative_mask.set(ch);
+            }
+            break;
+          }
         }
       }
     }
   }
-  return false;
+  return {can_be_applied, speculative_mask};
 }
 
 bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
@@ -456,8 +488,17 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     }
   }
 
-  bool speculative_calculation =
-      IsSpeculativeCalculationApplied(sorted_decoded_vocab, possible_token_num);
+  bool speculative_calculation = false;
+  std::bitset<256> speculative_mask;
+  if (init_rule_id == -1 || !grammar_->per_rule_fsms[init_rule_id].has_value()) {
+    speculative_calculation =
+        GetSpeculativeCalculation(sorted_decoded_vocab).first &&
+        (possible_token_num >= static_cast<int>(sorted_decoded_vocab.size() / 4));
+    speculative_mask = first_char_mask;
+  } else {
+    std::tie(speculative_calculation, speculative_mask) =
+        GetSpeculativeCalculation(sorted_decoded_vocab);
+  }
 
   int prev_matched_size = 0;
   int last_rejected_range = 0;
@@ -485,7 +526,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         for (char ch : token) {
           // If the first character is not the ascii character or can't be accepted by the
           // first character mask, we need to check them in the parser.
-          if (isascii(ch) == 0 || !first_char_mask[static_cast<uint8_t>(ch)]) {
+          if (isascii(ch) == 0 || !speculative_mask[static_cast<uint8_t>(ch)]) {
             all_accepted = false;
             break;
           }
