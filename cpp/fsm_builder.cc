@@ -195,8 +195,7 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
 Result<FSMWithStartEnd> RegexIR::Build() const {
   if (states.empty()) {
     FSM empty_fsm(1);
-    std::vector<bool> ends(1, true);
-    FSMWithStartEnd result(empty_fsm, 0, std::move(ends), false);
+    FSMWithStartEnd result(empty_fsm, 0, std::unordered_set<int>{0}, false);
     return ResultOk(std::move(result));
   }
   std::vector<FSMWithStartEnd> fsm_list;
@@ -292,11 +291,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
 
   if (state.lower_bound == 1) {
     // Insert the first end state.
-    for (size_t i = 0; i < result.GetEnds().size(); ++i) {
-      if (result.GetEnds()[i]) {
-        new_ends.insert(i);
-      }
-    }
+    new_ends = result.GetEnds();
   }
 
   // Handling {n,}
@@ -328,10 +323,10 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
 
 FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
   FSM empty_fsm(0);
-  FSMWithStartEnd result(empty_fsm, 0, std::vector<bool>{false}, true);
+  FSMWithStartEnd result(empty_fsm, 0, std::unordered_set<int>{}, true);
   // Handle the regex string.
   if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
-    result.AddState();
+    result->AddState();
     for (size_t i = 0; i < regex.size(); i++) {
       if (regex[i] != '\\') {
         if (regex[i] == '.') {
@@ -344,7 +339,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
               static_cast<uint8_t>(regex[i])
           );
         }
-        result.AddState();
+        result->AddState();
         continue;
       }
       std::vector<std::pair<int, int>> escape_vector = HandleEscapes(regex, i);
@@ -356,14 +351,14 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
             static_cast<uint8_t>(escape.second)
         );
       }
-      result.AddState();
+      result->AddState();
       i++;
     }
     result.AddEndState(result->NumStates() - 1);
   } else if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
     // Handle the character class.
-    result.AddState();
-    result.AddState();
+    result->AddState();
+    result->AddState();
     result.AddEndState(1);
     bool reverse = regex[1] == '^';
     for (size_t i = reverse ? 2 : 1; i < regex.size() - 1; i++) {
@@ -481,7 +476,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
         new_fsm.AddEdge(0, 1, last, 0xFF);
       }
     }
-    result = FSMWithStartEnd(new_fsm, 0, std::vector<bool>{false, true}, false);
+    result = FSMWithStartEnd(new_fsm, 0, std::unordered_set<int>{1}, false);
   } else {
     // TODO: The support for rules.
     XGRAMMAR_LOG(WARNING) << "rule is not supported yet.";
@@ -797,7 +792,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
       int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
       int next_state = fsm.GetNextState(current_state, ch_int16);
       if (next_state == FSM::kNoNextState) {
-        next_state = fsm.AddStateDeprecated();
+        next_state = fsm.AddState();
         fsm.AddEdge(current_state, next_state, ch_int16, ch_int16);
       }
       current_state = next_state;
@@ -816,11 +811,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
   if (add_back_edges) {
     AddBackEdges(&fsm, start, ends);
   }
-  std::vector<bool> ends_vector(fsm.NumStates(), false);
-  for (const auto& end : ends) {
-    ends_vector[end] = true;
-  }
-  return FSMWithStartEnd(fsm, start, ends_vector);
+  return FSMWithStartEnd(fsm, start, ends);
 }
 
 void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends) {
@@ -984,7 +975,7 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithEOSStop(
 
   // The final end states are all but old_ends.
   for (int i = 0; i < trie_fsm.NumStates(); i++) {
-    if (old_ends[i] == 0) {
+    if (old_ends.count(i) == 0) {
       ends.insert(i);
     }
   }
@@ -995,17 +986,13 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithEOSStop(
     if (loop_after_dispatch) {
       next_state = start;
     } else {
-      next_state = trie_fsm.AddStateDeprecated();
+      next_state = trie_fsm.AddState();
       ends.insert(next_state);
     }
     trie_fsm.AddRuleEdge(end_states[i], next_state, tag_dispatch_rules[i].second);
   }
 
-  std::vector<bool> ends_vector(trie_fsm.NumStates(), false);
-  for (const auto& end : ends) {
-    ends_vector[end] = true;
-  }
-  return FSMWithStartEnd(trie_fsm, start, ends_vector);
+  return FSMWithStartEnd(trie_fsm, start, ends);
 }
 
 std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithStopString(
@@ -1068,12 +1055,8 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithStopString(
       trie_fsm.AddRuleEdge(trie_end_states[i], start_of_stop_trie, tag_dispatch_rules[i].second);
     }
   }
-  std::vector<bool> ends_vector(trie_fsm.NumStates(), false);
-  for (const auto& end : ends) {
-    ends_vector[end] = true;
-  }
 
-  return FSMWithStartEnd(trie_fsm, start, ends_vector);
+  return FSMWithStartEnd(trie_fsm, start, ends);
 }
 
 std::optional<FSMWithStartEnd> ChoiceFSMBuilderImpl::Build(
@@ -1100,36 +1083,36 @@ std::optional<FSMWithStartEnd> ChoiceFSMBuilderImpl::Build(
   if (fsm_list.empty()) {
     // It's an empty rule.
     FSMWithStartEnd empty_fsm;
-    empty_fsm.AddState();
+    empty_fsm->AddState();
     empty_fsm.SetStartState(0);
     empty_fsm.AddEndState(0);
     return empty_fsm;
   }
   if (nullable) {
     FSMWithStartEnd null_fsm;
-    null_fsm.AddState();
+    null_fsm->AddState();
     null_fsm.SetStartState(0);
     null_fsm.AddEndState(0);
     fsm_list.push_back(std::move(null_fsm));
   }
 
   auto result = FSMWithStartEnd::Union(fsm_list);
-  // result = result.SimplifyEpsilon();
-  // result = result.MergeEquivalentSuccessors();
-  // if (result->NumStates() < 20) {
-  //   result = result.ToDFA();
-  //   result = result.MinimizeDFA();
-  // }
+  result = result.SimplifyEpsilon();
+  result = result.MergeEquivalentSuccessors();
+  if (result->NumStates() < 20) {
+    result = result.ToDFA();
+    result = result.MinimizeDFA();
+  }
   return result;
 }
 
 std::optional<FSMWithStartEnd> ByteStringFSMBuilderImpl::Build(const GrammarExpr& expr) {
   XGRAMMAR_DCHECK(expr.type == ExprType::kByteString);
   FSMWithStartEnd result_fsm;
-  int current_state = result_fsm.AddState();
+  int current_state = result_fsm->AddState();
   result_fsm.SetStartState(current_state);
   for (const auto& byte : expr) {
-    int next_state = result_fsm.AddState();
+    int next_state = result_fsm->AddState();
     result_fsm->AddEdge(
         current_state, next_state, static_cast<uint8_t>(byte), static_cast<uint8_t>(byte)
     );
@@ -1141,8 +1124,8 @@ std::optional<FSMWithStartEnd> ByteStringFSMBuilderImpl::Build(const GrammarExpr
 
 std::optional<FSMWithStartEnd> RuleRefFSMBuilderImpl::Build(const GrammarExpr& expr) {
   FSMWithStartEnd result_fsm;
-  result_fsm.AddState();
-  result_fsm.AddState();
+  result_fsm->AddState();
+  result_fsm->AddState();
   result_fsm.SetStartState(0);
   result_fsm.AddEndState(1);
   result_fsm->AddRuleEdge(0, 1, expr[0]);
@@ -1192,7 +1175,7 @@ std::optional<FSMWithStartEnd> SequenceFSMBuilderImpl::Build(
   // Check if the sequence is empty.
   if (fsm_lists.empty()) {
     FSMWithStartEnd empty_fsm;
-    empty_fsm.AddState();
+    empty_fsm->AddState();
     empty_fsm.SetStartState(0);
     empty_fsm.AddEndState(0);
     return empty_fsm;
@@ -1211,14 +1194,14 @@ std::optional<FSMWithStartEnd> CharacterClassFSMBuilderImpl::Build(const Grammar
     }
     return result_fsm = std::move(optional_fsm.value());
   }
-  int start_state = result_fsm.AddState();
+  int start_state = result_fsm->AddState();
   result_fsm.SetStartState(start_state);
   bool is_star = expr.type == ExprType::kCharacterClassStar;
   int end_state = -1;
   if (is_star) {
     end_state = start_state;
   } else {
-    end_state = result_fsm.AddState();
+    end_state = result_fsm->AddState();
   }
   result_fsm.AddEndState(end_state);
   for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
@@ -1251,14 +1234,14 @@ std::optional<FSMWithStartEnd> CharacterClassFSMBuilderImpl::BuildNegative(const
 
   // Construct the basic FSM.
   FSMWithStartEnd result_fsm;
-  int start_state = result_fsm.AddState();
+  int start_state = result_fsm->AddState();
   bool is_star = expr.type == ExprType::kCharacterClassStar;
   result_fsm.SetStartState(start_state);
   int end_state = -1;
   if (is_star) {
     end_state = start_state;
   } else {
-    end_state = result_fsm.AddState();
+    end_state = result_fsm->AddState();
   }
   result_fsm.AddEndState(end_state);
   int left_bound = -1;
@@ -1279,7 +1262,7 @@ std::optional<FSMWithStartEnd> CharacterClassFSMBuilderImpl::BuildNegative(const
     }
   }
   // Accept UTF-8 characters.
-  int utf8_nodes[3] = {result_fsm.AddState(), result_fsm.AddState(), result_fsm.AddState()};
+  int utf8_nodes[3] = {result_fsm->AddState(), result_fsm->AddState(), result_fsm->AddState()};
   result_fsm->AddEdge(utf8_nodes[0], utf8_nodes[1], 0x80, 0xBF);
   result_fsm->AddEdge(utf8_nodes[1], utf8_nodes[2], 0x80, 0xBF);
   result_fsm->AddEdge(utf8_nodes[2], end_state, 0x80, 0xBF);

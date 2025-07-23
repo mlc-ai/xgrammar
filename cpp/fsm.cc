@@ -374,7 +374,7 @@ FSM::FSM(std::vector<std::vector<FSMEdge>>&& edges)
 
 int FSM::NumStates() const { return pimpl_->NumStates(); }
 
-int FSM::AddStateDeprecated() { return pimpl_->AddState(); }
+int FSM::AddState() { return pimpl_->AddState(); }
 
 void FSM::AddEdge(int from, int to, int16_t min, int16_t max) {
   pimpl_->AddEdge(from, to, min, max);
@@ -675,9 +675,9 @@ FSMWithStartEnd FSMWithStartEnd::RebuildWithMapping(
 ) {
   FSM new_fsm = fsm_.RebuildWithMapping(state_mapping, new_num_states);
   auto new_start = state_mapping[start_];
-  std::vector<bool> new_ends(new_num_states, false);
+  std::unordered_set<int> new_ends;
   for (const auto& end : ends_) {
-    new_ends[state_mapping[end]] = true;
+    new_ends.insert(state_mapping[end]);
   }
 
   return FSMWithStartEnd(new_fsm, new_start, new_ends);
@@ -693,24 +693,21 @@ FSMWithStartEnd FSMWithStartEnd::AddToCompleteFSM(
   XGRAMMAR_DCHECK(state_mapping != nullptr) << "state_mapping cannot be nullptr";
   complete_fsm->AddFSM(fsm_, state_mapping);
   int new_start = (*state_mapping)[start_];
-  std::vector<bool> new_ends;
-  new_ends.resize(complete_fsm->NumStates(), false);
+  std::unordered_set<int> new_ends;
   for (const auto& end : ends_) {
-    new_ends[(*state_mapping)[end]] = true;
+    new_ends.insert((*state_mapping)[end]);
   }
   return FSMWithStartEnd(*complete_fsm, new_start, new_ends, is_dfa_);
 }
 
 FSMWithStartEnd FSMWithStartEnd::Star() const {
   FSM fsm = fsm_.Copy();
-  auto new_start = fsm.AddStateDeprecated();
+  auto new_start = fsm.AddState();
   for (const auto& end : ends_) {
     fsm.AddEpsilonEdge(end, new_start);
   }
   fsm.AddEpsilonEdge(new_start, start_);
-  std::vector<bool> new_ends(fsm.NumStates(), false);
-  new_ends[new_start] = true;
-  return FSMWithStartEnd(fsm, new_start, new_ends);
+  return FSMWithStartEnd(fsm, new_start, {new_start});
 }
 
 FSMWithStartEnd FSMWithStartEnd::Plus() const {
@@ -749,7 +746,7 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
   }
 
   // Add a new state to avoid the blocking.
-  result.AddState();
+  result->AddState();
   final_states.insert(result.NumStates() - 1);
   for (auto rule : rules) {
     result->AddRuleEdge(result.NumStates() - 1, result.NumStates() - 1, rule);
@@ -800,12 +797,7 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
       }
     }
   }
-
-  std::vector<bool> final_states_vec(state_cnt, false);
-  for (const auto& end : final_states) {
-    final_states_vec[end] = true;
-  }
-  result.SetEndStates(final_states_vec);
+  result.SetEndStates(final_states);
   return result;
 }
 
@@ -820,19 +812,18 @@ FSMWithStartEnd FSMWithStartEnd::Union(const std::vector<FSMWithStartEnd>& fsms)
 
   FSM fsm(1);
   int start = 0;
+  std::unordered_set<int> ends;
 
   std::unordered_map<int, int> state_mapping;
 
   for (const auto& fsm_with_se : fsms) {
     fsm.AddFSM(fsm_with_se.GetFSM(), &state_mapping);
     fsm.AddEpsilonEdge(start, state_mapping[fsm_with_se.GetStart()]);
-  }
-  std::vector<bool> ends(fsm.NumStates(), false);
-  for (const auto& fsm_with_se : fsms) {
     for (const auto& end : fsm_with_se.GetEnds()) {
-      ends[end] = true;
+      ends.insert(state_mapping[end]);
     }
   }
+
   return FSMWithStartEnd(fsm, start, ends);
 }
 
@@ -874,11 +865,8 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
       }
     }
   }
-  std::vector<bool> ends_vec(fsm.NumStates(), false);
-  for (const auto& end : ends) {
-    ends_vec[end] = true;
-  }
-  return FSMWithStartEnd(fsm, start, ends_vec);
+
+  return FSMWithStartEnd(fsm, start, ends);
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
@@ -930,7 +918,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   std::unordered_set<std::pair<int, int>> visited;
   std::queue<std::pair<int, int>> queue;
   queue.push({lhs_dfa.GetStart(), rhs_dfa.GetStart()});
-  result.AddState();
+  result->AddState();
   state_map[{lhs_dfa.GetStart(), rhs_dfa.GetStart()}] = 0;
   while (!queue.empty()) {
     if (int(state_map.size()) > num_of_states_limited) {
@@ -963,7 +951,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
           if (state_map.find(next_state) == state_map.end()) {
             state_map[next_state] = state_map.size();
             queue.push(next_state);
-            result.AddState();
+            result->AddState();
           }
           result->AddEdge(
               state_map[{lhs_state, rhs_state}],
@@ -994,7 +982,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
           if (state_map.find(next_state) == state_map.end()) {
             state_map[next_state] = state_map.size();
             queue.push(next_state);
-            result.AddState();
+            result->AddState();
           }
           result->AddRuleEdge(state_map[{lhs_state, rhs_state}], state_map[next_state], rule);
           break;
@@ -1391,7 +1379,7 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
     rules.clear();
     std::set<int> interval_ends;
     std::bitset<256> allowed_characters;
-    dfa.AddState();
+    dfa->AddState();
     // Check if the closure is a final state.
     for (const auto& state : closures[now_process]) {
       if (IsEndState(state)) {
