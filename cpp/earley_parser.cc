@@ -631,7 +631,7 @@ void EarleyParser::AdvanceFsm(
     const ParserState& state, const uint8_t ch, const GrammarExpr& cur_sequence
 ) {
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
-  auto current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
+  const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
   for (const auto& edge : current_fsm->GetEdges(state.element_id)) {
     if ((!edge.IsCharRange()) || ch < edge.min || ch > edge.max) {
       continue;
