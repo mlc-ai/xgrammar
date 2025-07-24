@@ -148,5 +148,31 @@ rule2 ::= "dg"
         assert accepted_tokens == expected_accepted_tokens[i]
 
 
+def test_regression_multiple_tag_dispatch():
+    grammar_str = """root ::= root1 "w"
+root1 ::= TagDispatch(
+  ("tag1", rule1),
+  ("tag2", rule2),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false
+)
+rule1 ::= TagDispatch(
+  ("tag1", rule2),
+  ("tag2", rule3),
+  stop_eos=false,
+  stop_str=("tag3", "ll"),
+  loop_after_dispatch=true
+)
+rule2 ::= "efg" [t]*
+rule3 ::= "abcd" [p]*
+"""
+    assert _is_grammar_accept_string(grammar_str, "tag1tag1efgllw")
+    assert _is_grammar_accept_string(grammar_str, "tag1tag2abcdtag3w")
+    assert not _is_grammar_accept_string(grammar_str, "tag1Ktag2abcdtag3tag1")
+    assert _is_grammar_accept_string(grammar_str, "tag1tag3w")
+    assert not _is_grammar_accept_string(grammar_str, "tag1tag3tag2abcdll")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

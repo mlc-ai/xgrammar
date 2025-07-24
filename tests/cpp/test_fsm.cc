@@ -413,7 +413,7 @@ TEST(XGrammarFSMTest, EfficiencyTest) {
   time_end = std::chrono::high_resolution_clock::now();
   duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start);
   std::cout << "Time taken to minimize DFA: " << duration.count() << " ms" << std::endl;
-  // EXPECT_EQ(fsm_wse->NumStates(), 111);
+  EXPECT_EQ(fsm_wse->NumStates(), 111);
   std::cout << "--------- Efficiency Test Passed! -----------" << std::endl;
 }
 
