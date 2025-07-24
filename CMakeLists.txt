@@ -20,6 +20,7 @@ option(XGRAMMAR_ENABLE_CPPTRACE
        "Enable C++ trace (Now only support Linux, and RelWithDebugInfo or Debug build)" OFF
 )
 option(XGRAMMAR_ENABLE_COVERAGE "Enable code coverage with gcov" OFF)
+option(XGRAMMAR_ENABLE_INTERNAL_CHECK "Enable internal checks" OFF)
 
 set(XGRAMMAR_CUDA_ARCHITECTURES
     native
@@ -106,4 +107,10 @@ if(XGRAMMAR_ENABLE_COVERAGE)
   if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
     set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} --coverage")
   endif()
+endif()
+
+if(XGRAMMAR_ENABLE_INTERNAL_CHECK)
+  target_compile_definitions(xgrammar PUBLIC XGRAMMAR_ENABLE_INTERNAL_CHECK=1)
+else()
+  target_compile_definitions(xgrammar PUBLIC XGRAMMAR_ENABLE_INTERNAL_CHECK=0)
 endif()
