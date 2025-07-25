@@ -4,12 +4,17 @@
  */
 #include "fsm_builder.h"
 
+#include <sys/types.h>
+
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <set>
 #include <stack>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -17,6 +22,7 @@
 #include "grammar_data_structure.h"
 #include "support/logging.h"
 #include "support/utils.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -285,7 +291,11 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
 
   if (state.lower_bound == 1) {
     // Insert the first end state.
-    new_ends = result.GetEnds();
+    for (int end = 0; end < result.NumStates(); ++end) {
+      if (result.IsEndState(end)) {
+        new_ends.insert(end);
+      }
+    }
   }
 
   // Handling {n,}
@@ -293,10 +303,20 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
     for (int i = 2; i < state.lower_bound; i++) {
       result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     }
-    int end_state_of_lower_bound_fsm = *result.GetEnds().begin();
+    int end_state_of_lower_bound_fsm = -1;
+    for (int end = 0; end < result.NumStates(); ++end) {
+      if (result.IsEndState(end)) {
+        end_state_of_lower_bound_fsm = end;
+        break;
+      }
+    }
+    XGRAMMAR_DCHECK(end_state_of_lower_bound_fsm != -1)
+        << "No end state found in the lower bound FSM.";
     result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
-    for (const auto& end : result.GetEnds()) {
-      result->AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
+    for (int end = 0; end < result.NumStates(); ++end) {
+      if (result.IsEndState(end)) {
+        result->AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
+      }
     }
     return ResultOk(std::move(result));
   }
@@ -304,8 +324,10 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   for (int i = 2; i <= state.upper_bound; i++) {
     result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     if (i >= state.lower_bound) {
-      for (const auto& end : result.GetEnds()) {
-        new_ends.insert(end);
+      for (int end = 0; end < result.NumStates(); ++end) {
+        if (result.IsEndState(end)) {
+          new_ends.insert(end);
+        }
       }
     }
   }
@@ -320,7 +342,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
   FSMWithStartEnd result(empty_fsm, 0, std::unordered_set<int>{}, true);
   // Handle the regex string.
   if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
-    result->AddState();
+    result.AddState();
     for (size_t i = 0; i < regex.size(); i++) {
       if (regex[i] != '\\') {
         if (regex[i] == '.') {
@@ -333,7 +355,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
               static_cast<uint8_t>(regex[i])
           );
         }
-        result->AddState();
+        result.AddState();
         continue;
       }
       std::vector<std::pair<int, int>> escape_vector = HandleEscapes(regex, i);
@@ -345,14 +367,14 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
             static_cast<uint8_t>(escape.second)
         );
       }
-      result->AddState();
+      result.AddState();
       i++;
     }
     result.AddEndState(result->NumStates() - 1);
   } else if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
     // Handle the character class.
-    result->AddState();
-    result->AddState();
+    result.AddState();
+    result.AddState();
     result.AddEndState(1);
     bool reverse = regex[1] == '^';
     for (size_t i = reverse ? 2 : 1; i < regex.size() - 1; i++) {
@@ -786,7 +808,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
       int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
       int next_state = fsm.GetNextState(current_state, ch_int16);
       if (next_state == FSM::kNoNextState) {
-        next_state = fsm.AddState();
+        next_state = fsm.AddStateWithoutEnd();
         fsm.AddEdge(current_state, next_state, ch_int16, ch_int16);
       }
       current_state = next_state;
@@ -899,6 +921,43 @@ class TagDispatchFSMBuilderImpl {
   );
 };
 
+class ChoiceFSMBuilderImpl {
+ public:
+  ChoiceFSMBuilderImpl() = default;
+
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+};
+
+class SequenceFSMBuilderImpl {
+ public:
+  SequenceFSMBuilderImpl() = default;
+
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr, const Grammar& grammar);
+};
+
+class ByteStringFSMBuilderImpl {
+ public:
+  ByteStringFSMBuilderImpl() = default;
+
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr);
+};
+
+class CharacterClassFSMBuilderImpl {
+ public:
+  CharacterClassFSMBuilderImpl() = default;
+
+  static std::optional<FSMWithStartEnd> BuildNegative(const GrammarExpr& expr);
+
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr);
+};
+
+class RuleRefFSMBuilderImpl {
+ public:
+  RuleRefFSMBuilderImpl() = default;
+
+  static std::optional<FSMWithStartEnd> Build(const GrammarExpr& expr);
+};
+
 std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::Build(
     const Grammar::Impl::TagDispatch& tag_dispatch
 ) {
@@ -927,8 +986,13 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithEOSStop(
   }
   auto trie_fsm = trie_result->GetFSM();
   auto start = trie_result->GetStart();
-  auto old_ends = trie_result->GetEnds();
+  std::unordered_set<int> old_ends;
   std::unordered_set<int> ends;
+  for (int end = 0; end < trie_result->NumStates(); end++) {
+    if (trie_result->IsEndState(end)) {
+      old_ends.insert(end);
+    }
+  }
 
   // The final end states are all but old_ends.
   for (int i = 0; i < trie_fsm.NumStates(); i++) {
@@ -943,7 +1007,7 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithEOSStop(
     if (loop_after_dispatch) {
       next_state = start;
     } else {
-      next_state = trie_fsm.AddState();
+      next_state = trie_fsm.AddStateWithoutEnd();
       ends.insert(next_state);
     }
     trie_fsm.AddRuleEdge(end_states[i], next_state, tag_dispatch_rules[i].second);
@@ -974,7 +1038,12 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithStopString(
   }
   auto trie_fsm = trie_result->GetFSM();
   auto start = trie_result->GetStart();
-  auto old_ends = trie_result->GetEnds();
+  std::unordered_set<int> old_ends;
+  for (int end = 0; end < trie_result->NumStates(); end++) {
+    if (trie_result->IsEndState(end)) {
+      old_ends.insert(end);
+    }
+  }
   std::unordered_set<int> ends;
 
   // The final end states are the end of each stop string.
@@ -999,7 +1068,12 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithStopString(
     XGRAMMAR_DCHECK(stop_trie_result.has_value());
     auto stop_trie_fsm = stop_trie_result->GetFSM();
     auto stop_trie_start = stop_trie_result->GetStart();
-    auto stop_trie_ends = stop_trie_result->GetEnds();
+    std::unordered_set<int> stop_trie_ends;
+    for (int end = 0; end < stop_trie_result->NumStates(); end++) {
+      if (stop_trie_result->IsEndState(end)) {
+        stop_trie_ends.insert(end);
+      }
+    }
 
     std::unordered_map<int, int> stop_trie_to_trie_map;
     trie_fsm.AddFSM(stop_trie_fsm, &stop_trie_to_trie_map);
@@ -1016,10 +1090,247 @@ std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithStopString(
   return FSMWithStartEnd(trie_fsm, start, ends);
 }
 
+std::optional<FSMWithStartEnd> ChoiceFSMBuilderImpl::Build(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kChoices);
+  std::vector<FSMWithStartEnd> fsm_list;
+  bool nullable = false;
+  for (const auto& choice_id : expr) {
+    const auto& choice_expr = grammar->GetGrammarExpr(choice_id);
+    // The choice expression should be either a sequence or an empty string.
+    if (choice_expr.type == ExprType::kEmptyStr) {
+      nullable = true;
+      continue;
+    }
+    XGRAMMAR_DCHECK(choice_expr.type == ExprType::kSequence);
+    auto fsm_result = SequenceFSMBuilderImpl::Build(choice_expr, grammar);
+    if (!fsm_result.has_value()) {
+      return std::nullopt;
+    }
+    fsm_list.push_back(std::move(fsm_result.value()));
+  }
+
+  if (fsm_list.empty()) {
+    // It's an empty rule.
+    FSMWithStartEnd empty_fsm;
+    empty_fsm.AddState();
+    empty_fsm.SetStartState(0);
+    empty_fsm.AddEndState(0);
+    return empty_fsm;
+  }
+  if (nullable) {
+    FSMWithStartEnd null_fsm;
+    null_fsm.AddState();
+    null_fsm.SetStartState(0);
+    null_fsm.AddEndState(0);
+    fsm_list.push_back(std::move(null_fsm));
+  }
+
+  auto result = FSMWithStartEnd::Union(fsm_list);
+  result = result.SimplifyEpsilon();
+  result = result.MergeEquivalentSuccessors();
+  if (result->NumStates() < 100) {
+    result = result.ToDFA();
+    result = result.MinimizeDFA();
+  }
+  return result;
+}
+
+std::optional<FSMWithStartEnd> ByteStringFSMBuilderImpl::Build(const GrammarExpr& expr) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kByteString);
+  FSMWithStartEnd result_fsm;
+  int current_state = result_fsm.AddState();
+  result_fsm.SetStartState(current_state);
+  for (const auto& byte : expr) {
+    int next_state = result_fsm.AddState();
+    result_fsm->AddEdge(
+        current_state, next_state, static_cast<uint8_t>(byte), static_cast<uint8_t>(byte)
+    );
+    current_state = next_state;
+  }
+  result_fsm.AddEndState(current_state);
+  return result_fsm;
+}
+
+std::optional<FSMWithStartEnd> RuleRefFSMBuilderImpl::Build(const GrammarExpr& expr) {
+  FSMWithStartEnd result_fsm;
+  result_fsm.AddState();
+  result_fsm.AddState();
+  result_fsm.SetStartState(0);
+  result_fsm.AddEndState(1);
+  result_fsm->AddRuleEdge(0, 1, expr[0]);
+  return result_fsm;
+}
+
+std::optional<FSMWithStartEnd> SequenceFSMBuilderImpl::Build(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  std::vector<FSMWithStartEnd> fsm_lists;
+
+  // Build the fsm of sub-expressions.
+  for (const auto& sequence_id : expr) {
+    const auto& sequence_expr = grammar->GetGrammarExpr(sequence_id);
+    switch (sequence_expr.type) {
+      case (ExprType::kByteString): {
+        auto fsm = ByteStringFSMBuilder::Build(sequence_expr);
+        if (!fsm.has_value()) {
+          return std::nullopt;
+        }
+        fsm_lists.push_back(std::move(fsm.value()));
+        break;
+      }
+      case (ExprType::kRuleRef): {
+        auto fsm = RuleRefFSMBuilder::Build(sequence_expr);
+        if (!fsm.has_value()) {
+          return std::nullopt;
+        }
+        fsm_lists.push_back(std::move(fsm.value()));
+        break;
+      }
+      case (ExprType::kCharacterClass):
+      case (ExprType::kCharacterClassStar): {
+        auto fsm = CharacterClassFSMBuilder::Build(sequence_expr);
+        if (!fsm.has_value()) {
+          return std::nullopt;
+        }
+        fsm_lists.push_back(std::move(fsm.value()));
+        break;
+      }
+      default: {
+        return std::nullopt;
+      }
+    }
+  }
+
+  // Check if the sequence is empty.
+  if (fsm_lists.empty()) {
+    FSMWithStartEnd empty_fsm;
+    empty_fsm.AddState();
+    empty_fsm.SetStartState(0);
+    empty_fsm.AddEndState(0);
+    return empty_fsm;
+  }
+
+  return FSMWithStartEnd::Concat(fsm_lists);
+}
+
+std::optional<FSMWithStartEnd> CharacterClassFSMBuilderImpl::Build(const GrammarExpr& expr) {
+  bool is_negative = expr[0];
+  FSMWithStartEnd result_fsm;
+  if (is_negative) {
+    auto optional_fsm = BuildNegative(expr);
+    if (!optional_fsm.has_value()) {
+      return std::nullopt;
+    }
+    return result_fsm = std::move(optional_fsm.value());
+  }
+  int start_state = result_fsm.AddState();
+  result_fsm.SetStartState(start_state);
+  bool is_star = expr.type == ExprType::kCharacterClassStar;
+  int end_state = -1;
+  if (is_star) {
+    end_state = start_state;
+  } else {
+    end_state = result_fsm.AddState();
+  }
+  result_fsm.AddEndState(end_state);
+  for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
+    uint8_t byte_min = static_cast<uint8_t>(expr[i]);
+    uint8_t byte_max = static_cast<uint8_t>(expr[i + 1]);
+    result_fsm->AddEdge(start_state, end_state, byte_min, byte_max);
+  }
+  return result_fsm;
+}
+
+std::optional<FSMWithStartEnd> CharacterClassFSMBuilderImpl::BuildNegative(const GrammarExpr& expr
+) {
+  XGRAMMAR_DCHECK(
+      expr.type == ExprType::kCharacterClass || expr.type == ExprType::kCharacterClassStar
+  );
+  XGRAMMAR_DCHECK(expr[0]);  // Negative character class should be true.
+  std::bitset<128> char_set;
+  for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
+    uint8_t byte_min = static_cast<uint8_t>(expr[i]);
+    uint8_t byte_max = static_cast<uint8_t>(expr[i + 1]);
+    if (byte_max > 128) {
+      XGRAMMAR_LOG(WARNING) << "Negative Character class contains byte greater than 127, "
+                            << "clamping to 127.";
+      byte_max = 127;
+    }
+    for (uint8_t j = byte_min; j <= byte_max; ++j) {
+      char_set.set(j);
+    }
+  }
+
+  // Construct the basic FSM.
+  FSMWithStartEnd result_fsm;
+  int start_state = result_fsm.AddState();
+  bool is_star = expr.type == ExprType::kCharacterClassStar;
+  result_fsm.SetStartState(start_state);
+  int end_state = -1;
+  if (is_star) {
+    end_state = start_state;
+  } else {
+    end_state = result_fsm.AddState();
+  }
+  result_fsm.AddEndState(end_state);
+  int left_bound = -1;
+  for (int i = 0; i < 128; ++i) {
+    if (!char_set[i]) {
+      left_bound = i;
+      int right_bound = i + 1;
+      while (right_bound < 128 && !char_set[right_bound]) {
+        right_bound++;
+      }
+      result_fsm->AddEdge(
+          start_state,
+          end_state,
+          static_cast<uint8_t>(left_bound),
+          static_cast<uint8_t>(right_bound - 1)
+      );
+      i = right_bound;
+    }
+  }
+  // Accept UTF-8 characters.
+  int utf8_nodes[3] = {result_fsm.AddState(), result_fsm.AddState(), result_fsm.AddState()};
+  result_fsm->AddEdge(utf8_nodes[0], utf8_nodes[1], 0x80, 0xBF);
+  result_fsm->AddEdge(utf8_nodes[1], utf8_nodes[2], 0x80, 0xBF);
+  result_fsm->AddEdge(utf8_nodes[2], end_state, 0x80, 0xBF);
+  result_fsm->AddEdge(start_state, utf8_nodes[0], 0xf0, 0xf7);
+  result_fsm->AddEdge(start_state, utf8_nodes[1], 0xe0, 0xef);
+  result_fsm->AddEdge(start_state, utf8_nodes[2], 0xc0, 0xdf);
+  return result_fsm;
+}
+
 std::optional<FSMWithStartEnd> TagDispatchFSMBuilder::Build(
     const Grammar::Impl::TagDispatch& tag_dispatch
 ) {
   return TagDispatchFSMBuilderImpl().Build(tag_dispatch);
+}
+
+std::optional<FSMWithStartEnd> ChoiceFSMBuilder::Build(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  return ChoiceFSMBuilderImpl::Build(expr, grammar);
+}
+
+std::optional<FSMWithStartEnd> SequenceFSMBuilder::Build(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  return SequenceFSMBuilderImpl::Build(expr, grammar);
+}
+
+std::optional<FSMWithStartEnd> ByteStringFSMBuilder::Build(const GrammarExpr& expr) {
+  return ByteStringFSMBuilderImpl::Build(expr);
+}
+
+std::optional<FSMWithStartEnd> CharacterClassFSMBuilder::Build(const GrammarExpr& expr) {
+  return CharacterClassFSMBuilderImpl::Build(expr);
+}
+
+std::optional<FSMWithStartEnd> RuleRefFSMBuilder::Build(const GrammarExpr& expr) {
+  return RuleRefFSMBuilderImpl().Build(expr);
 }
 
 }  // namespace xgrammar
