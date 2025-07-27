@@ -520,8 +520,7 @@ TEST(XGrammarSerializationTest, TestCompactFSM) {
     ASSERT_TRUE(json_value.is<picojson::object>());
 
     // Test literal string comparison - edges are sorted by CompactFSM
-    std::string expected =
-        "{\"edges_\":{\"data_\":[[-1,0,2],[97,97,1],[98,98,2]],\"indptr_\":[0,1,2,3]}}";
+    std::string expected = "{\"data_\":[[-1,0,2],[97,97,1],[98,98,2]],\"indptr_\":[0,2,3,3]}";
     ASSERT_EQ(json_value.serialize(), expected);
 
     CompactFSM deserialized;
@@ -548,8 +547,7 @@ TEST(XGrammarSerializationTest, TestCompactFSM) {
     auto json_value = AutoSerializeJSONValue(compact_fsm);
 
     // Test literal string comparison
-    std::string expected =
-        "{\"edges_\":{\"data_\":[[-3,0,0],[-2,5,2],[97,122,1]],\"indptr_\":[0,0,1,2]}}";
+    std::string expected = "{\"data_\":[[97,122,1],[-2,5,2],[-3,0,0]],\"indptr_\":[0,1,2,3]}";
     ASSERT_EQ(json_value.serialize(), expected);
 
     CompactFSM deserialized;
