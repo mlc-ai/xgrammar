@@ -7,12 +7,16 @@
 
 #include <picojson.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <variant>
+#include <vector>
 
 #include "grammar_builder.h"
 #include "grammar_impl.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -757,57 +761,59 @@ int32_t EBNFParser::HandleQuestionQuantifier(int32_t grammar_expr_id) {
   return builder_.AddRuleRef(new_rule_id);
 }
 
-int32_t EBNFParser::HandleRepetitionRange(int32_t grammar_expr_id, int64_t lower, int64_t upper) {
-  // Construct expr expr ... expr (l times)
-  std::vector<int32_t> elements;
-  for (int64_t i = 0; i < lower; ++i) {
-    elements.push_back(grammar_expr_id);
-  }
-
-  // Case 1: {l}:
-  // expr expr ... expr (l times)
-  if (upper == lower) {
-    return builder_.AddSequence(elements);
-  }
-
-  // Case 2: {l,}:
-  // expr expr ... expr (l times) rest
-  // rest ::= "" | expr rest
+int32_t EBNFParser::HandleRepetitionRange(
+    const int32_t grammar_expr_id, int64_t lower, int64_t upper
+) {
   if (upper == -1) {
-    auto new_rule_name = builder_.GetNewRuleName(cur_rule_name_);
-    auto new_rule_id = builder_.AddEmptyRule(new_rule_name);
-    auto ref_to_new_rule = builder_.AddRuleRef(new_rule_id);
-    auto new_grammar_expr_id = builder_.AddChoices(
-        {builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id, ref_to_new_rule})}
-    );
-    builder_.UpdateRuleBody(new_rule_id, new_grammar_expr_id);
+    // The repeation is unbounded, e.g. {2,}
+    upper = 0x7FFFFFFF;  // Use a large number to represent unbounded
+  }
+  const auto repeat_name = builder_.GetNewRuleName(cur_rule_name_) + "_xgrammar_repetition_context";
+  std::vector<int32_t> elements;
+  int splited_count = lower >= 4 ? 4 : lower;
+  int nullable_splited_count = 0;
+  if (splited_count != 4) {
+    nullable_splited_count =
+        (upper - lower) >= (4 - splited_count) ? 4 - splited_count : upper - lower;
+  }
+  // The repetition sentence.
+  if (upper != (splited_count + nullable_splited_count)) {
+    auto new_rule_name = builder_.GetNewRuleName(repeat_name);
+    auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
+    auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
+    elements.push_back(builder_.AddRepeat(
+        new_rule_id, lower - splited_count, upper - splited_count - nullable_splited_count
+    ));
+  }
+  // The last split_count exprs.
+
+  // The nullable exprs.
+  for (int i = 0; i < nullable_splited_count; i++) {
+    auto new_rule_name = builder_.GetNewRuleName(repeat_name);
+    auto new_grammar_expr_id =
+        builder_.AddChoices({builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id})});
+    auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
     elements.push_back(builder_.AddRuleRef(new_rule_id));
-    return builder_.AddSequence(elements);
   }
 
-  // Case 3: {l, r} (r - l >= 1)
-  // expr expr ... expr (l times) rest1
-  // rest1 ::= "" | expr rest2
-  // rest2 ::= "" | expr rest3
-  // ...
-  // rest(r - l) ::= "" | expr
-  std::vector<int32_t> rest_rule_ids;
-
-  for (int64_t i = 0; i < upper - lower; ++i) {
-    auto new_rule_name = builder_.GetNewRuleName(cur_rule_name_);
-    rest_rule_ids.push_back(builder_.AddEmptyRule(new_rule_name));
+  for (int i = 0; i < splited_count; i++) {
+    auto new_rule_name = builder_.GetNewRuleName(repeat_name);
+    auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
+    auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
+    elements.push_back(builder_.AddRuleRef(new_rule_id));
   }
-  for (int64_t i = 0; i < upper - lower - 1; ++i) {
-    auto ref_to_next_rule = builder_.AddRuleRef(rest_rule_ids[i + 1]);
-    auto new_grammar_expr_id = builder_.AddChoices(
-        {builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id, ref_to_next_rule})}
+
+  // Add the lookahead elements
+  std::vector<int32_t> lookahead_elements = elements;
+  if (elements.empty()) {
+    return builder_.AddEmptyStr();
+  }
+  for (size_t i = 0; i < elements.size() - 1; i++) {
+    lookahead_elements.erase(lookahead_elements.begin());
+    builder_.UpdateLookaheadAssertion(
+        builder_.GetGrammarExpr(elements[i])[0], builder_.AddSequence(lookahead_elements)
     );
-    builder_.UpdateRuleBody(rest_rule_ids[i], new_grammar_expr_id);
   }
-  auto last_grammar_expr_id = builder_.AddChoices({builder_.AddEmptyStr(), grammar_expr_id});
-  builder_.UpdateRuleBody(rest_rule_ids.back(), last_grammar_expr_id);
-
-  elements.push_back(builder_.AddRuleRef(rest_rule_ids[0]));
   return builder_.AddSequence(elements);
 }
 

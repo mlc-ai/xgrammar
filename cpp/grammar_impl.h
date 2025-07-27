@@ -118,6 +118,8 @@ class Grammar::Impl {
     // tag_expr should be a byte string, and rule_id should be a rule id.
     // loop_after_dispatch is a bool.
     kTagDispatch,
+    // data format: [grammar_expr_id, min_repeat_count, max_repeat_count]
+    kRepeat,
   };
 
   /*! \brief The object representing a grammar expr. */
@@ -138,6 +140,7 @@ class Grammar::Impl {
     }
     const int32_t* begin() const { return data; }
     const int32_t* end() const { return data + data_len; }
+    void SetData(int index, int value) { const_cast<int32_t*>(data)[index] = value; }
   };
 
   /*! \brief Get the number of grammar_exprs. */
@@ -247,6 +250,9 @@ class Grammar::Impl {
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
 
+  /*! \brief Store the lookahead which are exact, used to reduce uncertainty.*/
+  std::vector<int32_t> exact_lookahead;
+
   friend class GrammarBuilder;
   friend class GrammarCompiler;
 
@@ -276,7 +282,9 @@ XGRAMMAR_MEMBER_TABLE(
     "per_rule_fsms",
     &Grammar::Impl::per_rule_fsms,
     "allow_empty_rule_ids",
-    &Grammar::Impl::allow_empty_rule_ids
+    &Grammar::Impl::allow_empty_rule_ids,
+    "exact_lookahead",
+    &Grammar::Impl::exact_lookahead
 );
 
 }  // namespace xgrammar

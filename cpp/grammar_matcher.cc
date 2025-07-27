@@ -366,18 +366,14 @@ bool GrammarMatcher::Impl::IsStopTokenAccepted() const { return stop_token_is_ac
 // TODO(yixin): Polish verbose logging
 bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   if (IsStopTokenAccepted()) {
-    if (debug_print) {
-      XGRAMMAR_LOG(WARNING) << "The matcher has terminated after accepting the stop token, but is "
-                            << "trying to accept new token with id " << token_id << ".";
-    }
+    XGRAMMAR_LOG(WARNING) << "The matcher has terminated after accepting the stop token, but is "
+                          << "trying to accept new token with id " << token_id << ".";
     return false;
   }
 
   if (token_id < 0 || token_id >= tokenizer_info_.GetVocabSize()) {
-    if (debug_print) {
-      XGRAMMAR_LOG(WARNING) << "The token id " << token_id << " is out of range [0, "
-                            << tokenizer_info_.GetVocabSize() << "). Rejecting the token.";
-    }
+    XGRAMMAR_LOG(WARNING) << "The token id " << token_id << " is out of range [0, "
+                          << tokenizer_info_.GetVocabSize() << "). Rejecting the token.";
     return false;
   }
 
@@ -404,11 +400,9 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   const auto& special_token_ids = tokenizer_info_.GetSpecialTokenIds();
   if (std::find(special_token_ids.begin(), special_token_ids.end(), token_id) !=
       special_token_ids.end()) {
-    if (debug_print) {
-      XGRAMMAR_LOG(WARNING) << "GrammarMatcher cannot accept special token id " << token_id << ": "
-                            << tokenizer_info_.GetDecodedVocab()[token_id]
-                            << ". Rejecting the token.";
-    }
+    XGRAMMAR_LOG(WARNING) << "GrammarMatcher cannot accept special token id " << token_id << ": "
+                          << tokenizer_info_.GetDecodedVocab()[token_id]
+                          << ". Rejecting the token.";
     return false;
   }
 

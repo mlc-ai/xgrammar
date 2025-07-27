@@ -43,22 +43,19 @@ struct ParserState {
   constexpr ParserState() = default;
 
   constexpr ParserState(
-      int32_t rule_id,
-      int32_t sequence_id,
-      int32_t element_id,
-      int32_t rule_start_pos,
-      int32_t sub_element_id
+      const int32_t& rule_id,
+      const int32_t& sequence_id,
+      const int32_t& element_id,
+      const int32_t& rule_start_pos,
+      const int32_t& sub_element_id,
+      const int32_t& repeat_count = 0
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
         element_id(element_id),
         rule_start_pos(rule_start_pos),
-        sub_element_id(sub_element_id) {}
-
-  constexpr ParserState(const ParserState&) = default;
-  constexpr ParserState(ParserState&&) = default;
-  ParserState& operator=(const ParserState&) = default;
-  ParserState& operator=(ParserState&&) = default;
+        sub_element_id(sub_element_id),
+        repeat_count(repeat_count) {}
 
   /*!
    * \brief A sequence_id value of kUnexpandedRuleStartSequenceId means a rule hasn't been
@@ -92,6 +89,9 @@ struct ParserState {
   /*! \brief The id of the sub element in the current selement of the sequence. */
   int32_t sub_element_id = 0;
 
+  /*! \brief The number of times the element is repeated. It will be used in kRepeat.*/
+  int32_t repeat_count = 0;
+
   /*! \brief The element is invalid when sequence_id is -1. */
   bool IsInvalid() const { return sequence_id == -1; }
 
@@ -107,13 +107,15 @@ struct ParserState {
     if (sequence_id != other.sequence_id) return sequence_id < other.sequence_id;
     if (element_id != other.element_id) return element_id < other.element_id;
     if (rule_start_pos != other.rule_start_pos) return rule_start_pos < other.rule_start_pos;
-    return sub_element_id < other.sub_element_id;
+    if (sub_element_id != other.sub_element_id) return sub_element_id < other.sub_element_id;
+    return repeat_count < other.repeat_count;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
     os << "ParserState(rule_id=" << state.rule_id << ", sequence_id=" << state.sequence_id
        << ", element_id=" << state.element_id << ", rule_start_pos=" << state.rule_start_pos
-       << ", sub_element_id=" << state.sub_element_id << ")";
+       << ", sub_element_id=" << state.sub_element_id << ", repeat_count=" << state.repeat_count
+       << ")";
     return os;
   }
 
@@ -132,7 +134,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::sequence_id,
     &ParserState::element_id,
     &ParserState::rule_start_pos,
-    &ParserState::sub_element_id
+    &ParserState::sub_element_id,
+    &ParserState::repeat_count
 );
 
 /*!
@@ -170,7 +173,8 @@ class StateHashForParsing {
         state.sequence_id,
         state.element_id,
         state.rule_start_pos,
-        state.sub_element_id
+        state.sub_element_id,
+        state.repeat_count
     );
   }
 };

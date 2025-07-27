@@ -199,6 +199,12 @@ class GrammarBuilder {
     );
   }
 
+  int32_t AddRepeat(const int32_t ref_rule_id, int32_t min_repeat_count, int32_t max_repeat_count) {
+    std::vector<int32_t> data({ref_rule_id, min_repeat_count, max_repeat_count});
+    return AddGrammarExpr({GrammarExprType::kRepeat, data.data(), static_cast<int32_t>(data.size())}
+    );
+  }
+
   /*! \brief Get the number of grammar_exprs. */
   int32_t NumGrammarExprs() const { return grammar_->NumGrammarExprs(); }
 

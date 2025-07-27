@@ -60,8 +60,10 @@ def test_serialize_grammar():
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
         "per_rule_fsms": [],
+        "exact_lookahead": [],
         "__VERSION__": "v4",
     }
+    print(json.loads(serialized))  # For debugging purposes
     assert json.loads(serialized) == expected_json
 
 
@@ -79,6 +81,7 @@ def test_serialize_grammar_exception():
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
         "per_rule_fsms": [],
+        "exact_lookahead": [],
         "__VERSION__": "v4",
     }
 
@@ -202,6 +205,7 @@ def test_serialize_compiled_grammar():
             "root_rule_id": 1,
             "allow_empty_rule_ids": [0],
             "complete_fsm": {"data_": [], "indptr_": [0]},
+            "exact_lookahead": [],
             "per_rule_fsms": [None, None],
         },
         "tokenizer_metadata": {

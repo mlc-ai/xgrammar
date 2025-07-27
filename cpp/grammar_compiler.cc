@@ -17,6 +17,8 @@
 #include "compiled_grammar_impl.h"
 #include "earley_parser.h"
 #include "fsm.h"
+#include "fsm_builder.h"
+#include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "grammar_impl.h"
 #include "support/logging.h"
@@ -83,7 +85,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
 
  private:
   /*! \brief Check if a token can pass the lookahead assertion. */
-  bool IsTokenPassLookaheadAssertion(
+  std::pair</*acceptable*/ bool, /*can reach end*/ bool> IsTokenPassLookaheadAssertion(
       const std::string& token, const std::vector<bool>& can_reach_end_stack
   );
 
@@ -107,12 +109,12 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   std::vector<bool> tmp_can_reach_end_prefix_or_stack_;
 };
 
-bool GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAssertion(
+std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAssertion(
     const std::string& token, const std::vector<bool>& can_reach_end_stack
 ) {
   auto lookahead_assertion_id = grammar_->GetRule(init_rule_id).lookahead_assertion_id;
   if (lookahead_assertion_id == -1) {
-    return true;
+    return {true, true};
   }
   auto lookahead_state =
       ParserState(/*rule_id*/ -1, lookahead_assertion_id, 0, ParserState::kNoPrevInputPos, 0);
@@ -136,20 +138,20 @@ bool GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAssertion(
         // accepted chars: pos - i + 1
         // we need to rollback the pushed initial state as well
         PopLastStates(pos - i + 2);
-        return true;
+        return {true, true};
       }
     }
     // Case 2. The whole token is accepted
     if (last_accept_pos == token_len - 1) {
       PopLastStates(last_accept_pos - i + 2);
-      return true;
+      return {true, false};
     }
     // Case 3. The token is not accepted. Check the next position.
     PopLastStates(last_accept_pos - i + 1);
   }
 
   PopLastStates(1);
-  return false;
+  return {false, false};
 }
 
 // Comparator for std::pair<int32_t, std::string> based on the string value.
@@ -359,18 +361,34 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
       if (accepted) {
         tmp_accepted_indices_.push_back(i);
-      } else if (can_reach_end && !is_root_rule &&
-                 IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_) &&
-                 prev_matched_size > 0) {
-        // 1. If the current rule is the root rule (is_root_rule=true), there are no
-        // uncertain tokens. Not accepted tokens are just rejected.
-        // 2. If a token cannot pass the lookahead assertion, it is rejected.
-        tmp_uncertain_indices_.push_back(i);
       } else {
-        tmp_rejected_indices_.push_back(i);
-        last_rejected_range = subtree_nodes_range[i];
-        fill_reject_indices =
-            tmp_rejected_indices_.size() < AdaptiveTokenMask::USE_BITSET_THRESHOLD;
+        auto lookahead_result_pair = IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_);
+        if (can_reach_end && !is_root_rule && lookahead_result_pair.first &&
+            prev_matched_size > 0) {
+          // 1. If the current rule is the root rule (is_root_rule=true), there are no
+          // uncertain tokens. Not accepted tokens are just rejected.
+          // 2. If a token cannot pass the lookahead assertion, it is rejected.
+          if ((!lookahead_result_pair.second) &&
+              (std::binary_search(
+                  grammar_->exact_lookahead.begin(), grammar_->exact_lookahead.end(), init_rule_id
+              ))) {
+            tmp_accepted_indices_.push_back(i);
+          } else {
+            tmp_uncertain_indices_.push_back(i);
+            // On the subtree, they are all uncertain tokens.
+            if (lookahead_result_pair.second) {
+              for (int j = i + 1; j < subtree_nodes_range[i]; ++j) {
+                tmp_uncertain_indices_.push_back(j);
+              }
+              i = subtree_nodes_range[i] - 1;  // Skip the subtree nodes.
+            }
+          }
+        } else {
+          tmp_rejected_indices_.push_back(i);
+          last_rejected_range = subtree_nodes_range[i];
+          fill_reject_indices =
+              tmp_rejected_indices_.size() < AdaptiveTokenMask::USE_BITSET_THRESHOLD;
+        }
       }
     }
     if (interval_idx != possible_intervals.size() - 1 && fill_reject_indices) {
@@ -573,7 +591,10 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
   // Step 1. Compute the ids of rules that can be empty
   compiled_grammar_impl->grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(grammar);
 
-  // Step 2. Build the fsm for each rule
+  // Step 2. Normalize the repeat expressions in the grammar.
+  RepetitionNormalizer::Apply(&compiled_grammar_impl->grammar);
+
+  // Step 3. Build the fsm for each rule
   GrammarFSMBuilder::Apply(&compiled_grammar_impl->grammar);
 
   if (tokenizer_info_.GetVocabSize() == 0) {
@@ -630,7 +651,6 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
     auto rule = grammar->GetRule(rule_id);
     auto rule_body = grammar->GetGrammarExpr(rule.body_expr_id);
     const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
-
     if (rule_fsm.has_value()) {
       auto cur_stack_element =
           ParserState(rule_id, rule.body_expr_id, 0, ParserState::kNoPrevInputPos, 0);
@@ -642,7 +662,6 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
       }
       continue;
     }
-
     XGRAMMAR_DCHECK(rule_body.type == GrammarExprType::kChoices);
     for (auto sequence_id : rule_body) {
       const auto& sequence = grammar->GetGrammarExpr(sequence_id);
@@ -654,7 +673,7 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
       for (int element_id = 0; element_id < sequence.size(); ++element_id) {
         state.element_id = element_id;
         auto element = grammar->GetGrammarExpr(sequence[element_id]);
-        if (element.type == GrammarExprType::kRuleRef) {
+        if (element.type == GrammarExprType::kRuleRef || element.type == GrammarExprType::kRepeat) {
           continue;
         }
         if (element.type == GrammarExprType::kByteString) {

@@ -14,8 +14,10 @@
 #include <vector>
 
 #include "fsm_builder.h"
+#include "grammar_builder.h"
 #include "grammar_impl.h"
 #include "support/encoding.h"
+#include "support/logging.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -135,6 +137,7 @@ class StructureNormalizerSub : public GrammarMutator {
       case GrammarExprType::kCharacterClass:
       case GrammarExprType::kCharacterClassStar:
       case GrammarExprType::kRuleRef:
+      case GrammarExprType::kRepeat:
         return builder_->AddSequence({builder_->AddGrammarExpr(assertion_expr)});
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected lookahead assertion type: "
@@ -156,6 +159,7 @@ class StructureNormalizerSub : public GrammarMutator {
       case GrammarExprType::kCharacterClass:
       case GrammarExprType::kCharacterClassStar:
       case GrammarExprType::kRuleRef:
+      case GrammarExprType::kRepeat:
         return builder_->AddChoices({builder_->AddSequence({builder_->AddGrammarExpr(grammar_expr)})
         });
       case GrammarExprType::kTagDispatch:
@@ -189,6 +193,7 @@ class StructureNormalizerSub : public GrammarMutator {
         case GrammarExprType::kCharacterClass:
         case GrammarExprType::kCharacterClassStar:
         case GrammarExprType::kRuleRef:
+        case GrammarExprType::kRepeat:
           VisitElementInChoices(choice_expr, &new_choice_ids);
           break;
         case GrammarExprType::kTagDispatch: {
@@ -267,6 +272,7 @@ class StructureNormalizerSub : public GrammarMutator {
         case GrammarExprType::kCharacterClass:
         case GrammarExprType::kCharacterClassStar:
         case GrammarExprType::kRuleRef:
+        case GrammarExprType::kRepeat:
           VisitElementInSequence(element_expr, &new_sequence_ids);
           break;
         case GrammarExprType::kTagDispatch: {
@@ -492,6 +498,8 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
 
   void VisitRuleRef(const GrammarExpr& grammar_expr) { visit_queue_.push(grammar_expr[0]); }
 
+  void VisitRepeat(const GrammarExpr& grammar_expr) { visit_queue_.push(grammar_expr[0]); }
+
  private:
   std::queue<int32_t> visit_queue_;
 };
@@ -535,6 +543,12 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
     XGRAMMAR_DCHECK(rule_id_map_.count(grammar_expr[0]) > 0);
     auto new_rule_id = rule_id_map_[grammar_expr[0]];
     return builder_->AddRuleRef(new_rule_id);
+  }
+
+  int32_t VisitRepeat(const GrammarExpr& grammar_expr) final {
+    XGRAMMAR_DCHECK(rule_id_map_.count(grammar_expr[0]) > 0);
+    auto new_rule_id = rule_id_map_[grammar_expr[0]];
+    return builder_->AddRepeat(new_rule_id, grammar_expr[1], grammar_expr[2]);
   }
 
  private:
@@ -689,6 +703,12 @@ class SubGrammarAdderImpl : public GrammarMutator {
     return builder_->AddRuleRef(new_rule_ids_names[grammar_expr[0]].first);
   }
 
+  int32_t VisitRepeat(const GrammarExpr& grammar_expr) final {
+    return builder_->AddRepeat(
+        new_rule_ids_names[grammar_expr[0]].first, grammar_expr[1], grammar_expr[2]
+    );
+  }
+
   std::vector<std::pair<int32_t, std::string>> new_rule_ids_names;
 };
 
@@ -799,6 +819,10 @@ class RuleRefGraphFinder : public GrammarVisitor<std::vector<std::vector<int32_t
     rule_visit_graph_[grammar_expr[0]].push_back(cur_rule_id_);
   }
 
+  void VisitRepeat(const GrammarExpr& grammar_expr) {
+    rule_visit_graph_[grammar_expr[0]].push_back(cur_rule_id_);
+  }
+
   void VisitTagDispatch(const GrammarExpr& grammar_expr) {
     for (int i = 1; i < grammar_expr.size() - 3; i += 2) {
       rule_visit_graph_[grammar_expr[i]].push_back(cur_rule_id_);
@@ -872,7 +896,9 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       auto element_expr = base_grammar_->GetGrammarExpr(i);
       return (element_expr.type == GrammarExprType::kRuleRef &&
               empty_rule_id_set.count(element_expr[0])) ||
-             element_expr.type == GrammarExprType::kCharacterClassStar;
+             element_expr.type == GrammarExprType::kCharacterClassStar ||
+             (element_expr.type == GrammarExprType::kRepeat &&
+              (empty_rule_id_set.count(element_expr[0]) || element_expr[1] == 0));
     });
   }
 
@@ -1023,6 +1049,29 @@ class GrammarFSMBuilderImpl {
   }
 };
 
+class RepetitionNormalizerImpl {
+ public:
+  void Apply(Grammar* grammar) {
+    for (int i = 0; i < (*grammar)->NumGrammarExprs(); ++i) {
+      auto expr = (*grammar)->GetGrammarExpr(i);
+      if (expr.type != Grammar::Impl::GrammarExprType::kRepeat) {
+        continue;
+      }
+      int repeat_rule_id = expr[0];
+      (*grammar)->exact_lookahead.push_back(repeat_rule_id);
+      if (std::binary_search(
+              (*grammar)->allow_empty_rule_ids.begin(),
+              (*grammar)->allow_empty_rule_ids.end(),
+              repeat_rule_id
+          )) {
+        // The repeated rule can be empty, so we need to normalize it.
+        expr.SetData(1, 0);  // Set min repeat to 0
+      }
+    }
+    std::sort((*grammar)->exact_lookahead.begin(), (*grammar)->exact_lookahead.end());
+  }
+};
+
 /*************************** Forward grammar functors to their impl ***************************/
 
 Grammar GrammarNormalizer::Apply(const Grammar& grammar) {
@@ -1071,5 +1120,7 @@ int32_t SubGrammarAdder::Apply(GrammarBuilder* builder, const Grammar& sub_gramm
 }
 
 void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl().Apply(grammar); }
+
+void RepetitionNormalizer::Apply(Grammar* grammar) { RepetitionNormalizerImpl().Apply(grammar); }
 
 }  // namespace xgrammar
