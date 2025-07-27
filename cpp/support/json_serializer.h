@@ -11,7 +11,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -20,7 +19,6 @@
 #include <type_traits>
 #include <vector>
 
-#include "cpptrace.h"
 #include "encoding.h"
 #include "logging.h"
 #include "reflection.h"
@@ -331,18 +329,8 @@ inline std::runtime_error ConstructDeserializeError(
   }
 }
 
-static auto recursive_time = 0;
-
 template <typename T>
 inline picojson::value AutoSerializeJSONValue(const T& value) {
-  recursive_time++;
-  struct Guard {
-    ~Guard() { recursive_time--; }
-  } guard;
-  if (recursive_time > 1000) {
-    PrintTrace();
-    throw std::runtime_error("Recursive serialization limit exceeded");
-  }
   if constexpr (detail::json_serializer::has_serialize_json_global<T>::value) {
     // User-defined SerializeJSONValue (highest priority)
     return SerializeJSONValue(value);

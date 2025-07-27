@@ -283,5 +283,4 @@ def test_serialize_compiled_grammar_with_hf_tokenizer():
 
 
 if __name__ == "__main__":
-    # pytest.main(sys.argv)
-    test_serialize_compiled_grammar()
+    pytest.main(sys.argv)
