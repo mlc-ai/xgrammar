@@ -4,17 +4,20 @@
  */
 #include "fsm_builder.h"
 
+#include <sys/types.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <set>
 #include <stack>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
 #include "fsm.h"
-#include "grammar_impl.h"
 #include "support/logging.h"
 #include "support/utils.h"
 
@@ -285,7 +288,11 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
 
   if (state.lower_bound == 1) {
     // Insert the first end state.
-    new_ends = result.GetEnds();
+    for (int end = 0; end < result.NumStates(); ++end) {
+      if (result.IsEndState(end)) {
+        new_ends.insert(end);
+      }
+    }
   }
 
   // Handling {n,}
@@ -293,10 +300,20 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
     for (int i = 2; i < state.lower_bound; i++) {
       result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     }
-    int end_state_of_lower_bound_fsm = *result.GetEnds().begin();
+    int end_state_of_lower_bound_fsm = -1;
+    for (int end = 0; end < result.NumStates(); ++end) {
+      if (result.IsEndState(end)) {
+        end_state_of_lower_bound_fsm = end;
+        break;
+      }
+    }
+    XGRAMMAR_DCHECK(end_state_of_lower_bound_fsm != -1)
+        << "No end state found in the lower bound FSM.";
     result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
-    for (const auto& end : result.GetEnds()) {
-      result->AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
+    for (int end = 0; end < result.NumStates(); ++end) {
+      if (result.IsEndState(end)) {
+        result->AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
+      }
     }
     return ResultOk(std::move(result));
   }
@@ -304,8 +321,10 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   for (int i = 2; i <= state.upper_bound; i++) {
     result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     if (i >= state.lower_bound) {
-      for (const auto& end : result.GetEnds()) {
-        new_ends.insert(end);
+      for (int end = 0; end < result.NumStates(); ++end) {
+        if (result.IsEndState(end)) {
+          new_ends.insert(end);
+        }
       }
     }
   }
@@ -320,7 +339,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
   FSMWithStartEnd result(empty_fsm, 0, std::unordered_set<int>{}, true);
   // Handle the regex string.
   if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
-    result->AddState();
+    result.AddState();
     for (size_t i = 0; i < regex.size(); i++) {
       if (regex[i] != '\\') {
         if (regex[i] == '.') {
@@ -333,7 +352,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
               static_cast<uint8_t>(regex[i])
           );
         }
-        result->AddState();
+        result.AddState();
         continue;
       }
       std::vector<std::pair<int, int>> escape_vector = HandleEscapes(regex, i);
@@ -345,14 +364,14 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
             static_cast<uint8_t>(escape.second)
         );
       }
-      result->AddState();
+      result.AddState();
       i++;
     }
     result.AddEndState(result->NumStates() - 1);
   } else if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
     // Handle the character class.
-    result->AddState();
-    result->AddState();
+    result.AddState();
+    result.AddState();
     result.AddEndState(1);
     bool reverse = regex[1] == '^';
     for (size_t i = reverse ? 2 : 1; i < regex.size() - 1; i++) {
@@ -786,7 +805,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
       int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
       int next_state = fsm.GetNextState(current_state, ch_int16);
       if (next_state == FSM::kNoNextState) {
-        next_state = fsm.AddState();
+        next_state = fsm.AddStateWithoutEnd();
         fsm.AddEdge(current_state, next_state, ch_int16, ch_int16);
       }
       current_state = next_state;
@@ -880,146 +899,6 @@ std::optional<FSMWithStartEnd> TrieFSMBuilder::Build(
     bool add_back_edges
 ) {
   return TrieFSMBuilderImpl().Build(patterns, end_states, allow_overlap, add_back_edges);
-}
-
-class TagDispatchFSMBuilderImpl {
- public:
-  TagDispatchFSMBuilderImpl() = default;
-
-  std::optional<FSMWithStartEnd> Build(const Grammar::Impl::TagDispatch& tag_dispatch);
-
-  std::optional<FSMWithStartEnd> BuildWithEOSStop(
-      const std::vector<std::pair<std::string, int>>& tag_dispatch_rules, bool loop_after_dispatch
-  );
-
-  std::optional<FSMWithStartEnd> BuildWithStopString(
-      const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
-      const std::vector<std::string>& stop_strings,
-      bool loop_after_dispatch
-  );
-};
-
-std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::Build(
-    const Grammar::Impl::TagDispatch& tag_dispatch
-) {
-  if (tag_dispatch.stop_eos) {
-    return BuildWithEOSStop(tag_dispatch.tag_rule_pairs, tag_dispatch.loop_after_dispatch);
-  } else {
-    return BuildWithStopString(
-        tag_dispatch.tag_rule_pairs, tag_dispatch.stop_str, tag_dispatch.loop_after_dispatch
-    );
-  }
-}
-
-std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithEOSStop(
-    const std::vector<std::pair<std::string, int>>& tag_dispatch_rules, bool loop_after_dispatch
-) {
-  XGRAMMAR_DCHECK(tag_dispatch_rules.size() > 0);
-  std::vector<std::string> tag_names;
-  tag_names.reserve(tag_dispatch_rules.size());
-  for (const auto& [tag_name, tag_id] : tag_dispatch_rules) {
-    tag_names.push_back(tag_name);
-  }
-  std::vector<int> end_states;
-  auto trie_result = TrieFSMBuilder::Build(tag_names, &end_states, false, true);
-  if (!trie_result.has_value()) {
-    return std::nullopt;
-  }
-  auto trie_fsm = trie_result->GetFSM();
-  auto start = trie_result->GetStart();
-  auto old_ends = trie_result->GetEnds();
-  std::unordered_set<int> ends;
-
-  // The final end states are all but old_ends.
-  for (int i = 0; i < trie_fsm.NumStates(); i++) {
-    if (old_ends.count(i) == 0) {
-      ends.insert(i);
-    }
-  }
-
-  // Add rule ref edges
-  for (int i = 0; i < static_cast<int>(tag_dispatch_rules.size()); i++) {
-    int next_state;
-    if (loop_after_dispatch) {
-      next_state = start;
-    } else {
-      next_state = trie_fsm.AddState();
-      ends.insert(next_state);
-    }
-    trie_fsm.AddRuleEdge(end_states[i], next_state, tag_dispatch_rules[i].second);
-  }
-
-  return FSMWithStartEnd(trie_fsm, start, ends);
-}
-
-std::optional<FSMWithStartEnd> TagDispatchFSMBuilderImpl::BuildWithStopString(
-    const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
-    const std::vector<std::string>& stop_strings,
-    bool loop_after_dispatch
-) {
-  XGRAMMAR_DCHECK(tag_dispatch_rules.size() > 0);
-  XGRAMMAR_DCHECK(stop_strings.size() > 0);
-  std::vector<std::string> tag_names;
-  tag_names.reserve(tag_dispatch_rules.size());
-  for (const auto& [tag_name, tag_id] : tag_dispatch_rules) {
-    tag_names.push_back(tag_name);
-  }
-  for (const auto& stop_string : stop_strings) {
-    tag_names.push_back(stop_string);
-  }
-  std::vector<int> trie_end_states;
-  auto trie_result = TrieFSMBuilder::Build(tag_names, &trie_end_states, false, true);
-  if (!trie_result.has_value()) {
-    return std::nullopt;
-  }
-  auto trie_fsm = trie_result->GetFSM();
-  auto start = trie_result->GetStart();
-  auto old_ends = trie_result->GetEnds();
-  std::unordered_set<int> ends;
-
-  // The final end states are the end of each stop string.
-  for (int i = static_cast<int>(tag_dispatch_rules.size());
-       i < static_cast<int>(trie_end_states.size());
-       i++) {
-    ends.insert(trie_end_states[i]);
-  }
-
-  if (loop_after_dispatch) {
-    for (int i = 0; i < static_cast<int>(tag_dispatch_rules.size()); i++) {
-      trie_fsm.AddRuleEdge(trie_end_states[i], start, tag_dispatch_rules[i].second);
-    }
-  } else {
-    // We should first build a new FSM that only contains the stop strings.
-    tag_names.clear();
-    for (const auto& stop_string : stop_strings) {
-      tag_names.push_back(stop_string);
-    }
-    std::vector<int> stop_end_states;
-    auto stop_trie_result = TrieFSMBuilder::Build(tag_names, nullptr, false, false);
-    XGRAMMAR_DCHECK(stop_trie_result.has_value());
-    auto stop_trie_fsm = stop_trie_result->GetFSM();
-    auto stop_trie_start = stop_trie_result->GetStart();
-    auto stop_trie_ends = stop_trie_result->GetEnds();
-
-    std::unordered_map<int, int> stop_trie_to_trie_map;
-    trie_fsm.AddFSM(stop_trie_fsm, &stop_trie_to_trie_map);
-    int start_of_stop_trie = stop_trie_to_trie_map[stop_trie_start];
-    for (auto state : stop_trie_ends) {
-      ends.insert(stop_trie_to_trie_map[state]);
-    }
-
-    for (int i = 0; i < static_cast<int>(tag_dispatch_rules.size()); i++) {
-      trie_fsm.AddRuleEdge(trie_end_states[i], start_of_stop_trie, tag_dispatch_rules[i].second);
-    }
-  }
-
-  return FSMWithStartEnd(trie_fsm, start, ends);
-}
-
-std::optional<FSMWithStartEnd> TagDispatchFSMBuilder::Build(
-    const Grammar::Impl::TagDispatch& tag_dispatch
-) {
-  return TagDispatchFSMBuilderImpl().Build(tag_dispatch);
 }
 
 }  // namespace xgrammar
