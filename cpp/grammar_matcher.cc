@@ -443,8 +443,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
   if (IsStopTokenAccepted()) {
     if (debug_print) {
       XGRAMMAR_LOG(WARNING) << "The matcher has terminated after accepting the stop token, but is "
-                            << "trying to accept new string \"" << PrintAsEscapedUTF8(input_str)
-                            << "\".";
+                            << "trying to accept new string \"" << EscapeString(input_str) << "\".";
     }
     return false;
   }

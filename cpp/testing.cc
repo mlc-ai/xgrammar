@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 #include "grammar_parser.h"
 #include "support/encoding.h"
 

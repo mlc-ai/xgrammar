@@ -49,11 +49,6 @@ inline constexpr bool false_v = false;
 
 }  // namespace detail::memory_size
 
-template <typename T, typename = std::enable_if_t<std::is_trivially_copyable_v<T>>>
-inline constexpr std::size_t MemorySize(const T& value) {
-  return 0;
-}
-
 /*!
  * \brief Compute the memory consumption of a value.
  * \tparam T The type of the value.

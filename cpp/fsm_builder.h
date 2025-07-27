@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "fsm.h"
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 #include "support/utils.h"
 
 namespace xgrammar {

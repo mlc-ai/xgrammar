@@ -5,24 +5,28 @@
 
 #include <xgrammar/grammar.h>
 
+#include <string>
+
 #include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_printer.h"
 #include "json_schema_converter.h"
 #include "regex_converter.h"
 #include "structural_tag.h"
-#include "support/logging.h"
 #include "support/json_serializer.h"
+#include "support/logging.h"
 
 namespace xgrammar {
 
 /******************* Grammar::Impl *******************/
 
 std::size_t MemorySize(const Grammar::Impl& impl) {
-  // we assume strings are not long, so we don't iterate through all the rules
-  return impl.rules_.size() * sizeof(impl.rules_[0]) + MemorySize(impl.grammar_expr_data_) +
-         MemorySize(impl.root_tag_dispatch_fsm) +
-         MemorySize(impl.tag_dispatch_end_node_to_rule_id) + MemorySize(impl.allow_empty_rule_ids);
+  /// TODO: Now, we evaluatve memory size of rule strings as sizeof(std::string),
+  /// with an assumption that the string is small.
+  /// This should be improved in the future.
+  return impl.rules_.size() * sizeof(std::string) + MemorySize(impl.grammar_expr_data_) +
+         MemorySize(impl.grammar_expr_indptr_) + MemorySize(impl.complete_fsm) +
+         MemorySize(impl.per_rule_fsms) + MemorySize(impl.allow_empty_rule_ids);
 }
 
 /******************* Grammar *******************/

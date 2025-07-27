@@ -120,7 +120,7 @@ std::string GrammarPrinter::PrintChoices(const GrammarExpr& grammar_expr) {
 }
 
 std::string GrammarPrinter::PrintString(const std::string& str) {
-  return "\"" + PrintAsEscapedUTF8(str) + "\"";
+  return "\"" + EscapeString(str) + "\"";
 }
 
 std::string GrammarPrinter::PrintBoolean(bool value) { return value ? "true" : "false"; }
