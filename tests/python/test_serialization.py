@@ -57,9 +57,9 @@ def test_serialize_grammar():
             # fmt: on
         ],
         "root_rule_id": 1,
-        "root_tag_dispatch_fsm": None,
-        "tag_dispatch_end_node_to_rule_id": [],
         "allow_empty_rule_ids": [],
+        "complete_fsm": None,
+        "per_rule_fsms": [],
         "__VERSION__": "v2",
     }
     assert json.loads(serialized) == expected_json
@@ -170,9 +170,9 @@ def test_serialize_compiled_grammar():
                 # fmt: on
             ],
             "root_rule_id": 1,
-            "root_tag_dispatch_fsm": None,
-            "tag_dispatch_end_node_to_rule_id": [],
             "allow_empty_rule_ids": [0],
+            "complete_fsm": {"data_": [], "indptr_": [0]},
+            "per_rule_fsms": [None, None],
         },
         "tokenizer_metadata": {
             "vocab_type": 1,
@@ -283,4 +283,5 @@ def test_serialize_compiled_grammar_with_hf_tokenizer():
 
 
 if __name__ == "__main__":
-    pytest.main(sys.argv)
+    # pytest.main(sys.argv)
+    test_serialize_compiled_grammar()
