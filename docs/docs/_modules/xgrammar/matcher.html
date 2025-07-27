@@ -423,16 +423,16 @@ window.addEventListener("load", () => mermaid.run());
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct the grammar matcher.</span>
 
-<span class="sd">            Parameters</span>
-<span class="sd">            ----------</span>
-<span class="sd">            compiled_grammar : CompiledGrammar</span>
-<span class="sd">                The initialization context for the grammar matcher.</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The initialization context for the grammar matcher.</span>
 
-<span class="sd">            override_stop_tokens : Optional[Union[int, List[int]]], default: None</span>
-<span class="sd">                If not None, the stop tokens to override the ones in the grammar.</span>
+<span class="sd">        override_stop_tokens : Optional[Union[int, List[int]]], default: None</span>
+<span class="sd">            If not None, the stop tokens to override the ones in the grammar.</span>
 
-<span class="sd">            terminate_without_stop_token : bool, default: False</span>
-<span class="sd">                Whether to terminate the matcher without accepting a stop token.</span>
+<span class="sd">        terminate_without_stop_token : bool, default: False</span>
+<span class="sd">            Whether to terminate the matcher without accepting a stop token.</span>
 
 <span class="sd">        max_rollback_tokens : int, default: -1</span>
 <span class="sd">            Deprecated because the earley parser significantly reduces the number of states, so not</span>
