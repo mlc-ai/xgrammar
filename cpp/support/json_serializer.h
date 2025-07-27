@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -19,10 +20,12 @@
 #include <type_traits>
 #include <vector>
 
+#include "cpptrace.h"
 #include "encoding.h"
 #include "logging.h"
 #include "reflection.h"
 #include "utils.h"
+#include "xgrammar/object.h"
 
 namespace xgrammar {
 
@@ -295,6 +298,7 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
 
 template <typename T, typename = is_pimpl_class<T>>
 inline picojson::value AutoSerializeJSONValuePImpl(const T& value) {
+  if (value.IsNull()) return picojson::value{};
   return AutoSerializeJSONValue(*value.ImplPtr());
 }
 
@@ -303,6 +307,10 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValuePImpl(
     T* result, const picojson::value& value, const std::string& type_name
 ) {
   XGRAMMAR_DCHECK(result->IsNull());
+  if (value.is<picojson::null>()) {
+    *result = T{NullObj{}};
+    return std::nullopt;
+  }
   auto ptr = std::make_shared<typename T::Impl>();
   if (auto error = AutoDeserializeJSONValue(ptr.get(), value, type_name)) {
     return error;
@@ -323,8 +331,18 @@ inline std::runtime_error ConstructDeserializeError(
   }
 }
 
+static auto recursive_time = 0;
+
 template <typename T>
 inline picojson::value AutoSerializeJSONValue(const T& value) {
+  recursive_time++;
+  struct Guard {
+    ~Guard() { recursive_time--; }
+  } guard;
+  if (recursive_time > 1000) {
+    PrintTrace();
+    throw std::runtime_error("Recursive serialization limit exceeded");
+  }
   if constexpr (detail::json_serializer::has_serialize_json_global<T>::value) {
     // User-defined SerializeJSONValue (highest priority)
     return SerializeJSONValue(value);
@@ -534,7 +552,7 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
         if (auto error = AutoDeserializeJSONValue(&item_value, item, type_name)) {
           return error;
         }
-        result->emplace(key, std::move(item_value));
+        result->try_emplace(key, std::move(item_value));
       }
       return std::nullopt;
     } else {

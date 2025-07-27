@@ -109,8 +109,6 @@ struct alignas(8) FSMEdge {
   int32_t GetRefRuleId() const { return IsRuleRef() ? max : -1; }
 
   friend struct member_trait<FSMEdge>;
-
- private:
 };
 
 /*!
@@ -352,9 +350,9 @@ class CompactFSM {
   // for serialization only
   CompactFSM() = default;
 
-  CompactFSM(const Compact2DArray<FSMEdge>& edges);
+  explicit CompactFSM(const Compact2DArray<FSMEdge>& edges);
 
-  CompactFSM(Compact2DArray<FSMEdge>&& edges);
+  explicit CompactFSM(Compact2DArray<FSMEdge>&& edges);
 
   /****************** CompactFSM Visitors ******************/
 
