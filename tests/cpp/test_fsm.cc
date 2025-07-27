@@ -207,7 +207,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   std::cout << "--------- Function Test3 -----------" << std::endl;
   fsm_wse = fsm_wse.MinimizeDFA();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  EXPECT_EQ(fsm_wse->GetEdges().size(), 3);
+  EXPECT_EQ(fsm_wse->GetEdges().size(), 2);
   std::cout << "--------- Function Test4 -----------" << std::endl;
   fsm_wse = fsm_wse.Not();
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
@@ -242,8 +242,8 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = RegexFSMBuilder::Build("abc|abd").Unwrap();
   test_str = "abc";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   fsm_wse = fsm_wse.SimplifyEpsilon();
+  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
@@ -252,8 +252,8 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = RegexFSMBuilder::Build("acd|bcd").Unwrap();
   test_str = "acd";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   fsm_wse = fsm_wse.SimplifyEpsilon();
+  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));

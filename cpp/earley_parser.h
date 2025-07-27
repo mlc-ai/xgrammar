@@ -7,7 +7,6 @@
 #ifndef XGRAMMAR_EARLEY_PARSER_H_
 #define XGRAMMAR_EARLEY_PARSER_H_
 #include <cstdint>
-#include <map>
 #include <ostream>
 #include <queue>
 #include <unordered_set>
@@ -241,7 +240,7 @@ class EarleyParser {
    * \brief rule_id_to_completeable_states[i][j] is the i pos j rule_id states. Earley
    * parser needs it to complete.
    */
-  std::vector<std::multimap<int32_t, ParserState>> rule_id_to_completeable_states_;
+  std::vector<std::vector<std::pair<int32_t, ParserState>>> rule_id_to_completeable_states_;
 
   /*!
    * \brief The states history. state_stack[i] is a vector storing the states after accepting the
@@ -260,9 +259,6 @@ class EarleyParser {
 
   /*! \brief The class is used to check if a state has been added into the queue. */
   RepeatDetector tmp_states_visited_in_queue_;
-
-  /*! \brief The targets of the fsm edges, used in AdvanceFsm. */
-  std::vector<int> tmp_fsm_targets_;
 
   /*! \brief Check if the stop token is accepted. */
   bool stop_token_is_accepted_ = false;
@@ -288,7 +284,7 @@ class EarleyParser {
    * of the grammar is used to check if the grammar is completed,
    * so it should be added into the next states.
    */
-  void Complete(const ParserState& state, const GrammarExpr& grammar_expr);
+  void Complete(const ParserState& state);
 
   /*!
    * \brief The prediction operation of the Earley parser.
@@ -296,7 +292,7 @@ class EarleyParser {
    * then return true, otherwise return false.
    * \return Second: If the state is completable, then return true, otherwise return false.
    */
-  std::pair<bool, bool> Predict(const ParserState& state, const GrammarExpr& grammar_expr);
+  std::pair<bool, bool> Predict(const ParserState& state);
 
   /*!
    * \brief Handle the unexpanded rule, used for pushing initial state.
@@ -318,6 +314,12 @@ class EarleyParser {
   void ExpandNextRuleRefElement(
       const ParserState& state, const GrammarExpr& grammar_expr, const GrammarExpr* sub_grammar_expr
   );
+
+  /*!
+   * \brief Expand the rule, used for RuleRef and kTagDispatch.
+   * \param state The state to be expanded, and it's should be on the FSM.
+   */
+  void ExpandNextRuleRefElementOnFSM(const ParserState& state);
 
   /*!
    * \brief Advance the parser to the next state, with the sub sequence is kCharacterClass.
@@ -359,7 +361,7 @@ class EarleyParser {
    * \param cur_sequence The sequence of the current state.
    * \return The next state, Invalid state if the character is not accepted.
    */
-  void AdvanceFsm(const ParserState& state, const uint8_t ch, const GrammarExpr& cur_sequence);
+  void AdvanceFsm(const ParserState& state, const uint8_t ch);
 
   /*!
    * \brief Enqueue the state into the queue.
@@ -370,6 +372,17 @@ class EarleyParser {
     if (!IsStateVisitedInQueue(state)) {
       tmp_process_state_queue_.push(state);
       tmp_states_visited_in_queue_.Insert(state);
+    }
+  }
+
+  /*!
+   * \brief Enqueue the state into the queue, without prediction and completion.
+   * \param state The state to be enqueued.
+   */
+  void EnqueueWithoutProcessing(const ParserState& state) {
+    if (!IsStateVisitedInQueue(state)) {
+      tmp_states_visited_in_queue_.Insert(state);
+      tmp_states_to_be_added_.push_back(state);
     }
   }
 

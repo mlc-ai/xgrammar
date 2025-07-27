@@ -1029,6 +1029,12 @@ class GrammarFSMBuilderImpl {
         auto rule_fsm = TagDispatchFSMBuilder::Build((*grammar)->GetTagDispatch(grammar_expr));
         XGRAMMAR_CHECK(rule_fsm.has_value()) << "Failed to build tag dispatch fsm for rule " << i;
         per_rule_fsms[i] = rule_fsm->AddToCompleteFSM(&complete_fsm, &state_mapping);
+      } else {
+        XGRAMMAR_DCHECK(grammar_expr.type == Grammar::Impl::GrammarExprType::kChoices);
+        auto rule_fsm = ChoiceFSMBuilder::Build(grammar_expr, *grammar);
+        if (rule_fsm.has_value()) {
+          per_rule_fsms[i] = rule_fsm->AddToCompleteFSM(&complete_fsm, &state_mapping);
+        }
       }
     }
 
