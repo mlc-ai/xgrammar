@@ -65,6 +65,36 @@ def test_serialize_grammar():
     assert json.loads(serialized) == expected_json
 
 
+def test_serialize_grammar_exception():
+    """Test Grammar serialization produces expected JSON string."""
+    expected_json = {
+        "rules": [["rule1", 4, 9], ["root_rule", 8, -1]],
+        "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
+        "grammar_expr_indptr": [
+            # fmt: off
+            3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7,5,1,6
+            # fmt: on
+        ],
+        "root_rule_id": 1,
+        "allow_empty_rule_ids": [],
+        "complete_fsm": None,
+        "per_rule_fsms": [],
+        "__VERSION__": "v2",  # intentionally incorrect version
+    }
+
+    expected_json["__VERSION__"] = "v1"  # Change version to trigger error
+    with pytest.raises(xgr.DeserializeVersionError):
+        xgr.Grammar.deserialize_json(json.dumps(expected_json))
+
+    expected_json["__VERSION__"] = "v2"
+    expected_json.pop("rules")  # Remove required field to trigger error
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.Grammar.deserialize_json(json.dumps(expected_json))
+
+    with pytest.raises(xgr.InvalidJSONError):
+        xgr.Grammar.deserialize_json("not a valid json string")
+
+
 def test_serialize_grammar_roundtrip():
     """Test Grammar serialization and deserialization roundtrip."""
     original_grammar = construct_grammar()

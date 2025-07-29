@@ -7,6 +7,7 @@ from .config import (
     set_max_recursion_depth,
 )
 from .contrib import hf
+from .exception import DeserializeFormatError, DeserializeVersionError, InvalidJSONError
 from .grammar import Grammar, StructuralTagItem
 from .matcher import (
     GrammarMatcher,
