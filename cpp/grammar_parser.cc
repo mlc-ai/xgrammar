@@ -7,7 +7,6 @@
 
 #include <picojson.h>
 
-#include <cstddef>
 #include <cstdint>
 #include <variant>
 #include <vector>
@@ -808,7 +807,7 @@ int32_t EBNFParser::HandleRepetitionRange(
   if (elements.empty()) {
     return builder_.AddEmptyStr();
   }
-  for (size_t i = 0; i < elements.size() - 1; i++) {
+  for (int64_t i = 0; i < static_cast<int64_t>(elements.size() - 1); i++) {
     lookahead_elements.erase(lookahead_elements.begin());
     builder_.UpdateLookaheadAssertion(
         builder_.GetGrammarExpr(elements[i])[0], builder_.AddSequence(lookahead_elements)
