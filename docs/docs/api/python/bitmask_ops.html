@@ -167,14 +167,7 @@
 <li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="testing.html">xgr.testing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Bitmask Operations</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.allocate_token_bitmask"><code class="docutils literal notranslate"><span class="pre">allocate_token_bitmask()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.apply_token_bitmask_inplace"><code class="docutils literal notranslate"><span class="pre">apply_token_bitmask_inplace()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.reset_token_bitmask"><code class="docutils literal notranslate"><span class="pre">reset_token_bitmask()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.get_bitmask_shape"><code class="docutils literal notranslate"><span class="pre">get_bitmask_shape()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.bitmask_dtype"><code class="docutils literal notranslate"><span class="pre">bitmask_dtype</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Bitmask Operations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
 </ul>
 </li>
@@ -263,107 +256,6 @@
             
   <section id="bitmask-operations">
 <h1>Bitmask Operations<a class="headerlink" href="#bitmask-operations" title="Permalink to this heading">¶</a></h1>
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.allocate_token_bitmask">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">allocate_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.7)"><span class="pre">torch.Tensor</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#allocate_token_bitmask"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.allocate_token_bitmask" title="Permalink to this definition">¶</a></dt>
-<dd><p>Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on
-CPU with shape (batch_size, ceil(vocab_size / 32)). Users who have their own needs to
-manage CUDA memory can construct the tensor with get_bitmask_shape and bitmask_dtype
-themselves.</p>
-<p>The reason why we use int32 instead of uint32 is that old versions of PyTorch do not support
-uint32.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a>) – The batch size of the bitmask.</p></li>
-<li><p><strong>vocab_size</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a>) – The size of the vocabulary.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>bitmask</strong> – The shape of the bitmask.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.7)">torch.Tensor</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.apply_token_bitmask_inplace">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">apply_token_bitmask_inplace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.7)"><span class="pre">torch.Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.7)"><span class="pre">torch.Tensor</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#apply_token_bitmask_inplace"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.apply_token_bitmask_inplace" title="Permalink to this definition">¶</a></dt>
-<dd><p>Apply the bitmask to the logits in-place. The bitmask is a 01 bitwise compressed tensor,
-where 0 means the token is masked and 1 means the token is not masked. It can be generated by
-allocate_token_bitmask and filled by fill_next_token_bitmask. After applying the bitmask, the
-masked logits will be set to -inf.</p>
-<p>The shape of logits and bitmask should be (batch_size, vocab_size) and
-(batch_size, bitmask_size) respectively. bitmask_size = ceil(vocab_size / 32). The operation is:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">vocab_size</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">get_bitmask_value</span><span class="p">(</span><span class="n">bitmask</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">logits</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">inf</span>
-</pre></div>
-</div>
-<p>get_bitmask_value(bitmask, i, j) gets the j-th bit of the i-th row of the bitmask.</p>
-<p class="rubric">Notes</p>
-<dl>
-<dt>Padding:</dt><dd><p>This method allows additional padding on the vocabulary dimension of logits or bitmask. If
-padding exists, provide the real vocab size to the vocab_size parameter, and the operation
-will be applied to logits[…, :vocab_size] and bitmask[…, :ceil(vocab_size / 32)].</p>
-<p>If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],
-bitmask.shape[-1] * 32).</p>
-</dd>
-<dt>Indices:</dt><dd><p>Indices can be used to specify which logits in the batch to apply the bitmask to. It is
-especially useful when there are structured requests and unstructured requests mixed in the
-same batch by skipping masking the logits in the unstructured requests. When specified, the
-operation will be</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">batch_id</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">vocab_size</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">get_bitmask_value</span><span class="p">(</span><span class="n">bitmask</span><span class="p">,</span> <span class="n">batch_id</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">logits</span><span class="p">[</span><span class="n">batch_id</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">inf</span>
-</pre></div>
-</div>
-<p>When indices is specified, the batch sizes of logits and bitmask do not need to be the same.
-As long as the indices are valid, the operation will be performed.</p>
-</dd>
-<dt>Device:</dt><dd><p>The logits and bitmask should be on the same device. If both them are on GPU, we launch a GPU
-kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The GPU kernel
-is optimized and should be preferred.</p>
-<p>In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should
-manually copy the bitmask to GPU before calling this function.</p>
-</dd>
-</dl>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>logits</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.7)"><em>torch.Tensor</em></a>) – The tensor to apply the bitmask to.</p></li>
-<li><p><strong>bitmask</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.7)"><em>torch.Tensor</em></a>) – The bitmask to apply.</p></li>
-<li><p><strong>vocab_size</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>]</em><em>, </em><em>default: None</em>) – The size of the vocabulary. If not provided, the vocab size will be detected as
-min(logits.shape[-1], bitmask.shape[-1] * 32).</p></li>
-<li><p><strong>indices</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>]</em><em>]</em><em>, </em><em>default: None</em>) – A list of indices to specify which logits in the batch to apply the bitmask to. Should be
-unique. If None, apply the bitmask to all logits in the batch.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.reset_token_bitmask">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">reset_token_bitmask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitmask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.7)"><span class="pre">torch.Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#reset_token_bitmask"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.reset_token_bitmask" title="Permalink to this definition">¶</a></dt>
-<dd><p>Reset the bitmask to the full mask.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="xgrammar.get_bitmask_shape">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">get_bitmask_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Tuple" title="(in Python v3.12)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#get_bitmask_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.get_bitmask_shape" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32)).</p>
-</dd></dl>
-
-<dl class="py data">
-<dt class="sig sig-object py" id="xgrammar.bitmask_dtype">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">bitmask_dtype</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></span><a class="headerlink" href="#xgrammar.bitmask_dtype" title="Permalink to this definition">¶</a></dt>
-<dd><p>The dtype of the bitmask: int32.</p>
-</dd></dl>
-
 </section>
 
 

@@ -1,0 +1,394 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Serialization &mdash; XGrammar 0.1.22 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+        <script src="../_static/clipboard.min.js"></script>
+        <script src="../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html">
+          
+
+          
+            
+            <img src="../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.22
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/python/index.html">XGrammar Python API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+      <li>Serialization</li>
+    
+    
+      
+      
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/xgrammar_features/serialization.md" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section class="tex2jax_ignore mathjax_ignore" id="serialization">
+<h1>Serialization<a class="headerlink" href="#serialization" title="Permalink to this heading">¶</a></h1>
+<p>XGrammar supports serialization and deserialization for caching and cross-process and cross-node
+communication purposes. We currently support serialization to and deserialization from JSON.</p>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Permalink to this heading">¶</a></h2>
+<p>The following types are supported:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Grammar</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></p></li>
+</ul>
+<p>Each type has a <code class="docutils literal notranslate"><span class="pre">serialize_json</span></code> method to serialize the type to a JSON string, and
+a <code class="docutils literal notranslate"><span class="pre">deserialize_json</span></code> method to deserialize the type from a JSON string.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span>
+</pre></div>
+</div>
+<section id="xgr-grammar">
+<h3><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code><a class="headerlink" href="#xgr-grammar" title="Permalink to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Construct Grammar</span>
+<span class="n">grammar</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">builtin_json_grammar</span><span class="p">()</span>
+
+<span class="c1"># Serialize to JSON</span>
+<span class="n">grammar_json</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">grammar</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Serialized Grammar: </span><span class="si">{</span><span class="n">grammar_json</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Deserialize from JSON</span>
+<span class="n">grammar_deserialized</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span><span class="n">grammar_json</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Deserialized Grammar: </span><span class="si">{</span><span class="n">grammar_deserialized</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="xgr-tokenizerinfo">
+<h3><code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo</span></code><a class="headerlink" href="#xgr-tokenizerinfo" title="Permalink to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Construct TokenizerInfo</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;meta-llama/Llama-3.1-8B-Instruct&quot;</span><span class="p">)</span>
+<span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">)</span>
+
+<span class="c1"># Serialize to JSON</span>
+<span class="n">tokenizer_info_json</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Serialized TokenizerInfo&quot;</span><span class="p">)</span>
+
+<span class="c1"># Deserialize from JSON</span>
+<span class="n">tokenizer_info_deserialized</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span>
+    <span class="n">tokenizer_info_json</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Deserialized TokenizerInfo&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="xgr-compiledgrammar">
+<h3><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code><a class="headerlink" href="#xgr-compiledgrammar" title="Permalink to this heading">¶</a></h3>
+<p>Each <code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code> is associated with a <code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code>, but multiple <code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code>s can
+share the same <code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code>. Therefore, when serializing a <code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code>, we will not
+include the <code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code>. Instead, we store the metadata of the <code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code>.
+During deserialization, you need to provide a <code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code> object to the <code class="docutils literal notranslate"><span class="pre">deserialize_json</span></code>
+method. XGrammar will check if the metadata of the <code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code> object matches the original one,
+and return a <code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code> associated with the provided <code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code>. If the metadata
+does not match, the deserialization will raise a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Construct CompiledGrammar</span>
+<span class="n">compiler</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info_deserialized</span><span class="p">)</span>
+<span class="n">compiled_grammar</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">CompiledGrammar</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar_deserialized</span><span class="p">)</span>
+
+<span class="c1"># Serialize to JSON</span>
+<span class="n">compiled_grammar_json</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">compiled_grammar</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Serialized CompiledGrammar&quot;</span><span class="p">)</span>
+
+<span class="c1"># Deserialize from JSON</span>
+<span class="n">compiled_grammar_deserialized</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">CompiledGrammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span>
+    <span class="n">compiled_grammar_json</span><span class="p">,</span> <span class="n">tokenizer_info_deserialized</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Deserialized CompiledGrammar&quot;</span><span class="p">)</span>
+
+<span class="c1"># compiled_grammar_deserialized can be used as a normal CompiledGrammar</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="deserialization-errors">
+<h2>Deserialization Errors<a class="headerlink" href="#deserialization-errors" title="Permalink to this heading">¶</a></h2>
+<section id="serialization-version-mismatch">
+<h3>Serialization Version Mismatch<a class="headerlink" href="#serialization-version-mismatch" title="Permalink to this heading">¶</a></h3>
+<p>The serialization version is a string that is used to identify the serialization format. When the
+serialization format is updated in a new version (e.g. the internal data structure of the type is
+changed), the serialization version will be updated.</p>
+<p>The serialization version is added to the serialized JSON string. When the deserialization is
+performed, the serialization version of the JSON string must match the current serialization
+version. If the version is not correct, the deserialization will fail and return a
+<code class="docutils literal notranslate"><span class="pre">std::runtime_error</span></code>.</p>
+<p><strong>Note</strong>: Always check if the deserialization version error is raised.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+<div id="button" class="backtop"><img src="../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>

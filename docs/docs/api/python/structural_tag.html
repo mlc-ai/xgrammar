@@ -166,15 +166,7 @@
 <li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="testing.html">xgr.testing</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Structural Tag</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.StructuralTagItem"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.StructuralTagItem.begin"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.begin</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.StructuralTagItem.schema_"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.schema_</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.StructuralTagItem.end"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem.end</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Structural Tag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
 </ul>
@@ -264,31 +256,6 @@
             
   <section id="structural-tag">
 <h1>Structural Tag<a class="headerlink" href="#structural-tag" title="Permalink to this heading">¶</a></h1>
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.StructuralTagItem">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">StructuralTagItem</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">begin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Type" title="(in Python v3.12)"><span class="pre">Type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">BaseModel</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#StructuralTagItem"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.StructuralTagItem" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
-<p>A structural tag item. See <a class="reference internal" href="grammar.html#xgrammar.Grammar.from_structural_tag" title="xgrammar.Grammar.from_structural_tag"><code class="xref py py-meth docutils literal notranslate"><span class="pre">xgrammar.Grammar.from_structural_tag()</span></code></a> for more details.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.begin">
-<span class="sig-name descname"><span class="pre">begin</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></em><a class="headerlink" href="#xgrammar.StructuralTagItem.begin" title="Permalink to this definition">¶</a></dt>
-<dd><p>The begin tag.</p>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.schema_">
-<span class="sig-name descname"><span class="pre">schema_</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Type" title="(in Python v3.12)"><span class="pre">Type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">BaseModel</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.StructuralTagItem.schema_" title="Permalink to this definition">¶</a></dt>
-<dd><p>The schema.</p>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="xgrammar.StructuralTagItem.end">
-<span class="sig-name descname"><span class="pre">end</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></em><a class="headerlink" href="#xgrammar.StructuralTagItem.end" title="Permalink to this definition">¶</a></dt>
-<dd><p>The end tag.</p>
-</dd></dl>
-
-</dd></dl>
-
 </section>
 
 
