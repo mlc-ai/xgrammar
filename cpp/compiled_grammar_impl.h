@@ -19,6 +19,7 @@
 #include "support/dynamic_bitset.h"
 #include "support/reflection.h"
 #include "xgrammar/compiler.h"
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -123,7 +124,7 @@ class CompiledGrammar::Impl {
 
   friend struct member_trait<Impl>;
   friend picojson::value SerializeJSONValue(const Impl& impl);
-  friend std::optional<std::runtime_error> DeserializeJSONValue(
+  friend std::optional<SerializationError> DeserializeJSONValue(
       CompiledGrammar::Impl* impl,
       const picojson::value& json_value,
       const TokenizerInfo& tokenizer_info

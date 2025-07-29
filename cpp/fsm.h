@@ -23,6 +23,7 @@
 #include "support/compact_2d_array.h"
 #include "support/reflection.h"
 #include "support/utils.h"
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -453,14 +454,14 @@ class CompactFSM {
   FSM ToFSM() const;
 
   friend picojson::value SerializeJSONValue(const CompactFSM& value);
-  friend std::optional<std::runtime_error> DeserializeJSONValue(
+  friend std::optional<SerializationError> DeserializeJSONValue(
       CompactFSM* result, const picojson::value& value, const std::string& type_name
   );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompactFSM);
 };
 
-std::optional<std::runtime_error> DeserializeJSONValue(
+std::optional<SerializationError> DeserializeJSONValue(
     CompactFSM* result, const picojson::value& value, const std::string& type_name = ""
 );
 

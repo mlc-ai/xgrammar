@@ -228,7 +228,7 @@ class DynamicBitset {
     return picojson::value(std::move(result));
   }
 
-  friend std::optional<std::runtime_error> DeserializeJSONValue(
+  friend std::optional<SerializationError> DeserializeJSONValue(
       DynamicBitset* bitset, const picojson::value& value, const std::string& type_name
   ) {
     if (!value.is<picojson::array>()) {

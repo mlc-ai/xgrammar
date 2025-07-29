@@ -164,17 +164,6 @@ class Result {
     return IsOk() ? std::get<T>(std::move(data_)) : std::move(default_value);
   }
 
-  /*!
-   * \brief Get the success value, or throw E if it is an error.
-   * \note It's useful when exposing Result values to Python.
-   */
-  T UnwrapOrThrow() && {
-    if (!IsOk()) {
-      throw std::get<E>(std::move(data_));
-    }
-    return std::get<T>(std::move(data_));
-  }
-
   /*! \brief Map success value to new type using provided function */
   template <typename F, typename U = std::decay_t<std::invoke_result_t<F, T>>>
   Result<U, E> Map(F&& f) && {

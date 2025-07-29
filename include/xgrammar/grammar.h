@@ -15,6 +15,8 @@
 #include <variant>
 #include <vector>
 
+#include "xgrammar/exception.h"
+
 namespace xgrammar {
 
 struct StructuralTagItem {
@@ -175,7 +177,7 @@ class Grammar {
    * \return If the deserialization is successful, return the grammar. Otherwise, return a runtime
    * error with the error message.
    */
-  static std::variant<Grammar, std::runtime_error> DeserializeJSON(const std::string& json_string);
+  static std::variant<Grammar, SerializationError> DeserializeJSON(const std::string& json_string);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(Grammar);
 };

@@ -13,7 +13,6 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -23,6 +22,7 @@
 #include "logging.h"
 #include "reflection.h"
 #include "utils.h"
+#include "xgrammar/exception.h"
 #include "xgrammar/object.h"
 
 namespace xgrammar {
@@ -50,7 +50,7 @@ class SerializeVersion {
    * \brief Checks if the serialized object's version matches the current serialization version.
    * \return An error if the version does not exist or does not match.
    */
-  static std::optional<std::runtime_error> Check(const picojson::object& object);
+  static std::optional<SerializationError> Check(const picojson::object& object);
 
  private:
   /*!
@@ -103,7 +103,7 @@ std::string AutoSerializeJSON(const T& value, bool add_version = false);
  * \return The deserialization error if any.
  */
 template <typename T>
-std::optional<std::runtime_error> AutoDeserializeJSONValue(
+std::optional<SerializationError> AutoDeserializeJSONValue(
     T* result, const picojson::value& value, const std::string& type_name = ""
 );
 
@@ -121,7 +121,7 @@ std::optional<std::runtime_error> AutoDeserializeJSONValue(
  * \return The deserialization error if any.
  */
 template <typename T>
-std::optional<std::runtime_error> AutoDeserializeJSON(
+std::optional<SerializationError> AutoDeserializeJSON(
     T* result,
     const std::string& json_string,
     bool check_version = false,
@@ -134,7 +134,7 @@ std::optional<std::runtime_error> AutoDeserializeJSON(
  * \param type_name The name of the type.
  * \return The constructed runtime error.
  */
-inline std::runtime_error ConstructDeserializeError(
+inline SerializationError ConstructDeserializeError(
     const std::string& error_message, const std::string& type_name
 );
 
@@ -146,14 +146,14 @@ inline void SerializeVersion::Apply(picojson::object* object) {
   (*object)[kXGrammarSerializeVersionKey] = picojson::value(std::string(GetVersion()));
 }
 
-inline std::optional<std::runtime_error> SerializeVersion::Check(const picojson::object& object) {
+inline std::optional<SerializationError> SerializeVersion::Check(const picojson::object& object) {
   if (object.find(kXGrammarSerializeVersionKey) == object.end()) {
-    return std::runtime_error(
+    return DeserializeVersionError(
         std::string("Missing version in serialized object: ") + kXGrammarSerializeVersionKey
     );
   }
   if (object.at(kXGrammarSerializeVersionKey).get<std::string>() != GetVersion()) {
-    return std::runtime_error(
+    return DeserializeVersionError(
         std::string("Wrong version in serialized object: Got ") +
         object.at(kXGrammarSerializeVersionKey).get<std::string>() + ", expected " +
         std::string(GetVersion())
@@ -190,8 +190,8 @@ struct has_deserialize_json_global<
   static_assert(
       std::is_same_v<
           decltype(DeserializeJSONValue(std::declval<T*>(), picojson::value{}, std::string{})),
-          std::optional<std::runtime_error>>,
-      "DeserializeJSONValue must be a global function returning std::optional<std::runtime_error>"
+          std::optional<SerializationError>>,
+      "DeserializeJSONValue must be a global function returning std::optional<SerializationError>"
   );
   static_assert(
       std::is_default_constructible_v<T>,
@@ -236,7 +236,7 @@ inline picojson::value TraitSerializeJSONValue(const T& value) {
 }
 
 template <typename T>
-inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
+inline std::optional<SerializationError> TraitDeserializeJSONValue(
     T* result, const picojson::value& value, const std::string& type_name
 ) {
   using Functor = member_functor<T>;
@@ -247,7 +247,7 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
         return ConstructDeserializeError("Expect an object", type_name);
       }
       const auto& obj = value.get<picojson::object>();
-      std::optional<std::runtime_error> err = std::nullopt;
+      std::optional<SerializationError> err = std::nullopt;
       visit_config<T>([&](auto ptr, const char* name, std::size_t idx) {
         if (err) {
           return;
@@ -275,7 +275,7 @@ inline std::optional<std::runtime_error> TraitDeserializeJSONValue(
             type_name
         );
       }
-      std::optional<std::runtime_error> err = std::nullopt;
+      std::optional<SerializationError> err = std::nullopt;
       visit_config<T>([&](auto ptr, const char*, std::size_t idx) {
         if (err) {
           return;
@@ -301,7 +301,7 @@ inline picojson::value AutoSerializeJSONValuePImpl(const T& value) {
 }
 
 template <typename T, typename = is_pimpl_class<T>>
-inline std::optional<std::runtime_error> AutoDeserializeJSONValuePImpl(
+inline std::optional<SerializationError> AutoDeserializeJSONValuePImpl(
     T* result, const picojson::value& value, const std::string& type_name
 ) {
   XGRAMMAR_DCHECK(result->IsNull());
@@ -319,13 +319,13 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValuePImpl(
 
 }  // namespace detail::json_serializer
 
-inline std::runtime_error ConstructDeserializeError(
+inline SerializationError ConstructDeserializeError(
     const std::string& error_message, const std::string& type_name
 ) {
   if (type_name.empty()) {
-    return std::runtime_error("Deserialize error: " + error_message);
+    return DeserializeFormatError("Deserialize error: " + error_message);
   } else {
-    return std::runtime_error("Deserialize error for type " + type_name + ": " + error_message);
+    return DeserializeFormatError("Deserialize error for type " + type_name + ": " + error_message);
   }
 }
 
@@ -428,7 +428,7 @@ inline std::string AutoSerializeJSON(const T& value, bool add_version) {
 }
 
 template <typename T>
-inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
+inline std::optional<SerializationError> AutoDeserializeJSONValue(
     T* result, const picojson::value& value, const std::string& type_name
 ) {
   static_assert(!std::is_const_v<T>, "Cannot deserialize into a const type");
@@ -585,12 +585,12 @@ inline std::optional<std::runtime_error> AutoDeserializeJSONValue(
 }
 
 template <typename T>
-inline std::optional<std::runtime_error> AutoDeserializeJSON(
+inline std::optional<SerializationError> AutoDeserializeJSON(
     T* result, const std::string& json_string, bool check_version, const std::string& type_name
 ) {
   picojson::value json_value;
   if (auto error = picojson::parse(json_value, json_string); !error.empty()) {
-    return std::runtime_error("Failed to parse JSON: " + error);
+    return InvalidJSONError(error);
   }
   if (check_version) {
     XGRAMMAR_DCHECK(json_value.is<picojson::object>());

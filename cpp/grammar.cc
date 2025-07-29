@@ -15,6 +15,7 @@
 #include "structural_tag.h"
 #include "support/json_serializer.h"
 #include "support/logging.h"
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -170,7 +171,7 @@ std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
 
 std::string Grammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
 
-std::variant<Grammar, std::runtime_error> Grammar::DeserializeJSON(const std::string& json_string) {
+std::variant<Grammar, SerializationError> Grammar::DeserializeJSON(const std::string& json_string) {
   Grammar result{NullObj()};
   if (auto err = AutoDeserializeJSON(&result, json_string, true, "Grammar")) {
     return err.value();

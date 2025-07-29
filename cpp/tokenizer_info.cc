@@ -13,12 +13,14 @@
 #include <stack>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include "support/encoding.h"
 #include "support/json_serializer.h"
 #include "support/logging.h"
 #include "tokenizer_info_impl.h"
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -485,7 +487,7 @@ std::string TokenizerInfo::DetectMetadataFromHF(const std::string& backend_str) 
 
 std::string TokenizerInfo::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
 
-std::variant<TokenizerInfo, std::runtime_error> TokenizerInfo::DeserializeJSON(
+std::variant<TokenizerInfo, SerializationError> TokenizerInfo::DeserializeJSON(
     const std::string& json_string
 ) {
   TokenizerInfo tokenizer_info{NullObj()};

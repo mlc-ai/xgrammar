@@ -11,10 +11,11 @@
 
 #include <cstdint>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
+
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -73,7 +74,7 @@ class TokenizerInfo {
    * \return If the deserialization is successful, return the tokenizer info. Otherwise, return a
    * runtime error with the error message.
    */
-  static std::variant<TokenizerInfo, std::runtime_error> DeserializeJSON(
+  static std::variant<TokenizerInfo, SerializationError> DeserializeJSON(
       const std::string& json_string
   );
 

@@ -17,6 +17,8 @@
 #include <variant>
 #include <vector>
 
+#include "xgrammar/exception.h"
+
 namespace xgrammar {
 
 /*!
@@ -38,7 +40,7 @@ class CompiledGrammar {
   std::string SerializeJSON() const;
 
   /*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
-  static std::variant<CompiledGrammar, std::runtime_error> DeserializeJSON(
+  static std::variant<CompiledGrammar, SerializationError> DeserializeJSON(
       const std::string& json_string, const TokenizerInfo& tokenizer_info
   );
 

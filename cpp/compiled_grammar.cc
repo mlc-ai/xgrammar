@@ -9,6 +9,7 @@
 #include "support/json_serializer.h"
 #include "testing.h"
 #include "tokenizer_info_impl.h"
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -171,7 +172,7 @@ picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   return picojson::value(result);
 }
 
-std::optional<std::runtime_error> DeserializeJSONValue(
+std::optional<SerializationError> DeserializeJSONValue(
     CompiledGrammar::Impl* impl,
     const picojson::value& json_value,
     const TokenizerInfo& tokenizer_info
@@ -218,15 +219,15 @@ TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetToke
 std::string CompiledGrammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
 
 /*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
-std::variant<CompiledGrammar, std::runtime_error> CompiledGrammar::DeserializeJSON(
+std::variant<CompiledGrammar, SerializationError> CompiledGrammar::DeserializeJSON(
     const std::string& json_string, const TokenizerInfo& tokenizer_info
 ) {
   picojson::value json_value;
   if (auto error = picojson::parse(json_value, json_string); !error.empty()) {
-    return std::runtime_error("Failed to parse JSON: " + error);
+    return InvalidJSONError("Failed to parse JSON: " + error);
   }
   if (!json_value.is<picojson::object>()) {
-    return std::runtime_error("Expect an object");
+    return DeserializeFormatError("Expect an object");
   }
   const auto& object = json_value.get<picojson::object>();
   if (auto error = SerializeVersion::Check(object)) {

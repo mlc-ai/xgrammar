@@ -29,6 +29,7 @@
 #include "support/logging.h"
 #include "support/reflection.h"
 #include "support/union_find_set.h"
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -630,7 +631,7 @@ picojson::value SerializeJSONValue(const CompactFSM& value) {
   return detail::json_serializer::AutoSerializeJSONValuePImpl(value);
 }
 
-std::optional<std::runtime_error> DeserializeJSONValue(
+std::optional<SerializationError> DeserializeJSONValue(
     CompactFSM* result, const picojson::value& value, const std::string& type_name
 ) {
   return detail::json_serializer::AutoDeserializeJSONValuePImpl(result, value, type_name);

@@ -17,6 +17,7 @@
 #include "../regex_converter.h"
 #include "../testing.h"
 #include "python_methods.h"
+#include "xgrammar/exception.h"
 
 namespace nb = nanobind;
 using namespace xgrammar;
@@ -48,7 +49,17 @@ std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& 
   return py_result;
 }
 
+template <typename T>
+static void RegisterRuntimeError(nb::module_& m, const char* name) {
+  // to avoid warning, cast to void
+  static_cast<void>(nb::exception<T>{m, name, PyExc_RuntimeError});
+}
+
 NB_MODULE(xgrammar_bindings, m) {
+  RegisterRuntimeError<DeserializeFormatError>(m, "DeserializeFormatError");
+  RegisterRuntimeError<DeserializeVersionError>(m, "DeserializeVersionError");
+  RegisterRuntimeError<InvalidJSONError>(m, "InvalidJSONError");
+
   auto pyTokenizerInfo = nb::class_<TokenizerInfo>(m, "TokenizerInfo");
   pyTokenizerInfo
       .def(
