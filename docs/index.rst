@@ -27,7 +27,6 @@ The mission of this project is to bring flexible zero-overhead structure generat
    :caption: XGrammar Features
 
    xgrammar_features/runtime_safeguards
-   xgrammar_features/serialization
    xgrammar_features/javascript_api
 
 .. toctree::
