@@ -28,6 +28,7 @@
 #include "support/logging.h"
 #include "support/reflection.h"
 #include "support/union_find_set.h"
+#include "support/utils.h"
 #include "xgrammar/exception.h"
 
 namespace xgrammar {
@@ -744,13 +745,21 @@ FSMWithStartEnd FSMWithStartEnd::Optional() const {
   return FSMWithStartEnd(fsm, start_, ends_);
 }
 
-FSMWithStartEnd FSMWithStartEnd::Not() const {
+Result<FSMWithStartEnd> FSMWithStartEnd::Not(int num_of_states_limited) const {
   // Check if the FSM contains any rule references.
   if (!IsLeaf()) {
     XGRAMMAR_LOG(FATAL) << "Not operation is not supported for FSM with rule references.";
   }
-
-  FSMWithStartEnd result = is_dfa_ ? Copy() : ToDFA();
+  FSMWithStartEnd result;
+  if (is_dfa_) {
+    result = Copy();
+  } else {
+    Result<FSMWithStartEnd> dfa_result = ToDFA(num_of_states_limited);
+    if (dfa_result.IsErr()) {
+      return dfa_result;
+    }
+    result = std::move(dfa_result).Unwrap();
+  }
   // Reverse all the final states.
   std::vector<uint8_t> new_final_states(result.NumStates() + 1, false);
   for (int i = 0; i < result->NumStates(); ++i) {
@@ -789,7 +798,7 @@ FSMWithStartEnd FSMWithStartEnd::Not() const {
   }
 
   result.SetEndStates(new_final_states);
-  return result;
+  return ResultOk(result);
 }
 
 FSMWithStartEnd FSMWithStartEnd::Union(const std::vector<FSMWithStartEnd>& fsms) {
@@ -872,9 +881,18 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   if (!lhs.IsLeaf() || !rhs.IsLeaf()) {
     return ResultErr("Intersect only support leaf fsm!");
   }
-  auto lhs_dfa = lhs.ToDFA();
-  auto rhs_dfa = rhs.ToDFA();
+  auto lhs_dfa_raw = lhs.ToDFA();
+  auto rhs_dfa_raw = rhs.ToDFA();
 
+  if (lhs_dfa_raw.IsErr()) {
+    return lhs_dfa_raw;
+  }
+  if (rhs_dfa_raw.IsErr()) {
+    return rhs_dfa_raw;
+  }
+
+  auto lhs_dfa = std::move(lhs_dfa_raw).Unwrap();
+  auto rhs_dfa = std::move(rhs_dfa_raw).Unwrap();
   // Initialize the result FSM.
   FSM result_fsm(0);
   FSMWithStartEnd result(result_fsm, 0, std::vector<uint8_t>(), true);
@@ -1158,13 +1176,17 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
   return result;
 }
 
-FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
+Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int num_of_states_limited) const {
   FSMWithStartEnd now_fsm(FSM(0), 0, std::vector<uint8_t>(), true);
 
   // To perform the algorithm, we must make sure the FSM is
   // a DFA.
   if (!is_dfa_) {
-    now_fsm = ToDFA();
+    Result<FSMWithStartEnd> dfa_raw = ToDFA(num_of_states_limited);
+    if (dfa_raw.IsErr()) {
+      return dfa_raw;
+    }
+    now_fsm = std::move(dfa_raw).Unwrap();
   } else {
     now_fsm = Copy();
   }
@@ -1276,10 +1298,10 @@ FSMWithStartEnd FSMWithStartEnd::MinimizeDFA() const {
     }
   }
   int new_num_states = partitions.size();
-  return now_fsm.RebuildWithMapping(state_mapping, new_num_states);
+  return ResultOk(now_fsm.RebuildWithMapping(state_mapping, new_num_states));
 }
 
-FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
+Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int num_of_states_limited) const {
   FSMWithStartEnd dfa(FSM(0), 0, std::vector<uint8_t>(), true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
@@ -1289,6 +1311,9 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
   fsm_.GetEpsilonClosure(&closure);
   closures.push_back(closure);
   while (now_process < static_cast<int>(closures.size())) {
+    if (static_cast<int64_t>(closures.size()) >= num_of_states_limited) {
+      return ResultErr("Too many states in ToDFA!");
+    }
     rules.clear();
     std::set<int> interval_ends;
     std::bitset<256> allowed_characters;
@@ -1397,7 +1422,8 @@ FSMWithStartEnd FSMWithStartEnd::ToDFA() const {
     }
     now_process++;
   }
-  return dfa;
+  dfa.is_dfa_ = true;
+  return ResultOk(dfa);
 }
 
 /****************** CompactFSMWithStartEnd ******************/

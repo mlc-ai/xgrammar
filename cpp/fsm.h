@@ -702,7 +702,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \brief Return a new FSM representing the complement of the language.
    * \return The complement FSM.
    */
-  FSMWithStartEnd Not() const;
+  Result<FSMWithStartEnd> Not(int num_of_states_limited = 1e6) const;
 
   /*!
    * \brief Intersect the FSMs.
@@ -751,15 +751,17 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
 
   /*!
    * \brief Transform the FSM to a DFA.
+   * \param num_of_states_limited The maximum number of states in the DFA.
    * \return The DFA.
    */
-  FSMWithStartEnd ToDFA() const;
+  Result<FSMWithStartEnd> ToDFA(int num_of_states_limited = 1e6) const;
 
   /*!
    * \brief Minimize the DFA.
+   * \param num_of_states_limited The maximum number of states in the DFA.
    * \return The minimized DFA.
    */
-  FSMWithStartEnd MinimizeDFA() const;
+  Result<FSMWithStartEnd> MinimizeDFA(int num_of_states_limited = 1e6) const;
 };
 
 /*!
