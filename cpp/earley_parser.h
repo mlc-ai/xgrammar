@@ -218,9 +218,9 @@ class EarleyParser {
    * We divide the parser states into three categories:
    * - Scanable (which will be stored in scanable_state_history_).
    * - Predictable(If it predict a new rule successfully, then it will be stored in
-   * rule_id_to_completeable_states).
-   * - Completeable(which can perform a completion operation).
-   * A state will be stored in rule_id_to_completeable_states_ if it can be completed,
+   * rule_id_to_completable_states).
+   * - completable(which can perform a completion operation).
+   * A state will be stored in rule_id_to_completable_states_ if it can be completed,
    * and it will be stored in scanable_state_history_ if it can be scanned. Otherwise,
    * it will be discarded.
    */
@@ -237,10 +237,16 @@ class EarleyParser {
   std::vector<bool> is_completed_;
 
   /*!
-   * \brief rule_id_to_completeable_states[i][j] is the i pos j rule_id states. Earley
+   * \brief rule_id_to_completable_states[i][j] is the i pos j rule_id states. Earley
    * parser needs it to complete.
    */
-  std::vector<std::vector<std::pair<int32_t, ParserState>>> rule_id_to_completeable_states_;
+  Compact2DArray<std::pair<int32_t, ParserState>> rule_id_to_completable_states_;
+
+  /*!
+   * \brief The current rule_id_to_completable_states_, and it will be pushed back
+   * into the compact 2d array when current parsing is done.
+   */
+  std::vector<std::pair<int32_t, ParserState>> tmp_rule_id_to_completable_states_;
 
   /*!
    * \brief The states history. state_stack[i] is a vector storing the states after accepting the
@@ -448,7 +454,7 @@ class EarleyParser {
    * \param state The state to be pushed.
    */
   void PushOneStateToCheck(const ParserState& state) {
-    rule_id_to_completeable_states_.emplace_back();
+    rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
     is_completed_.push_back(is_completed_.back());
     scanable_state_history_.PushBack(&state, 1);
     return;
