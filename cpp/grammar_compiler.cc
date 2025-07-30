@@ -86,7 +86,12 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::string& token, const std::vector<bool>& can_reach_end_stack
   );
 
-  /*! \brief Check if speculative calculation will be applied.*/
+  /*!
+   * \brief Check if speculative calculation will be applied.
+   * \return first: whether speculative calculation is applicable.
+   * \return second: part of the first character mask,
+   * which can be used in speculative calculation.
+   */
   std::pair<bool, std::bitset<256>> GetSpeculativeCalculation(
       const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab
   );
