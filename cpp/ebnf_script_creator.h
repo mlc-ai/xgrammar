@@ -16,6 +16,7 @@
 
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/utils.h"
 
 namespace xgrammar {
 
@@ -58,6 +59,7 @@ class EBNFScriptCreator {
       }
     }
     XGRAMMAR_LOG(FATAL) << "Cannot find a unique rule name for " << rule_name_hint;
+    XGRAMMAR_UNREACHABLE();
   }
 
   /*!
@@ -116,7 +118,7 @@ class EBNFScriptCreator {
    */
   static std::string Str(const std::string& str) {
     std::stringstream ss;
-    ss << "\"" << PrintAsEscapedUTF8(str) << "\"";
+    ss << "\"" << EscapeString(str) << "\"";
     return ss.str();
   }
 

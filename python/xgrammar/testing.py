@@ -295,6 +295,12 @@ def _generate_float_regex(start: Optional[float] = None, end: Optional[float] = 
     return _core.testing._generate_float_regex(start, end)
 
 
+def _print_grammar_fsms(grammar: Grammar) -> str:
+    """Print the FSMs of the grammar. Now the fsms are initialized in the grammar compilation
+    process."""
+    return _core.testing._print_grammar_fsms(grammar._handle)
+
+
 class GrammarFunctor:
     """A utility class for transforming grammars. These methods are called during grammar parsing.
     For test purposes."""

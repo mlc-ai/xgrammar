@@ -26,6 +26,7 @@ sphinxcontrib-napoleon==0.7
 sphinxcontrib_httpdomain==1.8.1
 tiktoken
 tlcpack-sphinx-addon==0.2.2
+tomli
 torch
 transformers
-urllib3<2.0.0
+urllib3>=2.5.0

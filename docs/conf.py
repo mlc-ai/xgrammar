@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 
 import tlcpack_sphinx_addon
+import tomli
 
 # -- General configuration ------------------------------------------------
 
@@ -11,10 +12,10 @@ os.environ["XGRAMMAR_BUILD_DOCS"] = "1"
 sys.path.insert(0, os.path.abspath("../python"))
 sys.path.insert(0, os.path.abspath("../"))
 
-version_file = "../python/xgrammar/version.py"
-with open(version_file, "r") as f:
-    exec(compile(f.read(), version_file, "exec"))
-__version__ = locals()["__version__"]
+# Load version from pyproject.toml
+with open("../pyproject.toml", "rb") as f:
+    pyproject_data = tomli.load(f)
+__version__ = pyproject_data["project"]["version"]
 
 project = "XGrammar"
 author = "XGrammar Contributors"

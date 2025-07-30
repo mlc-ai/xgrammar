@@ -1,17 +1,17 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_serializer.h
+ * \file xgrammar/grammar_printer.h
  * \brief The header for printing the AST of a BNF grammar.
  */
 
-#ifndef XGRAMMAR_GRAMMAR_SERIALIZER_H_
-#define XGRAMMAR_GRAMMAR_SERIALIZER_H_
+#ifndef XGRAMMAR_GRAMMAR_PRINTER_H_
+#define XGRAMMAR_GRAMMAR_PRINTER_H_
 
 #include <xgrammar/xgrammar.h>
 
 #include <string>
 
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 
 namespace xgrammar {
 
@@ -60,10 +60,16 @@ class GrammarPrinter {
   std::string PrintChoices(const GrammarExpr& grammar_expr);
   /*! \brief Print a GrammarExpr for tag dispatch. */
   std::string PrintTagDispatch(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for repeat. */
+  std::string PrintRepeat(const GrammarExpr& grammar_expr);
+  /*! \brief Print a string. */
+  std::string PrintString(const std::string& str);
+  /*! \brief Print a boolean. */
+  std::string PrintBoolean(bool value);
 
   Grammar grammar_;
 };
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_SERIALIZER_H_
+#endif  // XGRAMMAR_GRAMMAR_PRINTER_H_

@@ -1,9 +1,9 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_serializer.cc
+ * \file xgrammar/grammar_printer.cc
  */
 
-#include "grammar_serializer.h"
+#include "grammar_printer.h"
 
 #include <picojson.h>
 
@@ -42,8 +42,11 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintChoices(grammar_expr);
     case GrammarExprType::kTagDispatch:
       return PrintTagDispatch(grammar_expr);
+    case GrammarExprType::kRepeat:
+      return PrintRepeat(grammar_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected GrammarExpr type: " << static_cast<int>(grammar_expr.type);
+      XGRAMMAR_UNREACHABLE();
   }
 }
 
@@ -57,7 +60,7 @@ std::string GrammarPrinter::PrintByteString(const GrammarExpr& grammar_expr) {
   for (int i = 0; i < grammar_expr.data_len; ++i) {
     internal_str += static_cast<char>(grammar_expr[i]);
   }
-  return "\"" + PrintAsEscapedUTF8(internal_str) + "\"";
+  return "\"" + EscapeString(internal_str) + "\"";
 }
 
 std::string GrammarPrinter::PrintCharacterClass(const GrammarExpr& grammar_expr) {
@@ -70,12 +73,12 @@ std::string GrammarPrinter::PrintCharacterClass(const GrammarExpr& grammar_expr)
     result += "^";
   }
   for (auto i = 1; i < grammar_expr.data_len; i += 2) {
-    result += PrintAsEscapedUTF8(grammar_expr[i], kCustomEscapeMap);
+    result += EscapeString(grammar_expr[i], kCustomEscapeMap);
     if (grammar_expr[i] == grammar_expr[i + 1]) {
       continue;
     }
     result += "-";
-    result += PrintAsEscapedUTF8(grammar_expr[i + 1], kCustomEscapeMap);
+    result += EscapeString(grammar_expr[i + 1], kCustomEscapeMap);
   }
   result += "]";
   return result;
@@ -118,16 +121,41 @@ std::string GrammarPrinter::PrintChoices(const GrammarExpr& grammar_expr) {
   return result;
 }
 
+std::string GrammarPrinter::PrintString(const std::string& str) {
+  return "\"" + EscapeString(str) + "\"";
+}
+
+std::string GrammarPrinter::PrintBoolean(bool value) { return value ? "true" : "false"; }
+
 std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
-  std::string result = "TagDispatch(";
-  for (int i = 0; i < grammar_expr.data_len; i += 2) {
-    result += "(" + PrintGrammarExpr(grammar_expr[i]) + ", " +
-              grammar_->GetRule(grammar_expr[i + 1]).name + ")";
-    if (i + 2 != grammar_expr.data_len) {
+  auto tag_dispatch = grammar_->GetTagDispatch(grammar_expr);
+  std::string result = "TagDispatch(\n";
+  std::string indent = "  ";
+  for (const auto& [tag, rule_id] : tag_dispatch.tag_rule_pairs) {
+    result += indent + "(" + PrintString(tag) + ", " + grammar_->GetRule(rule_id).name + "),\n";
+  }
+  result += indent + "stop_eos=" + PrintBoolean(tag_dispatch.stop_eos) + ",\n";
+  result += indent + "stop_str=(";
+  for (int i = 0; i < static_cast<int>(tag_dispatch.stop_str.size()); ++i) {
+    result += PrintString(tag_dispatch.stop_str[i]);
+    if (i + 1 != static_cast<int>(tag_dispatch.stop_str.size())) {
       result += ", ";
     }
   }
+  result += "),\n";
+  result += indent + "loop_after_dispatch=" + PrintBoolean(tag_dispatch.loop_after_dispatch) + "\n";
   result += ")";
+  return result;
+}
+
+std::string GrammarPrinter::PrintRepeat(const GrammarExpr& grammar_expr) {
+  int32_t lower_bound = grammar_expr[1];
+  int32_t upper_bound = grammar_expr[2];
+  std::string result = grammar_->GetRule(grammar_expr[0]).name + "{";
+  result += std::to_string(lower_bound);
+  result += ", ";
+  result += std::to_string(upper_bound);
+  result += "}";
   return result;
 }
 

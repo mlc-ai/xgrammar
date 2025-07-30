@@ -7,12 +7,15 @@
 
 #include <picojson.h>
 
+#include <cstdint>
 #include <variant>
+#include <vector>
 
 #include "grammar_builder.h"
-#include "grammar_data_structure.h"
+#include "grammar_impl.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -173,7 +176,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseStringToken() {
   // Convert codepoints to UTF-8 string value
   std::string value;
   for (auto codepoint : codepoints) {
-    value += PrintAsUTF8(codepoint);
+    value += CharToUTF8(codepoint);
   }
 
   return {TokenType::StringLiteral, lexeme, value, start_line, start_column};
@@ -757,57 +760,59 @@ int32_t EBNFParser::HandleQuestionQuantifier(int32_t grammar_expr_id) {
   return builder_.AddRuleRef(new_rule_id);
 }
 
-int32_t EBNFParser::HandleRepetitionRange(int32_t grammar_expr_id, int64_t lower, int64_t upper) {
-  // Construct expr expr ... expr (l times)
-  std::vector<int32_t> elements;
-  for (int64_t i = 0; i < lower; ++i) {
-    elements.push_back(grammar_expr_id);
-  }
-
-  // Case 1: {l}:
-  // expr expr ... expr (l times)
-  if (upper == lower) {
-    return builder_.AddSequence(elements);
-  }
-
-  // Case 2: {l,}:
-  // expr expr ... expr (l times) rest
-  // rest ::= "" | expr rest
+int32_t EBNFParser::HandleRepetitionRange(
+    const int32_t grammar_expr_id, int64_t lower, int64_t upper
+) {
   if (upper == -1) {
-    auto new_rule_name = builder_.GetNewRuleName(cur_rule_name_);
-    auto new_rule_id = builder_.AddEmptyRule(new_rule_name);
-    auto ref_to_new_rule = builder_.AddRuleRef(new_rule_id);
-    auto new_grammar_expr_id = builder_.AddChoices(
-        {builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id, ref_to_new_rule})}
-    );
-    builder_.UpdateRuleBody(new_rule_id, new_grammar_expr_id);
+    // The repeation is unbounded, e.g. {2,}
+    upper = 0x7FFFFFFF;  // Use a large number to represent unbounded
+  }
+  const auto repeat_name = builder_.GetNewRuleName(cur_rule_name_) + "_xgrammar_repetition_context";
+  std::vector<int32_t> elements;
+  int splited_count = lower >= 4 ? 4 : lower;
+  int nullable_splited_count = 0;
+  if (splited_count != 4) {
+    nullable_splited_count =
+        (upper - lower) >= (4 - splited_count) ? 4 - splited_count : upper - lower;
+  }
+  // The repetition sentence.
+  if (upper != (splited_count + nullable_splited_count)) {
+    auto new_rule_name = builder_.GetNewRuleName(repeat_name);
+    auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
+    auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
+    elements.push_back(builder_.AddRepeat(
+        new_rule_id, lower - splited_count, upper - splited_count - nullable_splited_count
+    ));
+  }
+  // The last split_count exprs.
+
+  // The nullable exprs.
+  for (int i = 0; i < nullable_splited_count; i++) {
+    auto new_rule_name = builder_.GetNewRuleName(repeat_name);
+    auto new_grammar_expr_id =
+        builder_.AddChoices({builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id})});
+    auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
     elements.push_back(builder_.AddRuleRef(new_rule_id));
-    return builder_.AddSequence(elements);
   }
 
-  // Case 3: {l, r} (r - l >= 1)
-  // expr expr ... expr (l times) rest1
-  // rest1 ::= "" | expr rest2
-  // rest2 ::= "" | expr rest3
-  // ...
-  // rest(r - l) ::= "" | expr
-  std::vector<int32_t> rest_rule_ids;
-
-  for (int64_t i = 0; i < upper - lower; ++i) {
-    auto new_rule_name = builder_.GetNewRuleName(cur_rule_name_);
-    rest_rule_ids.push_back(builder_.AddEmptyRule(new_rule_name));
+  for (int i = 0; i < splited_count; i++) {
+    auto new_rule_name = builder_.GetNewRuleName(repeat_name);
+    auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
+    auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
+    elements.push_back(builder_.AddRuleRef(new_rule_id));
   }
-  for (int64_t i = 0; i < upper - lower - 1; ++i) {
-    auto ref_to_next_rule = builder_.AddRuleRef(rest_rule_ids[i + 1]);
-    auto new_grammar_expr_id = builder_.AddChoices(
-        {builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id, ref_to_next_rule})}
+
+  // Add the lookahead elements
+  std::vector<int32_t> lookahead_elements = elements;
+  if (elements.empty()) {
+    return builder_.AddEmptyStr();
+  }
+  for (int64_t i = 0; i < static_cast<int64_t>(elements.size() - 1); i++) {
+    lookahead_elements.erase(lookahead_elements.begin());
+    builder_.UpdateLookaheadAssertion(
+        builder_.GetGrammarExpr(elements[i])[0], builder_.AddSequence(lookahead_elements)
     );
-    builder_.UpdateRuleBody(rest_rule_ids[i], new_grammar_expr_id);
   }
-  auto last_grammar_expr_id = builder_.AddChoices({builder_.AddEmptyStr(), grammar_expr_id});
-  builder_.UpdateRuleBody(rest_rule_ids.back(), last_grammar_expr_id);
-
-  elements.push_back(builder_.AddRuleRef(rest_rule_ids[0]));
   return builder_.AddSequence(elements);
 }
 
@@ -948,10 +953,10 @@ int32_t EBNFParser::ParseTagDispatch() {
   auto start = current_token_;
   auto args = ParseMacroArguments();
   auto delta_element = start - current_token_;  // Used to report parse errors
-  // Process the arguments for TagDispatch
-  std::vector<std::pair<int32_t, int32_t>> tag_rule_pairs;
 
-  // Process each argument in the form of ("tag", rule_name)
+  Grammar::Impl::TagDispatch tag_dispatch;
+
+  // Position parameters: ("tag", rule_name)
   for (const auto& arg : args.arguments) {
     auto tuple_node = std::get_if<MacroIR::TupleNode>(arg.get());
     if (tuple_node == nullptr) {
@@ -967,8 +972,6 @@ int32_t EBNFParser::ParseTagDispatch() {
     if (tag_str_node == nullptr || tag_str_node->value.empty()) {
       ReportParseError("Tag must be a non-empty string literal", delta_element);
     }
-    auto tag_id = builder_.AddByteString(tag_str_node->value);
-
     // Second element should be an identifier (rule name)
     auto rule_name_node = std::get_if<MacroIR::IdentifierNode>(tuple_node->elements[1].get());
     if (rule_name_node == nullptr) {
@@ -980,10 +983,54 @@ int32_t EBNFParser::ParseTagDispatch() {
       ReportParseError("Rule \"" + rule_name_node->name + "\" is not defined", delta_element);
     }
 
-    tag_rule_pairs.push_back({tag_id, rule_id});
+    tag_dispatch.tag_rule_pairs.push_back({tag_str_node->value, rule_id});
   }
 
-  return builder_.AddTagDispatch(tag_rule_pairs);
+  // stop_eos
+  tag_dispatch.stop_eos = true;
+  if (auto it = args.named_arguments.find("stop_eos"); it != args.named_arguments.end()) {
+    auto bool_node = std::get_if<MacroIR::BooleanNode>(it->second.get());
+    if (bool_node == nullptr) {
+      ReportParseError("stop_eos must be a boolean literal", delta_element);
+    }
+    tag_dispatch.stop_eos = bool_node->value;
+  }
+
+  // stop_str
+  if (auto it = args.named_arguments.find("stop_str"); it != args.named_arguments.end()) {
+    auto tuple_node = std::get_if<MacroIR::TupleNode>(it->second.get());
+    if (tuple_node == nullptr) {
+      ReportParseError("Stop strings must be a tuple", delta_element);
+    }
+
+    for (const auto& element : tuple_node->elements) {
+      auto stop_str_node = std::get_if<MacroIR::StringNode>(element.get());
+      if (stop_str_node == nullptr || stop_str_node->value.empty()) {
+        ReportParseError("Stop string must be a non-empty string literal", delta_element);
+      }
+      tag_dispatch.stop_str.push_back(stop_str_node->value);
+    }
+  }
+
+  // loop_after_dispatch
+  tag_dispatch.loop_after_dispatch = true;
+  if (auto it = args.named_arguments.find("loop_after_dispatch");
+      it != args.named_arguments.end()) {
+    auto bool_node = std::get_if<MacroIR::BooleanNode>(it->second.get());
+    if (bool_node == nullptr) {
+      ReportParseError("loop_after_dispatch must be a boolean literal", delta_element);
+    }
+    tag_dispatch.loop_after_dispatch = bool_node->value;
+  }
+
+  // Well formed check
+  if (!tag_dispatch.stop_eos && tag_dispatch.stop_str.empty()) {
+    ReportParseError(
+        "The TagDispatch must have stop_eos=true or stop_str is not empty", delta_element
+    );
+  }
+
+  return builder_.AddTagDispatch(tag_dispatch);
 }
 
 int32_t EBNFParser::ParseLookaheadAssertion() {

@@ -10,8 +10,12 @@
 #include <xgrammar/object.h>
 
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
+
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -133,6 +137,7 @@ class Grammar {
 
   /*!
    * \brief Get the grammar of standard JSON format. We have built-in support for JSON.
+   * \return The grammar of standard JSON format.
    */
   static Grammar BuiltinJSONGrammar();
 
@@ -152,14 +157,27 @@ class Grammar {
    */
   static Grammar Concat(const std::vector<Grammar>& grammars);
 
-  /*! \brief Print a BNF grammar. */
+  /*!
+   * \brief Print a BNF grammar.
+   * \param os The output stream.
+   * \param grammar The grammar to print.
+   * \return The output stream.
+   */
   friend std::ostream& operator<<(std::ostream& os, const Grammar& grammar);
 
-  /*! \brief Return the serialized JSON string of the grammar. */
+  /*!
+   * \brief Return the serialized JSON string of the grammar.
+   * \return The serialized JSON string.
+   */
   std::string SerializeJSON() const;
 
-  /*! \brief Deserialize a grammar from a JSON string. */
-  static Grammar DeserializeJSON(const std::string& json_string);
+  /*!
+   * \brief Deserialize a grammar from a JSON string.
+   * \param json_string The JSON string to deserialize.
+   * \return If the deserialization is successful, return the grammar. Otherwise, return a runtime
+   * error with the error message.
+   */
+  static std::variant<Grammar, SerializationError> DeserializeJSON(const std::string& json_string);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(Grammar);
 };

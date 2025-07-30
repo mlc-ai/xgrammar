@@ -2117,7 +2117,7 @@ Result<JSONSchemaConverter::ArraySpec, SchemaError> JSONSchemaConverter::ParseAr
     }
   }
 
-  return Result<ArraySpec, SchemaError>::Ok(ArraySpec{
+  return ResultOk(ArraySpec{
       prefix_item_schemas, allow_additional_items, additional_item_schema, min_items, max_items
   });
 }
@@ -2282,7 +2282,7 @@ std::string JSONSchemaConverter::GetOtherPropertyPattern(
 std::string JSONSchemaConverter::GetPropertyWithNumberConstrains(
     const std::string& pattern, int min_properties, int max_properties, int already_repeated_times
 ) {
-  XGRAMMAR_DCHECK(max_properties >= already_repeated_times);
+  XGRAMMAR_DCHECK(max_properties >= already_repeated_times || max_properties == -1);
   if (max_properties == already_repeated_times) {
     return "\"\"";
   }
@@ -2416,7 +2416,6 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     if (allow_additional) {
       key_matched_min.back() = std::max(1, key_matched_min.back());
     } else {
-      XGRAMMAR_DCHECK(key_matched_min.back() <= max_properties);
       key_matched_min.back() = std::max(min_properties, key_matched_min.back());
     }
     for (int i = properties_size - 2; i >= 0; --i) {
@@ -2777,7 +2776,7 @@ Result<JSONSchemaConverter::ObjectSpec, SchemaError> JSONSchemaConverter::ParseO
     );
   }
 
-  return Result<ObjectSpec, SchemaError>::Ok(ObjectSpec{
+  return ResultOk(ObjectSpec{
       properties,
       pattern_properties,
       allow_additional_properties,

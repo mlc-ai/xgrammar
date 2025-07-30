@@ -58,6 +58,12 @@ class TypedError : public std::runtime_error {
   T type_;
 };
 
+/*!
+ * \brief A partial result type that can be used to construct a Result. Holds a result value or an
+ * error value.
+ * \tparam T The type of the value
+ * \tparam IsOk Whether the result is ok
+ */
 template <typename T, bool IsOk>
 struct PartialResult {
   template <typename... Args>
@@ -135,9 +141,6 @@ class Result {
   Result(PartialResult<U, true>&& partial_result)
       : data_(std::in_place_type<T>, std::forward<U>(partial_result.value)) {}
 
-  /*! \brief Construct a success Result by moving T */
-  static Result Ok(T&& value) { return Result(std::in_place_type<T>, std::move(value)); }
-
   /*! \brief Check if Result contains success value */
   bool IsOk() const { return std::holds_alternative<T>(data_); }
 
@@ -159,17 +162,6 @@ class Result {
   /*! \brief Get the success value if present, otherwise return the provided default */
   T UnwrapOr(T default_value) && {
     return IsOk() ? std::get<T>(std::move(data_)) : std::move(default_value);
-  }
-
-  /*!
-   * \brief Get the success value, or throw E if it is an error.
-   * \note It's useful when exposing Result values to Python.
-   */
-  T UnwrapOrThrow() && {
-    if (!IsOk()) {
-      throw std::get<E>(std::move(data_));
-    }
-    return std::get<T>(std::move(data_));
   }
 
   /*! \brief Map success value to new type using provided function */

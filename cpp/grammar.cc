@@ -5,14 +5,32 @@
 
 #include <xgrammar/grammar.h>
 
+#include <string>
+
 #include "grammar_functor.h"
 #include "grammar_parser.h"
-#include "grammar_serializer.h"
+#include "grammar_printer.h"
 #include "json_schema_converter.h"
 #include "regex_converter.h"
 #include "structural_tag.h"
+#include "support/json_serializer.h"
+#include "support/logging.h"
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
+
+/******************* Grammar::Impl *******************/
+
+std::size_t MemorySize(const Grammar::Impl& impl) {
+  /// TODO: Now, we evaluatve memory size of rule strings as sizeof(std::string),
+  /// with an assumption that the string is small.
+  /// This should be improved in the future.
+  return impl.rules_.size() * sizeof(std::string) + MemorySize(impl.grammar_expr_data_) +
+         MemorySize(impl.grammar_expr_indptr_) + MemorySize(impl.complete_fsm) +
+         MemorySize(impl.per_rule_fsms) + MemorySize(impl.allow_empty_rule_ids);
+}
+
+/******************* Grammar *******************/
 
 std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString(); }
 
@@ -149,6 +167,16 @@ Grammar Grammar::Concat(const std::vector<Grammar>& grammars) {
 std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
   os << grammar.ToString();
   return os;
+}
+
+std::string Grammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
+
+std::variant<Grammar, SerializationError> Grammar::DeserializeJSON(const std::string& json_string) {
+  Grammar result{NullObj()};
+  if (auto err = AutoDeserializeJSON(&result, json_string, true, "Grammar")) {
+    return err.value();
+  }
+  return result;
 }
 
 }  // namespace xgrammar

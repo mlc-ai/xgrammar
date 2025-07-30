@@ -5,7 +5,7 @@
 
 set -euxo pipefail
 
-cd "$(dirname "${BASH_SOURCE[0]}")/../build" && ninja
+cd "$(dirname "${BASH_SOURCE[0]}")/../build" && cmake .. -G Ninja && ninja
 
 if [ $# -gt 0 ]; then
   # If a test name is given, run only that test

@@ -13,11 +13,14 @@
 #include <stack>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include "support/encoding.h"
+#include "support/json_serializer.h"
 #include "support/logging.h"
 #include "tokenizer_info_impl.h"
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -296,25 +299,29 @@ TokenizerInfo::Impl::Impl(
   std::sort(sorted_decoded_vocab_.begin(), sorted_decoded_vocab_.end(), f_compare_token);
 
   // The value means: the subtree is [i, trie_subtree_nodes_range[i]).
-  trie_subtree_nodes_range.resize(sorted_decoded_vocab_.size(), 0);
+  trie_subtree_nodes_range_.resize(sorted_decoded_vocab_.size(), 0);
   std::stack<std::pair<std::string, int32_t>> prefix_stack;
   for (size_t i = 0; i < sorted_decoded_vocab_.size(); ++i) {
     const auto& token = sorted_decoded_vocab_[i].second;
     while ((!prefix_stack.empty()) && (token.find(prefix_stack.top().first) == std::string::npos)) {
       const auto& top_pair = prefix_stack.top();
-      trie_subtree_nodes_range[top_pair.second] = i;
+      trie_subtree_nodes_range_[top_pair.second] = i;
       prefix_stack.pop();
     }
     prefix_stack.push({token, i});
   }
   while (!prefix_stack.empty()) {
     const auto& top_pair = prefix_stack.top();
-    trie_subtree_nodes_range[top_pair.second] = sorted_decoded_vocab_.size();
+    trie_subtree_nodes_range_[top_pair.second] = sorted_decoded_vocab_.size();
     prefix_stack.pop();
   }
 }
 
 std::string TokenizerInfo::Impl::DumpMetadata() const {
+  return DumpMetadataValue().serialize(false);
+}
+
+picojson::value TokenizerInfo::Impl::DumpMetadataValue() const {
   picojson::object obj;
   obj["vocab_type"] = picojson::value(static_cast<int64_t>(vocab_type_));
   obj["vocab_size"] = picojson::value(static_cast<int64_t>(vocab_size_));
@@ -323,9 +330,63 @@ std::string TokenizerInfo::Impl::DumpMetadata() const {
   for (auto id : stop_token_ids_) {
     stop_token_ids_array.push_back(picojson::value(static_cast<int64_t>(id)));
   }
-  obj["stop_token_ids"] = picojson::value(stop_token_ids_array);
+  obj["stop_token_ids"] = picojson::value(std::move(stop_token_ids_array));
 
-  return picojson::value(obj).serialize(false);
+  return picojson::value(std::move(obj));
+}
+
+std::optional<std::runtime_error> TokenizerInfo::Impl::CheckMetadataMatch(
+    const picojson::value& metadata
+) const {
+  if (!metadata.is<picojson::object>()) {
+    return std::runtime_error("Expect an object");
+  }
+  const auto& object = metadata.get<picojson::object>();
+  if (object.find("vocab_type") == object.end()) {
+    return std::runtime_error("Missing 'vocab_type' in metadata");
+  }
+  auto vocab_type = object.at("vocab_type").get<int64_t>();
+  if (vocab_type != static_cast<int64_t>(vocab_type_)) {
+    return std::runtime_error(
+        "Vocab type mismatch: " + std::to_string(vocab_type) +
+        " != " + std::to_string(static_cast<int64_t>(vocab_type_))
+    );
+  }
+  if (object.find("vocab_size") == object.end()) {
+    return std::runtime_error("Missing 'vocab_size' in metadata");
+  }
+  auto vocab_size = object.at("vocab_size").get<int64_t>();
+  if (vocab_size != vocab_size_) {
+    return std::runtime_error(
+        "Vocab size mismatch: " + std::to_string(vocab_size) + " != " + std::to_string(vocab_size_)
+    );
+  }
+  if (object.find("add_prefix_space") == object.end()) {
+    return std::runtime_error("Missing 'add_prefix_space' in metadata");
+  }
+  auto add_prefix_space = object.at("add_prefix_space").get<bool>();
+  if (add_prefix_space != add_prefix_space_) {
+    return std::runtime_error(
+        "Add prefix space mismatch: " + std::to_string(add_prefix_space) +
+        " != " + std::to_string(add_prefix_space_)
+    );
+  }
+  if (object.find("stop_token_ids") == object.end()) {
+    return std::runtime_error("Missing 'stop_token_ids' in metadata");
+  }
+  auto stop_token_ids = object.at("stop_token_ids").get<picojson::array>();
+  std::vector<int32_t> stop_token_ids_vec;
+  stop_token_ids_vec.reserve(stop_token_ids.size());
+  for (const auto& id : stop_token_ids) {
+    if (!id.is<int64_t>()) {
+      return std::runtime_error("Stop token id is not an integer");
+    }
+    stop_token_ids_vec.push_back(static_cast<int32_t>(id.get<int64_t>()));
+  }
+  if (stop_token_ids_vec != stop_token_ids_) {
+    return std::runtime_error("Stop token ids mismatch");
+  }
+  return std::nullopt;
 }
 
 std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
@@ -422,6 +483,18 @@ TokenizerInfo TokenizerInfo::FromVocabAndMetadata(
 
 std::string TokenizerInfo::DetectMetadataFromHF(const std::string& backend_str) {
   return Impl::DetectMetadataFromHF(backend_str);
+}
+
+std::string TokenizerInfo::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
+
+std::variant<TokenizerInfo, SerializationError> TokenizerInfo::DeserializeJSON(
+    const std::string& json_string
+) {
+  TokenizerInfo tokenizer_info{NullObj()};
+  if (auto err = AutoDeserializeJSON(&tokenizer_info, json_string, true, "TokenizerInfo")) {
+    return err.value();
+  }
+  return tokenizer_info;
 }
 
 }  // namespace xgrammar

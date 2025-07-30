@@ -1,5 +1,6 @@
 [project]
 name = "xgrammar"
+version = "0.1.22"
 description = "Efficient, Flexible and Portable Structured Generation"
 authors = [{ name = "MLC Team" }]
 readme = "README.md"
@@ -21,8 +22,8 @@ dependencies = [
   "mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'",
   "ninja",
   "numpy",
+  "typing-extensions>=4.9.0",
 ]
-dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://xgrammar.mlc.ai/"
@@ -39,10 +40,6 @@ test = [
   # https://github.com/huggingface/transformers/issues/36906
   "transformers<4.50.0; platform_system == 'Darwin'",
 ]
-
-[tool.scikit-build.metadata.version]
-provider = "scikit_build_core.metadata.regex"
-input = "python/xgrammar/version.py"
 
 [build-system]
 requires = ["scikit-build-core>=0.10.0", "nanobind==2.5.0"]

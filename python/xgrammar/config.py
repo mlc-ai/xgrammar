@@ -51,3 +51,14 @@ def max_recursion_depth(temp_depth: int):
         yield
     finally:
         set_max_recursion_depth(prev_depth)
+
+
+def get_serialization_version() -> str:
+    """Get the serialization version number. The current version is "v4".
+
+    Returns
+    -------
+    serialization_version : str
+        The serialization version number.
+    """
+    return _core.config.get_serialization_version()

@@ -1,10 +1,10 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/compiled_grammar_data_structure.h
+ * \file xgrammar/compiled_grammar_impl.h
  * \brief The header for the data structures of the compiled grammar.
  */
-#ifndef XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
-#define XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
+#ifndef XGRAMMAR_COMPILED_GRAMMAR_IMPL_H_
+#define XGRAMMAR_COMPILED_GRAMMAR_IMPL_H_
 
 #include <xgrammar/grammar.h>
 
@@ -17,9 +17,9 @@
 
 #include "earley_parser.h"
 #include "support/dynamic_bitset.h"
-#include "support/reflection/reflection.h"
-#include "support/utils.h"
+#include "support/reflection.h"
 #include "xgrammar/compiler.h"
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -51,7 +51,7 @@ struct AdaptiveTokenMask {
   };
   StoreType store_type;
 
-  static constexpr int USE_BITSET_THRESHOLD = 200;
+  static constexpr int USE_BITSET_THRESHOLD = 1000;
 
   std::vector<int32_t> accepted_indices;
   std::vector<int32_t> rejected_indices;
@@ -59,6 +59,7 @@ struct AdaptiveTokenMask {
 
   std::vector<int32_t> uncertain_indices;
 
+  /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;
 
   AdaptiveTokenMask(
@@ -78,16 +79,23 @@ struct AdaptiveTokenMask {
 
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
-  std::size_t MemorySize() const;
-  friend std::size_t MemorySize(const AdaptiveTokenMask& mask);
+  friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
+    return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
+           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset);
+  }
 };
 
-XGRAMMAR_MEMBER_ARRAY(
+XGRAMMAR_MEMBER_TABLE(
     AdaptiveTokenMask,
+    "store_type",
     &AdaptiveTokenMask::store_type,
+    "accepted_indices",
     &AdaptiveTokenMask::accepted_indices,
+    "rejected_indices",
     &AdaptiveTokenMask::rejected_indices,
+    "accepted_bitset",
     &AdaptiveTokenMask::accepted_bitset,
+    "uncertain_indices",
     &AdaptiveTokenMask::uncertain_indices
 );
 
@@ -98,15 +106,14 @@ XGRAMMAR_MEMBER_ARRAY(
  */
 class CompiledGrammar::Impl {
  public:
-  /******************* The grammar and tokenizer info *******************/
-
   /*! \brief The grammar for the GrammarMatcher. */
   Grammar grammar{NullObj{}};
 
   /*! \brief The tokenizer information. */
   TokenizerInfo tokenizer_info{NullObj{}};
 
-  /******************* The adaptive token mask cache *******************/
+  /*! \brief Default constructor. */
+  Impl() = default;
 
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache> adaptive_token_mask_cache;
@@ -115,9 +122,14 @@ class CompiledGrammar::Impl {
 
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
 
-  std::size_t MemorySize() const;
-
   friend struct member_trait<Impl>;
+  friend picojson::value SerializeJSONValue(const Impl& impl);
+  friend std::optional<SerializationError> DeserializeJSONValue(
+      CompiledGrammar::Impl* impl,
+      const picojson::value& json_value,
+      const TokenizerInfo& tokenizer_info
+  );
+  friend std::size_t MemorySize(const Impl& impl);
 };
 
 XGRAMMAR_MEMBER_TABLE(
@@ -132,4 +144,4 @@ XGRAMMAR_MEMBER_TABLE(
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_COMPILED_GRAMMAR_DATA_STRUCTURE_H_
+#endif  // XGRAMMAR_COMPILED_GRAMMAR_IMPL_H_

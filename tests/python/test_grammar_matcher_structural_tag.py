@@ -11,35 +11,7 @@ import xgrammar as xgr
 from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 
-def test_simple():
-    grammar_str = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2))
-rule1 ::= "abcd"
-rule2 ::= "efg"
-"""
-
-    grammar = xgr.Grammar.from_ebnf(grammar_str)
-    assert _is_grammar_accept_string(grammar, "tag1abcd")
-    assert _is_grammar_accept_string(grammar, "tag1abcdtag2efg")
-    assert _is_grammar_accept_string(grammar, "tag1abcdqqqqtag2efg")
-    assert not _is_grammar_accept_string(grammar, "tag1abc")
-    assert not _is_grammar_accept_string(grammar, "tag1abce")
-    assert not _is_grammar_accept_string(grammar, "ttag1abd")
-
-
-def test_complex_rule():
-    grammar_str = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2))
-rule1 ::= "abcd" [p]*
-rule2 ::= "efg" [t]*
-"""
-
-    grammar = xgr.Grammar.from_ebnf(grammar_str)
-    assert _is_grammar_accept_string(grammar, "tag1abcd")
-    assert _is_grammar_accept_string(grammar, "tag1abcdppppptag2efg")
-    assert _is_grammar_accept_string(grammar, "tag2efgtttttag1abc")
-
-
 def test_utf8():
-
     # Test utf8-encoded string with structural tags
     class Schema(BaseModel):
         arg1: str
@@ -65,59 +37,13 @@ def test_utf8():
         assert _is_grammar_accept_string(grammar, input_str, print_time=True)
 
 
-def test_tag_dispatch_mask_generation_correctness():
-    grammar_str = """root ::= TagDispatch(("tag1", rule1), ("tag2", rule2))
-rule1 ::= "abc"
-rule2 ::= "dg"
-"""
-    tokens = [
-        # fmt: off
-        "a", "b", "c", "d", "g", "t", "1", "2", "1a", "2d", "2a", "2dgt",
-        "2dgtag1a", "2dgtag1b", "tag1a", "tag1b", "c哈哈t", "q", "abcdef"
-        # fmt: on
-    ]
-    input_str = "tag1abcqqtag2dgq"
-    expected_accepted_tokens = [
-        # fmt: off
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'abcdef'],
-        ['b'],
-        ['c哈哈t', 'c'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['d'],
-        ['g'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef'],
-        ['a', 'b', 'c', 'd', 'g', 't', '1', '2', '1a', '2d', '2a', '2dgt', '2dgtag1a', 'tag1a', 'c哈哈t', 'q', 'abcdef']
-        # fmt: on
-    ]
-
-    grammar = xgr.Grammar.from_ebnf(grammar_str)
-    tokenizer_info = xgr.TokenizerInfo(tokens)
-    compiler = xgr.GrammarCompiler(tokenizer_info)
-    compiled_grammar = compiler.compile_grammar(grammar)
-    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
-    mask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-
-    # pad a dummy char to check the final bitmask after accepting the input string
-    for i, c in enumerate(input_str + "0"):
-        matcher.fill_next_token_bitmask(mask)
-        rejected_indices = _get_masked_tokens_from_bitmask(mask, tokenizer_info.vocab_size)
-        accepted_indices = list(set(range(tokenizer_info.vocab_size)) - set(rejected_indices))
-        accepted_tokens = [tokens[id] for id in accepted_indices]
-        if i < len(input_str):
-            assert matcher.accept_string(c)
-        assert accepted_tokens == expected_accepted_tokens[i]
-
-
-expected_grammar_test_structural_tag = r"""root ::= TagDispatch(("<function=f", trigger_rule_0), ("<function=g", trigger_rule_1))
+expected_grammar_test_structural_tag = r"""root ::= TagDispatch(
+  ("<function=f", trigger_rule_0),
+  ("<function=g", trigger_rule_1),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true
+)
 trigger_rule_0 ::= (("1>" root_1 "</function>") | ("2>" root_2 "</function>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))

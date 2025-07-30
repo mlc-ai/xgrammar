@@ -1,5 +1,6 @@
 /*!
- * \file memory_size.h
+ *  Copyright (c) 2025 by Contributors
+ * \file xgrammar/support/memory_size.h
  * \brief Compute the memory consumption of a container in heap memory.
  */
 
@@ -12,22 +13,41 @@
 #include <type_traits>
 #include <utility>
 
+#include "reflection.h"
+
 namespace xgrammar {
 
-namespace detail {
+/******************* MemorySize Procotol *******************/
+
+template <typename T>
+inline constexpr std::size_t MemorySize(const T& value);
+
+template <typename T1, typename T2>
+inline constexpr std::size_t MemorySize(const std::pair<T1, T2>& pair);
+
+template <typename... Ts>
+inline constexpr std::size_t MemorySize(const std::tuple<Ts...>& tpl);
+
+template <typename T>
+inline constexpr std::size_t MemorySize(const std::optional<T>& optional_value);
+
+/******************* MemorySize Implementations *******************/
+
+namespace detail::memory_size {
 
 /*!
  * \brief Get the element type of a container.
  */
 template <typename Container>
-using Element_t = std::decay_t<decltype(*std::begin(Container()))>;
+using ElementType = std::decay_t<decltype(*std::begin(Container()))>;
 
+/*!
+ * \brief A false value for static_assert.
+ */
 template <typename>
 inline constexpr bool false_v = false;
 
-}  // namespace detail
-
-/******************* MemorySize Procotol *******************/
+}  // namespace detail::memory_size
 
 /*!
  * \brief Compute the memory consumption of a value.
@@ -37,18 +57,24 @@ inline constexpr bool false_v = false;
  */
 template <typename T>
 inline constexpr std::size_t MemorySize(const T& value) {
-  if constexpr (std::is_trivially_copyable_v<T>) {
+  if constexpr (is_pimpl_class<T>::value) {
+    // Customized MemorySize
+    return MemorySize(*value.ImplPtr());
+  } else if constexpr (std::is_trivially_copyable_v<T>) {
+    // Primitive type
     return 0;
-  } else if constexpr (std::is_trivially_copyable_v<detail::Element_t<T>>) {
-    return sizeof(detail::Element_t<T>) * std::size(value);
-  } else if constexpr (std::is_trivially_copyable_v<detail::Element_t<T>>) {
-    std::size_t size = sizeof(detail::Element_t<T>) * std::size(value);
+  } else if constexpr (std::is_trivially_copyable_v<detail::memory_size::ElementType<T>>) {
+    // Container of primitive type
+    return sizeof(detail::memory_size::ElementType<T>) * std::size(value);
+  } else if constexpr (!std::is_trivially_copyable_v<detail::memory_size::ElementType<T>>) {
+    // Container of non-primitive type: sum up the memory size of all elements
+    std::size_t size = sizeof(detail::memory_size::ElementType<T>) * std::size(value);
     for (const auto& element : value) {
       size += MemorySize(element);
     }
     return size;
   } else {
-    static_assert(detail::false_v<T>, "MemorySize is not implemented for this type");
+    static_assert(detail::memory_size::false_v<T>, "MemorySize is not implemented for this type");
   }
 }
 

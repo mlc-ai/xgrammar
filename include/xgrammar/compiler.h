@@ -12,8 +12,12 @@
 
 #include <cstddef>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
+
+#include "xgrammar/exception.h"
 
 namespace xgrammar {
 
@@ -23,8 +27,12 @@ namespace xgrammar {
  */
 class CompiledGrammar {
  public:
+  /*! \brief Get the associated grammar. */
   Grammar GetGrammar() const;
+
+  /*! \brief Get the associated tokenizer info. */
   TokenizerInfo GetTokenizerInfo() const;
+
   /*! \brief Return the approximate memory usage of the grammar in bytes. */
   std::size_t MemorySizeBytes() const;
 
@@ -32,8 +40,8 @@ class CompiledGrammar {
   std::string SerializeJSON() const;
 
   /*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
-  static CompiledGrammar DeserializeJSON(
-      const std::string& json_string, TokenizerInfo tokenizer_info
+  static std::variant<CompiledGrammar, SerializationError> DeserializeJSON(
+      const std::string& json_string, const TokenizerInfo& tokenizer_info
   );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(CompiledGrammar);

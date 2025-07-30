@@ -4,8 +4,8 @@
  * \brief The header for the support of grammar-guided generation.
  */
 
-#ifndef XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
-#define XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
+#ifndef XGRAMMAR_GRAMMAR_IMPL_H_
+#define XGRAMMAR_GRAMMAR_IMPL_H_
 
 #include <xgrammar/xgrammar.h>
 
@@ -15,7 +15,7 @@
 
 #include "fsm.h"
 #include "support/logging.h"
-#include "support/reflection/reflection.h"
+#include "support/reflection.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -112,9 +112,14 @@ class Grammar::Impl {
     kSequence,
     // data format: [grammar_expr_id0, grammar_expr_id1, ...]
     kChoices,
-    // data format: [tag_expr0, rule_id0, tag_expr1, rule_id1, ...]
-    // tag_expr should be a byte string, and rule_id should be a rule id
+    // data format: [tag_expr0, rule_id0, tag_expr1, rule_id1, ..., stop_eos, stop_str_expr_id,
+    // loop_after_dispatch]
+    // where stop_eos is a bool, stop_str_expr_id is a choices GrammarExpr id.
+    // tag_expr should be a byte string, and rule_id should be a rule id.
+    // loop_after_dispatch is a bool.
     kTagDispatch,
+    // data format: [grammar_expr_id, min_repeat_count, max_repeat_count]
+    kRepeat,
   };
 
   /*! \brief The object representing a grammar expr. */
@@ -135,10 +140,12 @@ class Grammar::Impl {
     }
     const int32_t* begin() const { return data; }
     const int32_t* end() const { return data + data_len; }
+    void SetData(int index, int value) { const_cast<int32_t*>(data)[index] = value; }
   };
 
   /*! \brief Get the number of grammar_exprs. */
   int32_t NumGrammarExprs() const { return grammar_expr_indptr_.size(); }
+
   /*! \brief Get the grammar_expr with the given id. */
   GrammarExpr GetGrammarExpr(int32_t grammar_expr_id) const {
     XGRAMMAR_DCHECK(
@@ -170,6 +177,52 @@ class Grammar::Impl {
     return GetByteString(GetGrammarExpr(grammar_expr_id));
   }
 
+  /*! \brief The object representing a tag dispatch. */
+  struct TagDispatch {
+    /*! \brief The tag and rule id pairs. */
+    std::vector<std::pair<std::string, int32_t>> tag_rule_pairs;
+    /*! \brief If true, EOS is allowed to generate and will stop the tag dispatch. */
+    bool stop_eos;
+    /*! \brief The strings that will stop the tag dispatch. Only work if stop_eos is false. */
+    std::vector<std::string> stop_str;
+    /*! \brief If true, the tag dispatch will loop after dispatching. */
+    bool loop_after_dispatch;
+  };
+
+  /*! \brief Get the tag dispatch from the grammar expr. */
+  TagDispatch GetTagDispatch(const GrammarExpr& grammar_expr) {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTagDispatch)
+        << "GrammarExpr is not a tag dispatch";
+
+    TagDispatch result;
+    XGRAMMAR_DCHECK(grammar_expr.size() >= 3);
+    result.tag_rule_pairs.reserve((grammar_expr.size() - 3) / 2);
+
+    for (int i = 0; i < grammar_expr.size() - 3; i += 2) {
+      auto tag_expr_id = grammar_expr[i];
+      auto rule_id = grammar_expr[i + 1];
+      result.tag_rule_pairs.push_back({GetByteString(tag_expr_id), rule_id});
+    }
+
+    result.stop_eos = static_cast<bool>(grammar_expr[grammar_expr.size() - 3]);
+
+    auto stop_str_expr = GetGrammarExpr(grammar_expr[grammar_expr.size() - 2]);
+    XGRAMMAR_DCHECK(stop_str_expr.type == GrammarExprType::kChoices);
+    result.stop_str.reserve(stop_str_expr.size());
+    for (int j = 0; j < stop_str_expr.size(); j++) {
+      result.stop_str.push_back(GetByteString(stop_str_expr[j]));
+    }
+
+    result.loop_after_dispatch = static_cast<bool>(grammar_expr[grammar_expr.size() - 1]);
+
+    return result;
+  }
+
+  /*! \brief Get the tag dispatch from the grammar expr with the given id. */
+  TagDispatch GetTagDispatch(int32_t grammar_expr_id) {
+    return GetTagDispatch(GetGrammarExpr(grammar_expr_id));
+  }
+
  private:
   /*! \brief The rules of the grammar. rule_id corresponds the index of this vector. */
   std::vector<Rule> rules_;
@@ -184,20 +237,25 @@ class Grammar::Impl {
  public:
   /******************* Aux information for matching *******************/
 
-  /*! \brief The fsm for the root tag dispatch rule. If the grammar does not have a root tag
-   * dispatch rule, it is not built. */
-  std::optional<CompactFSMWithStartEnd> root_tag_dispatch_fsm = std::nullopt;
+  /*! \brief The complete FSM for the grammar. It contains the FSMs for all rules. */
+  CompactFSM complete_fsm{NullObj{}};
 
-  /*! \brief The map from the end nodes of the root tag dispatch fsm to the rule ids. */
-  std::unordered_map<int32_t, int32_t> tag_dispatch_end_node_to_rule_id;
+  /*!
+   * \brief The FSM for each rule.
+   * \details The FSM will be used in matching if it exists. If it does not exist (std::nullopt),
+   * the rule will be used in matching, and the rule's body must be a kChoices expr.
+   */
+  std::vector<std::optional<CompactFSMWithStartEnd>> per_rule_fsms;
 
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
 
+  /*! \brief Store the lookahead which are exact, used to reduce uncertainty.*/
+  std::vector<int32_t> exact_lookahead;
+
   friend class GrammarBuilder;
   friend class GrammarCompiler;
 
-  std::size_t MemorySize() const;
   friend std::size_t MemorySize(const Impl& impl);
   friend struct member_trait<Impl>;
 };
@@ -211,22 +269,24 @@ XGRAMMAR_MEMBER_ARRAY(
 
 XGRAMMAR_MEMBER_TABLE(
     Grammar::Impl,
-    "rules_",
+    "rules",
     &Grammar::Impl::rules_,
-    "grammar_expr_data_",
-    &Grammar::Impl::grammar_expr_data_,
-    "grammar_expr_indptr_",
+    "grammar_expr_data",
     &Grammar::Impl::grammar_expr_indptr_,
-    "root_rule_id_",
+    "grammar_expr_indptr",
+    &Grammar::Impl::grammar_expr_data_,
+    "root_rule_id",
     &Grammar::Impl::root_rule_id_,
-    "root_tag_dispatch_fsm",
-    &Grammar::Impl::root_tag_dispatch_fsm,
-    "tag_dispatch_end_node_to_rule_id",
-    &Grammar::Impl::tag_dispatch_end_node_to_rule_id,
+    "complete_fsm",
+    &Grammar::Impl::complete_fsm,
+    "per_rule_fsms",
+    &Grammar::Impl::per_rule_fsms,
     "allow_empty_rule_ids",
-    &Grammar::Impl::allow_empty_rule_ids
+    &Grammar::Impl::allow_empty_rule_ids,
+    "exact_lookahead",
+    &Grammar::Impl::exact_lookahead
 );
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_GRAMMAR_DATA_STRUCTURE_H_
+#endif  // XGRAMMAR_GRAMMAR_IMPL_H_
