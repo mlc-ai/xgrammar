@@ -10,6 +10,8 @@
 
 #include "fsm.h"
 #include "fsm_builder.h"
+#include "grammar_functor.h"
+#include "xgrammar/grammar.h"
 
 using namespace xgrammar;
 
@@ -60,7 +62,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder1) {
       /* stop_str = */ {},
       /* loop_after_dispatch = */ true,
   };
-  auto fsm_result = TagDispatchFSMBuilder::Build(tag_dispatch);
+  auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());
   auto fsm = std::move(fsm_result).value();
   auto fsm_printed = fsm.ToString();
@@ -86,7 +88,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder2) {
       /* stop_str = */ {},
       /* loop_after_dispatch = */ false,
   };
-  auto fsm_result = TagDispatchFSMBuilder::Build(tag_dispatch);
+  auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());
   auto fsm = std::move(fsm_result).value();
   auto fsm_printed = fsm.ToString();
@@ -116,7 +118,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder3) {
       /* stop_str = */ {"hos", "eos"},
       /* loop_after_dispatch = */ true,
   };
-  auto fsm_result = TagDispatchFSMBuilder::Build(tag_dispatch);
+  auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());
   auto fsm = std::move(fsm_result).value();
   auto fsm_printed = fsm.ToString();
@@ -147,7 +149,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder4) {
       /* stop_str = */ {"hos", "eos"},
       /* loop_after_dispatch = */ false,
   };
-  auto fsm_result = TagDispatchFSMBuilder::Build(tag_dispatch);
+  auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());
   auto fsm = std::move(fsm_result).value();
   auto fsm_printed = fsm.ToString();

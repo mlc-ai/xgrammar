@@ -1057,7 +1057,6 @@ class GrammarFSMBuilderImpl {
     (*grammar)->per_rule_fsms = std::move(compact_per_rule_fsms);
   }
 
- private:
   /* Basic Building functions.*/
   static std::optional<FSMWithStartEnd> RuleRef(const GrammarExpr& expr);
   static std::optional<FSMWithStartEnd> CharacterClass(const GrammarExpr& expr);
@@ -1499,5 +1498,35 @@ int32_t SubGrammarAdder::Apply(GrammarBuilder* builder, const Grammar& sub_gramm
 void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl().Apply(grammar); }
 
 void RepetitionNormalizer::Apply(Grammar* grammar) { RepetitionNormalizerImpl().Apply(grammar); }
+
+std::optional<FSMWithStartEnd> GrammarFSMBuilder::RuleRef(const GrammarExpr& expr) {
+  return GrammarFSMBuilderImpl::RuleRef(expr);
+}
+
+std::optional<FSMWithStartEnd> GrammarFSMBuilder::CharacterClass(const GrammarExpr& expr) {
+  return GrammarFSMBuilderImpl::CharacterClass(expr);
+}
+
+std::optional<FSMWithStartEnd> GrammarFSMBuilder::ByteString(const GrammarExpr& expr) {
+  return GrammarFSMBuilderImpl::ByteString(expr);
+}
+
+std::optional<FSMWithStartEnd> GrammarFSMBuilder::Sequence(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  return GrammarFSMBuilderImpl::Sequence(expr, grammar);
+}
+
+std::optional<FSMWithStartEnd> GrammarFSMBuilder::Choices(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  return GrammarFSMBuilderImpl::Choices(expr, grammar);
+}
+
+std::optional<FSMWithStartEnd> GrammarFSMBuilder::TagDispatch(
+    const Grammar::Impl::TagDispatch& tag_dispatch
+) {
+  return GrammarFSMBuilderImpl::TagDispatch(tag_dispatch);
+}
 
 }  // namespace xgrammar
