@@ -1,5 +1,6 @@
 """Test the basic functionality of GrammarMatcher."""
 
+import math
 import sys
 from typing import List, Optional, Union
 
@@ -14,6 +15,8 @@ from xgrammar.testing import (
     _get_matcher_from_grammar_and_tokenizer_info,
     _is_grammar_accept_string,
 )
+
+_is_cuda_available = torch.cuda.is_available()
 
 json_grammar = xgr.Grammar.builtin_json_grammar()
 
@@ -361,6 +364,35 @@ def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[in
         json_grammar, tokenizer_info_2, override_stop_tokens=override_stop_tokens
     )
     assert matcher_2.stop_token_ids == override_stop_tokens
+
+
+def test_fill_next_token_bitmask_errors():
+    # llama 3.1 8b
+    tokenizer = AutoTokenizer.from_pretrained(
+        "meta-llama/Meta-Llama-3-8B-Instruct", use_fast=True, trust_remote_code=True
+    )
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
+
+    bitmask1 = torch.zeros(1, math.ceil(tokenizer_info.vocab_size / 32) - 1, dtype=torch.int32)
+    with pytest.raises(RuntimeError):
+        matcher.fill_next_token_bitmask(bitmask1)
+
+    bitmask2 = torch.zeros(1, math.ceil(tokenizer_info.vocab_size / 32), dtype=torch.int32)
+    with pytest.raises(RuntimeError):
+        matcher.fill_next_token_bitmask(bitmask2, index=1)
+
+    bitmask3 = torch.zeros(1, math.ceil(tokenizer_info.vocab_size / 32), dtype=torch.float32)
+    with pytest.raises(RuntimeError):
+        matcher.fill_next_token_bitmask(bitmask3)
+
+    if _is_cuda_available:
+        bitmask3 = torch.zeros(1, math.ceil(tokenizer_info.vocab_size / 32), 1, dtype=torch.int32)
+        with pytest.raises(RuntimeError):
+            matcher.fill_next_token_bitmask(bitmask3)
+
+    bitmask_correct = torch.zeros(1, math.ceil(tokenizer_info.vocab_size / 32), dtype=torch.int32)
+    matcher.fill_next_token_bitmask(bitmask_correct)
 
 
 if __name__ == "__main__":
