@@ -304,6 +304,7 @@ EarleyParser::EarleyParser(
     const Grammar& grammar, const ParserState& init_state, const bool need_expand
 )
     : grammar_(grammar) {
+  XGRAMMAR_ICHECK(grammar->optimized_);
   // Check if the initial state is valid. If invalid, then we choose the root state as default.
   ParserState init = init_state;
   if (init_state.IsInvalid()) {
