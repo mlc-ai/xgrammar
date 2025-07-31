@@ -18,6 +18,7 @@
 #include "earley_parser.h"
 #include "fsm.h"
 #include "grammar_impl.h"
+#include "grammar_optimizer.h"
 #include "support/logging.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
@@ -635,7 +636,7 @@ class GrammarCompiler::Impl {
 CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
 
-  compiled_grammar_impl->grammar = grammar;
+  compiled_grammar_impl->grammar = GrammarOptimizer::Optimize(grammar);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
 
   if (tokenizer_info_.GetVocabSize() == 0) {
