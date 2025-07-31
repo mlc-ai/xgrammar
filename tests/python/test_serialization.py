@@ -70,6 +70,7 @@ def test_serialize_grammar():
             'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [0, 0, 0, 0, 0, 0, 1, 0, 0], False]],
         # fmt: on
         "exact_lookahead": [],
+        "optimized": False,
         "__VERSION__": "v4",
     }
     # The fsms are the same one, but the start state and end states are different.
@@ -225,6 +226,7 @@ def test_serialize_compiled_grammar():
                 'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [0, 0, 0, 0, 0, 0, 1, 0, 0], False]],
             # fmt: on
             "exact_lookahead": [],
+            "optimized": True,
         },
         "tokenizer_metadata": {
             "vocab_type": 1,
