@@ -37,9 +37,6 @@ std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString();
 Grammar Grammar::FromEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
   auto grammar = ParseEBNF(ebnf_string, root_rule_name);
   grammar = GrammarNormalizer().Apply(grammar);
-  grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(grammar);
-  RepetitionNormalizer::Apply(&grammar);
-  GrammarFSMBuilder::Apply(&grammar);
   return grammar;
 }
 
@@ -70,9 +67,6 @@ Grammar Grammar::FromStructuralTag(
     const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
 ) {
   Grammar grammar = StructuralTagToGrammar(tags, triggers);
-  grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(grammar);
-  RepetitionNormalizer::Apply(&grammar);
-  GrammarFSMBuilder::Apply(&grammar);
   return grammar;
 }
 
