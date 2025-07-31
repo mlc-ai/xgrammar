@@ -811,10 +811,6 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     InitGrammar(grammar);
     InitBuilder(grammar);
     auto root_rule = grammar->GetRootRule();
-    auto root_grammar_expr = base_grammar_->GetGrammarExpr(root_rule.body_expr_id);
-    if (root_grammar_expr.type == GrammarExprType::kTagDispatch) {
-      return grammar;
-    }
     for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
       auto rule = grammar->GetRule(i);
       if (i == grammar->GetRootRuleId() || rule.lookahead_assertion_id != -1) {

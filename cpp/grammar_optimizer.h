@@ -35,6 +35,14 @@ class DeadCodeEliminator {
 };
 
 /*!
+ * \brief Analyze and add lookahead assertions in the grammar.
+ */
+class LookaheadAssertionAnalyzer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
  * \brief Build the FSMs of the grammar.
  */
 class GrammarFSMBuilder {

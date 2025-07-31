@@ -274,14 +274,6 @@ class GrammarConcatFunctor {
 };
 
 /*!
- * \brief Analyze and add lookahead assertions in the grammar.
- */
-class LookaheadAssertionAnalyzer {
- public:
-  static Grammar Apply(const Grammar& grammar);
-};
-
-/*!
  * \brief Create a grammar that recognizes structural tags based on their triggers. See
  * StructuralTagToGrammar() for more details.
  *
