@@ -6,11 +6,14 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstdint>
 #include <iostream>
+#include <vector>
 
 #include "fsm.h"
 #include "fsm_builder.h"
 #include "grammar_functor.h"
+#include "support/logging.h"
 #include "xgrammar/grammar.h"
 
 using namespace xgrammar;
@@ -177,5 +180,138 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder4) {
 19: []
 ]))";
 
+  EXPECT_EQ(fsm_printed, expected_fsm_printed);
+}
+using GrammarExpr = Grammar::Impl::GrammarExpr;
+using GrammarExprType = Grammar::Impl::GrammarExprType;
+
+TEST(XGrammarFSMBuilderTest, TestByteStringFSMBuilder1) {
+  int32_t byte_string[] = {'h', 'e', 'l', 'l', 'o'};
+  GrammarExpr grammar_expr = {GrammarExprType::kByteString, byte_string, 5};
+  auto fsm_result = GrammarFSMBuilder::ByteString(grammar_expr);
+  EXPECT_TRUE(fsm_result.has_value());
+  auto fsm = std::move(fsm_result).value();
+  auto fsm_printed = fsm.ToString();
+  std::string expected_fsm_printed =
+      R"(FSM(num_states=6, start=0, end=[5], edges=[
+0: ['h'->1]
+1: ['e'->2]
+2: ['l'->3]
+3: ['l'->4]
+4: ['o'->5]
+5: []
+]))";
+  EXPECT_EQ(fsm_printed, expected_fsm_printed);
+}
+
+TEST(XGrammarFSMBuilderTest, TestByteStringFSMBuilder2) {
+  std::string byte_string = "你好";
+  std::vector<int32_t> byte_string_vec(byte_string.begin(), byte_string.end());
+  GrammarExpr grammar_expr = {
+      GrammarExprType::kByteString,
+      byte_string_vec.data(),
+      static_cast<int32_t>(byte_string_vec.size())
+  };
+  auto fsm_result = GrammarFSMBuilder::ByteString(grammar_expr);
+  EXPECT_TRUE(fsm_result.has_value());
+  auto fsm = std::move(fsm_result).value();
+  auto fsm_printed = fsm.ToString();
+  std::string expected_fsm_printed =
+      R"(FSM(num_states=7, start=0, end=[6], edges=[
+0: ['\xe4'->1]
+1: ['\xbd'->2]
+2: ['\xa0'->3]
+3: ['\xe5'->4]
+4: ['\xa5'->5]
+5: ['\xbd'->6]
+6: []
+]))";
+  EXPECT_EQ(fsm_printed, expected_fsm_printed);
+}
+
+TEST(XGrammarFSMBuilderTest, TestRuleRefFSMBuilder) {
+  int32_t rule_ref = 1;
+  GrammarExpr grammar_expr = {GrammarExprType::kRuleRef, &rule_ref, 1};
+  auto fsm_result = GrammarFSMBuilder::RuleRef(grammar_expr);
+  EXPECT_TRUE(fsm_result.has_value());
+  auto fsm = std::move(fsm_result).value();
+  auto fsm_printed = fsm.ToString();
+  std::string expected_fsm_printed =
+      R"(FSM(num_states=2, start=0, end=[1], edges=[
+0: [Rule(1)->1]
+1: []
+]))";
+  EXPECT_EQ(fsm_printed, expected_fsm_printed);
+}
+
+TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder1) {
+  std::vector<int32_t> datas = {0, 'a', 'z', 'A', 'Z'};
+  GrammarExpr grammar_expr = {
+      GrammarExprType::kCharacterClass, datas.data(), static_cast<int32_t>(datas.size())
+  };
+  auto fsm_result = GrammarFSMBuilder::CharacterClass(grammar_expr);
+  EXPECT_TRUE(fsm_result.has_value());
+  auto fsm = std::move(fsm_result).value();
+  auto fsm_printed = fsm.ToString();
+  std::string expected_fsm_printed =
+      R"(FSM(num_states=2, start=0, end=[1], edges=[
+0: [[a-z]->1, [A-Z]->1]
+1: []
+]))";
+  EXPECT_EQ(fsm_printed, expected_fsm_printed);
+}
+
+TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder2) {
+  std::vector<int32_t> datas = {0, 'a', 'z', 'A', 'Z'};
+  GrammarExpr grammar_expr = {
+      GrammarExprType::kCharacterClassStar, datas.data(), static_cast<int32_t>(datas.size())
+  };
+  auto fsm_result = GrammarFSMBuilder::CharacterClass(grammar_expr);
+  EXPECT_TRUE(fsm_result.has_value());
+  auto fsm = std::move(fsm_result).value();
+  auto fsm_printed = fsm.ToString();
+  std::string expected_fsm_printed =
+      R"(FSM(num_states=1, start=0, end=[0], edges=[
+0: [[a-z]->0, [A-Z]->0]
+]))";
+  EXPECT_EQ(fsm_printed, expected_fsm_printed);
+}
+
+TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder3) {
+  std::vector<int32_t> datas = {1, 'a', 'z', 'A', 'Z'};
+  GrammarExpr grammar_expr = {
+      GrammarExprType::kCharacterClass, datas.data(), static_cast<int32_t>(datas.size())
+  };
+  auto fsm_result = GrammarFSMBuilder::CharacterClass(grammar_expr);
+  EXPECT_TRUE(fsm_result.has_value());
+  auto fsm = std::move(fsm_result).value();
+  auto fsm_printed = fsm.ToString();
+  std::string expected_fsm_printed =
+      R"(FSM(num_states=5, start=0, end=[1], edges=[
+0: [[\0-@]->1, [[-`]->1, [{-\x7f]->1, [\xf0-\xf7]->2, [\xe0-\xef]->3, [\xc0-\xdf]->4]
+1: []
+2: [[\x80-\xbf]->3]
+3: [[\x80-\xbf]->4]
+4: [[\x80-\xbf]->1]
+]))";
+  EXPECT_EQ(fsm_printed, expected_fsm_printed);
+}
+
+TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder4) {
+  std::vector<int32_t> datas = {1, 'a', 'z', 'A', 'Z'};
+  GrammarExpr grammar_expr = {
+      GrammarExprType::kCharacterClassStar, datas.data(), static_cast<int32_t>(datas.size())
+  };
+  auto fsm_result = GrammarFSMBuilder::CharacterClass(grammar_expr);
+  EXPECT_TRUE(fsm_result.has_value());
+  auto fsm = std::move(fsm_result).value();
+  auto fsm_printed = fsm.ToString();
+  std::string expected_fsm_printed =
+      R"(FSM(num_states=4, start=0, end=[0], edges=[
+0: [[\0-@]->0, [[-`]->0, [{-\x7f]->0, [\xf0-\xf7]->1, [\xe0-\xef]->2, [\xc0-\xdf]->3]
+1: [[\x80-\xbf]->2]
+2: [[\x80-\xbf]->3]
+3: [[\x80-\xbf]->0]
+]))";
   EXPECT_EQ(fsm_printed, expected_fsm_printed);
 }
