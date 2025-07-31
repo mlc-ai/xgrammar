@@ -732,7 +732,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \brief Check if the FSM is a DFA.
    * \return True if the FSM is a DFA, false otherwise.
    */
-  bool IsDFA();
+  bool CheckDFA();
 
   /*!
    * \brief Merge some states by removing some epsilon transitions.

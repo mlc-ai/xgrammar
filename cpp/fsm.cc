@@ -929,7 +929,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   return ResultOk(std::move(result));
 }
 
-bool FSMWithStartEnd::IsDFA() {
+bool FSMWithStartEnd::CheckDFA() {
   if (is_dfa_) {
     return true;
   }
