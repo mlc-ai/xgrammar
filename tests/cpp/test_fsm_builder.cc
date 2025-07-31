@@ -339,10 +339,10 @@ TEST(XGrammarFSMBuilderTest, TestSequenceFSMBuilder) {
   auto fsm_rule1_result = GrammarFSMBuilder::Choices(
       grammar->GetGrammarExpr(grammar->GetRule(1).body_expr_id), grammar
   );
-  std::string expected_fsm_rule1 = R"(FSM(num_states=3, start=1, end=[0], edges=[
+  std::string expected_fsm_rule1 = R"(FSM(num_states=3, start=2, end=[0], edges=[
 0: []
-1: ['a'->2]
-2: [Rule(3)->0, [a-z]->2]
+1: [Rule(3)->0, [a-z]->1]
+2: ['a'->1]
 ]))";
 
   EXPECT_TRUE(fsm_rule1_result.has_value());
