@@ -1192,15 +1192,13 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int num_of_states_limited) 
   }
 
   // Initialize the precursors of nodes.
-  std::unordered_map<int, std::unordered_multimap<std::pair<int16_t, int16_t>, int>> precursors;
+  std::vector<std::vector<std::pair<std::pair<int16_t, int16_t>, int>>> precursors;
+  precursors.resize(now_fsm.NumStates());
   for (int i = 0; i < now_fsm.NumStates(); ++i) {
     const auto& edges = now_fsm->GetEdges(i);
     for (const auto& edge : edges) {
       XGRAMMAR_DCHECK(!edge.IsEpsilon());
-      if (precursors.find(edge.target) == precursors.end()) {
-        precursors[edge.target] = std::unordered_multimap<std::pair<int16_t, int16_t>, int>();
-      }
-      precursors[edge.target].emplace(std::make_pair(edge.min, edge.max), i);
+      precursors[edge.target].push_back(std::make_pair(std::make_pair(edge.min, edge.max), i));
     }
   }
 
