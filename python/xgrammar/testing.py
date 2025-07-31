@@ -339,3 +339,15 @@ class GrammarFunctor:
         return Grammar._create_from_handle(
             _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
         )
+
+
+class GrammarOptimizer:
+    """A utility class for optimizing grammars. These methods are called during grammar parsing.
+    For test purposes."""
+
+    @staticmethod
+    def optimize(grammar: Grammar) -> Grammar:
+        """Optimize the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_optimizer.optimize(grammar._handle)
+        )

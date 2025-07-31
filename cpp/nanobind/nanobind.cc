@@ -13,6 +13,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include "../grammar_functor.h"
+#include "../grammar_optimizer.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
 #include "../testing.h"
@@ -255,6 +256,9 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("rule_inliner", &RuleInliner::Apply)
       .def("dead_code_eliminator", &DeadCodeEliminator::Apply)
       .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply);
+
+  auto pyGrammarOptimizerModule = pyTestingModule.def_submodule("grammar_optimizer");
+  pyGrammarOptimizerModule.def("optimize", &GrammarOptimizer::Optimize);
 
   auto pyKernelsModule = m.def_submodule("kernels");
   pyKernelsModule.def(
