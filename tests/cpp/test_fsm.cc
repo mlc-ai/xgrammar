@@ -11,6 +11,7 @@
 
 #include "fsm.h"
 #include "fsm_builder.h"
+#include "support/logging.h"
 
 using namespace xgrammar;
 
@@ -259,6 +260,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
   EXPECT_EQ(fsm_wse->NumStates(), 4);
+  XGRAMMAR_LOG(INFO) << fsm_wse;
   std::cout << "--------- Function Test9 -----------" << std::endl;
   fsm_wse = RegexFSMBuilder::Build("ab*").Unwrap();
   test_str = "abbb";
