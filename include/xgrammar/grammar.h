@@ -158,6 +158,12 @@ class Grammar {
   static Grammar Concat(const std::vector<Grammar>& grammars);
 
   /*!
+   * \brief Create an empty grammar that matches an empty string.
+   * \return An empty grammar.
+   */
+  static Grammar Empty();
+
+  /*!
    * \brief Print a BNF grammar.
    * \param os The output stream.
    * \param grammar The grammar to print.
