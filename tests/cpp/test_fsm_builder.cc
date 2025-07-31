@@ -339,10 +339,10 @@ TEST(XGrammarFSMBuilderTest, TestSequenceFSMBuilder) {
   auto fsm_rule1_result = GrammarFSMBuilder::Choices(
       grammar->GetGrammarExpr(grammar->GetRule(1).body_expr_id), grammar
   );
-  std::string expected_fsm_rule1 = R"(FSM(num_states=3, start=2, end=[0], edges=[
+  std::string expected_fsm_rule1 = R"(FSM(num_states=3, start=1, end=[0], edges=[
 0: []
-1: [Rule(3)->0, [a-z]->1]
-2: ['a'->1]
+1: ['a'->2]
+2: [Rule(3)->0, [a-z]->2]
 ]))";
 
   EXPECT_TRUE(fsm_rule1_result.has_value());
@@ -351,10 +351,10 @@ TEST(XGrammarFSMBuilderTest, TestSequenceFSMBuilder) {
   auto fsm_rule2_result = GrammarFSMBuilder::Choices(
       grammar->GetGrammarExpr(grammar->GetRule(2).body_expr_id), grammar
   );
-  std::string expected_fsm_rule2 = R"(FSM(num_states=4, start=1, end=[0], edges=[
+  std::string expected_fsm_rule2 = R"(FSM(num_states=4, start=2, end=[0], edges=[
 0: []
-1: ['c'->2]
-2: [[A-Z]->3]
+1: [[A-Z]->3]
+2: ['c'->1]
 3: [Rule(3)->0]
 ]))";
 
@@ -395,14 +395,14 @@ TEST(XGrammarFSMBuilderTest, TestChoicesFSMBuilder) {
   auto fsm_rule1_result = GrammarFSMBuilder::Choices(
       grammar->GetGrammarExpr(grammar->GetRule(1).body_expr_id), grammar
   );
-  std::string expected_fsm_rule1 = R"(FSM(num_states=7, start=0, end=[0, 2], edges=[
+  std::string expected_fsm_rule1 = R"(FSM(num_states=7, start=0, end=[0, 3], edges=[
 0: ['h'->1]
 1: ['e'->6]
-2: []
-3: ['l'->4]
+2: ['l'->4]
+3: []
 4: ['o'->5]
-5: [Rule(2)->2]
-6: ['l'->3]
+5: [Rule(2)->3]
+6: ['l'->2]
 ]))";
 
   EXPECT_TRUE(fsm_rule1_result.has_value());
