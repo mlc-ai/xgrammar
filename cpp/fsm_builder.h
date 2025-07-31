@@ -12,8 +12,13 @@
 #include "fsm.h"
 #include "grammar_impl.h"
 #include "support/utils.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
+
+using GrammarExpr = Grammar::Impl::GrammarExpr;
+
+using ExprType = Grammar::Impl::GrammarExprType;
 
 /*!
  * \brief A builder that converts a regex string to a FSM.
@@ -52,19 +57,6 @@ class TrieFSMBuilder {
       bool add_back_edges = false
   );
 };
-
-class TagDispatchFSMBuilder {
- public:
-  /*!
-   * \brief Build a FSM from a tag dispatch rule.
-   * \param tag_dispatch The tag dispatch.
-   * \return The FSM with start and end states.
-   */
-  static std::optional<FSMWithStartEnd> Build(const Grammar::Impl::TagDispatch& tag_dispatch);
-};
-
-// stop token
-// eos string
 
 }  // namespace xgrammar
 
