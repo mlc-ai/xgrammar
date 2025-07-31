@@ -1068,7 +1068,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
     for (const auto& edges : result->GetEdges()) {
       for (size_t i = 0; i < edges.size(); i++) {
         for (size_t j = i + 1; j < edges.size(); j++) {
-          if (IsEndState(edges[i].target) != IsEndState(edges[j].target)) {
+          if (result.IsEndState(edges[i].target) != result.IsEndState(edges[j].target)) {
             continue;
           }
           if (edges[i].target == edges[j].target) {
@@ -1110,7 +1110,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
     bool is_equiv_precursor = false;
     for (int i = 0; i < result->NumStates(); i++) {
       for (int j = i + 1; j < result->NumStates(); j++) {
-        if (IsEndState(i) != IsEndState(j)) {
+        if (result.IsEndState(i) != result.IsEndState(j)) {
           continue;
         }
         bool equivalent = true;
