@@ -291,13 +291,13 @@ NB_MODULE(xgrammar_bindings, m) {
 
   auto pyGrammarFunctorModule = pyTestingModule.def_submodule("grammar_functor");
   pyGrammarFunctorModule.def("structure_normalizer", &StructureNormalizer::Apply)
-      .def("byte_string_fuser", &ByteStringFuser::Apply)
+      .def("byte_string_fuser", &ByteStringFuser::Apply);
+
+  auto pyGrammarOptimizerModule = pyTestingModule.def_submodule("grammar_optimizer");
+  pyGrammarOptimizerModule.def("optimize", &GrammarOptimizer::Optimize)
       .def("rule_inliner", &RuleInliner::Apply)
       .def("dead_code_eliminator", &DeadCodeEliminator::Apply)
       .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply);
-
-  auto pyGrammarOptimizerModule = pyTestingModule.def_submodule("grammar_optimizer");
-  pyGrammarOptimizerModule.def("optimize", &GrammarOptimizer::Optimize);
 
   auto pyKernelsModule = m.def_submodule("kernels");
   pyKernelsModule.def(

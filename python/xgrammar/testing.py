@@ -313,31 +313,10 @@ class GrammarFunctor:
         )
 
     @staticmethod
-    def rule_inliner(grammar: Grammar) -> Grammar:
-        """Inline some rule references in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_functor.rule_inliner(grammar._handle)
-        )
-
-    @staticmethod
     def byte_string_fuser(grammar: Grammar) -> Grammar:
         """Fuse the byte string elements in the grammar."""
         return Grammar._create_from_handle(
             _core.testing.grammar_functor.byte_string_fuser(grammar._handle)
-        )
-
-    @staticmethod
-    def dead_code_eliminator(grammar: Grammar) -> Grammar:
-        """Eliminate the not referenced rules in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_functor.dead_code_eliminator(grammar._handle)
-        )
-
-    @staticmethod
-    def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
-        """Analyze and add lookahead assertions in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
         )
 
 
@@ -350,4 +329,25 @@ class GrammarOptimizer:
         """Optimize the grammar."""
         return Grammar._create_from_handle(
             _core.testing.grammar_optimizer.optimize(grammar._handle)
+        )
+
+    @staticmethod
+    def rule_inliner(grammar: Grammar) -> Grammar:
+        """Inline some rule references in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_optimizer.rule_inliner(grammar._handle)
+        )
+
+    @staticmethod
+    def dead_code_eliminator(grammar: Grammar) -> Grammar:
+        """Eliminate the not referenced rules in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_optimizer.dead_code_eliminator(grammar._handle)
+        )
+
+    @staticmethod
+    def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
+        """Analyze and add lookahead assertions in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_optimizer.lookahead_assertion_analyzer(grammar._handle)
         )
