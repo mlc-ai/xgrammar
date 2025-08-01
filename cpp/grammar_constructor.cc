@@ -213,6 +213,61 @@ class StructuralTagGrammarCreatorImpl : public GrammarMutator {
   }
 };
 
+class TagDispatchGrammarCreatorImpl : public GrammarMutator {
+ public:
+  Grammar Apply(
+      const std::vector<std::string>& triggers,
+      const std::vector<Grammar>& tags,
+      bool stop_eos,
+      bool loop_after_dispatch,
+      std::vector<std::string> stop_strs
+  ) {
+    InitGrammar();
+    InitBuilder();
+
+    auto root_rule_id = builder_->AddEmptyRule("root");
+
+    Grammar::Impl::TagDispatch tag_dispatch{
+        /* tag_rule_pairs = */ {},
+        /* stop_eos = */ stop_eos,
+        /* stop_str = */ stop_strs,
+        /* loop_after_dispatch = */ loop_after_dispatch,
+    };
+    tag_dispatch.tag_rule_pairs.reserve(triggers.size());
+
+    // Create rules for each trigger group
+    for (size_t i = 0; i < triggers.size(); i++) {
+      auto rule_name = "trigger_rule_" + std::to_string(i);
+      auto rule_id = builder_->AddEmptyRule(rule_name);
+
+      // Create choices for each tag in this trigger group
+      std::vector<int32_t> choices;
+      std::vector<int32_t> seq_elements;
+      seq_elements.reserve(1);
+
+      // Create and visit schema grammar for this tag
+      auto new_rule_id = SubGrammarAdderImpl().ApplyWithBuilder(builder_, tags[i]);
+      seq_elements.push_back(builder_->AddRuleRef(new_rule_id));
+
+      choices.push_back(builder_->AddSequence(seq_elements));
+
+      builder_->UpdateRuleBody(rule_id, builder_->AddChoices(choices));
+      tag_dispatch.tag_rule_pairs.emplace_back(triggers[i], rule_id);
+    }
+
+    auto tag_dispatch_id = builder_->AddTagDispatch(tag_dispatch);
+    builder_->UpdateRuleBody(root_rule_id, tag_dispatch_id);
+
+    return builder_->Get(root_rule_id);
+  }
+
+  // Avoid hiding the original Apply(const Grammar&)
+  Grammar Apply(const Grammar& grammar) final {
+    XGRAMMAR_LOG(FATAL) << "Should not be called";
+    XGRAMMAR_UNREACHABLE();
+  }
+};
+
 /**************************************** Grammar Functions ***************************************/
 
 Grammar Grammar::Empty() { return Grammar::FromEBNF("root ::= \"\""); }
@@ -245,11 +300,13 @@ Grammar Grammar::CharacterClass(bool negated, const std::vector<uint8_t>& charac
 }
 
 Grammar Grammar::TagDispatch(
-    const std::vector<std::string>& triggers, const std::vector<Grammar>& tags
+    const std::vector<std::string>& triggers,
+    const std::vector<Grammar>& tags,
+    bool stop_eos,
+    bool loop_after_dispatch,
+    const std::vector<std::string>& stop_strs
 ) {
-  XGRAMMAR_CHECK(triggers.size() == tags.size()) << "Number of triggers must match number of tags";
-  // TODO(linzhang): Implement it.
-  XGRAMMAR_UNREACHABLE();
+  return TagDispatchGrammarCreator::Apply(triggers, tags, stop_eos, loop_after_dispatch, stop_strs);
 }
 
 Grammar Grammar::Union(const std::vector<Grammar>& grammars) {
@@ -279,6 +336,18 @@ Grammar StructuralTagGrammarCreator::Apply(
     const std::vector<std::vector<std::pair<StructuralTagItem, Grammar>>>& tag_groups
 ) {
   return StructuralTagGrammarCreatorImpl().Apply(triggers, tag_groups);
+}
+
+Grammar TagDispatchGrammarCreator::Apply(
+    const std::vector<std::string>& triggers,
+    const std::vector<Grammar>& tags,
+    bool stop_eos,
+    bool loop_after_dispatch,
+    const std::vector<std::string>& stop_strs
+) {
+  return TagDispatchGrammarCreatorImpl().Apply(
+      triggers, tags, stop_eos, loop_after_dispatch, stop_strs
+  );
 }
 
 }  // namespace xgrammar

@@ -48,6 +48,17 @@ class StructuralTagGrammarCreator {
   );
 };
 
+class TagDispatchGrammarCreator {
+ public:
+  static Grammar Apply(
+      const std::vector<std::string>& triggers,
+      const std::vector<Grammar>& tags,
+      bool stop_eos = true,
+      bool loop_after_dispatch = true,
+      const std::vector<std::string>& stop_strs = {}
+  );
+};
+
 }  // namespace xgrammar
 
 #endif
