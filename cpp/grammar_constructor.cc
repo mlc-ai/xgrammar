@@ -8,6 +8,8 @@
 #include <xgrammar/grammar.h>
 
 #include "grammar_functor.h"
+#include "support/encoding.h"
+#include "support/utils.h"
 
 namespace xgrammar {
 
@@ -211,7 +213,52 @@ class StructuralTagGrammarCreatorImpl : public GrammarMutator {
   }
 };
 
+/**************************************** Grammar Functions ***************************************/
+
 Grammar Grammar::Empty() { return Grammar::FromEBNF("root ::= \"\""); }
+
+Grammar Grammar::String(const std::string& str) {
+  std::string ebnf_string = "root ::= \"";
+  for (char c : str) {
+    ebnf_string += EscapeString(c);
+  }
+  ebnf_string += "\"";
+  return Grammar::FromEBNF(ebnf_string);
+}
+
+Grammar Grammar::CharacterClass(bool negated, const std::vector<uint8_t>& characters) {
+  XGRAMMAR_CHECK(characters.size() % 2 == 0)
+      << "Character class must have an even number of characters";
+  std::string ebnf_string = "root ::= ";
+  ebnf_string += "[";
+  if (negated) {
+    ebnf_string += "^";
+  }
+  for (size_t i = 0; i < characters.size(); i += 2) {
+    ebnf_string += EscapeString((characters[i]));
+    if (characters[i] != characters[i + 1]) {
+      ebnf_string += "-" + EscapeString((characters[i + 1]));
+    }
+  }
+  ebnf_string += "]";
+  return Grammar::FromEBNF(ebnf_string);
+}
+
+Grammar Grammar::TagDispatch(
+    const std::vector<std::string>& triggers, const std::vector<Grammar>& tags
+) {
+  XGRAMMAR_CHECK(triggers.size() == tags.size()) << "Number of triggers must match number of tags";
+  // TODO(linzhang): Implement it.
+  XGRAMMAR_UNREACHABLE();
+}
+
+Grammar Grammar::Union(const std::vector<Grammar>& grammars) {
+  return GrammarUnionFunctor::Apply(grammars);
+}
+
+Grammar Grammar::Concat(const std::vector<Grammar>& grammars) {
+  return GrammarConcatFunctor::Apply(grammars);
+}
 
 /*************************** Forward grammar Constructors to their impl ***************************/
 
