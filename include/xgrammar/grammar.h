@@ -9,8 +9,8 @@
 
 #include <xgrammar/object.h>
 
+#include <cstdint>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -162,6 +162,35 @@ class Grammar {
    * \return An empty grammar.
    */
   static Grammar Empty();
+
+  /*!
+   * \brief Create a character class grammar that matches a set of characters.
+   * \param negated Whether the character class is negated. If true, it matches any character not in
+   * the set.
+   * \param characters The characters to match. This should be a vector of bytes (0~255), and its
+   * size should be even. characters[2 * i] is the start of the range, and characters[2 * i + 1] is
+   * the end of the range. \return A grammar that matches the character class.
+   */
+  static Grammar CharacterClass(bool negated, const std::vector<uint8_t>& characters);
+
+  /*!
+   * \brief Create a grammar that matches a tag dispatch. A tag dispatch is a grammar that matches
+   * a set of tags, each with a trigger and a schema.
+   * \param triggers The triggers for the tags. Each trigger is a string that identifies the tag.
+   * \param tags The tags to match. Each tag is a grammar, and they are corresponding to the
+   * triggers in the same order.
+   * \return A grammar that matches the tag dispatch.
+   */
+  static Grammar TagDispatch(
+      const std::vector<std::string>& triggers, const std::vector<Grammar>& tags
+  );
+
+  /*!
+   * \brief Create a grammar that matches a string.
+   * \param str The string to match.
+   * \return A grammar that matches the string.
+   */
+  static Grammar String(const std::string& str);
 
   /*!
    * \brief Print a BNF grammar.

@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "grammar_constructor.h"
 #include "grammar_normalizer.h"
 #include "grammar_parser.h"
 #include "grammar_printer.h"
@@ -156,14 +155,6 @@ sign ::= "" | "+" | "-"
 Grammar Grammar::BuiltinJSONGrammar() {
   static const Grammar grammar = FromEBNF(kJSONGrammarString);
   return grammar;
-}
-
-Grammar Grammar::Union(const std::vector<Grammar>& grammars) {
-  return GrammarUnionFunctor::Apply(grammars);
-}
-
-Grammar Grammar::Concat(const std::vector<Grammar>& grammars) {
-  return GrammarConcatFunctor::Apply(grammars);
 }
 
 std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
