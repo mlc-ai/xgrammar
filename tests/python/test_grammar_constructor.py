@@ -16,7 +16,7 @@ def test_grammar_constructor_empty():
 
 input_test_string_expected_grammar_test_grammar_constructor_string = (
     ("our beautiful Earth", "our beautiful Earth", 'root ::= (("our beautiful Earth"))\n'),
-    ("wqepqw\\n", "wqepqw\n", 'root ::= (("wqepqw\\n"))\n'),
+    ("wqepqw\n", "wqepqw\n", 'root ::= (("wqepqw\\n"))\n'),
     ("世界", "世界", 'root ::= (("\\u4e16\\u754c"))\n'),
     ("ぉ", "ぉ", 'root ::= (("\\u3049"))\n'),
     (
@@ -243,7 +243,7 @@ root_1_1_1 ::= (([0-9]))
 
 
 def test_grammar_constructor_star():
-    grammar1 = xgr.Grammar.string('\\"')
+    grammar1 = xgr.Grammar.string('"')
     grammar2 = xgr.Grammar.star(xgr.Grammar.character_class(False, ["a", "z"]))
     grammar = xgr.Grammar.concat(grammar1, grammar2, grammar1)
     expected_grammar = """root ::= ((root_1 root_2 root_3))
