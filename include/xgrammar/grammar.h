@@ -202,6 +202,27 @@ class Grammar {
   static Grammar String(const std::string& str);
 
   /*!
+   * \brief Create a grammar that matches zero or more occurrences of the given grammar.
+   * \param grammar The grammar to match.
+   * \return A grammar that matches zero or more occurrences of the given grammar.
+   */
+  static Grammar Star(const Grammar& grammar);
+
+  /*!
+   * \brief Create a grammar that matches one or more occurrences of the given grammar.
+   * \param grammar The grammar to match.
+   * \return A grammar that matches one or more occurrences of the given grammar.
+   */
+  static Grammar Plus(const Grammar& grammar);
+
+  /*!
+   * \brief Create a grammar that matches zero or one occurrences of the given grammar.
+   * \param grammar The grammar to match.
+   * \return A grammar that matches zero or one occurrences of the given grammar.
+   */
+  static Grammar Optional(const Grammar& grammar);
+
+  /*!
    * \brief Print a BNF grammar.
    * \param os The output stream.
    * \param grammar The grammar to print.
