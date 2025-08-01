@@ -115,5 +115,53 @@ r3 ::= ("" | ("abc"))
     assert str(concat_grammar) == expected
 
 
+string_accepted_test_grammar_constructor_character_class = (
+    ("a", True),
+    ("b", True),
+    ("c", True),
+    ("-", True),
+    ("1", False),
+    (" ", False),
+    ("A", True),
+)
+
+
+@pytest.mark.parametrize(
+    "input, expected_accept", string_accepted_test_grammar_constructor_character_class
+)
+def test_grammar_character_constructor_class(input: str, expected_accept: bool):
+    expected_grammar = "root ::= (([\-a-zA-Z]))\n"
+    character_range = ["-", "-", "a", "z", "A", "Z"]
+    grammar = xgr.Grammar.character_class(False, character_range)
+    assert grammar is not None
+    assert str(grammar) == expected_grammar
+    assert _is_grammar_accept_string(grammar, input) == expected_accept
+
+
+string_accepted_test_grammar_constructor_character_class_negated = (
+    ("a", False),
+    ("b", False),
+    ("c", False),
+    ("-", False),
+    ("1", True),
+    (" ", True),
+    ("A", False),
+    ("好", True),
+)
+
+
+@pytest.mark.parametrize(
+    "input, expected_accept", string_accepted_test_grammar_constructor_character_class_negated
+)
+def test_grammar_character_constructor_class_negated(input: str, expected_accept: bool):
+    expected_grammar = "root ::= (([^\-a-zA-Z]))\n"
+    character_range = ["-", "-", "a", "z", "A", "Z"]
+    grammar = xgr.Grammar.character_class(True, character_range)
+    assert grammar is not None
+    assert str(grammar) == expected_grammar
+    print(str(grammar))
+    assert _is_grammar_accept_string(grammar, input) == expected_accept
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
