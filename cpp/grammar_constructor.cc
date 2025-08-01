@@ -274,9 +274,7 @@ Grammar Grammar::Empty() { return Grammar::FromEBNF("root ::= \"\""); }
 
 Grammar Grammar::String(const std::string& str) {
   std::string ebnf_string = "root ::= \"";
-  for (char c : str) {
-    ebnf_string += EscapeString(c);
-  }
+  ebnf_string += str;
   ebnf_string += "\"";
   return Grammar::FromEBNF(ebnf_string);
 }
