@@ -115,7 +115,7 @@ r3 ::= ("" | ("abc"))
     assert str(concat_grammar) == expected
 
 
-string_accepted_test_grammar_constructor_character_class = (
+input_expected_accepted_test_grammar_constructor_character_class = (
     ("a", True),
     ("b", True),
     ("c", True),
@@ -127,10 +127,10 @@ string_accepted_test_grammar_constructor_character_class = (
 
 
 @pytest.mark.parametrize(
-    "input, expected_accept", string_accepted_test_grammar_constructor_character_class
+    "input, expected_accept", input_expected_accepted_test_grammar_constructor_character_class
 )
 def test_grammar_character_constructor_class(input: str, expected_accept: bool):
-    expected_grammar = "root ::= (([\-a-zA-Z]))\n"
+    expected_grammar = "root ::= (([\\-a-zA-Z]))\n"
     character_range = ["-", "-", "a", "z", "A", "Z"]
     grammar = xgr.Grammar.character_class(False, character_range)
     assert grammar is not None
@@ -138,7 +138,7 @@ def test_grammar_character_constructor_class(input: str, expected_accept: bool):
     assert _is_grammar_accept_string(grammar, input) == expected_accept
 
 
-string_accepted_test_grammar_constructor_character_class_negated = (
+input_expected_accepted_test_grammar_constructor_character_class_negated = (
     ("a", False),
     ("b", False),
     ("c", False),
@@ -151,15 +151,76 @@ string_accepted_test_grammar_constructor_character_class_negated = (
 
 
 @pytest.mark.parametrize(
-    "input, expected_accept", string_accepted_test_grammar_constructor_character_class_negated
+    "input, expected_accept",
+    input_expected_accepted_test_grammar_constructor_character_class_negated,
 )
-def test_grammar_character_constructor_class_negated(input: str, expected_accept: bool):
-    expected_grammar = "root ::= (([^\-a-zA-Z]))\n"
+def test_grammar_constructor_character_class_negated(input: str, expected_accept: bool):
+    expected_grammar = "root ::= (([^\\-a-zA-Z]))\n"
     character_range = ["-", "-", "a", "z", "A", "Z"]
     grammar = xgr.Grammar.character_class(True, character_range)
     assert grammar is not None
     assert str(grammar) == expected_grammar
     print(str(grammar))
+    assert _is_grammar_accept_string(grammar, input) == expected_accept
+
+
+input_expected_accepted_test_grammar_constructor_tag_dispatch = (
+    ("eeeee", True),
+    ("tag114", True),
+    ("tag1", False),
+    ("tag2123", False),
+    ("tag11tag20.3", True),
+    ("tag20.", False),
+    ("tag11111tag20.2", True),
+)
+
+
+@pytest.mark.parametrize(
+    "input, expected_accept", input_expected_accepted_test_grammar_constructor_tag_dispatch
+)
+def test_grammar_constructor_tag_dispatch(input: str, expected_accept: bool):
+    expected_grammar = """root ::= TagDispatch(
+  ("tag1", trigger_rule_0),
+  ("tag2", trigger_rule_1),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true
+)
+trigger_rule_0 ::= ((root_1))
+root_1 ::= ((rule1) | (rule2))
+rule1 ::= (("[a-z]+"))
+rule2 ::= ((rule2_1))
+rule2_1 ::= (([0-9] rule2_1) | ([0-9]))
+trigger_rule_1 ::= ((root_2))
+root_2 ::= ((rule1_1 rule2_2))
+rule1_1 ::= (("0."))
+rule2_2 ::= ((rule2_1_1))
+rule2_1_1 ::= (([0-9] rule2_1_1) | ([0-9]))
+"""
+
+    grammar_1_str = """
+        root ::= rule1 | rule2
+        rule1 ::= \"[a-z]+\"
+        rule2 ::= [0-9]+
+    """
+
+    grammar_2_str = """
+        root ::= rule1 rule2
+        rule1 ::= "0."
+        rule2 ::= [0-9]+
+    """
+
+    tag1 = "tag1"
+    tag2 = "tag2"
+
+    grammar_1 = xgr.Grammar.from_ebnf(grammar_1_str)
+    grammar_2 = xgr.Grammar.from_ebnf(grammar_2_str)
+
+    grammar_list = [grammar_1, grammar_2]
+    tag_list = [tag1, tag2]
+    grammar = xgr.Grammar.tag_dispatch(tags=tag_list, grammars=grammar_list)
+    assert grammar is not None
+    assert str(grammar) == expected_grammar
     assert _is_grammar_accept_string(grammar, input) == expected_accept
 
 

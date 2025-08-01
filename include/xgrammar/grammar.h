@@ -176,9 +176,8 @@ class Grammar {
   /*!
    * \brief Create a grammar that matches a tag dispatch. A tag dispatch is a grammar that matches
    * a set of tags, each with a trigger and a schema.
-   * \param triggers The triggers for the tags. Each trigger is a string that identifies the tag.
-   * \param tags The tags to match. Each tag is a grammar, and they are corresponding to the
-   * triggers in the same order.
+   * \param tags The tags corresponding to the grammars.
+   * \param grammars The grammar to match.
    * \param stop_eos Whether to end the tag dispatch when matching any characters before a tag is
    * dispatched.
    * \param loop_after_dispatch Whether to loop back to the start of the tag dispatch after
@@ -188,8 +187,8 @@ class Grammar {
    * \return A grammar that matches the tag dispatch.
    */
   static Grammar TagDispatch(
-      const std::vector<std::string>& triggers,
-      const std::vector<Grammar>& tags,
+      const std::vector<std::string>& tags,
+      const std::vector<Grammar>& grammars,
       bool stop_eos,
       bool loop_after_dispatch,
       const std::vector<std::string>& stop_strs

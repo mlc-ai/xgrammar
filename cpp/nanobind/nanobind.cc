@@ -179,11 +179,11 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_static(
           "tag_dispatch",
           &Grammar::TagDispatch,
-          nb::arg("tag"),
-          nb::arg("grammar"),
+          nb::arg("tags"),
+          nb::arg("grammars"),
           nb::arg("stop_eos") = true,
           nb::arg("loop_after_dispatch") = true,
-          nb::arg("stop_strs").none(),
+          nb::arg("stop_strs"),
           nb::call_guard<nb::gil_scoped_release>()
       )
       .def("serialize_json", &Grammar::SerializeJSON)

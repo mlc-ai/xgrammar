@@ -374,8 +374,8 @@ class Grammar(XGRObject):
 
     @staticmethod
     def tag_dispatch(
-        triggers: List[str],
-        tags: List["Grammar"],
+        tags: List[str],
+        grammars: "Grammar",
         stop_eos: bool = True,
         stop_str: List[str] = [],
         loop_after_dispatch: bool = True,
@@ -408,8 +408,11 @@ class Grammar(XGRObject):
             The grammar that dispatches to different grammars based on the triggers.
         """
 
+        grammar_handles = [grammar._handle for grammar in grammars]
         return Grammar._create_from_handle(
-            _core.Grammar.tag_dispatch(triggers, tags, stop_eos, stop_str, loop_after_dispatch)
+            _core.Grammar.tag_dispatch(
+                tags, grammar_handles, stop_eos, loop_after_dispatch, stop_str
+            )
         )
 
     def serialize_json(self) -> str:
