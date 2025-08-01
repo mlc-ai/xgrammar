@@ -344,7 +344,7 @@ class Grammar(XGRObject):
         return Grammar._create_from_handle(_core.Grammar.string(string))
 
     @staticmethod
-    def character_class(negated: bool, characters: List[int]) -> "Grammar":
+    def character_class(negated: bool, characters: List[str]) -> "Grammar":
         """Create a grammar that matches a character class.
 
         Parameters
@@ -352,26 +352,25 @@ class Grammar(XGRObject):
         negated : bool
             Whether the character class is negated (matches any character not in the list).
 
-        characters : List[int]
+        characters : List[str]
             The list of Unicode code points representing the characters in the class. The size
             of the list should be even. characters[i] and characters[i + 1] represent
             a range of characters from characters[i] to characters[i + 1] (inclusive).
-            The elements in the list should be less than 0xff.
+            The elements in the list should be less than 0xff. The size of each string should be 1.
 
         Returns
         -------
         grammar : Grammar
             The grammar that matches the character class.
         """
-        for character in characters:
-            if not (0 <= character < 0x100):
-                raise ValueError(
-                    f"Character code points must be in the range [0, 255], got {character}."
-                )
+        if any(len(c) != 1 for c in characters):
+            raise ValueError("Each character should be a single Unicode code point.")
         if len(characters) % 2 != 0:
-            raise ValueError("The list of characters must have an even size, representing ranges.")
-
-        return Grammar._create_from_handle(_core.Grammar.character_class(negated, characters))
+            raise ValueError("The size of the characters list should be even.")
+        int_characters = [ord(c) for c in characters]
+        if any(c < 0 or c > 0xFF for c in int_characters):
+            raise ValueError("The characters should be Unicode code points in the range [0, 255].")
+        return Grammar._create_from_handle(_core.Grammar.character_class(negated, int_characters))
 
     @staticmethod
     def tag_dispatch(
