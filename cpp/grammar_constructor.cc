@@ -315,6 +315,19 @@ Grammar Grammar::Concat(const std::vector<Grammar>& grammars) {
   return GrammarConcatFunctor::Apply(grammars);
 }
 
+Grammar Grammar::Star(const Grammar& grammar) {
+  // TODO:
+  XGRAMMAR_UNREACHABLE();
+}
+
+Grammar Grammar::Plus(const Grammar& grammar) {
+  return Grammar::Concat({grammar, Grammar::Star(grammar)});
+}
+
+Grammar Grammar::Optional(const Grammar& grammar) {
+  return Grammar::Union({grammar, Grammar::Empty()});
+}
+
 /*************************** Forward grammar Constructors to their impl ***************************/
 
 Grammar GrammarUnionFunctor::Apply(const std::vector<Grammar>& grammars) {
