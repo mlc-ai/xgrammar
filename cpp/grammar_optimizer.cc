@@ -873,7 +873,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
   }
 };
 
-/*************************** Forward grammar functors to their impl ***************************/
+/*************************** Forward grammar optimizers to their impl ***************************/
 
 Grammar GrammarOptimizer::Optimize(const Grammar& grammar) {
   return GrammarOptimizerImpl().Apply(grammar);
