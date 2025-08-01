@@ -4,7 +4,7 @@ from typing import Optional
 import pytest
 
 import xgrammar as xgr
-from xgrammar.testing import GrammarFunctor, _ebnf_to_grammar_no_normalization
+from xgrammar.testing import GrammarFunctor, GrammarOptimizer, _ebnf_to_grammar_no_normalization
 
 
 def test_basic_string_literal():
@@ -491,7 +491,7 @@ rule4 ::= (("") | ("e" rule4 "f")) (=("f"))
 rule5 ::= (("") | ("g" rule5 "h"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
+    grammar = GrammarOptimizer.lookahead_assertion_analyzer(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -546,7 +546,7 @@ rule2 ::= (("b") | ("c" [b-c]))
 @pytest.mark.parametrize("before, expected", before__expected__test_rule_inliner)
 def test_rule_inliner(before: str, expected: str):
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.rule_inliner(grammar)
+    grammar = GrammarOptimizer.rule_inliner(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -601,7 +601,7 @@ rule4 ::= (("g") | ("h"))
 @pytest.mark.parametrize("before, expected", before__expected__test_dead_code_eliminator)
 def test_dead_code_eliminator(before: str, expected: str):
     grammar = _ebnf_to_grammar_no_normalization(before)
-    after = xgr.testing.GrammarFunctor.dead_code_eliminator(grammar)
+    after = xgr.testing.GrammarOptimizer.dead_code_eliminator(grammar)
     assert str(after) == expected
 
 
