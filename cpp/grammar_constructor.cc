@@ -268,6 +268,35 @@ class TagDispatchGrammarCreatorImpl : public GrammarMutator {
   }
 };
 
+class StarGrammarCreatorImpl : public GrammarMutator {
+ public:
+  Grammar Apply(const Grammar& grammar) {
+    // Initialize the grammar and builder.
+    InitGrammar();
+    InitBuilder();
+
+    // Add a new empty rule for the root.
+    auto root_rule_id = builder_->AddEmptyRule("root");
+
+    // Add the original grammar as a subgrammar.
+    auto original_root_rule_id = SubGrammarAdderImpl().ApplyWithBuilder(builder_, grammar);
+
+    // Get a rule reference for root_original.
+    auto original_root_rule_ref = builder_->AddRuleRef(original_root_rule_id);
+
+    // Get a rule reference for the new root rule.
+    auto root_rule_ref = builder_->AddRuleRef(root_rule_id);
+
+    // We get root_original root.
+    auto new_root_seq = builder_->AddSequence({original_root_rule_ref, root_rule_ref});
+
+    // root ::= "" | root_original root
+    auto new_root_choice = builder_->AddChoices({builder_->AddEmptyStr(), new_root_seq});
+    builder_->UpdateRuleBody(root_rule_id, new_root_choice);
+    return builder_->Get(root_rule_id);
+  }
+};
+
 /**************************************** Grammar Functions ***************************************/
 
 Grammar Grammar::Empty() { return Grammar::FromEBNF("root ::= \"\""); }
@@ -315,10 +344,7 @@ Grammar Grammar::Concat(const std::vector<Grammar>& grammars) {
   return GrammarConcatFunctor::Apply(grammars);
 }
 
-Grammar Grammar::Star(const Grammar& grammar) {
-  // TODO:
-  XGRAMMAR_UNREACHABLE();
-}
+Grammar Grammar::Star(const Grammar& grammar) { return StarGrammarCreator::Apply(grammar); }
 
 Grammar Grammar::Plus(const Grammar& grammar) {
   return Grammar::Concat({grammar, Grammar::Star(grammar)});
@@ -359,6 +385,10 @@ Grammar TagDispatchGrammarCreator::Apply(
   return TagDispatchGrammarCreatorImpl().Apply(
       triggers, tags, stop_eos, loop_after_dispatch, stop_strs
   );
+}
+
+Grammar StarGrammarCreator::Apply(const Grammar& grammar) {
+  return StarGrammarCreatorImpl().Apply(grammar);
 }
 
 }  // namespace xgrammar

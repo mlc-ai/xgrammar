@@ -59,6 +59,11 @@ class TagDispatchGrammarCreator {
   );
 };
 
+class StarGrammarCreator {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
 }  // namespace xgrammar
 
 #endif
