@@ -128,6 +128,25 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)
       .def_static("union", &Grammar::Union, nb::call_guard<nb::gil_scoped_release>())
       .def_static("concat", &Grammar::Concat, nb::call_guard<nb::gil_scoped_release>())
+      .def_static("string", &Grammar::String, nb::call_guard<nb::gil_scoped_release>())
+      .def_static("empty", &Grammar::Empty)
+      .def_static(
+          "character_class",
+          &Grammar::CharacterClass,
+          nb::arg("characters"),
+          nb::arg("negate") = false,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "tag_dispatch",
+          &Grammar::TagDispatch,
+          nb::arg("tag"),
+          nb::arg("grammar"),
+          nb::arg("stop_eos") = true,
+          nb::arg("loop_after_dispatch") = true,
+          nb::arg("stop_strs").none(),
+          nb::call_guard<nb::gil_scoped_release>()
+      )
       .def("serialize_json", &Grammar::SerializeJSON)
       .def_static("deserialize_json", &Grammar_DeserializeJSON);
 

@@ -316,6 +316,103 @@ class Grammar(XGRObject):
         grammar_handles = [grammar._handle for grammar in grammars]
         return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
 
+    @staticmethod
+    def empty() -> "Grammar":
+        """Create an empty grammar that matches nothing.
+
+        Returns
+        -------
+        grammar : Grammar
+            The empty grammar.
+        """
+        return Grammar._create_from_handle(_core.Grammar.empty())
+
+    @staticmethod
+    def string(string: str) -> "Grammar":
+        """Create a grammar that matches a specific string.
+
+        Parameters
+        ----------
+        string : str
+            The string to match.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches the specific string.
+        """
+        return Grammar._create_from_handle(_core.Grammar.string(string))
+
+    @staticmethod
+    def character_class(negated: bool, characters: List[int]) -> "Grammar":
+        """Create a grammar that matches a character class.
+
+        Parameters
+        ----------
+        negated : bool
+            Whether the character class is negated (matches any character not in the list).
+
+        characters : List[int]
+            The list of Unicode code points representing the characters in the class. The size
+            of the list should be even. characters[i] and characters[i + 1] represent
+            a range of characters from characters[i] to characters[i + 1] (inclusive).
+            The elements in the list should be less than 0xff.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches the character class.
+        """
+        for character in characters:
+            if not (0 <= character < 0x100):
+                raise ValueError(
+                    f"Character code points must be in the range [0, 255], got {character}."
+                )
+        if len(characters) % 2 != 0:
+            raise ValueError("The list of characters must have an even size, representing ranges.")
+
+        return Grammar._create_from_handle(_core.Grammar.character_class(negated, characters))
+
+    @staticmethod
+    def tag_dispatch(
+        triggers: List[str],
+        tags: List["Grammar"],
+        stop_eos: bool = True,
+        stop_str: List[str] = [],
+        loop_after_dispatch: bool = True,
+    ) -> "Grammar":
+        """Create a grammar that dispatches to different grammars based on the triggers.
+        The grammar will match the triggers, and then dispatch to the corresponding grammar
+        based on the tags.
+
+        Parameters
+        ----------
+        triggers : List[str]
+            The list of triggers. The grammar will match the triggers, and then dispatch to the
+            corresponding grammar based on the tags.
+        tags : List[Grammar]
+            The list of grammars to dispatch to. The grammar will match the triggers, and then
+            dispatch to the corresponding grammar based on the tags.
+        stop_eos : bool, default: True
+            Whether to stop the grammar when not dispatching to any grammar.
+            If True, the grammar will be able to stop when not dispatching to any grammar.
+        stop_str : List[str], default: []
+            The list of strings that will stop the grammar when matched. If the grammar matches
+            any of the strings in the list, it will stop the grammar.
+        loop_after_dispatch : bool, default: True
+            Whether to loop after dispatching to the grammar. If True, the grammar will loop
+            after dispatching to the grammar, allowing the grammar to match the triggers again.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that dispatches to different grammars based on the triggers.
+        """
+
+        return Grammar._create_from_handle(
+            _core.Grammar.tag_dispatch(triggers, tags, stop_eos, stop_str, loop_after_dispatch)
+        )
+
     def serialize_json(self) -> str:
         """Serialize the grammar to a JSON string."""
         return self._handle.serialize_json()
