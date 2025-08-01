@@ -373,6 +373,53 @@ class Grammar(XGRObject):
         return Grammar._create_from_handle(_core.Grammar.character_class(negated, int_characters))
 
     @staticmethod
+    def star(grammar: "Grammar") -> "Grammar":
+        """Create a grammar that matches zero or more occurrences of the given grammar.
+
+        Parameters
+        ----------
+        grammar : Grammar
+            The grammar to match zero or more occurrences of.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches zero or more occurrences of the given grammar.
+        """
+        return Grammar._create_from_handle(_core.Grammar.star(grammar._handle))
+
+    @staticmethod
+    def plus(grammar: "Grammar") -> "Grammar":
+        """Create a grammar that matches one or more occurrences of the given grammar.
+
+        Parameters
+        ----------
+        grammar : Grammar
+            The grammar to match one or more occurrences of.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches one or more occurrences of the given grammar.
+        """
+        return Grammar._create_from_handle(_core.Grammar.plus(grammar._handle))
+
+    def optional(grammar: "Grammar") -> "Grammar":
+        """Create a grammar that matches zero or one occurrence of the given grammar.
+
+        Parameters
+        ----------
+        grammar : Grammar
+            The grammar to match zero or one occurrence of.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches zero or one occurrence of the given grammar.
+        """
+        return Grammar._create_from_handle(_core.Grammar.optional(grammar._handle))
+
+    @staticmethod
     def tag_dispatch(
         tags: List[str],
         grammars: "Grammar",
