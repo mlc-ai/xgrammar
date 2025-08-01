@@ -302,8 +302,29 @@ class StarGrammarCreatorImpl : public GrammarMutator {
 Grammar Grammar::Empty() { return Grammar::FromEBNF("root ::= \"\""); }
 
 Grammar Grammar::String(const std::string& str) {
+  static const std::unordered_map<char, std::string> kCodepointToEscape = {
+      {'\'', "\\\'"},
+      {'\"', "\\\""},
+      {'\?', "\\?"},
+      {'\\', "\\\\"},
+      {'\a', "\\a"},
+      {'\b', "\\b"},
+      {'\f', "\\f"},
+      {'\n', "\\n"},
+      {'\r', "\\r"},
+      {'\t', "\\t"},
+      {'\v', "\\v"},
+      {'\0', "\\0"},
+      {'\x1B', "\\e"}
+  };
   std::string ebnf_string = "root ::= \"";
-  ebnf_string += str;
+  for (auto ch : str) {
+    if (kCodepointToEscape.find(ch) != kCodepointToEscape.end()) {
+      ebnf_string += kCodepointToEscape.at(ch);
+    } else {
+      ebnf_string += ch;
+    }
+  }
   ebnf_string += "\"";
   return Grammar::FromEBNF(ebnf_string);
 }
