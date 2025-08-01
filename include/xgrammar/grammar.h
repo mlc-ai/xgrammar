@@ -179,10 +179,20 @@ class Grammar {
    * \param triggers The triggers for the tags. Each trigger is a string that identifies the tag.
    * \param tags The tags to match. Each tag is a grammar, and they are corresponding to the
    * triggers in the same order.
+   * \param stop_eos Whether to end the tag dispatch when matching any characters before a tag is
+   * dispatched.
+   * \param loop_after_dispatch Whether to loop back to the start of the tag dispatch after
+   * dispatching a tag. If true, the tag dispatch will continue to match tags after dispatching one.
+   * \param stop_strs The strings to stop the tag dispatch. If this is not empty, the tag dispatch
+   * will stop when it matches one of the strings in stop_strs.
    * \return A grammar that matches the tag dispatch.
    */
   static Grammar TagDispatch(
-      const std::vector<std::string>& triggers, const std::vector<Grammar>& tags
+      const std::vector<std::string>& triggers,
+      const std::vector<Grammar>& tags,
+      bool stop_eos,
+      bool loop_after_dispatch,
+      const std::vector<std::string>& stop_strs
   );
 
   /*!
