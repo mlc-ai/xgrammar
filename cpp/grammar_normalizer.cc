@@ -1,9 +1,9 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_functor.cc
+ * \file xgrammar/grammar_normalizer.cc
  */
 
-#include "grammar_functor.h"
+#include "grammar_normalizer.h"
 
 #include <xgrammar/xgrammar.h>
 

@@ -301,7 +301,7 @@ def _print_grammar_fsms(grammar: Grammar) -> str:
     return _core.testing._print_grammar_fsms(grammar._handle)
 
 
-class GrammarFunctor:
+class GrammarNormalizer:
     """A utility class for transforming grammars. These methods are called during grammar parsing.
     For test purposes."""
 
@@ -309,14 +309,14 @@ class GrammarFunctor:
     def structure_normalizer(grammar: Grammar) -> Grammar:
         """Normalize the structure of the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.structure_normalizer(grammar._handle)
+            _core.testing.grammar_normalizer.structure_normalizer(grammar._handle)
         )
 
     @staticmethod
     def byte_string_fuser(grammar: Grammar) -> Grammar:
         """Fuse the byte string elements in the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.byte_string_fuser(grammar._handle)
+            _core.testing.grammar_normalizer.byte_string_fuser(grammar._handle)
         )
 
 
