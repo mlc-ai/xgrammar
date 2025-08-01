@@ -6,7 +6,7 @@ from typing import Optional
 import pytest
 
 import xgrammar as xgr
-from xgrammar.testing import GrammarFunctor, _ebnf_to_grammar_no_normalization
+from xgrammar.testing import GrammarNormalizer, GrammarOptimizer, _ebnf_to_grammar_no_normalization
 
 
 def test_tag_dispatch():
@@ -84,9 +84,9 @@ rule5 ::= ("" | ("g" rule5 "h"))
 """
 
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.structure_normalizer(grammar)
-    grammar = GrammarFunctor.byte_string_fuser(grammar)
-    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
+    grammar = GrammarNormalizer.structure_normalizer(grammar)
+    grammar = GrammarNormalizer.byte_string_fuser(grammar)
+    grammar = GrammarOptimizer.lookahead_assertion_analyzer(grammar)
     after = str(grammar)
     assert after == expected
 

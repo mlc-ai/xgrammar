@@ -5,9 +5,9 @@
 #ifndef XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
 #define XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
 
+#include <map>
 #include <queue>
-#include <unordered_map>
-#include <unordered_set>
+#include <set>
 #include <vector>
 
 namespace xgrammar {
@@ -15,8 +15,8 @@ namespace xgrammar {
 template <typename T>
 class UnionFindSet {
  private:
-  std::unordered_map<T, T> parent;
-  std::unordered_map<T, int> rank;
+  std::map<T, T> parent;
+  std::map<T, int> rank;
 
  public:
   UnionFindSet() = default;
@@ -106,13 +106,13 @@ class UnionFindSet {
    * \brief Get all the equivalence classes in the union-find set.
    * \return A vector of unordered sets, each representing an equivalence class.
    */
-  std::vector<std::unordered_set<T>> GetAllSets() const {
-    std::vector<std::unordered_set<T>> result;
-    std::unordered_map<T, int> which_set;
+  std::vector<std::set<T>> GetAllSets() const {
+    std::vector<std::set<T>> result;
+    std::map<T, int> which_set;
     for (const auto& [key, value] : parent) {
       if (which_set.find(value) == which_set.end()) {
         which_set[value] = result.size();
-        result.push_back(std::unordered_set<T>());
+        result.push_back(std::set<T>());
       }
       result[which_set[value]].insert(key);
     }

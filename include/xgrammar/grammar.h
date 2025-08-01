@@ -9,8 +9,8 @@
 
 #include <xgrammar/object.h>
 
+#include <cstdint>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -156,6 +156,71 @@ class Grammar {
    * \returns The concatenation of the grammars.
    */
   static Grammar Concat(const std::vector<Grammar>& grammars);
+
+  /*!
+   * \brief Create an empty grammar that matches an empty string.
+   * \return An empty grammar.
+   */
+  static Grammar Empty();
+
+  /*!
+   * \brief Create a character class grammar that matches a set of characters.
+   * \param negated Whether the character class is negated. If true, it matches any character not in
+   * the set.
+   * \param characters The characters to match. This should be a vector of bytes (0~255), and its
+   * size should be even. characters[2 * i] is the start of the range, and characters[2 * i + 1] is
+   * the end of the range. \return A grammar that matches the character class.
+   */
+  static Grammar CharacterClass(bool negated, const std::vector<uint8_t>& characters);
+
+  /*!
+   * \brief Create a grammar that matches a tag dispatch. A tag dispatch is a grammar that matches
+   * a set of tags, each with a trigger and a schema.
+   * \param tags The tags corresponding to the grammars.
+   * \param grammars The grammar to match.
+   * \param stop_eos Whether to end the tag dispatch when matching any characters before a tag is
+   * dispatched.
+   * \param loop_after_dispatch Whether to loop back to the start of the tag dispatch after
+   * dispatching a tag. If true, the tag dispatch will continue to match tags after dispatching one.
+   * \param stop_strs The strings to stop the tag dispatch. If this is not empty, the tag dispatch
+   * will stop when it matches one of the strings in stop_strs.
+   * \return A grammar that matches the tag dispatch.
+   */
+  static Grammar TagDispatch(
+      const std::vector<std::string>& tags,
+      const std::vector<Grammar>& grammars,
+      bool stop_eos,
+      bool loop_after_dispatch,
+      const std::vector<std::string>& stop_strs
+  );
+
+  /*!
+   * \brief Create a grammar that matches a string.
+   * \param str The string to match.
+   * \return A grammar that matches the string.
+   */
+  static Grammar String(const std::string& str);
+
+  /*!
+   * \brief Create a grammar that matches zero or more occurrences of the given grammar.
+   * \param grammar The grammar to match.
+   * \return A grammar that matches zero or more occurrences of the given grammar.
+   */
+  static Grammar Star(const Grammar& grammar);
+
+  /*!
+   * \brief Create a grammar that matches one or more occurrences of the given grammar.
+   * \param grammar The grammar to match.
+   * \return A grammar that matches one or more occurrences of the given grammar.
+   */
+  static Grammar Plus(const Grammar& grammar);
+
+  /*!
+   * \brief Create a grammar that matches zero or one occurrences of the given grammar.
+   * \param grammar The grammar to match.
+   * \return A grammar that matches zero or one occurrences of the given grammar.
+   */
+  static Grammar Optional(const Grammar& grammar);
 
   /*!
    * \brief Print a BNF grammar.
