@@ -8,7 +8,7 @@
 #include <string>
 #include <string_view>
 
-#include "grammar_normalizer.h"
+#include "grammar_constructor.h"
 #include "support/logging.h"
 
 namespace xgrammar {
