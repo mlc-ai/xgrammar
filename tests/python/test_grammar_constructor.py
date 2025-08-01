@@ -160,7 +160,6 @@ def test_grammar_constructor_character_class_negated(input: str, expected_accept
     grammar = xgr.Grammar.character_class(True, character_range)
     assert grammar is not None
     assert str(grammar) == expected_grammar
-    print(str(grammar))
     assert _is_grammar_accept_string(grammar, input) == expected_accept
 
 
@@ -222,6 +221,70 @@ rule2_1_1 ::= (([0-9] rule2_1_1) | ([0-9]))
     assert grammar is not None
     assert str(grammar) == expected_grammar
     assert _is_grammar_accept_string(grammar, input) == expected_accept
+
+
+def test_grammar_constructor_plus():
+    grammar1 = xgr.Grammar.string("0.")
+    grammar2 = xgr.Grammar.plus(xgr.Grammar.character_class(False, ["0", "9"]))
+    grammar = xgr.Grammar.concat(grammar1, grammar2)
+    expected_grammar = """root ::= ((root_1 root_2))
+root_1 ::= (("0."))
+root_2 ::= ((root_1_1 root_2_1))
+root_1_1 ::= (([0-9]))
+root_2_1 ::= ("" | (root_1_1_1 root_2_1))
+root_1_1_1 ::= (([0-9]))
+"""
+
+    assert str(grammar) == expected_grammar
+    assert _is_grammar_accept_string(grammar, "0.1234567890")
+    assert not _is_grammar_accept_string(grammar, "0.123456789a")
+    assert not _is_grammar_accept_string(grammar, "0.")
+    assert _is_grammar_accept_string(grammar, "0.0")
+
+
+def test_grammar_constructor_star():
+    grammar1 = xgr.Grammar.string('\\"')
+    grammar2 = xgr.Grammar.star(xgr.Grammar.character_class(False, ["a", "z"]))
+    grammar = xgr.Grammar.concat(grammar1, grammar2, grammar1)
+    expected_grammar = """root ::= ((root_1 root_2 root_3))
+root_1 ::= (("\\\""))
+root_2 ::= ("" | (root_1_1 root_2))
+root_1_1 ::= (([a-z]))
+root_3 ::= (("\\\""))
+"""
+
+    assert str(grammar) == expected_grammar
+    assert _is_grammar_accept_string(grammar, '"azazaz"')
+    assert _is_grammar_accept_string(grammar, '""')
+    assert not _is_grammar_accept_string(grammar, "azazaz")
+    assert not _is_grammar_accept_string(grammar, '"azazaz')
+    assert not _is_grammar_accept_string(grammar, '"a--"a')
+
+
+def test_grammar_constructor_optional():
+    grammar1 = xgr.Grammar.union(xgr.Grammar.string("-"), xgr.Grammar.string("+"))
+    grammar2 = xgr.Grammar.plus(xgr.Grammar.character_class(False, ["0", "9"]))
+    grammar1_optional = xgr.Grammar.optional(grammar1)
+    grammar = xgr.Grammar.concat(grammar1_optional, grammar2)
+    expected_grammar = """root ::= ((root_1 root_4))
+root_1 ::= ((root_1_1) | (root_3))
+root_1_1 ::= ((root_1_1_1) | (root_2))
+root_1_1_1 ::= (("-"))
+root_2 ::= (("+"))
+root_3 ::= ("")
+root_4 ::= ((root_1_2 root_2_1))
+root_1_2 ::= (([0-9]))
+root_2_1 ::= ("" | (root_1_1_2 root_2_1))
+root_1_1_2 ::= (([0-9]))
+"""
+
+    assert str(grammar) == expected_grammar
+    assert _is_grammar_accept_string(grammar, "123")
+    assert _is_grammar_accept_string(grammar, "-123")
+    assert _is_grammar_accept_string(grammar, "+123")
+    assert not _is_grammar_accept_string(grammar, "++123")
+    assert not _is_grammar_accept_string(grammar, "123-")
+    assert not _is_grammar_accept_string(grammar, "+-123")
 
 
 if __name__ == "__main__":
