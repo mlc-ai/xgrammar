@@ -1,0 +1,703 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>xgrammar.matcher &mdash; XGrammar 0.1.22 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+        <script src="../../_static/tabs.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
+        <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
+        <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+        <script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";
+window.addEventListener("load", () => mermaid.run());
+</script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html">
+          
+
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.22
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+          <li><a href="../index.html">Module code</a> <span class="br-arrow">></span></li>
+        
+      <li>xgrammar.matcher</li>
+    
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for xgrammar.matcher</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Match the output of the LLM to the specified grammar, then generate the mask for the next</span>
+<span class="sd">token.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGRObject</span><span class="p">,</span> <span class="n">_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.compiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledGrammar</span>
+
+<span class="n">bitmask_dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">int32</span>
+<span class="sd">&quot;&quot;&quot;The dtype of the bitmask: int32.&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="get_bitmask_shape"><a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.get_bitmask_shape">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">get_bitmask_shape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32)).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">vocab_size</span> <span class="o">/</span> <span class="mi">32</span><span class="p">))</span></div>
+
+
+<span class="n">_FULL_MASK</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">bitmask_dtype</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="allocate_token_bitmask"><a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.allocate_token_bitmask">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">allocate_token_bitmask</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on</span>
+<span class="sd">    CPU with shape (batch_size, ceil(vocab_size / 32)). Users who have their own needs to</span>
+<span class="sd">    manage CUDA memory can construct the tensor with get_bitmask_shape and bitmask_dtype</span>
+<span class="sd">    themselves.</span>
+
+<span class="sd">    The reason why we use int32 instead of uint32 is that old versions of PyTorch do not support</span>
+<span class="sd">    uint32.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    batch_size : int</span>
+<span class="sd">        The batch size of the bitmask.</span>
+
+<span class="sd">    vocab_size : int</span>
+<span class="sd">        The size of the vocabulary.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    bitmask : torch.Tensor</span>
+<span class="sd">        The shape of the bitmask.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># In CUDA, use pinned memory to speed up data transfer from CPU to GPU</span>
+    <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">get_bitmask_shape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">),</span> <span class="n">_FULL_MASK</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">bitmask_dtype</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="reset_token_bitmask"><a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.reset_token_bitmask">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">reset_token_bitmask</span><span class="p">(</span><span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reset the bitmask to the full mask.&quot;&quot;&quot;</span>
+    <span class="n">bitmask</span><span class="o">.</span><span class="n">fill_</span><span class="p">(</span><span class="n">_FULL_MASK</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="apply_token_bitmask_inplace"><a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.apply_token_bitmask_inplace">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">apply_token_bitmask_inplace</span><span class="p">(</span>
+    <span class="n">logits</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">vocab_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">indices</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply the bitmask to the logits in-place. The bitmask is a 01 bitwise compressed tensor,</span>
+<span class="sd">    where 0 means the token is masked and 1 means the token is not masked. It can be generated by</span>
+<span class="sd">    allocate_token_bitmask and filled by fill_next_token_bitmask. After applying the bitmask, the</span>
+<span class="sd">    masked logits will be set to -inf.</span>
+
+<span class="sd">    The shape of logits and bitmask should be (batch_size, vocab_size) and</span>
+<span class="sd">    (batch_size, bitmask_size) respectively. bitmask_size = ceil(vocab_size / 32). The operation is:</span>
+
+<span class="sd">    .. code:: python</span>
+
+<span class="sd">        for i in range(batch_size):</span>
+<span class="sd">            for j in range(vocab_size):</span>
+<span class="sd">                if get_bitmask_value(bitmask, i, j) == 0:</span>
+<span class="sd">                    logits[i, j] = -inf</span>
+
+<span class="sd">    get_bitmask_value(bitmask, i, j) gets the j-th bit of the i-th row of the bitmask.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Padding:</span>
+<span class="sd">        This method allows additional padding on the vocabulary dimension of logits or bitmask. If</span>
+<span class="sd">        padding exists, provide the real vocab size to the vocab_size parameter, and the operation</span>
+<span class="sd">        will be applied to logits[..., :vocab_size] and bitmask[..., :ceil(vocab_size / 32)].</span>
+
+<span class="sd">        If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],</span>
+<span class="sd">        bitmask.shape[-1] * 32).</span>
+
+<span class="sd">    Indices:</span>
+<span class="sd">        Indices can be used to specify which logits in the batch to apply the bitmask to. It is</span>
+<span class="sd">        especially useful when there are structured requests and unstructured requests mixed in the</span>
+<span class="sd">        same batch by skipping masking the logits in the unstructured requests. When specified, the</span>
+<span class="sd">        operation will be</span>
+
+<span class="sd">        .. code:: python</span>
+
+<span class="sd">            for batch_id in indices:</span>
+<span class="sd">                for j in range(vocab_size):</span>
+<span class="sd">                    if get_bitmask_value(bitmask, batch_id, j) == 0:</span>
+<span class="sd">                        logits[batch_id, j] = -inf</span>
+
+<span class="sd">        When indices is specified, the batch sizes of logits and bitmask do not need to be the same.</span>
+<span class="sd">        As long as the indices are valid, the operation will be performed.</span>
+
+<span class="sd">    Device:</span>
+<span class="sd">        The logits and bitmask should be on the same device. If both them are on GPU, we launch a GPU</span>
+<span class="sd">        kernel to apply bitmask. If both them are on CPU, we use a CPU implementation. The GPU kernel</span>
+<span class="sd">        is optimized and should be preferred.</span>
+
+<span class="sd">        In practice, the bitmask is allocated on CPU, and the logits is usually on GPU, so users should</span>
+<span class="sd">        manually copy the bitmask to GPU before calling this function.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    logits : torch.Tensor</span>
+<span class="sd">        The tensor to apply the bitmask to.</span>
+
+<span class="sd">    bitmask : torch.Tensor</span>
+<span class="sd">        The bitmask to apply.</span>
+
+<span class="sd">    vocab_size : Optional[int], default: None</span>
+<span class="sd">        The size of the vocabulary. If not provided, the vocab size will be detected as</span>
+<span class="sd">        min(logits.shape[-1], bitmask.shape[-1] * 32).</span>
+
+<span class="sd">    indices : Optional[List[int]], default: None</span>
+<span class="sd">        A list of indices to specify which logits in the batch to apply the bitmask to. Should be</span>
+<span class="sd">        unique. If None, apply the bitmask to all logits in the batch.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;logits and bitmask should be on the same device. &quot;</span>
+            <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;But got logits.device: </span><span class="si">{</span><span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, bitmask.device: </span><span class="si">{</span><span class="n">bitmask</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+
+    <span class="c1"># dispatch to different implementations based on the device</span>
+    <span class="k">if</span> <span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.kernels.apply_token_bitmask_inplace_cpu</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_token_bitmask_inplace_cpu</span>
+
+        <span class="n">apply_token_bitmask_inplace_cpu</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cuda&quot;</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.kernels.apply_token_bitmask_inplace_triton</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_token_bitmask_inplace_triton</span>
+
+        <span class="n">apply_token_bitmask_inplace_triton</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.kernels.apply_token_bitmask_inplace_torch_compile</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">apply_token_bitmask_inplace_torch_compile</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">apply_token_bitmask_inplace_torch_compile</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="GrammarMatcher"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarMatcher</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Match the output of the LLM to the specified grammar, then generate the mask for the next</span>
+<span class="sd">    token. This is the core class in the grammar-guided generation.</span>
+
+<span class="sd">    This class maintains a stateful matcher that can accept tokens and strings, then match them</span>
+<span class="sd">    to the specified grammar. The matcher can provide a bitmask for the next token prediction,</span>
+<span class="sd">    so that the output of the LLM follows the specified grammar. Its state can be reset and</span>
+<span class="sd">    rolled back by tokens. It also provides utilities for jump-forward decoding.</span>
+
+<span class="sd">    After matching the whole grammar, the matcher will accept a stop token. The token mask at</span>
+<span class="sd">    this time will only allow stop tokens. After accepting the stop token, the matcher will</span>
+<span class="sd">    terminate, then it cannot accept any new token or generate a new token mask, meaning the</span>
+<span class="sd">    generation is finished.</span>
+
+<span class="sd">    Under the hood, it utilizes a pushdown automaton with backtracking to match the grammar,</span>
+<span class="sd">    with optimizations specific to LLM token mask generation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="GrammarMatcher.__init__"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">compiled_grammar</span><span class="p">:</span> <span class="n">CompiledGrammar</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">override_stop_tokens</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">terminate_without_stop_token</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">max_rollback_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct the grammar matcher.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The initialization context for the grammar matcher.</span>
+
+<span class="sd">        override_stop_tokens : Optional[Union[int, List[int]]], default: None</span>
+<span class="sd">            If not None, the stop tokens to override the ones in the grammar.</span>
+
+<span class="sd">        terminate_without_stop_token : bool, default: False</span>
+<span class="sd">            Whether to terminate the matcher without accepting a stop token.</span>
+
+<span class="sd">        max_rollback_tokens : int, default: -1</span>
+<span class="sd">            Deprecated because the earley parser significantly reduces the number of states, so not</span>
+<span class="sd">            needed anymore.</span>
+
+<span class="sd">            The maximum number of rollback tokens allowed. The rollback operation is useful for</span>
+<span class="sd">            jump-forward decoding and speculative decoding.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">compiled_grammar</span><span class="p">,</span> <span class="n">CompiledGrammar</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The grammar should be compiled before passing it to GrammarMatcher.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">max_rollback_tokens</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="s2">&quot;max_rollback_tokens is deprecated because the earley parser significantly reduces the number of states, so not needed anymore.&quot;</span><span class="p">,</span>
+                <span class="ne">DeprecationWarning</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">override_stop_tokens</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">override_stop_tokens</span> <span class="o">=</span> <span class="p">[</span><span class="n">override_stop_tokens</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_handle</span><span class="p">(</span>
+            <span class="n">_core</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span>
+                <span class="n">compiled_grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">,</span>
+                <span class="n">override_stop_tokens</span><span class="p">,</span>
+                <span class="n">terminate_without_stop_token</span><span class="p">,</span>
+                <span class="n">max_rollback_tokens</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GrammarMatcher.accept_token"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">accept_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept one token and update the state of the matcher.</span>
+
+<span class="sd">        In the following cases, the matcher will not accept the token and return False:</span>
+
+<span class="sd">        1. The token does not match the grammar.</span>
+<span class="sd">        2. The matcher has terminated after accepting the stop token, but is trying to accept a</span>
+<span class="sd">           new token.</span>
+<span class="sd">        3. The token id is out of range.</span>
+<span class="sd">        4. The token is a special token.</span>
+
+<span class="sd">        The user should capture the return value and handle the cases where the token is not</span>
+<span class="sd">        accepted.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        token_id : int</span>
+<span class="sd">            The id of the token to accept.</span>
+
+<span class="sd">        debug_print : bool, default: False</span>
+<span class="sd">            Whether to print information about the internal state of the matcher. Helpful</span>
+<span class="sd">            for debugging.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        accepted : bool</span>
+<span class="sd">            Whether the token is accepted.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        RuntimeError</span>
+<span class="sd">            If the recursion depth is exceeded.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">accept_token</span><span class="p">(</span><span class="n">token_id</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GrammarMatcher.accept_string"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_string">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">accept_string</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_str</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept a string and update the state of the matcher. The whole string is considered</span>
+<span class="sd">        as one step in rollback. It is used to complement the functionality of accept_token, and</span>
+<span class="sd">        accept_token should always be used to accept tokens.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        input_str : Union[str, bytes]</span>
+<span class="sd">            The string to be accepted.</span>
+
+<span class="sd">        debug_print : bool, default: False</span>
+<span class="sd">            Whether to print information about the internal state of the matcher. Helpful for</span>
+<span class="sd">            debugging.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        accepted : bool</span>
+<span class="sd">            Whether the string is accepted.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        RuntimeError</span>
+<span class="sd">            If the recursion depth is exceeded.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">accept_string</span><span class="p">(</span><span class="n">input_str</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GrammarMatcher.fill_next_token_bitmask"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">fill_next_token_bitmask</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fill the bitmask for the next token prediction. The input bitmask can be generated</span>
+<span class="sd">        by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the</span>
+<span class="sd">        next token bitmask.</span>
+
+<span class="sd">        This method does not change the matcher state.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        bitmask : torch.Tensor</span>
+<span class="sd">            The bitmask for the next token prediction.</span>
+
+<span class="sd">        index : int, default: 0</span>
+<span class="sd">            The batch id of the bitmask.</span>
+
+<span class="sd">        debug_print : bool, default: False</span>
+<span class="sd">            Whether to print information about generated bitmask. Helpful for debugging.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        need_apply : bool</span>
+<span class="sd">            Whether the bitmask need to be applied (not all-true). An optimization: if False,</span>
+<span class="sd">            this means the bitmask is already all-true, so no need to apply it.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        RuntimeError</span>
+<span class="sd">            If the recursion depth is exceeded.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;bitmask should be on CPU.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">bitmask_dtype</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;bitmask should be of type </span><span class="si">{</span><span class="n">bitmask_dtype</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">fill_next_token_bitmask</span><span class="p">(</span>
+            <span class="n">bitmask</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">(),</span> <span class="nb">list</span><span class="p">(</span><span class="n">bitmask</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">index</span><span class="p">,</span> <span class="n">debug_print</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GrammarMatcher.find_jump_forward_string"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">find_jump_forward_string</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find the jump-forward string for jump-forward decoding. This is the longest string that</span>
+<span class="sd">        certainly conforms with the current grammar from the current matcher state. This string</span>
+<span class="sd">        can become the output of the LLM without requiring LLM decoding.</span>
+
+<span class="sd">        This method does not change the matcher state.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        jump_forward_string : str</span>
+<span class="sd">            The jump-forward string.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        RuntimeError</span>
+<span class="sd">            If the recursion depth is exceeded.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">find_jump_forward_string</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="GrammarMatcher.rollback"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.rollback">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Rollback the matcher to a previous state by several tokens.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        num_tokens : int, default: 1</span>
+<span class="sd">            The number of tokens to rollback. It cannot exceed the current number of steps, nor can</span>
+<span class="sd">            it exceed the specified maximum number of rollback tokens.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">rollback</span><span class="p">(</span><span class="n">num_tokens</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GrammarMatcher.is_terminated"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.is_terminated">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_terminated</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if the matcher has terminated. If terminate_without_stop_token is False, the</span>
+<span class="sd">        matcher will terminate if it has accepted the stop token. Otherwise, the matcher will</span>
+<span class="sd">        terminate after matching the whole grammar.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        terminated : bool</span>
+<span class="sd">            Whether the matcher has terminated.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">is_terminated</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="GrammarMatcher.reset"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.reset">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reset the matcher to the initial state.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">max_rollback_tokens</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the maximum number of rollback tokens allowed.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        max_rollback_tokens : int</span>
+<span class="sd">            The maximum number of rollback tokens.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">max_rollback_tokens</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">stop_token_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The ids of the stop tokens used in the matcher. If specified, the provided stop tokens</span>
+<span class="sd">        will be used. Otherwise, the stop tokens will be detected from the vocabulary.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        stop_token_ids : List[int]</span>
+<span class="sd">            The ids of the stop tokens.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">stop_token_ids</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_debug_print_internal_state</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Print the internal state of the matcher. This is used for debugging. The</span>
+<span class="sd">        representation of the internal state is subject to change.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        internal_state : str</span>
+<span class="sd">            The internal state of the matcher.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">_debug_print_internal_state</span><span class="p">()</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+<div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>
