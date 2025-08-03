@@ -317,10 +317,36 @@ class Grammar(XGRObject):
         return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
 
     def serialize_json(self) -> str:
-        """Serialize the grammar to a JSON string."""
+        """Serialize the grammar to a JSON string.
+
+        Returns
+        -------
+        json_string : str
+            The JSON string.
+        """
         return self._handle.serialize_json()
 
     @staticmethod
     def deserialize_json(json_string: str) -> "Grammar":
-        """Deserialize a grammar from a JSON string."""
+        """Deserialize a grammar from a JSON string.
+
+        Parameters
+        ----------
+        json_string : str
+            The JSON string.
+
+        Returns
+        -------
+        grammar : Grammar
+            The deserialized grammar.
+
+        Raises
+        ------
+        InvalidJSONError
+            When the JSON string is invalid.
+        DeserializeFormatError
+            When the JSON string does not follow the serialization format of the grammar.
+        DeserializeVersionError
+            When the __VERSION__ field in the JSON string is not the same as the current version.
+        """
         return Grammar._create_from_handle(_core.Grammar.deserialize_json(json_string))

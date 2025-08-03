@@ -37,12 +37,54 @@ class CompiledGrammar(XGRObject):
         return self._handle.memory_size_bytes
 
     def serialize_json(self) -> str:
-        """Serialize the compiled grammar to a JSON string."""
+        """Serialize the compiled grammar to a JSON string. It will serialize the compiled grammar
+        without the tokenizer info, since the tokenizer info is shared by multiple compiled
+        grammars.
+
+        Notes
+        -----
+        The metadata of the tokenizer info is serialized and will be checked when deserializing.
+
+        Returns
+        -------
+        json_string : str
+            The JSON string.
+        """
         return self._handle.serialize_json()
 
     @staticmethod
     def deserialize_json(json_str: str, tokenizer_info: TokenizerInfo) -> "CompiledGrammar":
-        """Deserialize the compiled grammar from a JSON string and tokenizer info."""
+        """Deserialize the compiled grammar from a JSON string and associate it with the specified
+        tokenizer info.
+
+        Notes
+        -----
+        This will check the metadata of the tokenizer info matching the serialized metadata in
+        json_str. If the metadata does not match, a DeserializeFormatError will be raised.
+
+        Parameters
+        ----------
+        json_str : str
+            The JSON string.
+
+        tokenizer_info : TokenizerInfo
+            The tokenizer info.
+
+        Returns
+        -------
+        compiled_grammar : CompiledGrammar
+            The compiled grammar.
+
+        Raises
+        ------
+        InvalidJSONError
+            When the JSON string is invalid.
+        DeserializeFormatError
+            When the JSON string does not follow the serialization format of the grammar, or the
+            tokenizer info metadata does not match.
+        DeserializeVersionError
+            When the __VERSION__ field in the JSON string is not the same as the current version.
+        """
         return CompiledGrammar._create_from_handle(
             _core.CompiledGrammar.deserialize_json(json_str, tokenizer_info._handle)
         )

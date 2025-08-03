@@ -1,8 +1,10 @@
+"""Exceptions in XGrammar."""
+
 from typing import TYPE_CHECKING
 
 from .base import _core
 
-if TYPE_CHECKING:
+if TYPE_CHECKING or isinstance(_core, str):
 
     class DeserializeFormatError(RuntimeError):
         """Raised when the deserialization format is invalid."""

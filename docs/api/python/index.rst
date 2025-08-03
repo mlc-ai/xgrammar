@@ -14,4 +14,5 @@ XGrammar Python API
    testing
    structural_tag
    bitmask_ops
-   configuration
+   config
+   exception

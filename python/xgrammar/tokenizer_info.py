@@ -390,7 +390,7 @@ class TokenizerInfo(XGRObject):
         }
 
     def serialize_json(self) -> str:
-        """Serialize the tokenizer_info to a JSON string.
+        """Serialize the tokenizer info to a JSON string.
 
         Returns
         -------
@@ -401,7 +401,12 @@ class TokenizerInfo(XGRObject):
 
     @staticmethod
     def deserialize_json(json_string: str) -> "TokenizerInfo":
-        """Deserialize a grammar from a JSON string.
+        """Deserialize a tokenizer info from a JSON string.
+
+        Parameters
+        ----------
+        json_string : str
+            The JSON string.
 
         Returns
         -------
@@ -410,8 +415,11 @@ class TokenizerInfo(XGRObject):
 
         Raises
         ------
-        RuntimeError
-            If the string is not a valid JSON, or does not follow the serialization format, or its
-            serialization version number doesn't match that of the current xgrammar.
+        InvalidJSONError
+            When the JSON string is invalid.
+        DeserializeFormatError
+            When the JSON string does not follow the serialization format of the tokenizer info.
+        DeserializeVersionError
+            When the __VERSION__ field in the JSON string is not the same as the current version.
         """
         return TokenizerInfo._create_from_handle(_core.TokenizerInfo.deserialize_json(json_string))
