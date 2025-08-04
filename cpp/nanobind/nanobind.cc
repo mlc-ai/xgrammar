@@ -173,11 +173,7 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_static("optional", &Grammar::Optional, nb::call_guard<nb::gil_scoped_release>())
       .def_static("empty", &Grammar::Empty)
       .def_static(
-          "character_class",
-          &Grammar::CharacterClass,
-          nb::arg("characters"),
-          nb::arg("negate") = false,
-          nb::call_guard<nb::gil_scoped_release>()
+          "character_class", &Grammar::CharacterClass, nb::call_guard<nb::gil_scoped_release>()
       )
       .def_static(
           "tag_dispatch",

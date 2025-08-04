@@ -7,8 +7,9 @@
 
 #include <xgrammar/grammar.h>
 
+#include <string>
+
 #include "grammar_functor.h"
-#include "support/encoding.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -329,23 +330,7 @@ Grammar Grammar::String(const std::string& str) {
   return Grammar::FromEBNF(ebnf_string);
 }
 
-Grammar Grammar::CharacterClass(bool negated, const std::vector<uint8_t>& characters) {
-  XGRAMMAR_CHECK(characters.size() % 2 == 0)
-      << "Character class must have an even number of characters";
-  std::string ebnf_string = "root ::= ";
-  ebnf_string += "[";
-  if (negated) {
-    ebnf_string += "^";
-  }
-  for (size_t i = 0; i < characters.size(); i += 2) {
-    ebnf_string += EscapeString((characters[i]));
-    if (characters[i] != characters[i + 1]) {
-      ebnf_string += "-" + EscapeString((characters[i + 1]));
-    }
-  }
-  ebnf_string += "]";
-  return Grammar::FromEBNF(ebnf_string);
-}
+Grammar Grammar::CharacterClass(const std::string& str) { return Grammar::FromRegex(str); }
 
 Grammar Grammar::TagDispatch(
     const std::vector<std::string>& triggers,

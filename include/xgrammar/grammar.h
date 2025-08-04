@@ -9,7 +9,6 @@
 
 #include <xgrammar/object.h>
 
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <variant>
@@ -165,13 +164,11 @@ class Grammar {
 
   /*!
    * \brief Create a character class grammar that matches a set of characters.
-   * \param negated Whether the character class is negated. If true, it matches any character not in
-   * the set.
-   * \param characters The characters to match. This should be a vector of bytes (0~255), and its
-   * size should be even. characters[2 * i] is the start of the range, and characters[2 * i + 1] is
-   * the end of the range. \return A grammar that matches the character class.
+   * \param str The string representing the character class, Which should be in the format of
+   * [a-z], [^a-z], [0-9], etc.
+   * \return A grammar that matches the character class.
    */
-  static Grammar CharacterClass(bool negated, const std::vector<uint8_t>& characters);
+  static Grammar CharacterClass(const std::string& str);
 
   /*!
    * \brief Create a grammar that matches a tag dispatch. A tag dispatch is a grammar that matches

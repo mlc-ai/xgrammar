@@ -131,8 +131,8 @@ input_expected_accepted_test_grammar_constructor_character_class = (
 )
 def test_grammar_character_constructor_class(input: str, expected_accept: bool):
     expected_grammar = "root ::= (([\\-a-zA-Z]))\n"
-    character_range = ["-", "-", "a", "z", "A", "Z"]
-    grammar = xgr.Grammar.character_class(False, character_range)
+    grammar_str = "[-a-zA-Z]"
+    grammar = xgr.Grammar.character_class(grammar_str)
     assert grammar is not None
     assert str(grammar) == expected_grammar
     assert _is_grammar_accept_string(grammar, input) == expected_accept
@@ -156,8 +156,8 @@ input_expected_accepted_test_grammar_constructor_character_class_negated = (
 )
 def test_grammar_constructor_character_class_negated(input: str, expected_accept: bool):
     expected_grammar = "root ::= (([^\\-a-zA-Z]))\n"
-    character_range = ["-", "-", "a", "z", "A", "Z"]
-    grammar = xgr.Grammar.character_class(True, character_range)
+    grammar_str = "[^-a-zA-Z]"
+    grammar = xgr.Grammar.character_class(grammar_str)
     assert grammar is not None
     assert str(grammar) == expected_grammar
     assert _is_grammar_accept_string(grammar, input) == expected_accept
@@ -225,7 +225,7 @@ rule2_1_1 ::= (([0-9] rule2_1_1) | ([0-9]))
 
 def test_grammar_constructor_plus():
     grammar1 = xgr.Grammar.string("0.")
-    grammar2 = xgr.Grammar.plus(xgr.Grammar.character_class(False, ["0", "9"]))
+    grammar2 = xgr.Grammar.plus(xgr.Grammar.character_class("[0-9]"))
     grammar = xgr.Grammar.concat(grammar1, grammar2)
     expected_grammar = """root ::= ((root_1 root_2))
 root_1 ::= (("0."))
@@ -244,7 +244,7 @@ root_1_1_1 ::= (([0-9]))
 
 def test_grammar_constructor_star():
     grammar1 = xgr.Grammar.string('"')
-    grammar2 = xgr.Grammar.star(xgr.Grammar.character_class(False, ["a", "z"]))
+    grammar2 = xgr.Grammar.star(xgr.Grammar.character_class("[a-z]"))
     grammar = xgr.Grammar.concat(grammar1, grammar2, grammar1)
     expected_grammar = """root ::= ((root_1 root_2 root_3))
 root_1 ::= (("\\\""))
@@ -263,7 +263,7 @@ root_3 ::= (("\\\""))
 
 def test_grammar_constructor_optional():
     grammar1 = xgr.Grammar.union(xgr.Grammar.string("-"), xgr.Grammar.string("+"))
-    grammar2 = xgr.Grammar.plus(xgr.Grammar.character_class(False, ["0", "9"]))
+    grammar2 = xgr.Grammar.plus(xgr.Grammar.character_class("[0-9]"))
     grammar1_optional = xgr.Grammar.optional(grammar1)
     grammar = xgr.Grammar.concat(grammar1_optional, grammar2)
     expected_grammar = """root ::= ((root_1 root_4))
