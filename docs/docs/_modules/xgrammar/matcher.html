@@ -251,6 +251,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">numpy.typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ArrayLike</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGRObject</span><span class="p">,</span> <span class="n">_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.compiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledGrammar</span>
@@ -525,7 +526,7 @@ window.addEventListener("load", () => mermaid.run());
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">accept_string</span><span class="p">(</span><span class="n">input_str</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="GrammarMatcher.fill_next_token_bitmask"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">fill_next_token_bitmask</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">:</span> <span class="n">ArrayLike</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Fill the bitmask for the next token prediction. The input bitmask can be generated</span>
 <span class="sd">        by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the</span>
@@ -553,15 +554,11 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        Raises</span>
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
+<span class="sd">            If the bitmask is invalid (not on CPU, not int32, shape mismatch).</span>
+
 <span class="sd">            If the recursion depth is exceeded.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;bitmask should be on CPU.&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">bitmask_dtype</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;bitmask should be of type </span><span class="si">{</span><span class="n">bitmask_dtype</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">fill_next_token_bitmask</span><span class="p">(</span>
-            <span class="n">bitmask</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">(),</span> <span class="nb">list</span><span class="p">(</span><span class="n">bitmask</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">index</span><span class="p">,</span> <span class="n">debug_print</span>
-        <span class="p">)</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">fill_next_token_bitmask</span><span class="p">(</span><span class="n">bitmask</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="GrammarMatcher.find_jump_forward_string"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">find_jump_forward_string</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Find the jump-forward string for jump-forward decoding. This is the longest string that</span>
