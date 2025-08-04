@@ -287,5 +287,52 @@ root_1_1_2 ::= (([0-9]))
     assert not _is_grammar_accept_string(grammar, "+-123")
 
 
+def test_grammar_constructor_tag_dispatch_with_concatenation():
+    grammar_1_str = """
+root ::= rule1 | rule2
+rule1 ::= \"[a-z]+\"
+rule2 ::= [0-9]+
+"""
+    grammar1 = xgr.Grammar.from_ebnf(grammar_1_str)
+    tag = "tag1"
+    grammar = xgr.Grammar.tag_dispatch(
+        tags=[tag], grammars=[grammar1], stop_eos=False, stop_str=["end"], loop_after_dispatch=False
+    )
+    test_grammar = xgr.Grammar.concat(grammar, xgr.Grammar.string("between"), grammar)
+
+    assert test_grammar is not None
+    assert _is_grammar_accept_string(test_grammar, "tag1123endbetween123end")
+    assert _is_grammar_accept_string(test_grammar, "endbetweenend")
+    assert _is_grammar_accept_string(test_grammar, "endbetweentag123end")
+    assert not _is_grammar_accept_string(test_grammar, "tag1endbetween123end")
+    assert not _is_grammar_accept_string(test_grammar, "endend")
+    assert not _is_grammar_accept_string(test_grammar, "tag1abcendbetween123endextra")
+
+
+def test_grammar_constructor_tag_dispatch_with_union():
+    grammar_1_str = """
+root ::= [a-z]+
+"""
+    grammar1 = xgr.Grammar.from_ebnf(grammar_1_str)
+
+    tagdispatch_a = xgr.Grammar.tag_dispatch(
+        tags=["tag1"],
+        grammars=[grammar1],
+        stop_eos=False,
+        stop_str=["end"],
+        loop_after_dispatch=False,
+    )
+
+    grammar = xgr.Grammar.union(tagdispatch_a, xgr.Grammar.string("Interesting"))
+
+    assert grammar is not None
+    assert _is_grammar_accept_string(grammar, "tag1abcend")
+    assert _is_grammar_accept_string(grammar, "Interesting")
+    assert _is_grammar_accept_string(grammar, "tag1abcendextraend")
+    assert _is_grammar_accept_string(grammar, "Interesting")
+    assert not _is_grammar_accept_string(grammar, "tag1abcI")
+    assert not _is_grammar_accept_string(grammar, "Interestingextra")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

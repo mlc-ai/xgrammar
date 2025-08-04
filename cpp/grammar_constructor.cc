@@ -7,6 +7,7 @@
 
 #include <xgrammar/grammar.h>
 
+#include <cstdint>
 #include <string>
 
 #include "grammar_functor.h"
@@ -58,6 +59,14 @@ class SubGrammarAdderImpl : public GrammarMutator {
     return builder_->AddRepeat(
         new_rule_ids_names[grammar_expr[0]].first, grammar_expr[1], grammar_expr[2]
     );
+  }
+
+  int32_t VisitTagDispatch(const GrammarExpr& grammar_expr) final {
+    Grammar::Impl::TagDispatch tag_dispatch = base_grammar_->GetTagDispatch(grammar_expr);
+    for (auto& [tag, grammar_rule_id] : tag_dispatch.tag_rule_pairs) {
+      grammar_rule_id = new_rule_ids_names[grammar_rule_id].first;
+    }
+    return builder_->AddTagDispatch(tag_dispatch);
   }
 
   std::vector<std::pair<int32_t, std::string>> new_rule_ids_names;
