@@ -353,8 +353,8 @@ TEST(XGrammarFSMBuilderTest, TestSequenceFSMBuilder) {
   );
   std::string expected_fsm_rule2 = R"(FSM(num_states=4, start=2, end=[0], edges=[
 0: []
-1: [[A-Z]->3]
-2: ['c'->1]
+1: ['c'->2]
+2: [[A-Z]->3]
 3: [Rule(3)->0]
 ]))";
 
