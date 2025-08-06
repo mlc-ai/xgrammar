@@ -6,6 +6,7 @@
 #define XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
 
 #include <algorithm>
+#include <cstddef>
 #include <unordered_map>
 #include <vector>
 
@@ -77,15 +78,14 @@ class UnionFindSet {
 
   std::vector<std::vector<T>> GetAllSets() {
     std::vector<std::vector<T>> result;
-    std::unordered_map<T, std::vector<T>*> root_to_set;
-    for (const auto& [_, value_size_pair] : element_to_parent_and_size_) {
-      const auto& value = value_size_pair.first;
+    std::unordered_map<T, size_t> root_to_set;
+    for (const auto& [value, _] : element_to_parent_and_size_) {
       auto root = Find(value);
       if (root_to_set.find(root) == root_to_set.end()) {
         result.emplace_back();
-        root_to_set[root] = &result.back();
+        root_to_set[root] = result.size() - 1;
       }
-      root_to_set[root]->push_back(value);
+      result[root_to_set[root]].push_back(value);
     }
     // Sort result to make it deterministic
     for (auto& vec : result) {
