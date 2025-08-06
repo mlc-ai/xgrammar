@@ -1220,7 +1220,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int num_of_states_limited) 
   working_set.push_back(std::move(non_final_states));
 
   while (!working_set.empty()) {
-    std::map<std::pair<int16_t, int16_t>, std::unordered_set<int>> possible_transitions;
+    std::unordered_map<std::pair<int16_t, int16_t>, std::unordered_set<int>> possible_transitions;
     auto current_partition = std::move(working_set.back());
     working_set.pop_back();
 

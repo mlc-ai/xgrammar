@@ -5,9 +5,9 @@
 #ifndef XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
 #define XGRAMMAR_SUPPORT_UNION_FIND_SET_H_
 
-#include <map>
 #include <queue>
-#include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace xgrammar {
@@ -15,8 +15,8 @@ namespace xgrammar {
 template <typename T>
 class UnionFindSet {
  private:
-  std::map<T, T> parent;
-  std::map<T, int> rank;
+  std::unordered_map<T, T> parent;
+  std::unordered_map<T, int> rank;
 
  public:
   UnionFindSet() = default;
@@ -81,7 +81,7 @@ class UnionFindSet {
    * \param value The element whose representative is to be found.
    * \return The representative of the set containing the element.
    */
-  T find(T value) {
+  T Find(const T& value) {
     std::queue<T> queue;
     while (parent[value] != value) {
       queue.push(value);
@@ -100,19 +100,19 @@ class UnionFindSet {
    * \param b The second element.
    * \return true if the elements are in the same set, false otherwise.
    */
-  bool SameSet(T a, T b) const { return find(a) == find(b); }
+  bool SameSet(const T& a, const T& b) const { return Find(a) == Find(b); }
 
   /*!
    * \brief Get all the equivalence classes in the union-find set.
    * \return A vector of unordered sets, each representing an equivalence class.
    */
-  std::vector<std::set<T>> GetAllSets() const {
-    std::vector<std::set<T>> result;
-    std::map<T, int> which_set;
+  std::vector<std::unordered_set<T>> GetAllSets() const {
+    std::vector<std::unordered_set<T>> result;
+    std::unordered_map<T, int> which_set;
     for (const auto& [key, value] : parent) {
       if (which_set.find(value) == which_set.end()) {
         which_set[value] = result.size();
-        result.push_back(std::set<T>());
+        result.push_back(std::unordered_set<T>());
       }
       result[which_set[value]].insert(key);
     }
