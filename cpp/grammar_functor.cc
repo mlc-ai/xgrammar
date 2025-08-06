@@ -1282,16 +1282,12 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
   }
 
   auto result = FSMWithStartEnd::Union(fsm_list);
-  XGRAMMAR_LOG(INFO) << result;
   result = result.SimplifyEpsilon();
-  XGRAMMAR_LOG(INFO) << "After simplify epsilon: " << result;
   result = result.MergeEquivalentSuccessors();
-  XGRAMMAR_LOG(INFO) << "After merge equivalent successors: " << result;
   auto result_raw = result.MinimizeDFA();
   if (result_raw.IsOk()) {
     result = std::move(result_raw).Unwrap();
   }
-  XGRAMMAR_LOG(INFO) << "After minimize DFA: " << result;
   return result;
 }
 

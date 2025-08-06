@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <queue>
 #include <set>
@@ -1190,7 +1191,6 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int num_of_states_limited) 
   } else {
     now_fsm = Copy();
   }
-  XGRAMMAR_LOG(INFO) << now_fsm;
 
   // Initialize the precursors of nodes.
   std::vector<std::vector<std::pair<std::pair<int16_t, int16_t>, int>>> precursors;
@@ -1221,7 +1221,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int num_of_states_limited) 
   working_set.push_back(std::move(non_final_states));
 
   while (!working_set.empty()) {
-    std::unordered_map<std::pair<int16_t, int16_t>, std::unordered_set<int>> possible_transitions;
+    std::map<std::pair<int16_t, int16_t>, std::unordered_set<int>> possible_transitions;
     auto current_partition = std::move(working_set.back());
     working_set.pop_back();
 
