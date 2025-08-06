@@ -1190,6 +1190,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int num_of_states_limited) 
   } else {
     now_fsm = Copy();
   }
+  XGRAMMAR_LOG(INFO) << now_fsm;
 
   // Initialize the precursors of nodes.
   std::vector<std::vector<std::pair<std::pair<int16_t, int16_t>, int>>> precursors;
