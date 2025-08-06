@@ -351,7 +351,7 @@ TEST(XGrammarFSMBuilderTest, TestSequenceFSMBuilder) {
   auto fsm_rule2_result = GrammarFSMBuilder::Choices(
       grammar->GetGrammarExpr(grammar->GetRule(2).body_expr_id), grammar
   );
-  std::string expected_fsm_rule2 = R"(FSM(num_states=4, start=2, end=[0], edges=[
+  std::string expected_fsm_rule2 = R"(FSM(num_states=4, start=1, end=[0], edges=[
 0: []
 1: ['c'->2]
 2: [[A-Z]->3]
