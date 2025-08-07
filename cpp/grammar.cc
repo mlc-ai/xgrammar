@@ -182,12 +182,11 @@ std::variant<Grammar, SerializationError> Grammar::DeserializeJSON(const std::st
 }
 
 Grammar Grammar::FromFunctionCall(
-    const std::string& function_name,
     const std::vector<std::string>& args_names,
     const std::vector<std::string>& args_types,
     uint8_t function_type
 ) {
-  return FunctionCallConverter::Apply(function_name, args_names, args_types, function_type);
+  return FunctionCallConverter::Apply(args_names, args_types, function_type);
 }
 
 }  // namespace xgrammar
