@@ -17,7 +17,6 @@ requires-python = ">=3.8, <4"
 dependencies = [
   "pydantic",
   "torch>=1.10.0",
-  "transformers>=4.38.0",
   "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
   "mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'",
   "ninja",
@@ -38,7 +37,7 @@ test = [
   "tiktoken",
   # transformers==4.50.0 has error on MacOS.
   # https://github.com/huggingface/transformers/issues/36906
-  "transformers<4.50.0; platform_system == 'Darwin'",
+  "transformers!=4.50.0",
 ]
 
 [build-system]
@@ -78,6 +77,7 @@ sdist.include = [
   "/cpp/**/*.h",
   "/include/**/*",
   "/python/xgrammar/**/*.py",
+  "/python/xgrammar/py.typed",
 
   # Third party files
   "/3rdparty/**/*",
@@ -87,6 +87,7 @@ sdist.include = [
   "/LICENSE",
   "/README.md",
   "/NOTICE",
+
 
   # Tests
   "/tests/**/*",
