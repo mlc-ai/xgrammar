@@ -157,6 +157,14 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("print_converted_ebnf"),
           nb::call_guard<nb::gil_scoped_release>()
       )
+      .def_static(
+          "from_function_call",
+          &Grammar::FromFunctionCall,
+          nb::arg("args_names"),
+          nb::arg("args_types"),
+          nb::arg("function_type") = Grammar::kXmlStyleFunctionCall,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
       .def_static("from_regex", &Grammar::FromRegex, nb::call_guard<nb::gil_scoped_release>())
       .def_static(
           "from_structural_tag",
