@@ -256,9 +256,9 @@ communication purposes. We currently support serialization to and deserializatio
 deserialize the type from a JSON string.</p>
 <p>Each serialized result have a <code class="docutils literal notranslate"><span class="pre">__VERSION__</span></code> field to indicate the serialization version. When the
 internal data structure is changed in XGrammar, the serialization version will be updated. Use
-<a class="reference internal" href="../api/python/config.html#xgrammar.get_serialization_version" title="xgrammar.get_serialization_version"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.get_serialization_version</span></code></span></a> to get the current serialization
+<a class="reference internal" href="#xgrammar.get_serialization_version"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">xgr.get_serialization_version</span></code></span></a> to get the current serialization
 version. In deserialization, if the version in the JSON string does not match the current version,
-the deserialization will fail and raise a <a class="reference internal" href="../api/python/exception.html#xgrammar.DeserializeVersionError" title="xgrammar.DeserializeVersionError"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.DeserializeVersionError</span></code></span></a>.</p>
+the deserialization will fail and raise a <a class="reference internal" href="#xgrammar.DeserializeVersionError"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">xgr.DeserializeVersionError</span></code></span></a>.</p>
 <blockquote>
 <div><p><strong>Note:</strong><br>
 After upgrading XGrammar, the serialization format may change. If you have cached serialization
@@ -266,13 +266,13 @@ results to disk, please clear the cache after the upgrade to avoid potential ver
 </div></blockquote>
 <p>Three error types are raised when deserialization fails:</p>
 <ul class="simple">
-<li><p><a class="reference internal" href="../api/python/exception.html#xgrammar.InvalidJSONError" title="xgrammar.InvalidJSONError"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.InvalidJSONError</span></code></span></a>: When the JSON string is invalid.</p></li>
-<li><p><a class="reference internal" href="../api/python/exception.html#xgrammar.DeserializeFormatError" title="xgrammar.DeserializeFormatError"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.DeserializeFormatError</span></code></span></a>: When the JSON string does not follow the serialization format of the type.</p></li>
-<li><p><a class="reference internal" href="../api/python/exception.html#xgrammar.DeserializeVersionError" title="xgrammar.DeserializeVersionError"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.DeserializeVersionError</span></code></span></a>: When the serialization version in the JSON string is not the same as the
+<li><p><a class="reference internal" href="#xgrammar.InvalidJSONError"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">xgr.InvalidJSONError</span></code></span></a>: When the JSON string is invalid.</p></li>
+<li><p><a class="reference internal" href="#xgrammar.DeserializeFormatError"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">xgr.DeserializeFormatError</span></code></span></a>: When the JSON string does not follow the serialization format of the type.</p></li>
+<li><p><a class="reference internal" href="#xgrammar.DeserializeVersionError"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">xgr.DeserializeVersionError</span></code></span></a>: When the serialization version in the JSON string is not the same as the
 current version.</p></li>
 </ul>
 <section id="xgr-grammar">
-<h2><a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a><a class="headerlink" href="#xgr-grammar" title="Permalink to this heading">¶</a></h2>
+<h2><a class="reference internal" href="#xgrammar.Grammar"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a><a class="headerlink" href="#xgr-grammar" title="Permalink to this heading">¶</a></h2>
 <p>The grammar class.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span>
@@ -291,7 +291,7 @@ current version.</p></li>
 </div>
 </section>
 <section id="xgr-tokenizerinfo">
-<h2><a class="reference internal" href="../api/python/tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo</span></code></span></a><a class="headerlink" href="#xgr-tokenizerinfo" title="Permalink to this heading">¶</a></h2>
+<h2><a class="reference internal" href="#xgrammar.TokenizerInfo"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo</span></code></span></a><a class="headerlink" href="#xgr-tokenizerinfo" title="Permalink to this heading">¶</a></h2>
 <p>The tokenizer information class.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Construct TokenizerInfo</span>
 <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;meta-llama/Llama-3.1-8B-Instruct&quot;</span><span class="p">)</span>
@@ -310,7 +310,7 @@ current version.</p></li>
 </div>
 </section>
 <section id="xgr-compiledgrammar">
-<h2><a class="reference internal" href="../api/python/compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code></span></a><a class="headerlink" href="#xgr-compiledgrammar" title="Permalink to this heading">¶</a></h2>
+<h2><a class="reference internal" href="#xgrammar.CompiledGrammar"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code></span></a><a class="headerlink" href="#xgr-compiledgrammar" title="Permalink to this heading">¶</a></h2>
 <p>A <code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code> contains a tokenizer info, and multiple <code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code>s can share the same
 <code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code> to avoid redundant storage. So in serialization of a <code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code>, we will not
 include the complete <code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code>, but only the metadata of it. During deserialization, we will

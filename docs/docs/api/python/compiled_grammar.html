@@ -164,17 +164,7 @@
 <li class="toctree-l2"><a class="reference internal" href="grammar.html">xgr.Grammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">xgr.CompiledGrammar</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.CompiledGrammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.grammar</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.tokenizer_info</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.memory_size_bytes</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.serialize_json"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.serialize_json()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.CompiledGrammar.deserialize_json"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar.deserialize_json()</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">xgr.CompiledGrammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="testing.html">xgr.testing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
@@ -268,110 +258,6 @@
             
   <section id="xgr-compiledgrammar">
 <h1>xgr.CompiledGrammar<a class="headerlink" href="#xgr-compiledgrammar" title="Permalink to this heading">¶</a></h1>
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">CompiledGrammar</span></span><a class="reference internal" href="../../_modules/xgrammar/compiler.html#CompiledGrammar"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.CompiledGrammar" title="Permalink to this definition">¶</a></dt>
-<dd><p>This is the primary object to store compiled grammar.</p>
-<p>A CompiledGrammar can be used to construct GrammarMatcher
-to generate token masks efficiently.</p>
-<p class="rubric">Notes</p>
-<p>Do not construct this class directly, instead
-use <a class="reference internal" href="grammar_compiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a> to construct the object.</p>
-<p><strong>Attributes:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.grammar" title="xgrammar.CompiledGrammar.grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">grammar</span></code></a></p></td>
-<td><p>The original grammar.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.tokenizer_info" title="xgrammar.CompiledGrammar.tokenizer_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tokenizer_info</span></code></a></p></td>
-<td><p>The tokenizer info associated with the compiled grammar.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="xgrammar.CompiledGrammar.memory_size_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memory_size_bytes</span></code></a></p></td>
-<td><p>The approximate memory usage of the compiled grammar in bytes.</p></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Methods:</strong></p>
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.serialize_json" title="xgrammar.CompiledGrammar.serialize_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">serialize_json</span></code></a>()</p></td>
-<td><p>Serialize the compiled grammar to a JSON string.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.CompiledGrammar.deserialize_json" title="xgrammar.CompiledGrammar.deserialize_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">deserialize_json</span></code></a>(json_str, tokenizer_info)</p></td>
-<td><p>Deserialize the compiled grammar from a JSON string and associate it with the specified tokenizer info.</p></td>
-</tr>
-</tbody>
-</table>
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.grammar">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">grammar</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.grammar" title="Permalink to this definition">¶</a></dt>
-<dd><p>The original grammar.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.tokenizer_info">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">tokenizer_info</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.tokenizer_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>The tokenizer info associated with the compiled grammar.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.memory_size_bytes">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">memory_size_bytes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></em><a class="headerlink" href="#xgrammar.CompiledGrammar.memory_size_bytes" title="Permalink to this definition">¶</a></dt>
-<dd><p>The approximate memory usage of the compiled grammar in bytes.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.serialize_json">
-<span class="sig-name descname"><span class="pre">serialize_json</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/compiler.html#CompiledGrammar.serialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.CompiledGrammar.serialize_json" title="Permalink to this definition">¶</a></dt>
-<dd><p>Serialize the compiled grammar to a JSON string. It will serialize the compiled grammar
-without the tokenizer info, since the tokenizer info is shared by multiple compiled
-grammars.</p>
-<p class="rubric">Notes</p>
-<p>The metadata of the tokenizer info is serialized and will be checked when deserializing.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>json_string</strong> – The JSON string.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)">str</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="xgrammar.CompiledGrammar.deserialize_json">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">deserialize_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">json_str</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">tokenizer_info</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/compiler.html#CompiledGrammar.deserialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.CompiledGrammar.deserialize_json" title="Permalink to this definition">¶</a></dt>
-<dd><p>Deserialize the compiled grammar from a JSON string and associate it with the specified
-tokenizer info.</p>
-<p class="rubric">Notes</p>
-<p>This will check the metadata of the tokenizer info matching the serialized metadata in
-json_str. If the metadata does not match, a DeserializeFormatError will be raised.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>json_str</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a>) – The JSON string.</p></li>
-<li><p><strong>tokenizer_info</strong> (<a class="reference internal" href="tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><em>TokenizerInfo</em></a>) – The tokenizer info.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><ul class="simple">
-<li><p><a class="reference internal" href="exception.html#xgrammar.InvalidJSONError" title="xgrammar.InvalidJSONError"><strong>InvalidJSONError</strong></a> – When the JSON string is invalid.</p></li>
-<li><p><a class="reference internal" href="exception.html#xgrammar.DeserializeFormatError" title="xgrammar.DeserializeFormatError"><strong>DeserializeFormatError</strong></a> – When the JSON string does not follow the serialization format of the grammar, or the
-    tokenizer info metadata does not match.</p></li>
-<li><p><a class="reference internal" href="exception.html#xgrammar.DeserializeVersionError" title="xgrammar.DeserializeVersionError"><strong>DeserializeVersionError</strong></a> – When the __VERSION__ field in the JSON string is not the same as the current version.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
 </section>
 
 

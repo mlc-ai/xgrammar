@@ -258,67 +258,20 @@
 <span id="apixgrammar"></span><h1>XGrammar Python API<a class="headerlink" href="#xgrammar-python-api" title="Permalink to this heading">¶</a></h1>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="grammar.html">xgr.Grammar</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="grammar.html#xgrammar.Grammar"><code class="docutils literal notranslate"><span class="pre">Grammar</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html#xgrammar.VocabType"><code class="docutils literal notranslate"><span class="pre">VocabType</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html#xgrammar.TokenizerInfo"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html#xgrammar.GrammarCompiler"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar"><code class="docutils literal notranslate"><span class="pre">CompiledGrammar</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html#xgrammar.GrammarMatcher"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="testing.html">xgr.testing</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._json_schema_to_ebnf"><code class="docutils literal notranslate"><span class="pre">_json_schema_to_ebnf()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._regex_to_ebnf"><code class="docutils literal notranslate"><span class="pre">_regex_to_ebnf()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._ebnf_to_grammar_no_normalization"><code class="docutils literal notranslate"><span class="pre">_ebnf_to_grammar_no_normalization()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._get_matcher_from_grammar"><code class="docutils literal notranslate"><span class="pre">_get_matcher_from_grammar()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._is_grammar_accept_string"><code class="docutils literal notranslate"><span class="pre">_is_grammar_accept_string()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._get_masked_tokens_from_bitmask"><code class="docutils literal notranslate"><span class="pre">_get_masked_tokens_from_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._is_single_token_bitmask"><code class="docutils literal notranslate"><span class="pre">_is_single_token_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._bool_mask_to_bitmask"><code class="docutils literal notranslate"><span class="pre">_bool_mask_to_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._get_matcher_from_grammar_and_tokenizer_info"><code class="docutils literal notranslate"><span class="pre">_get_matcher_from_grammar_and_tokenizer_info()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._get_allow_empty_rule_ids"><code class="docutils literal notranslate"><span class="pre">_get_allow_empty_rule_ids()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._generate_range_regex"><code class="docutils literal notranslate"><span class="pre">_generate_range_regex()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._generate_float_regex"><code class="docutils literal notranslate"><span class="pre">_generate_float_regex()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing._print_grammar_fsms"><code class="docutils literal notranslate"><span class="pre">_print_grammar_fsms()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html#xgrammar.testing.GrammarFunctor"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="structural_tag.html">Structural Tag</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTagItem"><code class="docutils literal notranslate"><span class="pre">StructuralTagItem</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.allocate_token_bitmask"><code class="docutils literal notranslate"><span class="pre">allocate_token_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.apply_token_bitmask_inplace"><code class="docutils literal notranslate"><span class="pre">apply_token_bitmask_inplace()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.reset_token_bitmask"><code class="docutils literal notranslate"><span class="pre">reset_token_bitmask()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.get_bitmask_shape"><code class="docutils literal notranslate"><span class="pre">get_bitmask_shape()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html#xgrammar.bitmask_dtype"><code class="docutils literal notranslate"><span class="pre">bitmask_dtype</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="grammar.html">xgr.Grammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">xgr.testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="config.html">Config</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="config.html#recursion-depth-management">Recursion Depth Management</a></li>
 <li class="toctree-l2"><a class="reference internal" href="config.html#serialization-version">Serialization Version</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="exception.html">Exception</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="exception.html#xgrammar.DeserializeFormatError"><code class="docutils literal notranslate"><span class="pre">DeserializeFormatError</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="exception.html#xgrammar.DeserializeVersionError"><code class="docutils literal notranslate"><span class="pre">DeserializeVersionError</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="exception.html#xgrammar.InvalidJSONError"><code class="docutils literal notranslate"><span class="pre">InvalidJSONError</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="exception.html">Exception</a></li>
 </ul>
 </div>
 </section>
