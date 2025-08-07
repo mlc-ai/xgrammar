@@ -33,11 +33,11 @@ test = [
   "huggingface-hub[cli]",
   "protobuf",
   "pytest",
-  "sentencepiece",
-  "tiktoken",
   # transformers==4.50.0 has error on MacOS.
   # https://github.com/huggingface/transformers/issues/36906
   "transformers!=4.50.0",
+  "sentencepiece",
+  "tiktoken",
 ]
 
 [build-system]
@@ -87,7 +87,6 @@ sdist.include = [
   "/LICENSE",
   "/README.md",
   "/NOTICE",
-
 
   # Tests
   "/tests/**/*",
