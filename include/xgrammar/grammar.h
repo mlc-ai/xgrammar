@@ -87,14 +87,12 @@ class Grammar {
 
   /*!
    * \brief Construct a BNF grammar from a function call.
-   * \param function_name The name of the function.
    * \param args_names The names of the arguments.
    * \param args_types The types of the arguments.
    * \param function_type The type of the function call format. Default is kXmlStyleFunctionCall.
    * \return The constructed grammar.
    */
   static Grammar FromFunctionCall(
-      const std::string& function_name,
       const std::vector<std::string>& args_names,
       const std::vector<std::string>& args_types,
       uint8_t function_type = kXmlStyleFunctionCall
