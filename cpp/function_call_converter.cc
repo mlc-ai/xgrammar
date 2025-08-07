@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "grammar_builder.h"
+#include "grammar_functor.h"
 #include "support/logging.h"
 #include "support/utils.h"
 #include "xgrammar/grammar.h"
@@ -125,21 +127,25 @@ sign ::= "" | "+" | "-"
 
 /*************************** FunctionCallConverterImpl ***************************/
 
-class FunctionCallConverterImpl {
+class FunctionCallConverterImpl : public GrammarMutator {
  public:
   enum class kParametersType : int32_t { kNumber = 0, kString = 1, kBoolean = 2, kObject = 3 };
 
-  static Grammar Apply(
+  Grammar Apply(
       const std::vector<std::string>& args_names,
       const std::vector<std::string>& args_types,
       uint8_t function_type
   );
 
-  static Grammar BuildXmlParameterGrammar(
+  Grammar BuildXmlParameterGrammar(
       const std::vector<std::string>& args_names, const std::vector<std::string>& args_types
   );
 
-  static Grammar DecorateXmlParameterGrammar(std::vector<Grammar>& grammar);
+  // Avoid hiding the original Apply(const Grammar&)
+  Grammar Apply(const Grammar& grammar) final {
+    XGRAMMAR_LOG(FATAL) << "Should not be called";
+    XGRAMMAR_UNREACHABLE();
+  }
 };
 
 Grammar FunctionCallConverterImpl::Apply(
@@ -198,7 +204,91 @@ static const Grammar kXmlObjectGrammar = Grammar::FromEBNF(kXmlObjectGrammarStri
 Grammar FunctionCallConverterImpl::BuildXmlParameterGrammar(
     const std::vector<std::string>& arg_names, const std::vector<std::string>& arg_types
 ) {
-  XGRAMMAR_UNREACHABLE();
+  // Initialize the grammar builder.
+  InitGrammar();
+  InitBuilder();
+
+  // Add the root rule and the xml grammars.
+  auto root_rule_id = builder_->AddEmptyRule("root");
+  auto object_rule_id = SubGrammarAdder().Apply(builder_, kXmlObjectGrammar);
+  auto string_rule_id = SubGrammarAdder().Apply(builder_, kXmlStringGrammar);
+  auto number_rule_id = SubGrammarAdder().Apply(builder_, kNumberGrammar);
+  auto boolean_rule_id = SubGrammarAdder().Apply(builder_, kBooleanGrammar);
+
+  std::vector<int32_t> parameters_reference_sequence;
+  parameters_reference_sequence.reserve(arg_names.size());
+  std::vector<GrammarBuilder::CharacterClassElement> whitespace_class;
+  GrammarBuilder::CharacterClassElement whitespace_element;
+  whitespace_element.lower = ' ';
+  whitespace_element.upper = ' ';
+  whitespace_class.push_back(whitespace_element);
+  whitespace_element.lower = '\n';
+  whitespace_element.upper = '\n';
+  whitespace_class.push_back(whitespace_element);
+  whitespace_element.lower = '\t';
+  whitespace_element.upper = '\t';
+  whitespace_class.push_back(whitespace_element);
+
+  for (int i = 0; i < static_cast<int>(arg_names.size()); ++i) {
+    const auto& arg_name = arg_names[i];
+    const auto& arg_type = arg_types[i];
+    kParametersType type = kParametersType::kString;  // Default to string type
+
+    // Check the type of the argument.
+    if (raw_string_to_types.find(arg_type) != raw_string_to_types.end()) {
+      type = raw_string_to_types.at(arg_type);
+    } else {
+      for (const auto& [raw_string, param_type] : raw_string_to_types) {
+        if (arg_type.size() >= raw_string.size() &&
+            arg_type.substr(0, raw_string.size()) == raw_string) {
+          type = param_type;
+          break;
+        }
+      }
+    }
+
+    // Build the prefix.
+    std::string prefix = "<parameter=" + arg_name + ">";
+    int32_t prefix_id = builder_->AddByteString(prefix);
+    int32_t whitespace_id = builder_->AddCharacterClassStar(whitespace_class);
+
+    // Add the reference for the parameter.
+    std::vector<int32_t> parameter_sequence;
+    parameter_sequence.push_back(prefix_id);
+    parameter_sequence.push_back(whitespace_id);
+    switch (type) {
+      case kParametersType::kString: {
+        parameter_sequence.push_back(builder_->AddRuleRef(string_rule_id));
+        break;
+      }
+      case kParametersType::kBoolean: {
+        parameter_sequence.push_back(builder_->AddRuleRef(boolean_rule_id));
+        break;
+      }
+      case kParametersType::kNumber: {
+        parameter_sequence.push_back(builder_->AddRuleRef(number_rule_id));
+        break;
+      }
+      case kParametersType::kObject: {
+        parameter_sequence.push_back(builder_->AddRuleRef(object_rule_id));
+        break;
+      }
+      default: {
+        XGRAMMAR_LOG(FATAL) << "Unsupported parameter type: " << static_cast<int>(type);
+      }
+    }
+
+    // Add the new rule.
+    int32_t parameter_choice_id = builder_->AddSequence(parameter_sequence);
+    parameter_choice_id = builder_->AddChoices({parameter_choice_id});
+    int32_t parameter_rule_id = builder_->AddRuleWithHint(arg_name, parameter_choice_id);
+    parameters_reference_sequence.push_back(builder_->AddRuleRef(parameter_rule_id));
+  }
+
+  // Add the root rule with the parameters sequence.
+  int32_t parameters_sequence_id = builder_->AddSequence(parameters_reference_sequence);
+  builder_->UpdateRuleBody(root_rule_id, builder_->AddChoices({parameters_sequence_id}));
+  return builder_->Get(root_rule_id);
 }
 
 /*************************** Forward grammar functors to their impl ***************************/
@@ -208,6 +298,7 @@ Grammar FunctionCallConverter::Apply(
     const std::vector<std::string>& args_types,
     uint8_t function_type
 ) {
-  return FunctionCallConverterImpl::Apply(args_names, args_types, function_type);
+  Grammar grammar = FunctionCallConverterImpl().Apply(args_names, args_types, function_type);
+  return GrammarNormalizer().Apply(grammar);
 }
 }  // namespace xgrammar
