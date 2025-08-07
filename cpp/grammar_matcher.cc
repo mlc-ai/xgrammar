@@ -257,14 +257,14 @@ class GrammarMatcher::Impl : public EarleyParser {
       const CompiledGrammar& compiled_grammar,
       std::optional<std::vector<int>> override_stop_tokens = std::nullopt,
       bool terminate_without_stop_token = false,
-      int max_rollback_tokens = 0
+      // max_rollback_tokens_ is deprecated and not used.
+      int max_rollback_tokens = -1
   )
       : EarleyParser(compiled_grammar->grammar, ParserState::GetInvalidState()),
         compiled_grammar_(compiled_grammar),
         tokenizer_info_(compiled_grammar->tokenizer_info),
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
         terminate_without_stop_token_(terminate_without_stop_token),
-        max_rollback_tokens_(max_rollback_tokens),
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
@@ -284,7 +284,7 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   void Reset() { EarleyParser::Reset(); }
 
-  int GetMaxRollbackTokens() const { return max_rollback_tokens_; }
+  int GetMaxRollbackTokens() const { return -1; }
 
   const std::vector<int>& GetStopTokenIds() const { return stop_token_ids_; }
 
@@ -332,7 +332,6 @@ class GrammarMatcher::Impl : public EarleyParser {
   TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
-  int max_rollback_tokens_;
   std::deque<int> token_length_history;
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
@@ -421,9 +420,6 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     ++pos;
   }
   token_length_history.push_back(token.size());
-  if (static_cast<int>(token_length_history.size()) > max_rollback_tokens_) {
-    token_length_history.pop_front();
-  }
 
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<"
@@ -455,9 +451,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     ++accepted_cnt;
   }
   token_length_history.push_back(input_str.size());
-  if (static_cast<int>(token_length_history.size()) > max_rollback_tokens_) {
-    token_length_history.pop_front();
-  }
+
   if (debug_print) {
     std::string states_str;
     for (const auto& state : GetLatestScanableStates()) {

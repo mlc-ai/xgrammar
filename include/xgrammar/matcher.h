@@ -75,7 +75,7 @@ class GrammarMatcher {
       const CompiledGrammar& compiled_grammar,
       std::optional<std::vector<int>> override_stop_tokens = std::nullopt,
       bool terminate_without_stop_token = false,
-      int max_rollback_tokens = 0
+      int max_rollback_tokens = -1
   );
 
   /*!

@@ -193,8 +193,9 @@ class GrammarMatcher(XGRObject):
             Whether to terminate the matcher without accepting a stop token.
 
         max_rollback_tokens : int, default: -1
-            Deprecated because the earley parser significantly reduces the number of states, so not
-            needed anymore.
+            Deprecated. You don't need to set it and it's always unlimited (-1).
+            The new Earley parser significantly reduces the number of states, so we can allow
+            unlimited rollback.
 
             The maximum number of rollback tokens allowed. The rollback operation is useful for
             jump-forward decoding and speculative decoding.
@@ -204,7 +205,8 @@ class GrammarMatcher(XGRObject):
 
         if not max_rollback_tokens == -1:
             warnings.warn(
-                "max_rollback_tokens is deprecated because the earley parser significantly reduces the number of states, so not needed anymore.",
+                "max_rollback_tokens is deprecated. You don't need to set it and it's always "
+                "unlimited (-1).",
                 DeprecationWarning,
             )
 
@@ -292,8 +294,9 @@ class GrammarMatcher(XGRObject):
 
         Parameters
         ----------
-        bitmask : torch.Tensor
-            The bitmask for the next token prediction.
+        bitmask : ArrayLike
+            The bitmask for the next token prediction. It supports torch.Tensor and other
+            array-like objects, as long as they support the DLPack protocol.
 
         index : int, default: 0
             The batch id of the bitmask.
@@ -364,14 +367,16 @@ class GrammarMatcher(XGRObject):
 
     @property
     def max_rollback_tokens(self) -> int:
-        """Get the maximum number of rollback tokens allowed.
+        """Depracated. Now max_rollback_tokens is always unlimited (-1).
+
+        Get the maximum number of rollback tokens allowed.
 
         Returns
         -------
         max_rollback_tokens : int
             The maximum number of rollback tokens.
         """
-        return self._handle.max_rollback_tokens
+        return -1
 
     @property
     def stop_token_ids(self) -> List[int]:

@@ -189,7 +189,7 @@ def test_rollback():
         json_grammar, tokenizer_info, max_rollback_tokens=5
     )
 
-    assert matcher.max_rollback_tokens == 5
+    assert matcher.max_rollback_tokens == -1
 
     input_ids_splitted = [input_ids[i : i + 2] for i in range(0, len(input_ids), 2)]
 
