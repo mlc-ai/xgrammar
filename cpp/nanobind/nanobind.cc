@@ -13,7 +13,6 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
-#include "../function_call_converter.h"
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
@@ -163,7 +162,7 @@ NB_MODULE(xgrammar_bindings, m) {
           &Grammar::FromFunctionCall,
           nb::arg("args_names"),
           nb::arg("args_types"),
-          nb::arg("function_type") = Grammar::kXmlStyleFunctionCall,
+          nb::arg("function_type"),
           nb::call_guard<nb::gil_scoped_release>()
       )
       .def_static("from_regex", &Grammar::FromRegex, nb::call_guard<nb::gil_scoped_release>())
