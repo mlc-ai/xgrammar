@@ -210,10 +210,10 @@ Grammar FunctionCallConverterImpl::BuildXmlParameterGrammar(
 
   // Add the root rule and the xml grammars.
   auto root_rule_id = builder_->AddEmptyRule("root");
-  auto object_rule_id = SubGrammarAdder().Apply(builder_, kXmlObjectGrammar);
-  auto string_rule_id = SubGrammarAdder().Apply(builder_, kXmlStringGrammar);
-  auto number_rule_id = SubGrammarAdder().Apply(builder_, kNumberGrammar);
-  auto boolean_rule_id = SubGrammarAdder().Apply(builder_, kBooleanGrammar);
+  auto object_rule_id = -1;
+  auto string_rule_id = -1;
+  auto number_rule_id = -1;
+  auto boolean_rule_id = -1;
 
   std::vector<int32_t> parameters_reference_sequence;
   parameters_reference_sequence.reserve(arg_names.size());
@@ -258,18 +258,30 @@ Grammar FunctionCallConverterImpl::BuildXmlParameterGrammar(
     parameter_sequence.push_back(whitespace_id);
     switch (type) {
       case kParametersType::kString: {
+        if (string_rule_id == -1) {
+          string_rule_id = SubGrammarAdder().Apply(builder_, kXmlStringGrammar);
+        }
         parameter_sequence.push_back(builder_->AddRuleRef(string_rule_id));
         break;
       }
       case kParametersType::kBoolean: {
+        if (boolean_rule_id == -1) {
+          boolean_rule_id = SubGrammarAdder().Apply(builder_, kBooleanGrammar);
+        }
         parameter_sequence.push_back(builder_->AddRuleRef(boolean_rule_id));
         break;
       }
       case kParametersType::kNumber: {
+        if (number_rule_id == -1) {
+          number_rule_id = SubGrammarAdder().Apply(builder_, kNumberGrammar);
+        }
         parameter_sequence.push_back(builder_->AddRuleRef(number_rule_id));
         break;
       }
       case kParametersType::kObject: {
+        if (object_rule_id == -1) {
+          object_rule_id = SubGrammarAdder().Apply(builder_, kXmlObjectGrammar);
+        }
         parameter_sequence.push_back(builder_->AddRuleRef(object_rule_id));
         break;
       }
