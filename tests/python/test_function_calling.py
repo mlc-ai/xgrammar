@@ -78,7 +78,7 @@ arg2 ::= (("<parameter=arg2>" [ \\n\\t]* number))
         number_call, "<parameter=arg1>123.45e</parameter><parameter=arg2>--678.90</parameter>"
     )
     assert not _is_grammar_accept_string(
-        number_call, "<parameter=arg1></parameter><parameter=arg2></parameter>"
+        number_call, "<parameter=arg1></parameter><parameter=arg2>123.45e-</parameter>"
     )
 
 
