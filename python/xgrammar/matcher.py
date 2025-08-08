@@ -5,7 +5,7 @@ token.
 import math
 import warnings
 from typing import List, Optional, Tuple, Union
-
+import logging
 import torch
 from numpy.typing import ArrayLike
 
@@ -134,6 +134,8 @@ def apply_token_bitmask_inplace(
             "logits and bitmask should be on the same device. "
             + f"But got logits.device: {logits.device}, bitmask.device: {bitmask.device}"
         )
+
+    logging.info(f"===Jialin {logits.device.type=}")
 
     # dispatch to different implementations based on the device
     if logits.device.type == "cpu":
