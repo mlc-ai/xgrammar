@@ -172,38 +172,37 @@ Grammar FunctionCallConverterImpl::Apply(
 
 using kParametersType = FunctionCallConverterImpl::kParametersType;
 
-static const std::unordered_map<std::string, kParametersType> raw_string_to_types = {
-    {"string", kParametersType::kString},
-    {"str", kParametersType::kString},
-    {"char", kParametersType::kString},
-    {"enum", kParametersType::kString},
-    {"text", kParametersType::kString},
-    {"varchar", kParametersType::kString},
-    {"int", kParametersType::kNumber},
-    {"uint", kParametersType::kNumber},
-    {"long", kParametersType::kNumber},
-    {"short", kParametersType::kNumber},
-    {"unsign", kParametersType::kNumber},
-    {"float", kParametersType::kNumber},
-    {"num", kParametersType::kNumber},
-    {"boolean", kParametersType::kBoolean},
-    {"bool", kParametersType::kBoolean},
-    {"binary", kParametersType::kBoolean},
-    {"object", kParametersType::kObject},
-    {"dict", kParametersType::kObject}
-};
-
-static const Grammar kXmlStringGrammar = Grammar::FromEBNF(kXmlStringGrammarString, "string");
-
-static const Grammar kNumberGrammar = Grammar::FromEBNF(kNumberGrammarString, "number");
-
-static const Grammar kBooleanGrammar = Grammar::FromEBNF(kBooleanGrammarString, "boolean");
-
-static const Grammar kXmlObjectGrammar = Grammar::FromEBNF(kXmlObjectGrammarString, "object");
-
 Grammar FunctionCallConverterImpl::BuildXmlParameterGrammar(
     const std::vector<std::string>& arg_names, const std::vector<std::string>& arg_types
 ) {
+  static const std::unordered_map<std::string, kParametersType> raw_string_to_types = {
+      {"string", kParametersType::kString},
+      {"str", kParametersType::kString},
+      {"char", kParametersType::kString},
+      {"enum", kParametersType::kString},
+      {"text", kParametersType::kString},
+      {"varchar", kParametersType::kString},
+      {"int", kParametersType::kNumber},
+      {"uint", kParametersType::kNumber},
+      {"long", kParametersType::kNumber},
+      {"short", kParametersType::kNumber},
+      {"unsign", kParametersType::kNumber},
+      {"float", kParametersType::kNumber},
+      {"num", kParametersType::kNumber},
+      {"boolean", kParametersType::kBoolean},
+      {"bool", kParametersType::kBoolean},
+      {"binary", kParametersType::kBoolean},
+      {"object", kParametersType::kObject},
+      {"dict", kParametersType::kObject}
+  };
+
+  static const Grammar kXmlStringGrammar = Grammar::FromEBNF(kXmlStringGrammarString, "string");
+
+  static const Grammar kNumberGrammar = Grammar::FromEBNF(kNumberGrammarString, "number");
+
+  static const Grammar kBooleanGrammar = Grammar::FromEBNF(kBooleanGrammarString, "boolean");
+
+  static const Grammar kXmlObjectGrammar = Grammar::FromEBNF(kXmlObjectGrammarString, "object");
   // Initialize the grammar builder.
   InitGrammar();
   InitBuilder();
