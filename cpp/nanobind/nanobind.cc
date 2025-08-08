@@ -13,7 +13,8 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
-#include "../grammar_functor.h"
+#include "../grammar_normalizer.h"
+#include "../grammar_optimizer.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
 #include "../testing.h"
@@ -166,6 +167,24 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)
       .def_static("union", &Grammar::Union, nb::call_guard<nb::gil_scoped_release>())
       .def_static("concat", &Grammar::Concat, nb::call_guard<nb::gil_scoped_release>())
+      .def_static("string", &Grammar::String, nb::call_guard<nb::gil_scoped_release>())
+      .def_static("star", &Grammar::Star, nb::call_guard<nb::gil_scoped_release>())
+      .def_static("plus", &Grammar::Plus, nb::call_guard<nb::gil_scoped_release>())
+      .def_static("optional", &Grammar::Optional, nb::call_guard<nb::gil_scoped_release>())
+      .def_static("empty", &Grammar::Empty)
+      .def_static(
+          "character_class", &Grammar::CharacterClass, nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "tag_dispatch",
+          &Grammar::TagDispatch,
+          nb::arg("tags"),
+          nb::arg("grammars"),
+          nb::arg("stop_eos") = true,
+          nb::arg("loop_after_dispatch") = true,
+          nb::arg("stop_strs"),
+          nb::call_guard<nb::gil_scoped_release>()
+      )
       .def("serialize_json", &Grammar::SerializeJSON)
       .def_static("deserialize_json", &Grammar_DeserializeJSON);
 
@@ -288,9 +307,12 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def("_print_grammar_fsms", &_PrintGrammarFSMs);
 
-  auto pyGrammarFunctorModule = pyTestingModule.def_submodule("grammar_functor");
-  pyGrammarFunctorModule.def("structure_normalizer", &StructureNormalizer::Apply)
-      .def("byte_string_fuser", &ByteStringFuser::Apply)
+  auto pyGrammarNormalizerModule = pyTestingModule.def_submodule("grammar_normalizer");
+  pyGrammarNormalizerModule.def("structure_normalizer", &StructureNormalizer::Apply)
+      .def("byte_string_fuser", &ByteStringFuser::Apply);
+
+  auto pyGrammarOptimizerModule = pyTestingModule.def_submodule("grammar_optimizer");
+  pyGrammarOptimizerModule.def("optimize", &GrammarOptimizer::Optimize)
       .def("rule_inliner", &RuleInliner::Apply)
       .def("dead_code_eliminator", &DeadCodeEliminator::Apply)
       .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply);

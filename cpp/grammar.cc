@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "grammar_functor.h"
+#include "grammar_normalizer.h"
 #include "grammar_parser.h"
 #include "grammar_printer.h"
 #include "json_schema_converter.h"
@@ -66,7 +66,8 @@ Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) 
 Grammar Grammar::FromStructuralTag(
     const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
 ) {
-  return StructuralTagToGrammar(tags, triggers);
+  Grammar grammar = StructuralTagToGrammar(tags, triggers);
+  return grammar;
 }
 
 // Optimized json grammar for the speed of the grammar matcher
@@ -154,14 +155,6 @@ sign ::= "" | "+" | "-"
 Grammar Grammar::BuiltinJSONGrammar() {
   static const Grammar grammar = FromEBNF(kJSONGrammarString);
   return grammar;
-}
-
-Grammar Grammar::Union(const std::vector<Grammar>& grammars) {
-  return GrammarUnionFunctor::Apply(grammars);
-}
-
-Grammar Grammar::Concat(const std::vector<Grammar>& grammars) {
-  return GrammarConcatFunctor::Apply(grammars);
 }
 
 std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
