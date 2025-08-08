@@ -23,6 +23,7 @@ dependencies = [
   "ninja",
   "numpy",
   "typing-extensions>=4.9.0",
+  "safetensors==0.5.*",
 ]
 
 [project.urls]
@@ -34,11 +35,9 @@ test = [
   "huggingface-hub[cli]",
   "protobuf",
   "pytest",
+  "transformers>=4.46.0",
   "sentencepiece",
   "tiktoken",
-  # transformers==4.50.0 has error on MacOS.
-  # https://github.com/huggingface/transformers/issues/36906
-  "transformers<4.50.0; platform_system == 'Darwin'",
 ]
 
 [build-system]
@@ -78,6 +77,7 @@ sdist.include = [
   "/cpp/**/*.h",
   "/include/**/*",
   "/python/xgrammar/**/*.py",
+  "/python/xgrammar/py.typed",
 
   # Third party files
   "/3rdparty/**/*",
