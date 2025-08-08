@@ -37,6 +37,9 @@ std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString();
 Grammar Grammar::FromEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
   auto grammar = ParseEBNF(ebnf_string, root_rule_name);
   grammar = GrammarNormalizer().Apply(grammar);
+  grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(grammar);
+  RepetitionNormalizer::Apply(&grammar);
+  GrammarFSMBuilder::Apply(&grammar);
   return grammar;
 }
 
@@ -66,7 +69,11 @@ Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) 
 Grammar Grammar::FromStructuralTag(
     const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
 ) {
-  return StructuralTagToGrammar(tags, triggers);
+  Grammar grammar = StructuralTagToGrammar(tags, triggers);
+  grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(grammar);
+  RepetitionNormalizer::Apply(&grammar);
+  GrammarFSMBuilder::Apply(&grammar);
+  return grammar;
 }
 
 // Optimized json grammar for the speed of the grammar matcher

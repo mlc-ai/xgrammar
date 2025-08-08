@@ -7,9 +7,11 @@
 
 #include <chrono>
 #include <iostream>
+#include <utility>
 
 #include "fsm.h"
 #include "fsm_builder.h"
+#include "support/logging.h"
 
 using namespace xgrammar;
 
@@ -170,7 +172,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = RegexFSMBuilder::Build("([abc]|[\\d])+").Unwrap();
   test_str = "abc3";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  fsm_wse = fsm_wse.ToDFA();
+  fsm_wse = std::move(fsm_wse.ToDFA()).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   EXPECT_TRUE([&]() -> bool {
     for (const auto& edges : fsm_wse->GetEdges()) {
@@ -205,11 +207,11 @@ TEST(XGrammarFSMTest, FunctionTest) {
     return true;
   }());
   std::cout << "--------- Function Test3 -----------" << std::endl;
-  fsm_wse = fsm_wse.MinimizeDFA();
+  fsm_wse = std::move(fsm_wse.MinimizeDFA()).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  EXPECT_EQ(fsm_wse->GetEdges().size(), 3);
+  EXPECT_EQ(fsm_wse->GetEdges().size(), 2);
   std::cout << "--------- Function Test4 -----------" << std::endl;
-  fsm_wse = fsm_wse.Not();
+  fsm_wse = std::move(fsm_wse.Not()).Unwrap();
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
@@ -242,8 +244,8 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = RegexFSMBuilder::Build("abc|abd").Unwrap();
   test_str = "abc";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   fsm_wse = fsm_wse.SimplifyEpsilon();
+  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
@@ -252,12 +254,13 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = RegexFSMBuilder::Build("acd|bcd").Unwrap();
   test_str = "acd";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   fsm_wse = fsm_wse.SimplifyEpsilon();
+  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
   EXPECT_EQ(fsm_wse->NumStates(), 4);
+  XGRAMMAR_LOG(INFO) << fsm_wse;
   std::cout << "--------- Function Test9 -----------" << std::endl;
   fsm_wse = RegexFSMBuilder::Build("ab*").Unwrap();
   test_str = "abbb";
@@ -403,13 +406,13 @@ TEST(XGrammarFSMTest, EfficiencyTest) {
   std::cout << "Time taken to simplify transition: " << duration.count() << " ms" << std::endl;
   std::cout << "After SimplifyTransition Node Numbers:" << fsm_wse->NumStates() << std::endl;
   time_start = std::chrono::high_resolution_clock::now();
-  fsm_wse = fsm_wse.ToDFA();
+  fsm_wse = std::move(fsm_wse.ToDFA()).Unwrap();
   time_end = std::chrono::high_resolution_clock::now();
   duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start);
   std::cout << "Time taken to convert to DFA: " << duration.count() << " ms" << std::endl;
   std::cout << "After ToDFA Node Numbers:" << fsm_wse->NumStates() << std::endl;
   time_start = std::chrono::high_resolution_clock::now();
-  fsm_wse = fsm_wse.MinimizeDFA();
+  fsm_wse = std::move(fsm_wse.MinimizeDFA()).Unwrap();
   time_end = std::chrono::high_resolution_clock::now();
   duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start);
   std::cout << "Time taken to minimize DFA: " << duration.count() << " ms" << std::endl;

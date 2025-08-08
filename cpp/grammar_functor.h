@@ -11,8 +11,10 @@
 
 #include <string>
 
+#include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -342,8 +344,16 @@ class LookaheadAssertionAnalyzer {
  * \brief Build the FSMs of the grammar.
  */
 class GrammarFSMBuilder {
+  using GrammarExpr = Grammar::Impl::GrammarExpr;
+
  public:
   static void Apply(Grammar* grammar);
+  static std::optional<FSMWithStartEnd> RuleRef(const GrammarExpr& expr);
+  static std::optional<FSMWithStartEnd> CharacterClass(const GrammarExpr& expr);
+  static std::optional<FSMWithStartEnd> ByteString(const GrammarExpr& expr);
+  static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
+  static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
 };
 class SubGrammarAdder {
  public:
