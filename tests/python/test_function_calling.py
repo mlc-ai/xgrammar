@@ -47,10 +47,10 @@ def test_number_function_call():
     assert (
         str(number_call)
         == """root ::= ((arg1 arg2))
-number ::= ((sign_1 "0" fraction_1 exponent_1 [ \\n\\t]* "</parameter>") | (sign_1 [1-9] [0-9]* fraction_1 exponent_1 [ \\n\\t]* "</parameter>"))
-fraction_1 ::= ("" | ("." [0-9] [0-9]*))
-exponent_1 ::= ("" | ("e" sign_1 [0-9] [0-9]*) | ("E" sign_1 [0-9] [0-9]*))
-sign_1 ::= ("" | ("+") | ("-"))
+number ::= ((sign "0" fraction exponent [ \\n\\t]* "</parameter>") | (sign [1-9] [0-9]* fraction exponent [ \\n\\t]* "</parameter>"))
+fraction ::= ("" | ("." [0-9] [0-9]*))
+exponent ::= ("" | ("e" sign [0-9] [0-9]*) | ("E" sign [0-9] [0-9]*))
+sign ::= ("" | ("+") | ("-"))
 arg1 ::= (("<parameter=arg1>" [ \\n\\t]* number)) (=(arg2))
 arg2 ::= (("<parameter=arg2>" [ \\n\\t]* number))
 """
@@ -90,9 +90,9 @@ def test_string_function_call():
     expect_grammar = """root ::= ((arg1 arg2))
 string ::= ((xml_content [ \\n\\t]* "</parameter>"))
 xml_content ::= ((xml_content_1)) (=([ \\n\\t]* "</parameter>"))
-escape_1 ::= (([\\"\\\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+escape ::= (([\\"\\\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 xml_content_1 ::= ("" | (xml_content_1_1 xml_content_1))
-xml_content_1_1 ::= (([^<>&\\\\\\0-\\x1f]) | ("&lt;") | ("&gt;") | ("&amp;") | ("&quot;") | ("&apos;") | ("\\\\" escape_1)) (=(xml_content_1))
+xml_content_1_1 ::= (([^<>&\\\\\\0-\\x1f]) | ("&lt;") | ("&gt;") | ("&amp;") | ("&quot;") | ("&apos;") | ("\\\\" escape)) (=(xml_content_1))
 arg1 ::= (("<parameter=arg1>" [ \\n\\t]* string)) (=(arg2))
 arg2 ::= (("<parameter=arg2>" [ \\n\\t]* string))
 """
