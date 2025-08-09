@@ -301,8 +301,10 @@ NB_MODULE(xgrammar_bindings, m) {
       &Kernels_ApplyTokenBitmaskInplaceCPU,
       nb::arg("logits_ptr"),
       nb::arg("logits_shape"),
+      nb::arg("logits_strides"),
       nb::arg("bitmask_ptr"),
       nb::arg("bitmask_shape"),
+      nb::arg("bitmask_strides"),
       nb::arg("vocab_size"),
       nb::arg("indices").none(),
       nb::call_guard<nb::gil_scoped_release>()

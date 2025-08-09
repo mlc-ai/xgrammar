@@ -76,6 +76,46 @@ def test_apply_token_bitmask_inplace(device: str):
     torch.testing.assert_close(logits, expected)
 
 
+@pytest.mark.parametrize("device", ("cpu", "cuda"))
+def test_apply_token_bitmask_inplace_shape_stride_mismatch(device: str):
+    if device == "cuda" and not _is_cuda_available:
+        pytest.skip(reason="CUDA is not installed")
+
+    col = 100
+    compacted_col = (col + 31) // 32
+    neginf = float("-inf")
+    # Mask even positions (0-indexed) in the first row, and
+    # mask odd positions in the second row.
+    bool_mask = torch.tensor(
+        [[i % 2 == 0 for i in range(col)], [i % 2 == 1 for i in range(col)]],
+        dtype=torch.bool,
+        device=device,
+    )
+    # In int32 binary representation,
+    # 0x55555555 = 1431655765
+    # 0xAAAAAAAA = -1431655766
+    bitmask = torch.tensor(
+        [[1431655765] * compacted_col, [-1431655766] * compacted_col],
+        dtype=torch.int32,
+        device=device,
+    )
+    master_logits = torch.tensor(
+        [[i + 0.1 for i in range(col + 1)], [i + 0.2 for i in range(col + 1)]],
+        dtype=torch.float32,
+        device=device,
+    )
+    logits = master_logits[:, :col]
+
+    # Ensure the test environment setup is accurate (i.e. shape[-1] != stride[0])
+    assert logits.size() == (2, col)
+    assert logits.stride() == (col + 1, 1)
+
+    expected = torch.where(bool_mask, logits, neginf)
+
+    xgr.apply_token_bitmask_inplace(logits, bitmask)
+    torch.testing.assert_close(logits, expected)
+
+
 def get_apply_token_bitmask_kernel(impl: str) -> Callable:
     if impl == "cpu":
         from xgrammar.kernels.apply_token_bitmask_inplace_cpu import apply_token_bitmask_inplace_cpu
