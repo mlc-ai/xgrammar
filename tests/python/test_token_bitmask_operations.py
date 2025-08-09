@@ -349,9 +349,6 @@ def test_apply_token_bitmask_inplace_indices(
     if impl in ["cuda", "triton", "torch_compile"]:
         logits_gpu = logits.to("cuda")
         bitmask_gpu = bitmask.to("cuda")
-        print(
-            f"===Jialin {logits_gpu.shape=} {logits_gpu.stride()=} {bitmask_gpu.shape=} {bitmask_gpu.stride()=}"
-        )
         kernel(logits_gpu, bitmask_gpu, indices=indices)
         torch.testing.assert_close(logits_gpu, logits_expected.to("cuda"))
     else:
