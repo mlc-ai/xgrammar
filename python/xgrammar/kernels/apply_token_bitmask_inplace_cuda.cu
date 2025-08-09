@@ -168,6 +168,13 @@ void ApplyTokenBitmaskInplaceDispatchToPackedT(
     int32_t bitmask_stride,
     int32_t num_rows
 ) {
+  printf(
+      "===Jialin ApplyTokenBitmaskInplaceDispatchToPackedT vocab_size:%d logits_stride:%d "
+      "bitmask_stride:%d\n",
+      vocab_size,
+      logits_stride,
+      bitmask_stride
+  );
   if (logits_stride % (sizeof(float4) / sizeof(T)) == 0) {
     ApplyTokenBitmaskInplaceDispatchToBitsPerThread<T, float4>(
         logits, bitmask, indices, vocab_size, logits_stride, bitmask_stride, num_rows
@@ -234,6 +241,7 @@ void ApplyTokenBitmaskInplace(
 
   switch (logits.scalar_type()) {
     case torch::kFloat32: {
+      printf("===Jialin A!!!\n");
       ApplyTokenBitmaskInplaceDispatchToPackedT(
           logits.data_ptr<float>(),
           bitmask.data_ptr<int32_t>(),
@@ -246,6 +254,7 @@ void ApplyTokenBitmaskInplace(
       break;
     }
     case torch::kFloat16: {
+      printf("===Jialin B!!!\n");
       ApplyTokenBitmaskInplaceDispatchToPackedT(
           reinterpret_cast<__half*>(logits.data_ptr<torch::Half>()),
           bitmask.data_ptr<int32_t>(),
@@ -258,6 +267,7 @@ void ApplyTokenBitmaskInplace(
       break;
     }
     case torch::kBFloat16: {
+      printf("===Jialin C!!!\n");
       ApplyTokenBitmaskInplaceDispatchToPackedT(
           reinterpret_cast<__nv_bfloat16*>(logits.data_ptr<torch::BFloat16>()),
           bitmask.data_ptr<int32_t>(),

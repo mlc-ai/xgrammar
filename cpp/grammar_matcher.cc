@@ -113,10 +113,12 @@ void ApplyTokenBitmaskInplaceCPU(
       logits->ndim == 2
           ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
           : std::make_pair(1, static_cast<int>(logits->shape[0]));
+  int logits_stride0 = logits->strides[0];
   std::pair<int, int> bitmask_shape =
       bitmask.ndim == 2
           ? std::make_pair(static_cast<int>(bitmask.shape[0]), static_cast<int>(bitmask.shape[1]))
           : std::make_pair(1, static_cast<int>(bitmask.shape[0]));
+  int bitmask_stride0 = bitmask.strides[0];
 
   XGRAMMAR_CHECK(
       vocab_size <= bitmask_shape.second * DynamicBitset::BITS_PER_BLOCK &&
@@ -133,18 +135,18 @@ void ApplyTokenBitmaskInplaceCPU(
   // Apply mask
   if (indices.has_value()) {
     for (auto idx : indices.value()) {
-      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_shape.second;
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
       DynamicBitset bitset(vocab_size, data_ptr);
-      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_shape.second;
+      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
         logits_ptr[i] = -std::numeric_limits<float>::infinity();
       }
     }
   } else {
     for (int idx = 0; idx < logits_shape.first; ++idx) {
-      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_shape.second;
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
       DynamicBitset bitset(vocab_size, data_ptr);
-      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_shape.second;
+      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
         logits_ptr[i] = -std::numeric_limits<float>::infinity();
       }

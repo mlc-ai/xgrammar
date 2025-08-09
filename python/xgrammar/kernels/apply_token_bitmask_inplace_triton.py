@@ -83,7 +83,6 @@ def apply_token_bitmask_inplace_triton(
     vocab_size: Optional[int] = None,
     indices: Optional[List[int]] = None,
 ):
-    print("===Jialin apply_token_bitmask_inplace_triton")
     NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
     BLOCK_SIZE = 4096
 
@@ -110,8 +109,8 @@ def apply_token_bitmask_inplace_triton(
         indices,
         num_rows,
         vocab_size,
-        logits.stride[0],
-        bitmask.stride[0],
+        logits.stride()[0],
+        bitmask.stride()[0],
         NUM_SMS,
         BLOCK_SIZE,
         num_warps=BLOCK_SIZE // 32 // (16 // logits.element_size()),
