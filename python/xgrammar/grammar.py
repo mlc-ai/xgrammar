@@ -350,22 +350,3 @@ class Grammar(XGRObject):
             When the __VERSION__ field in the JSON string is not the same as the current version.
         """
         return Grammar._create_from_handle(_core.Grammar.deserialize_json(json_string))
-
-    @staticmethod
-    def from_function_call(
-        args_names: List[str], args_types: List[str], function_type: int = 0
-    ) -> "Grammar":
-        """Create a grammar from function call arguments.
-
-        Parameters
-        ----------
-        args_names : List[str]
-            The names of the arguments.
-        args_types : List[str]
-            The types of the arguments.
-        function_type : int
-            The type of the function. 0: XML style function call.
-        """
-        return Grammar._create_from_handle(
-            _core.Grammar.from_function_call(args_names, args_types, function_type)
-        )

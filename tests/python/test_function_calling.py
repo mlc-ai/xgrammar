@@ -2,20 +2,19 @@ import sys
 
 import pytest
 
-import xgrammar as xgr
-from xgrammar.testing import _is_grammar_accept_string
+from xgrammar.testing import GrammarFunctor, _is_grammar_accept_string
 
 
 def test_empty_function_call():
     expect_grammar = """root ::= ("")
 """
-    empty_call = xgr.Grammar.from_function_call(args_names=[], args_types=[])
+    empty_call = GrammarFunctor.from_function_call(args_names=[], args_types=[])
 
     assert str(empty_call) == expect_grammar
 
 
 def test_boolean_function_call():
-    boolean_call = xgr.Grammar.from_function_call(
+    boolean_call = GrammarFunctor.from_function_call(
         args_names=["arg1", "arg2"], args_types=["bool", "binary"]
     )
 
@@ -40,7 +39,7 @@ arg2 ::= (("<parameter=arg2>" [ \\n\\t]* boolean))
 
 
 def test_number_function_call():
-    number_call = xgr.Grammar.from_function_call(
+    number_call = GrammarFunctor.from_function_call(
         args_names=["arg1", "arg2"], args_types=["int", "float"]
     )
 
@@ -83,7 +82,7 @@ arg2 ::= (("<parameter=arg2>" [ \\n\\t]* number))
 
 
 def test_string_function_call():
-    string_call = xgr.Grammar.from_function_call(
+    string_call = GrammarFunctor.from_function_call(
         args_names=["arg1", "arg2"], args_types=["str", "str"]
     )
 
@@ -119,7 +118,7 @@ arg2 ::= (("<parameter=arg2>" [ \\n\\t]* string))
 
 
 def test_object_function_call():
-    object_call = xgr.Grammar.from_function_call(args_names=["arg1"], args_types=["object"])
+    object_call = GrammarFunctor.from_function_call(args_names=["arg1"], args_types=["object"])
     assert (
         str(object_call)
         == """root ::= ((arg1))
@@ -200,7 +199,7 @@ arg_names_arg_types_input_accept = [
     "input_args_names, input_args_types, input_string, accepted", arg_names_arg_types_input_accept
 )
 def test_complex_function_call(input_args_names, input_args_types, input_string, accepted):
-    complex_function_call = xgr.Grammar.from_function_call(
+    complex_function_call = GrammarFunctor.from_function_call(
         args_names=input_args_names, args_types=input_args_types
     )
     assert _is_grammar_accept_string(complex_function_call, input_string) == accepted

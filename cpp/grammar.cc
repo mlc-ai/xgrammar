@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "function_call_converter.h"
 #include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_printer.h"
@@ -179,14 +178,6 @@ std::variant<Grammar, SerializationError> Grammar::DeserializeJSON(const std::st
     return err.value();
   }
   return result;
-}
-
-Grammar Grammar::FromFunctionCall(
-    const std::vector<std::string>& args_names,
-    const std::vector<std::string>& args_types,
-    uint8_t function_type
-) {
-  return FunctionCallConverter::Apply(args_names, args_types, function_type);
 }
 
 }  // namespace xgrammar
