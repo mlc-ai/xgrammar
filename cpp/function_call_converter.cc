@@ -7,11 +7,13 @@
 #include "function_call_converter.h"
 
 #include <cstdint>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
 #include "grammar_builder.h"
 #include "grammar_functor.h"
+#include "json_schema_converter.h"
 #include "support/logging.h"
 #include "support/utils.h"
 #include "xgrammar/grammar.h"
@@ -41,88 +43,12 @@ const std::string kBooleanGrammarString = R"(
 boolean ::= "true" [ \n\t]* "</parameter>" | "false" [ \n\t]* "</parameter>"
 )";
 
-const std::string kXmlObjectGrammarString = R"(
-object ::=
-    "{" [ \n\t]* members_and_embrace [ \n\t]* "</parameter>" | "null" [ \n\t]* "</parameter>"
-xml_entity ::= "&lt;" | "&gt;" | "&amp;" | "&quot;" | "&apos;"
-value_non_str ::= (
-    "{" [ \n\t]* members_and_embrace |
-    "[" [ \n\t]* elements_or_embrace |
-    "0" fraction exponent |
-    [1-9] [0-9]* fraction exponent |
-    "-" [0-9] fraction exponent |
-    "-" [1-9] [0-9]* fraction exponent |
-    "true" |
-    "false" |
-    "null"
-) (= [ \n\t,}\]])
-members_and_embrace ::= ("\"" characters_and_colon [ \n\t]* members_suffix | "}") (= [ \n\t,}\]])
-members_suffix ::= (
-    value_non_str [ \n\t]* member_suffix_suffix |
-    "\"" characters_and_embrace |
-    "\"" characters_and_comma [ \n\t]* "\"" characters_and_colon [ \n\t]* members_suffix
-) (= [ \n\t,}\]])
-member_suffix_suffix ::= (
-    "}" |
-    "," [ \n\t]* "\"" characters_and_colon [ \n\t]* members_suffix
-) (= [ \n\t,}\]])
-elements_or_embrace ::= (
-    "{" [ \n\t]* members_and_embrace elements_rest [ \n\t]* "]" |
-    "[" [ \n\t]* elements_or_embrace elements_rest [ \n\t]* "]" |
-    "\"" characters_item elements_rest [ \n\t]* "]" |
-    "0" fraction exponent elements_rest [ \n\t]* "]" |
-    [1-9] [0-9]* fraction exponent elements_rest [ \n\t]* "]" |
-    "-" "0" fraction exponent elements_rest [ \n\t]* "]" |
-    "-" [1-9] [0-9]* fraction exponent elements_rest [ \n\t]* "]" |
-    "true" elements_rest [ \n\t]* "]" |
-    "false" elements_rest [ \n\t]* "]" |
-    "null" elements_rest [ \n\t]* "]" |
-    "]"
-)
-elements ::= (
-    "{" [ \n\t]* members_and_embrace elements_rest |
-    "[" [ \n\t]* elements_or_embrace elements_rest |
-    "\"" characters_item elements_rest |
-    "0" fraction exponent elements_rest |
-    [1-9] [0-9]* fraction exponent elements_rest |
-    "-" [0-9] fraction exponent elements_rest |
-    "-" [1-9] [0-9]* fraction exponent elements_rest |
-    "true" elements_rest |
-    "false" elements_rest |
-    "null" elements_rest
-)
-elements_rest ::= (
-    "" |
-    [ \n\t]* "," [ \n\t]* elements
-)
-characters_and_colon ::= (
-    "\"" [ \n\t]* ":" |
-    [^<>&\\\x00-\x1F] characters_and_colon |
-    xml_entity characters_and_colon |
-    "\\" escape characters_and_colon
-) (=[ \n\t]* [\"{[0-9tfn-])
-characters_and_comma ::= (
-    "\"" [ \n\t]* "," |
-    [^<>&\\\x00-\x1F] characters_and_comma |
-    xml_entity characters_and_comma |
-    "\\" escape characters_and_comma
-) (=[ \n\t]* "\"")
-characters_and_embrace ::= (
-    "\"" [ \n\t]* "}" |
-    [^<>&\\\x00-\x1F] characters_and_embrace |
-    xml_entity characters_and_embrace |
-    "\\" escape characters_and_embrace
-) (=[ \n\t]* [},])
-characters_item ::= (
-    "\"" |
-    [^<>&\\\x00-\x1F] characters_item |
-    xml_entity characters_item |
-    "\\" escape characters_item
-) (= [ \n\t]* [,\]])
-escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-fraction ::= "" | "." [0-9] [0-9]*
-exponent ::= "" |  "e" sign [0-9] [0-9]* | "E" sign [0-9] [0-9]*
-sign ::= "" | "+" | "-"
+const std::string kXmlObjectSchemaString = R"(
+{
+  "type": "object",
+  "properties": {},
+  "additionalProperties": true
+}
 )";
 
 /*************************** FunctionCallConverterImpl ***************************/
@@ -190,7 +116,13 @@ Grammar FunctionCallConverterImpl::BuildXmlParameterGrammar(
 
   static const Grammar kBooleanGrammar = Grammar::FromEBNF(kBooleanGrammarString, "boolean");
 
-  static const Grammar kXmlObjectGrammar = Grammar::FromEBNF(kXmlObjectGrammarString, "object");
+  static const Grammar kXmlObjectGrammar_raw = Grammar::FromEBNF(JSONSchemaToEBNF(
+      kXmlObjectSchemaString, true, std::nullopt, std::nullopt, false, StringEscapeType::kXML
+  ));
+  static const Grammar kXmlObjectGrammar = Grammar::Concat(
+      {Grammar::Union({kXmlObjectGrammar_raw, Grammar::FromEBNF("root ::= \"null\"")}),
+       Grammar::FromEBNF("root ::= " + kWhiteSpacesString + " \"</parameter>\"")}
+  );
   // Initialize the grammar builder.
   InitGrammar();
   InitBuilder();

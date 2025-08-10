@@ -250,12 +250,15 @@ NB_MODULE(xgrammar_bindings, m) {
   pyTestingModule
       .def(
           "_json_schema_to_ebnf",
-          nb::overload_cast<
-              const std::string&,
-              bool,
-              std::optional<int>,
-              std::optional<std::pair<std::string, std::string>>,
-              bool>(&JSONSchemaToEBNF),
+          [](const std::string& schema,
+             bool any_whitespace,
+             std::optional<int> indent,
+             std::optional<std::pair<std::string, std::string>> separators,
+             bool strict_mode) {
+            return JSONSchemaToEBNF(
+                schema, any_whitespace, indent, separators, strict_mode, StringEscapeType::kJSON
+            );
+          },
           nb::arg("schema"),
           nb::arg("any_whitespace"),
           nb::arg("indent").none(),

@@ -15,6 +15,11 @@
 
 namespace xgrammar {
 
+enum class StringEscapeType {
+  kJSON,
+  kXML,
+};
+
 /*!
  * \brief Convert JSON schema string to EBNF grammar string.
  * \param schema The JSON schema string.
@@ -32,12 +37,14 @@ namespace xgrammar {
  * schema. Default: true.
  * \returns The EBNF grammar string.
  */
+
 std::string JSONSchemaToEBNF(
     const std::string& schema,
     bool any_whitespace = true,
     std::optional<int> indent = std::nullopt,
     std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
-    bool strict_mode = true
+    bool strict_mode = true,
+    StringEscapeType string_escape_type = StringEscapeType::kJSON
 );
 
 /*!
@@ -48,7 +55,8 @@ std::string JSONSchemaToEBNF(
  * \param separators Two separators used in the schema: comma and colon. Examples: {",", ":"},
  * {", ", ": "}. If std::nullopt, the default separators will be used: {",", ": "} when the
  * indent is not -1, and {", ", ": "} otherwise. This follows the convention in python
- * json.dumps(). Default: std::nullopt. \param strict_mode Whether to use strict mode. In strict
+ * json.dumps(). Default: std::nullopt.
+ * \param strict_mode Whether to use strict mode. In strict
  * mode, the generated grammar will not allow properties and items that is not specified in the
  * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
  *
@@ -61,7 +69,8 @@ std::string JSONSchemaToEBNF(
     bool any_whitespace = true,
     std::optional<int> indent = std::nullopt,
     std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
-    bool strict_mode = true
+    bool strict_mode = true,
+    StringEscapeType string_escape_type = StringEscapeType::kJSON
 );
 
 /*!
