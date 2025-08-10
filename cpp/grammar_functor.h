@@ -11,7 +11,6 @@
 
 #include <string>
 
-#include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
 #include "xgrammar/grammar.h"

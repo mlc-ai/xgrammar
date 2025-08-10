@@ -514,5 +514,20 @@ def test_not_neighbour_character_class():
     assert len(rejected_token_ids) == 31933
 
 
+def test_nfa():
+    grammar_str = """
+root ::= rule1 | rule2 | rule3
+rule1 ::= "abc" | ""
+rule2 ::= "abd" | ""
+rule3 ::= [a-n] [b-c] "x" | ""
+"""
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    assert _is_grammar_accept_string(grammar, "abc")
+    assert _is_grammar_accept_string(grammar, "abx")
+    assert _is_grammar_accept_string(grammar, "ccx")
+    assert not _is_grammar_accept_string(grammar, "abb")
+    assert not _is_grammar_accept_string(grammar, "ad")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

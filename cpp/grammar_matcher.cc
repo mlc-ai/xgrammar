@@ -666,13 +666,14 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
       can_find_next_char = false;
       break;
     }
+
     // 1. Check that for every leaf ParserState, the next possible char is unique and the same
     // -1 means not found yet; 0~255 means the next char
     int next_char = -1;
     for (const auto& state : states) {
       if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
         const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
-        const auto& current_edges = fsm->GetEdges(state.element_id);
+        const auto& current_edges = fsm.GetFsm().GetEdges(state.element_id);
         for (const auto& edge : current_edges) {
           if (!edge.IsCharRange()) {
             continue;

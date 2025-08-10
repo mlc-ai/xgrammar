@@ -57,18 +57,9 @@ def test_serialize_grammar():
             # fmt: on
         ],
         "root_rule_id": 1,
-        "allow_empty_rule_ids": [0],
-        # fmt: off
-        "complete_fsm": {
-            'data_': [[0, 47, 3], [58, 127, 3], [192, 223, 1], [224, 239, 4], [240, 247, 5], [128, 191, 3], [-2, 0, 2], [128, 191, 1], [128, 191, 4], [-2, 0, 8], [97, 97, 6]],
-            'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]
-            },
-        "per_rule_fsms": [
-            [{'data_': [[0, 47, 3], [58, 127, 3], [192, 223, 1], [224, 239, 4], [240, 247, 5], [128, 191, 3], [-2, 0, 2], [128, 191, 1], [128, 191, 4], [-2, 0, 8], [97, 97, 6]],
-            'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 0, [1, 0, 1, 0, 0, 0], False],
-            [{'data_': [[0, 47, 3], [58, 127, 3], [192, 223, 1], [224, 239, 4], [240, 247, 5], [128, 191, 3], [-2, 0, 2], [128, 191, 1], [128, 191, 4], [-2, 0, 8], [97, 97, 6]],
-            'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [0, 0, 0, 0, 0, 0, 1, 0, 0], False]],
-        # fmt: on
+        "complete_fsm": None,
+        "per_rule_fsms": [],
+        "allow_empty_rule_ids": [],
         "exact_lookahead": [],
         "__VERSION__": "v4",
     }
@@ -220,9 +211,9 @@ def test_serialize_compiled_grammar():
                 },
             "per_rule_fsms": [
                 [{'data_': [[0, 47, 3], [58, 127, 3], [192, 223, 1], [224, 239, 4], [240, 247, 5], [128, 191, 3], [-2, 0, 2], [128, 191, 1], [128, 191, 4], [-2, 0, 8], [97, 97, 6]],
-                'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 0, [1, 0, 1, 0, 0, 0], False],
+                'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 0, [0, 2], False],
                 [{'data_': [[0, 47, 3], [58, 127, 3], [192, 223, 1], [224, 239, 4], [240, 247, 5], [128, 191, 3], [-2, 0, 2], [128, 191, 1], [128, 191, 4], [-2, 0, 8], [97, 97, 6]],
-                'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [0, 0, 0, 0, 0, 0, 1, 0, 0], False]],
+                'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [6], False]],
             # fmt: on
             "exact_lookahead": [],
         },
@@ -247,7 +238,6 @@ def test_serialize_compiled_grammar():
 
     recovered_obj = json.loads(serialized)
     adaptive_token_mask_cache = recovered_obj.pop("adaptive_token_mask_cache", None)
-
     assert recovered_obj == expected_json
     AdaptiveTokenMaskCache.model_validate(adaptive_token_mask_cache)
 

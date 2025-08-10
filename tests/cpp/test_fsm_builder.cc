@@ -28,7 +28,7 @@ TEST(XGrammarFSMBuilderTest, TestTrieFSMBuilder) {
   // Test1: The printed result of FSM
 
   // Test2: The printed result of CompactFSM
-  CompactFSMWithStartEnd compact_fsm(fsm->ToCompact(), fsm.GetStart(), fsm.GetEnds());
+  CompactFSMWithStartEnd compact_fsm(fsm.GetFsm().ToCompact(), fsm.GetStart(), fsm.GetEnds());
 
   // Test3: Walk through the FSM
   int state = fsm.GetStart();
@@ -36,25 +36,25 @@ TEST(XGrammarFSMBuilderTest, TestTrieFSMBuilder) {
 
   // Test "hello"
   state = fsm.GetStart();
-  EXPECT_EQ(fsm->GetNextState(state, 'h'), 1);
-  EXPECT_EQ(fsm->GetNextState(1, 'e'), 2);
-  EXPECT_EQ(fsm->GetNextState(2, 'l'), 3);
-  EXPECT_EQ(fsm->GetNextState(3, 'l'), 4);
-  EXPECT_EQ(fsm->GetNextState(4, 'o'), 5);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(state, 'h'), 1);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(1, 'e'), 2);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(2, 'l'), 3);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(3, 'l'), 4);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(4, 'o'), 5);
   EXPECT_TRUE(fsm.IsEndState(5));
 
   // Test "hil"
   state = fsm.GetStart();
-  EXPECT_EQ(fsm->GetNextState(state, 'h'), 1);
-  EXPECT_EQ(fsm->GetNextState(1, 'i'), 6);
-  EXPECT_EQ(fsm->GetNextState(6, 'l'), 13);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(state, 'h'), 1);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(1, 'i'), 6);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(6, 'l'), 13);
   EXPECT_FALSE(fsm.IsEndState(13));
 
   // Test walk failure
   state = fsm.GetStart();
-  EXPECT_EQ(fsm->GetNextState(state, 'g'), 15);
-  EXPECT_EQ(fsm->GetNextState(15, 'o'), 16);
-  EXPECT_EQ(fsm->GetNextState(16, 'e'), -1);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(state, 'g'), 15);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(15, 'o'), 16);
+  EXPECT_EQ(fsm.GetFsm().GetNextState(16, 'e'), -1);
 }
 
 TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder1) {
@@ -287,12 +287,15 @@ TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder3) {
   auto fsm = std::move(fsm_result).value();
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
-      R"(FSM(num_states=5, start=0, end=[1], edges=[
-0: [[\0-@]->1, [[-`]->1, [{-\x7f]->1, [\xf0-\xf7]->2, [\xe0-\xef]->3, [\xc0-\xdf]->4]
+      R"(FSM(num_states=8, start=0, end=[1], edges=[
+0: [[\0-@]->1, [[-`]->1, [{-\x7f]->1, [\xc0-\xdf]->2, [\xe0-\xef]->3, [\xf0-\xf7]->5]
 1: []
-2: [[\x80-\xbf]->3]
+2: [[\x80-\xbf]->1]
 3: [[\x80-\xbf]->4]
 4: [[\x80-\xbf]->1]
+5: [[\x80-\xbf]->6]
+6: [[\x80-\xbf]->7]
+7: [[\x80-\xbf]->1]
 ]))";
   EXPECT_EQ(fsm_printed, expected_fsm_printed);
 }
@@ -307,11 +310,14 @@ TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder4) {
   auto fsm = std::move(fsm_result).value();
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
-      R"(FSM(num_states=4, start=0, end=[0], edges=[
-0: [[\0-@]->0, [[-`]->0, [{-\x7f]->0, [\xf0-\xf7]->1, [\xe0-\xef]->2, [\xc0-\xdf]->3]
-1: [[\x80-\xbf]->2]
+      R"(FSM(num_states=7, start=0, end=[0], edges=[
+0: [[\0-@]->0, [[-`]->0, [{-\x7f]->0, [\xc0-\xdf]->1, [\xe0-\xef]->2, [\xf0-\xf7]->4]
+1: [[\x80-\xbf]->0]
 2: [[\x80-\xbf]->3]
 3: [[\x80-\xbf]->0]
+4: [[\x80-\xbf]->5]
+5: [[\x80-\xbf]->6]
+6: [[\x80-\xbf]->0]
 ]))";
   EXPECT_EQ(fsm_printed, expected_fsm_printed);
 }

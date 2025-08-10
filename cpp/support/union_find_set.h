@@ -27,7 +27,7 @@ class UnionFindSet {
    * \param element The element to add.
    * \return True if the element was added successfully, false if it already exists.
    */
-  bool Make(const T& element) {
+  bool Add(const T& element) {
     if (element_to_parent_and_size_.find(element) != element_to_parent_and_size_.end()) {
       return false;  // Element already exists.
     }

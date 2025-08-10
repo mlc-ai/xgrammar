@@ -128,6 +128,18 @@ class Compact2DArray {
   int32_t PushBack(const Row& row) { return PushBack(row.data, row.data_len); }
 
   /*!
+   * \brief Push back a new element in the latest row.
+   * \param new_data the element to be pushed.
+   */
+  void PushBackInLatestRow(const DataType& new_data) {
+    XGRAMMAR_DCHECK(!indptr_.empty()) << "Cannot push back in an empty Compact2DArray";
+    data_.push_back(new_data);
+    indptr_.back()++;
+  }
+
+  Row Back() { return (*this)[size() - 1]; }
+
+  /*!
    * \brief Insert a new row of non-contiguous data into the Compact2DArray. This method inserts a
    * single element followed by a sequence of elements. This is useful in the GrammarExpr data
    * structure.

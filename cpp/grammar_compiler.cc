@@ -17,6 +17,7 @@
 #include "compiled_grammar_impl.h"
 #include "earley_parser.h"
 #include "fsm.h"
+#include "grammar_functor.h"
 #include "grammar_impl.h"
 #include "support/logging.h"
 #include "support/thread_pool.h"
@@ -225,7 +226,7 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   // Check if the initial state is self-recursive-like. If the state is self-recursive-like,
   // and it covers a large part of the vocabulary, we will do speculative calculation in compiling.
-  if (init_rule_id == -1 || !grammar_->per_rule_fsms[init_rule_id].has_value()) {
+  if (!grammar_->per_rule_fsms[init_rule_id].has_value()) {
     if (initial_state.sub_element_id == 0) {
       const auto& sequence_expr = grammar_->GetGrammarExpr(initial_state.sequence_id);
       // A self-recursive-like rule must be a sequence.
@@ -253,8 +254,8 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
   bool can_be_applied = false;
   std::bitset<256> speculative_mask;
   const auto& fsm = grammar_->per_rule_fsms[init_rule_id].value();
-  XGRAMMAR_DCHECK(initial_state.element_id < fsm->NumStates());
-  for (const auto& edge : fsm->GetEdges(initial_state.element_id)) {
+  XGRAMMAR_DCHECK(initial_state.element_id < fsm.NumStates());
+  for (const auto& edge : fsm.GetFsm().GetEdges(initial_state.element_id)) {
     if (edge.IsCharRange()) {
       // Case A: The edge is towards itself.
       if (edge.target == initial_state.element_id) {
@@ -268,7 +269,7 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
       // Case B: The state is the start state, and there's an edge to another state,
       // which calls the fsm itself.
       if (fsm.GetStart() == initial_state.element_id) {
-        for (const auto& next_edge : fsm->GetEdges(edge.target)) {
+        for (const auto& next_edge : fsm.GetFsm().GetEdges(edge.target)) {
           if (next_edge.IsRuleRef() && next_edge.GetRefRuleId() == init_rule_id) {
             can_be_applied = true;
             for (int ch = edge.min; ch <= edge.max; ++ch) {
@@ -510,7 +511,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
     }
   } else {
     const auto& fsm = grammar_->per_rule_fsms[init_rule_id].value();
-    const auto& edges = fsm->GetEdges(initial_state.element_id);
+    const auto& edges = fsm.GetFsm().GetEdges(initial_state.element_id);
     for (const auto& edge : edges) {
       if (edge.IsCharRange()) {
         for (int c = edge.min; c <= edge.max; ++c) {
@@ -637,11 +638,12 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
 
   compiled_grammar_impl->grammar = grammar;
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
-
+  grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(compiled_grammar_impl->grammar);
+  RepetitionNormalizer::Apply(&compiled_grammar_impl->grammar);
+  GrammarFSMBuilder::Apply(&compiled_grammar_impl->grammar);
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
-
   // Step 3. Compute the adaptive token mask cache
   // The token mask cache is computed for these positions in the grammar:
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)

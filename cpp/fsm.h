@@ -264,7 +264,7 @@ class FSM {
    * \brief Adds a new state to the FSM.
    * \return The index of the newly added state.
    */
-  int AddStateWithoutEnd();
+  int AddState();
 
   /*!
    * \brief Adds a transition edge between states with given min and max values. For character
@@ -346,6 +346,7 @@ class FSM {
  *
  * It share the same set of visitor methods with FSM.
  */
+
 class CompactFSM {
  public:
   // for serialization only
@@ -497,20 +498,20 @@ class FSMWithStartEndBase {
   }
 
   FSMWithStartEndBase(
-      const FSMType& fsm, int start, const std::vector<uint8_t>& ends, bool is_dfa = false
+      const FSMType& fsm, int start, const std::vector<bool>& ends, bool is_dfa = false
   )
       : fsm_(fsm), start_(start), ends_(ends), is_dfa_(is_dfa) {}
 
   /****************** Member Accessors and Mutators ******************/
 
   /*! \brief Returns the underlying FSM. */
-  const FSMType& GetFSM() const { return fsm_; }
+  const FSMType& GetFsm() const { return fsm_; }
 
   /*! \brief Returns the start state of the FSM. */
   int GetStart() const { return start_; }
 
   /*! \brief Returns the end states of the FSM. */
-  const std::vector<uint8_t>& GetEnds() const { return ends_; }
+  const std::vector<bool>& GetEnds() const { return ends_; }
 
   /*!
    * \brief Checks if a given state is an end/accepting state.
@@ -568,16 +569,16 @@ class FSMWithStartEndBase {
    * \brief Adds a new state to the FSM and marks it as non-end.
    * \return The index of the newly added state.
    */
-  int AddState() {
+  int AddStateWithEnd() {
     ends_.push_back(false);
-    return fsm_.AddStateWithoutEnd();
+    return fsm_.AddState();
   }
 
   /*!
    * \brief Sets the end states of the FSM.
    * \param ends The new end states.
    */
-  void SetEndStates(const std::vector<uint8_t>& ends) { ends_ = ends; }
+  void SetEndStates(const std::vector<bool>& ends) { ends_ = ends; }
 
   /*! \brief Returns the total number of states in the FSM. */
   int NumStates() const { return fsm_.NumStates(); }
@@ -585,12 +586,7 @@ class FSMWithStartEndBase {
   /*!
    * \brief Access the methods of the underlying FSM.
    */
-  FSMType* operator->() { return &fsm_; }
-
-  /*!
-   * \brief Access the methods of the underlying FSM.
-   */
-  const FSMType* operator->() const { return &fsm_; }
+  FSMType& GetFsm() { return fsm_; }
 
   /****************** FSM Traversal Algorithms ******************/
 
@@ -620,7 +616,7 @@ class FSMWithStartEndBase {
   int start_;
 
   /*! \brief The set of accepting/end states. */
-  std::vector<uint8_t> ends_;
+  std::vector<bool> ends_;
 
  protected:
   /*! \brief Whether this FSM is a deterministic finite automaton. */
@@ -702,7 +698,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \brief Return a new FSM representing the complement of the language.
    * \return The complement FSM.
    */
-  Result<FSMWithStartEnd> Not(int num_of_states_limited = 1e6) const;
+  Result<FSMWithStartEnd> Not(int max_result_num_states = 1e6) const;
 
   /*!
    * \brief Intersect the FSMs.
@@ -711,7 +707,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \return The intersection of the FSMs.
    */
   static Result<FSMWithStartEnd> Intersect(
-      const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, int num_of_states_limited = 1e6
+      const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, int max_result_num_states = 1e6
   );
 
   /*!
@@ -732,7 +728,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \brief Check if the FSM is a DFA.
    * \return True if the FSM is a DFA, false otherwise.
    */
-  bool CheckDFA();
+  bool IsDFA();
 
   /*!
    * \brief Merge some states by removing some epsilon transitions.
@@ -751,17 +747,17 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
 
   /*!
    * \brief Transform the FSM to a DFA.
-   * \param num_of_states_limited The maximum number of states in the DFA.
+   * \param max_result_num_states The maximum number of states in the DFA.
    * \return The DFA.
    */
-  Result<FSMWithStartEnd> ToDFA(int num_of_states_limited = 1e6) const;
+  Result<FSMWithStartEnd> ToDFA(int max_result_num_states = 1e6) const;
 
   /*!
    * \brief Minimize the DFA.
-   * \param num_of_states_limited The maximum number of states in the DFA.
+   * \param max_result_num_states The maximum number of states in the DFA.
    * \return The minimized DFA.
    */
-  Result<FSMWithStartEnd> MinimizeDFA(int num_of_states_limited = 1e6) const;
+  Result<FSMWithStartEnd> MinimizeDFA(int max_result_num_states = 1e6) const;
 };
 
 /*!
@@ -806,6 +802,13 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   friend std::size_t MemorySize(const CompactFSMWithStartEnd& self);
 
   friend struct member_trait<CompactFSMWithStartEnd>;
+
+  friend struct CompactFSMWithStartEndSerializeHelper;
+
+  friend picojson::value SerializeJSONValue(const CompactFSMWithStartEnd& value);
+  friend std::optional<SerializationError> DeserializeJSONValue(
+      CompactFSMWithStartEnd* result, const picojson::value& value, const std::string& type_name
+  );
 };
 
 XGRAMMAR_MEMBER_ARRAY(

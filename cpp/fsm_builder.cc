@@ -312,7 +312,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
     result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     for (int end = 0; end < result.NumStates(); ++end) {
       if (result.IsEndState(end)) {
-        result->AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
+        result.GetFsm().AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
       }
     }
     return ResultOk(std::move(result));
@@ -339,61 +339,67 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
   FSMWithStartEnd result(empty_fsm, 0, std::unordered_set<int>{}, true);
   // Handle the regex string.
   if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
-    result.AddState();
+    result.AddStateWithEnd();
     for (size_t i = 0; i < regex.size(); i++) {
       if (regex[i] != '\\') {
         if (regex[i] == '.') {
-          result->AddEdge(result->NumStates() - 1, result->NumStates(), 0, 0xFF);
+          result.GetFsm().AddEdge(result.NumStates() - 1, result.NumStates(), 0, 0xFF);
         } else {
-          result->AddEdge(
-              result->NumStates() - 1,
-              result->NumStates(),
+          result.GetFsm().AddEdge(
+              result.NumStates() - 1,
+              result.NumStates(),
               static_cast<uint8_t>(regex[i]),
               static_cast<uint8_t>(regex[i])
           );
         }
-        result.AddState();
+        result.AddStateWithEnd();
         continue;
       }
       std::vector<std::pair<int, int>> escape_vector = HandleEscapes(regex, i);
       for (const auto& escape : escape_vector) {
-        result->AddEdge(
-            result->NumStates() - 1,
-            result->NumStates(),
+        result.GetFsm().AddEdge(
+            result.NumStates() - 1,
+            result.NumStates(),
             static_cast<uint8_t>(escape.first),
             static_cast<uint8_t>(escape.second)
         );
       }
-      result.AddState();
+      result.AddStateWithEnd();
       i++;
     }
-    result.AddEndState(result->NumStates() - 1);
+    result.AddEndState(result.NumStates() - 1);
   } else if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
     // Handle the character class.
-    result.AddState();
-    result.AddState();
+    result.AddStateWithEnd();
+    result.AddStateWithEnd();
     result.AddEndState(1);
     bool reverse = regex[1] == '^';
     for (size_t i = reverse ? 2 : 1; i < regex.size() - 1; i++) {
       if (regex[i] != '\\') {
         if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
           // A single char.
-          result->AddEdge(0, 1, static_cast<uint8_t>(regex[i]), static_cast<uint8_t>(regex[i]));
+          result.GetFsm().AddEdge(
+              0, 1, static_cast<uint8_t>(regex[i]), static_cast<uint8_t>(regex[i])
+          );
           continue;
         }
         // Handle the char range.
         if (regex[i + 2] != '\\') {
-          result->AddEdge(0, 1, static_cast<uint8_t>(regex[i]), static_cast<uint8_t>(regex[i + 2]));
+          result.GetFsm().AddEdge(
+              0, 1, static_cast<uint8_t>(regex[i]), static_cast<uint8_t>(regex[i + 2])
+          );
           i = i + 2;
           continue;
         }
         auto escaped_edges = HandleEscapes(regex, i + 2);
         // Means it's not a range.
         if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
-          result->AddEdge(0, 1, static_cast<uint8_t>(regex[i]), static_cast<uint8_t>(regex[i]));
+          result.GetFsm().AddEdge(
+              0, 1, static_cast<uint8_t>(regex[i]), static_cast<uint8_t>(regex[i])
+          );
           continue;
         }
-        result->AddEdge(
+        result.GetFsm().AddEdge(
             0, 1, static_cast<uint8_t>(regex[0]), static_cast<uint8_t>(escaped_edges[0].first)
         );
         i = i + 3;
@@ -404,14 +410,14 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
       if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
         // It's a multi-match escape char.
         for (const auto& edge : escaped_edges) {
-          result->AddEdge(
+          result.GetFsm().AddEdge(
               0, 1, static_cast<uint8_t>(edge.first), static_cast<uint8_t>(edge.second)
           );
         }
         continue;
       }
       if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
-        result->AddEdge(
+        result.GetFsm().AddEdge(
             0,
             1,
             static_cast<uint8_t>(escaped_edges[0].first),
@@ -420,7 +426,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
         continue;
       }
       if (regex[i + 2] != '\\') {
-        result->AddEdge(
+        result.GetFsm().AddEdge(
             0, 1, static_cast<uint8_t>(escaped_edges[0].first), static_cast<uint8_t>(regex[i + 2])
         );
         i = i + 2;
@@ -429,7 +435,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
       auto rhs_escaped_edges = HandleEscapes(regex, i + 2);
       if (rhs_escaped_edges.size() != 1 ||
           rhs_escaped_edges[0].first != rhs_escaped_edges[0].second) {
-        result->AddEdge(
+        result.GetFsm().AddEdge(
             0,
             1,
             static_cast<uint8_t>(escaped_edges[0].first),
@@ -437,7 +443,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
         );
         continue;
       }
-      result->AddEdge(
+      result.GetFsm().AddEdge(
           0,
           1,
           static_cast<uint8_t>(escaped_edges[0].first),
@@ -449,7 +455,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
     bool has_edge[0x100];
     memset(has_edge, 0, sizeof(has_edge));
     FSM new_fsm(2);
-    for (const auto& edge : result->GetEdges(0)) {
+    for (const auto& edge : result.GetFsm().GetEdges(0)) {
       for (int i = edge.min; i <= edge.max; i++) {
         has_edge[i] = true;
       }
@@ -805,7 +811,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
       int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
       int next_state = fsm.GetNextState(current_state, ch_int16);
       if (next_state == FSM::kNoNextState) {
-        next_state = fsm.AddStateWithoutEnd();
+        next_state = fsm.AddState();
         fsm.AddEdge(current_state, next_state, ch_int16, ch_int16);
       }
       current_state = next_state;

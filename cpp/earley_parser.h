@@ -243,12 +243,6 @@ class EarleyParser {
   Compact2DArray<std::pair<int32_t, ParserState>> rule_id_to_completable_states_;
 
   /*!
-   * \brief The current rule_id_to_completable_states_, and it will be pushed back
-   * into the compact 2d array when current parsing is done.
-   */
-  std::vector<std::pair<int32_t, ParserState>> tmp_rule_id_to_completable_states_;
-
-  /*!
    * \brief The states history. state_stack[i] is a vector storing the states after accepting the
    * input[i-1].
    */
