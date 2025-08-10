@@ -183,11 +183,6 @@ std::string IndentManager::NextSeparator(bool is_end) {
  */
 class JSONSchemaConverter {
  public:
-  enum class StringEscapeType {
-    kJSON,
-    kXML,
-  };
-
   JSONSchemaConverter(
       const picojson::value& json_schema,
       bool any_whitespace,
@@ -521,7 +516,7 @@ std::string JSONSchemaConverter::Convert() {
   return ebnf_script_creator_.GetScript();
 }
 
-void JSONSchemaConverter::AddBasicRules(JSONSchemaConverter::StringEscapeType string_escape_type) {
+void JSONSchemaConverter::AddBasicRules(StringEscapeType string_escape_type) {
   bool past_strict_mode = strict_mode_;
   // Allow any field for basic array/obj rules
   strict_mode_ = false;
@@ -2975,13 +2970,16 @@ std::string JSONSchemaToEBNF(
     bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
-    bool strict_mode
+    bool strict_mode,
+    StringEscapeType string_escape_type
 ) {
   picojson::value schema_value;
   std::string err = picojson::parse(schema_value, schema);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
                               << ". The JSON string is:" << schema;
-  return JSONSchemaToEBNF(schema_value, any_whitespace, indent, separators, strict_mode);
+  return JSONSchemaToEBNF(
+      schema_value, any_whitespace, indent, separators, strict_mode, string_escape_type
+  );
 }
 
 std::string JSONSchemaToEBNF(
@@ -2989,9 +2987,12 @@ std::string JSONSchemaToEBNF(
     bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
-    bool strict_mode
+    bool strict_mode,
+    StringEscapeType string_escape_type
 ) {
-  JSONSchemaConverter converter(schema, any_whitespace, indent, separators, strict_mode);
+  JSONSchemaConverter converter(
+      schema, any_whitespace, indent, separators, strict_mode, string_escape_type
+  );
   return converter.Convert();
 }
 
