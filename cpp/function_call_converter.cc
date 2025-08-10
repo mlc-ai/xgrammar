@@ -132,9 +132,7 @@ class FunctionCallConverterImpl : public GrammarMutator {
   enum class kParametersType : int32_t { kNumber = 0, kString = 1, kBoolean = 2, kObject = 3 };
 
   Grammar Apply(
-      const std::vector<std::string>& args_names,
-      const std::vector<std::string>& args_types,
-      uint8_t function_type
+      const std::vector<std::string>& args_names, const std::vector<std::string>& args_types
   );
 
   Grammar BuildXmlParameterGrammar(
@@ -149,9 +147,7 @@ class FunctionCallConverterImpl : public GrammarMutator {
 };
 
 Grammar FunctionCallConverterImpl::Apply(
-    const std::vector<std::string>& args_names,
-    const std::vector<std::string>& args_types,
-    uint8_t function_type
+    const std::vector<std::string>& args_names, const std::vector<std::string>& args_types
 ) {
   // Handle the corner cases.
   XGRAMMAR_CHECK(args_types.size() == args_types.size());
@@ -159,15 +155,7 @@ Grammar FunctionCallConverterImpl::Apply(
     return Grammar::FromEBNF("root ::= \"\"");
   }
 
-  // Build the grammar
-  switch (function_type) {
-    case Grammar::kXmlStyleFunctionCall: {
-      return BuildXmlParameterGrammar(args_names, args_types);
-    }
-    default: {
-      XGRAMMAR_LOG(FATAL) << "Can't build a function calling grammar for this style!";
-    }
-  }
+  return BuildXmlParameterGrammar(args_names, args_types);
 }
 
 using kParametersType = FunctionCallConverterImpl::kParametersType;
@@ -305,11 +293,9 @@ Grammar FunctionCallConverterImpl::BuildXmlParameterGrammar(
 /*************************** Forward grammar functors to their impl ***************************/
 
 Grammar FunctionCallConverter::Apply(
-    const std::vector<std::string>& args_names,
-    const std::vector<std::string>& args_types,
-    uint8_t function_type
+    const std::vector<std::string>& args_names, const std::vector<std::string>& args_types
 ) {
-  Grammar grammar = FunctionCallConverterImpl().Apply(args_names, args_types, function_type);
+  Grammar grammar = FunctionCallConverterImpl().Apply(args_names, args_types);
   return GrammarNormalizer().Apply(grammar);
 }
 }  // namespace xgrammar

@@ -13,6 +13,7 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
+#include "../function_call_converter.h"
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
@@ -157,14 +158,6 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("print_converted_ebnf"),
           nb::call_guard<nb::gil_scoped_release>()
       )
-      .def_static(
-          "from_function_call",
-          &Grammar::FromFunctionCall,
-          nb::arg("args_names"),
-          nb::arg("args_types"),
-          nb::arg("function_type"),
-          nb::call_guard<nb::gil_scoped_release>()
-      )
       .def_static("from_regex", &Grammar::FromRegex, nb::call_guard<nb::gil_scoped_release>())
       .def_static(
           "from_structural_tag",
@@ -301,7 +294,14 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("byte_string_fuser", &ByteStringFuser::Apply)
       .def("rule_inliner", &RuleInliner::Apply)
       .def("dead_code_eliminator", &DeadCodeEliminator::Apply)
-      .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply);
+      .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply)
+      .def(
+          "from_function_call",
+          &FunctionCallConverter::Apply,
+          nb::arg("args_names"),
+          nb::arg("args_types"),
+          nb::call_guard<nb::gil_scoped_release>()
+      );
 
   auto pyKernelsModule = m.def_submodule("kernels");
   pyKernelsModule.def(

@@ -14,13 +14,10 @@ class FunctionCallConverter {
    * \brief Convert a function call to a Grammar.
    * \param args_names The names of the arguments.
    * \param args_types The types of the arguments.
-   * \param function_type The type of the function call format. Default is kXmlStyleFunctionCall.
    * \return The constructed grammar.
    */
   static Grammar Apply(
-      const std::vector<std::string>& args_names,
-      const std::vector<std::string>& args_types,
-      uint8_t function_type
+      const std::vector<std::string>& args_names, const std::vector<std::string>& args_types
   );
 };
 }  // namespace xgrammar

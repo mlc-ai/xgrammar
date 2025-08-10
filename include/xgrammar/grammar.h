@@ -86,19 +86,6 @@ class Grammar {
   std::string ToString() const;
 
   /*!
-   * \brief Construct a BNF grammar from a function call.
-   * \param args_names The names of the arguments.
-   * \param args_types The types of the arguments.
-   * \param function_type The type of the function call format. Default is kXmlStyleFunctionCall.
-   * \return The constructed grammar.
-   */
-  static Grammar FromFunctionCall(
-      const std::vector<std::string>& args_names,
-      const std::vector<std::string>& args_types,
-      uint8_t function_type = kXmlStyleFunctionCall
-  );
-
-  /*!
    * \brief Construct a BNF grammar with a EBNF-formatted string. The grammar will be normalized
    * (simplified) by default.
    * \param ebnf_string The EBNF-formatted string.
