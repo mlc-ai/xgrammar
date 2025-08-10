@@ -183,12 +183,18 @@ std::string IndentManager::NextSeparator(bool is_end) {
  */
 class JSONSchemaConverter {
  public:
+  enum class StringEscapeType {
+    kJSON,
+    kXML,
+  };
+
   JSONSchemaConverter(
       const picojson::value& json_schema,
       bool any_whitespace,
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
-      bool strict_mode
+      bool strict_mode,
+      StringEscapeType string_escape_type = StringEscapeType::kJSON
   );
 
   /*! \brief The root method. Convert the JSON schema to EBNF grammar string. */
@@ -218,12 +224,16 @@ class JSONSchemaConverter {
   // The name of the helper rules to construct basic rules
   inline static const std::string kBasicEscape = "basic_escape";
   inline static const std::string kBasicStringSub = "basic_string_sub";
+  inline static const std::string kXMLEntity = "xml_entity";
 
   /*! \brief Add the basic rules to the rules list and the basic_rules_cache. */
-  void AddBasicRules();
+  void AddBasicRules(StringEscapeType string_escape_type);
 
   /*! \brief Add helper rules for the basic rules. */
-  void AddHelperRules();
+  void AddJSONHelperRules();
+
+  /*! \brief Add xml-style helper rules for the basic rules. */
+  void AddXMLHelperRules();
 
   /*! \brief Create a rule for the given schema and name, and add it to the basic_rules_cache. */
   void CreateBasicRule(const picojson::value& schema, const std::string& name);
@@ -482,7 +492,8 @@ JSONSchemaConverter::JSONSchemaConverter(
     bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
-    bool strict_mode
+    bool strict_mode,
+    StringEscapeType string_escape_type
 )
     : json_schema_(json_schema), strict_mode_(strict_mode), any_whitespace_(any_whitespace) {
   if (!separators.has_value()) {
@@ -502,7 +513,7 @@ JSONSchemaConverter::JSONSchemaConverter(
     colon_pattern_ = "\"" + separators->second + "\"";
   }
 
-  AddBasicRules();
+  AddBasicRules(string_escape_type);
 }
 
 std::string JSONSchemaConverter::Convert() {
@@ -510,7 +521,7 @@ std::string JSONSchemaConverter::Convert() {
   return ebnf_script_creator_.GetScript();
 }
 
-void JSONSchemaConverter::AddBasicRules() {
+void JSONSchemaConverter::AddBasicRules(JSONSchemaConverter::StringEscapeType string_escape_type) {
   bool past_strict_mode = strict_mode_;
   // Allow any field for basic array/obj rules
   strict_mode_ = false;
@@ -521,8 +532,18 @@ void JSONSchemaConverter::AddBasicRules() {
   } else {
     indentManager_ = IndentManager(std::nullopt, ", ", false);
   }
-
-  AddHelperRules();
+  switch (string_escape_type) {
+    case StringEscapeType::kJSON:
+      AddJSONHelperRules();
+      break;
+    case StringEscapeType::kXML:
+      AddXMLHelperRules();
+      break;
+    default:
+      XGRAMMAR_LOG(FATAL) << "Unsupported string escape type: "
+                          << static_cast<int>(string_escape_type);
+      break;
+  }
   CreateBasicRule(picojson::value(true), kBasicAny);
   basic_rules_cache_[GetSchemaCacheIndex(picojson::value(picojson::object()))] = kBasicAny;
   CreateBasicRule(
@@ -549,7 +570,7 @@ void JSONSchemaConverter::AddBasicRules() {
   indentManager_ = past_indent_manager;
 }
 
-void JSONSchemaConverter::AddHelperRules() {
+void JSONSchemaConverter::AddJSONHelperRules() {
   ebnf_script_creator_.AddRule(
       kBasicEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
   );
@@ -557,6 +578,21 @@ void JSONSchemaConverter::AddHelperRules() {
       kBasicStringSub,
       "(\"\\\"\" | [^\\0-\\x1f\\\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " + kBasicEscape +
           " " + kBasicStringSub + ") (= [ \\n\\t]* [,}\\]:])"
+  );
+}
+
+void JSONSchemaConverter::AddXMLHelperRules() {
+  ebnf_script_creator_.AddRule(
+      kBasicEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
+  );
+  ebnf_script_creator_.AddRule(
+      kXMLEntity, " \"&lt;\" | \"&gt;\" | \"&amp;\" | \"&quot;\" | \"&apos;\" "
+  );
+  ebnf_script_creator_.AddRule(
+      kBasicStringSub,
+      "(\"\\\"\" | [^<>&\\0-\\x1f\\\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " +
+          kBasicEscape + " " + kBasicStringSub + " | " + kXMLEntity + " " + kBasicStringSub +
+          ") (= [ \\n\\t]* [,}\\]:])"
   );
 }
 
