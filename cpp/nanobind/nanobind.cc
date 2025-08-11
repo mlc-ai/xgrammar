@@ -13,7 +13,7 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
-#include "../function_call_converter.h"
+#include "../function_calling_converter.h"
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
@@ -280,6 +280,7 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("start").none(),
           nb::arg("end").none()
       )
+      .def("_qwen_xml_tool_calling_to_ebnf", &QwenXMLToolCallingToEbnf, nb::arg("schema"))
       .def(
           "_generate_float_regex",
           [](std::optional<double> start, std::optional<double> end) {
@@ -297,14 +298,7 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("byte_string_fuser", &ByteStringFuser::Apply)
       .def("rule_inliner", &RuleInliner::Apply)
       .def("dead_code_eliminator", &DeadCodeEliminator::Apply)
-      .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply)
-      .def(
-          "from_function_call",
-          &FunctionCallConverter::Apply,
-          nb::arg("args_names"),
-          nb::arg("args_types"),
-          nb::call_guard<nb::gil_scoped_release>()
-      );
+      .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply);
 
   auto pyKernelsModule = m.def_submodule("kernels");
   pyKernelsModule.def(
