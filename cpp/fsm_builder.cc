@@ -891,7 +891,6 @@ void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_
 
   // Finally, add range edges to the start state.
   std::vector<FSMEdge>& start_edges = fsm->GetEdges(start);
-  XGRAMMAR_DCHECK(start_edges.size() > 0);
   std::set<FSMEdge, FSMEdgeRangeComparator> start_edges_set(start_edges.begin(), start_edges.end());
   f_add_range_edges(start, start_edges_set);
   start_edges.clear();

@@ -220,5 +220,33 @@ def test_structural_tag_mask_gen():
     assert tokenizer.eos_token_id not in rejected_token_ids
 
 
+def test_empty_tag_dispatch():
+    grammar_str = """root ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true
+)
+"""
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    assert _is_grammar_accept_string(grammar, "any string")
+    assert _is_grammar_accept_string(grammar, "")
+    assert _is_grammar_accept_string(grammar, "好")
+
+    grammar_with_stop_str_str = """root ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("end"),
+  loop_after_dispatch=true
+)
+"""
+
+    grammar_with_stop_str = xgr.Grammar.from_ebnf(grammar_with_stop_str_str)
+
+    assert _is_grammar_accept_string(grammar_with_stop_str, "any stringend")
+    assert _is_grammar_accept_string(grammar_with_stop_str, "end")
+    assert _is_grammar_accept_string(grammar_with_stop_str, "好end")
+
+    assert not _is_grammar_accept_string(grammar_with_stop_str, "aaa")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

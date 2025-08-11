@@ -1512,7 +1512,6 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithStopSt
     const std::vector<std::string>& stop_strings,
     bool loop_after_dispatch
 ) {
-  XGRAMMAR_DCHECK(tag_dispatch_rules.size() > 0);
   XGRAMMAR_DCHECK(stop_strings.size() > 0);
   std::vector<std::string> tag_names;
   tag_names.reserve(tag_dispatch_rules.size());
@@ -1584,7 +1583,6 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithStopSt
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithEOSStop(
     const std::vector<std::pair<std::string, int>>& tag_dispatch_rules, bool loop_after_dispatch
 ) {
-  XGRAMMAR_DCHECK(tag_dispatch_rules.size() > 0);
   std::vector<std::string> tag_names;
   tag_names.reserve(tag_dispatch_rules.size());
   for (const auto& [tag_name, tag_id] : tag_dispatch_rules) {
