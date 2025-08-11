@@ -169,10 +169,8 @@ def test_apply_token_bitmask_inplace_kernel_large(
 ):
     if impl == "cpu" and logits_dtype != "float32":
         pytest.skip(reason="CPU implementation supports float32 only")
-        return
     elif impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
-        return
 
     kernel = get_apply_token_bitmask_kernel(impl)
 
@@ -206,8 +204,10 @@ def test_apply_token_bitmask_inplace_kernel_large(
         indices = batch_indices.to("cuda") if stride != 1 else None
         f = lambda: kernel(logits_gpu, bitmask_gpu, indices=indices)
 
+        torch.cuda.synchronize()
         f()
-        torch.testing.assert_close(logits_gpu.to("cpu"), logits_expected)
+        torch.cuda.synchronize()
+        torch.testing.assert_close(logits_gpu, logits_expected.to("cuda"))
 
         try:
             from triton.testing import do_bench
@@ -223,7 +223,7 @@ def test_apply_token_bitmask_inplace_kernel_large(
         kernel(logits, bitmask, indices=indices)
         time_end = time.monotonic_ns()
         exec_time = (time_end - time_start) / 1e3
-        # torch.testing.assert_close(logits, logits_expected)
+        torch.testing.assert_close(logits, logits_expected)
 
     print(
         f"Batch: {batch_size:2} | Vocab: {vocab_size:6} | Masked: {masked_cnt:6} | "
