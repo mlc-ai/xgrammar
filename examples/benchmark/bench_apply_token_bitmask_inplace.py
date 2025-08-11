@@ -90,7 +90,11 @@ def bench_single_setup(batch_size: int, masked_cnt: int, args: argparse.Namespac
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--impl", type=str, nargs="*", choices=ALL_IMPLS, default=[IMPL_TORCH_COMPILE, IMPL_TRITON]
+        "--impl",
+        type=str,
+        nargs="*",
+        choices=ALL_IMPLS,
+        default=[IMPL_TORCH_COMPILE, IMPL_TRITON, IMPL_CUDA],
     )
     parser.add_argument("--batch-size", type=int, nargs="*", default=[1, 8, 64, 512, 4096])
     parser.add_argument("--vocab-size", type=int, default=128000)
