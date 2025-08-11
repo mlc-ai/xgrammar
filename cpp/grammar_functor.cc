@@ -1116,7 +1116,7 @@ void AddSameLengthCharacterRange(
   if (byte_max[3] != 0) {
     // 4-byte unicode.
     if (byte_max[3] == byte_min[3]) {
-      int tmp_state = fsm.AddStateWithEnd();
+      int tmp_state = fsm.AddState();
       fsm.GetFsm().AddEdge(from, tmp_state, byte_min[3], byte_max[3]);
       min = (min & 0x00FFFFFF);
       max = (max & 0x00FFFFFF);
@@ -1124,27 +1124,27 @@ void AddSameLengthCharacterRange(
       return;
     }
     if ((min & 0x00FFFFFF) != 0x808080) {
-      int tmp_state_min = fsm.AddStateWithEnd();
+      int tmp_state_min = fsm.AddState();
       fsm.GetFsm().AddEdge(from, tmp_state_min, byte_min[3], byte_min[3]);
       AddSameLengthCharacterRange(fsm, tmp_state_min, to, (min & 0x00FFFFFF), 0x00BFBFBF);
     } else {
       byte_min[3]--;
     }
     if ((max & 0x00FFFFFF) != 0xBFBFBF) {
-      int tmp_state_max = fsm.AddStateWithEnd();
+      int tmp_state_max = fsm.AddState();
       fsm.GetFsm().AddEdge(from, tmp_state_max, byte_max[3], byte_max[3]);
       AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x00808080, (max & 0x00FFFFFF));
     } else {
       byte_max[3]++;
     }
     if (byte_max[3] - byte_min[3] > 1) {
-      int tmp_state_mid = fsm.AddStateWithEnd();
+      int tmp_state_mid = fsm.AddState();
       // First byte.
       fsm.GetFsm().AddEdge(from, tmp_state_mid, byte_min[3] + 1, byte_max[3] - 1);
-      int tmp_state_mid2 = fsm.AddStateWithEnd();
+      int tmp_state_mid2 = fsm.AddState();
       // Second byte.
       fsm.GetFsm().AddEdge(tmp_state_mid, tmp_state_mid2, 0x80, 0xBF);
-      int tmp_state_mid3 = fsm.AddStateWithEnd();
+      int tmp_state_mid3 = fsm.AddState();
       // Third byte.
       fsm.GetFsm().AddEdge(tmp_state_mid2, tmp_state_mid3, 0x80, 0xBF);
       // Last byte.
@@ -1155,7 +1155,7 @@ void AddSameLengthCharacterRange(
   if (byte_max[2] != 0) {
     // 3 byte unicode.
     if (byte_max[2] == byte_min[2]) {
-      int tmp_state = fsm.AddStateWithEnd();
+      int tmp_state = fsm.AddState();
       fsm.GetFsm().AddEdge(from, tmp_state, byte_min[2], byte_max[2]);
       min = (min & 0x00FFFF);
       max = (max & 0x00FFFF);
@@ -1163,24 +1163,24 @@ void AddSameLengthCharacterRange(
       return;
     }
     if ((min & 0x00FFFF) != 0x8080) {
-      int tmp_state_min = fsm.AddStateWithEnd();
+      int tmp_state_min = fsm.AddState();
       fsm.GetFsm().AddEdge(from, tmp_state_min, byte_min[2], byte_min[2]);
       AddSameLengthCharacterRange(fsm, tmp_state_min, to, (min & 0x00FFFF), 0x00BFBF);
     } else {
       byte_min[2]--;
     }
     if ((max & 0x00FFFF) != 0xBFBF) {
-      int tmp_state_max = fsm.AddStateWithEnd();
+      int tmp_state_max = fsm.AddState();
       fsm.GetFsm().AddEdge(from, tmp_state_max, byte_max[2], byte_max[2]);
       AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x0080, (max & 0x00FFFF));
     } else {
       byte_max[2]++;
     }
     if (byte_max[2] - byte_min[2] > 1) {
-      int tmp_state_mid = fsm.AddStateWithEnd();
+      int tmp_state_mid = fsm.AddState();
       // First byte.
       fsm.GetFsm().AddEdge(from, tmp_state_mid, byte_min[2] + 1, byte_max[2] - 1);
-      int tmp_state_mid2 = fsm.AddStateWithEnd();
+      int tmp_state_mid2 = fsm.AddState();
       // Second byte.
       fsm.GetFsm().AddEdge(tmp_state_mid, tmp_state_mid2, 0x80, 0xBF);
       // Last byte.
@@ -1191,7 +1191,7 @@ void AddSameLengthCharacterRange(
 
   // 2 byte unicode.
   if (byte_max[1] == byte_min[1]) {
-    int tmp_state = fsm.AddStateWithEnd();
+    int tmp_state = fsm.AddState();
     fsm.GetFsm().AddEdge(from, tmp_state, byte_min[1], byte_max[1]);
     min = (min & 0x00FF);
     max = (max & 0x00FF);
@@ -1199,21 +1199,21 @@ void AddSameLengthCharacterRange(
     return;
   }
   if ((min & 0x00FF) != 0x80) {
-    int tmp_state_min = fsm.AddStateWithEnd();
+    int tmp_state_min = fsm.AddState();
     fsm.GetFsm().AddEdge(from, tmp_state_min, byte_min[1], byte_min[1]);
     AddSameLengthCharacterRange(fsm, tmp_state_min, to, (min & 0x00FF), 0x00BF);
   } else {
     byte_min[1]--;
   }
   if ((max & 0x00FF) != 0xBF) {
-    int tmp_state_max = fsm.AddStateWithEnd();
+    int tmp_state_max = fsm.AddState();
     fsm.GetFsm().AddEdge(from, tmp_state_max, byte_max[1], byte_max[1]);
     AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x0080, (max & 0x00FF));
   } else {
     byte_max[1]++;
   }
   if (byte_max[1] - byte_min[1] > 1) {
-    int tmp_state_mid = fsm.AddStateWithEnd();
+    int tmp_state_mid = fsm.AddState();
     // First byte.
     fsm.GetFsm().AddEdge(from, tmp_state_mid, byte_min[1] + 1, byte_max[1] - 1);
     fsm.GetFsm().AddEdge(tmp_state_mid, to, 0x80, 0xBF);
@@ -1323,14 +1323,14 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildNegativeCharacterClas
 
   // Construct the basic FSM.
   FSMWithStartEnd result_fsm;
-  int start_state = result_fsm.AddStateWithEnd();
+  int start_state = result_fsm.AddState();
   bool is_star = expr.type == ExprType::kCharacterClassStar;
   result_fsm.SetStartState(start_state);
   int end_state = -1;
   if (is_star) {
     end_state = start_state;
   } else {
-    end_state = result_fsm.AddStateWithEnd();
+    end_state = result_fsm.AddState();
   }
   result_fsm.AddEndState(end_state);
   int left_bound = -1;
@@ -1364,14 +1364,14 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::CharacterClass(const Gramm
     }
     return result_fsm = std::move(optional_fsm.value());
   }
-  int start_state = result_fsm.AddStateWithEnd();
+  int start_state = result_fsm.AddState();
   result_fsm.SetStartState(start_state);
   bool is_star = expr.type == ExprType::kCharacterClassStar;
   int end_state = -1;
   if (is_star) {
     end_state = start_state;
   } else {
-    end_state = result_fsm.AddStateWithEnd();
+    end_state = result_fsm.AddState();
   }
   result_fsm.AddEndState(end_state);
   for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
@@ -1425,7 +1425,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
   // Check if the sequence is empty.
   if (fsm_lists.empty()) {
     FSMWithStartEnd empty_fsm;
-    empty_fsm.AddStateWithEnd();
+    empty_fsm.AddState();
     empty_fsm.SetStartState(0);
     empty_fsm.AddEndState(0);
     return empty_fsm;
@@ -1436,8 +1436,8 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::RuleRef(const GrammarExpr& expr) {
   FSMWithStartEnd result_fsm;
-  result_fsm.AddStateWithEnd();
-  result_fsm.AddStateWithEnd();
+  result_fsm.AddState();
+  result_fsm.AddState();
   result_fsm.SetStartState(0);
   result_fsm.AddEndState(1);
   result_fsm.GetFsm().AddRuleEdge(0, 1, expr[0]);
@@ -1447,10 +1447,10 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::RuleRef(const GrammarExpr&
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::ByteString(const GrammarExpr& expr) {
   XGRAMMAR_DCHECK(expr.type == ExprType::kByteString);
   FSMWithStartEnd result_fsm;
-  int current_state = result_fsm.AddStateWithEnd();
+  int current_state = result_fsm.AddState();
   result_fsm.SetStartState(current_state);
   for (const auto& byte : expr) {
-    int next_state = result_fsm.AddStateWithEnd();
+    int next_state = result_fsm.AddState();
     result_fsm.GetFsm().AddEdge(
         current_state, next_state, static_cast<uint8_t>(byte), static_cast<uint8_t>(byte)
     );
@@ -1484,14 +1484,14 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
   if (fsm_list.empty()) {
     // It's an empty rule.
     FSMWithStartEnd empty_fsm;
-    empty_fsm.AddStateWithEnd();
+    empty_fsm.AddState();
     empty_fsm.SetStartState(0);
     empty_fsm.AddEndState(0);
     return empty_fsm;
   }
   if (nullable) {
     FSMWithStartEnd null_fsm;
-    null_fsm.AddStateWithEnd();
+    null_fsm.AddState();
     null_fsm.SetStartState(0);
     null_fsm.AddEndState(0);
     fsm_list.push_back(std::move(null_fsm));

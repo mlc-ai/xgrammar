@@ -339,7 +339,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
   FSMWithStartEnd result(empty_fsm, 0, std::unordered_set<int>{}, true);
   // Handle the regex string.
   if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
-    result.AddStateWithEnd();
+    result.AddState();
     for (size_t i = 0; i < regex.size(); i++) {
       if (regex[i] != '\\') {
         if (regex[i] == '.') {
@@ -352,7 +352,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
               static_cast<uint8_t>(regex[i])
           );
         }
-        result.AddStateWithEnd();
+        result.AddState();
         continue;
       }
       std::vector<std::pair<int, int>> escape_vector = HandleEscapes(regex, i);
@@ -364,14 +364,14 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
             static_cast<uint8_t>(escape.second)
         );
       }
-      result.AddStateWithEnd();
+      result.AddState();
       i++;
     }
     result.AddEndState(result.NumStates() - 1);
   } else if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
     // Handle the character class.
-    result.AddStateWithEnd();
-    result.AddStateWithEnd();
+    result.AddState();
+    result.AddState();
     result.AddEndState(1);
     bool reverse = regex[1] == '^';
     for (size_t i = reverse ? 2 : 1; i < regex.size() - 1; i++) {

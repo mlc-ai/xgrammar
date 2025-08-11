@@ -682,7 +682,7 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (err.has_value()) {
     return err;
   }
-  result->fsm_ = tmp.fsm;
+  result->fsm_ = std::move(tmp.fsm);
   result->start_ = tmp.start;
   result->is_dfa_ = tmp.is_dfa;
   const auto& end_index = tmp.end_index;
@@ -822,7 +822,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Not(int max_result_num_states) const {
   }
 
   // Add a new final state that accepts all characters.
-  int accept_all_new_state = result.AddStateWithEnd();
+  int accept_all_new_state = result.AddState();
   new_final_states[accept_all_new_state] = true;
 
   std::bitset<256> char_set;
@@ -953,7 +953,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   std::unordered_set<std::pair<int, int>> visited;
   std::queue<std::pair<int, int>> queue;
   queue.push({lhs_dfa.GetStart(), rhs_dfa.GetStart()});
-  result.AddStateWithEnd();
+  result.AddState();
   state_map[{lhs_dfa.GetStart(), rhs_dfa.GetStart()}] = 0;
   while (!queue.empty()) {
     auto [lhs_state, rhs_state] = std::move(queue.front());
@@ -971,7 +971,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
         int min_value = std::max(lhs_edge.min, rhs_edge.min);
         int max_value = std::min(lhs_edge.max, rhs_edge.max);
         if (state_map.find(std::make_pair(lhs_edge.target, rhs_edge.target)) == state_map.end()) {
-          state_map[{lhs_edge.target, rhs_edge.target}] = result.AddStateWithEnd();
+          state_map[{lhs_edge.target, rhs_edge.target}] = result.AddState();
           queue.push({lhs_edge.target, rhs_edge.target});
         }
         int target_state = state_map[{lhs_edge.target, rhs_edge.target}];
@@ -1370,7 +1370,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_result_num_states) const 
     rules.clear();
     std::set<int> interval_ends;
     std::bitset<256> allowed_characters;
-    dfa.AddStateWithEnd();
+    dfa.AddState();
     // Check if the closure is a final state.
     for (const auto& state : closures[now_process]) {
       if (IsEndState(state)) {

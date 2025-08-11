@@ -569,7 +569,7 @@ class FSMWithStartEndBase {
    * \brief Adds a new state to the FSM and marks it as non-end.
    * \return The index of the newly added state.
    */
-  int AddStateWithEnd() {
+  int AddState() {
     ends_.push_back(false);
     return fsm_.AddState();
   }
