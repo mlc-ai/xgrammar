@@ -239,8 +239,8 @@ void ApplyTokenBitmaskInplace(
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocab_size,
-          bitmask.stride(0),
           logits.stride(0),
+          bitmask.stride(0),
           num_rows
       );
       break;
@@ -251,8 +251,8 @@ void ApplyTokenBitmaskInplace(
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocab_size,
-          bitmask.stride(0),
           logits.stride(0),
+          bitmask.stride(0),
           num_rows
       );
       break;
@@ -263,8 +263,8 @@ void ApplyTokenBitmaskInplace(
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
           vocab_size,
-          bitmask.stride(0),
           logits.stride(0),
+          bitmask.stride(0),
           num_rows
       );
       break;
