@@ -301,6 +301,12 @@ def _print_grammar_fsms(grammar: Grammar) -> str:
     return _core.testing._print_grammar_fsms(grammar._handle)
 
 
+def _qwen_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
+    """Convert Qwen XML tool calling schema to EBNF."""
+    schema_str = _convert_schema_to_str(schema)
+    return _core.testing._qwen_xml_tool_calling_to_ebnf(schema_str)
+
+
 class GrammarFunctor:
     """A utility class for transforming grammars. These methods are called during grammar parsing.
     For test purposes."""
