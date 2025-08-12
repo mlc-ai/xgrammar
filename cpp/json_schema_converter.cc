@@ -543,10 +543,16 @@ JSONSchemaConverter::JSONSchemaConverter(
 
 std::string JSONSchemaConverter::Convert(const StringEscapeType string_escape_type) {
   switch (string_escape_type) {
+    // If the type is JSON, we handle it trivially.
     case (StringEscapeType::kJSON): {
       CreateRuleFromSchema(json_schema_, kRootRuleName, string_escape_type);
       break;
     }
+
+    // If the type is XML, then the root schema must be a object.
+    // To ensure the inner object is in JSON format, we need to call
+    // VisitObject directly, and pass StringEscapeType::kXML to it.
+    // In other VisitObject, only StringEscapeType::kJSON will be passed.
     case (StringEscapeType::kXML): {
       auto rule_name = ebnf_script_creator_.AllocateRuleName(kRootRuleName);
       XGRAMMAR_CHECK(json_schema_.is<picojson::object>());
