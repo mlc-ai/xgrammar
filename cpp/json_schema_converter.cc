@@ -3222,16 +3222,26 @@ std::string JSONSchemaConverter::VisitObject(
   }
 
   indentManager_->EndIndent();
-  if (string_escape_type == StringEscapeType::kJSON) {
-    result += " \"}\"";
-    if (could_be_empty) {
-      // result = (result) | {}
-      auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"}\"";
-      if (result == "\"{\"  \"}\"") {
-        result = rest;
-      } else {
-        result = "(" + result + ") | " + rest;
+
+  switch (string_escape_type) {
+    case (StringEscapeType::kJSON): {
+      result += " \"}\"";
+      if (could_be_empty) {
+        // result = (result) | {}
+        auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"}\"";
+        if (result == "\"{\"  \"}\"") {
+          result = rest;
+        } else {
+          result = "(" + result + ") | " + rest;
+        }
       }
+      break;
+    }
+    case (StringEscapeType::kXML): {
+      if (could_be_empty) {
+        result = "\"\" | " + result;
+      }
+      break;
     }
   }
   return result;
