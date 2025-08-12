@@ -366,6 +366,7 @@ def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[in
     assert matcher_2.stop_token_ids == override_stop_tokens
 
 
+@pytest.mark.hf_token_required
 def test_fill_next_token_bitmask_errors():
     # llama 3.1 8b
     tokenizer = AutoTokenizer.from_pretrained(
