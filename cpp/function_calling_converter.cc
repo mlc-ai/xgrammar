@@ -13,7 +13,7 @@
 
 namespace xgrammar {
 
-std::string QwenXMLToolCallingToEbnf(const std::string& schema) {
+std::string QwenXMLToolCallingToEBNF(const std::string& schema) {
   // Convert the schema string to picojson value.
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);

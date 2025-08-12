@@ -14,7 +14,7 @@ namespace xgrammar {
  * \return The ebnf-grammar to match the requirements of the schema, and
  * in Qwen xml style.
  */
-std::string QwenXMLToolCallingToEbnf(const std::string& schema);
+std::string QwenXMLToolCallingToEBNF(const std::string& schema);
 
 }  // namespace xgrammar
 
