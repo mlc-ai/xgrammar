@@ -288,7 +288,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         if (fill_reject_indices) {
           tmp_rejected_indices_.push_back(i);
           fill_reject_indices =
-              tmp_rejected_indices_.size() < AdaptiveTokenMask::USE_BITSET_THRESHOLD;
+              tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                  ? false
+                  : fill_reject_indices;
         } else {
           i = last_rejected_range - 1;
         }
@@ -387,7 +389,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
           tmp_rejected_indices_.push_back(i);
           last_rejected_range = subtree_nodes_range[i];
           fill_reject_indices =
-              tmp_rejected_indices_.size() < AdaptiveTokenMask::USE_BITSET_THRESHOLD;
+              tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                  ? false
+                  : fill_reject_indices;
         }
       }
     }
@@ -396,7 +400,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       for (int i = interval.second; i < next_interval.first; ++i) {
         tmp_rejected_indices_.push_back(i);
       }
-      fill_reject_indices = tmp_rejected_indices_.size() < AdaptiveTokenMask::USE_BITSET_THRESHOLD;
+      fill_reject_indices = tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                                ? false
+                                : fill_reject_indices;
     }
   }
 
