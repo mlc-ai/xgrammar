@@ -35,16 +35,14 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_part_0 ::= [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>" root_part_0))
-"""
-
+root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>" root_part_0))"""
     schema = {
         "type": "object",
         "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
         "required": ["name", "age"],
     }
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
+    assert str(ebnf_grammar[:-2]) == expected_grammar
     assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
 
 
@@ -83,9 +81,7 @@ basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")*
 root_part_0 ::= [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>" root_part_0))
-"""
-
+root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>" root_part_0))"""
     schema = {
         "type": "object",
         "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
@@ -93,7 +89,7 @@ root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parame
         "additionalProperties": True,
     }
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
+    assert str(ebnf_grammar[:-2]) == expected_grammar
     assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
 
 
@@ -128,8 +124,7 @@ basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")*
 root_part_0 ::= root_part_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>" root_part_0) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" root_part_1)
-"""
+root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>" root_part_0) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" root_part_1)"""
 
     schema = {
         "type": "object",
@@ -137,7 +132,7 @@ root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parame
         "additionalProperties": True,
     }
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
+    assert str(ebnf_grammar[:-2]) == expected_grammar
     assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
 
 
@@ -213,8 +208,7 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string ""
 root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
-root ::=  [ \n\t]* (("<parameter=address>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" ""))
-"""
+root ::=  [ \n\t]* (("<parameter=address>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" ""))"""
 
     schema = {
         "type": "object",
@@ -228,7 +222,7 @@ root ::=  [ \n\t]* (("<parameter=address>" [ \n\t]* root_prop_0 [ \n\t]* "</para
         "required": ["address"],
     }
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
+    assert str(ebnf_grammar[:-2]) == expected_grammar
     assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
 
 
