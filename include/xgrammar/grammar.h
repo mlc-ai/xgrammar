@@ -9,7 +9,6 @@
 
 #include <xgrammar/object.h>
 
-#include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -79,7 +78,6 @@ struct StructuralTagItem {
  */
 class Grammar {
  public:
-  static const uint8_t kXmlStyleFunctionCall = 0;
   /*!
    * \brief Get the EBNF string of the grammar.
    */
