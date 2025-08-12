@@ -627,7 +627,7 @@ void JSONSchemaConverter::AddXMLHelperRules() {
       kXMLEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
   );
   ebnf_script_creator_.AddRule(
-      kXMLEntity, " \"&lt;\" | \"&gt;\" | \"&amp;\" | \"&quot;\" | \"&apos;\" "
+      kXMLEntity, " \"&lt;\" | \"&gt;\" | \"&amp;\" | \"&quot;\" | \"&apos;\""
   );
   ebnf_script_creator_.AddRule(
       kXMLString,
