@@ -32,9 +32,12 @@ enum class StringEscapeType {
  * \param strict_mode Whether to use strict mode. In strict
  * mode, the generated grammar will not allow properties and items that is not specified in the
  * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
- *
  * This helps LLM to generate accurate output in the grammar-guided generation with JSON
  * schema. Default: true.
+ * \param string_escape_type Define the root format of the object. If it's StringEscapeType::kJSON,
+ * then it will generate a fully JSON-style grammar. If it's StringEscapeType::kXML, then it will
+ * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
+ * Default: StringEscapeType::kJSON.
  * \returns The EBNF grammar string.
  */
 
@@ -59,9 +62,12 @@ std::string JSONSchemaToEBNF(
  * \param strict_mode Whether to use strict mode. In strict
  * mode, the generated grammar will not allow properties and items that is not specified in the
  * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
- *
  * This helps LLM to generate accurate output in the grammar-guided generation with JSON
  * schema. Default: true.
+ * \param string_escape_type Define the root format of the object. If it's StringEscapeType::kJSON,
+ * then it will generate a fully JSON-style grammar. If it's StringEscapeType::kXML, then it will
+ * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
+ * Default: StringEscapeType::kJSON.
  * \returns The EBNF grammar string.
  */
 std::string JSONSchemaToEBNF(
