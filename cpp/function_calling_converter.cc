@@ -10,8 +10,6 @@
 
 #include "json_schema_converter.h"
 #include "support/logging.h"
-#include "support/utils.h"
-#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 

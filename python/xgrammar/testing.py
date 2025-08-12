@@ -345,18 +345,3 @@ class GrammarFunctor:
         return Grammar._create_from_handle(
             _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
         )
-
-    @staticmethod
-    def from_function_call(args_names: List[str], args_types: List[str]) -> "Grammar":
-        """Create a grammar from function call arguments.
-
-        Parameters
-        ----------
-        args_names : List[str]
-            The names of the arguments.
-        args_types : List[str]
-            The types of the arguments.
-        """
-        return Grammar._create_from_handle(
-            _core.testing.grammar_functor.from_function_call(args_names, args_types)
-        )
