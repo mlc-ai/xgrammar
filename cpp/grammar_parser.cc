@@ -625,7 +625,6 @@ int32_t EBNFParser::ParseString() {
     return builder_.AddEmptyStr();
   }
 
-  // Convert string to bytes
   return builder_.AddByteString(str_value);
 }
 
