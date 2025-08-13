@@ -511,5 +511,32 @@ def test_implicit_left_recursion_schema():
     _ = grammar_compiler.compile_json_schema(schema=json.dumps(json_schema))
 
 
+@pytest.mark.hf_token_required
+def test_regression_accept_invalid_token():
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-235B-A22B-Instruct-2507-FP8")
+    vocab_size = 151936
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(
+        tokenizer, vocab_size=vocab_size, stop_token_ids=[tokenizer.eos_token_id]
+    )
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info=tokenizer_info)
+    ctx = grammar_compiler.compile_json_schema(
+        schema="""{"type": "object", "properties": {"value": {"type": ["string", "null"], "maxLength": 10}, "nested": {"type": "object", "properties": {"value": {"type": ["string", "null"]}, "nested_nested": {"type": "array", "items": {"type": ["string", "null"]}}}, "required": ["value", "nested_nested"], "maxItems": 10, "minItems": 1}}, "required": ["value", "nested"], "additionalProperties": false}"""
+    )
+    matcher = xgr.GrammarMatcher(ctx, max_rollback_tokens=200, override_stop_tokens=None)
+    token_bitmask = xgr.allocate_token_bitmask(vocab_size=vocab_size, batch_size=7)
+    token_bitmask.fill_(0)
+    for i, token in enumerate([4913, 957, 788, 330, 1072, 67212, 788]):
+        if i == 0:
+            accepted = True
+        else:
+            parent_pos = i - 1
+            curr_token_id = token
+            parent_bitmask = token_bitmask[parent_pos]
+            # 32 boolean bitmask values are packed into 32-bit integers
+            accepted = (parent_bitmask[curr_token_id // 32] & (1 << (curr_token_id % 32))) != 0
+        assert matcher.accept_token(token) == accepted
+        matcher.fill_next_token_bitmask(token_bitmask, i)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
