@@ -8,6 +8,8 @@
 #include <string>
 
 #include "grammar_functor.h"
+#include "grammar_normalizer.h"
+#include "grammar_optimizer.h"
 #include "grammar_parser.h"
 #include "grammar_printer.h"
 #include "json_schema_converter.h"

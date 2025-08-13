@@ -301,7 +301,7 @@ def _print_grammar_fsms(grammar: Grammar) -> str:
     return _core.testing._print_grammar_fsms(grammar._handle)
 
 
-class GrammarFunctor:
+class GrammarNormalizer:
     """A utility class for transforming grammars. These methods are called during grammar parsing.
     For test purposes."""
 
@@ -309,33 +309,45 @@ class GrammarFunctor:
     def structure_normalizer(grammar: Grammar) -> Grammar:
         """Normalize the structure of the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.structure_normalizer(grammar._handle)
-        )
-
-    @staticmethod
-    def rule_inliner(grammar: Grammar) -> Grammar:
-        """Inline some rule references in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_functor.rule_inliner(grammar._handle)
+            _core.testing.grammar_normalizer.structure_normalizer(grammar._handle)
         )
 
     @staticmethod
     def byte_string_fuser(grammar: Grammar) -> Grammar:
         """Fuse the byte string elements in the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.byte_string_fuser(grammar._handle)
+            _core.testing.grammar_normalizer.byte_string_fuser(grammar._handle)
+        )
+
+
+class GrammarOptimizer:
+    """A utility class for optimizing grammars. These methods are called during grammar parsing.
+    For test purposes."""
+
+    @staticmethod
+    def optimize(grammar: Grammar) -> Grammar:
+        """Optimize the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_optimizer.optimize(grammar._handle)
+        )
+
+    @staticmethod
+    def rule_inliner(grammar: Grammar) -> Grammar:
+        """Inline some rule references in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_optimizer.rule_inliner(grammar._handle)
         )
 
     @staticmethod
     def dead_code_eliminator(grammar: Grammar) -> Grammar:
         """Eliminate the not referenced rules in the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.dead_code_eliminator(grammar._handle)
+            _core.testing.grammar_optimizer.dead_code_eliminator(grammar._handle)
         )
 
     @staticmethod
     def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
         """Analyze and add lookahead assertions in the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
+            _core.testing.grammar_optimizer.lookahead_assertion_analyzer(grammar._handle)
         )

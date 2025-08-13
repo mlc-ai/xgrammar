@@ -12,7 +12,7 @@
 
 #include "fsm.h"
 #include "fsm_builder.h"
-#include "grammar_functor.h"
+#include "grammar_optimizer.h"
 #include "support/logging.h"
 #include "xgrammar/grammar.h"
 

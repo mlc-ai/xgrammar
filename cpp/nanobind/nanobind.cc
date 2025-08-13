@@ -13,7 +13,8 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
-#include "../grammar_functor.h"
+#include "../grammar_normalizer.h"
+#include "../grammar_optimizer.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
 #include "../testing.h"
@@ -288,9 +289,12 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def("_print_grammar_fsms", &_PrintGrammarFSMs);
 
-  auto pyGrammarFunctorModule = pyTestingModule.def_submodule("grammar_functor");
-  pyGrammarFunctorModule.def("structure_normalizer", &StructureNormalizer::Apply)
-      .def("byte_string_fuser", &ByteStringFuser::Apply)
+  auto pyGrammarNormalizerModule = pyTestingModule.def_submodule("grammar_normalizer");
+  pyGrammarNormalizerModule.def("structure_normalizer", &StructureNormalizer::Apply)
+      .def("byte_string_fuser", &ByteStringFuser::Apply);
+
+  auto pyGrammarOptimizerModule = pyTestingModule.def_submodule("grammar_optimizer");
+  pyGrammarOptimizerModule.def("optimize", &GrammarOptimizer::Optimize)
       .def("rule_inliner", &RuleInliner::Apply)
       .def("dead_code_eliminator", &DeadCodeEliminator::Apply)
       .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply);

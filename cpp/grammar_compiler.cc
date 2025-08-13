@@ -17,8 +17,8 @@
 #include "compiled_grammar_impl.h"
 #include "earley_parser.h"
 #include "fsm.h"
-#include "grammar_functor.h"
 #include "grammar_impl.h"
+#include "grammar_optimizer.h"
 #include "support/logging.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
@@ -650,11 +650,9 @@ class GrammarCompiler::Impl {
 CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
 
-  compiled_grammar_impl->grammar = grammar;
+  compiled_grammar_impl->grammar = GrammarOptimizer::Optimize(grammar);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
-  grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(compiled_grammar_impl->grammar);
-  RepetitionNormalizer::Apply(&compiled_grammar_impl->grammar);
-  GrammarFSMBuilder::Apply(&compiled_grammar_impl->grammar);
+
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
@@ -676,7 +674,8 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
   }
 
   auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
-    auto grammar_matcher = GrammarMatcherForTokenMaskCache(grammar, state, false);
+    auto grammar_matcher =
+        GrammarMatcherForTokenMaskCache(compiled_grammar_impl->grammar, state, false);
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
         tokenizer_info_.GetVocabSize(),
         tokenizer_info_.GetSortedDecodedVocab(),
@@ -702,12 +701,13 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
     }
   };
 
-  auto root_rule_id = grammar->GetRootRuleId();
+  auto root_rule_id = compiled_grammar_impl->grammar->GetRootRuleId();
 
-  for (int32_t rule_id = 0; rule_id < static_cast<int>(grammar->NumRules()); ++rule_id) {
-    auto rule = grammar->GetRule(rule_id);
-    auto rule_body = grammar->GetGrammarExpr(rule.body_expr_id);
-    const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
+  for (int32_t rule_id = 0; rule_id < static_cast<int>(compiled_grammar_impl->grammar->NumRules());
+       ++rule_id) {
+    auto rule = compiled_grammar_impl->grammar->GetRule(rule_id);
+    auto rule_body = compiled_grammar_impl->grammar->GetGrammarExpr(rule.body_expr_id);
+    const auto& rule_fsm = compiled_grammar_impl->grammar->per_rule_fsms[rule_id];
     if (rule_fsm.has_value()) {
       auto cur_stack_element =
           ParserState(rule_id, rule.body_expr_id, 0, ParserState::kNoPrevInputPos, 0);
@@ -724,7 +724,7 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
     }
     XGRAMMAR_DCHECK(rule_body.type == GrammarExprType::kChoices);
     for (auto sequence_id : rule_body) {
-      const auto& sequence = grammar->GetGrammarExpr(sequence_id);
+      const auto& sequence = compiled_grammar_impl->grammar->GetGrammarExpr(sequence_id);
       if (sequence.type == GrammarExprType::kEmptyStr) {
         continue;
       }
@@ -732,7 +732,7 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
       auto state = ParserState(rule_id, sequence_id, 0, ParserState::kNoPrevInputPos, 0);
       for (int element_id = 0; element_id < sequence.size(); ++element_id) {
         state.element_id = element_id;
-        auto element = grammar->GetGrammarExpr(sequence[element_id]);
+        auto element = compiled_grammar_impl->grammar->GetGrammarExpr(sequence[element_id]);
         if (element.type == GrammarExprType::kRuleRef || element.type == GrammarExprType::kRepeat) {
           continue;
         }
