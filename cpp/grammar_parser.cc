@@ -626,11 +626,7 @@ int32_t EBNFParser::ParseString() {
   }
 
   // Convert string to bytes
-  std::vector<int32_t> bytes;
-  for (auto c : str_value) {
-    bytes.push_back(static_cast<int32_t>(static_cast<uint8_t>(c)));
-  }
-  return builder_.AddByteString(bytes);
+  return builder_.AddByteString(str_value);
 }
 
 int32_t EBNFParser::ParseRuleRef() {

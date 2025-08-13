@@ -95,7 +95,10 @@ class GrammarBuilder {
    * \param str The string to be added.
    */
   int32_t AddByteString(const std::string& str) {
-    std::vector<int32_t> bytes(str.begin(), str.end());
+    std::vector<int32_t> bytes;
+    for (char c : str) {
+      bytes.push_back(static_cast<int32_t>(static_cast<uint8_t>(c)));
+    }
     return AddGrammarExpr(
         {GrammarExprType::kByteString, bytes.data(), static_cast<int32_t>(bytes.size())}
     );

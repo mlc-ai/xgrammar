@@ -248,5 +248,18 @@ def test_empty_tag_dispatch():
     assert not _is_grammar_accept_string(grammar_with_stop_str, "aaa")
 
 
+@pytest.mark.hf_token_required
+def test_utf8_structural_tag_begin_end():
+    model = "deepseek-ai/DeepSeek-V3-0324"
+    tokenizer = AutoTokenizer.from_pretrained(model)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    structures = [
+        xgr.StructuralTagItem(begin="<｜tool▁calls▁begin｜>", schema={}, end="<｜tool▁calls▁end｜>")
+    ]
+    triggers = ["<｜tool▁calls▁begin｜>"]
+    _ = compiler.compile_structural_tag(structures, triggers)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
