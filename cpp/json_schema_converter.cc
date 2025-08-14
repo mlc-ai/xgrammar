@@ -2891,9 +2891,9 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
     const picojson::object& schema
 ) {
   XGRAMMAR_DCHECK((schema.count("type") && schema.at("type").get<std::string>() == "string"));
-  StringSpec string_spec;
   JSONFormat json_format = NestedLayerHelper::GetLayer() <= 1 ? json_format_ : JSONFormat::kJSON;
   if (schema.count("format")) {
+    StringSpec string_spec;
     if (json_format == JSONFormat::kJSON) {
       string_spec.wrapper.first = "\\\"";
       string_spec.wrapper.second = "\\\"";
@@ -3080,6 +3080,7 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
     }
   }
   if (schema.count("pattern")) {
+    StringSpec string_spec;
     if (json_format == JSONFormat::kJSON) {
       string_spec.wrapper.first = "\\\"";
       string_spec.wrapper.second = "\\\"";
@@ -3094,6 +3095,7 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
     return ResultOk(string_spec);
   }
   if (schema.count("minLength") || schema.count("maxLength")) {
+    StringSpec string_spec;
     if (json_format == JSONFormat::kJSON) {
       string_spec.wrapper.first = "\\\"";
       string_spec.wrapper.second = "\\\"";
@@ -3115,6 +3117,7 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
     }
     return ResultOk(string_spec);
   }
+  StringSpec string_spec;
   switch (json_format) {
     case JSONFormat::kJSON: {
       string_spec.pattern = "[\"] " + kBasicStringSub;
