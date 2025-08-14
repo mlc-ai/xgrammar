@@ -189,11 +189,11 @@ class JSONSchemaConverter {
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
       bool strict_mode,
-      StringEscapeType string_escape_type = StringEscapeType::kJSON
+      JSONFormat string_escape_type = JSONFormat::kJSON
   );
 
   /*! \brief The root method. Convert the JSON schema to EBNF grammar string. */
-  std::string Convert(const StringEscapeType string_escape_type = StringEscapeType::kJSON);
+  std::string Convert(const JSONFormat string_escape_type = JSONFormat::kJSON);
 
   /*! \brief Generate the regex for integer range. Public for testing. */
   static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
@@ -227,7 +227,7 @@ class JSONSchemaConverter {
   inline static const std::string kWhiteSpace = "[ \\n\\t]*";
 
   /*! \brief Add the basic rules to the rules list and the basic_rules_cache. */
-  void AddBasicRules(StringEscapeType string_escape_type);
+  void AddBasicRules(JSONFormat string_escape_type);
 
   /*! \brief Add helper rules for the basic rules. */
   void AddJSONHelperRules();
@@ -239,7 +239,7 @@ class JSONSchemaConverter {
   void CreateBasicRule(
       const picojson::value& schema,
       const std::string& name,
-      const StringEscapeType string_escape_type = StringEscapeType::kJSON
+      const JSONFormat string_escape_type = JSONFormat::kJSON
   );
 
   /*! \brief Get the index for the schema in the cache. Keys that do not effect the validation
@@ -263,7 +263,7 @@ class JSONSchemaConverter {
   std::string CreateRuleFromSchema(
       const picojson::value& schema,
       const std::string& rule_name_hint,
-      const StringEscapeType string_escape_type = StringEscapeType::kJSON
+      const JSONFormat string_escape_type = JSONFormat::kJSON
   );
 
   /*! \brief Get the next separator in the current level from the indent manager. */
@@ -285,7 +285,7 @@ class JSONSchemaConverter {
   std::string VisitSchema(
       const picojson::value& schema,
       const std::string& rule_name,
-      const StringEscapeType string_escape_type = StringEscapeType::kJSON
+      const JSONFormat string_escape_type = JSONFormat::kJSON
   );
 
   /*! \brief Visit a reference schema. */
@@ -315,7 +315,7 @@ class JSONSchemaConverter {
   std::string VisitAny(
       const picojson::value& schema,
       const std::string& rule_name,
-      const StringEscapeType string_escape_type
+      const JSONFormat string_escape_type
   );
 
   /*! \brief Visit an integer schema. */
@@ -328,7 +328,7 @@ class JSONSchemaConverter {
   std::string VisitString(
       const picojson::object& schema,
       const std::string& rule_name,
-      const StringEscapeType string_escape_type
+      const JSONFormat string_escape_type
   );
 
   /*! \brief Visit a boolean schema. */
@@ -435,7 +435,7 @@ class JSONSchemaConverter {
   std::string VisitObject(
       const picojson::object& schema,
       const std::string& rule_name,
-      const StringEscapeType string_escape_type = StringEscapeType::kJSON
+      const JSONFormat string_escape_type = JSONFormat::kJSON
   );
 
   /*!
@@ -460,7 +460,7 @@ class JSONSchemaConverter {
       const picojson::value& prop_schema,
       const std::string& rule_name,
       int64_t idx,
-      const StringEscapeType string_escape_type = StringEscapeType::kJSON
+      const JSONFormat string_escape_type = JSONFormat::kJSON
   );
 
   /*! \brief Get the pattern for the additional/unevaluated properties in the object schema. */
@@ -469,7 +469,7 @@ class JSONSchemaConverter {
       const picojson::value& prop_schema,
       const std::string& rule_name,
       const std::string& rule_name_suffix,
-      const StringEscapeType string_escape_type = StringEscapeType::kJSON
+      const JSONFormat string_escape_type = JSONFormat::kJSON
   );
 
   /*! \brief Get the pattern for the properties with repetition number limit. */
@@ -490,7 +490,7 @@ class JSONSchemaConverter {
       const std::string& additional_suffix,
       const int min_properties,
       const int max_properties,
-      const StringEscapeType string_escape_type = StringEscapeType::kJSON
+      const JSONFormat string_escape_type = JSONFormat::kJSON
   );
 
   // The EBNF script creator
@@ -505,7 +505,7 @@ class JSONSchemaConverter {
   std::string colon_pattern_;
   // The cache for basic rules. Mapping from the key of schema returned by GetSchemaCacheIndex()
   // to the basic rule name.
-  std::unordered_map<std::pair<std::string, StringEscapeType>, std::string> basic_rules_cache_;
+  std::unordered_map<std::pair<std::string, JSONFormat>, std::string> basic_rules_cache_;
   // Whether to use any whitespace in the conversion
   bool any_whitespace_;
   // The cache for URI to rule. Mapping from the URI to the rule name.
@@ -518,7 +518,7 @@ JSONSchemaConverter::JSONSchemaConverter(
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
-    StringEscapeType string_escape_type
+    JSONFormat string_escape_type
 )
     : json_schema_(json_schema), strict_mode_(strict_mode), any_whitespace_(any_whitespace) {
   if (!separators.has_value()) {
@@ -541,19 +541,19 @@ JSONSchemaConverter::JSONSchemaConverter(
   AddBasicRules(string_escape_type);
 }
 
-std::string JSONSchemaConverter::Convert(const StringEscapeType string_escape_type) {
+std::string JSONSchemaConverter::Convert(const JSONFormat string_escape_type) {
   switch (string_escape_type) {
     // If the type is JSON, we handle it trivially.
-    case (StringEscapeType::kJSON): {
+    case (JSONFormat::kJSON): {
       CreateRuleFromSchema(json_schema_, kRootRuleName, string_escape_type);
       break;
     }
 
     // If the type is XML, then the root schema must be a object.
     // To ensure the inner object is in JSON format, we need to call
-    // VisitObject directly, and pass StringEscapeType::kXML to it.
-    // In other VisitObject, only StringEscapeType::kJSON will be passed.
-    case (StringEscapeType::kXML): {
+    // VisitObject directly, and pass JSONFormat::kXML to it.
+    // In other VisitObject, only JSONFormat::kJSON will be passed.
+    case (JSONFormat::kXML): {
       auto rule_name = ebnf_script_creator_.AllocateRuleName(kRootRuleName);
       XGRAMMAR_CHECK(json_schema_.is<picojson::object>());
       std::string rule_content =
@@ -565,7 +565,7 @@ std::string JSONSchemaConverter::Convert(const StringEscapeType string_escape_ty
   return ebnf_script_creator_.GetScript();
 }
 
-void JSONSchemaConverter::AddBasicRules(StringEscapeType string_escape_type) {
+void JSONSchemaConverter::AddBasicRules(JSONFormat string_escape_type) {
   bool past_strict_mode = strict_mode_;
   // Allow any field for basic array/obj rules
   strict_mode_ = false;
@@ -577,21 +577,21 @@ void JSONSchemaConverter::AddBasicRules(StringEscapeType string_escape_type) {
     indentManager_ = IndentManager(std::nullopt, ", ", false);
   }
   AddJSONHelperRules();
-  if (string_escape_type == StringEscapeType::kXML) {
+  if (string_escape_type == JSONFormat::kXML) {
     AddXMLHelperRules();
     CreateBasicRule(
         picojson::value(picojson::object{{"type", picojson::value("string")}}),
         kXMLString,
-        StringEscapeType::kXML
+        JSONFormat::kXML
     );
-    CreateBasicRule(picojson::value(true), kXMLAny, StringEscapeType::kXML);
+    CreateBasicRule(picojson::value(true), kXMLAny, JSONFormat::kXML);
     basic_rules_cache_[{
-        GetSchemaCacheIndex(picojson::value(picojson::object())), StringEscapeType::kXML
+        GetSchemaCacheIndex(picojson::value(picojson::object())), JSONFormat::kXML
     }] = kXMLAny;
   }
   CreateBasicRule(picojson::value(true), kBasicAny);
   basic_rules_cache_[{
-      GetSchemaCacheIndex(picojson::value(picojson::object())), StringEscapeType::kJSON
+      GetSchemaCacheIndex(picojson::value(picojson::object())), JSONFormat::kJSON
   }] = kBasicAny;
   CreateBasicRule(
       picojson::value(picojson::object{{"type", picojson::value("integer")}}), kBasicInteger
@@ -644,9 +644,7 @@ void JSONSchemaConverter::AddXMLHelperRules() {
 }
 
 void JSONSchemaConverter::CreateBasicRule(
-    const picojson::value& schema,
-    const std::string& name,
-    const StringEscapeType string_escape_type
+    const picojson::value& schema, const std::string& name, const JSONFormat string_escape_type
 ) {
   std::string rule_name = CreateRuleFromSchema(schema, name, string_escape_type);
   basic_rules_cache_[{GetSchemaCacheIndex(schema), string_escape_type}] = rule_name;
@@ -683,7 +681,7 @@ void JSONSchemaConverter::WarnUnsupportedKeywords(
 std::string JSONSchemaConverter::CreateRuleFromSchema(
     const picojson::value& schema,
     const std::string& rule_name_hint,
-    const StringEscapeType string_escape_type
+    const JSONFormat string_escape_type
 ) {
   std::string idx = GetSchemaCacheIndex(schema);
   if (basic_rules_cache_.count({idx, string_escape_type})) {
@@ -754,9 +752,7 @@ std::string JSONSchemaConverter::GetSchemaCacheIndex(const picojson::value& sche
 }
 
 std::string JSONSchemaConverter::VisitSchema(
-    const picojson::value& schema,
-    const std::string& rule_name,
-    const StringEscapeType string_escape_type
+    const picojson::value& schema, const std::string& rule_name, const JSONFormat string_escape_type
 ) {
   if (schema.is<bool>()) {
     XGRAMMAR_CHECK(schema.get<bool>()) << "Schema should not be false: it cannot accept any value";
@@ -808,7 +804,7 @@ std::string JSONSchemaConverter::VisitSchema(
     } else if (type == "array") {
       return VisitArray(schema_obj, rule_name);
     } else if (type == "object") {
-      return VisitObject(schema_obj, rule_name, StringEscapeType::kJSON);
+      return VisitObject(schema_obj, rule_name, JSONFormat::kJSON);
     } else {
       XGRAMMAR_LOG(FATAL) << "Unsupported type \"" << type << "\"";
     }
@@ -962,15 +958,15 @@ std::string JSONSchemaConverter::VisitAllOf(
 }
 
 std::string JSONSchemaConverter::VisitAny(
-    const picojson::value& schema, const std::string& rule_name, StringEscapeType string_escape_type
+    const picojson::value& schema, const std::string& rule_name, JSONFormat string_escape_type
 ) {
   // Note integer is a subset of number, so we don't need to add integer here
   switch (string_escape_type) {
-    case StringEscapeType::kJSON: {
+    case JSONFormat::kJSON: {
       return kBasicNumber + " | " + kBasicString + " | " + kBasicBoolean + " | " + kBasicNull +
              " | " + kBasicArray + " | " + kBasicObject;
     }
-    case StringEscapeType::kXML: {
+    case JSONFormat::kXML: {
       return kBasicNumber + " | " + kXMLString + " | " + kBasicBoolean + " | " + kBasicNull +
              " | " + kBasicArray + " | " + kBasicObject;
     }
@@ -1879,9 +1875,7 @@ std::string JSONSchemaConverter::VisitNumber(
 }
 
 std::string JSONSchemaConverter::VisitString(
-    const picojson::object& schema,
-    const std::string& rule_name,
-    StringEscapeType string_escape_type
+    const picojson::object& schema, const std::string& rule_name, JSONFormat string_escape_type
 ) {
   XGRAMMAR_CHECK(schema.count("type"));
   XGRAMMAR_CHECK(schema.at("type").get<std::string>() == "string");
@@ -2074,10 +2068,10 @@ std::string JSONSchemaConverter::VisitString(
     return "\"\\\"\" " + std::string("[^\"\\\\\\r\\n]") + range_part + " \"\\\"\"";
   }
   switch (string_escape_type) {
-    case StringEscapeType::kJSON: {
+    case JSONFormat::kJSON: {
       return "[\"] " + kBasicStringSub;
     }
-    case StringEscapeType::kXML: {
+    case JSONFormat::kXML: {
       return kXMLString;
     }
     default: {
@@ -2380,18 +2374,18 @@ std::string JSONSchemaConverter::GetPropertyPattern(
     const picojson::value& prop_schema,
     const std::string& rule_name,
     int64_t idx,  // Changed to int64_t
-    const StringEscapeType string_escape_type
+    const JSONFormat string_escape_type
 ) {
   // the outer quote is for the string in EBNF grammar, and the inner quote is for
   // the string in JSON
 
   std::string key;
   switch (string_escape_type) {
-    case StringEscapeType::kJSON: {
+    case JSONFormat::kJSON: {
       key += "\"\\\"" + prop_name + "\\\"\"";
       break;
     }
-    case StringEscapeType::kXML: {
+    case JSONFormat::kXML: {
       key += "\"<parameter=" + prop_name + ">\"";
       break;
     }
@@ -2400,10 +2394,10 @@ std::string JSONSchemaConverter::GetPropertyPattern(
       prop_schema, rule_name + "_prop_" + std::to_string(idx), string_escape_type
   );
   switch (string_escape_type) {
-    case StringEscapeType::kJSON: {
+    case JSONFormat::kJSON: {
       return key + " " + colon_pattern_ + " " + value;
     }
-    case StringEscapeType::kXML: {
+    case JSONFormat::kXML: {
       return key + " " + kWhiteSpace + " " + value + " " + kWhiteSpace + " \"</parameter>\"";
     }
     default: {
@@ -2419,15 +2413,15 @@ std::string JSONSchemaConverter::GetOtherPropertyPattern(
     const picojson::value& prop_schema,
     const std::string& rule_name,
     const std::string& rule_name_suffix,
-    const StringEscapeType string_escape_type
+    const JSONFormat string_escape_type
 ) {
   std::string value =
       CreateRuleFromSchema(prop_schema, rule_name + "_" + rule_name_suffix, string_escape_type);
   switch (string_escape_type) {
-    case (StringEscapeType::kJSON): {
+    case (JSONFormat::kJSON): {
       return key_pattern + " " + colon_pattern_ + " " + value;
     }
-    case (StringEscapeType::kXML): {
+    case (JSONFormat::kXML): {
       return "\"<parameter=\" " + key_pattern + " \">\" " + kWhiteSpace + " " + value + " " +
              kWhiteSpace + " \"</parameter>\"";
     }
@@ -2468,7 +2462,7 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     const std::string& additional_suffix,
     const int min_properties,
     const int max_properties,
-    const StringEscapeType string_escape_type
+    const JSONFormat string_escape_type
 ) {
   // return empty when maxProperties=0
   if (max_properties == 0) {
@@ -2479,13 +2473,13 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
   std::string mid_sep;
   std::string last_sep;
   switch (string_escape_type) {
-    case (StringEscapeType::kJSON): {
+    case (JSONFormat::kJSON): {
       first_sep = NextSeparator();
       mid_sep = NextSeparator();
       last_sep = NextSeparator(true);
       break;
     }
-    case (StringEscapeType::kXML): {
+    case (JSONFormat::kXML): {
       first_sep = kWhiteSpace;
       mid_sep = kWhiteSpace;
       last_sep = "";
@@ -2515,14 +2509,14 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     std::string additional_prop_pattern;
     if (allow_additional) {
       switch (string_escape_type) {
-        case (StringEscapeType::kJSON): {
+        case (JSONFormat::kJSON): {
           additional_prop_pattern =
               GetOtherPropertyPattern(kBasicString, additional, rule_name, additional_suffix);
           break;
         }
-        case (StringEscapeType::kXML): {
+        case (JSONFormat::kXML): {
           additional_prop_pattern = GetOtherPropertyPattern(
-              kXMLVariableName, additional, rule_name, additional_suffix, StringEscapeType::kXML
+              kXMLVariableName, additional, rule_name, additional_suffix, JSONFormat::kXML
           );
           break;
         }
@@ -2614,14 +2608,14 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     std::string additional_prop_pattern;
     if (allow_additional) {
       switch (string_escape_type) {
-        case (StringEscapeType::kJSON): {
+        case (JSONFormat::kJSON): {
           additional_prop_pattern =
               GetOtherPropertyPattern(kBasicString, additional, rule_name, additional_suffix);
           break;
         }
-        case (StringEscapeType::kXML): {
+        case (JSONFormat::kXML): {
           additional_prop_pattern = GetOtherPropertyPattern(
-              kXMLVariableName, additional, rule_name, additional_suffix, StringEscapeType::kXML
+              kXMLVariableName, additional, rule_name, additional_suffix, JSONFormat::kXML
           );
           break;
         }
@@ -2629,13 +2623,13 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
       for (int matched = key_matched_min.back(); matched <= properties_size; ++matched) {
         std::string last_rule_body;
         switch (string_escape_type) {
-          case (StringEscapeType::kJSON): {
+          case (JSONFormat::kJSON): {
             last_rule_body = GetPropertyWithNumberConstrains(
                 mid_sep + " " + additional_prop_pattern, min_properties, max_properties, matched
             );
             break;
           }
-          case (StringEscapeType::kXML): {
+          case (JSONFormat::kXML): {
             last_rule_body = GetPropertyWithNumberConstrains(
                 additional_prop_pattern, min_properties, max_properties, matched
             );
@@ -2697,7 +2691,7 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
         res += " | ";
       }
       switch (string_escape_type) {
-        case (StringEscapeType::kJSON): {
+        case (JSONFormat::kJSON): {
           res += "(" + additional_prop_pattern + " " +
                  GetPropertyWithNumberConstrains(
                      mid_sep + " " + additional_prop_pattern, min_properties, max_properties, 1
@@ -2705,7 +2699,7 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
                  ")";
           break;
         }
-        case (StringEscapeType::kXML): {
+        case (JSONFormat::kXML): {
           res += "(" + additional_prop_pattern + " " +
                  GetPropertyWithNumberConstrains(
                      additional_prop_pattern, min_properties, max_properties, 1
@@ -2774,14 +2768,14 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     std::string additional_prop_pattern;
     if (allow_additional) {
       switch (string_escape_type) {
-        case (StringEscapeType::kJSON): {
+        case (JSONFormat::kJSON): {
           additional_prop_pattern =
               GetOtherPropertyPattern(kBasicString, additional, rule_name, additional_suffix);
           break;
         }
-        case (StringEscapeType::kXML): {
+        case (JSONFormat::kXML): {
           additional_prop_pattern = GetOtherPropertyPattern(
-              kXMLVariableName, additional, rule_name, additional_suffix, StringEscapeType::kXML
+              kXMLVariableName, additional, rule_name, additional_suffix, JSONFormat::kXML
           );
           break;
         }
@@ -2789,13 +2783,13 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
       for (int matched = key_matched_min.back(); matched <= key_matched_max.back(); ++matched) {
         std::string last_rule_body;
         switch (string_escape_type) {
-          case (StringEscapeType::kJSON): {
+          case (JSONFormat::kJSON): {
             last_rule_body = GetPropertyWithNumberConstrains(
                 mid_sep + " " + additional_prop_pattern, min_properties, max_properties, matched
             );
             break;
           }
-          case (StringEscapeType::kXML): {
+          case (JSONFormat::kXML): {
             last_rule_body = GetPropertyWithNumberConstrains(
                 additional_prop_pattern, min_properties, max_properties, matched
             );
@@ -2863,14 +2857,14 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
       }
       res += "(" + additional_prop_pattern + " ";
       switch (string_escape_type) {
-        case (StringEscapeType::kJSON): {
+        case (JSONFormat::kJSON): {
           res += GetPropertyWithNumberConstrains(
                      mid_sep + " " + additional_prop_pattern, min_properties, max_properties, 1
                  ) +
                  ")";
           break;
         }
-        case (StringEscapeType::kXML): {
+        case (JSONFormat::kXML): {
           res += GetPropertyWithNumberConstrains(
                      additional_prop_pattern, min_properties, max_properties, 1
                  ) +
@@ -3053,7 +3047,7 @@ Result<JSONSchemaConverter::ObjectSpec, SchemaError> JSONSchemaConverter::ParseO
 std::string JSONSchemaConverter::VisitObject(
     const picojson::object& schema,
     const std::string& rule_name,
-    const StringEscapeType string_escape_type
+    const JSONFormat string_escape_type
 ) {
   // Parse the object schema
   auto object_spec_result = ParseObjectSchema(schema);
@@ -3063,7 +3057,7 @@ std::string JSONSchemaConverter::VisitObject(
 
   auto object_spec = std::move(object_spec_result).Unwrap();
   std::string result;
-  if (string_escape_type == StringEscapeType::kJSON) {
+  if (string_escape_type == JSONFormat::kJSON) {
     result += "\"{\"";
   }
 
@@ -3094,11 +3088,11 @@ std::string JSONSchemaConverter::VisitObject(
     // Initialize the beginning sequence of a property.
     std::string beg_seq;
     switch (string_escape_type) {
-      case (StringEscapeType::kJSON): {
+      case (JSONFormat::kJSON): {
         beg_seq = NextSeparator();
         break;
       }
-      case (StringEscapeType::kXML): {
+      case (JSONFormat::kXML): {
         beg_seq = "";
         break;
       }
@@ -3114,7 +3108,7 @@ std::string JSONSchemaConverter::VisitObject(
           );
 
           std::string property_pattern;
-          if (string_escape_type == StringEscapeType::kJSON) {
+          if (string_escape_type == JSONFormat::kJSON) {
             property_pattern += "\"\\\"\"" + RegexToEBNF(prop_name, false) + "\"\\\"\" " +
                                 colon_pattern_ + " " + value;
           } else {
@@ -3132,12 +3126,12 @@ std::string JSONSchemaConverter::VisitObject(
             object_spec.property_names, rule_name + "_name", string_escape_type
         );
         switch (string_escape_type) {
-          case (StringEscapeType::kJSON): {
+          case (JSONFormat::kJSON): {
             property_rule_body +=
                 beg_seq + " " + key_pattern + " " + colon_pattern_ + " " + kBasicAny + ")";
             break;
           }
-          case (StringEscapeType::kXML): {
+          case (JSONFormat::kXML): {
             property_rule_body += beg_seq + " \"<parameter=\" " + key_pattern + " \">\" " +
                                   kWhiteSpace + " " + kXMLAny + " " + kWhiteSpace +
                                   " \"</parameter>\"";
@@ -3149,7 +3143,7 @@ std::string JSONSchemaConverter::VisitObject(
       auto prop_rule_name = ebnf_script_creator_.AllocateRuleName(rule_name + "_prop");
       ebnf_script_creator_.AddRuleWithAllocatedName(prop_rule_name, property_rule_body);
       switch (string_escape_type) {
-        case (StringEscapeType::kJSON): {
+        case (JSONFormat::kJSON): {
           result += " " + prop_rule_name + " " +
                     GetPropertyWithNumberConstrains(
                         NextSeparator() + " " + prop_rule_name,
@@ -3160,7 +3154,7 @@ std::string JSONSchemaConverter::VisitObject(
                     NextSeparator(true);
           break;
         }
-        case (StringEscapeType::kXML): {
+        case (JSONFormat::kXML): {
           result += " " + prop_rule_name + " " +
                     GetPropertyWithNumberConstrains(
                         prop_rule_name, object_spec.min_properties, object_spec.max_properties, 1
@@ -3189,20 +3183,16 @@ std::string JSONSchemaConverter::VisitObject(
     if (object_spec.max_properties != 0) {
       std::string other_property_pattern;
       switch (string_escape_type) {
-        case (StringEscapeType::kJSON): {
+        case (JSONFormat::kJSON): {
           other_property_pattern += GetOtherPropertyPattern(
               kBasicString, additional_property, rule_name, additional_suffix
           );
           result += " " + NextSeparator() + " " + other_property_pattern + " ";
           break;
         }
-        case (StringEscapeType::kXML): {
+        case (JSONFormat::kXML): {
           other_property_pattern += GetOtherPropertyPattern(
-              kXMLVariableName,
-              additional_property,
-              rule_name,
-              additional_suffix,
-              StringEscapeType::kXML
+              kXMLVariableName, additional_property, rule_name, additional_suffix, JSONFormat::kXML
           );
           result += " " + other_property_pattern + " ";
           break;
@@ -3224,7 +3214,7 @@ std::string JSONSchemaConverter::VisitObject(
   indentManager_->EndIndent();
 
   switch (string_escape_type) {
-    case (StringEscapeType::kJSON): {
+    case (JSONFormat::kJSON): {
       result += " \"}\"";
       if (could_be_empty) {
         // result = (result) | {}
@@ -3237,7 +3227,7 @@ std::string JSONSchemaConverter::VisitObject(
       }
       break;
     }
-    case (StringEscapeType::kXML): {
+    case (JSONFormat::kXML): {
       if (could_be_empty) {
         result = "\"\" | " + result;
       }
@@ -3279,7 +3269,7 @@ std::string JSONSchemaToEBNF(
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
-    StringEscapeType string_escape_type
+    JSONFormat string_escape_type
 ) {
   picojson::value schema_value;
   std::string err = picojson::parse(schema_value, schema);
@@ -3296,7 +3286,7 @@ std::string JSONSchemaToEBNF(
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
-    StringEscapeType string_escape_type
+    JSONFormat string_escape_type
 ) {
   JSONSchemaConverter converter(
       schema, any_whitespace, indent, separators, strict_mode, string_escape_type
