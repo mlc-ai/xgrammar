@@ -15,9 +15,9 @@
 
 namespace xgrammar {
 
-enum class StringEscapeType {
-  kJSON,
-  kXML,
+enum class JSONFormat : int {
+  kJSON = 0,
+  kXML = 1,
 };
 
 /*!
@@ -47,7 +47,7 @@ std::string JSONSchemaToEBNF(
     std::optional<int> indent = std::nullopt,
     std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
     bool strict_mode = true,
-    StringEscapeType string_escape_type = StringEscapeType::kJSON
+    JSONFormat string_escape_type = JSONFormat::kJSON
 );
 
 /*!
@@ -76,7 +76,7 @@ std::string JSONSchemaToEBNF(
     std::optional<int> indent = std::nullopt,
     std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
     bool strict_mode = true,
-    StringEscapeType string_escape_type = StringEscapeType::kJSON
+    JSONFormat string_escape_type = JSONFormat::kJSON
 );
 
 /*!
