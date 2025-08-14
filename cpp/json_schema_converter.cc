@@ -1916,7 +1916,6 @@ std::string JSONSchemaConverter::VisitString(
     XGRAMMAR_LOG(FATAL) << std::move(string_spec_result).UnwrapErr().what();
   }
   auto string_spec = std::move(string_spec_result).Unwrap();
-  XGRAMMAR_CHECK(!string_spec.pattern.empty());
   std::string result;
   if (!string_spec.wrapper.first.empty()) {
     result += "\"" + string_spec.wrapper.first + "\" ";
@@ -3026,7 +3025,6 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
       string_spec.pattern = uri_ebnf;
       return ResultOk(string_spec);
     }
-
     if (format == "uri-reference") {
       // refer to RFC 3986, Appendix A, but skipping IP-literal and IPv4address currently
       std::string pchar = "([\\w\\.~!$&'()*+,;=:@-]|%[0-9A-Fa-f][0-9A-Fa-f])";
