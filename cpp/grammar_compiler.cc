@@ -571,7 +571,7 @@ class GrammarCompiler::Impl {
   void BuildFSM(Grammar grammar);
 
   /*! \brief Multi-thread compile the grammar. */
-  CompiledGrammar MultiThreadCompileGrammar(const Grammar& grammar);
+  CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
 
   /*! \brief Compile the built-in JSON grammar. */
   CompiledGrammar CompileJson();
@@ -639,7 +639,7 @@ class GrammarCompiler::Impl {
   ThreadSafeLRUCache<MultipleKey, CompiledGrammar, Computer, SizeEstimator> compile_cache_;
 };
 
-CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(const Grammar& grammar) {
+CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
 
   compiled_grammar_impl->grammar = GrammarOptimizer::Optimize(grammar);
