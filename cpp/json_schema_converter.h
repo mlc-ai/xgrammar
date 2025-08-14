@@ -34,7 +34,7 @@ enum class JSONFormat : int {
  * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
  * This helps LLM to generate accurate output in the grammar-guided generation with JSON
  * schema. Default: true.
- * \param string_escape_type Define the root format of the object. If it's StringEscapeType::kJSON,
+ * \param json_format Define the root format of the object. If it's StringEscapeType::kJSON,
  * then it will generate a fully JSON-style grammar. If it's StringEscapeType::kXML, then it will
  * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
  * Default: StringEscapeType::kJSON.
@@ -47,7 +47,7 @@ std::string JSONSchemaToEBNF(
     std::optional<int> indent = std::nullopt,
     std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
     bool strict_mode = true,
-    JSONFormat string_escape_type = JSONFormat::kJSON
+    JSONFormat json_format = JSONFormat::kJSON
 );
 
 /*!
@@ -64,7 +64,7 @@ std::string JSONSchemaToEBNF(
  * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
  * This helps LLM to generate accurate output in the grammar-guided generation with JSON
  * schema. Default: true.
- * \param string_escape_type Define the root format of the object. If it's StringEscapeType::kJSON,
+ * \param json_format Define the root format of the object. If it's StringEscapeType::kJSON,
  * then it will generate a fully JSON-style grammar. If it's StringEscapeType::kXML, then it will
  * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
  * Default: StringEscapeType::kJSON.
@@ -76,7 +76,7 @@ std::string JSONSchemaToEBNF(
     std::optional<int> indent = std::nullopt,
     std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
     bool strict_mode = true,
-    JSONFormat string_escape_type = JSONFormat::kJSON
+    JSONFormat json_format = JSONFormat::kJSON
 );
 
 /*!
