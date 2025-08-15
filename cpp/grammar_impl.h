@@ -253,6 +253,9 @@ class Grammar::Impl {
   /*! \brief Store the lookahead which are exact, used to reduce uncertainty.*/
   std::vector<int32_t> exact_lookahead;
 
+  /*! \brief If true, the grammar is optimized. A grammar must be optimized before parsing. */
+  bool optimized = false;
+
   friend class GrammarBuilder;
   friend class GrammarCompiler;
 
@@ -284,7 +287,9 @@ XGRAMMAR_MEMBER_TABLE(
     "allow_empty_rule_ids",
     &Grammar::Impl::allow_empty_rule_ids,
     "exact_lookahead",
-    &Grammar::Impl::exact_lookahead
+    &Grammar::Impl::exact_lookahead,
+    "optimized",
+    &Grammar::Impl::optimized
 );
 
 }  // namespace xgrammar
