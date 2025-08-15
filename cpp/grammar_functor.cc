@@ -16,6 +16,7 @@
 #include <queue>
 #include <set>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "fsm.h"
@@ -1669,14 +1670,16 @@ class GrammarFSMHasherImpl {
   static void HashFsmWithGrammar(
       int fsm_index, Grammar* grammar, const std::vector<std::vector<FSMEdge>>& sorted_edges
   ) {
-    static const int16_t kEndStateFlag = -0xff;
+    static const int16_t kEndStateFlag = -0x200;
+    static const int16_t kSelfRecursionFlag = -0x300;
     int32_t hash_result = 0;
     const auto& fsm = grammar->ImplPtr()->per_rule_fsms[fsm_index];
     XGRAMMAR_CHECK(fsm.has_value());
+    XGRAMMAR_CHECK(!grammar->ImplPtr()->per_rule_fsm_hashes[fsm_index].has_value());
     std::map<int32_t, int32_t> original_state_id_to_new_id;
     original_state_id_to_new_id[fsm->GetStart()] = 0;
     std::queue<int32_t> bfs_queue;
-    std::map<int32_t, int32_t> from_hash_to_rules;
+    std::set<std::pair<int32_t, int32_t>> hash_and_target;
 
     // Perform a bfs to hash all the edges.
     while (!bfs_queue.empty()) {
@@ -1695,7 +1698,38 @@ class GrammarFSMHasherImpl {
 
       // First, check the edges which are rule references. To keep consistent, we need to sort them
       // with hashes.
-      // TODO(Linzhang):Finish it.
+      for (const auto& edge : sorted_edges[current_old_state_id]) {
+        if (!edge.IsRuleRef()) {
+          continue;
+        }
+        if (edge.GetRefRuleId() == fsm_index) {
+          hash_and_target.insert({kSelfRecursionFlag, edge.target});
+          continue;
+        }
+        XGRAMMAR_CHECK(grammar->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].has_value());
+        hash_and_target.insert(
+            {grammar->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].value(), edge.target}
+        );
+      }
+
+      // Hash them.
+      for (const auto& [hash, target] : hash_and_target) {
+        int16_t first_half_of_hash = static_cast<int16_t>(static_cast<uint32_t>(hash) >> 16);
+        int16_t second_half_of_hash = static_cast<int16_t>(static_cast<uint32_t>(hash) & 0xFFFF);
+        if (original_state_id_to_new_id.find(target) == original_state_id_to_new_id.end()) {
+          original_state_id_to_new_id[target] =
+              static_cast<int32_t>(original_state_id_to_new_id.size());
+          bfs_queue.push(target);
+        }
+        int32_t target_new_id = original_state_id_to_new_id[target];
+        hash_result = HashCombine(
+            hash_result,
+            current_new_state_id,
+            first_half_of_hash,
+            second_half_of_hash,
+            target_new_id
+        );
+      }
 
       // Then, check the edges which are not rule references.
       for (const auto& edge : sorted_edges[current_old_state_id]) {
@@ -1708,19 +1742,19 @@ class GrammarFSMHasherImpl {
         int32_t target_new_id = original_state_id_to_new_id[edge.target];
         if (edge.IsRuleRef()) {
           continue;
-        } else {
-          hash_result = HashCombine(
-              hash_result,
-              current_new_state_id,
-              static_cast<int32_t>(edge.min),
-              static_cast<int32_t>(edge.max),
-              target_new_id
-          );
         }
+        hash_result = HashCombine(
+            hash_result,
+            current_new_state_id,
+            static_cast<int32_t>(edge.min),
+            static_cast<int32_t>(edge.max),
+            target_new_id
+        );
       }
     }
     grammar->ImplPtr()->per_rule_fsm_hashes[fsm_index] = hash_result;
   }
+
   static int32_t FindFsmCanBeHashed(
       const std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
       const std::vector<bool>& visited
