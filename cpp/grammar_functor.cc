@@ -15,6 +15,7 @@
 #include <optional>
 #include <queue>
 #include <set>
+#include <stack>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -1667,11 +1668,13 @@ class RepetitionNormalizerImpl {
 };
 class GrammarFSMHasherImpl {
  private:
+  static const int16_t kEndStateFlag = -0x200;
+  static const int16_t kSelfRecursionFlag = -0x300;
+  static const int16_t kSimpleCycleFlag = -0x400;
+
   static void HashFsmWithGrammar(
       int fsm_index, Grammar* grammar, const std::vector<std::vector<FSMEdge>>& sorted_edges
   ) {
-    static const int16_t kEndStateFlag = -0x200;
-    static const int16_t kSelfRecursionFlag = -0x300;
     int32_t hash_result = 0;
     XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar)->NumRules())
         << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar)->NumRules();
@@ -1758,10 +1761,67 @@ class GrammarFSMHasherImpl {
     grammar->ImplPtr()->per_rule_fsm_hashes[fsm_index] = hash_result;
   }
 
-  static int32_t FindFsmCanBeHashed(
-      const std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
-      const std::vector<bool>& visited
+  static bool FindSimpleCycle(
+      std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
+      std::vector<bool>& visited,
+      std::vector<std::vector<int32_t>>& ref_graph_from_referee_to_referer
   ) {
+    // Try to find a simple cycle.
+    for (size_t i = 0; i < ref_graph_from_referee_to_referer.size(); i++) {
+      if (visited[i]) {
+        continue;
+      }
+
+      // Not a simple cycle if it has more than one referee.
+      if (ref_graph_from_referer_to_referee[i].size() != 1) {
+        continue;
+      }
+      std::stack<int32_t> dfs_stack;
+      std::vector<int32_t> simple_cycle;
+      auto in_stack = std::vector<bool>(ref_graph_from_referee_to_referer.size(), false);
+      in_stack[i] = true;
+      dfs_stack.push(static_cast<int32_t>(i));
+      int32_t current_fsm_index = i;
+      while (true) {
+        if (ref_graph_from_referee_to_referer[current_fsm_index].size() != 1) {
+          // Not a simple cycle.
+          break;
+        }
+        if (visited[current_fsm_index]) {
+          // Already visited, not a simple cycle.
+          break;
+        }
+        current_fsm_index = ref_graph_from_referee_to_referer[current_fsm_index][0];
+        if (in_stack[current_fsm_index]) {
+          simple_cycle.push_back(current_fsm_index);
+          while (dfs_stack.top() != current_fsm_index) {
+            simple_cycle.push_back(dfs_stack.top());
+            dfs_stack.pop();
+          }
+          // Found a simple cycle.
+          break;
+        }
+      }
+      if (simple_cycle.empty()) {
+        // TODO(Linzhang):HashSimpleCycle();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static void HashSimpleCycle() {}
+
+  static int32_t FindSimpleFsmCanBeHashed(
+      std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
+      std::vector<bool>& visited,
+      std::vector<std::vector<int32_t>>& ref_graph_from_referee_to_referer
+  ) {
+    // Try to hash simple cycles as much as possible.
+    while (FindSimpleCycle(
+        ref_graph_from_referer_to_referee, visited, ref_graph_from_referee_to_referer
+    ));
+
     for (size_t i = 0; i < ref_graph_from_referer_to_referee.size(); i++) {
       if (visited[i]) {
         continue;
@@ -1817,7 +1877,9 @@ class GrammarFSMHasherImpl {
     }
 
     // Find the fsm which can be hashed: a terminal fsm, or a self-recursion fsm.
-    auto current_operating_index = FindFsmCanBeHashed(ref_graph_from_referer_to_referee, visited);
+    auto current_operating_index = FindSimpleFsmCanBeHashed(
+        ref_graph_from_referer_to_referee, visited, ref_graph_from_referee_to_referer
+    );
     while (current_operating_index != -1) {
       visited[current_operating_index] = true;
 
@@ -1832,7 +1894,9 @@ class GrammarFSMHasherImpl {
       }
 
       // Find if there are more fsms can be hashed.
-      current_operating_index = FindFsmCanBeHashed(ref_graph_from_referer_to_referee, visited);
+      current_operating_index = FindSimpleFsmCanBeHashed(
+          ref_graph_from_referer_to_referee, visited, ref_graph_from_referee_to_referer
+      );
     }
   }
 };
