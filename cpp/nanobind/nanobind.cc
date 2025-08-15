@@ -249,12 +249,15 @@ NB_MODULE(xgrammar_bindings, m) {
   pyTestingModule
       .def(
           "_json_schema_to_ebnf",
-          nb::overload_cast<
-              const std::string&,
-              bool,
-              std::optional<int>,
-              std::optional<std::pair<std::string, std::string>>,
-              bool>(&JSONSchemaToEBNF),
+          [](const std::string& schema,
+             bool any_whitespace,
+             std::optional<int> indent,
+             std::optional<std::pair<std::string, std::string>> separators,
+             bool strict_mode) {
+            return JSONSchemaToEBNF(
+                schema, any_whitespace, indent, separators, strict_mode, JSONFormat::kJSON
+            );
+          },
           nb::arg("schema"),
           nb::arg("any_whitespace"),
           nb::arg("indent").none(),
@@ -276,6 +279,7 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("start").none(),
           nb::arg("end").none()
       )
+      .def("_qwen_xml_tool_calling_to_ebnf", &_QwenXMLToolCallingToEBNF, nb::arg("schema"))
       .def(
           "_generate_float_regex",
           [](std::optional<double> start, std::optional<double> end) {

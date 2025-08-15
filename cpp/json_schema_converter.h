@@ -15,6 +15,11 @@
 
 namespace xgrammar {
 
+enum class JSONFormat : int {
+  kJSON = 0,
+  kXML = 1,
+};
+
 /*!
  * \brief Convert JSON schema string to EBNF grammar string.
  * \param schema The JSON schema string.
@@ -27,17 +32,22 @@ namespace xgrammar {
  * \param strict_mode Whether to use strict mode. In strict
  * mode, the generated grammar will not allow properties and items that is not specified in the
  * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
- *
  * This helps LLM to generate accurate output in the grammar-guided generation with JSON
  * schema. Default: true.
+ * \param json_format Define the root format of the object. If it's StringEscapeType::kJSON,
+ * then it will generate a fully JSON-style grammar. If it's StringEscapeType::kXML, then it will
+ * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
+ * Default: StringEscapeType::kJSON.
  * \returns The EBNF grammar string.
  */
+
 std::string JSONSchemaToEBNF(
     const std::string& schema,
     bool any_whitespace = true,
     std::optional<int> indent = std::nullopt,
     std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
-    bool strict_mode = true
+    bool strict_mode = true,
+    JSONFormat json_format = JSONFormat::kJSON
 );
 
 /*!
@@ -48,12 +58,16 @@ std::string JSONSchemaToEBNF(
  * \param separators Two separators used in the schema: comma and colon. Examples: {",", ":"},
  * {", ", ": "}. If std::nullopt, the default separators will be used: {",", ": "} when the
  * indent is not -1, and {", ", ": "} otherwise. This follows the convention in python
- * json.dumps(). Default: std::nullopt. \param strict_mode Whether to use strict mode. In strict
+ * json.dumps(). Default: std::nullopt.
+ * \param strict_mode Whether to use strict mode. In strict
  * mode, the generated grammar will not allow properties and items that is not specified in the
  * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
- *
  * This helps LLM to generate accurate output in the grammar-guided generation with JSON
  * schema. Default: true.
+ * \param json_format Define the root format of the object. If it's StringEscapeType::kJSON,
+ * then it will generate a fully JSON-style grammar. If it's StringEscapeType::kXML, then it will
+ * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
+ * Default: StringEscapeType::kJSON.
  * \returns The EBNF grammar string.
  */
 std::string JSONSchemaToEBNF(
@@ -61,7 +75,8 @@ std::string JSONSchemaToEBNF(
     bool any_whitespace = true,
     std::optional<int> indent = std::nullopt,
     std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
-    bool strict_mode = true
+    bool strict_mode = true,
+    JSONFormat json_format = JSONFormat::kJSON
 );
 
 /*!
