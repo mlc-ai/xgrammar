@@ -156,7 +156,7 @@ class StateEqualForParsing {
   bool operator()(const ParserState& lhs, const ParserState& rhs) const {
     return lhs.rule_id == rhs.rule_id && lhs.sequence_id == rhs.sequence_id &&
            lhs.element_id == rhs.element_id && lhs.rule_start_pos == rhs.rule_start_pos &&
-           lhs.sub_element_id == rhs.sub_element_id;
+           lhs.sub_element_id == rhs.sub_element_id && lhs.repeat_count == rhs.repeat_count;
   }
 };
 
