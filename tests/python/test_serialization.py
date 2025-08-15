@@ -41,7 +41,7 @@ def construct_compiled_grammar():
 
 def test_get_serialization_version():
     """Test the version of the serialized JSON string."""
-    assert xgr.get_serialization_version() == "v4"
+    assert xgr.get_serialization_version() == "v5"
 
 
 def test_serialize_grammar():
@@ -59,9 +59,10 @@ def test_serialize_grammar():
         "root_rule_id": 1,
         "complete_fsm": None,
         "per_rule_fsms": [],
+        "per_rule_fsm_hashes": [],
         "allow_empty_rule_ids": [],
         "exact_lookahead": [],
-        "__VERSION__": "v4",
+        "__VERSION__": "v5",
     }
     # The fsms are the same one, but the start state and end states are different.
     assert json.loads(serialized) == expected_json
@@ -82,14 +83,14 @@ def test_serialize_grammar_exception():
         "complete_fsm": None,
         "per_rule_fsms": [],
         "exact_lookahead": [],
-        "__VERSION__": "v4",
+        "__VERSION__": "v5",
     }
 
     expected_json["__VERSION__"] = "v1"  # Change version to trigger error
     with pytest.raises(xgr.DeserializeVersionError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
 
-    expected_json["__VERSION__"] = "v4"
+    expected_json["__VERSION__"] = "v5"
     expected_json.pop("rules")  # Remove required field to trigger error
     with pytest.raises(xgr.DeserializeFormatError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
@@ -141,7 +142,7 @@ def test_serialize_tokenizer_info():
         '"decoded_vocab":["1","212","a","A","b","\\u00e4\\u00b8\\u0080","-","aBc","abc"],'
         '"sorted_decoded_vocab":[[6,"-"],[3,"A"],[2,"a"],[7,"aBc"],[8,"abc"],[4,"b"],[5,"\\u00e4\\u00b8\\u0080"]],'
         '"trie_subtree_nodes_range":[1,2,5,4,5,6,7],'
-        '"__VERSION__":"v4"}'
+        '"__VERSION__":"v5"}'
     )
     assert json.loads(serialized) == json.loads(expected_json)
 
@@ -215,6 +216,7 @@ def test_serialize_compiled_grammar():
                 [{'data_': [[0, 47, 3], [58, 127, 3], [192, 223, 1], [224, 239, 4], [240, 247, 5], [128, 191, 3], [-2, 0, 2], [128, 191, 1], [128, 191, 4], [-2, 0, 8], [97, 97, 6]],
                 'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [6], False]],
             # fmt: on
+            "per_rule_fsm_hashes": [],
             "exact_lookahead": [],
         },
         "tokenizer_metadata": {
@@ -223,7 +225,7 @@ def test_serialize_compiled_grammar():
             "add_prefix_space": True,
             "stop_token_ids": [0, 1],
         },
-        "__VERSION__": "v4",
+        "__VERSION__": "v5",
     }
 
     class AdaptiveTokenMask(BaseModel):
