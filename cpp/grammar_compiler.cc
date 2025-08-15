@@ -647,6 +647,7 @@ CompiledGrammar GrammarCompiler::Impl::MultiThreadCompileGrammar(Grammar grammar
   grammar->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(compiled_grammar_impl->grammar);
   RepetitionNormalizer::Apply(&compiled_grammar_impl->grammar);
   GrammarFSMBuilder::Apply(&compiled_grammar_impl->grammar);
+  GrammarFSMHasher::Apply(&compiled_grammar_impl->grammar);
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }

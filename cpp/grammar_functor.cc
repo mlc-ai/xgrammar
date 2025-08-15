@@ -1673,13 +1673,16 @@ class GrammarFSMHasherImpl {
     static const int16_t kEndStateFlag = -0x200;
     static const int16_t kSelfRecursionFlag = -0x300;
     int32_t hash_result = 0;
+    XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar)->NumRules())
+        << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar)->NumRules();
     const auto& fsm = grammar->ImplPtr()->per_rule_fsms[fsm_index];
-    XGRAMMAR_CHECK(fsm.has_value());
-    XGRAMMAR_CHECK(!grammar->ImplPtr()->per_rule_fsm_hashes[fsm_index].has_value());
+    XGRAMMAR_DCHECK(fsm.has_value());
+    XGRAMMAR_DCHECK(!grammar->ImplPtr()->per_rule_fsm_hashes[fsm_index].has_value());
     std::map<int32_t, int32_t> original_state_id_to_new_id;
     original_state_id_to_new_id[fsm->GetStart()] = 0;
     std::queue<int32_t> bfs_queue;
     std::set<std::pair<int32_t, int32_t>> hash_and_target;
+    bfs_queue.push(fsm->GetStart());
 
     // Perform a bfs to hash all the edges.
     while (!bfs_queue.empty()) {
@@ -1777,7 +1780,8 @@ class GrammarFSMHasherImpl {
 
  public:
   static void Apply(Grammar* grammar) {
-    std::vector<std::optional<uint64_t>> fsm_hashes((*grammar)->NumRules());
+    grammar->ImplPtr()->per_rule_fsm_hashes =
+        std::vector<std::optional<int32_t>>((*grammar)->NumRules());
     std::vector<bool> visited((*grammar)->NumRules(), false);
 
     // Get the reference graph.
@@ -1820,7 +1824,7 @@ class GrammarFSMHasherImpl {
       HashFsmWithGrammar(current_operating_index, grammar, sorted_edges);
       // Remove the fsm from the reference graph.
       for (const auto& referer : ref_graph_from_referee_to_referer[current_operating_index]) {
-        ref_graph_from_referee_to_referer[referer].erase(std::find_if(
+        ref_graph_from_referer_to_referee[referer].erase(std::find_if(
             ref_graph_from_referer_to_referee[referer].begin(),
             ref_graph_from_referer_to_referee[referer].end(),
             [&](int32_t rule_id) { return rule_id == current_operating_index; }

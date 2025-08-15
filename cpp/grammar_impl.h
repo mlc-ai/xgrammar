@@ -248,7 +248,7 @@ class Grammar::Impl {
    */
   std::vector<std::optional<CompactFSMWithStartEnd>> per_rule_fsms;
 
-  std::vector<std::optional<uint64_t>> per_rule_fsm_hashes;
+  std::vector<std::optional<int32_t>> per_rule_fsm_hashes;
 
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
