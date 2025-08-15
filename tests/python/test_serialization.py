@@ -238,7 +238,6 @@ def test_serialize_compiled_grammar():
 
     recovered_obj = json.loads(serialized)
     adaptive_token_mask_cache = recovered_obj.pop("adaptive_token_mask_cache", None)
-    print(recovered_obj)
     assert recovered_obj == expected_json
     AdaptiveTokenMaskCache.model_validate(adaptive_token_mask_cache)
 
