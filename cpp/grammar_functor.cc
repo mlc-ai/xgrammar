@@ -608,8 +608,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
           continue;
         }
         auto last_element = base_grammar_->GetGrammarExpr(sequence_expr.end()[-1]);
-        if (last_element.type == GrammarExprType::kRuleRef && last_element[0] == rule_id &&
-            i != rule_id) {
+        if (last_element.type == GrammarExprType::kRuleRef && last_element[0] == rule_id) {
           return -1;
         }
 

@@ -129,6 +129,11 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
     if (!can_reach_end_stack[i]) {
       continue;
     }
+    if (IsCompleted()) {
+      // If the lookahead assertion is already completed, we can accept the token.
+      PopLastStates(1);
+      return {true, true};
+    }
     int last_accept_pos = i - 1;
     for (int pos = i; pos < token_len; ++pos) {
       if (!Advance(token[pos])) {

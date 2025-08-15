@@ -49,11 +49,11 @@ def test_serialize_grammar():
     grammar = construct_grammar()
     serialized = grammar.serialize_json()
     expected_json = {
-        "rules": [["rule1", 4, 9], ["root_rule", 8, -1]],
-        "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
+        "rules": [["rule1", 4, -1], ["root_rule", 8, -1]],
+        "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28],
         "grammar_expr_indptr": [
             # fmt: off
-            3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7,5,1,6
+            3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7
             # fmt: on
         ],
         "root_rule_id": 1,
@@ -195,11 +195,11 @@ def test_serialize_compiled_grammar():
 
     expected_json = {
         "grammar": {
-            "rules": [["rule1", 4, 6], ["root_rule", 10, -1]],
-            "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 27, 30, 34],
+            "rules": [["rule1", 4, -1], ["root_rule", 8, -1]],
+            "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28],
             "grammar_expr_indptr": [
                 # fmt: off
-                3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,0,1,97,5,1,5,4,1,0,0,1,97,5,2,7,8,6,1,9
+                3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7
                 # fmt: on
             ],
             "root_rule_id": 1,
@@ -238,6 +238,7 @@ def test_serialize_compiled_grammar():
 
     recovered_obj = json.loads(serialized)
     adaptive_token_mask_cache = recovered_obj.pop("adaptive_token_mask_cache", None)
+    print(recovered_obj)
     assert recovered_obj == expected_json
     AdaptiveTokenMaskCache.model_validate(adaptive_token_mask_cache)
 
