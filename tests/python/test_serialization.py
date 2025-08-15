@@ -216,7 +216,7 @@ def test_serialize_compiled_grammar():
                 [{'data_': [[0, 47, 3], [58, 127, 3], [192, 223, 1], [224, 239, 4], [240, 247, 5], [128, 191, 3], [-2, 0, 2], [128, 191, 1], [128, 191, 4], [-2, 0, 8], [97, 97, 6]],
                 'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [6], False]],
             # fmt: on
-            "per_rule_fsm_hashes": [-1884130629, -1607288103],
+            "per_rule_fsm_hashes": [],
             "exact_lookahead": [],
         },
         "tokenizer_metadata": {
