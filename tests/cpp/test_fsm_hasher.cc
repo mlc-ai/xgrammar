@@ -44,13 +44,26 @@ TEST(XGrammarFSMHasherTest, TestLoopReferenceFsm) {
     rule2 ::= [A-Z] | rule1
     rule3 ::= [0-9] rule3
     )";
+  std::string ebnf_grammar2 = R"(
+    rule2 ::= [0-9] rule3
+    rule3 ::= [A-Z] | rule2
+    root ::= rule2 | rule1
+    rule1 ::= [0-9] rule1
+)";
   auto grammar = Grammar::FromEBNF(ebnf_grammar);
+  auto grammar2 = Grammar::FromEBNF(ebnf_grammar2);
   GrammarFSMBuilder::Apply(&grammar);
   GrammarFSMHasher::Apply(&grammar);
-  EXPECT_EQ(grammar->per_rule_fsm_hashes[0], std::nullopt);
-  EXPECT_EQ(grammar->per_rule_fsm_hashes[1], std::nullopt);
-  EXPECT_EQ(grammar->per_rule_fsm_hashes[2], std::nullopt);
-  EXPECT_EQ(grammar->per_rule_fsm_hashes[3], -1269379148);
+  GrammarFSMBuilder::Apply(&grammar2);
+  GrammarFSMHasher::Apply(&grammar2);
+  EXPECT_NE(grammar->per_rule_fsm_hashes[0], std::nullopt);
+  EXPECT_NE(grammar->per_rule_fsm_hashes[1], std::nullopt);
+  EXPECT_NE(grammar->per_rule_fsm_hashes[2], std::nullopt);
+  EXPECT_NE(grammar->per_rule_fsm_hashes[3], std::nullopt);
+  EXPECT_EQ(grammar->per_rule_fsm_hashes[0], grammar2->per_rule_fsm_hashes[2]);
+  EXPECT_EQ(grammar->per_rule_fsm_hashes[1], grammar2->per_rule_fsm_hashes[0]);
+  EXPECT_EQ(grammar->per_rule_fsm_hashes[2], grammar2->per_rule_fsm_hashes[1]);
+  EXPECT_EQ(grammar->per_rule_fsm_hashes[3], grammar2->per_rule_fsm_hashes[3]);
 }
 
 TEST(XGrammarFSMHasherTest, TestComplexFsm) {
