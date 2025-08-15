@@ -11,6 +11,7 @@
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <queue>
 #include <set>
@@ -23,6 +24,7 @@
 #include "grammar_impl.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/utils.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -1664,8 +1666,60 @@ class RepetitionNormalizerImpl {
 };
 class GrammarFSMHasherImpl {
  private:
-  static void HashFsmWithGrammar(int fsm_index, Grammar* grammar) {
-    // TODO: Implement the hashing of the FSM with the given grammar.
+  static void HashFsmWithGrammar(
+      int fsm_index, Grammar* grammar, const std::vector<std::vector<FSMEdge>>& sorted_edges
+  ) {
+    static const int16_t kEndStateFlag = -0xff;
+    int32_t hash_result = 0;
+    const auto& fsm = grammar->ImplPtr()->per_rule_fsms[fsm_index];
+    XGRAMMAR_CHECK(fsm.has_value());
+    std::map<int32_t, int32_t> original_state_id_to_new_id;
+    original_state_id_to_new_id[fsm->GetStart()] = 0;
+    std::queue<int32_t> bfs_queue;
+    std::map<int32_t, int32_t> from_hash_to_rules;
+
+    // Perform a bfs to hash all the edges.
+    while (!bfs_queue.empty()) {
+      const int& current_old_state_id = std::move(bfs_queue.front());
+      const int& current_new_state_id = original_state_id_to_new_id[current_old_state_id];
+      bfs_queue.pop();
+
+      // Check if the current state is an end state.
+      if (fsm->IsEndState(current_old_state_id)) {
+        hash_result = HashCombine(
+            hash_result, current_new_state_id, kEndStateFlag, kEndStateFlag, current_new_state_id
+        );
+      }
+
+      // Hash the edges.
+
+      // First, check the edges which are rule references. To keep consistent, we need to sort them
+      // with hashes.
+      // TODO(Linzhang):Finish it.
+
+      // Then, check the edges which are not rule references.
+      for (const auto& edge : sorted_edges[current_old_state_id]) {
+        // Visit a new node.
+        if (original_state_id_to_new_id.find(edge.target) == original_state_id_to_new_id.end()) {
+          original_state_id_to_new_id[edge.target] =
+              static_cast<int32_t>(original_state_id_to_new_id.size());
+          bfs_queue.push(edge.target);
+        }
+        int32_t target_new_id = original_state_id_to_new_id[edge.target];
+        if (edge.IsRuleRef()) {
+          continue;
+        } else {
+          hash_result = HashCombine(
+              hash_result,
+              current_new_state_id,
+              static_cast<int32_t>(edge.min),
+              static_cast<int32_t>(edge.max),
+              target_new_id
+          );
+        }
+      }
+    }
+    grammar->ImplPtr()->per_rule_fsm_hashes[fsm_index] = hash_result;
   }
   static int32_t FindFsmCanBeHashed(
       const std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
@@ -1703,6 +1757,20 @@ class GrammarFSMHasherImpl {
       }
     }
 
+    // Sort the edges.
+    std::vector<std::vector<FSMEdge>> sorted_edges;
+    const auto& complete_fsm = grammar->ImplPtr()->complete_fsm;
+    sorted_edges.reserve(complete_fsm.NumStates());
+    for (int i = 0; i < complete_fsm.NumStates(); i++) {
+      const auto& edges = complete_fsm.GetEdges(i);
+      sorted_edges.emplace_back();
+      sorted_edges.back().reserve(edges.size());
+      for (const auto& edge : edges) {
+        sorted_edges.back().emplace_back(edge);
+      }
+      std::sort(sorted_edges.back().begin(), sorted_edges.back().end());
+    }
+
     // Disable non-fsms.
     for (size_t i = 0; i < grammar->ImplPtr()->per_rule_fsms.size(); i++) {
       if (!grammar->ImplPtr()->per_rule_fsms[i].has_value()) {
@@ -1715,11 +1783,12 @@ class GrammarFSMHasherImpl {
     while (current_operating_index != -1) {
       visited[current_operating_index] = true;
 
+      HashFsmWithGrammar(current_operating_index, grammar, sorted_edges);
       // Remove the fsm from the reference graph.
       for (const auto& referer : ref_graph_from_referee_to_referer[current_operating_index]) {
         ref_graph_from_referee_to_referer[referer].erase(std::find_if(
-            ref_graph_from_referee_to_referer[referer].begin(),
-            ref_graph_from_referee_to_referer[referer].end(),
+            ref_graph_from_referer_to_referee[referer].begin(),
+            ref_graph_from_referer_to_referee[referer].end(),
             [&](int32_t rule_id) { return rule_id == current_operating_index; }
         ));
       }
