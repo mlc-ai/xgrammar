@@ -364,6 +364,11 @@ class RepetitionNormalizer {
   static void Apply(Grammar* grammar);
 };
 
+class GrammarFSMHasher {
+ public:
+  static void Apply(Grammar* grammar);
+};
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_GRAMMAR_FUNCTOR_H_

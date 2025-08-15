@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <queue>
@@ -1661,6 +1662,73 @@ class RepetitionNormalizerImpl {
     std::sort((*grammar)->exact_lookahead.begin(), (*grammar)->exact_lookahead.end());
   }
 };
+class GrammarFSMHasherImpl {
+ private:
+  static void HashFsmWithGrammar(int fsm_index, Grammar* grammar) {
+    // TODO: Implement the hashing of the FSM with the given grammar.
+  }
+  static int32_t FindFsmCanBeHashed(
+      const std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
+      const std::vector<bool>& visited
+  ) {
+    for (size_t i = 0; i < ref_graph_from_referer_to_referee.size(); i++) {
+      if (visited[i]) {
+        continue;
+      }
+      if (ref_graph_from_referer_to_referee[i].empty()) {
+        return i;
+      }
+      if (ref_graph_from_referer_to_referee[i].size() == 1 &&
+          ref_graph_from_referer_to_referee[i][0] == static_cast<int32_t>(i)) {
+        // Self-recursion fsm.
+        return static_cast<int32_t>(i);
+      }
+    }
+    return -1;
+  }
+
+ public:
+  static void Apply(Grammar* grammar) {
+    std::vector<std::optional<uint64_t>> fsm_hashes((*grammar)->NumRules());
+    std::vector<bool> visited((*grammar)->NumRules(), false);
+
+    // Get the reference graph.
+    std::vector<std::vector<int32_t>> ref_graph_from_referee_to_referer =
+        RuleRefGraphFinder().Apply(*grammar);
+    std::vector<std::vector<int32_t>> ref_graph_from_referer_to_referee((*grammar)->NumRules());
+    for (int referee = 0; referee < static_cast<int>(ref_graph_from_referee_to_referer.size());
+         ++referee) {
+      for (int referer : ref_graph_from_referee_to_referer[referee]) {
+        ref_graph_from_referer_to_referee[referer].push_back(referee);
+      }
+    }
+
+    // Disable non-fsms.
+    for (size_t i = 0; i < grammar->ImplPtr()->per_rule_fsms.size(); i++) {
+      if (!grammar->ImplPtr()->per_rule_fsms[i].has_value()) {
+        visited[i] = true;
+      }
+    }
+
+    // Find the fsm which can be hashed: a terminal fsm, or a self-recursion fsm.
+    auto current_operating_index = FindFsmCanBeHashed(ref_graph_from_referer_to_referee, visited);
+    while (current_operating_index != -1) {
+      visited[current_operating_index] = true;
+
+      // Remove the fsm from the reference graph.
+      for (const auto& referer : ref_graph_from_referee_to_referer[current_operating_index]) {
+        ref_graph_from_referee_to_referer[referer].erase(std::find_if(
+            ref_graph_from_referee_to_referer[referer].begin(),
+            ref_graph_from_referee_to_referer[referer].end(),
+            [&](int32_t rule_id) { return rule_id == current_operating_index; }
+        ));
+      }
+
+      // Find if there are more fsms can be hashed.
+      current_operating_index = FindFsmCanBeHashed(ref_graph_from_referer_to_referee, visited);
+    }
+  }
+};
 
 /*************************** Forward grammar functors to their impl ***************************/
 
@@ -1742,5 +1810,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilder::TagDispatch(
 ) {
   return GrammarFSMBuilderImpl::TagDispatch(tag_dispatch);
 }
+
+void GrammarFSMHasher::Apply(Grammar* grammar) { GrammarFSMHasherImpl::Apply(grammar); }
 
 }  // namespace xgrammar

@@ -10,6 +10,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -247,6 +248,8 @@ class Grammar::Impl {
    */
   std::vector<std::optional<CompactFSMWithStartEnd>> per_rule_fsms;
 
+  std::vector<std::optional<uint64_t>> per_rule_fsm_hashes;
+
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
 
@@ -281,6 +284,8 @@ XGRAMMAR_MEMBER_TABLE(
     &Grammar::Impl::complete_fsm,
     "per_rule_fsms",
     &Grammar::Impl::per_rule_fsms,
+    "per_rule_fsm_hashes",
+    &Grammar::Impl::per_rule_fsm_hashes,
     "allow_empty_rule_ids",
     &Grammar::Impl::allow_empty_rule_ids,
     "exact_lookahead",
