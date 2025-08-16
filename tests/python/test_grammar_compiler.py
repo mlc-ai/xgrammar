@@ -6,6 +6,7 @@ import time
 from typing import Dict, List, Tuple
 
 import pytest
+import torch
 from pydantic import BaseModel
 from transformers import AutoTokenizer
 
@@ -327,6 +328,37 @@ def test_grammar_compiler_cache_limited():
     # Test clear_cache
     grammar_compiler.clear_cache()
     assert grammar_compiler.get_cache_size_bytes() == 0
+
+
+def test_regression_lookahead_already_completed():
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    xgr_compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1)
+    compiled_grammar = xgr_compiler.compile_regex(r"\/\*(\*+[^*\/]|[^*])*\*+\/")
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    def process_logit(input_ids: list, logit: torch.Tensor) -> torch.Tensor:
+        if input_ids:
+            last_token = input_ids[-1]
+            assert matcher.accept_token(last_token)
+        matcher.fill_next_token_bitmask(token_bitmask)
+        xgr.apply_token_bitmask_inplace(logit, token_bitmask)
+        return logit
+
+    def process_tokens(tokens: list):
+        for i in range(len(tokens)):
+            logit = torch.zeros((tokenizer_info.vocab_size,), dtype=torch.float)
+            visible_tokens = tokens[:i]
+            masked_logit = process_logit(visible_tokens, logit)
+            assert masked_logit[tokens[i]] != float(
+                "-inf"
+            ), f"token {i} ({tokens[i]}, {tokenizer.decode(tokens[i])!r}) is masked"
+
+    text = "/*  */"
+    tokens = tokenizer.encode(text)
+    process_tokens(tokens)
 
 
 if __name__ == "__main__":

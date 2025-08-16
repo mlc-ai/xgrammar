@@ -49,18 +49,17 @@ def test_serialize_grammar():
     grammar = construct_grammar()
     serialized = grammar.serialize_json()
     expected_json = {
-        "rules": [["rule1", 4, 9], ["root_rule", 8, -1]],
-        "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
+        "rules": [["rule1", 4, -1], ["root_rule", 8, -1]],
+        "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28],
         "grammar_expr_indptr": [
             # fmt: off
-            3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7,5,1,6
+            3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7
             # fmt: on
         ],
         "root_rule_id": 1,
         "complete_fsm": None,
         "per_rule_fsms": [],
         "allow_empty_rule_ids": [],
-        "exact_lookahead": [],
         "__VERSION__": "v4",
     }
     # The fsms are the same one, but the start state and end states are different.
@@ -81,7 +80,6 @@ def test_serialize_grammar_exception():
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
         "per_rule_fsms": [],
-        "exact_lookahead": [],
         "__VERSION__": "v4",
     }
 
@@ -195,11 +193,11 @@ def test_serialize_compiled_grammar():
 
     expected_json = {
         "grammar": {
-            "rules": [["rule1", 4, 6], ["root_rule", 10, -1]],
-            "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 27, 30, 34],
+            "rules": [["rule1", 4, -1], ["root_rule", 8, -1]],
+            "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28],
             "grammar_expr_indptr": [
                 # fmt: off
-                3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,0,1,97,5,1,5,4,1,0,0,1,97,5,2,7,8,6,1,9
+                3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7
                 # fmt: on
             ],
             "root_rule_id": 1,
@@ -215,7 +213,6 @@ def test_serialize_compiled_grammar():
                 [{'data_': [[0, 47, 3], [58, 127, 3], [192, 223, 1], [224, 239, 4], [240, 247, 5], [128, 191, 3], [-2, 0, 2], [128, 191, 1], [128, 191, 4], [-2, 0, 8], [97, 97, 6]],
                 'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [6], False]],
             # fmt: on
-            "exact_lookahead": [],
         },
         "tokenizer_metadata": {
             "vocab_type": 1,
