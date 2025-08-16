@@ -176,12 +176,13 @@ def test_repetition_range_min_only():
     before = """root ::= "a"{2,}
 """
     expected = """root ::= (((root_1_xgrammar_repetition_context_unbounded root_1_xgrammar_repetition_context root_1_xgrammar_repetition_context_1)))
-root_1_xgrammar_repetition_context_unbounded ::= ("" | ("a" root_1_xgrammar_repetition_context_unbounded)) (=(root_1_xgrammar_repetition_context root_1_xgrammar_repetition_context_1))
-root_1_xgrammar_repetition_context ::= (("a")) (=(root_1_xgrammar_repetition_context_1))
+root_1_xgrammar_repetition_context_unbounded ::= ("" | ("a" root_1_xgrammar_repetition_context_unbounded))
+root_1_xgrammar_repetition_context ::= (("a")) (=(root_1_xgrammar_repetition_context root_1_xgrammar_repetition_context_1))
 root_1_xgrammar_repetition_context_1 ::= (("a"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
+    print(after)
     assert after == expected
 
 
@@ -369,8 +370,8 @@ b_1_xgrammar_repetition_context_4 ::= ((a) | ("b"))
 c_1_xgrammar_repetition_context ::= ("" | ("c")) (=(c_1_xgrammar_repetition_context_1))
 c_1_xgrammar_repetition_context_1 ::= ("" | ("c"))
 d_1_xgrammar_repetition_context_unbounded ::= ("" | ("d" d_1_xgrammar_repetition_context_unbounded))
-e_1_xgrammar_repetition_context_unbounded ::= ("" | ("e" e_1_xgrammar_repetition_context_unbounded)) (=(e_1_xgrammar_repetition_context e_1_xgrammar_repetition_context_1))
-e_1_xgrammar_repetition_context ::= (("e")) (=(e_1_xgrammar_repetition_context_1))
+e_1_xgrammar_repetition_context_unbounded ::= ("" | ("e" e_1_xgrammar_repetition_context_unbounded))
+e_1_xgrammar_repetition_context ::= (("e")) (=(e_1_xgrammar_repetition_context e_1_xgrammar_repetition_context_1))
 e_1_xgrammar_repetition_context_1 ::= (("e"))
 f_1_xgrammar_repetition_context ::= (("f")) (=(f_1_xgrammar_repetition_context_1 f_1_xgrammar_repetition_context_2))
 f_1_xgrammar_repetition_context_1 ::= (("f")) (=(f_1_xgrammar_repetition_context_2))
@@ -381,6 +382,7 @@ f_1_xgrammar_repetition_context_2 ::= (("f"))
     grammar = GrammarFunctor.structure_normalizer(grammar)
     grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
+    print(after)
     assert after == expected
 
 
