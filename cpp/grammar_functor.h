@@ -364,6 +364,10 @@ class RepetitionNormalizer {
   static void Apply(Grammar* grammar);
 };
 
+/*!
+ * \brief Hash the fsms in the grammar,
+ * and get the new state ids of each fsm's states.
+ */
 class GrammarFSMHasher {
  public:
   static void Apply(Grammar* grammar);
