@@ -758,12 +758,22 @@ int32_t EBNFParser::HandleQuestionQuantifier(int32_t grammar_expr_id) {
 int32_t EBNFParser::HandleRepetitionRange(
     const int32_t grammar_expr_id, int64_t lower, int64_t upper
 ) {
+  bool is_unbounded = false;
+  std::vector<int32_t> elements;
   if (upper == -1) {
     // The repeation is unbounded, e.g. {2,}
-    upper = 0x7FFFFFFF;  // Use a large number to represent unbounded
+    is_unbounded = true;
+    const auto unbounded_repeat_name =
+        builder_.GetNewRuleName(cur_rule_name_) + "_xgrammar_repetition_context_unbounded";
+    const auto& unbounded_rule_id = builder_.AddEmptyRule(unbounded_repeat_name);
+    int recursion_sequence =
+        builder_.AddSequence({grammar_expr_id, builder_.AddRuleRef(unbounded_rule_id)});
+    int recursion_choice = builder_.AddChoices({builder_.AddEmptyStr(), recursion_sequence});
+    builder_.UpdateRuleBody(unbounded_rule_id, recursion_choice);
+    elements.push_back(builder_.AddRuleRef(unbounded_rule_id));
+    upper = lower;
   }
   const auto repeat_name = builder_.GetNewRuleName(cur_rule_name_) + "_xgrammar_repetition_context";
-  std::vector<int32_t> elements;
   int splited_count = lower >= 4 ? 4 : lower;
   int nullable_splited_count = 0;
   if (splited_count != 4) {
@@ -803,6 +813,10 @@ int32_t EBNFParser::HandleRepetitionRange(
     return builder_.AddEmptyStr();
   }
   for (int64_t i = 0; i < static_cast<int64_t>(elements.size() - 1); i++) {
+    if (i == 0 && is_unbounded) {
+      // The first element is the unbounded repetition, we don't need to add lookahead assertion
+      continue;
+    }
     lookahead_elements.erase(lookahead_elements.begin());
     builder_.UpdateLookaheadAssertion(
         builder_.GetGrammarExpr(elements[i])[0], builder_.AddSequence(lookahead_elements)
