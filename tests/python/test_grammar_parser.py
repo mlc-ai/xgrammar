@@ -175,10 +175,10 @@ def test_repetition_range_min_only():
     """Test repetition range with only min {n,}."""
     before = """root ::= "a"{2,}
 """
-    expected = """root ::= (((root_1_xgrammar_repetition_context_unbounded root_1_xgrammar_repetition_context root_1_xgrammar_repetition_context_1)))
+    expected = """root ::= (((root_1_xgrammar_repetition_context root_1_xgrammar_repetition_context_1 root_1_xgrammar_repetition_context_unbounded)))
 root_1_xgrammar_repetition_context_unbounded ::= ("" | ("a" root_1_xgrammar_repetition_context_unbounded))
-root_1_xgrammar_repetition_context ::= (("a")) (=(root_1_xgrammar_repetition_context root_1_xgrammar_repetition_context_1))
-root_1_xgrammar_repetition_context_1 ::= (("a"))
+root_1_xgrammar_repetition_context ::= (("a")) (=(root_1_xgrammar_repetition_context_1 root_1_xgrammar_repetition_context_unbounded))
+root_1_xgrammar_repetition_context_1 ::= (("a")) (=(root_1_xgrammar_repetition_context_unbounded))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
@@ -357,7 +357,7 @@ a ::= ((a_1_xgrammar_repetition_context a_1_xgrammar_repetition_context_1))
 b ::= ((b_1_xgrammar_repetition_context{0, 1} b_1_xgrammar_repetition_context_1 b_1_xgrammar_repetition_context_2 b_1_xgrammar_repetition_context_3 b_1_xgrammar_repetition_context_4))
 c ::= ((c_1_xgrammar_repetition_context c_1_xgrammar_repetition_context_1))
 d ::= ((d_1_xgrammar_repetition_context_unbounded))
-e ::= ((e_1_xgrammar_repetition_context_unbounded e_1_xgrammar_repetition_context e_1_xgrammar_repetition_context_1))
+e ::= ((e_1_xgrammar_repetition_context e_1_xgrammar_repetition_context_1 e_1_xgrammar_repetition_context_unbounded))
 f ::= ((f_1_xgrammar_repetition_context f_1_xgrammar_repetition_context_1 f_1_xgrammar_repetition_context_2))
 g ::= ("")
 a_1_xgrammar_repetition_context ::= ("" | ("a")) (=(a_1_xgrammar_repetition_context_1))
@@ -371,8 +371,8 @@ c_1_xgrammar_repetition_context ::= ("" | ("c")) (=(c_1_xgrammar_repetition_cont
 c_1_xgrammar_repetition_context_1 ::= ("" | ("c"))
 d_1_xgrammar_repetition_context_unbounded ::= ("" | ("d" d_1_xgrammar_repetition_context_unbounded))
 e_1_xgrammar_repetition_context_unbounded ::= ("" | ("e" e_1_xgrammar_repetition_context_unbounded))
-e_1_xgrammar_repetition_context ::= (("e")) (=(e_1_xgrammar_repetition_context e_1_xgrammar_repetition_context_1))
-e_1_xgrammar_repetition_context_1 ::= (("e"))
+e_1_xgrammar_repetition_context ::= (("e")) (=(e_1_xgrammar_repetition_context_1 e_1_xgrammar_repetition_context_unbounded))
+e_1_xgrammar_repetition_context_1 ::= (("e")) (=(e_1_xgrammar_repetition_context_unbounded))
 f_1_xgrammar_repetition_context ::= (("f")) (=(f_1_xgrammar_repetition_context_1 f_1_xgrammar_repetition_context_2))
 f_1_xgrammar_repetition_context_1 ::= (("f")) (=(f_1_xgrammar_repetition_context_2))
 f_1_xgrammar_repetition_context_2 ::= (("f"))

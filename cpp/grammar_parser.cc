@@ -759,20 +759,31 @@ int32_t EBNFParser::HandleRepetitionRange(
     const int32_t grammar_expr_id, int64_t lower, int64_t upper
 ) {
   bool is_unbounded = false;
-  std::vector<int32_t> elements;
+  int32_t new_element;
   if (upper == -1) {
     // The repeation is unbounded, e.g. {2,}
     is_unbounded = true;
-    const auto unbounded_repeat_name =
-        builder_.GetNewRuleName(cur_rule_name_) + "_xgrammar_repetition_context_unbounded";
-    const auto& unbounded_rule_id = builder_.AddEmptyRule(unbounded_repeat_name);
-    int recursion_sequence =
-        builder_.AddSequence({grammar_expr_id, builder_.AddRuleRef(unbounded_rule_id)});
-    int recursion_choice = builder_.AddChoices({builder_.AddEmptyStr(), recursion_sequence});
-    builder_.UpdateRuleBody(unbounded_rule_id, recursion_choice);
-    elements.push_back(builder_.AddRuleRef(unbounded_rule_id));
+    const auto& rule_expr = builder_.GetGrammarExpr(grammar_expr_id);
+    if (rule_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass) {
+      std::vector<GrammarBuilder::CharacterClassElement> character_ranges;
+      bool is_negative = rule_expr[0];
+      for (int i = 1; i < static_cast<int>(rule_expr.size()); i += 2) {
+        character_ranges.push_back({rule_expr[i], rule_expr[i + 1]});
+      }
+      new_element = builder_.AddCharacterClassStar(character_ranges, is_negative);
+    } else {
+      const auto unbounded_repeat_name =
+          builder_.GetNewRuleName(cur_rule_name_) + "_xgrammar_repetition_context_unbounded";
+      const auto& unbounded_rule_id = builder_.AddEmptyRule(unbounded_repeat_name);
+      int recursion_sequence =
+          builder_.AddSequence({grammar_expr_id, builder_.AddRuleRef(unbounded_rule_id)});
+      int recursion_choice = builder_.AddChoices({builder_.AddEmptyStr(), recursion_sequence});
+      builder_.UpdateRuleBody(unbounded_rule_id, recursion_choice);
+      new_element = builder_.AddRuleRef(unbounded_rule_id);
+    }
     upper = lower;
   }
+  std::vector<int32_t> elements;
   const auto repeat_name = builder_.GetNewRuleName(cur_rule_name_) + "_xgrammar_repetition_context";
   int splited_count = lower >= 4 ? 4 : lower;
   int nullable_splited_count = 0;
@@ -806,17 +817,15 @@ int32_t EBNFParser::HandleRepetitionRange(
     auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
     elements.push_back(builder_.AddRuleRef(new_rule_id));
   }
-
+  if (is_unbounded) {
+    elements.push_back(new_element);
+  }
   // Add the lookahead elements
   std::vector<int32_t> lookahead_elements = elements;
   if (elements.empty()) {
     return builder_.AddEmptyStr();
   }
   for (int64_t i = 0; i < static_cast<int64_t>(elements.size() - 1); i++) {
-    if (i == 0 && is_unbounded) {
-      // The first element is the unbounded repetition, we don't need to add lookahead assertion
-      continue;
-    }
     lookahead_elements.erase(lookahead_elements.begin());
     builder_.UpdateLookaheadAssertion(
         builder_.GetGrammarExpr(elements[i])[0], builder_.AddSequence(lookahead_elements)
