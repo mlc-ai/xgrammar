@@ -22,6 +22,8 @@ TEST(XGrammarFSMHasherTest, TestTerminalfsm) {
   GrammarFSMHasher::Apply(&grammar[0]);
   GrammarFSMHasher::Apply(&grammar[1]);
   EXPECT_EQ(grammar[0]->per_rule_fsm_hashes[0], grammar[1]->per_rule_fsm_hashes[0]);
+  EXPECT_EQ(grammar[0]->per_rule_fsm_new_state_ids[0]->size(), 2);
+  EXPECT_EQ(grammar[0]->per_rule_fsm_new_state_ids[0], grammar[1]->per_rule_fsm_new_state_ids[0]);
 }
 
 TEST(XGrammarFSMHasherTest, TestNonTerminalAndRecursionFsm) {

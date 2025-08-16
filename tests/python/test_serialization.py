@@ -60,6 +60,7 @@ def test_serialize_grammar():
         "complete_fsm": None,
         "per_rule_fsms": [],
         "per_rule_fsm_hashes": [],
+        "per_rule_fsm_new_state_ids": [],
         "allow_empty_rule_ids": [],
         "exact_lookahead": [],
         "__VERSION__": "v5",
@@ -82,6 +83,8 @@ def test_serialize_grammar_exception():
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
         "per_rule_fsms": [],
+        "per_rule_fsm_hashes": [],
+        "per_rule_fsm_new_state_ids": [],
         "exact_lookahead": [],
         "__VERSION__": "v5",
     }
@@ -217,6 +220,7 @@ def test_serialize_compiled_grammar():
                 'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [6], False]],
             # fmt: on
             "per_rule_fsm_hashes": [],
+            "per_rule_fsm_new_state_ids": [],
             "exact_lookahead": [],
         },
         "tokenizer_metadata": {

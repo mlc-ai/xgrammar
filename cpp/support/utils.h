@@ -37,6 +37,20 @@ inline uint32_t HashCombine(Args... args) {
   return seed;
 }
 
+/*!
+ * \brief Find the hash sum of several uint64_t args.
+ */
+inline void HashCombineBinary64Bits(uint64_t& seed, uint64_t value) {
+  seed ^= value + 0xc6a4a7935bd1e995 + (seed << 6) + (seed >> 2);
+}
+
+template <typename... Args>
+inline uint64_t HashCombine64Bits(Args... args) {
+  uint64_t seed = 0;
+  (..., HashCombineBinary64Bits(seed, args));
+  return seed;
+}
+
 // Sometimes GCC fails to detect some branches will not return, such as when we use LOG(FATAL)
 // to raise an error. This macro manually mark them as unreachable to avoid warnings.
 #ifdef __GNUC__
