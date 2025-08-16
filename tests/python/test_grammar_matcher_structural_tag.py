@@ -97,7 +97,6 @@ def test_structural_tag():
     triggers = ["<function=f", "<function=g"]
 
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
-    print(grammar)
     assert str(grammar) == expected_grammar_test_structural_tag
 
     accepted_inputs = [
