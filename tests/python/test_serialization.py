@@ -60,7 +60,6 @@ def test_serialize_grammar():
         "complete_fsm": None,
         "per_rule_fsms": [],
         "allow_empty_rule_ids": [],
-        "exact_lookahead": [],
         "__VERSION__": "v4",
     }
     # The fsms are the same one, but the start state and end states are different.
@@ -81,7 +80,6 @@ def test_serialize_grammar_exception():
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
         "per_rule_fsms": [],
-        "exact_lookahead": [],
         "__VERSION__": "v4",
     }
 
@@ -215,7 +213,6 @@ def test_serialize_compiled_grammar():
                 [{'data_': [[0, 47, 3], [58, 127, 3], [192, 223, 1], [224, 239, 4], [240, 247, 5], [128, 191, 3], [-2, 0, 2], [128, 191, 1], [128, 191, 4], [-2, 0, 8], [97, 97, 6]],
                 'indptr_': [0, 5, 6, 6, 7, 8, 9, 9, 10, 11]}, 7, [6], False]],
             # fmt: on
-            "exact_lookahead": [],
         },
         "tokenizer_metadata": {
             "vocab_type": 1,
