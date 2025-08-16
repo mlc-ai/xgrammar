@@ -1675,7 +1675,7 @@ class GrammarFSMHasherImpl {
   static const int16_t kSimpleCycleFlag = -0x400;
 
  private:
-  static int32_t HashFsmWithGrammar(
+  static uint64_t HashFsmWithGrammar(
       int fsm_index, Grammar* grammar, const std::vector<std::vector<FSMEdge>>& sorted_edges
   );
 
@@ -1905,10 +1905,10 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
   }
 }
 
-int32_t GrammarFSMHasherImpl::HashFsmWithGrammar(
+uint64_t GrammarFSMHasherImpl::HashFsmWithGrammar(
     int fsm_index, Grammar* grammar, const std::vector<std::vector<FSMEdge>>& sorted_edges
 ) {
-  int32_t hash_result = 0;
+  uint64_t hash_result = 0;
   XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar)->NumRules())
       << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar)->NumRules();
   const auto& fsm = grammar->ImplPtr()->per_rule_fsms[fsm_index];
