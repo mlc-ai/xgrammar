@@ -182,7 +182,6 @@ root_1_xgrammar_repetition_context_1 ::= (("a"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
-    print(after)
     assert after == expected
 
 
@@ -382,7 +381,6 @@ f_1_xgrammar_repetition_context_2 ::= (("f"))
     grammar = GrammarFunctor.structure_normalizer(grammar)
     grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
-    print(after)
     assert after == expected
 
 
