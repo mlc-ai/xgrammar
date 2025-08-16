@@ -1669,83 +1669,63 @@ class RepetitionNormalizerImpl {
 };
 class GrammarFSMHasherImpl {
  public:
-  static void Apply(Grammar* grammar);
+  void Apply(Grammar* grammar);
+
   static const int16_t kEndStateFlag = -0x200;
   static const int16_t kSelfRecursionFlag = -0x300;
   static const int16_t kSimpleCycleFlag = -0x400;
 
  private:
+  Grammar* grammar_;
+  std::vector<bool> visited_;
+  std::vector<std::vector<int32_t>> ref_graph_from_referrer_to_referee_;
+  std::vector<std::vector<int32_t>> ref_graph_from_referee_to_referrer_;
+  std::vector<std::vector<FSMEdge>> sorted_edges_;
+
   /*!
    * \brief Get the hash value of a fsm, with a given grammar.
    */
-  static uint64_t HashFsmWithGrammar(
-      int fsm_index, Grammar* grammar, const std::vector<std::vector<FSMEdge>>& sorted_edges
-  );
+  uint64_t HashFsm(int fsm_index);
 
   /*!
    * \brief Find a simple cycle in the reference graph, And hash the
    * fsms in the simple cycle.
    */
-  static bool FindSimpleCycle(
-      std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
-      std::vector<bool>& visited,
-      std::vector<std::vector<int32_t>>& ref_graph_from_referee_to_referer,
-      Grammar* grammar,
-      const std::vector<std::vector<FSMEdge>>& sorted_edges
-  );
+  bool FindSimpleCycle();
 
   /*!
    * \brief Hash the fsms in the simple cycle.
    */
-  static void HashSimpleCycle(
-      std::vector<int32_t> simple_cycle,
-      std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
-      std::vector<bool>& visited,
-      std::vector<std::vector<int32_t>>& ref_graph_from_referee_to_referer,
-      Grammar* grammar,
-      const std::vector<std::vector<FSMEdge>>& sorted_edges
-  );
+  void HashSimpleCycle(const std::vector<int32_t>& simple_cycle);
 
   /*!
    * \brief Find a simple fsm that can be hashed. If it can't, it will
    * call FindSimpleCycle() and try to simplify the graph, and then try to
    * find a simple fsm again.
    */
-  static int32_t FindSimpleFsmCanBeHashed(
-      std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
-      std::vector<bool>& visited,
-      std::vector<std::vector<int32_t>>& ref_graph_from_referee_to_referer,
-      Grammar* grammar,
-      const std::vector<std::vector<FSMEdge>>& sorted_edges
-  );
+  int32_t FindSimpleFsmCanBeHashed();
 };
 
-bool GrammarFSMHasherImpl::FindSimpleCycle(
-    std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
-    std::vector<bool>& visited,
-    std::vector<std::vector<int32_t>>& ref_graph_from_referee_to_referer,
-    Grammar* grammar,
-    const std::vector<std::vector<FSMEdge>>& sorted_edges
-) {
+bool GrammarFSMHasherImpl::FindSimpleCycle() {
   // Try to find a simple cycle.
-  std::vector<bool> not_simple_cycle = visited;
-  for (size_t i = 0; i < ref_graph_from_referee_to_referer.size(); i++) {
+  std::vector<bool> not_simple_cycle = visited_;
+  for (size_t i = 0; i < ref_graph_from_referee_to_referrer_.size(); i++) {
     if (not_simple_cycle[i]) {
       continue;
     }
     // Not a simple cycle if it has more than one referee.
     std::stack<int32_t> dfs_stack;
     std::vector<int32_t> simple_cycle;
-    auto in_stack = std::vector<bool>(ref_graph_from_referee_to_referer.size(), false);
+    auto in_stack = std::vector<bool>(ref_graph_from_referee_to_referrer_.size(), false);
     dfs_stack.push(static_cast<int32_t>(i));
     int32_t current_fsm_index = i;
     in_stack[current_fsm_index] = true;
-    while ((ref_graph_from_referer_to_referee[current_fsm_index].size() == 1) &&
+    while ((ref_graph_from_referrer_to_referee_[current_fsm_index].size() == 1) &&
            !not_simple_cycle[current_fsm_index]) {
-      XGRAMMAR_CHECK(current_fsm_index != ref_graph_from_referer_to_referee[current_fsm_index][0])
+      XGRAMMAR_CHECK(current_fsm_index != ref_graph_from_referrer_to_referee_[current_fsm_index][0])
           << "Self-recursion cycle found in the reference graph, which is not allowed.";
       not_simple_cycle[current_fsm_index] = true;
-      current_fsm_index = ref_graph_from_referer_to_referee[current_fsm_index][0];
+      current_fsm_index = ref_graph_from_referrer_to_referee_[current_fsm_index][0];
       if (in_stack[current_fsm_index]) {
         simple_cycle.push_back(current_fsm_index);
         while (dfs_stack.top() != current_fsm_index) {
@@ -1760,38 +1740,24 @@ bool GrammarFSMHasherImpl::FindSimpleCycle(
       }
     }
     if (!simple_cycle.empty()) {
-      HashSimpleCycle(
-          simple_cycle,
-          ref_graph_from_referer_to_referee,
-          visited,
-          ref_graph_from_referee_to_referer,
-          grammar,
-          sorted_edges
-      );
+      HashSimpleCycle(simple_cycle);
       return true;
     }
   }
   return false;
 }
 
-void GrammarFSMHasherImpl::HashSimpleCycle(
-    std::vector<int32_t> simple_cycle,
-    std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
-    std::vector<bool>& visited,
-    std::vector<std::vector<int32_t>>& ref_graph_from_referee_to_referer,
-    Grammar* grammar,
-    const std::vector<std::vector<FSMEdge>>& sorted_edges
-) {
+void GrammarFSMHasherImpl::HashSimpleCycle(const std::vector<int32_t>& simple_cycle) {
   // Initialize the cycle hash.
   for (const auto& cycle_id : simple_cycle) {
-    visited[cycle_id] = true;
-    grammar->ImplPtr()->per_rule_fsm_hashes[cycle_id] = kSimpleCycleFlag;
+    visited_[cycle_id] = true;
+    grammar_->ImplPtr()->per_rule_fsm_hashes[cycle_id] = kSimpleCycleFlag;
   }
 
   std::vector<int32_t> local_cycle_hash;
   local_cycle_hash.reserve(simple_cycle.size());
   for (const auto& cycle_id : simple_cycle) {
-    local_cycle_hash.push_back(HashFsmWithGrammar(cycle_id, grammar, sorted_edges));
+    local_cycle_hash.push_back(HashFsm(cycle_id));
   }
   for (int i = 1; i < static_cast<int>(local_cycle_hash.size()); i++) {
     std::vector<int32_t> local_cycle_hash_copy = local_cycle_hash;
@@ -1802,131 +1768,107 @@ void GrammarFSMHasherImpl::HashSimpleCycle(
     }
   }
   for (int i = 0; i < static_cast<int>(simple_cycle.size()); i++) {
-    grammar->ImplPtr()->per_rule_fsm_hashes[simple_cycle[i]] = local_cycle_hash[i];
-    for (const auto& referer : ref_graph_from_referee_to_referer[simple_cycle[i]]) {
-      ref_graph_from_referer_to_referee[referer].erase(std::find_if(
-          ref_graph_from_referer_to_referee[referer].begin(),
-          ref_graph_from_referer_to_referee[referer].end(),
+    grammar_->ImplPtr()->per_rule_fsm_hashes[simple_cycle[i]] = local_cycle_hash[i];
+    for (const auto& referer : ref_graph_from_referee_to_referrer_[simple_cycle[i]]) {
+      ref_graph_from_referrer_to_referee_[referer].erase(std::find_if(
+          ref_graph_from_referrer_to_referee_[referer].begin(),
+          ref_graph_from_referrer_to_referee_[referer].end(),
           [&](int32_t rule_id) { return rule_id == simple_cycle[i]; }
       ));
     }
   }
 }
 
-int32_t GrammarFSMHasherImpl::FindSimpleFsmCanBeHashed(
-    std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
-    std::vector<bool>& visited,
-    std::vector<std::vector<int32_t>>& ref_graph_from_referee_to_referer,
-    Grammar* grammar,
-    const std::vector<std::vector<FSMEdge>>& sorted_edges
-) {
+int32_t GrammarFSMHasherImpl::FindSimpleFsmCanBeHashed() {
   bool possible_to_find = true;
   while (possible_to_find) {
     possible_to_find = false;
-    for (size_t i = 0; i < ref_graph_from_referer_to_referee.size(); i++) {
-      if (visited[i]) {
+    for (size_t i = 0; i < ref_graph_from_referrer_to_referee_.size(); i++) {
+      if (visited_[i]) {
         continue;
       }
-      if (ref_graph_from_referer_to_referee[i].empty()) {
+      if (ref_graph_from_referrer_to_referee_[i].empty()) {
         return i;
       }
-      if (ref_graph_from_referer_to_referee[i].size() == 1 &&
-          ref_graph_from_referer_to_referee[i][0] == static_cast<int32_t>(i)) {
+      if (ref_graph_from_referrer_to_referee_[i].size() == 1 &&
+          ref_graph_from_referrer_to_referee_[i][0] == static_cast<int32_t>(i)) {
         // Self-recursion fsm.
         return static_cast<int32_t>(i);
       }
     }
     // Try to find a simple cycle. We must ensure there are not self-recursion cycles.
-    possible_to_find = FindSimpleCycle(
-        ref_graph_from_referer_to_referee,
-        visited,
-        ref_graph_from_referee_to_referer,
-        grammar,
-        sorted_edges
-    );
+    possible_to_find = FindSimpleCycle();
   }
   return -1;
 }
 
 void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
+  grammar_ = grammar;
   grammar->ImplPtr()->per_rule_fsm_hashes =
       std::vector<std::optional<uint64_t>>((*grammar)->NumRules());
   grammar->ImplPtr()->per_rule_fsm_new_state_ids =
       std::vector<std::optional<std::vector<std::pair<int32_t, int32_t>>>>((*grammar)->NumRules());
-  std::vector<bool> visited((*grammar)->NumRules(), false);
+  ref_graph_from_referee_to_referrer_.clear();
+  ref_graph_from_referrer_to_referee_.clear();
+  sorted_edges_.clear();
+  visited_ = std::vector<bool>((*grammar)->NumRules(), false);
 
   // Get the reference graph.
-  std::vector<std::vector<int32_t>> ref_graph_from_referee_to_referer =
-      RuleRefGraphFinder().Apply(*grammar);
-  std::vector<std::vector<int32_t>> ref_graph_from_referer_to_referee((*grammar)->NumRules());
-  for (int referee = 0; referee < static_cast<int>(ref_graph_from_referee_to_referer.size());
+  ref_graph_from_referee_to_referrer_ = RuleRefGraphFinder().Apply(*grammar);
+  ref_graph_from_referrer_to_referee_ = std::vector<std::vector<int32_t>>((*grammar)->NumRules());
+  for (int referee = 0; referee < static_cast<int>(ref_graph_from_referee_to_referrer_.size());
        ++referee) {
-    for (int referer : ref_graph_from_referee_to_referer[referee]) {
-      ref_graph_from_referer_to_referee[referer].push_back(referee);
+    for (int referer : ref_graph_from_referee_to_referrer_[referee]) {
+      ref_graph_from_referrer_to_referee_[referer].push_back(referee);
     }
   }
 
   // Sort the edges.
-  std::vector<std::vector<FSMEdge>> sorted_edges;
   const auto& complete_fsm = grammar->ImplPtr()->complete_fsm;
-  sorted_edges.reserve(complete_fsm.NumStates());
+  sorted_edges_.reserve(complete_fsm.NumStates());
   for (int i = 0; i < complete_fsm.NumStates(); i++) {
     const auto& edges = complete_fsm.GetEdges(i);
-    sorted_edges.emplace_back();
-    sorted_edges.back().reserve(edges.size());
+    sorted_edges_.emplace_back();
+    sorted_edges_.back().reserve(edges.size());
     for (const auto& edge : edges) {
-      sorted_edges.back().emplace_back(edge);
+      sorted_edges_.back().emplace_back(edge);
     }
-    std::sort(sorted_edges.back().begin(), sorted_edges.back().end());
+    std::sort(sorted_edges_.back().begin(), sorted_edges_.back().end());
   }
 
   // Disable non-fsms.
   for (size_t i = 0; i < grammar->ImplPtr()->per_rule_fsms.size(); i++) {
     if (!grammar->ImplPtr()->per_rule_fsms[i].has_value()) {
-      visited[i] = true;
+      visited_[i] = true;
     }
   }
 
   // Find the fsm which can be hashed: a terminal fsm, or a self-recursion fsm.
-  auto current_operating_index = FindSimpleFsmCanBeHashed(
-      ref_graph_from_referer_to_referee,
-      visited,
-      ref_graph_from_referee_to_referer,
-      grammar,
-      sorted_edges
-  );
+  auto current_operating_index = FindSimpleFsmCanBeHashed();
   while (current_operating_index != -1) {
-    visited[current_operating_index] = true;
+    visited_[current_operating_index] = true;
 
     grammar->ImplPtr()->per_rule_fsm_hashes[current_operating_index] =
-        HashFsmWithGrammar(current_operating_index, grammar, sorted_edges);
+        HashFsm(current_operating_index);
     // Remove the fsm from the reference graph.
-    for (const auto& referer : ref_graph_from_referee_to_referer[current_operating_index]) {
-      ref_graph_from_referer_to_referee[referer].erase(std::find_if(
-          ref_graph_from_referer_to_referee[referer].begin(),
-          ref_graph_from_referer_to_referee[referer].end(),
+    for (const auto& referer : ref_graph_from_referee_to_referrer_[current_operating_index]) {
+      ref_graph_from_referrer_to_referee_[referer].erase(std::find_if(
+          ref_graph_from_referrer_to_referee_[referer].begin(),
+          ref_graph_from_referrer_to_referee_[referer].end(),
           [&](int32_t rule_id) { return rule_id == current_operating_index; }
       ));
     }
 
     // Find if there are more fsms can be hashed.
-    current_operating_index = FindSimpleFsmCanBeHashed(
-        ref_graph_from_referer_to_referee,
-        visited,
-        ref_graph_from_referee_to_referer,
-        grammar,
-        sorted_edges
-    );
+    current_operating_index = FindSimpleFsmCanBeHashed();
   }
 }
 
-uint64_t GrammarFSMHasherImpl::HashFsmWithGrammar(
-    int fsm_index, Grammar* grammar, const std::vector<std::vector<FSMEdge>>& sorted_edges
-) {
+uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
   uint64_t hash_result = 0;
-  XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar)->NumRules())
-      << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar)->NumRules();
-  const auto& fsm = grammar->ImplPtr()->per_rule_fsms[fsm_index];
+  XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar_)->NumRules())
+      << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar_)->NumRules();
+  const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index];
   XGRAMMAR_DCHECK(fsm.has_value());
   std::map<int32_t, int32_t> original_state_id_to_new_id;
   original_state_id_to_new_id[fsm->GetStart()] = 0;
@@ -1951,7 +1893,7 @@ uint64_t GrammarFSMHasherImpl::HashFsmWithGrammar(
 
     // First, check the edges which are rule references. To keep consistent, we need to sort them
     // with hashes.
-    for (const auto& edge : sorted_edges[current_old_state_id]) {
+    for (const auto& edge : sorted_edges_[current_old_state_id]) {
       if (!edge.IsRuleRef()) {
         continue;
       }
@@ -1959,9 +1901,9 @@ uint64_t GrammarFSMHasherImpl::HashFsmWithGrammar(
         hash_and_target.insert({kSelfRecursionFlag, edge.target});
         continue;
       }
-      XGRAMMAR_CHECK(grammar->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].has_value());
+      XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].has_value());
       hash_and_target.insert(
-          {grammar->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].value(), edge.target}
+          {grammar_->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].value(), edge.target}
       );
     }
 
@@ -1977,7 +1919,7 @@ uint64_t GrammarFSMHasherImpl::HashFsmWithGrammar(
     }
 
     // Then, check the edges which are not rule references.
-    for (const auto& edge : sorted_edges[current_old_state_id]) {
+    for (const auto& edge : sorted_edges_[current_old_state_id]) {
       // Visit a new node.
       if (original_state_id_to_new_id.find(edge.target) == original_state_id_to_new_id.end()) {
         original_state_id_to_new_id[edge.target] =
@@ -1997,7 +1939,7 @@ uint64_t GrammarFSMHasherImpl::HashFsmWithGrammar(
       );
     }
   }
-  auto& id_mapping = grammar->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index];
+  auto& id_mapping = grammar_->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index];
   id_mapping = std::vector<std::pair<int32_t, int32_t>>(
       original_state_id_to_new_id.begin(), original_state_id_to_new_id.end()
   );
@@ -2085,6 +2027,6 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilder::TagDispatch(
   return GrammarFSMBuilderImpl::TagDispatch(tag_dispatch);
 }
 
-void GrammarFSMHasher::Apply(Grammar* grammar) { GrammarFSMHasherImpl::Apply(grammar); }
+void GrammarFSMHasher::Apply(Grammar* grammar) { GrammarFSMHasherImpl().Apply(grammar); }
 
 }  // namespace xgrammar
