@@ -1675,10 +1675,17 @@ class GrammarFSMHasherImpl {
   static const int16_t kSimpleCycleFlag = -0x400;
 
  private:
+  /*!
+   * \brief Get the hash value of a fsm, with a given grammar.
+   */
   static uint64_t HashFsmWithGrammar(
       int fsm_index, Grammar* grammar, const std::vector<std::vector<FSMEdge>>& sorted_edges
   );
 
+  /*!
+   * \brief Find a simple cycle in the reference graph, And hash the
+   * fsms in the simple cycle.
+   */
   static bool FindSimpleCycle(
       std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
       std::vector<bool>& visited,
@@ -1687,6 +1694,9 @@ class GrammarFSMHasherImpl {
       const std::vector<std::vector<FSMEdge>>& sorted_edges
   );
 
+  /*!
+   * \brief Hash the fsms in the simple cycle.
+   */
   static void HashSimpleCycle(
       std::vector<int32_t> simple_cycle,
       std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
@@ -1696,6 +1706,11 @@ class GrammarFSMHasherImpl {
       const std::vector<std::vector<FSMEdge>>& sorted_edges
   );
 
+  /*!
+   * \brief Find a simple fsm that can be hashed. If it can't, it will
+   * call FindSimpleCycle() and try to simplify the graph, and then try to
+   * find a simple fsm again.
+   */
   static int32_t FindSimpleFsmCanBeHashed(
       std::vector<std::vector<int32_t>>& ref_graph_from_referer_to_referee,
       std::vector<bool>& visited,
