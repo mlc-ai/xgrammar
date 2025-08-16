@@ -129,6 +129,11 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
     if (!can_reach_end_stack[i]) {
       continue;
     }
+    if (IsCompleted()) {
+      // If the lookahead assertion is already completed, we can accept the token.
+      PopLastStates(1);
+      return {true, true};
+    }
     int last_accept_pos = i - 1;
     for (int pos = i; pos < token_len; ++pos) {
       if (!Advance(token[pos])) {
@@ -414,10 +419,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
           // 1. If the current rule is the root rule (is_root_rule=true), there are no
           // uncertain tokens. Not accepted tokens are just rejected.
           // 2. If a token cannot pass the lookahead assertion, it is rejected.
-          if ((!lookahead_result_pair.second) &&
-              (std::binary_search(
-                  grammar_->exact_lookahead.begin(), grammar_->exact_lookahead.end(), init_rule_id
-              ))) {
+          if ((!lookahead_result_pair.second)) {
             tmp_accepted_indices_.push_back(i);
           } else {
             tmp_uncertain_indices_.push_back(i);
