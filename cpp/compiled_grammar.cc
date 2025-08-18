@@ -84,7 +84,7 @@ std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const 
       if (uncertain_indices_set.count(i)) {
         continue;
       }
-      if (accepted_bitset[i]) {
+      if (accepted_bitset[sorted_decoded_vocab[i].first]) {
         accepted_indices.push_back(i);
       } else {
         rejected_indices.push_back(i);
