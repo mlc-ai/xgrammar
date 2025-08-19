@@ -122,17 +122,17 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
       ParserState(/*rule_id*/ -1, lookahead_assertion_id, 0, ParserState::kNoPrevInputPos, 0);
   PushStateAndExpand(lookahead_state);
   int token_len = token.size();
+  if (IsCompleted()) {
+    // If the lookahead assertion is already completed, we can accept the token.
+    PopLastStates(1);
+    return {true, true};
+  }
 
   // Find all positions that can come to and end. Then check if the suffix from that position
   // can be accepted by the lookahead assertion.
   for (int i = static_cast<int>(can_reach_end_stack.size()) - 1; i >= 0; --i) {
     if (!can_reach_end_stack[i]) {
       continue;
-    }
-    if (IsCompleted()) {
-      // If the lookahead assertion is already completed, we can accept the token.
-      PopLastStates(1);
-      return {true, true};
     }
     int last_accept_pos = i - 1;
     for (int pos = i; pos < token_len; ++pos) {
