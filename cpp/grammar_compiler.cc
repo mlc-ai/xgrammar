@@ -327,6 +327,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
   int prev_matched_size = 0;
   int last_rejected_range = 0;
+  bool is_exact_lookahead = std::binary_search(
+      grammar_->exact_lookahead.begin(), grammar_->exact_lookahead.end(), init_rule_id
+  );
   const std::string* prev_token = nullptr;
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
@@ -419,14 +422,17 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
           // 1. If the current rule is the root rule (is_root_rule=true), there are no
           // uncertain tokens. Not accepted tokens are just rejected.
           // 2. If a token cannot pass the lookahead assertion, it is rejected.
-          // TODO(Linzhang): enhance lookahead, and accept some tokens in the future.
-          tmp_uncertain_indices_.push_back(i);
-          // On the subtree, they are all uncertain tokens.
-          if (lookahead_result_pair.second) {
-            for (int j = i + 1; j < subtree_nodes_range[i]; ++j) {
-              tmp_uncertain_indices_.push_back(j);
+          if ((!lookahead_result_pair.second) && is_exact_lookahead) {
+            tmp_accepted_indices_.push_back(i);
+          } else {
+            tmp_uncertain_indices_.push_back(i);
+            // On the subtree, they are all uncertain tokens.
+            if (lookahead_result_pair.second) {
+              for (int j = i + 1; j < subtree_nodes_range[i]; ++j) {
+                tmp_uncertain_indices_.push_back(j);
+              }
+              i = subtree_nodes_range[i] - 1;  // Skip the subtree nodes.
             }
-            i = subtree_nodes_range[i] - 1;  // Skip the subtree nodes.
           }
         } else {
           tmp_rejected_indices_.push_back(i);
