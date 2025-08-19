@@ -419,17 +419,13 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
           // 1. If the current rule is the root rule (is_root_rule=true), there are no
           // uncertain tokens. Not accepted tokens are just rejected.
           // 2. If a token cannot pass the lookahead assertion, it is rejected.
-          if ((!lookahead_result_pair.second)) {
-            tmp_accepted_indices_.push_back(i);
-          } else {
-            tmp_uncertain_indices_.push_back(i);
-            // On the subtree, they are all uncertain tokens.
-            if (lookahead_result_pair.second) {
-              for (int j = i + 1; j < subtree_nodes_range[i]; ++j) {
-                tmp_uncertain_indices_.push_back(j);
-              }
-              i = subtree_nodes_range[i] - 1;  // Skip the subtree nodes.
+          tmp_uncertain_indices_.push_back(i);
+          // On the subtree, they are all uncertain tokens.
+          if (lookahead_result_pair.second) {
+            for (int j = i + 1; j < subtree_nodes_range[i]; ++j) {
+              tmp_uncertain_indices_.push_back(j);
             }
+            i = subtree_nodes_range[i] - 1;  // Skip the subtree nodes.
           }
         } else {
           tmp_rejected_indices_.push_back(i);
