@@ -23,9 +23,10 @@ struct StructuralTagItem {
   std::string begin;
   std::string schema;
   std::string end;
+  std::string type;
 
   bool operator==(const StructuralTagItem& other) const {
-    return begin == other.begin && schema == other.schema && end == other.end;
+    return begin == other.begin && schema == other.schema && end == other.end && type == other.type;
   }
 };
 

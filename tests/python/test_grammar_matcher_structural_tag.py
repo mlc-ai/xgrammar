@@ -261,5 +261,86 @@ def test_utf8_structural_tag_begin_end():
     _ = compiler.compile_structural_tag(structures, triggers)
 
 
+def test_structural_tag_with_other_schema_types():
+    tags = [
+        xgr.StructuralTagItem(
+            begin="<function=f>", schema="[0-9]{6,10}", end="</function>", schema_type="regex"
+        ),
+        xgr.StructuralTagItem(
+            begin="<function=g>",
+            schema="root ::= [a-z]{1,100}",
+            end="</function>",
+            schema_type="ebnf",
+        ),
+    ]
+    triggers = ["<function="]
+
+    # Set up tokenizer
+    tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+
+    # Compile grammar and create matcher
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    time_start = time.monotonic_ns()
+    compiled_grammar = compiler.compile_structural_tag(tags, triggers)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    time_end = time.monotonic_ns()
+    print(f"Time to compile grammar and init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    # Test input string
+    accepted_input = "hhhh<function=f>123456</function>" "haha<function=g>abcdef</function>123"
+    dont_apply_mask_indices = [
+        # fmt: off
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
+        44, 45, 66, 67, 68, 69
+        # fmt: on
+    ]
+    input_bytes = accepted_input.encode("utf-8")
+
+    # Set up token bitmask for validation
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    # Process input character by character
+    for i, c in enumerate(input_bytes):
+        # 1. Test token bitmask generation
+        time_start = time.monotonic_ns()
+        need_apply = matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+        assert need_apply == (i not in dont_apply_mask_indices)
+
+        # 2. Verify token bitmask correctness
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
+        # This checking does not support non-ascii characters for now
+        token_id_for_next_char = tokenizer.convert_tokens_to_ids(chr(c))
+        assert token_id_for_next_char not in rejected_token_ids
+
+        # 3. Test character acceptance
+        print("Accepting char:", bytes([c]))
+        time_start = time.monotonic_ns()
+        assert matcher.accept_string(bytes([c]))
+        time_end = time.monotonic_ns()
+        print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
+
+    # Final verification - check that EOS token is allowed
+    time_start = time.monotonic_ns()
+    need_apply = matcher.fill_next_token_bitmask(token_bitmask)
+    time_end = time.monotonic_ns()
+    assert need_apply == (len(input_bytes) not in dont_apply_mask_indices)
+    print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    assert tokenizer.eos_token_id not in rejected_token_ids
+
+    assert _is_grammar_accept_string(compiled_grammar.grammar, "function=is not a call")
+    assert _is_grammar_accept_string(compiled_grammar.grammar, "<function=f>123948</function>")
+    assert _is_grammar_accept_string(compiled_grammar.grammar, "<function=g>abcde</function>")
+    assert not _is_grammar_accept_string(compiled_grammar.grammar, "<function=f>abcdef</function>")
+    assert not _is_grammar_accept_string(compiled_grammar.grammar, "<function=g>12345</function>")
+    assert not _is_grammar_accept_string(compiled_grammar.grammar, "<function=fps")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

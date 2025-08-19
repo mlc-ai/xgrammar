@@ -122,14 +122,14 @@ std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_gramma
 }
 
 Grammar Grammar_FromStructuralTag(
-    const std::vector<std::tuple<std::string, std::string, std::string>>& tags,
+    const std::vector<std::tuple<std::string, std::string, std::string, std::string>>& tags,
     const std::vector<std::string>& triggers
 ) {
   std::vector<StructuralTagItem> tags_objects;
   tags_objects.reserve(tags.size());
   for (const auto& tag : tags) {
     tags_objects.emplace_back(
-        StructuralTagItem{std::get<0>(tag), std::get<1>(tag), std::get<2>(tag)}
+        StructuralTagItem{std::get<0>(tag), std::get<1>(tag), std::get<2>(tag), std::get<3>(tag)}
     );
   }
   return Grammar::FromStructuralTag(tags_objects, triggers);
@@ -137,14 +137,14 @@ Grammar Grammar_FromStructuralTag(
 
 CompiledGrammar GrammarCompiler_CompileStructuralTag(
     GrammarCompiler& compiler,
-    const std::vector<std::tuple<std::string, std::string, std::string>>& tags,
+    const std::vector<std::tuple<std::string, std::string, std::string, std::string>>& tags,
     const std::vector<std::string>& triggers
 ) {
   std::vector<StructuralTagItem> tags_objects;
   tags_objects.reserve(tags.size());
   for (const auto& tag : tags) {
     tags_objects.emplace_back(
-        StructuralTagItem{std::get<0>(tag), std::get<1>(tag), std::get<2>(tag)}
+        StructuralTagItem{std::get<0>(tag), std::get<1>(tag), std::get<2>(tag), std::get<3>(tag)}
     );
   }
   return compiler.CompileStructuralTag(tags_objects, triggers);
