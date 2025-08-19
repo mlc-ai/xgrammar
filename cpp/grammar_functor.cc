@@ -582,7 +582,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       }
       auto look_head_assertion_id = DetectLookaheadAssertion(i);
       if (look_head_assertion_id != -1) {
-        exact_lookahead.push_back(look_head_assertion_id);
+        exact_lookahead.push_back(i);
         builder_->UpdateLookaheadAssertion(i, look_head_assertion_id);
       }
     }
