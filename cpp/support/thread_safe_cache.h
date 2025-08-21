@@ -269,10 +269,10 @@ class ThreadSafeLRUCache {
   };
 
  public:
-  inline static constexpr std::size_t UNLIMITED_SIZE = static_cast<std::size_t>(-1);
+  inline static constexpr std::size_t kUnlimitedSize = static_cast<std::size_t>(-1);
 
   explicit ThreadSafeLRUCache(
-      std::size_t max_size = UNLIMITED_SIZE,
+      std::size_t max_size = kUnlimitedSize,
       const Computer& computer = Computer{},
       const SizeEstimator& size_estimator = SizeEstimator{}
   )
@@ -289,7 +289,7 @@ class ThreadSafeLRUCache {
   void Clear() {
     // Remove all the ready entries.
     const auto lock_map = std::lock_guard{map_mutex_};
-    if (this->max_size_ == UNLIMITED_SIZE)
+    if (this->max_size_ == kUnlimitedSize)
       cache_.GetMap().clear();
     else
       cache_.LRUEvict(
@@ -308,7 +308,7 @@ class ThreadSafeLRUCache {
 
  private:
   std::shared_future<SizedValue> GetFuture(const Key& key) {
-    if (this->max_size_ == UNLIMITED_SIZE) return GetFutureUnlimited(key);
+    if (this->max_size_ == kUnlimitedSize) return GetFutureUnlimited(key);
     auto& map = cache_.GetMap();
 
     {

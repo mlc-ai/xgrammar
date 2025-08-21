@@ -1,26 +1,18 @@
 """This module provides classes representing grammars."""
 
 import json
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from typing_extensions import deprecated
 
 from .base import XGRObject, _core
-
-
-class StructuralTagItem(BaseModel):
-    """A structural tag item. See :meth:`xgrammar.Grammar.from_structural_tag` for more details."""
-
-    begin: str
-    """The begin tag."""
-    schema_: Union[str, Type[BaseModel], Dict[str, Any]] = Field(alias="schema")
-    """The schema."""
-    end: str
-    """The end tag."""
+from .structural_tag import StructuralTag, StructuralTagItem
 
 
 def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
-    """Convert a schema to a string representation.
+    """Convert a schema to a string representation. It returns the schema in string format because
+    it's faster to send to C++.
 
     This function handles different schema input types and converts them to a JSON string:
     - Pydantic models are converted using their schema methods
@@ -56,6 +48,43 @@ def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) 
         return json.dumps(schema)
     else:
         raise ValueError("The schema should be a string or a Pydantic model.")
+
+
+def _get_structural_tag_str_from_args(args: List[Any], kwargs: Dict[str, Any]) -> str:
+    """Get the structural tag string from the arguments. It returns the structural tag in string
+    format because it's faster to send to C++.
+
+    Parameters
+    ----------
+    args : List[Any]
+        The positional arguments.
+    kwargs : Dict[str, Any]
+        The keyword arguments.
+
+    Returns
+    -------
+    str
+        The structural tag string.
+
+    Raises
+    ------
+    TypeError
+        When the arguments are invalid.
+    """
+    if len(args) == 1 and isinstance(args[0], (StructuralTag, str, dict)):
+        return _convert_schema_to_str(args[0])
+    elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], list):
+        return StructuralTag.from_legacy_structural_tag(args[0], args[1]).model_dump_json(
+            indent=None
+        )
+    elif "structural_tag" in kwargs:
+        return _convert_schema_to_str(kwargs["structural_tag"])
+    elif "tags" in kwargs and "triggers" in kwargs:
+        return StructuralTag.from_legacy_structural_tag(
+            kwargs["tags"], kwargs["triggers"]
+        ).model_dump_json(indent=None)
+    else:
+        raise TypeError("Invalid arguments for from_structural_tag")
 
 
 class Grammar(XGRObject):
@@ -211,7 +240,36 @@ class Grammar(XGRObject):
             _core.Grammar.from_regex(regex_string, print_converted_ebnf)
         )
 
+    @overload
     @staticmethod
+    def from_structural_tag(structural_tag: Union[StructuralTag, str, Dict[str, Any]]) -> "Grammar":
+        """Create a grammar from a structural tag.
+
+        Parameters
+        ----------
+        structural_tag : Union[StructuralTag, str, Dict[str, Any]]
+            The structural tag either as a StructuralTag object, or a JSON string or a dictionary.
+
+        Returns
+        -------
+        grammar : Grammar
+            The constructed grammar.
+
+        Raises
+        ------
+        InvalidJSONError
+            When the structural tag is not a valid JSON string.
+        InvalidStructuralTagError
+            When the structural tag is not valid.
+        """
+        ...
+
+    @overload
+    @staticmethod
+    @deprecated(
+        "from_structural_tag(tags, triggers) is deprecated. Construct structural tag with the "
+        "StructuralTag class instead."
+    )
     def from_structural_tag(tags: List[StructuralTagItem], triggers: List[str]) -> "Grammar":
         """Create a grammar from structural tags. The structural tag handles the dispatching
         of different grammars based on the tags and triggers: it initially allows any output,
@@ -278,8 +336,12 @@ class Grammar(XGRObject):
         >>> triggers = ["<function="]
         >>> grammar = Grammar.from_structural_tag(tags, triggers)
         """
-        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
-        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
+        ...
+
+    @staticmethod
+    def from_structural_tag(*args, **kwargs) -> "Grammar":
+        structural_tag_str = _get_structural_tag_str_from_args(args, kwargs)
+        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(structural_tag_str))
 
     @staticmethod
     def builtin_json_grammar() -> "Grammar":

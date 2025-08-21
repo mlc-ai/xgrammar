@@ -65,11 +65,10 @@ Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) 
   return FromEBNF(ebnf_string);
 }
 
-Grammar Grammar::FromStructuralTag(
-    const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
+std::variant<Grammar, StructuralTagError> Grammar::FromStructuralTag(
+    const std::string& structural_tag_json
 ) {
-  Grammar grammar = StructuralTagToGrammar(tags, triggers);
-  return grammar;
+  return StructuralTagToGrammar(structural_tag_json).ToVariant();
 }
 
 // Optimized json grammar for the speed of the grammar matcher

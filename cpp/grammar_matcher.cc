@@ -294,6 +294,7 @@ class GrammarMatcher::Impl : public EarleyParser {
 
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
+
   /*!
    * \brief If is_uncertain_saved is true, find the next token in uncertain_indices. Otherwise,
    * find the next token that is set to true in uncertain_tokens_bitset.
@@ -385,7 +386,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     }
     XGRAMMAR_LOG(INFO) << "Accepting token id " << token_id << ", string: \""
                        << EscapeString(tokenizer_info_.GetDecodedVocab()[token_id])
-                       << "\", current scannable states:\n"
+                       << "\", current state:\n"
                        << states_str;
   }
   // Handle the stop token
@@ -433,35 +434,37 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
 
 bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug_print) {
   if (IsStopTokenAccepted()) {
-    if (debug_print) {
-      XGRAMMAR_LOG(WARNING) << "The matcher has terminated after accepting the stop token, but is "
-                            << "trying to accept new string \"" << EscapeString(input_str) << "\".";
-    }
+    XGRAMMAR_LOG(WARNING) << "The matcher has terminated after accepting the stop token, but is "
+                          << "trying to accept new string \"" << EscapeString(input_str) << "\".";
     return false;
+  }
+
+  if (debug_print) {
+    XGRAMMAR_LOG(INFO) << "Trying to accept string \"" << EscapeString(input_str)
+                       << "\". Current state:\n"
+                       << PrintStates();
   }
 
   int accepted_cnt = 0;
   for (auto char_value : input_str) {
     if (!Advance(char_value)) {
       if (debug_print) {
-        XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" rejected at position "
-                           << accepted_cnt << ", char " << EscapeString(char_value);
+        XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" is rejected at "
+                           << "position " << accepted_cnt << ", char " << EscapeString(char_value);
       }
       PopLastStates(accepted_cnt);
       return false;
+    }
+    if (debug_print) {
+      XGRAMMAR_LOG(INFO) << "Char " << EscapeString(char_value) << " is accepted. Current state:\n"
+                         << PrintStates();
     }
     ++accepted_cnt;
   }
   token_length_history.push_back(input_str.size());
 
   if (debug_print) {
-    std::string states_str;
-    for (const auto& state : GetLatestScanableStates()) {
-      states_str += "  " + state.ToString() + "\n";
-    }
-    XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str)
-                       << "\" is accepted. Current scannable states:\n"
-                       << states_str;
+    XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" is accepted.";
   }
   return true;
 }

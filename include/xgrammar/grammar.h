@@ -129,11 +129,11 @@ class Grammar {
   static Grammar FromRegex(const std::string& regex, bool print_converted_ebnf = false);
 
   /*!
-   * \brief Construct a grammar from a regular expression string.
-   * \param regex The regular expression string.
+   * \brief Construct a grammar from a structural tag string.
+   * \param structural_tag_json The structural tag string.
    */
-  static Grammar FromStructuralTag(
-      const std::vector<StructuralTagItem>& tags, const std::vector<std::string>& triggers
+  static std::variant<Grammar, StructuralTagError> FromStructuralTag(
+      const std::string& structural_tag_json
   );
 
   /*!

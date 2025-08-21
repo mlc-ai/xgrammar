@@ -9,6 +9,7 @@
 
 #include <xgrammar/compiler.h>
 #include <xgrammar/config.h>
+#include <xgrammar/exception.h>
 #include <xgrammar/grammar.h>
 #include <xgrammar/matcher.h>
 #include <xgrammar/tokenizer_info.h>

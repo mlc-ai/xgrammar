@@ -125,21 +125,9 @@ XGRAMMAR_MEMBER_ARRAY(FSMEdge, &FSMEdge::min, &FSMEdge::max, &FSMEdge::target);
 
 }  // namespace xgrammar
 
-namespace std {
-
-/*!
- * \brief Hash function for FSMEdge.
- */
-template <>
-struct hash<xgrammar::FSMEdge> {
-  size_t operator()(const xgrammar::FSMEdge& edge) const {
-    return std::hash<std::tuple<int16_t, int16_t, int32_t>>()(
-        std::make_tuple(edge.min, edge.max, edge.target)
-    );
-  }
-};
-
-}  // namespace std
+XGRAMMAR_HASH_BY_MEMBERS(
+    xgrammar::FSMEdge, &xgrammar::FSMEdge::min, &xgrammar::FSMEdge::max, &xgrammar::FSMEdge::target
+);
 
 namespace xgrammar {
 

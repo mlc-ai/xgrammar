@@ -17,46 +17,109 @@
 
 #include "logging.h"
 
+/****************** Hash Library ******************/
+
 namespace xgrammar {
 
 /*!
  * \brief Hash and combine value into seed.
  * \ref https://www.boost.org/doc/libs/1_84_0/boost/intrusive/detail/hash_combine.hpp
  */
-inline void HashCombineBinary(uint32_t& seed, uint32_t value) {
-  seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+inline void HashCombineBinary(size_t& seed, size_t value) {
+  seed ^= value + 0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2);
 }
 
 /*!
- * \brief Find the hash sum of several uint32_t args.
+ * \brief Find the hash sum of several size_t args.
  */
 template <typename... Args>
-inline uint32_t HashCombine(Args... args) {
-  uint32_t seed = 0;
+inline size_t HashCombine(Args... args) {
+  size_t seed = 0;
   (..., HashCombineBinary(seed, args));
   return seed;
 }
 
-// Sometimes GCC fails to detect some branches will not return, such as when we use LOG(FATAL)
-// to raise an error. This macro manually mark them as unreachable to avoid warnings.
-#ifdef __GNUC__
-#define XGRAMMAR_UNREACHABLE() __builtin_unreachable()
-#else
-#define XGRAMMAR_UNREACHABLE()
-#endif
+/*!
+ * \brief Helper class to define the hash function for a struct by its members.
+ */
+template <class T, auto... Members>
+struct HashByMembers {
+  std::size_t operator()(T const& x) const noexcept {
+    return HashCombine(std::hash<std::decay_t<decltype(x.*Members)>>{}(x.*Members)...);
+  }
+};
+
+}  // namespace xgrammar
 
 /*!
- * \brief An error class that contains a type. The type can be an enum.
+ * \brief Define a hash function for a struct by its members in namespace std. Should be used
+ * outside of namespace xgrammar.
+ * \param Type The type of the struct.
+ * \param ... The member pointers of the struct.
+ * \example
+ * \code
+ * // In the global namespace
+ * XGRAMMAR_HASH_BY_MEMBERS(Type, &Type::member1, &Type::member2, &Type::member3);
+ * \endcode
+ */
+#define XGRAMMAR_HASH_BY_MEMBERS(Type, ...)                                 \
+  namespace std {                                                           \
+  template <>                                                               \
+  struct hash<Type> : public xgrammar::HashByMembers<Type, __VA_ARGS__> {}; \
+  }
+
+/*!
+ * \brief Empty specialization of XGRAMMAR_HASH_BY_MEMBERS.
+ */
+#define XGRAMMAR_HASH_BY_MEMBERS_EMPTY(Type)                   \
+  namespace std {                                              \
+  template <>                                                  \
+  struct hash<Type> : public xgrammar::HashByMembers<Type> {}; \
+  }
+
+namespace std {
+
+/*!
+ * \brief Define the hash function for std::pair.
+ */
+template <typename T, typename U>
+struct hash<std::pair<T, U>> {
+  size_t operator()(const std::pair<T, U>& pair) const noexcept {
+    return xgrammar::HashCombine(std::hash<T>{}(pair.first), std::hash<U>{}(pair.second));
+  }
+};
+
+/*!
+ * \brief Define the hash function for std::tuple.
+ */
+template <typename... Args>
+struct hash<std::tuple<Args...>> {
+  size_t operator()(const std::tuple<Args...>& tuple) const noexcept {
+    return std::apply(
+        [](const Args&... args) { return xgrammar::HashCombine(std::hash<Args>{}(args)...); }, tuple
+    );
+  }
+};
+
+/*!
+ * \brief Define the hash function for std::vector.
  */
 template <typename T>
-class TypedError : public std::runtime_error {
- public:
-  explicit TypedError(T type, const std::string& msg) : std::runtime_error(msg), type_(type) {}
-  const T& Type() const noexcept { return type_; }
-
- private:
-  T type_;
+struct hash<std::vector<T>> {
+  size_t operator()(const std::vector<T>& vec) const {
+    uint32_t seed = 0;
+    for (const auto& item : vec) {
+      xgrammar::HashCombineBinary(seed, std::hash<T>{}(item));
+    }
+    return seed;
+  }
 };
+
+}  // namespace std
+
+namespace xgrammar {
+
+/****************** Result Library ******************/
 
 /*!
  * \brief A partial result type that can be used to construct a Result. Holds a result value or an
@@ -71,19 +134,81 @@ struct PartialResult {
   T value;
 };
 
-template <typename E = std::runtime_error, typename... Args>
-inline PartialResult<E, false> ResultErr(Args&&... args) {
-  return PartialResult<E, false>{std::forward<Args>(args)...};
-}
-
+/*!
+ * \brief Construct a success result with the arguments to construct a T.
+ * \tparam T The type of the success value
+ * \tparam Args The types of the arguments to construct a T
+ * \param args The arguments to construct a T
+ * \return A PartialResult with the arguments to construct a T
+ * \example
+ * \code
+ * // Call the constructor of T with the arguments
+ * return ResultOk<T>(1, 2, 3);
+ * \endcode
+ */
 template <typename T, typename... Args>
 inline PartialResult<T, true> ResultOk(Args&&... args) {
   return PartialResult<T, true>{std::forward<Args>(args)...};
 }
 
+/*!
+ * \brief Construct a success result with a universal reference (both lvalue and rvalue)
+ * \tparam T The type of the success value
+ * \param value The universal reference to the success value
+ * \return A PartialResult with the universal reference to the success value
+ * \example
+ * \code
+ * T value = T(1, 2, 3);
+ * // Move the value to the PartialResult
+ * return ResultOk(std::move(value));
+ * \endcode
+ */
 template <typename T>
 inline PartialResult<T&&, true> ResultOk(T&& value) {
   return PartialResult<T&&, true>{std::forward<T>(value)};
+}
+
+/*!
+ * \brief Construct a error result with the arguments to construct a E.
+ * \tparam E The type of the error value. Default to std::runtime_error.
+ * \tparam Args The types of the arguments to construct a E
+ * \param args The arguments to construct a E
+ * \return A PartialResult with the arguments to construct a E
+ * \example
+ * \code
+ * // Construct a std::runtime_error with a error
+ * std::runtime_error error("Message");
+ * return ResultErr(std::move(error));
+ * \endcode
+ * \code
+ * // Construct a std::runtime_error with its argument
+ * return ResultErr("Error");
+ * \endcode
+ * \code
+ * // Construct an E error with its argument
+ * return ResultErr<E>("Error");
+ * \endcode
+ */
+template <typename E = std::runtime_error, typename... Args>
+inline PartialResult<E, false> ResultErr(Args&&... args) {
+  return PartialResult<E, false>{std::forward<Args>(args)...};
+}
+
+/*!
+ * \brief Construct a error result with a universal reference (both lvalue and rvalue)
+ * \tparam E The type of the error value
+ * \param err The universal reference to the error value
+ * \return A PartialResult with the universal reference to the error value
+ * \example
+ * \code
+ * E err = E("Error");
+ * // Move the err to the PartialResult
+ * return ResultErr(std::move(err));
+ * \endcode
+ */
+template <typename E>
+inline PartialResult<E&&, false> ResultErr(E&& err) {
+  return PartialResult<E&&, false>{std::forward<E>(err)};
 }
 
 /*!
@@ -131,15 +256,15 @@ class Result {
   /*! \brief Default constructor is deleted to avoid accidental use */
   Result() = delete;
 
-  /*! \brief Construct from Result::Err */
-  template <typename V, typename = std::enable_if_t<std::is_same_v<std::decay_t<V>, E>>>
-  Result(PartialResult<V, false>&& partial_result)
-      : data_(std::in_place_type<E>, std::forward<V>(partial_result.value)) {}
-
   /*! \brief Construct from Result::Ok */
-  template <typename U, typename = std::enable_if_t<std::is_same_v<std::decay_t<U>, T>>>
+  template <typename U, typename = std::enable_if_t<std::is_constructible_v<T, std::decay_t<U>>>>
   Result(PartialResult<U, true>&& partial_result)
       : data_(std::in_place_type<T>, std::forward<U>(partial_result.value)) {}
+
+  /*! \brief Construct from Result::Err */
+  template <typename V, typename = std::enable_if_t<std::is_constructible_v<E, std::decay_t<V>>>>
+  Result(PartialResult<V, false>&& partial_result)
+      : data_(std::in_place_type<E>, std::forward<V>(partial_result.value)) {}
 
   /*! \brief Check if Result contains success value */
   bool IsOk() const { return std::holds_alternative<T>(data_); }
@@ -189,9 +314,9 @@ class Result {
   template <typename U, typename V>
   static Result<T, E> Convert(Result<U, V>&& result) {
     if (result.IsOk()) {
-      return ResultOk(std::move(result).Unwrap());
+      return ResultOk<T>(std::move(result).Unwrap());
     }
-    return ResultErr(std::move(result).UnwrapErr());
+    return ResultErr<E>(std::move(result).UnwrapErr());
   }
 
   /*! \brief Get a std::variant<T, E> from the result. */
@@ -229,37 +354,87 @@ class Result {
   std::variant<T, E> data_;
 };
 
-}  // namespace xgrammar
+/****************** Misc ******************/
 
-namespace std {
+// Sometimes GCC fails to detect some branches will not return, such as when we use LOG(FATAL)
+// to raise an error. This macro manually mark them as unreachable to avoid warnings.
+#ifdef __GNUC__
+#define XGRAMMAR_UNREACHABLE() __builtin_unreachable()
+#else
+#define XGRAMMAR_UNREACHABLE()
+#endif
 
-template <typename T, typename U>
-struct hash<std::pair<T, U>> {
-  size_t operator()(const std::pair<T, U>& pair) const {
-    return xgrammar::HashCombine(std::hash<T>{}(pair.first), std::hash<U>{}(pair.second));
-  }
-};
-
-template <typename... Args>
-struct hash<std::tuple<Args...>> {
-  size_t operator()(const std::tuple<Args...>& tuple) const {
-    return std::apply(
-        [](const Args&... args) { return xgrammar::HashCombine(std::hash<Args>{}(args)...); }, tuple
-    );
-  }
-};
-
+/*!
+ * \brief An error class that contains a type. The type can be an enum.
+ */
 template <typename T>
-struct hash<std::vector<T>> {
-  size_t operator()(const std::vector<T>& vec) const {
-    uint32_t seed = 0;
-    for (const auto& item : vec) {
-      xgrammar::HashCombineBinary(seed, std::hash<T>{}(item));
-    }
-    return seed;
-  }
+class TypedError : public std::runtime_error {
+ public:
+  explicit TypedError(T type, const std::string& msg) : std::runtime_error(msg), type_(type) {}
+  const T& Type() const noexcept { return type_; }
+
+ private:
+  T type_;
 };
 
-}  // namespace std
+/**
+ * \brief Helper function to compare two objects by their members.
+ */
+template <class T, auto... Ms>
+constexpr bool EqualByMembers(const T& lhs, const T& rhs) noexcept {
+  return std::tie(lhs.*Ms...) == std::tie(rhs.*Ms...);
+}
+
+/**
+ * \brief Define == and != operator for a struct by its members.
+ * \param Type The type of the struct. Must be under namespace xgrammar.
+ * \param ... The member pointers of the struct.
+ * \example
+ * \code
+ * struct Type {
+ *   int member1;
+ *   std::string member2;
+ *   double member3;
+ *
+ *   XGRAMMAR_EQUAL_BY_MEMBERS(Type, &Type::member1, &Type::member2, &Type::member3);
+ * };
+ * \endcode
+ */
+#define XGRAMMAR_EQUAL_BY_MEMBERS(Type, ...)                          \
+  friend bool operator==(const Type& lhs, const Type& rhs) noexcept { \
+    return EqualByMembers<Type, __VA_ARGS__>(lhs, rhs);               \
+  }                                                                   \
+  friend bool operator!=(const Type& lhs, const Type& rhs) noexcept { return !(lhs == rhs); }
+
+/*!
+ * \brief Empty specialization of XGRAMMAR_EQUAL_BY_MEMBERS.
+ */
+#define XGRAMMAR_EQUAL_BY_MEMBERS_EMPTY(Type)                                        \
+  friend bool operator==(const Type& lhs, const Type& rhs) noexcept { return true; } \
+  friend bool operator!=(const Type& lhs, const Type& rhs) noexcept { return false; }
+
+/*!
+ * \brief Throw an error from a variant of multiple error types.
+ * \param error_variant The variant of multiple error types.
+ * \tparam Args The types of the error types. Each type should inherit from std::runtime_error.
+ */
+template <typename... Args>
+[[noreturn]] void ThrowVariantError(const std::variant<Args...>& error_variant) {
+  std::visit([](const auto& e) { throw e; }, error_variant);
+  XGRAMMAR_UNREACHABLE();
+}
+
+/*!
+ * \brief Get the message from a variant of multiple error types.
+ * \param error_variant The variant of multiple error types.
+ * \return The message from the error variant.
+ * \tparam Args The types of the error types. Each type should inherit from std::runtime_error.
+ */
+template <typename... Args>
+std::string GetMessageFromVariantError(const std::variant<Args...>& error_variant) {
+  return std::visit([](const auto& e) { return e.what(); }, error_variant);
+}
+
+}  // namespace xgrammar
 
 #endif  // XGRAMMAR_SUPPORT_UTILS_H_

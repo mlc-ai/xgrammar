@@ -282,23 +282,6 @@ class AllowEmptyRuleAnalyzer {
 };
 
 /*!
- * \brief Create a grammar that recognizes structural tags based on their triggers. See
- * StructuralTagToGrammar() for more details.
- *
- * \param triggers The trigger strings that identify each tag group
- * \param tag_groups The tags and their schema grammars, grouped by trigger. tag_groups[i][j] is the
- * j-th tag that matches triggers[i], and its corresponding schema grammar.
- * \return A grammar that matches all the tagged patterns.
- */
-class StructuralTagGrammarCreator {
- public:
-  static Grammar Apply(
-      const std::vector<std::string>& triggers,
-      const std::vector<std::vector<std::pair<StructuralTagItem, Grammar>>>& tag_groups
-  );
-};
-
-/*!
  * \brief Normalize the structure of the grammar. It will ensure each rule is a choices of
  * sequences of elements, or a tag dispatch. The expanded context will be a sequence of elements.
  */
