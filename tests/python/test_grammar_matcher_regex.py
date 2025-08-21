@@ -2,6 +2,7 @@ import sys
 import time
 
 import pytest
+import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
@@ -171,6 +172,38 @@ def test_regex_with_large_range_compilation():
     _ = compiler.compile_regex(regex_with_large_range)
     time_end = time.monotonic_ns()
     print(f"Time to compile regex with large range: {(time_end - time_start) / 1e3} us")
+
+
+@pytest.mark.hf_token_required
+def test_regression_lookahead_already_completed():
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    xgr_compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1)
+    compiled_grammar = xgr_compiler.compile_regex(r"\/\*(\*+[^*\/]|[^*])*\*+\/")
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    def process_logit(input_ids: list, logit: torch.Tensor) -> torch.Tensor:
+        if input_ids:
+            last_token = input_ids[-1]
+            assert matcher.accept_token(last_token)
+        matcher.fill_next_token_bitmask(token_bitmask)
+        xgr.apply_token_bitmask_inplace(logit, token_bitmask)
+        return logit
+
+    def process_tokens(tokens: list):
+        for i in range(len(tokens)):
+            logit = torch.zeros((tokenizer_info.vocab_size,), dtype=torch.float)
+            visible_tokens = tokens[:i]
+            masked_logit = process_logit(visible_tokens, logit)
+            assert masked_logit[tokens[i]] != float(
+                "-inf"
+            ), f"token {i} ({tokens[i]}, {tokenizer.decode(tokens[i])!r}) is masked"
+
+    text = "/*  */"
+    tokens = tokenizer.encode(text)
+    process_tokens(tokens)
 
 
 if __name__ == "__main__":

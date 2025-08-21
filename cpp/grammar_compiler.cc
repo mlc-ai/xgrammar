@@ -122,6 +122,11 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
       ParserState(/*rule_id*/ -1, lookahead_assertion_id, 0, ParserState::kNoPrevInputPos, 0);
   PushStateAndExpand(lookahead_state);
   int token_len = token.size();
+  if (IsCompleted()) {
+    // If the lookahead assertion is already completed, we can accept the token.
+    PopLastStates(1);
+    return {true, true};
+  }
 
   // Find all positions that can come to and end. Then check if the suffix from that position
   // can be accepted by the lookahead assertion.
@@ -322,6 +327,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
   int prev_matched_size = 0;
   int last_rejected_range = 0;
+  bool is_exact_lookahead = std::binary_search(
+      grammar_->exact_lookahead.begin(), grammar_->exact_lookahead.end(), init_rule_id
+  );
   const std::string* prev_token = nullptr;
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
@@ -414,10 +422,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
           // 1. If the current rule is the root rule (is_root_rule=true), there are no
           // uncertain tokens. Not accepted tokens are just rejected.
           // 2. If a token cannot pass the lookahead assertion, it is rejected.
-          if ((!lookahead_result_pair.second) &&
-              (std::binary_search(
-                  grammar_->exact_lookahead.begin(), grammar_->exact_lookahead.end(), init_rule_id
-              ))) {
+          if ((!lookahead_result_pair.second) && is_exact_lookahead) {
             tmp_accepted_indices_.push_back(i);
           } else {
             tmp_uncertain_indices_.push_back(i);
