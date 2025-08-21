@@ -161,6 +161,39 @@ def test_fill_next_token_bitmask(regex: str, input_str: str):
 
 
 @pytest.mark.hf_token_required
+@pytest.mark.parametrize("regex, input_str", regex_input_str_test_fill_next_token_bitmask)
+def test_fill_next_token_bitmask_with_jit(regex: str, input_str: str):
+    tokenizer_path = "meta-llama/Meta-Llama-3-8B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info, is_jit=True)
+
+    time_start = time.monotonic_ns()
+    compiled_grammar = compiler.compile_regex(regex)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    input_bytes = input_str.encode("utf-8")
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    for c in input_bytes:
+        time_start = time.monotonic_ns()
+        assert matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+        time_start = time.monotonic_ns()
+        assert matcher.accept_string(bytes([c]))
+        time_end = time.monotonic_ns()
+        print(f"Time to accept char {chr(c)}: {(time_end - time_start) / 1e3} us")
+
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    assert tokenizer.eos_token_id not in rejected_token_ids
+
+
+@pytest.mark.hf_token_required
 def test_regex_with_large_range_compilation():
     regex_with_large_range = r"[a-z]{100,20000}"
     tokenizer_path = "meta-llama/Meta-Llama-3-8B-Instruct"
