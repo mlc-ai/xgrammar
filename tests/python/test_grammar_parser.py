@@ -486,7 +486,7 @@ rule5 ::= "" | "g" rule5 "h"
     expected = r"""root ::= (("a" rule1 "b" rule3 rule5 rule2))
 rule1 ::= (("b")) (=("b" rule3 rule5 rule2))
 rule2 ::= (("c"))
-rule3 ::= (("") | ("d" rule3))
+rule3 ::= (("") | ("d" rule3)) (=(rule5 rule2))
 rule4 ::= (("") | ("e" rule4 "f")) (=("f"))
 rule5 ::= (("") | ("g" rule5 "h"))
 """

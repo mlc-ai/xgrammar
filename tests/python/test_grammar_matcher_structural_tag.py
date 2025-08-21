@@ -73,7 +73,7 @@ basic_number_3 ::= ("" | ("." basic_number_2)) (=(basic_number_6))
 basic_number_4 ::= ("" | ([+\-])) (=(basic_number_5))
 basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
-root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1))
+root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1)) (=([ \n\t]* "]"))
 basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
 """
 
@@ -97,6 +97,7 @@ def test_structural_tag():
     triggers = ["<function=f", "<function=g"]
 
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
+
     assert str(grammar) == expected_grammar_test_structural_tag
 
     accepted_inputs = [
