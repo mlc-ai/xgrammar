@@ -248,6 +248,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   fsm_wse = fsm_wse.MergeEquivalentSuccessors();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
+  XGRAMMAR_LOG(INFO) << fsm_wse;
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
   EXPECT_EQ(fsm_wse.GetFsm().NumStates(), 4);
   std::cout << "--------- Function Test8 -----------" << std::endl;

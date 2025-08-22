@@ -76,6 +76,8 @@ class UnionFindSet {
     element_to_parent_and_size_[root_a].second += element_to_parent_and_size_[root_b].second;
   }
 
+  int Count(const T& element) const { return element_to_parent_and_size_.count(element); }
+
   std::vector<std::vector<T>> GetAllSets() {
     std::vector<std::vector<T>> result;
     std::unordered_map<T, size_t> root_to_set;

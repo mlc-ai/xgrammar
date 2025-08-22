@@ -1101,118 +1101,139 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon() const {
   return result.RebuildWithMapping(new_to_old, cnt);
 }
 
-FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_node_size) const {
-  if (NumStates() > max_node_size) {
+FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_states) const {
+  if (max_result_num_states < NumStates()) {
     return *this;
   }
   bool changed = true;
   FSMWithStartEnd result = Copy();
+  result.GetFsm()->SortEdges();
   UnionFindSet<int> union_find_set;
   while (changed) {
     union_find_set.Clear();
-    std::unordered_map<int, std::unordered_set<int>> previous_states;
+    std::vector<std::unordered_map<int, std::vector<FSMEdge>>> previous_states(result.NumStates());
+    std::vector<std::unordered_map<int, std::vector<FSMEdge>>> next_states(result.NumStates());
     // Initialize the previous states.
     for (int i = 0; i < result.NumStates(); i++) {
       const auto& edges = result.GetFsm().GetEdges(i);
       for (const auto& edge : edges) {
-        if (previous_states.find(edge.target) == previous_states.end()) {
-          previous_states[edge.target] = std::unordered_set<int>();
+        if (previous_states[edge.target].find(i) == previous_states[edge.target].end()) {
+          previous_states[edge.target][i] = std::vector<FSMEdge>();
         }
-        previous_states[edge.target].insert(i);
+        previous_states[edge.target][i].push_back(edge);
+        if (next_states[i].find(edge.target) == next_states[i].end()) {
+          next_states[i][edge.target] = std::vector<FSMEdge>();
+        }
+        next_states[i][edge.target].push_back(edge);
       }
     }
     // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
     bool is_equiv_successor = false;
-    for (const auto& edges : result.GetFsm().GetEdges()) {
-      for (size_t i = 0; i < edges.size(); i++) {
-        for (size_t j = i + 1; j < edges.size(); j++) {
-          if (result.IsEndState(edges[i].target) != result.IsEndState(edges[j].target)) {
-            continue;
+    for (int i = 0; i < static_cast<int>(previous_states.size()); i++) {
+      if (previous_states[i].size() != 1 || union_find_set.Count(i)) {
+        continue;
+      }
+      const auto& previous_state = previous_states[i].begin()->first;
+      const auto& edges_to_i = previous_states[i].begin()->second;
+      const auto& siblings = next_states[previous_state];
+      for (const auto& [sibling, edges_to_sibling] : siblings) {
+        if (sibling <= i || previous_states[sibling].size() != 1 ||
+            result.IsEndState(sibling) != result.IsEndState(i)) {
+          continue;
+        }
+        bool is_equiv = true;
+
+        // Check if the edges are the same.
+        if (edges_to_i.size() != edges_to_sibling.size()) {
+          break;  // Different edges, not equivalent.
+        }
+        for (int i = 0; i < static_cast<int>(edges_to_i.size()); i++) {
+          if (edges_to_i[i].min != edges_to_sibling[i].min ||
+              edges_to_i[i].max != edges_to_sibling[i].max) {
+            is_equiv = false;
+            break;  // Different edge ranges, not equivalent.
           }
-          if (edges[i].target == edges[j].target) {
-            continue;
-          }
-          if (edges[i].max != edges[j].max || edges[i].min != edges[j].min) {
-            continue;
-          }
-          if (previous_states[edges[i].target].size() != 1 ||
-              previous_states[edges[j].target].size() != 1) {
-            continue;
-          }
-          union_find_set.Add(edges[i].target);
-          union_find_set.Add(edges[j].target);
-          union_find_set.Union(edges[i].target, edges[j].target);
+        }
+
+        // Merge the nodes.
+        if (is_equiv) {
+          union_find_set.Add(i);
+          union_find_set.Add(sibling);
+          union_find_set.Union(i, sibling);
           is_equiv_successor = true;
         }
       }
     }
-    if (is_equiv_successor) {
-      auto eq_classes = union_find_set.GetAllSets();
-      std::unordered_map<int, int> old_to_new;
-      for (size_t i = 0; i < eq_classes.size(); i++) {
-        for (const auto& state : eq_classes[i]) {
-          old_to_new[state] = i;
-        }
-      }
-      int cnt = eq_classes.size();
-      for (int i = 0; i < result.NumStates(); i++) {
-        if (old_to_new.find(i) == old_to_new.end()) {
-          old_to_new[i] = cnt;
-          cnt++;
-        }
-      }
-      result = result.RebuildWithMapping(old_to_new, cnt);
-    }
-    union_find_set.Clear();
+
     // Case 2: Like ba | ca | da, then they can be merged into (b | c | d)a.
     bool is_equiv_precursor = false;
-    for (int i = 0; i < result.NumStates(); i++) {
-      for (int j = i + 1; j < result.NumStates(); j++) {
-        if (result.IsEndState(i) != result.IsEndState(j)) {
+    std::vector<int32_t> no_successor_end_states;
+    std::vector<int32_t> no_successor_non_end_states;
+
+    for (int i = 0; i < static_cast<int>(next_states.size()); i++) {
+      if (next_states[i].empty()) {
+        if (result.IsEndState(i)) {
+          no_successor_end_states.push_back(i);
+        } else {
+          no_successor_non_end_states.push_back(i);
+        }
+        continue;  // Skip states with no successors.
+      }
+      if (next_states[i].size() != 1 || union_find_set.Count(i)) {
+        continue;  // Skip states with multiple successors.
+      }
+      const auto& next_state = next_states[i].begin()->first;
+      const auto& node_edges = result.GetFsm().GetEdges(i);
+      const auto& siblings = previous_states[next_state];
+      for (const auto& [sibling, edges_to_sibling] : siblings) {
+        if (sibling <= i || next_states[sibling].size() != 1 ||
+            result.IsEndState(i) != result.IsEndState(sibling)) {
           continue;
         }
-        bool equivalent = true;
-        // Check if all the edges of state i are in the edges of state j.
-        for (const auto& edge_i : result.GetFsm().GetEdges(i)) {
-          bool same = false;
-          for (const auto& edge_j : result.GetFsm().GetEdges(j)) {
-            if (edge_i.min == edge_j.min && edge_i.max == edge_j.max &&
-                edge_i.target == edge_j.target) {
-              same = true;
-              break;
-            }
-          }
-          if (!same) {
-            equivalent = false;
+        const auto& sibling_node_edges = result.GetFsm().GetEdges(sibling);
+        if (sibling_node_edges.size() != node_edges.size()) {
+          continue;  // Different number of edges, not equivalent.
+        }
+        bool is_equiv = true;
+        for (int i = 0; i < static_cast<int>(sibling_node_edges.size()); i++) {
+          if (sibling_node_edges[i].min != node_edges[i].min ||
+              sibling_node_edges[i].max != node_edges[i].max) {
+            is_equiv = false;
             break;
           }
         }
-        if (!equivalent) {
-          continue;
-        }
-        for (const auto& edge_j : result.GetFsm().GetEdges(j)) {
-          bool same = false;
-          for (const auto& edge_i : result.GetFsm().GetEdges(i)) {
-            if (edge_i.min == edge_j.min && edge_i.max == edge_j.max &&
-                edge_i.target == edge_j.target) {
-              same = true;
-              break;
-            }
-          }
-          if (!same) {
-            equivalent = false;
-            break;
-          }
-        }
-        if (equivalent) {
+
+        if (is_equiv) {
           union_find_set.Add(i);
-          union_find_set.Add(j);
-          union_find_set.Union(i, j);
-          is_equiv_precursor = true;
+          union_find_set.Add(sibling);
+          union_find_set.Union(i, sibling);
+          is_equiv_successor = true;
         }
       }
     }
-    if (is_equiv_precursor) {
+
+    if (no_successor_end_states.size() > 1) {
+      // Merge all end states with no successors.
+      for (size_t i = 1; i < no_successor_end_states.size(); ++i) {
+        union_find_set.Add(no_successor_end_states[0]);
+        union_find_set.Add(no_successor_end_states[i]);
+        union_find_set.Union(no_successor_end_states[0], no_successor_end_states[i]);
+        is_equiv_precursor = true;
+      }
+    }
+
+    if (no_successor_non_end_states.size() > 1) {
+      // Merge all non-end states with no successors.
+      for (size_t i = 1; i < no_successor_non_end_states.size(); ++i) {
+        union_find_set.Add(no_successor_non_end_states[0]);
+        union_find_set.Add(no_successor_non_end_states[i]);
+        union_find_set.Union(no_successor_non_end_states[0], no_successor_non_end_states[i]);
+        is_equiv_precursor = true;
+      }
+    }
+
+    changed = is_equiv_successor || is_equiv_precursor;
+    if (changed) {
       auto eq_classes = union_find_set.GetAllSets();
       std::unordered_map<int, int> old_to_new;
       for (size_t i = 0; i < eq_classes.size(); i++) {
@@ -1228,8 +1249,8 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_node_size) co
         }
       }
       result = result.RebuildWithMapping(old_to_new, cnt);
+      result.GetFsm()->SortEdges();
     }
-    changed = is_equiv_successor || is_equiv_precursor;
   }
   return result;
 }

@@ -743,7 +743,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * 2) they are not pointed to by other edges, then we can merge them.
    * \example n0 --(c)--> n1, n0 --(c)--> n2, then we can merge n1 and n2.
    */
-  FSMWithStartEnd MergeEquivalentSuccessors(int max_result_num_states = 2e4) const;
+  FSMWithStartEnd MergeEquivalentSuccessors(int max_result_num_states = 2e6) const;
 
   /*!
    * \brief Transform the FSM to a DFA.
