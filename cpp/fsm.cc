@@ -1018,8 +1018,11 @@ bool FSMWithStartEnd::IsDFA() {
   return true;
 }
 
-FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon() const {
+FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   if (is_dfa_) {
+    return *this;
+  }
+  if (NumStates() > max_num_states) {
     return *this;
   }
   UnionFindSet<int> union_find_set;

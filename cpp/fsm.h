@@ -735,7 +735,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \details If a --\epsilon--> b, and either 1) b doesn't have any other inward edges, or
    * 2) a doesn't have any other outward edges, we can merge a and b.
    */
-  FSMWithStartEnd SimplifyEpsilon() const;
+  FSMWithStartEnd SimplifyEpsilon(int max_num_states = 1e8) const;
 
   /*!
    * \brief Merge equivalent states in the FSM.
@@ -743,7 +743,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * 2) they are not pointed to by other edges, then we can merge them.
    * \example n0 --(c)--> n1, n0 --(c)--> n2, then we can merge n1 and n2.
    */
-  FSMWithStartEnd MergeEquivalentSuccessors(int max_result_num_states = 1e5) const;
+  FSMWithStartEnd MergeEquivalentSuccessors(int max_num_states = 1e5) const;
 
   /*!
    * \brief Transform the FSM to a DFA.
