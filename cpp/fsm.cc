@@ -1101,7 +1101,10 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon() const {
   return result.RebuildWithMapping(new_to_old, cnt);
 }
 
-FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
+FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_node_size) const {
+  if (NumStates() > max_node_size) {
+    return *this;
+  }
   bool changed = true;
   FSMWithStartEnd result = Copy();
   UnionFindSet<int> union_find_set;
