@@ -17,7 +17,7 @@ and is co-designed with the LLM inference engine and enables zero-overhead struc
 ## Get Started
 
 Please visit our [documentation](https://xgrammar.mlc.ai/docs/) to get started with XGrammar.
-- [Installation](https://xgrammar.mlc.ai/docs/start/install)
+- [Installation](https://xgrammar.mlc.ai/docs/start/installation)
 - [Quick start](https://xgrammar.mlc.ai/docs/start/quick_start)
 
 ## Links
