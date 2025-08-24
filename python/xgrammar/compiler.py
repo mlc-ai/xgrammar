@@ -129,6 +129,9 @@ class GrammarCompiler(XGRObject):
         cache_limit_bytes : int, default: -1
             The maximum memory usage for the cache in the specified unit.
             Note that the actual memory usage may slightly exceed this value.
+
+        is_jit : bool, default: False
+            Whether to enable Just-In-Time (JIT) compilation.
         """
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(
