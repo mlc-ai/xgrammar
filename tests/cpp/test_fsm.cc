@@ -457,3 +457,71 @@ TEST(XGrammarFSMTest, TestTime) {
     EXPECT_FALSE(fsm_wse.AcceptString(time)) << "Failed for time: " << time;
   }
 }
+
+TEST(XGrammarFSMTest, MergingNodesTest) {
+  FSMWithStartEnd fsm_wse;
+  for (int i = 0; i < 10; i++) {
+    fsm_wse.AddState();
+  }
+  fsm_wse.SetStartState(0);
+  fsm_wse.AddEndState(9);
+  fsm_wse.GetFsm().AddEdge(0, 1, 'a', 'a');
+  fsm_wse.GetFsm().AddEdge(0, 2, 'a', 'a');
+  fsm_wse.GetFsm().AddEdge(1, 3, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(1, 3, 'c', 'c');
+  fsm_wse.GetFsm().AddEdge(1, 4, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(1, 4, 'c', 'c');
+  fsm_wse.GetFsm().AddEdge(2, 5, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(2, 5, 'c', 'c');
+  fsm_wse.GetFsm().AddEdge(2, 6, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(2, 6, 'c', 'c');
+  fsm_wse.GetFsm().AddEdge(3, 7, 'd', 'd');
+  fsm_wse.GetFsm().AddEdge(4, 7, 'd', 'd');
+  fsm_wse.GetFsm().AddEdge(5, 8, 'd', 'd');
+  fsm_wse.GetFsm().AddEdge(6, 8, 'd', 'd');
+  fsm_wse.GetFsm().AddEdge(7, 9, 'e', 'e');
+  fsm_wse.GetFsm().AddEdge(8, 9, 'e', 'e');
+  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
+  std::string expected_fsm = R"(FSM(num_states=5, start=3, end=[4], edges=[
+0: ['d'->2]
+1: ['b'->0, 'c'->0]
+2: ['e'->4]
+3: ['a'->1]
+4: []
+]))";
+  EXPECT_EQ(fsm_wse.ToString(), expected_fsm);
+  EXPECT_EQ(fsm_wse.GetFsm().NumStates(), 5);
+}
+
+TEST(XGrammarFSMTest, EpsilonSimplificationTest) {
+  FSMWithStartEnd fsm_wse;
+  for (int i = 0; i < 10; i++) {
+    fsm_wse.AddState();
+  }
+  fsm_wse.SetStartState(0);
+  fsm_wse.AddEndState(9);
+  fsm_wse.GetFsm().AddEpsilonEdge(0, 1);
+  fsm_wse.GetFsm().AddEpsilonEdge(0, 2);
+  fsm_wse.GetFsm().AddEdge(1, 3, 'b', 'b');
+  fsm_wse.GetFsm().AddEpsilonEdge(1, 3);
+  fsm_wse.GetFsm().AddEdge(1, 4, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(3, 3, 'c', 'c');
+  fsm_wse.GetFsm().AddEpsilonEdge(2, 5);
+  fsm_wse.GetFsm().AddEdge(2, 5, 'c', 'c');
+  fsm_wse.GetFsm().AddEdge(2, 6, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(2, 6, 'c', 'c');
+  fsm_wse.GetFsm().AddEpsilonEdge(3, 7);
+  fsm_wse.GetFsm().AddEpsilonEdge(4, 7);
+  fsm_wse.GetFsm().AddEpsilonEdge(5, 8);
+  fsm_wse.GetFsm().AddEpsilonEdge(6, 8);
+  fsm_wse.GetFsm().AddEpsilonEdge(7, 9);
+  fsm_wse.GetFsm().AddEpsilonEdge(8, 9);
+  fsm_wse = fsm_wse.SimplifyEpsilon();
+  std::string expected_fsm = R"(FSM(num_states=3, start=0, end=[1], edges=[
+0: [Eps->1, Eps->2, 'b'->1, 'b'->2, 'c'->1]
+1: []
+2: [Eps->1, 'c'->2]
+]))";
+  EXPECT_EQ(fsm_wse.ToString(), expected_fsm);
+  EXPECT_EQ(fsm_wse.GetFsm().NumStates(), 3);
+}
