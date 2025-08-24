@@ -4,7 +4,7 @@ from typing import Optional
 import pytest
 
 import xgrammar as xgr
-from xgrammar.testing import GrammarFunctor, _ebnf_to_grammar_no_normalization
+from xgrammar.testing import GrammarNormalizer, GrammarOptimizer, _ebnf_to_grammar_no_normalization
 
 
 def test_basic_string_literal():
@@ -323,8 +323,8 @@ d_1_1 ::= (("bcd") | ("pq"))
 """
 
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.structure_normalizer(grammar)
-    grammar = GrammarFunctor.byte_string_fuser(grammar)
+    grammar = GrammarNormalizer.structure_normalizer(grammar)
+    grammar = GrammarNormalizer.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -336,8 +336,8 @@ rule1 ::= [abc]* [def]*
 rule1 ::= (([abc]* [def]*))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.structure_normalizer(grammar)
-    grammar = GrammarFunctor.byte_string_fuser(grammar)
+    grammar = GrammarNormalizer.structure_normalizer(grammar)
+    grammar = GrammarNormalizer.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -386,8 +386,8 @@ f_1_xgrammar_repetition_context_2 ::= (("f"))
 """
 
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.structure_normalizer(grammar)
-    grammar = GrammarFunctor.byte_string_fuser(grammar)
+    grammar = GrammarNormalizer.structure_normalizer(grammar)
+    grammar = GrammarNormalizer.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -406,8 +406,8 @@ d ::= (("ac") | ("b" d_choice)) (=("abc"))
 d_choice ::= (("e") | ("d"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.structure_normalizer(grammar)
-    grammar = GrammarFunctor.byte_string_fuser(grammar)
+    grammar = GrammarNormalizer.structure_normalizer(grammar)
+    grammar = GrammarNormalizer.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -423,8 +423,8 @@ rest1 ::= (("\?\"\'\u6d4b\u8bd5\u3042c\U0001f440ab"))
 """
     # Disable unwrap_nesting_rules to expose the result before unwrapping.
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.structure_normalizer(grammar)
-    grammar = GrammarFunctor.byte_string_fuser(grammar)
+    grammar = GrammarNormalizer.structure_normalizer(grammar)
+    grammar = GrammarNormalizer.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -491,7 +491,7 @@ rule4 ::= (("") | ("e" rule4 "f")) (=("f"))
 rule5 ::= (("") | ("g" rule5 "h"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
+    grammar = GrammarOptimizer.lookahead_assertion_analyzer(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -513,8 +513,8 @@ empty_test ::= ("" | ("d") | ("a"))
 sequence_test_1 ::= (("c") | ("d"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.structure_normalizer(grammar)
-    grammar = GrammarFunctor.byte_string_fuser(grammar)
+    grammar = GrammarNormalizer.structure_normalizer(grammar)
+    grammar = GrammarNormalizer.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -546,7 +546,7 @@ rule2 ::= (("b") | ("c" [b-c]))
 @pytest.mark.parametrize("before, expected", before__expected__test_rule_inliner)
 def test_rule_inliner(before: str, expected: str):
     grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.rule_inliner(grammar)
+    grammar = GrammarOptimizer.rule_inliner(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -601,7 +601,7 @@ rule4 ::= (("g") | ("h"))
 @pytest.mark.parametrize("before, expected", before__expected__test_dead_code_eliminator)
 def test_dead_code_eliminator(before: str, expected: str):
     grammar = _ebnf_to_grammar_no_normalization(before)
-    after = xgr.testing.GrammarFunctor.dead_code_eliminator(grammar)
+    after = xgr.testing.GrammarOptimizer.dead_code_eliminator(grammar)
     assert str(after) == expected
 
 
