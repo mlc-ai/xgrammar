@@ -1025,22 +1025,20 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   if (NumStates() > max_num_states) {
     return *this;
   }
+
   UnionFindSet<int> union_find_set;
-  std::unordered_map<int, std::unordered_set<int>> previous_states;
-  std::unordered_set<int> has_epsilon;
+  std::vector<int> previous_states(NumStates(), 0);
+  std::vector<std::pair<int32_t, int32_t>> epsilon_edges;
 
   // Initialize the previous states, and find all the states that have
   // epsilon edges.
   for (int i = 0; i < NumStates(); i++) {
     const auto& edges = fsm_->GetEdges(i);
     for (const auto& edge : edges) {
-      if (previous_states.find(edge.target) == previous_states.end()) {
-        previous_states[edge.target] = std::unordered_set<int>();
-      }
-      previous_states[edge.target].insert(i);
+      previous_states[edge.target]++;
       if (edge.IsEpsilon()) {
         if (edges.size() != 1) {
-          has_epsilon.insert(i);
+          epsilon_edges.push_back({i, edge.target});
         } else {
           // a -- epsilon --> b, and a doesn't have other outward edges.
           union_find_set.Add(i);
@@ -1052,32 +1050,11 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   }
 
   // a --> epsilon --> b, and b doesn't have other inward edges.
-  for (const auto& state : has_epsilon) {
-    const auto& edges = fsm_->GetEdges(state);
-    for (const auto& edge : edges) {
-      if (!edge.IsEpsilon()) {
-        continue;
-      }
-      // Have other inward states.
-      if (previous_states[edge.target].size() != 1 || edge.target == GetStart()) {
-        continue;
-      }
-      bool has_other_edge = false;
-      for (const auto& second_edge : edges) {
-        if (second_edge.IsEpsilon()) {
-          continue;
-        }
-        if (second_edge.target == edge.target) {
-          has_other_edge = true;
-          break;
-        }
-      }
-      // The state can be merged.
-      if (!has_other_edge) {
-        union_find_set.Add(state);
-        union_find_set.Add(edge.target);
-        union_find_set.Union(state, edge.target);
-      }
+  for (const auto& [from, to] : epsilon_edges) {
+    if (previous_states[to] == 1 && GetStart() != to) {
+      union_find_set.Add(from);
+      union_find_set.Add(to);
+      union_find_set.Union(from, to);
     }
   }
 
@@ -1093,6 +1070,7 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
       new_to_old[state] = i;
     }
   }
+
   int cnt = eq_classes.size();
   for (int i = 0; i < NumStates(); i++) {
     if (new_to_old.find(i) == new_to_old.end()) {
