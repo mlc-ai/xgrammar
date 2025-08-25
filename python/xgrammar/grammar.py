@@ -17,6 +17,10 @@ class StructuralTagItem(BaseModel):
     """The schema."""
     end: str
     """The end tag."""
+    schema_type: str = "jsonschema"
+    """The type of the schema. json schema, ebnf grammar, or regex.
+       Valid values: "jsonschema", "ebnf", "regex".
+    """
 
 
 def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
@@ -265,7 +269,10 @@ class Grammar(XGRObject):
         >>> triggers = ["<function="]
         >>> grammar = Grammar.from_structural_tag(tags, triggers)
         """
-        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
+        tags_tuple = [
+            (tag.begin, _convert_schema_to_str(tag.schema_), tag.end, tag.schema_type)
+            for tag in tags
+        ]
         return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
 
     @staticmethod

@@ -33,8 +33,16 @@ Grammar StructuralTagToGrammar(
   std::vector<Grammar> schema_grammars;
   schema_grammars.reserve(tags.size());
   for (const auto& tag : tags) {
-    auto schema_grammar = Grammar::FromJSONSchema(tag.schema, true);
-    schema_grammars.push_back(schema_grammar);
+    XGRAMMAR_LOG(INFO) << tag.type;
+    if (tag.type == "jsonschema") {
+      schema_grammars.push_back(Grammar::FromJSONSchema(tag.schema, true));
+    } else if (tag.type == "regex") {
+      schema_grammars.push_back(Grammar::FromRegex(tag.schema));
+    } else if (tag.type == "ebnf") {
+      schema_grammars.push_back(Grammar::FromEBNF(tag.schema));
+    } else {
+      XGRAMMAR_LOG(FATAL) << "Unexpected tag type: " << tag.type;
+    }
   }
 
   std::vector<std::vector<std::pair<StructuralTagItem, Grammar>>> tag_groups(triggers.size());
