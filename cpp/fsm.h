@@ -319,7 +319,7 @@ class FSM {
    * \param new_num_states The new number of states.
    * \return The rebuilt FSM.
    */
-  FSM RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) const;
+  FSM RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const;
 
   /*!
    * \brief Sort the edges of the FSM by their min, max and target.
@@ -653,9 +653,8 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \param state_mapping The mapping from old state ids to new state ids.
    * \param new_num_states The new number of states.
    */
-  FSMWithStartEnd RebuildWithMapping(
-      std::unordered_map<int, int>& state_mapping, int new_num_states
-  );
+  FSMWithStartEnd RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states)
+      const;
 
   /*!
    * \brief Add the underlying FSM to another complete FSM that could contain multiple FSMs.

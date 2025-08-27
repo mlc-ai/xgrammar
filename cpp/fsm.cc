@@ -222,7 +222,7 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   void AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping);
 
-  FSM RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) const;
+  FSM RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const;
 
   void SortEdges();
 
@@ -333,8 +333,7 @@ void FSM::Impl::AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mappi
   }
 }
 
-FSM FSM::Impl::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states)
-    const {
+FSM FSM::Impl::RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const {
   std::vector<std::set<FSMEdge>> new_edges_set(new_num_states);
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     for (const auto& edge : edges_[i]) {
@@ -434,7 +433,7 @@ void FSM::GetReachableStates(const std::vector<int>& from, std::unordered_set<in
   pimpl_->GetReachableStates(from, result);
 }
 
-FSM FSM::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) const {
+FSM FSM::RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const {
   return pimpl_->RebuildWithMapping(state_mapping, new_num_states);
 }
 
@@ -731,14 +730,14 @@ FSMWithStartEnd FSMWithStartEnd::Copy() const {
 }
 
 FSMWithStartEnd FSMWithStartEnd::RebuildWithMapping(
-    std::unordered_map<int, int>& state_mapping, int new_num_states
-) {
+    const std::vector<int>& state_mapping, int new_num_states
+) const {
   FSM new_fsm = fsm_.RebuildWithMapping(state_mapping, new_num_states);
   auto new_start = state_mapping[start_];
-  std::unordered_set<int> new_ends;
+  std::vector<bool> new_ends(new_num_states, false);
   for (int end = 0; end < NumStates(); ++end) {
     if (IsEndState(end)) {
-      new_ends.insert(state_mapping[end]);
+      new_ends[state_mapping[end]] = true;
     }
   }
   return FSMWithStartEnd(new_fsm, new_start, new_ends);
@@ -1064,7 +1063,7 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
     return *this;
   }
 
-  std::unordered_map<int, int> new_to_old;
+  std::vector<int> new_to_old(NumStates(), -1);
   for (size_t i = 0; i < eq_classes.size(); i++) {
     for (const auto& state : eq_classes[i]) {
       new_to_old[state] = i;
@@ -1073,13 +1072,12 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
 
   int cnt = eq_classes.size();
   for (int i = 0; i < NumStates(); i++) {
-    if (new_to_old.find(i) == new_to_old.end()) {
+    if (new_to_old[i] == -1) {
       new_to_old[i] = cnt;
       cnt++;
     }
   }
-  FSMWithStartEnd result = Copy();
-  return result.RebuildWithMapping(new_to_old, cnt);
+  return RebuildWithMapping(new_to_old, cnt);
 }
 
 FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_states) const {
@@ -1216,7 +1214,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_st
     changed = is_equiv_successor || is_equiv_precursor;
     if (changed) {
       auto eq_classes = union_find_set.GetAllSets();
-      std::unordered_map<int, int> old_to_new;
+      std::vector<int> old_to_new(result.NumStates(), -1);
       for (size_t i = 0; i < eq_classes.size(); i++) {
         for (const auto& state : eq_classes[i]) {
           old_to_new[state] = i;
@@ -1224,7 +1222,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_st
       }
       int cnt = eq_classes.size();
       for (int i = 0; i < result.NumStates(); i++) {
-        if (old_to_new.find(i) == old_to_new.end()) {
+        if (old_to_new[i] == -1) {
           old_to_new[i] = cnt;
           cnt++;
         }
@@ -1349,7 +1347,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_result_num_states) 
       }
     }
   }
-  std::unordered_map<int, int> state_mapping;
+  std::vector<int> state_mapping(now_fsm.NumStates(), -1);
   for (size_t i = 0; i < partitions.size(); ++i) {
     for (const auto& state : partitions[i]) {
       state_mapping[state] = i;
