@@ -298,6 +298,12 @@ std::variant<EBNFLexer::Token, std::vector<EBNFLexer::Token>> EBNFLexer::Impl::N
   switch (Peek()) {
     case '(':
       if (Peek(1) == '=') {
+        if (Peek(2) == '=') {
+          Consume(3);
+          return EBNFLexer::Token{
+              TokenType::ExactLookaheadLParen, "(==", "", start_line, start_column
+          };
+        }
         Consume(2);
         return EBNFLexer::Token{TokenType::LookaheadLParen, "(=", "", start_line, start_column};
       } else {
@@ -751,7 +757,7 @@ int32_t EBNFParser::HandleQuestionQuantifier(int32_t grammar_expr_id) {
   // a?  -->  rule ::= a | empty
   auto new_rule_name = builder_.GetNewRuleName(cur_rule_name_);
   auto new_grammar_expr_id = builder_.AddChoices({builder_.AddEmptyStr(), grammar_expr_id});
-  auto new_rule_id = builder_.AddRule({new_rule_name, new_grammar_expr_id});
+  auto new_rule_id = builder_.AddRule({new_rule_name, new_grammar_expr_id, -1, false});
   return builder_.AddRuleRef(new_rule_id);
 }
 
@@ -837,7 +843,8 @@ int32_t EBNFParser::ParseSequence() {
   do {
     elements.push_back(ParseElementWithQuantifier());
   } while (Peek().type != TokenType::Pipe && Peek().type != TokenType::RParen &&
-           Peek().type != TokenType::LookaheadLParen && Peek().type != TokenType::RuleName &&
+           Peek().type != TokenType::LookaheadLParen &&
+           Peek().type != TokenType::ExactLookaheadLParen && Peek().type != TokenType::RuleName &&
            Peek().type != TokenType::EndOfFile);
 
   return builder_.AddSequence(elements);
@@ -1029,7 +1036,11 @@ int32_t EBNFParser::ParseTagDispatch() {
 }
 
 int32_t EBNFParser::ParseLookaheadAssertion() {
-  PeekAndConsume(TokenType::LookaheadLParen, "Expect (= in lookahead assertion");
+  if (Peek().type == TokenType::LookaheadLParen) {
+    PeekAndConsume(TokenType::LookaheadLParen, "Expect (== or (=  in lookahead assertion");
+  } else {
+    PeekAndConsume(TokenType::ExactLookaheadLParen, "Expect (== or (= in lookahead assertion");
+  }
   auto result = ParseChoices();
   PeekAndConsume(TokenType::RParen, "Expect )");
   return result;
@@ -1047,11 +1058,13 @@ EBNFParser::Rule EBNFParser::ParseRule() {
   auto body_id = ParseChoices();
 
   int32_t lookahead_id = -1;
-  if (Peek().type == TokenType::LookaheadLParen) {
+  bool is_exact_lookahead = false;
+  if (Peek().type == TokenType::LookaheadLParen || Peek().type == TokenType::ExactLookaheadLParen) {
+    is_exact_lookahead = (Peek().type == TokenType::ExactLookaheadLParen);
     lookahead_id = ParseLookaheadAssertion();
   }
 
-  return {cur_rule_name_, body_id, lookahead_id};
+  return {cur_rule_name_, body_id, lookahead_id, is_exact_lookahead};
 }
 
 void EBNFParser::InitRuleNames() {
@@ -1086,6 +1099,7 @@ Grammar EBNFParser::Parse(
     auto new_rule = ParseRule();
     builder_.UpdateRuleBody(new_rule.name, new_rule.body_expr_id);
     builder_.UpdateLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
+    builder_.UpdateLookaheadExact(new_rule.name, new_rule.is_exact_lookahead);
   }
 
   return builder_.Get(root_rule_name);

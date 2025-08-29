@@ -47,7 +47,8 @@ class EBNFLexer {
     EscapeInCharClass,  // Escaped sequence with special function, e.g. \S in [\S]
 
     // Special structures
-    LookaheadLParen,  // (=
+    LookaheadLParen,       // (=
+    ExactLookaheadLParen,  // (==
   };
 
   // Token structure
