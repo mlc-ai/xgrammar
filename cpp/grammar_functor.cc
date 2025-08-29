@@ -1071,6 +1071,14 @@ class StructuralTagGrammarCreatorImpl : public GrammarMutator {
 
 class GrammarFSMBuilderImpl {
  public:
+  const static uint32_t kMax1ByteUnicode = 0x7F;
+  const static uint32_t kMin2BytesUnicode = 0xC080;
+  const static uint32_t kMax2BytesUnicode = 0xDFBF;
+  const static uint32_t kMin3BytesUnicode = 0xE08080;
+  const static uint32_t kMax3BytesUnicode = 0xEFBFBF;
+  const static uint32_t kMin4BytesUnicode = 0xF0808080;
+  const static uint32_t kMax4BytesUnicode = 0xF7BFBFBF;
+
   void Apply(Grammar* grammar) {
     FSM complete_fsm;
     std::vector<std::optional<FSMWithStartEnd>> per_rule_fsms((*grammar)->NumRules());
@@ -1109,13 +1117,13 @@ class GrammarFSMBuilderImpl {
   }
 
   /* Basic Building functions.*/
-  static std::optional<FSMWithStartEnd> RuleRef(const GrammarExpr& expr);
-  static std::optional<FSMWithStartEnd> CharacterClass(const GrammarExpr& expr);
-  static std::optional<FSMWithStartEnd> ByteString(const GrammarExpr& expr);
+  static FSMWithStartEnd RuleRef(const GrammarExpr& expr);
+  static FSMWithStartEnd CharacterClass(const GrammarExpr& expr);
+  static FSMWithStartEnd ByteString(const GrammarExpr& expr);
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
-
+  static void AddCharacterRange(FSMWithStartEnd& fsm, int from, int to, uint32_t min, uint32_t max);
   /* Building tool funtions.*/
   static std::optional<FSMWithStartEnd> BuildTagDispatchWithEOSStop(
       const std::vector<std::pair<std::string, int>>& tag_dispatch_rules, bool loop_after_dispatch
@@ -1125,16 +1133,8 @@ class GrammarFSMBuilderImpl {
       const std::vector<std::string>& stop_strings,
       bool loop_after_dispatch
   );
-  static std::optional<FSMWithStartEnd> BuildNegativeCharacterClass(const GrammarExpr& expr);
+  static FSMWithStartEnd BuildNegativeCharacterClass(const GrammarExpr& expr);
 };
-
-const static uint32_t kMax1ByteUnicode = 0x7F;
-const static uint32_t kMin2BytesUnicode = 0xC080;
-const static uint32_t kMax2BytesUnicode = 0xDFBF;
-const static uint32_t kMin3BytesUnicode = 0xE08080;
-const static uint32_t kMax3BytesUnicode = 0xEFBFBF;
-const static uint32_t kMin4BytesUnicode = 0xF0808080;
-const static uint32_t kMax4BytesUnicode = 0xF7BFBFBF;
 
 // This function will add a range [min, max] of characters to the FSM, and the length
 // of the characters are the same.
@@ -1269,7 +1269,9 @@ void AddSameLengthCharacterRange(
 }
 
 // This function will add a range [min, max] of unicode characters to the FSM.
-void AddCharacterRange(FSMWithStartEnd& fsm, int from, int to, uint32_t min, uint32_t max) {
+void GrammarFSMBuilderImpl::AddCharacterRange(
+    FSMWithStartEnd& fsm, int from, int to, uint32_t min, uint32_t max
+) {
   XGRAMMAR_CHECK(min <= max) << "Invalid character range: min (" << min << ") > max (" << max
                              << ")";
   // Ensure max and min are valid unicode value.
@@ -1347,9 +1349,7 @@ void AddCharacterRange(FSMWithStartEnd& fsm, int from, int to, uint32_t min, uin
   return;
 }
 
-std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildNegativeCharacterClass(
-    const GrammarExpr& expr
-) {
+FSMWithStartEnd GrammarFSMBuilderImpl::BuildNegativeCharacterClass(const GrammarExpr& expr) {
   XGRAMMAR_DCHECK(
       expr.type == ExprType::kCharacterClass || expr.type == ExprType::kCharacterClassStar
   );
@@ -1401,15 +1401,12 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildNegativeCharacterClas
   return result_fsm;
 }
 
-std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::CharacterClass(const GrammarExpr& expr) {
+FSMWithStartEnd GrammarFSMBuilderImpl::CharacterClass(const GrammarExpr& expr) {
   bool is_negative = expr[0];
   FSMWithStartEnd result_fsm;
   if (is_negative) {
-    auto optional_fsm = BuildNegativeCharacterClass(expr);
-    if (!optional_fsm.has_value()) {
-      return std::nullopt;
-    }
-    return result_fsm = std::move(optional_fsm.value());
+    result_fsm = BuildNegativeCharacterClass(expr);
+    return result_fsm;
   }
   int start_state = result_fsm.AddState();
   result_fsm.SetStartState(start_state);
@@ -1439,28 +1436,16 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
     const auto& sequence_expr = grammar->GetGrammarExpr(sequence_id);
     switch (sequence_expr.type) {
       case (ExprType::kByteString): {
-        auto fsm = ByteString(sequence_expr);
-        if (!fsm.has_value()) {
-          return std::nullopt;
-        }
-        fsm_lists.push_back(std::move(fsm.value()));
+        fsm_lists.push_back(ByteString(sequence_expr));
         break;
       }
       case (ExprType::kRuleRef): {
-        auto fsm = RuleRef(sequence_expr);
-        if (!fsm.has_value()) {
-          return std::nullopt;
-        }
-        fsm_lists.push_back(std::move(fsm.value()));
+        fsm_lists.push_back(RuleRef(sequence_expr));
         break;
       }
       case (ExprType::kCharacterClass):
       case (ExprType::kCharacterClassStar): {
-        auto fsm = CharacterClass(sequence_expr);
-        if (!fsm.has_value()) {
-          return std::nullopt;
-        }
-        fsm_lists.push_back(std::move(fsm.value()));
+        fsm_lists.push_back(CharacterClass(sequence_expr));
         break;
       }
       default: {
@@ -1481,7 +1466,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
   return FSMWithStartEnd::Concat(fsm_lists);
 }
 
-std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::RuleRef(const GrammarExpr& expr) {
+FSMWithStartEnd GrammarFSMBuilderImpl::RuleRef(const GrammarExpr& expr) {
   FSMWithStartEnd result_fsm;
   result_fsm.AddState();
   result_fsm.AddState();
@@ -1491,7 +1476,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::RuleRef(const GrammarExpr&
   return result_fsm;
 }
 
-std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::ByteString(const GrammarExpr& expr) {
+FSMWithStartEnd GrammarFSMBuilderImpl::ByteString(const GrammarExpr& expr) {
   XGRAMMAR_DCHECK(expr.type == ExprType::kByteString);
   FSMWithStartEnd result_fsm;
   int current_state = result_fsm.AddState();
@@ -1759,15 +1744,15 @@ void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl().Apply(
 
 void RepetitionNormalizer::Apply(Grammar* grammar) { RepetitionNormalizerImpl().Apply(grammar); }
 
-std::optional<FSMWithStartEnd> GrammarFSMBuilder::RuleRef(const GrammarExpr& expr) {
+FSMWithStartEnd GrammarFSMBuilder::RuleRef(const GrammarExpr& expr) {
   return GrammarFSMBuilderImpl::RuleRef(expr);
 }
 
-std::optional<FSMWithStartEnd> GrammarFSMBuilder::CharacterClass(const GrammarExpr& expr) {
+FSMWithStartEnd GrammarFSMBuilder::CharacterClass(const GrammarExpr& expr) {
   return GrammarFSMBuilderImpl::CharacterClass(expr);
 }
 
-std::optional<FSMWithStartEnd> GrammarFSMBuilder::ByteString(const GrammarExpr& expr) {
+FSMWithStartEnd GrammarFSMBuilder::ByteString(const GrammarExpr& expr) {
   return GrammarFSMBuilderImpl::ByteString(expr);
 }
 

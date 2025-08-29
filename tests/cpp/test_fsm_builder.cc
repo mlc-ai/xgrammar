@@ -188,9 +188,7 @@ using GrammarExprType = Grammar::Impl::GrammarExprType;
 TEST(XGrammarFSMBuilderTest, TestByteStringFSMBuilder1) {
   int32_t byte_string[] = {'h', 'e', 'l', 'l', 'o'};
   GrammarExpr grammar_expr = {GrammarExprType::kByteString, byte_string, 5};
-  auto fsm_result = GrammarFSMBuilder::ByteString(grammar_expr);
-  EXPECT_TRUE(fsm_result.has_value());
-  auto fsm = std::move(fsm_result).value();
+  auto fsm = GrammarFSMBuilder::ByteString(grammar_expr);
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
       R"(FSM(num_states=6, start=0, end=[5], edges=[
@@ -212,9 +210,7 @@ TEST(XGrammarFSMBuilderTest, TestByteStringFSMBuilder2) {
       byte_string_vec.data(),
       static_cast<int32_t>(byte_string_vec.size())
   };
-  auto fsm_result = GrammarFSMBuilder::ByteString(grammar_expr);
-  EXPECT_TRUE(fsm_result.has_value());
-  auto fsm = std::move(fsm_result).value();
+  auto fsm = GrammarFSMBuilder::ByteString(grammar_expr);
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
       R"(FSM(num_states=7, start=0, end=[6], edges=[
@@ -232,9 +228,7 @@ TEST(XGrammarFSMBuilderTest, TestByteStringFSMBuilder2) {
 TEST(XGrammarFSMBuilderTest, TestRuleRefFSMBuilder) {
   int32_t rule_ref = 1;
   GrammarExpr grammar_expr = {GrammarExprType::kRuleRef, &rule_ref, 1};
-  auto fsm_result = GrammarFSMBuilder::RuleRef(grammar_expr);
-  EXPECT_TRUE(fsm_result.has_value());
-  auto fsm = std::move(fsm_result).value();
+  auto fsm = GrammarFSMBuilder::RuleRef(grammar_expr);
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
       R"(FSM(num_states=2, start=0, end=[1], edges=[
@@ -249,9 +243,7 @@ TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder1) {
   GrammarExpr grammar_expr = {
       GrammarExprType::kCharacterClass, datas.data(), static_cast<int32_t>(datas.size())
   };
-  auto fsm_result = GrammarFSMBuilder::CharacterClass(grammar_expr);
-  EXPECT_TRUE(fsm_result.has_value());
-  auto fsm = std::move(fsm_result).value();
+  auto fsm = GrammarFSMBuilder::CharacterClass(grammar_expr);
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
       R"(FSM(num_states=2, start=0, end=[1], edges=[
@@ -266,9 +258,7 @@ TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder2) {
   GrammarExpr grammar_expr = {
       GrammarExprType::kCharacterClassStar, datas.data(), static_cast<int32_t>(datas.size())
   };
-  auto fsm_result = GrammarFSMBuilder::CharacterClass(grammar_expr);
-  EXPECT_TRUE(fsm_result.has_value());
-  auto fsm = std::move(fsm_result).value();
+  auto fsm = GrammarFSMBuilder::CharacterClass(grammar_expr);
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
       R"(FSM(num_states=1, start=0, end=[0], edges=[
@@ -282,9 +272,7 @@ TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder3) {
   GrammarExpr grammar_expr = {
       GrammarExprType::kCharacterClass, datas.data(), static_cast<int32_t>(datas.size())
   };
-  auto fsm_result = GrammarFSMBuilder::CharacterClass(grammar_expr);
-  EXPECT_TRUE(fsm_result.has_value());
-  auto fsm = std::move(fsm_result).value();
+  auto fsm = GrammarFSMBuilder::CharacterClass(grammar_expr);
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
       R"(FSM(num_states=8, start=0, end=[1], edges=[
@@ -305,9 +293,7 @@ TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder4) {
   GrammarExpr grammar_expr = {
       GrammarExprType::kCharacterClassStar, datas.data(), static_cast<int32_t>(datas.size())
   };
-  auto fsm_result = GrammarFSMBuilder::CharacterClass(grammar_expr);
-  EXPECT_TRUE(fsm_result.has_value());
-  auto fsm = std::move(fsm_result).value();
+  auto fsm = GrammarFSMBuilder::CharacterClass(grammar_expr);
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
       R"(FSM(num_states=7, start=0, end=[0], edges=[
