@@ -8,6 +8,7 @@
 #include <picojson.h>
 
 #include <cstdint>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -772,9 +773,8 @@ int32_t EBNFParser::HandleRepetitionRange(
       }
       new_element = builder_.AddCharacterClassStar(character_ranges, is_negative);
     } else {
-      const auto unbounded_repeat_name =
-          builder_.GetNewRuleName(cur_rule_name_) + "_xgrammar_repetition_context_unbounded";
-      const auto& unbounded_rule_id = builder_.AddEmptyRule(unbounded_repeat_name);
+      const auto& unbounded_rule_id =
+          builder_.AddEmptyRule(builder_.GetNewRuleName(cur_rule_name_ + "_repeat_inf"));
       int recursion_sequence =
           builder_.AddSequence({grammar_expr_id, builder_.AddRuleRef(unbounded_rule_id)});
       int recursion_choice = builder_.AddChoices({builder_.AddEmptyStr(), recursion_sequence});
@@ -784,7 +784,8 @@ int32_t EBNFParser::HandleRepetitionRange(
     upper = lower;
   }
   std::vector<int32_t> elements;
-  const auto repeat_name = builder_.GetNewRuleName(cur_rule_name_) + "_xgrammar_repetition_context";
+  const auto repeat_name = cur_rule_name_ + "_repeat_";
+  int cnt = 1;
   int splited_count = lower >= 4 ? 4 : lower;
   int nullable_splited_count = 0;
   if (splited_count != 4) {
@@ -793,9 +794,9 @@ int32_t EBNFParser::HandleRepetitionRange(
   }
   // The repetition sentence.
   if (upper != (splited_count + nullable_splited_count)) {
-    auto new_rule_name = builder_.GetNewRuleName(repeat_name);
     auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
-    auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
+    auto new_rule_id =
+        builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
     elements.push_back(builder_.AddRepeat(
         new_rule_id, lower - splited_count, upper - splited_count - nullable_splited_count
     ));
@@ -804,17 +805,17 @@ int32_t EBNFParser::HandleRepetitionRange(
 
   // The nullable exprs.
   for (int i = 0; i < nullable_splited_count; i++) {
-    auto new_rule_name = builder_.GetNewRuleName(repeat_name);
     auto new_grammar_expr_id =
         builder_.AddChoices({builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id})});
-    auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
+    auto new_rule_id =
+        builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
     elements.push_back(builder_.AddRuleRef(new_rule_id));
   }
 
   for (int i = 0; i < splited_count; i++) {
-    auto new_rule_name = builder_.GetNewRuleName(repeat_name);
     auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
-    auto new_rule_id = builder_.AddRule(new_rule_name, new_grammar_expr_id);
+    auto new_rule_id =
+        builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
     elements.push_back(builder_.AddRuleRef(new_rule_id));
   }
   if (is_unbounded) {
