@@ -78,12 +78,19 @@ class Grammar::Impl {
     /*! \brief The id of the associated lookahead assertion expr. For now it must be a id of a
      * sequence GrammarExpr. -1 if not exists. */
     int32_t lookahead_assertion_id = -1;
+    /*! \brief Whether the lookahead assertion is exact. */
+    bool is_exact_lookahead = false;
   };
 
   /*! \brief Get the number of rules. */
   int32_t NumRules() const { return rules_.size(); }
   /*! \brief Get the rule with the given id. */
   const Rule& GetRule(int32_t rule_id) const {
+    XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(rules_.size()))
+        << "rule_id " << rule_id << " is out of bound";
+    return rules_[rule_id];
+  }
+  Rule& GetRule(int32_t rule_id) {
     XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(rules_.size()))
         << "rule_id " << rule_id << " is out of bound";
     return rules_[rule_id];
@@ -250,9 +257,6 @@ class Grammar::Impl {
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
 
-  /*! \brief Store the lookahead which are exact, used to reduce uncertainty.*/
-  std::vector<int32_t> exact_lookahead;
-
   friend class GrammarBuilder;
   friend class GrammarCompiler;
 
@@ -264,7 +268,8 @@ XGRAMMAR_MEMBER_ARRAY(
     Grammar::Impl::Rule,
     &Grammar::Impl::Rule::name,
     &Grammar::Impl::Rule::body_expr_id,
-    &Grammar::Impl::Rule::lookahead_assertion_id
+    &Grammar::Impl::Rule::lookahead_assertion_id,
+    &Grammar::Impl::Rule::is_exact_lookahead
 );
 
 XGRAMMAR_MEMBER_TABLE(
@@ -282,9 +287,7 @@ XGRAMMAR_MEMBER_TABLE(
     "per_rule_fsms",
     &Grammar::Impl::per_rule_fsms,
     "allow_empty_rule_ids",
-    &Grammar::Impl::allow_empty_rule_ids,
-    "exact_lookahead",
-    &Grammar::Impl::exact_lookahead
+    &Grammar::Impl::allow_empty_rule_ids
 );
 
 }  // namespace xgrammar

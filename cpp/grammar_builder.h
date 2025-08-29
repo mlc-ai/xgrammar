@@ -279,6 +279,12 @@ class GrammarBuilder {
     grammar_->rules_[rule_id].lookahead_assertion_id = lookahead_assertion_id;
   }
 
+  void UpdateLookaheadExact(int32_t rule_id, bool is_exact = true) {
+    XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+        << "Rule id " << rule_id << " is out of range.";
+    grammar_->rules_[rule_id].is_exact_lookahead = is_exact;
+  }
+
   /*!
    * \brief Add a lookahead assertion to a rule referred by the given name. The lookahead
    * assertion should be a sequence GrammarExpr id. An id of -1 means no lookahead assertion.

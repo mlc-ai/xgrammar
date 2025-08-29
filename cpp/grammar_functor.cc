@@ -574,7 +574,6 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     if (root_grammar_expr.type == GrammarExprType::kTagDispatch) {
       return grammar;
     }
-    std::vector<int32_t> exact_lookahead;
     for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
       auto rule = grammar->GetRule(i);
       if (i == grammar->GetRootRuleId() || rule.lookahead_assertion_id != -1) {
@@ -582,14 +581,11 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       }
       auto look_head_assertion_id = DetectLookaheadAssertion(i);
       if (look_head_assertion_id != -1) {
-        exact_lookahead.push_back(i);
         builder_->UpdateLookaheadAssertion(i, look_head_assertion_id);
+        builder_->UpdateLookaheadExact(i);
       }
     }
-    auto return_grammar = builder_->Get(grammar->GetRootRuleId());
-    std::sort(exact_lookahead.begin(), exact_lookahead.end());
-    return_grammar->exact_lookahead = exact_lookahead;
-    return return_grammar;
+    return builder_->Get(grammar->GetRootRuleId());
   }
 
   int32_t DetectLookaheadAssertion(int32_t rule_id) {
@@ -1653,7 +1649,7 @@ class RepetitionNormalizerImpl {
         continue;
       }
       int repeat_rule_id = expr[0];
-      (*grammar)->exact_lookahead.push_back(repeat_rule_id);
+      grammar->ImplPtr()->GetRule(repeat_rule_id).is_exact_lookahead = true;
       if (std::binary_search(
               (*grammar)->allow_empty_rule_ids.begin(),
               (*grammar)->allow_empty_rule_ids.end(),
@@ -1663,7 +1659,6 @@ class RepetitionNormalizerImpl {
         expr.SetData(1, 0);  // Set min repeat to 0
       }
     }
-    std::sort((*grammar)->exact_lookahead.begin(), (*grammar)->exact_lookahead.end());
   }
 };
 

@@ -114,9 +114,11 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
 std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAssertion(
     const std::string& token, const std::vector<bool>& can_reach_end_stack
 ) {
+  bool accepted = true;
+  bool can_reach_end = true;
   auto lookahead_assertion_id = grammar_->GetRule(init_rule_id).lookahead_assertion_id;
   if (lookahead_assertion_id == -1) {
-    return {true, true};
+    return {accepted, can_reach_end};
   }
   auto lookahead_state =
       ParserState(/*rule_id*/ -1, lookahead_assertion_id, 0, ParserState::kNoPrevInputPos, 0);
@@ -125,7 +127,7 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
   if (IsCompleted()) {
     // If the lookahead assertion is already completed, we can accept the token.
     PopLastStates(1);
-    return {true, true};
+    return {accepted, can_reach_end};
   }
 
   // Find all positions that can come to and end. Then check if the suffix from that position
@@ -145,20 +147,23 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
         // accepted chars: pos - i + 1
         // we need to rollback the pushed initial state as well
         PopLastStates(pos - i + 2);
-        return {true, true};
+        return {accepted, can_reach_end};
       }
     }
     // Case 2. The whole token is accepted
     if (last_accept_pos == token_len - 1) {
       PopLastStates(last_accept_pos - i + 2);
-      return {true, false};
+      can_reach_end = false;
+      return {accepted, can_reach_end};
     }
     // Case 3. The token is not accepted. Check the next position.
     PopLastStates(last_accept_pos - i + 1);
   }
 
   PopLastStates(1);
-  return {false, false};
+  can_reach_end = false;
+  accepted = false;
+  return {accepted, can_reach_end};
 }
 
 // Comparator for std::pair<int32_t, std::string> based on the string value.
@@ -327,9 +332,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
   int prev_matched_size = 0;
   int last_rejected_range = 0;
-  bool is_exact_lookahead = std::binary_search(
-      grammar_->exact_lookahead.begin(), grammar_->exact_lookahead.end(), init_rule_id
-  );
+  const bool& is_exact_lookahead = grammar_->GetRule(init_rule_id).is_exact_lookahead;
   const std::string* prev_token = nullptr;
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
