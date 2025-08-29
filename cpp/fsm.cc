@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <bitset>
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -334,19 +335,20 @@ void FSM::Impl::AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mappi
 }
 
 FSM FSM::Impl::RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const {
-  std::vector<std::set<FSMEdge>> new_edges_set(new_num_states);
+  std::vector<std::vector<FSMEdge>> new_edges(new_num_states);
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     for (const auto& edge : edges_[i]) {
       if (edge.IsEpsilon() && state_mapping[i] == state_mapping[edge.target]) {
         continue;  // Skip self-loops for epsilon edges.
       }
-      new_edges_set[state_mapping[i]].insert(FSMEdge(edge.min, edge.max, state_mapping[edge.target])
+      new_edges[state_mapping[i]].push_back(FSMEdge(edge.min, edge.max, state_mapping[edge.target])
       );
     }
   }
-  std::vector<std::vector<FSMEdge>> new_edges(new_num_states);
   for (int i = 0; i < new_num_states; ++i) {
-    new_edges[i].insert(new_edges[i].end(), new_edges_set[i].begin(), new_edges_set[i].end());
+    std::sort(new_edges[i].begin(), new_edges[i].end());
+    const auto& end_iter = std::unique(new_edges[i].begin(), new_edges[i].end());
+    new_edges[i].erase(end_iter, new_edges[i].end());
   }
   return FSM(std::move(new_edges));
 }
