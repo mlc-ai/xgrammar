@@ -223,7 +223,10 @@ class GrammarCompiler(XGRObject):
         compiled_grammar : CompiledGrammar
             The compiled grammar.
         """
-        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
+        tags_tuple = [
+            (tag.begin, _convert_schema_to_str(tag.schema_), tag.end, tag.schema_type)
+            for tag in tags
+        ]
         return CompiledGrammar._create_from_handle(
             self._handle.compile_structural_tag(tags_tuple, triggers)
         )
