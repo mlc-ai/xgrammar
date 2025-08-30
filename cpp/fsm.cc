@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <bitset>
 #include <cassert>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -343,8 +342,7 @@ FSM FSM::Impl::RebuildWithMapping(const std::vector<int>& state_mapping, int new
       if (edge.IsEpsilon() && state_mapping[i] == state_mapping[edge.target]) {
         continue;  // Skip self-loops for epsilon edges.
       }
-      new_edges[state_mapping[i]].push_back(FSMEdge(edge.min, edge.max, state_mapping[edge.target])
-      );
+      new_edges[state_mapping[i]].emplace_back(edge.min, edge.max, state_mapping[edge.target]);
     }
   }
   for (int i = 0; i < new_num_states; ++i) {
@@ -1032,13 +1030,14 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   UnionFindSet<int> union_find_set;
   std::vector<int> previous_states(NumStates(), 0);
   std::vector<std::pair<int32_t, int32_t>> epsilon_edges;
-  FSMWithStartEnd fsm_copy = FSMWithStartEnd(FSM(NumStates()), start_, ends_);
-
   for (int i = 0; i < NumStates(); i++) {
     const auto& edges = fsm_->GetEdges(i);
     for (const auto& edge : edges) {
+      previous_states[edge.target]++;
       if (edge.IsEpsilon()) {
-        if (edges.size() == 1) {
+        if (edges.size() != 1) {
+          epsilon_edges.push_back({i, edge.target});
+        } else {
           // a -- epsilon --> b, and a doesn't have other outward edges.
           union_find_set.Add(i);
           union_find_set.Add(edge.target);
@@ -1049,31 +1048,21 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   }
 
   // Build the equivalent graph.
+  std::vector<int> equiv_node(NumStates());
   for (int i = 0; i < NumStates(); i++) {
-    const auto& edges = fsm_->GetEdges(i);
-    for (int j = edges.size() - 1; j >= 0; j--) {
-      auto& edge = edges[j];
-      int from = union_find_set.Count(i) ? union_find_set.Find(i) : i;
-      int to = union_find_set.Count(edge.target) ? union_find_set.Find(edge.target) : edge.target;
-      if (edge.IsEpsilon()) {
-        if (from == to) {
-          continue;  // Remove self-loops for epsilon edges.
-        }
-        epsilon_edges.push_back({from, to});
-      }
-      fsm_copy.GetFsm().AddEdge(from, to, edge.min, edge.max);
-      previous_states[to]++;
+    if (union_find_set.Count(i)) {
+      equiv_node[i] = union_find_set.Find(i);
+      previous_states[equiv_node[i]] += previous_states[i];
+    } else {
+      equiv_node[i] = i;
     }
   }
 
-  // Update the start state.
-  if (union_find_set.Count(GetStart())) {
-    fsm_copy.SetStartState(union_find_set.Find(GetStart()));
-  }
-
   // a --> epsilon --> b, and b doesn't have other inward edges.
-  for (const auto& [from, to] : epsilon_edges) {
-    if (previous_states[to] == 1 && fsm_copy.GetStart() != to) {
+  for (const auto& [from_raw, to_raw] : epsilon_edges) {
+    const int& from = equiv_node[from_raw];
+    const int& to = equiv_node[to_raw];
+    if (previous_states[to] == 1 && equiv_node[GetStart()] != to) {
       union_find_set.Add(from);
       union_find_set.Add(to);
       union_find_set.Union(from, to);
