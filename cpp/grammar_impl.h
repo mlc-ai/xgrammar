@@ -79,7 +79,7 @@ class Grammar::Impl {
      * sequence GrammarExpr. -1 if not exists. */
     int32_t lookahead_assertion_id = -1;
     /*! \brief Whether the lookahead assertion is exact. */
-    bool is_exact_lookahead;
+    bool is_exact_lookahead = false;
   };
 
   /*! \brief Get the number of rules. */

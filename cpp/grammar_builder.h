@@ -229,11 +229,11 @@ class GrammarBuilder {
   }
 
   int32_t AddRule(const std::string& name, int32_t body_expr_id) {
-    return AddRule({name, body_expr_id, -1, false});
+    return AddRule({name, body_expr_id});
   }
 
   int32_t AddRuleWithHint(const std::string& name_hint, int32_t body_expr_id) {
-    return AddRule({GetNewRuleName(name_hint), body_expr_id, -1, false});
+    return AddRule({GetNewRuleName(name_hint), body_expr_id});
   }
 
   int32_t NumRules() const { return grammar_->NumRules(); }
@@ -247,7 +247,7 @@ class GrammarBuilder {
    * required to build the rule body.
    * \sa GrammarBuilder::UpdateRuleBody
    */
-  int32_t AddEmptyRule(const std::string& name) { return AddRule({name, -1, -1, false}); }
+  int32_t AddEmptyRule(const std::string& name) { return AddRule({name, -1}); }
 
   /*!
    * \brief Update the rule body of the given rule, specified by rule id. Can be used to set the
@@ -293,15 +293,6 @@ class GrammarBuilder {
     int32_t rule_id = GetRuleId(rule_name);
     XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
     UpdateLookaheadAssertion(rule_id, lookahead_assertion_id);
-  }
-
-  /*!
-   * \brief Add the exact flag of a lookahead assertion to a rule referred by the given name.
-   */
-  void UpdateLookaheadExact(std::string rule_name, bool is_exact) {
-    int32_t rule_id = GetRuleId(rule_name);
-    XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
-    grammar_->rules_[rule_id].is_exact_lookahead = is_exact;
   }
 
   /*!

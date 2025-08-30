@@ -412,26 +412,6 @@ d_choice ::= (("e") | ("d"))
     assert after == expected
 
 
-def test_exact_lookahead_assertion_with_normalizer():
-    before = """root ::= ((b c d))
-b ::= (("abc" [a-z])) (==("abc"))
-c ::= (("a") | ("b")) (==[a-z] "b")
-d ::= (("ac") | ("b" d_choice)) (=="abc")
-d_choice ::= (("e") | ("d"))
-"""
-    expected = """root ::= ((b c d))
-b ::= (("abc" [a-z])) (==("abc"))
-c ::= (("a") | ("b")) (==([a-z] "b"))
-d ::= (("ac") | ("b" d_choice)) (==("abc"))
-d_choice ::= (("e") | ("d"))
-"""
-    grammar = _ebnf_to_grammar_no_normalization(before)
-    grammar = GrammarFunctor.structure_normalizer(grammar)
-    grammar = GrammarFunctor.byte_string_fuser(grammar)
-    after = str(grammar)
-    assert after == expected
-
-
 def test_char():
     before = r"""root ::= [a-z] [A-z] "\u0234" "\U00000345\xff" [-A-Z] [--] [^a] rest
 rest ::= [a-zA-Z0-9-] [\u0234-\U00000345] [测-试] [\--\]]  rest1
@@ -504,10 +484,10 @@ rule4 ::= "" | "e" rule4 "f"
 rule5 ::= "" | "g" rule5 "h"
 """
     expected = r"""root ::= (("a" rule1 "b" rule3 rule5 rule2))
-rule1 ::= (("b")) (==("b" rule3 rule5 rule2))
+rule1 ::= (("b")) (=("b" rule3 rule5 rule2))
 rule2 ::= (("c"))
-rule3 ::= (("") | ("d" rule3)) (==(rule5 rule2))
-rule4 ::= (("") | ("e" rule4 "f")) (==("f"))
+rule3 ::= (("") | ("d" rule3)) (=(rule5 rule2))
+rule4 ::= (("") | ("e" rule4 "f")) (=("f"))
 rule5 ::= (("") | ("g" rule5 "h"))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)

@@ -118,7 +118,6 @@ class StructureNormalizerSub : public GrammarMutator {
       auto new_body_expr_id = VisitRuleBody(grammar_expr);
       builder_->UpdateRuleBody(i, new_body_expr_id);
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
-      builder_->UpdateLookaheadExact(i, rule.is_exact_lookahead);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
   }
@@ -532,7 +531,6 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(
           rule_id_map_[rule_id], VisitLookaheadAssertion(rule.lookahead_assertion_id)
       );
-      builder_->UpdateLookaheadExact(rule_id_map_[rule_id], rule.is_exact_lookahead);
     }
     XGRAMMAR_CHECK(rule_id_map_.count(grammar->GetRootRuleId()) > 0);
     return builder_->Get(rule_id_map_[grammar->GetRootRuleId()]);
@@ -705,7 +703,6 @@ class SubGrammarAdderImpl : public GrammarMutator {
       builder_->UpdateRuleBody(new_rule_ids_names[i].first, new_body_expr_id);
       auto new_lookahead_assertion_id = VisitLookaheadAssertion(rule.lookahead_assertion_id);
       builder_->UpdateLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
-      builder_->UpdateLookaheadExact(new_rule_ids_names[i].first, rule.is_exact_lookahead);
     }
     return new_rule_ids_names[base_grammar_->GetRootRuleId()].first;
   }

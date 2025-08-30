@@ -193,7 +193,7 @@ def test_serialize_compiled_grammar():
 
     expected_json = {
         "grammar": {
-            "rules": [["rule1", 4, 6, True], ["root_rule", 10, -1, False]],
+            "rules": [["rule1", 4, 6, False], ["root_rule", 10, -1, False]],
             "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 27, 30, 34],
             "grammar_expr_indptr": [
                 # fmt: off

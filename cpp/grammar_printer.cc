@@ -14,11 +14,7 @@ namespace xgrammar {
 std::string GrammarPrinter::PrintRule(const Rule& rule) {
   std::string res = rule.name + " ::= " + PrintGrammarExpr(rule.body_expr_id);
   if (rule.lookahead_assertion_id != -1) {
-    if (rule.is_exact_lookahead) {
-      res += " (==" + PrintGrammarExpr(rule.lookahead_assertion_id) + ")";
-    } else {
-      res += " (=" + PrintGrammarExpr(rule.lookahead_assertion_id) + ")";
-    }
+    res += " (=" + PrintGrammarExpr(rule.lookahead_assertion_id) + ")";
   }
   return res;
 }
