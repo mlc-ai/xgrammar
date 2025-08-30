@@ -192,7 +192,7 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
 Result<FSMWithStartEnd> RegexIR::Build() const {
   if (states.empty()) {
     FSM empty_fsm(1);
-    FSMWithStartEnd result(empty_fsm, 0, std::unordered_set<int>{0}, false);
+    FSMWithStartEnd result(empty_fsm, 0, {true}, false);
     return ResultOk(std::move(result));
   }
   std::vector<FSMWithStartEnd> fsm_list;
@@ -336,7 +336,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
 
 FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
   FSM empty_fsm(0);
-  FSMWithStartEnd result(empty_fsm, 0, std::unordered_set<int>{}, true);
+  FSMWithStartEnd result(empty_fsm, 0, {}, true);
   // Handle the regex string.
   if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
     result.AddState();
@@ -495,7 +495,9 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
         new_fsm.AddEdge(0, 1, last, 0xFF);
       }
     }
-    result = FSMWithStartEnd(new_fsm, 0, std::unordered_set<int>{1}, false);
+    std::vector<bool> ends(new_fsm.NumStates(), false);
+    ends[1] = true;
+    result = FSMWithStartEnd(new_fsm, 0, ends, false);
   } else {
     // TODO: The support for rules.
     XGRAMMAR_LOG(WARNING) << "rule is not supported yet.";
@@ -830,7 +832,13 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
   if (add_back_edges) {
     AddBackEdges(&fsm, start, ends);
   }
-  return FSMWithStartEnd(fsm, start, ends);
+
+  std::vector<bool> is_end_state(fsm.NumStates(), false);
+  for (const auto& end : ends) {
+    is_end_state[end] = true;
+  }
+
+  return FSMWithStartEnd(fsm, start, is_end_state);
 }
 
 void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends) {

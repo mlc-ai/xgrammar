@@ -220,13 +220,15 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   void AddEOSEdge(int from, int to) { AddEdge(from, to, FSMEdge::EdgeType::kEOS, 0); }
 
-  void AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping);
+  void AddFSM(const FSM& fsm, std::vector<int>* state_mapping);
 
-  FSM RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) const;
+  FSM RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const;
 
   void SortEdges();
 
   CompactFSM ToCompact();
+
+  friend class FSMWithStartEnd;
 };
 
 int FSM::Impl::GetNextState(int from, int value, EdgeType edge_type) const {
@@ -314,13 +316,14 @@ void FSM::Impl::Advance(
   GetEpsilonClosure(result);
 }
 
-void FSM::Impl::AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping) {
+void FSM::Impl::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
   int old_num_states = NumStates();
 
   if (state_mapping != nullptr) {
     state_mapping->clear();
+    state_mapping->reserve(fsm.NumStates());
     for (int i = 0; i < fsm.NumStates(); ++i) {
-      state_mapping->insert({i, i + old_num_states});
+      state_mapping->push_back(i + old_num_states);
     }
   }
 
@@ -333,21 +336,20 @@ void FSM::Impl::AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mappi
   }
 }
 
-FSM FSM::Impl::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states)
-    const {
-  std::vector<std::set<FSMEdge>> new_edges_set(new_num_states);
+FSM FSM::Impl::RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const {
+  std::vector<std::vector<FSMEdge>> new_edges(new_num_states);
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     for (const auto& edge : edges_[i]) {
       if (edge.IsEpsilon() && state_mapping[i] == state_mapping[edge.target]) {
         continue;  // Skip self-loops for epsilon edges.
       }
-      new_edges_set[state_mapping[i]].insert(FSMEdge(edge.min, edge.max, state_mapping[edge.target])
-      );
+      new_edges[state_mapping[i]].emplace_back(edge.min, edge.max, state_mapping[edge.target]);
     }
   }
-  std::vector<std::vector<FSMEdge>> new_edges(new_num_states);
   for (int i = 0; i < new_num_states; ++i) {
-    new_edges[i].insert(new_edges[i].end(), new_edges_set[i].begin(), new_edges_set[i].end());
+    std::sort(new_edges[i].begin(), new_edges[i].end());
+    const auto& end_iter = std::unique(new_edges[i].begin(), new_edges[i].end());
+    new_edges[i].erase(end_iter, new_edges[i].end());
   }
   return FSM(std::move(new_edges));
 }
@@ -390,7 +392,7 @@ void FSM::AddRuleEdge(int from, int to, int16_t rule_id) { pimpl_->AddRuleEdge(f
 
 void FSM::AddEOSEdge(int from, int to) { pimpl_->AddEOSEdge(from, to); }
 
-void FSM::AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping) {
+void FSM::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
   pimpl_->AddFSM(fsm, state_mapping);
 }
 
@@ -434,7 +436,7 @@ void FSM::GetReachableStates(const std::vector<int>& from, std::unordered_set<in
   pimpl_->GetReachableStates(from, result);
 }
 
-FSM FSM::RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) const {
+FSM FSM::RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const {
   return pimpl_->RebuildWithMapping(state_mapping, new_num_states);
 }
 
@@ -731,14 +733,14 @@ FSMWithStartEnd FSMWithStartEnd::Copy() const {
 }
 
 FSMWithStartEnd FSMWithStartEnd::RebuildWithMapping(
-    std::unordered_map<int, int>& state_mapping, int new_num_states
-) {
+    const std::vector<int>& state_mapping, int new_num_states
+) const {
   FSM new_fsm = fsm_.RebuildWithMapping(state_mapping, new_num_states);
   auto new_start = state_mapping[start_];
-  std::unordered_set<int> new_ends;
+  std::vector<bool> new_ends(new_num_states, false);
   for (int end = 0; end < NumStates(); ++end) {
     if (IsEndState(end)) {
-      new_ends.insert(state_mapping[end]);
+      new_ends[state_mapping[end]] = true;
     }
   }
   return FSMWithStartEnd(new_fsm, new_start, new_ends);
@@ -749,15 +751,15 @@ CompactFSMWithStartEnd FSMWithStartEnd::ToCompact() {
 }
 
 FSMWithStartEnd FSMWithStartEnd::AddToCompleteFSM(
-    FSM* complete_fsm, std::unordered_map<int, int>* state_mapping
+    FSM* complete_fsm, std::vector<int>* state_mapping
 ) {
   XGRAMMAR_DCHECK(state_mapping != nullptr) << "state_mapping cannot be nullptr";
   complete_fsm->AddFSM(fsm_, state_mapping);
   int new_start = (*state_mapping)[start_];
-  std::unordered_set<int> new_ends;
+  std::vector<bool> new_ends(complete_fsm->NumStates(), false);
   for (int end = 0; end < NumStates(); ++end) {
     if (IsEndState(end)) {
-      new_ends.insert((*state_mapping)[end]);
+      new_ends[(*state_mapping)[end]] = true;
     }
   }
   return FSMWithStartEnd(*complete_fsm, new_start, new_ends, is_dfa_);
@@ -865,17 +867,15 @@ FSMWithStartEnd FSMWithStartEnd::Union(const std::vector<FSMWithStartEnd>& fsms)
 
   FSM fsm(1);
   int start = 0;
-  std::unordered_set<int> ends;
+  std::vector<bool> ends(1, false);
 
-  std::unordered_map<int, int> state_mapping;
+  std::vector<int> state_mapping;
 
   for (const auto& fsm_with_se : fsms) {
     fsm.AddFSM(fsm_with_se.GetFsm(), &state_mapping);
     fsm.AddEpsilonEdge(start, state_mapping[fsm_with_se.GetStart()]);
-    for (int end = 0; end < fsm_with_se.NumStates(); ++end) {
-      if (fsm_with_se.IsEndState(end)) {
-        ends.insert(state_mapping[end]);
-      }
+    for (int state = 0; state < fsm_with_se.NumStates(); ++state) {
+      ends.push_back(fsm_with_se.IsEndState(state));
     }
   }
 
@@ -893,9 +893,9 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
 
   FSM fsm;
   int start = 0;
-  std::unordered_set<int> ends;
+  std::vector<bool> ends;
 
-  std::unordered_map<int, int> state_mapping;
+  std::vector<int> state_mapping;
   std::vector<int> previous_ends;
 
   for (int i = 0; i < static_cast<int>(fsms.size()); ++i) {
@@ -909,9 +909,10 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
       }
     }
     if (i == static_cast<int>(fsms.size()) - 1) {
+      ends.resize(fsm.NumStates(), false);
       for (int end = 0; end < fsms[i].NumStates(); ++end) {
         if (fsms[i].IsEndState(end)) {
-          ends.insert(state_mapping[end]);
+          ends[state_mapping[end]] = true;
         }
       }
     } else {
@@ -1018,26 +1019,24 @@ bool FSMWithStartEnd::IsDFA() {
   return true;
 }
 
-FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon() const {
+FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   if (is_dfa_) {
     return *this;
   }
-  UnionFindSet<int> union_find_set;
-  std::unordered_map<int, std::unordered_set<int>> previous_states;
-  std::unordered_set<int> has_epsilon;
+  if (NumStates() > max_num_states) {
+    return *this;
+  }
 
-  // Initialize the previous states, and find all the states that have
-  // epsilon edges.
+  UnionFindSet<int> union_find_set;
+  std::vector<int> previous_states(NumStates(), 0);
+  std::vector<std::pair<int32_t, int32_t>> epsilon_edges;
   for (int i = 0; i < NumStates(); i++) {
     const auto& edges = fsm_->GetEdges(i);
     for (const auto& edge : edges) {
-      if (previous_states.find(edge.target) == previous_states.end()) {
-        previous_states[edge.target] = std::unordered_set<int>();
-      }
-      previous_states[edge.target].insert(i);
+      previous_states[edge.target]++;
       if (edge.IsEpsilon()) {
         if (edges.size() != 1) {
-          has_epsilon.insert(i);
+          epsilon_edges.push_back({i, edge.target});
         } else {
           // a -- epsilon --> b, and a doesn't have other outward edges.
           union_find_set.Add(i);
@@ -1048,33 +1047,25 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon() const {
     }
   }
 
+  // Build the equivalent graph.
+  std::vector<int> equiv_node(NumStates());
+  for (int i = 0; i < NumStates(); i++) {
+    if (union_find_set.Count(i)) {
+      equiv_node[i] = union_find_set.Find(i);
+      previous_states[equiv_node[i]] += previous_states[i];
+    } else {
+      equiv_node[i] = i;
+    }
+  }
+
   // a --> epsilon --> b, and b doesn't have other inward edges.
-  for (const auto& state : has_epsilon) {
-    const auto& edges = fsm_->GetEdges(state);
-    for (const auto& edge : edges) {
-      if (!edge.IsEpsilon()) {
-        continue;
-      }
-      // Have other inward states.
-      if (previous_states[edge.target].size() != 1 || edge.target == GetStart()) {
-        continue;
-      }
-      bool has_other_edge = false;
-      for (const auto& second_edge : edges) {
-        if (second_edge.IsEpsilon()) {
-          continue;
-        }
-        if (second_edge.target == edge.target) {
-          has_other_edge = true;
-          break;
-        }
-      }
-      // The state can be merged.
-      if (!has_other_edge) {
-        union_find_set.Add(state);
-        union_find_set.Add(edge.target);
-        union_find_set.Union(state, edge.target);
-      }
+  for (const auto& [from_raw, to_raw] : epsilon_edges) {
+    const int& from = equiv_node[from_raw];
+    const int& to = equiv_node[to_raw];
+    if (previous_states[to] == 1 && equiv_node[GetStart()] != to) {
+      union_find_set.Add(from);
+      union_find_set.Add(to);
+      union_find_set.Union(from, to);
     }
   }
 
@@ -1084,134 +1075,158 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon() const {
     return *this;
   }
 
-  std::unordered_map<int, int> new_to_old;
+  std::vector<int> new_to_old(NumStates(), -1);
   for (size_t i = 0; i < eq_classes.size(); i++) {
     for (const auto& state : eq_classes[i]) {
       new_to_old[state] = i;
     }
   }
+
   int cnt = eq_classes.size();
   for (int i = 0; i < NumStates(); i++) {
-    if (new_to_old.find(i) == new_to_old.end()) {
+    if (new_to_old[i] == -1) {
       new_to_old[i] = cnt;
       cnt++;
     }
   }
-  FSMWithStartEnd result = Copy();
-  return result.RebuildWithMapping(new_to_old, cnt);
+  return RebuildWithMapping(new_to_old, cnt);
 }
 
-FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
+FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_states) const {
+  if (max_result_num_states < NumStates()) {
+    return *this;
+  }
   bool changed = true;
   FSMWithStartEnd result = Copy();
+  result.GetFsm()->SortEdges();
   UnionFindSet<int> union_find_set;
   while (changed) {
     union_find_set.Clear();
-    std::unordered_map<int, std::unordered_set<int>> previous_states;
+    std::vector<std::unordered_map<int, std::vector<FSMEdge>>> previous_states(result.NumStates());
+    std::vector<std::unordered_map<int, std::vector<FSMEdge>>> next_states(result.NumStates());
     // Initialize the previous states.
     for (int i = 0; i < result.NumStates(); i++) {
       const auto& edges = result.GetFsm().GetEdges(i);
       for (const auto& edge : edges) {
-        if (previous_states.find(edge.target) == previous_states.end()) {
-          previous_states[edge.target] = std::unordered_set<int>();
+        if (previous_states[edge.target].find(i) == previous_states[edge.target].end()) {
+          previous_states[edge.target][i] = std::vector<FSMEdge>();
         }
-        previous_states[edge.target].insert(i);
+        previous_states[edge.target][i].push_back(edge);
+        if (next_states[i].find(edge.target) == next_states[i].end()) {
+          next_states[i][edge.target] = std::vector<FSMEdge>();
+        }
+        next_states[i][edge.target].push_back(edge);
       }
     }
     // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
     bool is_equiv_successor = false;
-    for (const auto& edges : result.GetFsm().GetEdges()) {
-      for (size_t i = 0; i < edges.size(); i++) {
-        for (size_t j = i + 1; j < edges.size(); j++) {
-          if (result.IsEndState(edges[i].target) != result.IsEndState(edges[j].target)) {
-            continue;
+    for (int i = 0; i < static_cast<int>(previous_states.size()); i++) {
+      if (previous_states[i].size() != 1 || union_find_set.Count(i)) {
+        continue;
+      }
+      const auto& previous_state = previous_states[i].begin()->first;
+      const auto& edges_to_i = previous_states[i].begin()->second;
+      const auto& siblings = next_states[previous_state];
+      for (const auto& [sibling, edges_to_sibling] : siblings) {
+        if (sibling <= i || previous_states[sibling].size() != 1 ||
+            result.IsEndState(sibling) != result.IsEndState(i)) {
+          continue;
+        }
+        bool is_equiv = true;
+
+        // Check if the edges are the same.
+        if (edges_to_i.size() != edges_to_sibling.size()) {
+          break;  // Different edges, not equivalent.
+        }
+        for (int i = 0; i < static_cast<int>(edges_to_i.size()); i++) {
+          if (edges_to_i[i].min != edges_to_sibling[i].min ||
+              edges_to_i[i].max != edges_to_sibling[i].max) {
+            is_equiv = false;
+            break;  // Different edge ranges, not equivalent.
           }
-          if (edges[i].target == edges[j].target) {
-            continue;
-          }
-          if (edges[i].max != edges[j].max || edges[i].min != edges[j].min) {
-            continue;
-          }
-          if (previous_states[edges[i].target].size() != 1 ||
-              previous_states[edges[j].target].size() != 1) {
-            continue;
-          }
-          union_find_set.Add(edges[i].target);
-          union_find_set.Add(edges[j].target);
-          union_find_set.Union(edges[i].target, edges[j].target);
+        }
+
+        // Merge the nodes.
+        if (is_equiv) {
+          union_find_set.Add(i);
+          union_find_set.Add(sibling);
+          union_find_set.Union(i, sibling);
           is_equiv_successor = true;
         }
       }
     }
-    if (is_equiv_successor) {
-      auto eq_classes = union_find_set.GetAllSets();
-      std::unordered_map<int, int> old_to_new;
-      for (size_t i = 0; i < eq_classes.size(); i++) {
-        for (const auto& state : eq_classes[i]) {
-          old_to_new[state] = i;
-        }
-      }
-      int cnt = eq_classes.size();
-      for (int i = 0; i < result.NumStates(); i++) {
-        if (old_to_new.find(i) == old_to_new.end()) {
-          old_to_new[i] = cnt;
-          cnt++;
-        }
-      }
-      result = result.RebuildWithMapping(old_to_new, cnt);
-    }
-    union_find_set.Clear();
+
     // Case 2: Like ba | ca | da, then they can be merged into (b | c | d)a.
     bool is_equiv_precursor = false;
-    for (int i = 0; i < result.NumStates(); i++) {
-      for (int j = i + 1; j < result.NumStates(); j++) {
-        if (result.IsEndState(i) != result.IsEndState(j)) {
+    std::vector<int32_t> no_successor_end_states;
+    std::vector<int32_t> no_successor_non_end_states;
+
+    for (int i = 0; i < static_cast<int>(next_states.size()); i++) {
+      if (next_states[i].empty()) {
+        if (result.IsEndState(i)) {
+          no_successor_end_states.push_back(i);
+        } else {
+          no_successor_non_end_states.push_back(i);
+        }
+        continue;  // Skip states with no successors.
+      }
+      if (next_states[i].size() != 1 || union_find_set.Count(i)) {
+        continue;  // Skip states with multiple successors.
+      }
+      const auto& next_state = next_states[i].begin()->first;
+      const auto& node_edges = result.GetFsm().GetEdges(i);
+      const auto& siblings = previous_states[next_state];
+      for (const auto& [sibling, edges_to_sibling] : siblings) {
+        if (sibling <= i || next_states[sibling].size() != 1 ||
+            result.IsEndState(i) != result.IsEndState(sibling)) {
           continue;
         }
-        bool equivalent = true;
-        // Check if all the edges of state i are in the edges of state j.
-        for (const auto& edge_i : result.GetFsm().GetEdges(i)) {
-          bool same = false;
-          for (const auto& edge_j : result.GetFsm().GetEdges(j)) {
-            if (edge_i.min == edge_j.min && edge_i.max == edge_j.max &&
-                edge_i.target == edge_j.target) {
-              same = true;
-              break;
-            }
-          }
-          if (!same) {
-            equivalent = false;
+        const auto& sibling_node_edges = result.GetFsm().GetEdges(sibling);
+        if (sibling_node_edges.size() != node_edges.size()) {
+          continue;  // Different number of edges, not equivalent.
+        }
+        bool is_equiv = true;
+        for (int i = 0; i < static_cast<int>(sibling_node_edges.size()); i++) {
+          if (sibling_node_edges[i].min != node_edges[i].min ||
+              sibling_node_edges[i].max != node_edges[i].max) {
+            is_equiv = false;
             break;
           }
         }
-        if (!equivalent) {
-          continue;
-        }
-        for (const auto& edge_j : result.GetFsm().GetEdges(j)) {
-          bool same = false;
-          for (const auto& edge_i : result.GetFsm().GetEdges(i)) {
-            if (edge_i.min == edge_j.min && edge_i.max == edge_j.max &&
-                edge_i.target == edge_j.target) {
-              same = true;
-              break;
-            }
-          }
-          if (!same) {
-            equivalent = false;
-            break;
-          }
-        }
-        if (equivalent) {
+
+        if (is_equiv) {
           union_find_set.Add(i);
-          union_find_set.Add(j);
-          union_find_set.Union(i, j);
-          is_equiv_precursor = true;
+          union_find_set.Add(sibling);
+          union_find_set.Union(i, sibling);
+          is_equiv_successor = true;
         }
       }
     }
-    if (is_equiv_precursor) {
+
+    if (no_successor_end_states.size() > 1) {
+      // Merge all end states with no successors.
+      for (size_t i = 1; i < no_successor_end_states.size(); ++i) {
+        union_find_set.Add(no_successor_end_states[0]);
+        union_find_set.Add(no_successor_end_states[i]);
+        union_find_set.Union(no_successor_end_states[0], no_successor_end_states[i]);
+        is_equiv_precursor = true;
+      }
+    }
+
+    if (no_successor_non_end_states.size() > 1) {
+      // Merge all non-end states with no successors.
+      for (size_t i = 1; i < no_successor_non_end_states.size(); ++i) {
+        union_find_set.Add(no_successor_non_end_states[0]);
+        union_find_set.Add(no_successor_non_end_states[i]);
+        union_find_set.Union(no_successor_non_end_states[0], no_successor_non_end_states[i]);
+        is_equiv_precursor = true;
+      }
+    }
+
+    changed = is_equiv_successor || is_equiv_precursor;
+    if (changed) {
       auto eq_classes = union_find_set.GetAllSets();
-      std::unordered_map<int, int> old_to_new;
+      std::vector<int> old_to_new(result.NumStates(), -1);
       for (size_t i = 0; i < eq_classes.size(); i++) {
         for (const auto& state : eq_classes[i]) {
           old_to_new[state] = i;
@@ -1219,25 +1234,27 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors() const {
       }
       int cnt = eq_classes.size();
       for (int i = 0; i < result.NumStates(); i++) {
-        if (old_to_new.find(i) == old_to_new.end()) {
+        if (old_to_new[i] == -1) {
           old_to_new[i] = cnt;
           cnt++;
         }
       }
       result = result.RebuildWithMapping(old_to_new, cnt);
+      result.GetFsm()->SortEdges();
     }
-    changed = is_equiv_successor || is_equiv_precursor;
   }
   return result;
 }
 
-Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_result_num_states) const {
+Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_num_states) const {
   FSMWithStartEnd now_fsm(FSM(0), 0, std::vector<bool>(), true);
-
+  if (NumStates() > max_num_states) {
+    return ResultErr("The number of states exceeds the limit.");
+  }
   // To perform the algorithm, we must make sure the FSM is
   // a DFA.
   if (!is_dfa_) {
-    Result<FSMWithStartEnd> dfa_raw = ToDFA(max_result_num_states);
+    Result<FSMWithStartEnd> dfa_raw = ToDFA(max_num_states);
     if (dfa_raw.IsErr()) {
       return dfa_raw;
     }
@@ -1344,7 +1361,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_result_num_states) 
       }
     }
   }
-  std::unordered_map<int, int> state_mapping;
+  std::vector<int> state_mapping(now_fsm.NumStates(), -1);
   for (size_t i = 0; i < partitions.size(); ++i) {
     for (const auto& state : partitions[i]) {
       state_mapping[state] = i;
@@ -1354,7 +1371,10 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_result_num_states) 
   return ResultOk(now_fsm.RebuildWithMapping(state_mapping, new_num_states));
 }
 
-Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_result_num_states) const {
+Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
+  if (NumStates() > max_num_states) {
+    return ResultErr("The number of states exceeds the limit.");
+  }
   FSMWithStartEnd dfa(FSM(0), 0, std::vector<bool>(), true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
@@ -1364,9 +1384,6 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_result_num_states) const 
   fsm_.GetEpsilonClosure(&closure);
   closures.push_back(closure);
   while (now_process < static_cast<int>(closures.size())) {
-    if (static_cast<int64_t>(closures.size()) >= max_result_num_states) {
-      return ResultErr("Too many states in ToDFA!");
-    }
     rules.clear();
     std::set<int> interval_ends;
     std::bitset<256> allowed_characters;

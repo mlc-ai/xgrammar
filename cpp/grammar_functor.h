@@ -347,9 +347,9 @@ class GrammarFSMBuilder {
 
  public:
   static void Apply(Grammar* grammar);
-  static std::optional<FSMWithStartEnd> RuleRef(const GrammarExpr& expr);
-  static std::optional<FSMWithStartEnd> CharacterClass(const GrammarExpr& expr);
-  static std::optional<FSMWithStartEnd> ByteString(const GrammarExpr& expr);
+  static FSMWithStartEnd RuleRef(const GrammarExpr& expr);
+  static FSMWithStartEnd CharacterClass(const GrammarExpr& expr);
+  static FSMWithStartEnd ByteString(const GrammarExpr& expr);
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);

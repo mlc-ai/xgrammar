@@ -16,11 +16,11 @@
 #include <cstdint>
 #include <functional>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "support/compact_2d_array.h"
+#include "support/logging.h"
 #include "support/reflection.h"
 #include "support/utils.h"
 #include "xgrammar/exception.h"
@@ -302,9 +302,10 @@ class FSM {
    * \brief Add a whole FSM to the current FSM.
    * \param fsm The FSM to be added.
    * \param state_mapping The mapping from the state ids of the added FSM to the new ids in the
-   * current FSM. The result is cleared at the beginning.
+   * current FSM. The result is cleared at the beginning. If the fsm's state id starts from 0, use
+   * it for efficiency.
    */
-  void AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping = nullptr);
+  void AddFSM(const FSM& fsm, std::vector<int>* state_mapping = nullptr);
 
   /****************** FSM Construction Methods ******************/
 
@@ -319,7 +320,7 @@ class FSM {
    * \param new_num_states The new number of states.
    * \return The rebuilt FSM.
    */
-  FSM RebuildWithMapping(std::unordered_map<int, int>& state_mapping, int new_num_states) const;
+  FSM RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const;
 
   /*!
    * \brief Sort the edges of the FSM by their min, max and target.
@@ -483,20 +484,6 @@ class FSMWithStartEndBase {
   // For serialization only
   FSMWithStartEndBase() = default;
 
-  /*! \brief Constructs an FSMWithStartEnd with a given FSM, start state, and end states. */
-  FSMWithStartEndBase(
-      const FSMType& fsm, int start, const std::unordered_set<int>& ends, bool is_dfa = false
-  )
-      : fsm_(fsm), start_(start), is_dfa_(is_dfa) {
-    ends_.resize(fsm.NumStates(), false);
-    for (const auto& end : ends) {
-      XGRAMMAR_DCHECK(end < fsm.NumStates())
-          << "End state " << end << " is out of bounds for FSM with " << fsm.NumStates()
-          << " states.";
-      ends_[end] = true;
-    }
-  }
-
   FSMWithStartEndBase(
       const FSMType& fsm, int start, const std::vector<bool>& ends, bool is_dfa = false
   )
@@ -653,9 +640,8 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \param state_mapping The mapping from old state ids to new state ids.
    * \param new_num_states The new number of states.
    */
-  FSMWithStartEnd RebuildWithMapping(
-      std::unordered_map<int, int>& state_mapping, int new_num_states
-  );
+  FSMWithStartEnd RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states)
+      const;
 
   /*!
    * \brief Add the underlying FSM to another complete FSM that could contain multiple FSMs.
@@ -666,7 +652,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * cleared at the beginning. Should not be nullptr.
    * \return The FSMWithStartEnd that points to the complete FSM.
    */
-  FSMWithStartEnd AddToCompleteFSM(FSM* complete_fsm, std::unordered_map<int, int>* state_mapping);
+  FSMWithStartEnd AddToCompleteFSM(FSM* complete_fsm, std::vector<int>* state_mapping);
 
   /*!
    * \brief Transform the FSMWithStartEnd to a CompactFSMWithStartEnd.
@@ -735,7 +721,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \details If a --\epsilon--> b, and either 1) b doesn't have any other inward edges, or
    * 2) a doesn't have any other outward edges, we can merge a and b.
    */
-  FSMWithStartEnd SimplifyEpsilon() const;
+  FSMWithStartEnd SimplifyEpsilon(int max_num_states = 1e8) const;
 
   /*!
    * \brief Merge equivalent states in the FSM.
@@ -743,21 +729,21 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * 2) they are not pointed to by other edges, then we can merge them.
    * \example n0 --(c)--> n1, n0 --(c)--> n2, then we can merge n1 and n2.
    */
-  FSMWithStartEnd MergeEquivalentSuccessors() const;
+  FSMWithStartEnd MergeEquivalentSuccessors(int max_num_states = 1e5) const;
 
   /*!
    * \brief Transform the FSM to a DFA.
    * \param max_result_num_states The maximum number of states in the DFA.
    * \return The DFA.
    */
-  Result<FSMWithStartEnd> ToDFA(int max_result_num_states = 1e6) const;
+  Result<FSMWithStartEnd> ToDFA(int max_num_states = 1e3) const;
 
   /*!
    * \brief Minimize the DFA.
    * \param max_result_num_states The maximum number of states in the DFA.
    * \return The minimized DFA.
    */
-  Result<FSMWithStartEnd> MinimizeDFA(int max_result_num_states = 1e6) const;
+  Result<FSMWithStartEnd> MinimizeDFA(int max_num_states = 1e3) const;
 };
 
 /*!
