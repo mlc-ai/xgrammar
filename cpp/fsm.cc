@@ -228,6 +228,8 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
   void SortEdges();
 
   CompactFSM ToCompact();
+
+  friend class FSMWithStartEnd;
 };
 
 int FSM::Impl::GetNextState(int from, int value, EdgeType edge_type) const {
@@ -1030,17 +1032,13 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   UnionFindSet<int> union_find_set;
   std::vector<int> previous_states(NumStates(), 0);
   std::vector<std::pair<int32_t, int32_t>> epsilon_edges;
+  FSMWithStartEnd fsm_copy = FSMWithStartEnd(FSM(NumStates()), start_, ends_);
 
-  // Initialize the previous states, and find all the states that have
-  // epsilon edges.
   for (int i = 0; i < NumStates(); i++) {
     const auto& edges = fsm_->GetEdges(i);
     for (const auto& edge : edges) {
-      previous_states[edge.target]++;
       if (edge.IsEpsilon()) {
-        if (edges.size() != 1) {
-          epsilon_edges.push_back({i, edge.target});
-        } else {
+        if (edges.size() == 1) {
           // a -- epsilon --> b, and a doesn't have other outward edges.
           union_find_set.Add(i);
           union_find_set.Add(edge.target);
@@ -1050,9 +1048,32 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
     }
   }
 
+  // Build the equivalent graph.
+  for (int i = 0; i < NumStates(); i++) {
+    const auto& edges = fsm_->GetEdges(i);
+    for (int j = edges.size() - 1; j >= 0; j--) {
+      auto& edge = edges[j];
+      int from = union_find_set.Count(i) ? union_find_set.Find(i) : i;
+      int to = union_find_set.Count(edge.target) ? union_find_set.Find(edge.target) : edge.target;
+      if (edge.IsEpsilon()) {
+        if (from == to) {
+          continue;  // Remove self-loops for epsilon edges.
+        }
+        epsilon_edges.push_back({from, to});
+      }
+      fsm_copy.GetFsm().AddEdge(from, to, edge.min, edge.max);
+      previous_states[to]++;
+    }
+  }
+
+  // Update the start state.
+  if (union_find_set.Count(GetStart())) {
+    fsm_copy.SetStartState(union_find_set.Find(GetStart()));
+  }
+
   // a --> epsilon --> b, and b doesn't have other inward edges.
   for (const auto& [from, to] : epsilon_edges) {
-    if (previous_states[to] == 1 && GetStart() != to) {
+    if (previous_states[to] == 1 && fsm_copy.GetStart() != to) {
       union_find_set.Add(from);
       union_find_set.Add(to);
       union_find_set.Union(from, to);
@@ -1236,13 +1257,15 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_st
   return result;
 }
 
-Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_result_num_states) const {
+Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_num_states) const {
   FSMWithStartEnd now_fsm(FSM(0), 0, std::vector<bool>(), true);
-
+  if (NumStates() > max_num_states) {
+    return ResultErr("The number of states exceeds the limit.");
+  }
   // To perform the algorithm, we must make sure the FSM is
   // a DFA.
   if (!is_dfa_) {
-    Result<FSMWithStartEnd> dfa_raw = ToDFA(max_result_num_states);
+    Result<FSMWithStartEnd> dfa_raw = ToDFA(max_num_states);
     if (dfa_raw.IsErr()) {
       return dfa_raw;
     }
@@ -1359,7 +1382,10 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_result_num_states) 
   return ResultOk(now_fsm.RebuildWithMapping(state_mapping, new_num_states));
 }
 
-Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_result_num_states) const {
+Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
+  if (NumStates() > max_num_states) {
+    return ResultErr("The number of states exceeds the limit.");
+  }
   FSMWithStartEnd dfa(FSM(0), 0, std::vector<bool>(), true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
@@ -1369,9 +1395,6 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_result_num_states) const 
   fsm_.GetEpsilonClosure(&closure);
   closures.push_back(closure);
   while (now_process < static_cast<int>(closures.size())) {
-    if (static_cast<int64_t>(closures.size()) >= max_result_num_states) {
-      return ResultErr("Too many states in ToDFA!");
-    }
     rules.clear();
     std::set<int> interval_ends;
     std::bitset<256> allowed_characters;

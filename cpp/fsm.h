@@ -749,14 +749,14 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \param max_result_num_states The maximum number of states in the DFA.
    * \return The DFA.
    */
-  Result<FSMWithStartEnd> ToDFA(int max_result_num_states = 1e3) const;
+  Result<FSMWithStartEnd> ToDFA(int max_num_states = 1e3) const;
 
   /*!
    * \brief Minimize the DFA.
    * \param max_result_num_states The maximum number of states in the DFA.
    * \return The minimized DFA.
    */
-  Result<FSMWithStartEnd> MinimizeDFA(int max_result_num_states = 1e3) const;
+  Result<FSMWithStartEnd> MinimizeDFA(int max_num_states = 1e3) const;
 };
 
 /*!
