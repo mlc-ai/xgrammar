@@ -16,11 +16,11 @@
 #include <cstdint>
 #include <functional>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "support/compact_2d_array.h"
+#include "support/logging.h"
 #include "support/reflection.h"
 #include "support/utils.h"
 #include "xgrammar/exception.h"
@@ -302,9 +302,10 @@ class FSM {
    * \brief Add a whole FSM to the current FSM.
    * \param fsm The FSM to be added.
    * \param state_mapping The mapping from the state ids of the added FSM to the new ids in the
-   * current FSM. The result is cleared at the beginning.
+   * current FSM. The result is cleared at the beginning. If the fsm's state id starts from 0, use
+   * it for efficiency.
    */
-  void AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping = nullptr);
+  void AddFSM(const FSM& fsm, std::vector<int>* state_mapping = nullptr);
 
   /****************** FSM Construction Methods ******************/
 
@@ -483,20 +484,6 @@ class FSMWithStartEndBase {
   // For serialization only
   FSMWithStartEndBase() = default;
 
-  /*! \brief Constructs an FSMWithStartEnd with a given FSM, start state, and end states. */
-  FSMWithStartEndBase(
-      const FSMType& fsm, int start, const std::unordered_set<int>& ends, bool is_dfa = false
-  )
-      : fsm_(fsm), start_(start), is_dfa_(is_dfa) {
-    ends_.resize(fsm.NumStates(), false);
-    for (const auto& end : ends) {
-      XGRAMMAR_DCHECK(end < fsm.NumStates())
-          << "End state " << end << " is out of bounds for FSM with " << fsm.NumStates()
-          << " states.";
-      ends_[end] = true;
-    }
-  }
-
   FSMWithStartEndBase(
       const FSMType& fsm, int start, const std::vector<bool>& ends, bool is_dfa = false
   )
@@ -665,7 +652,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * cleared at the beginning. Should not be nullptr.
    * \return The FSMWithStartEnd that points to the complete FSM.
    */
-  FSMWithStartEnd AddToCompleteFSM(FSM* complete_fsm, std::unordered_map<int, int>* state_mapping);
+  FSMWithStartEnd AddToCompleteFSM(FSM* complete_fsm, std::vector<int>* state_mapping);
 
   /*!
    * \brief Transform the FSMWithStartEnd to a CompactFSMWithStartEnd.

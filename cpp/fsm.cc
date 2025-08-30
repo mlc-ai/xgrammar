@@ -220,7 +220,7 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   void AddEOSEdge(int from, int to) { AddEdge(from, to, FSMEdge::EdgeType::kEOS, 0); }
 
-  void AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping);
+  void AddFSM(const FSM& fsm, std::vector<int>* state_mapping);
 
   FSM RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const;
 
@@ -316,13 +316,14 @@ void FSM::Impl::Advance(
   GetEpsilonClosure(result);
 }
 
-void FSM::Impl::AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping) {
+void FSM::Impl::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
   int old_num_states = NumStates();
 
   if (state_mapping != nullptr) {
     state_mapping->clear();
+    state_mapping->reserve(fsm.NumStates());
     for (int i = 0; i < fsm.NumStates(); ++i) {
-      state_mapping->insert({i, i + old_num_states});
+      state_mapping->push_back(i + old_num_states);
     }
   }
 
@@ -391,7 +392,7 @@ void FSM::AddRuleEdge(int from, int to, int16_t rule_id) { pimpl_->AddRuleEdge(f
 
 void FSM::AddEOSEdge(int from, int to) { pimpl_->AddEOSEdge(from, to); }
 
-void FSM::AddFSM(const FSM& fsm, std::unordered_map<int, int>* state_mapping) {
+void FSM::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
   pimpl_->AddFSM(fsm, state_mapping);
 }
 
@@ -750,15 +751,15 @@ CompactFSMWithStartEnd FSMWithStartEnd::ToCompact() {
 }
 
 FSMWithStartEnd FSMWithStartEnd::AddToCompleteFSM(
-    FSM* complete_fsm, std::unordered_map<int, int>* state_mapping
+    FSM* complete_fsm, std::vector<int>* state_mapping
 ) {
   XGRAMMAR_DCHECK(state_mapping != nullptr) << "state_mapping cannot be nullptr";
   complete_fsm->AddFSM(fsm_, state_mapping);
   int new_start = (*state_mapping)[start_];
-  std::unordered_set<int> new_ends;
+  std::vector<bool> new_ends(complete_fsm->NumStates(), false);
   for (int end = 0; end < NumStates(); ++end) {
     if (IsEndState(end)) {
-      new_ends.insert((*state_mapping)[end]);
+      new_ends[(*state_mapping)[end]] = true;
     }
   }
   return FSMWithStartEnd(*complete_fsm, new_start, new_ends, is_dfa_);
@@ -866,17 +867,15 @@ FSMWithStartEnd FSMWithStartEnd::Union(const std::vector<FSMWithStartEnd>& fsms)
 
   FSM fsm(1);
   int start = 0;
-  std::unordered_set<int> ends;
+  std::vector<bool> ends(1, false);
 
-  std::unordered_map<int, int> state_mapping;
+  std::vector<int> state_mapping;
 
   for (const auto& fsm_with_se : fsms) {
     fsm.AddFSM(fsm_with_se.GetFsm(), &state_mapping);
     fsm.AddEpsilonEdge(start, state_mapping[fsm_with_se.GetStart()]);
-    for (int end = 0; end < fsm_with_se.NumStates(); ++end) {
-      if (fsm_with_se.IsEndState(end)) {
-        ends.insert(state_mapping[end]);
-      }
+    for (int state = 0; state < fsm_with_se.NumStates(); ++state) {
+      ends.push_back(fsm_with_se.IsEndState(state));
     }
   }
 
@@ -894,9 +893,9 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
 
   FSM fsm;
   int start = 0;
-  std::unordered_set<int> ends;
+  std::vector<bool> ends;
 
-  std::unordered_map<int, int> state_mapping;
+  std::vector<int> state_mapping;
   std::vector<int> previous_ends;
 
   for (int i = 0; i < static_cast<int>(fsms.size()); ++i) {
@@ -910,9 +909,10 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
       }
     }
     if (i == static_cast<int>(fsms.size()) - 1) {
+      ends.resize(fsm.NumStates(), false);
       for (int end = 0; end < fsms[i].NumStates(); ++end) {
         if (fsms[i].IsEndState(end)) {
-          ends.insert(state_mapping[end]);
+          ends[state_mapping[end]] = true;
         }
       }
     } else {

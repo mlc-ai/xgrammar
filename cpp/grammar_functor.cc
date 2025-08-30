@@ -1081,7 +1081,7 @@ class GrammarFSMBuilderImpl {
   void Apply(Grammar* grammar) {
     FSM complete_fsm;
     std::vector<std::optional<FSMWithStartEnd>> per_rule_fsms((*grammar)->NumRules());
-    std::unordered_map<int, int> state_mapping;
+    std::vector<int> state_mapping;
 
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
       auto rule = (*grammar)->GetRule(i);
@@ -1565,13 +1565,13 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithStopSt
       old_ends.insert(end);
     }
   }
-  std::unordered_set<int> ends;
+  std::vector<bool> ends(trie_fsm.NumStates(), false);
 
   // The final end states are the end of each stop string.
   for (int i = static_cast<int>(tag_dispatch_rules.size());
        i < static_cast<int>(trie_end_states.size());
        i++) {
-    ends.insert(trie_end_states[i]);
+    ends[trie_end_states[i]] = true;
   }
 
   if (loop_after_dispatch) {
@@ -1596,11 +1596,12 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithStopSt
       }
     }
 
-    std::unordered_map<int, int> stop_trie_to_trie_map;
+    std::vector<int> stop_trie_to_trie_map;
     trie_fsm.AddFSM(stop_trie_fsm, &stop_trie_to_trie_map);
+    ends.resize(trie_fsm.NumStates(), false);
     int start_of_stop_trie = stop_trie_to_trie_map[stop_trie_start];
     for (auto state : stop_trie_ends) {
-      ends.insert(stop_trie_to_trie_map[state]);
+      ends[stop_trie_to_trie_map[state]] = true;
     }
 
     for (int i = 0; i < static_cast<int>(tag_dispatch_rules.size()); i++) {
@@ -1627,7 +1628,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithEOSSto
   auto trie_fsm = trie_result->GetFsm();
   auto start = trie_result->GetStart();
   std::unordered_set<int> old_ends;
-  std::unordered_set<int> ends;
+  std::vector<bool> ends(trie_fsm.NumStates(), false);
   for (int end = 0; end < trie_result->NumStates(); end++) {
     if (trie_result->IsEndState(end)) {
       old_ends.insert(end);
@@ -1637,7 +1638,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithEOSSto
   // The final end states are all but old_ends.
   for (int i = 0; i < trie_fsm.NumStates(); i++) {
     if (old_ends.count(i) == 0) {
-      ends.insert(i);
+      ends[i] = true;
     }
   }
 
@@ -1648,7 +1649,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithEOSSto
       next_state = start;
     } else {
       next_state = trie_fsm.AddState();
-      ends.insert(next_state);
+      ends.push_back(true);
     }
     trie_fsm.AddRuleEdge(end_states[i], next_state, tag_dispatch_rules[i].second);
   }
