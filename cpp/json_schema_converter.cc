@@ -3128,7 +3128,7 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
       return ResultOk(string_spec);
     }
     default: {
-      XGRAMMAR_LOG(FATAL) << "Unsupported string escape type: " << static_cast<int>(json_format);
+      XGRAMMAR_LOG(FATAL) << "Unsupported JSON Format type: " << static_cast<int>(json_format);
     }
   }
 }
