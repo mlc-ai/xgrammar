@@ -1028,20 +1028,22 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   }
 
   UnionFindSet<int> union_find_set;
-  std::vector<int> previous_states(NumStates(), 0);
+  std::vector<int> in_degree(NumStates(), 0);
   std::vector<std::pair<int32_t, int32_t>> epsilon_edges;
   for (int i = 0; i < NumStates(); i++) {
     const auto& edges = fsm_->GetEdges(i);
     for (const auto& edge : edges) {
-      previous_states[edge.target]++;
+      in_degree[edge.target]++;
       if (edge.IsEpsilon()) {
-        if (edges.size() != 1) {
-          epsilon_edges.push_back({i, edge.target});
-        } else {
+        if (edges.size() == 1) {
           // a -- epsilon --> b, and a doesn't have other outward edges.
           union_find_set.Add(i);
           union_find_set.Add(edge.target);
           union_find_set.Union(i, edge.target);
+          in_degree[edge.target]--;  // Remove the inward edge since a and b are merged.
+        } else {
+          // a has other outward edges, we store it to check for another case.
+          epsilon_edges.emplace_back(i, edge.target);
         }
       }
     }
@@ -1052,7 +1054,10 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   for (int i = 0; i < NumStates(); i++) {
     if (union_find_set.Count(i)) {
       equiv_node[i] = union_find_set.Find(i);
-      previous_states[equiv_node[i]] += previous_states[i];
+      if (equiv_node[i] == i) {
+        continue;
+      }
+      in_degree[equiv_node[i]] += in_degree[i];
     } else {
       equiv_node[i] = i;
     }
@@ -1062,7 +1067,7 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   for (const auto& [from_raw, to_raw] : epsilon_edges) {
     const int& from = equiv_node[from_raw];
     const int& to = equiv_node[to_raw];
-    if (previous_states[to] == 1 && equiv_node[GetStart()] != to) {
+    if (in_degree[to] == 1 && equiv_node[GetStart()] != to) {
       union_find_set.Add(from);
       union_find_set.Add(to);
       union_find_set.Union(from, to);
