@@ -23,10 +23,12 @@ namespace xgrammar {
 class RegexConverter {
  public:
   explicit RegexConverter(const std::string& regex) : regex_(regex) {
-    regex_codepoints_ = ParseUTF8(regex_.c_str(), false);
-    if (regex_codepoints_[0] == kInvalidUTF8) {
-      XGRAMMAR_LOG(FATAL) << "The regex is not a valid UTF-8 string.";
-      XGRAMMAR_UNREACHABLE();
+    if (!regex.empty()) {
+      regex_codepoints_ = ParseUTF8(regex_.c_str(), false);
+      if (regex_codepoints_[0] == kInvalidUTF8) {
+        XGRAMMAR_LOG(FATAL) << "The regex is not a valid UTF-8 string.";
+        XGRAMMAR_UNREACHABLE();
+      }
     }
     regex_codepoints_.push_back(0);  // Add a null terminator
   }
