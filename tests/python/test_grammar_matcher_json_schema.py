@@ -538,5 +538,21 @@ def test_regression_accept_invalid_token():
         matcher.fill_next_token_bitmask(token_bitmask, i)
 
 
+def test_regression_empty_property_key_regex():
+    schema = {
+        "type": "object",
+        "properties": {
+            "_links": {
+                "type": "object",
+                "patternProperties": {
+                    "": {"type": "object", "properties": {"href": {"type": "string"}}}
+                },
+            }
+        },
+    }
+    _ = xgr.Grammar.from_json_schema(schema)
+    assert _ is not None
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
