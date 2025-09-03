@@ -86,7 +86,7 @@ value_non_str ::= (
     "true" |
     "false" |
     "null"
-) (= [ \n\t,}\]])
+) (= [ \n\t]* member_suffix_suffix)
 members_and_embrace ::= ("\"" characters_and_colon [ \n\t]* members_suffix | "}") (= [ \n\t,}\]])
 members_suffix ::= (
     value_non_str [ \n\t]* member_suffix_suffix |
