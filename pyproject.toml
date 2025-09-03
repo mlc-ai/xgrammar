@@ -1,6 +1,6 @@
 [project]
 name = "xgrammar"
-version = "0.1.23"
+version = "0.1.24"
 description = "Efficient, Flexible and Portable Structured Generation"
 authors = [{ name = "MLC Team" }]
 readme = "README.md"
