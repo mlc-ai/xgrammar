@@ -469,5 +469,14 @@ def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     assert matcher.is_terminated()
 
 
+def test_empty():
+    regex = ""
+    grammar_str = _regex_to_ebnf(regex)
+    expected_grammar = 'root ::= ""\n'
+    assert grammar_str == expected_grammar
+    assert _is_grammar_accept_string(grammar_str, "")
+    assert not _is_grammar_accept_string(grammar_str, "a")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

@@ -293,6 +293,7 @@ std::string RegexConverter::Convert() {
   start_ = regex_codepoints_.data();
   current_ = start_;
   end_ = start_ + regex_codepoints_.size() - 1;
+  bool is_empty = true;
   while (current_ != end_) {
     if (*current_ == '^') {
       if (current_ != start_) {
@@ -309,8 +310,10 @@ std::string RegexConverter::Convert() {
       }
       ++current_;
     } else if (*current_ == '[') {
+      is_empty = false;
       AddEBNFSegment(HandleCharacterClass());
     } else if (*current_ == '(') {
+      is_empty = false;
       ++current_;
       ++parenthesis_level_;
       AddEBNFSegment("(");
@@ -319,6 +322,7 @@ std::string RegexConverter::Convert() {
         HandleGroupModifier();
       }
     } else if (*current_ == ')') {
+      is_empty = false;
       if (parenthesis_level_ == 0) {
         RaiseError("Unmatched ')'");
       }
@@ -330,6 +334,7 @@ std::string RegexConverter::Convert() {
       AddEBNFSegment(")");
       ++current_;
     } else if (*current_ == '*' || *current_ == '+' || *current_ == '?') {
+      is_empty = false;
       result_ebnf_ += static_cast<char>(*current_);
       ++current_;
       if (current_ != end_ && *current_ == '?') {
@@ -342,6 +347,7 @@ std::string RegexConverter::Convert() {
         RaiseError("Two consecutive repetition modifiers are not allowed.");
       }
     } else if (*current_ == '{') {
+      is_empty = false;
       result_ebnf_ += HandleRepetitionRange();
       if (current_ != end_ && *current_ == '?') {
         // Still ignore the non-greedy modifier.
@@ -352,14 +358,18 @@ std::string RegexConverter::Convert() {
         RaiseError("Two consecutive repetition modifiers are not allowed.");
       }
     } else if (*current_ == '|') {
+      is_empty = false;
       AddEBNFSegment("|");
       ++current_;
     } else if (*current_ == '\\') {
+      is_empty = false;
       AddEBNFSegment(HandleEscape());
     } else if (*current_ == '.') {
+      is_empty = false;
       AddEBNFSegment(R"([\u0000-\U0010FFFF])");
       ++current_;
     } else {
+      is_empty = false;
       // Non-special characters are matched literally.
       AddEBNFSegment("\"" + EscapeString(*current_) + "\"");
       ++current_;
@@ -367,6 +377,9 @@ std::string RegexConverter::Convert() {
   }
   if (parenthesis_level_ != 0) {
     RaiseError("The parenthesis is not closed.");
+  }
+  if (is_empty) {
+    AddEBNFSegment("\"\"");
   }
   return result_ebnf_;
 }
