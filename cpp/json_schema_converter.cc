@@ -109,7 +109,7 @@ class IndentManager {
 
 std::string IndentManager::StartSeparator() {
   if (any_whitespace_) {
-    return "[ \\n\\t]*";
+    return "[ \\n\\t]{0,20}";
   }
   if (!enable_newline_) {
     return "\"\"";
@@ -119,7 +119,7 @@ std::string IndentManager::StartSeparator() {
 
 std::string IndentManager::MiddleSeparator() {
   if (any_whitespace_) {
-    return "[ \\n\\t]* \"" + separator_ + "\" [ \\n\\t]*";
+    return "[ \\n\\t]{0,20} \"" + separator_ + "\" [ \\n\\t]{0,20}";
   }
   if (!enable_newline_) {
     return "\"" + separator_ + "\"";
@@ -129,7 +129,7 @@ std::string IndentManager::MiddleSeparator() {
 
 std::string IndentManager::EndSeparator() {
   if (any_whitespace_) {
-    return "[ \\n\\t]*";
+    return "[ \\n\\t]{0,20}";
   }
   if (!enable_newline_) {
     return "\"\"";
@@ -139,7 +139,7 @@ std::string IndentManager::EndSeparator() {
 
 std::string IndentManager::EmptySeparator() {
   if (any_whitespace_) {
-    return "[ \\n\\t]*";
+    return "[ \\n\\t]{0,20}";
   }
   return "\"\"";
 }
@@ -148,9 +148,9 @@ std::string IndentManager::NextSeparator(bool is_end) {
   if (any_whitespace_) {
     if (is_first_.back() || is_end) {
       is_first_.back() = false;
-      return "[ \\n\\t]*";
+      return "[ \\n\\t]{0,20}";
     } else {
-      return "[ \\n\\t]* \"" + separator_ + "\" [ \\n\\t]*";
+      return "[ \\n\\t]{0,20} \"" + separator_ + "\" [ \\n\\t]{0,20}";
     }
   }
 
@@ -224,7 +224,7 @@ class JSONSchemaConverter {
   inline static const std::string kXMLEscape = "xml_escape";
   inline static const std::string kXMLString = "xml_string";
   inline static const std::string kXMLVariableName = "xml_variable_name";
-  inline static const std::string kWhiteSpace = "[ \\n\\t]*";
+  inline static const std::string kWhiteSpace = "[ \\n\\t]{0,20}";
 
   /*! \brief Add the basic rules to the rules list and the basic_rules_cache. */
   void AddBasicRules(JSONFormat json_format);
@@ -540,7 +540,7 @@ JSONSchemaConverter::JSONSchemaConverter(
   }
   indentManager_ = IndentManager(indent, separators->first, any_whitespace);
   if (any_whitespace) {
-    colon_pattern_ = "[ \\n\\t]* \"" + separators->second + "\" [ \\n\\t]*";
+    colon_pattern_ = "[ \\n\\t]{0,20} \"" + separators->second + "\" [ \\n\\t]{0,20}";
   } else {
     colon_pattern_ = "\"" + separators->second + "\"";
   }
@@ -631,7 +631,7 @@ void JSONSchemaConverter::AddJSONHelperRules() {
   ebnf_script_creator_.AddRule(
       kBasicStringSub,
       "(\"\\\"\" | [^\\0-\\x1f\\\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " + kBasicEscape +
-          " " + kBasicStringSub + ") (= [ \\n\\t]* [,}\\]:])"
+          " " + kBasicStringSub + ") (= [ \\n\\t]{0,20} [,}\\]:])"
   );
 }
 
@@ -645,7 +645,7 @@ void JSONSchemaConverter::AddXMLHelperRules() {
   ebnf_script_creator_.AddRule(
       kXMLString,
       "(\"\" | [^<>&\\0-\\x1f\\\\\\r\\n] " + kXMLString + " | \"\\\\\" " + kXMLEscape + " " +
-          kXMLString + " | " + kXMLEntity + " " + kXMLString + ") (= [ \\n\\t]*)"
+          kXMLString + " | " + kXMLEntity + " " + kXMLString + ") (= [ \\n\\t]{0,20})"
   );
   ebnf_script_creator_.AddRule(kXMLVariableName, "[a-zA-Z_] [a-zA-Z0-9_]*");
 }
@@ -3278,7 +3278,7 @@ std::string JSONSchemaConverter::VisitObject(
       result += " \"}\"";
       if (could_be_empty) {
         // result = (result) | {}
-        auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]* " : "") + "\"}\"";
+        auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]{0,20} " : "") + "\"}\"";
         if (result == "\"{\"  \"}\"") {
           result = rest;
         } else {
