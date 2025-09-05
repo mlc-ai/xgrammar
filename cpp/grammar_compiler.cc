@@ -554,8 +554,13 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
 
 /******************* GrammarCompiler::Impl *******************/
 
-using SchemaKey =
-    std::tuple<std::string, bool, std::optional<int>, std::pair<std::string, std::string>, bool>;
+using SchemaKey = std::tuple<
+    std::string,
+    bool,
+    std::optional<int>,
+    std::pair<std::string, std::string>,
+    bool,
+    std::optional<int>>;
 using StructuralTagKey = std::tuple<std::vector<StructuralTagItem>, std::vector<std::string>>;
 using GrammarKey = std::pair<std::string, std::string>;
 
@@ -605,7 +610,8 @@ class GrammarCompiler::Impl {
       bool any_whitespace,
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
-      bool strict_mode = true
+      bool strict_mode = true,
+      std::optional<int> max_whitespace_cnt = std::nullopt
   );
 
   CompiledGrammar CompileStructuralTag(
@@ -768,8 +774,10 @@ CompiledGrammar GrammarCompiler::Impl::CompileJson() {
 
 template <>
 CompiledGrammar GrammarCompiler::Impl::Compute<SchemaKey>(const SchemaKey& key) {
-  const auto& [schema, any_whitespace, indent, separators, strict_mode] = key;
-  auto grammar = Grammar::FromJSONSchema(schema, any_whitespace, indent, separators, strict_mode);
+  const auto& [schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt] = key;
+  auto grammar = Grammar::FromJSONSchema(
+      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt
+  );
   return MultiThreadCompileGrammar(grammar);
 }
 
@@ -802,17 +810,20 @@ CompiledGrammar GrammarCompiler::Impl::CompileJSONSchema(
     bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
-    bool strict_mode
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt
 ) {
   if (!cache_enabled_) {
-    return MultiThreadCompileGrammar(
-        Grammar::FromJSONSchema(schema, any_whitespace, indent, separators, strict_mode)
-    );
+    return MultiThreadCompileGrammar(Grammar::FromJSONSchema(
+        schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt
+    ));
   }
   auto separators_value = separators.value_or(
       (indent == std::nullopt) ? std::make_pair(", ", ": ") : std::make_pair(",", ": ")
   );
-  auto key = std::make_tuple(schema, any_whitespace, indent, separators_value, strict_mode);
+  auto key = std::make_tuple(
+      schema, any_whitespace, indent, separators_value, strict_mode, max_whitespace_cnt
+  );
   return compile_cache_.Get(key);
 }
 
@@ -876,9 +887,12 @@ CompiledGrammar GrammarCompiler::CompileJSONSchema(
     bool any_whitespace,
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
-    bool strict_mode
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt
 ) {
-  return pimpl_->CompileJSONSchema(schema, any_whitespace, indent, separators, strict_mode);
+  return pimpl_->CompileJSONSchema(
+      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt
+  );
 }
 
 CompiledGrammar GrammarCompiler::CompileBuiltinJSONGrammar() {

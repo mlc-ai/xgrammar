@@ -39,13 +39,23 @@ using SchemaError = TypedError<SchemaErrorType>;
  */
 class IndentManager {
  public:
-  IndentManager(std::optional<int> indent, const std::string& separator, bool any_whitespace)
+  IndentManager(
+      std::optional<int> indent,
+      const std::string& separator,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt
+  )
       : any_whitespace_(any_whitespace),
         enable_newline_(indent.has_value()),
         indent_(indent.value_or(0)),
         separator_(separator),
         total_indent_(0),
-        is_first_({true}) {}
+        is_first_({true}),
+        max_whitespace_cnt_(max_whitespace_cnt) {
+    if (max_whitespace_cnt.has_value() && max_whitespace_cnt.value() <= 0) {
+      XGRAMMAR_LOG(FATAL) << ("max_whitespace_cnt must be positive.");
+    }
+  }
 
   /*! \brief Enter a new indent level. */
   void StartIndent() {
@@ -104,12 +114,17 @@ class IndentManager {
   std::string separator_;
   int64_t total_indent_;
   std::vector<bool> is_first_;
+  std::optional<int> max_whitespace_cnt_;
   friend class JSONSchemaConverter;
 };
 
 std::string IndentManager::StartSeparator() {
   if (any_whitespace_) {
-    return "[ \\n\\t]{0,20}";
+    if (!max_whitespace_cnt_.has_value()) {
+      return "[ \\n\\t]*";
+    } else {
+      return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+    }
   }
   if (!enable_newline_) {
     return "\"\"";
@@ -119,7 +134,13 @@ std::string IndentManager::StartSeparator() {
 
 std::string IndentManager::MiddleSeparator() {
   if (any_whitespace_) {
-    return "[ \\n\\t]{0,20} \"" + separator_ + "\" [ \\n\\t]{0,20}";
+    std::string whitespace_part;
+    if (!max_whitespace_cnt_.has_value()) {
+      whitespace_part = "[ \\n\\t]*";
+    } else {
+      whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+    }
+    return whitespace_part + " \"" + separator_ + "\" " + whitespace_part;
   }
   if (!enable_newline_) {
     return "\"" + separator_ + "\"";
@@ -129,7 +150,11 @@ std::string IndentManager::MiddleSeparator() {
 
 std::string IndentManager::EndSeparator() {
   if (any_whitespace_) {
-    return "[ \\n\\t]{0,20}";
+    if (!max_whitespace_cnt_.has_value()) {
+      return "[ \\n\\t]*";
+    } else {
+      return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+    }
   }
   if (!enable_newline_) {
     return "\"\"";
@@ -139,7 +164,11 @@ std::string IndentManager::EndSeparator() {
 
 std::string IndentManager::EmptySeparator() {
   if (any_whitespace_) {
-    return "[ \\n\\t]{0,20}";
+    if (!max_whitespace_cnt_.has_value()) {
+      return "[ \\n\\t]*";
+    } else {
+      return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+    }
   }
   return "\"\"";
 }
@@ -148,9 +177,19 @@ std::string IndentManager::NextSeparator(bool is_end) {
   if (any_whitespace_) {
     if (is_first_.back() || is_end) {
       is_first_.back() = false;
-      return "[ \\n\\t]{0,20}";
+      if (!max_whitespace_cnt_.has_value()) {
+        return "[ \\n\\t]*";
+      } else {
+        return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+      }
     } else {
-      return "[ \\n\\t]{0,20} \"" + separator_ + "\" [ \\n\\t]{0,20}";
+      std::string whitespace_part;
+      if (!max_whitespace_cnt_.has_value()) {
+        whitespace_part = "[ \\n\\t]*";
+      } else {
+        whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+      }
+      return whitespace_part + " \"" + separator_ + "\" " + whitespace_part;
     }
   }
 
@@ -189,6 +228,7 @@ class JSONSchemaConverter {
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
       bool strict_mode,
+      std::optional<int> max_whitespace_cnt = std::nullopt,
       JSONFormat json_format = JSONFormat::kJSON
   );
 
@@ -224,7 +264,6 @@ class JSONSchemaConverter {
   inline static const std::string kXMLEscape = "xml_escape";
   inline static const std::string kXMLString = "xml_string";
   inline static const std::string kXMLVariableName = "xml_variable_name";
-  inline static const std::string kWhiteSpace = "[ \\n\\t]{0,20}";
 
   /*! \brief Add the basic rules to the rules list and the basic_rules_cache. */
   void AddBasicRules(JSONFormat json_format);
@@ -517,6 +556,13 @@ class JSONSchemaConverter {
   bool any_whitespace_;
   // The cache for URI to rule. Mapping from the URI to the rule name.
   std::unordered_map<std::string, std::string> uri_to_rule_cache_;
+  // The maximum number of whitespaces allowed when any_whitespace_ is true.
+  std::optional<int> max_whitespace_cnt_;
+
+  const std::string kWhiteSpace =
+      max_whitespace_cnt_.has_value()
+          ? "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}"
+          : "[ \\n\\t]*";
 };
 
 JSONSchemaConverter::JSONSchemaConverter(
@@ -525,9 +571,13 @@ JSONSchemaConverter::JSONSchemaConverter(
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
     JSONFormat json_format
 )
-    : json_schema_(json_schema), strict_mode_(strict_mode), any_whitespace_(any_whitespace) {
+    : json_schema_(json_schema),
+      strict_mode_(strict_mode),
+      any_whitespace_(any_whitespace),
+      max_whitespace_cnt_(max_whitespace_cnt) {
   if (!separators.has_value()) {
     if (indent == std::nullopt) {
       separators = std::make_pair(", ", ": ");
@@ -538,9 +588,15 @@ JSONSchemaConverter::JSONSchemaConverter(
   if (any_whitespace) {
     separators = std::make_pair(",", ":");
   }
-  indentManager_ = IndentManager(indent, separators->first, any_whitespace);
+  indentManager_ = IndentManager(indent, separators->first, any_whitespace, max_whitespace_cnt);
   if (any_whitespace) {
-    colon_pattern_ = "[ \\n\\t]{0,20} \"" + separators->second + "\" [ \\n\\t]{0,20}";
+    std::string whitespace_part;
+    if (!max_whitespace_cnt_.has_value()) {
+      whitespace_part = "[ \\n\\t]*";
+    } else {
+      whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+    }
+    colon_pattern_ = whitespace_part + " \"" + separators->second + "\" " + whitespace_part;
   } else {
     colon_pattern_ = "\"" + separators->second + "\"";
   }
@@ -579,9 +635,9 @@ void JSONSchemaConverter::AddBasicRules(JSONFormat json_format) {
 
   auto past_indent_manager = indentManager_;
   if (any_whitespace_) {
-    indentManager_ = IndentManager(std::nullopt, ",", true);
+    indentManager_ = IndentManager(std::nullopt, ",", true, std::nullopt);
   } else {
-    indentManager_ = IndentManager(std::nullopt, ", ", false);
+    indentManager_ = IndentManager(std::nullopt, ", ", false, std::nullopt);
   }
   AddJSONHelperRules();
   if (json_format == JSONFormat::kXML) {
@@ -628,14 +684,28 @@ void JSONSchemaConverter::AddJSONHelperRules() {
   ebnf_script_creator_.AddRule(
       kBasicEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
   );
+  std::string whitespace_part;
+  if (!max_whitespace_cnt_.has_value()) {
+    whitespace_part = "[ \\n\\t]*";
+  } else {
+    whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+  }
   ebnf_script_creator_.AddRule(
       kBasicStringSub,
       "(\"\\\"\" | [^\\0-\\x1f\\\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " + kBasicEscape +
-          " " + kBasicStringSub + ") (= [ \\n\\t]{0,20} [,}\\]:])"
+          " " + kBasicStringSub + ") (= " + whitespace_part + " [,}\\]:])"
   );
 }
 
 void JSONSchemaConverter::AddXMLHelperRules() {
+  std::string whitespace_part;
+  if (any_whitespace_) {
+    if (!max_whitespace_cnt_.has_value()) {
+      whitespace_part = "[ \\n\\t]*";
+    } else {
+      whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+    }
+  }
   ebnf_script_creator_.AddRule(
       kXMLEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
   );
@@ -645,7 +715,7 @@ void JSONSchemaConverter::AddXMLHelperRules() {
   ebnf_script_creator_.AddRule(
       kXMLString,
       "(\"\" | [^<>&\\0-\\x1f\\\\\\r\\n] " + kXMLString + " | \"\\\\\" " + kXMLEscape + " " +
-          kXMLString + " | " + kXMLEntity + " " + kXMLString + ") (= [ \\n\\t]{0,20})"
+          kXMLString + " | " + kXMLEntity + " " + kXMLString + ") (= " + whitespace_part + ")"
   );
   ebnf_script_creator_.AddRule(kXMLVariableName, "[a-zA-Z_] [a-zA-Z0-9_]*");
 }
@@ -3278,7 +3348,13 @@ std::string JSONSchemaConverter::VisitObject(
       result += " \"}\"";
       if (could_be_empty) {
         // result = (result) | {}
-        auto rest = "\"{\" " + std::string(any_whitespace_ ? "[ \\n\\t]{0,20} " : "") + "\"}\"";
+        std::string whitespace_part;
+        if (max_whitespace_cnt_ == std::nullopt) {
+          whitespace_part = "[ \\n\\t]* ";
+        } else {
+          whitespace_part = "[ \\n\\t]{0," + std::to_string(*max_whitespace_cnt_) + "} ";
+        }
+        auto rest = "\"{\" " + std::string(any_whitespace_ ? whitespace_part : "") + "\"}\"";
         if (result == "\"{\"  \"}\"") {
           result = rest;
         } else {
@@ -3329,6 +3405,7 @@ std::string JSONSchemaToEBNF(
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
     JSONFormat json_format
 ) {
   picojson::value schema_value;
@@ -3336,7 +3413,7 @@ std::string JSONSchemaToEBNF(
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
                               << ". The JSON string is:" << schema;
   return JSONSchemaToEBNF(
-      schema_value, any_whitespace, indent, separators, strict_mode, json_format
+      schema_value, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, json_format
   );
 }
 
@@ -3346,10 +3423,11 @@ std::string JSONSchemaToEBNF(
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
     JSONFormat json_format
 ) {
   JSONSchemaConverter converter(
-      schema, any_whitespace, indent, separators, strict_mode, json_format
+      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, json_format
   );
   return converter.Convert(json_format);
 }

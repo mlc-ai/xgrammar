@@ -108,6 +108,7 @@ class Grammar(XGRObject):
         indent: Optional[int] = None,
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
+        max_whitespace_cnt: Optional[int] = None,
         print_converted_ebnf: bool = False,
     ) -> "Grammar":
         """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
@@ -151,6 +152,12 @@ class Grammar(XGRObject):
             This helps LLM to generate accurate output in the grammar-guided generation with JSON
             schema.
 
+        max_whitespace_cnt : Optional[int], default: None
+            The maximum number of whitespace characters allowed between elements, such like keys, values, separators and so on.
+            If None, there is no limit on the number of whitespace characters.
+            If specified, it will limit the number of whitespace characters to at most max_whitespace_cnt.
+            It should be a positive integer.
+
         print_converted_ebnf : bool, default: False
             If True, the converted EBNF string will be printed. For debugging purposes.
 
@@ -167,7 +174,13 @@ class Grammar(XGRObject):
         schema_str = _convert_schema_to_str(schema)
         return Grammar._create_from_handle(
             _core.Grammar.from_json_schema(
-                schema_str, any_whitespace, indent, separators, strict_mode, print_converted_ebnf
+                schema_str,
+                any_whitespace,
+                indent,
+                separators,
+                strict_mode,
+                max_whitespace_cnt,
+                print_converted_ebnf,
             )
         )
 

@@ -151,7 +151,7 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= "[" ("" | ws basic_any (ws "," ws basic_any)*) ws "]"
 basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
-ws ::= [ \n\t]{0,20}
+ws ::= [ \n\t]*
 """
 compiled_grammar = grammar_compiler.compile_grammar(json_grammar_ebnf_str)
 ```

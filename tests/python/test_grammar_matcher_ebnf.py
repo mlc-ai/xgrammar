@@ -92,7 +92,7 @@ basic_string ::= (([\"] basic_string_1 [\"]))
 basic_string_1 ::= "" | [^"\\\r\n] basic_string_1 | "\\" escape basic_string_1
 escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
-ws ::= [ \n\t]{0,20}
+ws ::= [ \n\t]*
 """
     grammar = xgr.Grammar.from_ebnf(json_grammar_simple_ebnf, root_rule_name="basic_string")
     assert _is_grammar_accept_string(grammar, r'"abc\r\n"')
@@ -111,7 +111,7 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= "[" ("" | ws basic_any (ws "," ws basic_any)*) ws "]"
 basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
-ws ::= [ \n\t]{0,20}
+ws ::= [ \n\t]*
 """
 json_grammar = xgr.Grammar.from_ebnf(json_grammar_ebnf)
 

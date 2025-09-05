@@ -4,6 +4,7 @@
  */
 #include <xgrammar/xgrammar.h>
 
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -74,7 +75,9 @@ std::string _QwenXMLToolCallingToEBNF(const std::string& schema) {
     XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
                         << json_value.to_str();
   }
-  return JSONSchemaToEBNF(json_value, true, std::nullopt, std::nullopt, true, JSONFormat::kXML);
+  return JSONSchemaToEBNF(
+      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kXML
+  );
 }
 
 }  // namespace xgrammar
