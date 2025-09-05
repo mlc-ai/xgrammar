@@ -46,9 +46,11 @@ Grammar Grammar::FromJSONSchema(
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
     bool print_converted_ebnf
 ) {
-  auto ebnf_string = JSONSchemaToEBNF(schema, any_whitespace, indent, separators, strict_mode);
+  auto ebnf_string =
+      JSONSchemaToEBNF(schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt);
   if (print_converted_ebnf) {
     XGRAMMAR_LOG(INFO) << "Converted EBNF: " << ebnf_string << std::endl;
   }
@@ -73,12 +75,12 @@ Grammar Grammar::FromStructuralTag(
 // Optimized json grammar for the speed of the grammar matcher
 const std::string kJSONGrammarString = R"(
 root ::= (
-    "{" [ \n\t]{0,20} members_and_embrace |
-    "[" [ \n\t]{0,20} elements_or_embrace
+    "{" [ \n\t]* members_and_embrace |
+    "[" [ \n\t]* elements_or_embrace
 )
 value_non_str ::= (
-    "{" [ \n\t]{0,20} members_and_embrace |
-    "[" [ \n\t]{0,20} elements_or_embrace |
+    "{" [ \n\t]* members_and_embrace |
+    "[" [ \n\t]* elements_or_embrace |
     "0" fraction exponent |
     [1-9] [0-9]* fraction exponent |
     "-" [0-9] fraction exponent |
@@ -86,33 +88,33 @@ value_non_str ::= (
     "true" |
     "false" |
     "null"
-) (= [ \n\t]{0,20} member_suffix_suffix)
-members_and_embrace ::= ("\"" characters_and_colon [ \n\t]{0,20} members_suffix | "}") (= [ \n\t,}\]])
+) (= [ \n\t]* member_suffix_suffix)
+members_and_embrace ::= ("\"" characters_and_colon [ \n\t]* members_suffix | "}") (= [ \n\t,}\]])
 members_suffix ::= (
-    value_non_str [ \n\t]{0,20} member_suffix_suffix |
+    value_non_str [ \n\t]* member_suffix_suffix |
     "\"" characters_and_embrace |
-    "\"" characters_and_comma [ \n\t]{0,20} "\"" characters_and_colon [ \n\t]{0,20} members_suffix
+    "\"" characters_and_comma [ \n\t]* "\"" characters_and_colon [ \n\t]* members_suffix
 ) (= [ \n\t,}\]])
 member_suffix_suffix ::= (
     "}" |
-    "," [ \n\t]{0,20} "\"" characters_and_colon [ \n\t]{0,20} members_suffix
+    "," [ \n\t]* "\"" characters_and_colon [ \n\t]* members_suffix
 ) (= [ \n\t,}\]])
 elements_or_embrace ::= (
-    "{" [ \n\t]{0,20} members_and_embrace elements_rest [ \n\t]{0,20} "]" |
-    "[" [ \n\t]{0,20} elements_or_embrace elements_rest [ \n\t]{0,20} "]" |
-    "\"" characters_item elements_rest [ \n\t]{0,20} "]" |
-    "0" fraction exponent elements_rest [ \n\t]{0,20} "]" |
-    [1-9] [0-9]* fraction exponent elements_rest [ \n\t]{0,20} "]" |
-    "-" "0" fraction exponent elements_rest [ \n\t]{0,20} "]" |
-    "-" [1-9] [0-9]* fraction exponent elements_rest [ \n\t]{0,20} "]" |
-    "true" elements_rest [ \n\t]{0,20} "]" |
-    "false" elements_rest [ \n\t]{0,20} "]" |
-    "null" elements_rest [ \n\t]{0,20} "]" |
+    "{" [ \n\t]* members_and_embrace elements_rest [ \n\t]* "]" |
+    "[" [ \n\t]* elements_or_embrace elements_rest [ \n\t]* "]" |
+    "\"" characters_item elements_rest [ \n\t]* "]" |
+    "0" fraction exponent elements_rest [ \n\t]* "]" |
+    [1-9] [0-9]* fraction exponent elements_rest [ \n\t]* "]" |
+    "-" "0" fraction exponent elements_rest [ \n\t]* "]" |
+    "-" [1-9] [0-9]* fraction exponent elements_rest [ \n\t]* "]" |
+    "true" elements_rest [ \n\t]* "]" |
+    "false" elements_rest [ \n\t]* "]" |
+    "null" elements_rest [ \n\t]* "]" |
     "]"
 )
 elements ::= (
-    "{" [ \n\t]{0,20} members_and_embrace elements_rest |
-    "[" [ \n\t]{0,20} elements_or_embrace elements_rest |
+    "{" [ \n\t]* members_and_embrace elements_rest |
+    "[" [ \n\t]* elements_or_embrace elements_rest |
     "\"" characters_item elements_rest |
     "0" fraction exponent elements_rest |
     [1-9] [0-9]* fraction exponent elements_rest |
@@ -124,28 +126,28 @@ elements ::= (
 )
 elements_rest ::= (
     "" |
-    [ \n\t]{0,20} "," [ \n\t]{0,20} elements
+    [ \n\t]* "," [ \n\t]* elements
 )
 characters_and_colon ::= (
-    "\"" [ \n\t]{0,20} ":" |
+    "\"" [ \n\t]* ":" |
     [^"\\\x00-\x1F] characters_and_colon |
     "\\" escape characters_and_colon
-) (=[ \n\t]{0,20} [\"{[0-9tfn-])
+) (=[ \n\t]* [\"{[0-9tfn-])
 characters_and_comma ::= (
-    "\"" [ \n\t]{0,20} "," |
+    "\"" [ \n\t]* "," |
     [^"\\\x00-\x1F] characters_and_comma |
     "\\" escape characters_and_comma
-) (=[ \n\t]{0,20} "\"")
+) (=[ \n\t]* "\"")
 characters_and_embrace ::= (
-    "\"" [ \n\t]{0,20} "}" |
+    "\"" [ \n\t]* "}" |
     [^"\\\x00-\x1F] characters_and_embrace |
     "\\" escape characters_and_embrace
-) (=[ \n\t]{0,20} [},])
+) (=[ \n\t]* [},])
 characters_item ::= (
     "\"" |
     [^"\\\x00-\x1F] characters_item |
     "\\" escape characters_item
-) (= [ \n\t]{0,20} [,\]])
+) (= [ \n\t]* [,\]])
 escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 fraction ::= "" | "." [0-9] [0-9]*
 exponent ::= "" |  "e" sign [0-9] [0-9]* | "E" sign [0-9] [0-9]*

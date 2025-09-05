@@ -22,6 +22,7 @@ def _json_schema_to_ebnf(
     any_whitespace: bool = True,
     indent: Optional[int] = None,
     separators: Optional[Tuple[str, str]] = None,
+    max_whitespace_cnt: Optional[int] = None,
     strict_mode: bool = True,
 ) -> str:
     """Convert JSON schema string to BNF grammar string. For test purposes.
@@ -47,6 +48,12 @@ def _json_schema_to_ebnf(
         This helps LLM to generate accurate output in the grammar-guided generation with JSON
         schema.
 
+    max_whitespace_cnt : Optional[int], default: None
+        The maximum number of whitespace characters allowed between elements, such like keys, values, separators and so on.
+        If None, there is no limit on the number of whitespace characters.
+        If specified, it will limit the number of whitespace characters to at most max_whitespace_cnt.
+        It should be a positive integer.
+
     Returns
     -------
     bnf_string : str
@@ -54,7 +61,7 @@ def _json_schema_to_ebnf(
     """
     schema_str = _convert_schema_to_str(schema)
     return _core.testing._json_schema_to_ebnf(
-        schema_str, any_whitespace, indent, separators, strict_mode
+        schema_str, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt
     )
 
 

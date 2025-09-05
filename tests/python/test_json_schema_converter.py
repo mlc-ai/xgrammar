@@ -15,19 +15,19 @@ from xgrammar.testing import (
 )
 
 basic_json_rules_ebnf = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]{0,20} [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]{0,20} basic_any ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_any)* [ \n\t]{0,20} "]") | ("[" [ \n\t]{0,20} "]"))
-basic_object ::= ("{" [ \n\t]{0,20} basic_string [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_any ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_string [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_any)* [ \n\t]{0,20} "}") | "{" [ \n\t]{0,20} "}"
+basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 """
 
 basic_json_rules_ebnf_no_space = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]{0,20} [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
@@ -168,7 +168,7 @@ schema__grammar__accepted_instances__rejected_instances__test_non_strict = [
     (
         {"type": "array", "prefixItems": [{"type": "integer"}, {"type": "integer"}]},
         basic_json_rules_ebnf
-        + r"""root ::= ("[" [ \n\t]{0,20} (basic_integer [ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer) ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_any)* [ \n\t]{0,20} "]")
+        + r"""root ::= ("[" [ \n\t]* (basic_integer [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]")
 """,
         [[1, 2], [1, 2, 3], [1, 2, 3, "123"]],
         [[1]],
@@ -180,9 +180,9 @@ schema__grammar__accepted_instances__rejected_instances__test_non_strict = [
             "required": ["foo", "bar"],
         },
         basic_json_rules_ebnf
-        + r"""root_part_1 ::= ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_string [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_any)*
-root_part_0 ::= [ \n\t]{0,20} "," [ \n\t]{0,20} "\"bar\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_integer root_part_1
-root ::= "{" [ \n\t]{0,20} (("\"foo\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_integer root_part_0)) [ \n\t]{0,20} "}"
+        + r"""root_part_1 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)*
+root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"bar\"" [ \n\t]* ":" [ \n\t]* basic_integer root_part_1
+root ::= "{" [ \n\t]* (("\"foo\"" [ \n\t]* ":" [ \n\t]* basic_integer root_part_0)) [ \n\t]* "}"
 """,
         [{"foo": 1, "bar": 2}, {"foo": 1, "bar": 2, "baz": 3}],
         [{"foo": 1}],
@@ -739,23 +739,23 @@ def test_any_whitespace():
     schema = SimpleModel.model_json_schema()
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root_prop_1 ::= (("[" [ \n\t]{0,20} basic_integer ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer)* [ \n\t]{0,20} "]") | ("[" [ \n\t]{0,20} "]"))
-root_prop_2 ::= ("{" [ \n\t]{0,20} basic_string [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_integer ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_string [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_integer)* [ \n\t]{0,20} "}") | "{" [ \n\t]{0,20} "}"
-root_part_1 ::= [ \n\t]{0,20} "," [ \n\t]{0,20} "\"obj\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} root_prop_2 ""
-root_part_0 ::= [ \n\t]{0,20} "," [ \n\t]{0,20} "\"arr\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} root_prop_1 root_part_1
-root ::= "{" [ \n\t]{0,20} (("\"value\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_string root_part_0)) [ \n\t]{0,20} "}"
+        r"""root_prop_1 ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+root_part_1 ::= [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 ""
+root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 root_part_1
+root ::= "{" [ \n\t]* (("\"value\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0)) [ \n\t]* "}"
 """
     )
 
     check_schema_with_grammar(schema, ebnf_grammar, any_whitespace=True, strict_mode=True)
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root_prop_1 ::= (("[" [ \n\t]{0,20} basic_integer ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer)* [ \n\t]{0,20} "]") | ("[" [ \n\t]{0,20} "]"))
-root_prop_2 ::= ("{" [ \n\t]{0,20} basic_string [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_integer ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_string [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_integer)* [ \n\t]{0,20} "}") | "{" [ \n\t]{0,20} "}"
-root_part_2 ::= ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_string [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_any)*
-root_part_1 ::= [ \n\t]{0,20} "," [ \n\t]{0,20} "\"obj\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} root_prop_2 root_part_2
-root_part_0 ::= [ \n\t]{0,20} "," [ \n\t]{0,20} "\"arr\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} root_prop_1 root_part_1
-root ::= "{" [ \n\t]{0,20} (("\"value\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_string root_part_0)) [ \n\t]{0,20} "}"
+        r"""root_prop_1 ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+root_part_2 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)*
+root_part_1 ::= [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 root_part_2
+root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 root_part_1
+root ::= "{" [ \n\t]* (("\"value\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0)) [ \n\t]* "}"
 """
     )
 
@@ -818,9 +818,9 @@ schema__expected_grammar__instances__test_array_schema = [
         },
         (
             basic_json_rules_ebnf
-            + r"""root_additional_part_0 ::= [ \n\t]{0,20} "," [ \n\t]{0,20} "\"age\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_integer ""
-root_additional ::= "{" [ \n\t]{0,20} (("\"name\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_string root_additional_part_0)) [ \n\t]{0,20} "}"
-root ::= (("[" [ \n\t]{0,20} root_additional ([ \n\t]{0,20} "," [ \n\t]{0,20} root_additional)* [ \n\t]{0,20} "]") | ("[" [ \n\t]{0,20} "]"))
+            + r"""root_additional_part_0 ::= [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer ""
+root_additional ::= "{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string root_additional_part_0)) [ \n\t]* "}"
+root ::= (("[" [ \n\t]* root_additional ([ \n\t]* "," [ \n\t]* root_additional)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 """
         ),
         [
@@ -844,9 +844,9 @@ root ::= (("[" [ \n\t]{0,20} root_additional ([ \n\t]{0,20} "," [ \n\t]{0,20} ro
         },
         (
             basic_json_rules_ebnf
-            + r"""root_item_0_part_0 ::= [ \n\t]{0,20} "," [ \n\t]{0,20} "\"age\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_integer ""
-root_item_0 ::= "{" [ \n\t]{0,20} (("\"name\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_string root_item_0_part_0)) [ \n\t]{0,20} "}"
-root ::= ("[" [ \n\t]{0,20} (root_item_0 [ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer [ \n\t]{0,20} "," [ \n\t]{0,20} basic_string) [ \n\t]{0,20} "]")
+            + r"""root_item_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer ""
+root_item_0 ::= "{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string root_item_0_part_0)) [ \n\t]* "}"
+root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer [ \n\t]* "," [ \n\t]* basic_string) [ \n\t]* "]")
 """
         ),
         [
@@ -875,10 +875,10 @@ root ::= ("[" [ \n\t]{0,20} (root_item_0 [ \n\t]{0,20} "," [ \n\t]{0,20} basic_i
         },
         (
             basic_json_rules_ebnf
-            + r"""root_item_0_part_0 ::= [ \n\t]{0,20} "," [ \n\t]{0,20} "\"age\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_integer ""
-root_item_0 ::= "{" [ \n\t]{0,20} (("\"name\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_string root_item_0_part_0)) [ \n\t]{0,20} "}"
-root_additional ::= "{" [ \n\t]{0,20} (("\"name\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_string "")) [ \n\t]{0,20} "}"
-root ::= ("[" [ \n\t]{0,20} (root_item_0 [ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer) ([ \n\t]{0,20} "," [ \n\t]{0,20} root_additional)* [ \n\t]{0,20} "]")
+            + r"""root_item_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"age\"" [ \n\t]* ":" [ \n\t]* basic_integer ""
+root_item_0 ::= "{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string root_item_0_part_0)) [ \n\t]* "}"
+root_additional ::= "{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string "")) [ \n\t]* "}"
+root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* root_additional)* [ \n\t]* "]")
 """
         ),
         [
@@ -909,7 +909,7 @@ schema__expected_grammar__instances__test_array_schema_min_max = [
         {"type": "array", "items": False, "prefixItems": []},
         (
             basic_json_rules_ebnf
-            + r"""root ::= ("[" [ \n\t]{0,20} "]")
+            + r"""root ::= ("[" [ \n\t]* "]")
 """
         ),
         [([], True), ([1], False), ([1, 2], False)],
@@ -919,7 +919,7 @@ schema__expected_grammar__instances__test_array_schema_min_max = [
         {"type": "array", "items": {"type": "integer"}, "minItems": 0, "maxItems": 0},
         (
             basic_json_rules_ebnf
-            + r"""root ::= ("[" [ \n\t]{0,20} "]")
+            + r"""root ::= ("[" [ \n\t]* "]")
 """
         ),
         [([], True), ([1], False), ([1, 2], False)],
@@ -929,7 +929,7 @@ schema__expected_grammar__instances__test_array_schema_min_max = [
         {"type": "array", "items": {"type": "integer"}, "minItems": 0, "maxItems": 2},
         (
             basic_json_rules_ebnf
-            + r"""root ::= (("[" [ \n\t]{0,20} basic_integer ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer)? [ \n\t]{0,20} "]") | ("[" [ \n\t]{0,20} "]"))
+            + r"""root ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)? [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 """
         ),
         [([], True), ([1], True), ([1, 2], True), ([1, 2, 3], False)],
@@ -939,7 +939,7 @@ schema__expected_grammar__instances__test_array_schema_min_max = [
         {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 3},
         (
             basic_json_rules_ebnf
-            + r"""root ::= ("[" [ \n\t]{0,20} basic_integer ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer){1,2} [ \n\t]{0,20} "]")
+            + r"""root ::= ("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer){1,2} [ \n\t]* "]")
 """
         ),
         [([], False), ([1], False), ([1, 2], True), ([1, 2, 3], True), ([1, 2, 3, 4], False)],
@@ -949,7 +949,7 @@ schema__expected_grammar__instances__test_array_schema_min_max = [
         {"type": "array", "items": False, "prefixItems": [{"type": "string"}, {"type": "integer"}]},
         (
             basic_json_rules_ebnf
-            + r"""root ::= ("[" [ \n\t]{0,20} (basic_string [ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer) [ \n\t]{0,20} "]")
+            + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) [ \n\t]* "]")
 """
         ),
         [(["foo", 42], True), (["foo", 42, "bar"], False), (["foo"], False), ([42, "foo"], False)],
@@ -965,7 +965,7 @@ schema__expected_grammar__instances__test_array_schema_min_max = [
         },
         (
             basic_json_rules_ebnf
-            + r"""root ::= ("[" [ \n\t]{0,20} (basic_string [ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer) ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_boolean){1,2} [ \n\t]{0,20} "]")
+            + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* basic_boolean){1,2} [ \n\t]* "]")
 """
         ),
         [
@@ -986,7 +986,7 @@ schema__expected_grammar__instances__test_array_schema_min_max = [
         },
         (
             basic_json_rules_ebnf
-            + r"""root ::= ("[" [ \n\t]{0,20} (basic_string [ \n\t]{0,20} "," [ \n\t]{0,20} basic_integer) ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_boolean)+ [ \n\t]{0,20} "]")
+            + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* basic_boolean)+ [ \n\t]* "]")
 """
         ),
         [
@@ -2086,7 +2086,7 @@ def test_empty_array():
     schema = {"items": {"type": "string"}, "type": "array"}
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root ::= (("[" [ \n\t]{0,20} basic_string ([ \n\t]{0,20} "," [ \n\t]{0,20} basic_string)* [ \n\t]{0,20} "]") | ("[" [ \n\t]{0,20} "]"))
+        r"""root ::= (("[" [ \n\t]* basic_string ([ \n\t]* "," [ \n\t]* basic_string)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 """
     )
 
@@ -2103,7 +2103,7 @@ def test_empty_object():
     schema = {"properties": {"name": {"type": "string"}}, "type": "object"}
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root ::= ("{" [ \n\t]{0,20} (("\"name\"" [ \n\t]{0,20} ":" [ \n\t]{0,20} basic_string "")) [ \n\t]{0,20} "}") | "{" [ \n\t]{0,20} "}"
+        r"""root ::= ("{" [ \n\t]* (("\"name\"" [ \n\t]* ":" [ \n\t]* basic_string "")) [ \n\t]* "}") | "{" [ \n\t]* "}"
 """
     )
 
@@ -2183,6 +2183,61 @@ def test_generate_float_regex():
         _generate_float_regex(-0.000001, 0.000001)
         == r"^(-0.000001|0.000001|-0\.000000\d{0,0}|0\.000000\d{0,0})$"
     )
+
+
+def test_limited_whitespace_cnt():
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_escape basic_escape [,}\]:]))
+basic_string ::= (("\"" basic_string_sub)) (=(root_repeat_1_3 root_repeat_2_3 "}"))
+root ::= (("{" root_repeat_1 root_repeat_2 "\"key\"" root_repeat_1_1 root_repeat_2_1 ":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+root_repeat_1 ::= ("" | ([ \n\t])) (=(root_repeat_2))
+root_repeat_2 ::= ("" | ([ \n\t])) (=("\"key\"" root_repeat_1_1 root_repeat_2_1 ":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+root_repeat_1_1 ::= ("" | ([ \n\t])) (=(root_repeat_2_1))
+root_repeat_2_1 ::= ("" | ([ \n\t])) (=(":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+root_repeat_1_2 ::= ("" | ([ \n\t])) (=(root_repeat_2_2))
+root_repeat_2_2 ::= ("" | ([ \n\t])) (=(basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+root_repeat_1_3 ::= ("" | ([ \n\t])) (=(root_repeat_2_3))
+root_repeat_2_3 ::= ("" | ([ \n\t])) (=("}"))
+"""
+    schema = {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]}
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=True, max_whitespace_cnt=2)
+
+    assert grammar is not None
+    assert str(grammar) == expected_grammar
+    assert _is_grammar_accept_string(grammar, '{  "key"  :  "value"  }')
+    assert _is_grammar_accept_string(grammar, '{"key":"value"}')
+    assert not _is_grammar_accept_string(grammar, '{   "key"  :  "value"   }')
+    assert not _is_grammar_accept_string(grammar, '{    "key"  :  "value"    }')
+
+
+def test_limited_whitespace_compile():
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_escape basic_escape [,}\]:]))
+basic_string ::= (("\"" basic_string_sub)) (=(root_repeat_1_3 root_repeat_2_3 "}"))
+root ::= (("{" root_repeat_1 root_repeat_2 "\"key\"" root_repeat_1_1 root_repeat_2_1 ":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+root_repeat_1 ::= ("" | ([ \n\t])) (=(root_repeat_2))
+root_repeat_2 ::= ("" | ([ \n\t])) (=("\"key\"" root_repeat_1_1 root_repeat_2_1 ":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+root_repeat_1_1 ::= ("" | ([ \n\t])) (=(root_repeat_2_1))
+root_repeat_2_1 ::= ("" | ([ \n\t])) (=(":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+root_repeat_1_2 ::= ("" | ([ \n\t])) (=(root_repeat_2_2))
+root_repeat_2_2 ::= ("" | ([ \n\t])) (=(basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+root_repeat_1_3 ::= ("" | ([ \n\t])) (=(root_repeat_2_3))
+root_repeat_2_3 ::= ("" | ([ \n\t])) (=("}"))
+"""
+    schema = {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]}
+    tokenizer_info = xgr.TokenizerInfo([])
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    compiled_grammar = compiler.compile_json_schema(
+        schema, any_whitespace=True, max_whitespace_cnt=2
+    )
+    assert compiled_grammar is not None
+    grammar = compiled_grammar.grammar
+    assert str(grammar) == expected_grammar
+    assert grammar is not None
+    assert _is_grammar_accept_string(grammar, '{  "key"  :  "value"  }')
+    assert _is_grammar_accept_string(grammar, '{"key":"value"}')
+    assert not _is_grammar_accept_string(grammar, '{   "key"  :  "value"   }')
+    assert not _is_grammar_accept_string(grammar, '{    "key"  :  "value"    }')
 
 
 if __name__ == "__main__":

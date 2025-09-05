@@ -154,6 +154,7 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("indent").none(),
           nb::arg("separators").none(),
           nb::arg("strict_mode"),
+          nb::arg("max_whitespace_cnt").none(),
           nb::arg("print_converted_ebnf"),
           nb::call_guard<nb::gil_scoped_release>()
       )
@@ -186,7 +187,8 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("any_whitespace"),
           nb::arg("indent").none(),
           nb::arg("separators").none(),
-          nb::arg("strict_mode")
+          nb::arg("strict_mode"),
+          nb::arg("max_whitespace_cnt").none()
       )
       .def(
           "compile_builtin_json_grammar",
@@ -253,16 +255,24 @@ NB_MODULE(xgrammar_bindings, m) {
              bool any_whitespace,
              std::optional<int> indent,
              std::optional<std::pair<std::string, std::string>> separators,
-             bool strict_mode) {
+             bool strict_mode,
+             std::optional<int> max_whitespace_cnt) {
             return JSONSchemaToEBNF(
-                schema, any_whitespace, indent, separators, strict_mode, JSONFormat::kJSON
+                schema,
+                any_whitespace,
+                indent,
+                separators,
+                strict_mode,
+                max_whitespace_cnt,
+                JSONFormat::kJSON
             );
           },
           nb::arg("schema"),
           nb::arg("any_whitespace"),
           nb::arg("indent").none(),
           nb::arg("separators").none(),
-          nb::arg("strict_mode")
+          nb::arg("strict_mode"),
+          nb::arg("max_whitespace_cnt").none()
       )
       .def("_regex_to_ebnf", &RegexToEBNF)
       .def("_ebnf_to_grammar_no_normalization", &_EBNFToGrammarNoNormalization)
