@@ -2187,9 +2187,11 @@ def test_generate_float_regex():
 
 def test_limited_whitespace_cnt():
     expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
-basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_escape basic_escape [,}\]:]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_string_sub_repeat_1 basic_string_sub_repeat_2 [,}\]:]))
 basic_string ::= (("\"" basic_string_sub)) (=(root_repeat_1_3 root_repeat_2_3 "}"))
 root ::= (("{" root_repeat_1 root_repeat_2 "\"key\"" root_repeat_1_1 root_repeat_2_1 ":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+basic_string_sub_repeat_1 ::= ("" | ([ \n\t])) (=(basic_string_sub_repeat_2))
+basic_string_sub_repeat_2 ::= ("" | ([ \n\t]))
 root_repeat_1 ::= ("" | ([ \n\t])) (=(root_repeat_2))
 root_repeat_2 ::= ("" | ([ \n\t])) (=("\"key\"" root_repeat_1_1 root_repeat_2_1 ":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
 root_repeat_1_1 ::= ("" | ([ \n\t])) (=(root_repeat_2_1))
@@ -2212,9 +2214,11 @@ root_repeat_2_3 ::= ("" | ([ \n\t])) (=("}"))
 
 def test_limited_whitespace_compile():
     expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
-basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_escape basic_escape [,}\]:]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_string_sub_repeat_1 basic_string_sub_repeat_2 [,}\]:]))
 basic_string ::= (("\"" basic_string_sub)) (=(root_repeat_1_3 root_repeat_2_3 "}"))
 root ::= (("{" root_repeat_1 root_repeat_2 "\"key\"" root_repeat_1_1 root_repeat_2_1 ":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
+basic_string_sub_repeat_1 ::= ("" | ([ \n\t])) (=(basic_string_sub_repeat_2))
+basic_string_sub_repeat_2 ::= ("" | ([ \n\t]))
 root_repeat_1 ::= ("" | ([ \n\t])) (=(root_repeat_2))
 root_repeat_2 ::= ("" | ([ \n\t])) (=("\"key\"" root_repeat_1_1 root_repeat_2_1 ":" root_repeat_1_2 root_repeat_2_2 basic_string root_repeat_1_3 root_repeat_2_3 "}"))
 root_repeat_1_1 ::= ("" | ([ \n\t])) (=(root_repeat_2_1))

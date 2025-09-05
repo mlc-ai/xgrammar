@@ -492,6 +492,9 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
       visited.insert(rule_id);
       auto rule = base_grammar_->GetRule(rule_id);
       VisitExpr(rule.body_expr_id);
+      if (rule.lookahead_assertion_id != -1) {
+        VisitExpr(rule.lookahead_assertion_id);
+      }
     }
 
     return std::vector<int32_t>(visited.begin(), visited.end());
