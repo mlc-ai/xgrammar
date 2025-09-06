@@ -16,6 +16,7 @@
 </div>
 
 ## News
+- [2025/09] XGrammar has been officially integrated into [OpenVINO GenAI](https://github.com/openvinotoolkit/openvino.genai)
 - [2025/02] XGrammar has been officially integrated into [Modular's MAX](https://docs.modular.com/max/serve/structured-output)
 - [2025/01] XGrammar has been officially integrated into [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM).
 - [2024/12] XGrammar has been officially integrated into [vLLM](https://github.com/vllm-project/vllm).
