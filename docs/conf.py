@@ -73,7 +73,6 @@ intersphinx_mapping = {
     "torch": ("https://pytorch.org/docs/stable", None),
 }
 
-autodoc_mock_imports = ["torch", "safetensors"]
 autodoc_default_options = {
     "members": True,
     "undoc-members": True,
