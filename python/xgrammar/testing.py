@@ -319,23 +319,21 @@ class GrammarFunctor:
     For test purposes."""
 
     @staticmethod
-    def structure_normalizer(grammar: Grammar) -> Grammar:
+    def structure_normalizer(grammar: Grammar) -> None:
         """Normalize the structure of the grammar."""
-        return Grammar._create_from_handle(
+        Grammar._create_from_handle(
             _core.testing.grammar_functor.structure_normalizer(grammar._handle)
         )
 
     @staticmethod
-    def rule_inliner(grammar: Grammar) -> Grammar:
+    def rule_inliner(grammar: Grammar) -> None:
         """Inline some rule references in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_functor.rule_inliner(grammar._handle)
-        )
+        Grammar._create_from_handle(_core.testing.grammar_functor.rule_inliner(grammar._handle))
 
     @staticmethod
-    def byte_string_fuser(grammar: Grammar) -> Grammar:
+    def byte_string_fuser(grammar: Grammar) -> None:
         """Fuse the byte string elements in the grammar."""
-        return Grammar._create_from_handle(
+        Grammar._create_from_handle(
             _core.testing.grammar_functor.byte_string_fuser(grammar._handle)
         )
 
@@ -347,8 +345,8 @@ class GrammarFunctor:
         )
 
     @staticmethod
-    def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
+    def lookahead_assertion_analyzer(grammar: Grammar) -> None:
         """Analyze and add lookahead assertions in the grammar."""
-        return Grammar._create_from_handle(
+        Grammar._create_from_handle(
             _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
         )

@@ -287,7 +287,7 @@ class AllowEmptyRuleAnalyzer {
  */
 class StructureNormalizer {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
@@ -295,7 +295,7 @@ class StructureNormalizer {
  */
 class ByteStringFuser {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
@@ -303,7 +303,7 @@ class ByteStringFuser {
  */
 class RuleInliner {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
@@ -319,7 +319,7 @@ class DeadCodeEliminator {
  */
 class LookaheadAssertionAnalyzer {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
