@@ -258,44 +258,11 @@ class GrammarNormalizer {
 };
 
 /*!
- * \brief Find the union of multiple grammars as a new grammar.
- */
-class GrammarUnionFunctor {
- public:
-  static Grammar Apply(const std::vector<Grammar>& grammars);
-};
-
-/*!
- * \brief Find the concatenation of multiple grammars as a new grammar.
- */
-class GrammarConcatFunctor {
- public:
-  static Grammar Apply(const std::vector<Grammar>& grammars);
-};
-
-/*!
  * \brief Analyze the grammar to find the rules that are allowed to be empty.
  */
 class AllowEmptyRuleAnalyzer {
  public:
   static std::vector<int32_t> Apply(const Grammar& grammar);
-};
-
-/*!
- * \brief Create a grammar that recognizes structural tags based on their triggers. See
- * StructuralTagToGrammar() for more details.
- *
- * \param triggers The trigger strings that identify each tag group
- * \param tag_groups The tags and their schema grammars, grouped by trigger. tag_groups[i][j] is the
- * j-th tag that matches triggers[i], and its corresponding schema grammar.
- * \return A grammar that matches all the tagged patterns.
- */
-class StructuralTagGrammarCreator {
- public:
-  static Grammar Apply(
-      const std::vector<std::string>& triggers,
-      const std::vector<std::vector<std::pair<StructuralTagItem, Grammar>>>& tag_groups
-  );
 };
 
 /*!
