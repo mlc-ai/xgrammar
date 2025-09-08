@@ -576,7 +576,7 @@ class JSONSchemaConverter {
   std::unordered_map<std::string, std::string> uri_to_rule_cache_;
   // The maximum number of whitespaces allowed when any_whitespace_ is true.
   std::optional<int> max_whitespace_cnt_;
-
+  // The map from string spec to the rule name.
   std::unordered_map<StringSpec, std::string, StringSpecHash> string_spec_to_rule_name_and_context_;
 
   const std::string kWhiteSpace =
