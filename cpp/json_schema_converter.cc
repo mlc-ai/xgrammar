@@ -577,8 +577,7 @@ class JSONSchemaConverter {
   // The maximum number of whitespaces allowed when any_whitespace_ is true.
   std::optional<int> max_whitespace_cnt_;
 
-  std::unordered_map<StringSpec, std::pair<std::string, std::string>, StringSpecHash>
-      string_spec_to_rule_name_and_context_;
+  std::unordered_map<StringSpec, std::string, StringSpecHash> string_spec_to_rule_name_and_context_;
 
   const std::string kWhiteSpace =
       max_whitespace_cnt_.has_value()
@@ -1981,8 +1980,23 @@ std::string JSONSchemaConverter::VisitString(
   // Check if we have already generated a rule for this string spec.
   if (string_spec_to_rule_name_and_context_.find(string_spec) !=
       string_spec_to_rule_name_and_context_.end()) {
-    const auto& [existing_rule_name, _] = string_spec_to_rule_name_and_context_.at(string_spec);
+    const auto& existing_rule_name = string_spec_to_rule_name_and_context_.at(string_spec);
     return existing_rule_name;
+  }
+
+  if (string_spec.pattern == "[\"] " + kBasicStringSub && string_spec.min_length == 0 &&
+      string_spec.max_length == -1 && string_spec.wrapper.first.empty() &&
+      string_spec.wrapper.second.empty()) {
+    // It's the creation of the basic string rule.
+    string_spec_to_rule_name_and_context_[string_spec] = kBasicString;
+    return string_spec.pattern;
+  }
+
+  if (string_spec.pattern == kXMLString && string_spec.min_length == 0 &&
+      string_spec.max_length == -1 && string_spec.wrapper.first.empty() &&
+      string_spec.wrapper.second.empty()) {
+    string_spec_to_rule_name_and_context_[string_spec] = kXMLString;
+    return kXMLString;
   }
 
   // Generate a new rule name for this string spec.
@@ -2002,7 +2016,7 @@ std::string JSONSchemaConverter::VisitString(
     spec_context += " \"" + string_spec.wrapper.second + "\"";
   }
   std::string spec_rule_name = ebnf_script_creator_.AddRule("string", spec_context);
-  string_spec_to_rule_name_and_context_[string_spec] = {spec_rule_name, spec_context};
+  string_spec_to_rule_name_and_context_[string_spec] = spec_rule_name;
   return spec_rule_name;
 }
 
