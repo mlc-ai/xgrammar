@@ -8,11 +8,10 @@
 <html class="writer-html5" lang="en" >
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
-
+  
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Runtime Safeguards &mdash; XGrammar 0.1.24 documentation</title>
+  <title>Overview: module code &mdash; XGrammar 0.1.24 documentation</title>
   
 
   
@@ -43,16 +42,23 @@
         <script src="../_static/sphinx_highlight.js"></script>
         <script src="../_static/clipboard.min.js"></script>
         <script src="../_static/copybutton.js"></script>
+        <script src="../_static/tabs.js"></script>
         <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
+        <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
+        <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+        <script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";
+window.addEventListener("load", () => mermaid.run());
+</script>
     
     <script type="text/javascript" src="../_static/js/theme.js"></script>
 
     
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
-    <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Serialization" href="serialization.html" />
-    <link rel="prev" title="EBNF-Guided Generation" href="../tutorials/ebnf_guided_generation.html" /> 
+    <link rel="search" title="Search" href="../search.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -148,14 +154,10 @@
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Runtime Safeguards</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#recursion-limit">Recursion Limit</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#cache-size-limit">Cache Size Limit</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="serialization.html">Serialization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="javascript_api.html">JavaScript API</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/javascript_api.html">JavaScript API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
@@ -221,20 +223,11 @@
     
       <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>Runtime Safeguards</li>
+      <li>Overview: module code</li>
     
-    
-      
-      
     
     
       <li class="wy-breadcrumbs-aside">
-        
-            
-            
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/xgrammar_features/runtime_safeguards.md" class="fa fa-github"> Edit on GitHub</a>
-            
-          
         
       </li>
     
@@ -246,45 +239,15 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="runtime-safeguards">
-<h1>Runtime Safeguards<a class="headerlink" href="#runtime-safeguards" title="Permalink to this heading">¶</a></h1>
-<p>XGrammar has a set of mechanisms to safeguard the runtime and avoid the LLM server from
-crashing.</p>
-<section id="recursion-limit">
-<h2>Recursion Limit<a class="headerlink" href="#recursion-limit" title="Permalink to this heading">¶</a></h2>
-<p>The <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher</span></code></span></a> class uses a pushdown automata parser to parse the grammar.
-It may involve very deep recursion, which may cause stack overflow. XGrammar provides
-<a class="reference internal" href="../api/python/config.html#xgrammar.set_max_recursion_depth" title="xgrammar.set_max_recursion_depth"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.set_max_recursion_depth</span></code></span></a> to set the maximum recursion depth and
-<a class="reference internal" href="../api/python/config.html#xgrammar.get_max_recursion_depth" title="xgrammar.get_max_recursion_depth"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.get_max_recursion_depth</span></code></span></a> to get the current maximum recursion
-depth. The maximum recursion depth is set per process.The default maximum recursion depth is 10000.</p>
-<p>If the recursion depth exceeds the limit,
-the matcher operations (including <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.accept_token</span></code></span></a>,
-<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_string" title="xgrammar.GrammarMatcher.accept_string"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.accept_string</span></code></span></a>, <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.fill_next_token_bitmask</span></code></span></a>,
-<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.find_jump_forward_string</span></code></span></a>) will raise
-<code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>.</p>
-<p>You can also use the <a class="reference internal" href="../api/python/config.html#xgrammar.max_recursion_depth" title="xgrammar.max_recursion_depth"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.max_recursion_depth</span></code></span></a> context manager to set the maximum
-recursion depth for a code block.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">max_recursion_depth</span>
-
-<span class="k">with</span> <span class="n">max_recursion_depth</span><span class="p">(</span><span class="mi">10000</span><span class="p">):</span>
-    <span class="n">matcher</span><span class="o">.</span><span class="n">accept_token</span><span class="p">(</span><span class="n">token_id</span><span class="p">)</span>
-</pre></div>
-</div>
-</section>
-<section id="cache-size-limit">
-<h2>Cache Size Limit<a class="headerlink" href="#cache-size-limit" title="Permalink to this heading">¶</a></h2>
-<p>The <code class="xref py py-class docutils literal notranslate"><span class="pre">xgr.GrammarCompiler</span></code> class uses a cache to store the compiled grammars.
-The cache size can be limited to avoid the cache from growing too large. The cache uses an LRU
-algorithm to evict the least recently used items. The cache size limit is -1 by default, which means
-no limit.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrammarCompiler</span>
-
-<span class="n">compiler</span> <span class="o">=</span> <span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">,</span> <span class="n">cache_limit_bytes</span><span class="o">=</span><span class="mi">10000</span><span class="p">)</span>
-</pre></div>
-</div>
-</section>
-</section>
-
+  <h1>All modules for which code is available</h1>
+<ul><li><a href="xgrammar/compiler.html">xgrammar.compiler</a></li>
+<li><a href="xgrammar/config.html">xgrammar.config</a></li>
+<li><a href="xgrammar/exception.html">xgrammar.exception</a></li>
+<li><a href="xgrammar/grammar.html">xgrammar.grammar</a></li>
+<li><a href="xgrammar/matcher.html">xgrammar.matcher</a></li>
+<li><a href="xgrammar/testing.html">xgrammar.testing</a></li>
+<li><a href="xgrammar/tokenizer_info.html">xgrammar.tokenizer_info</a></li>
+</ul>
 
            </div>
            
@@ -292,15 +255,6 @@ no limit.</p>
           
 
 <footer>
-
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-        <a href="serialization.html" class="btn btn-neutral float-right" title="Serialization" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
-      
-      
-        <a href="../tutorials/ebnf_guided_generation.html" class="btn btn-neutral float-left" title="EBNF-Guided Generation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
-    </div>
 
 <div id="button" class="backtop"><img src="../_static/img/right.svg" alt="backtop"/> </div>
 <section class="footerSec">

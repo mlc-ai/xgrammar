@@ -170,8 +170,16 @@
 <li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Config</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#recursion-depth-management">Recursion Depth Management</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#serialization-version">Serialization Version</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#recursion-depth-management">Recursion Depth Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.get_max_recursion_depth"><code class="docutils literal notranslate"><span class="pre">get_max_recursion_depth()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.set_max_recursion_depth"><code class="docutils literal notranslate"><span class="pre">set_max_recursion_depth()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.max_recursion_depth"><code class="docutils literal notranslate"><span class="pre">max_recursion_depth()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#serialization-version">Serialization Version</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.get_serialization_version"><code class="docutils literal notranslate"><span class="pre">get_serialization_version()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="exception.html">Exception</a></li>
@@ -264,9 +272,68 @@
 <h1>Config<a class="headerlink" href="#config" title="Permalink to this heading">¶</a></h1>
 <section id="recursion-depth-management">
 <h2>Recursion Depth Management<a class="headerlink" href="#recursion-depth-management" title="Permalink to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.get_max_recursion_depth">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">get_max_recursion_depth</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/config.html#get_max_recursion_depth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.get_max_recursion_depth" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the maximum allowed recursion depth. The depth is shared per process.</p>
+<p>The maximum recursion depth is determined in the following order:</p>
+<ol class="arabic simple">
+<li><p>Manually set via <a class="reference internal" href="#xgrammar.set_max_recursion_depth" title="xgrammar.set_max_recursion_depth"><code class="xref py py-func docutils literal notranslate"><span class="pre">set_max_recursion_depth()</span></code></a></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">XGRAMMAR_MAX_RECURSION_DEPTH</span></code> environment variable (if set and is a valid integer &lt;= 1,000,000)</p></li>
+<li><p>Default value of 10,000</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>max_recursion_depth</strong> – The maximum allowed recursion depth.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.set_max_recursion_depth">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">set_max_recursion_depth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">max_recursion_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/config.html#set_max_recursion_depth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.set_max_recursion_depth" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the maximum allowed recursion depth. The depth is shared per process. This method is
+thread-safe.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>max_recursion_depth</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a>) – The maximum allowed recursion depth.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.max_recursion_depth">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">max_recursion_depth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">temp_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/config.html#max_recursion_depth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.max_recursion_depth" title="Permalink to this definition">¶</a></dt>
+<dd><p>A context manager for temporarily setting recursion depth.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">recursion_depth</span><span class="p">(</span><span class="mi">1000</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="c1"># recursion depth is 1000 here</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># recursion depth is restored to original value</span>
+</pre></div>
+</div>
+</dd></dl>
+
 </section>
 <section id="serialization-version">
 <h2>Serialization Version<a class="headerlink" href="#serialization-version" title="Permalink to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.get_serialization_version">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">get_serialization_version</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/config.html#get_serialization_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.get_serialization_version" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the serialization version number. The current version is “v4”.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>serialization_version</strong> – The serialization version number.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 </section>
 

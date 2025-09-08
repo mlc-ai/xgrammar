@@ -8,11 +8,10 @@
 <html class="writer-html5" lang="en" >
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
-
+  
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Exception &mdash; XGrammar 0.1.24 documentation</title>
+  <title>xgrammar.config &mdash; XGrammar 0.1.24 documentation</title>
   
 
   
@@ -43,15 +42,23 @@
         <script src="../../_static/sphinx_highlight.js"></script>
         <script src="../../_static/clipboard.min.js"></script>
         <script src="../../_static/copybutton.js"></script>
+        <script src="../../_static/tabs.js"></script>
         <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
+        <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
+        <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+        <script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";
+window.addEventListener("load", () => mermaid.run());
+</script>
     
     <script type="text/javascript" src="../../_static/js/theme.js"></script>
 
     
     <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
-    <link rel="search" title="Search" href="../../search.html" />
-    <link rel="prev" title="Config" href="config.html" /> 
+    <link rel="search" title="Search" href="../../search.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -158,25 +165,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
-<ul class="current">
-<li class="toctree-l1 current"><a class="reference internal" href="index.html">XGrammar Python API</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="grammar.html">xgr.Grammar</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a></li>
-<li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
-<li class="toctree-l2"><a class="reference internal" href="testing.html">xgr.testing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
-<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="config.html">Config</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Exception</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.DeserializeFormatError"><code class="docutils literal notranslate"><span class="pre">DeserializeFormatError</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.DeserializeVersionError"><code class="docutils literal notranslate"><span class="pre">DeserializeVersionError</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.InvalidJSONError"><code class="docutils literal notranslate"><span class="pre">InvalidJSONError</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a></li>
 </ul>
 
             
@@ -233,22 +223,13 @@
     
       <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-          <li><a href="index.html">XGrammar Python API</a> <span class="br-arrow">></span></li>
+          <li><a href="../index.html">Module code</a> <span class="br-arrow">></span></li>
         
-      <li>Exception</li>
+      <li>xgrammar.config</li>
     
-    
-      
-      
     
     
       <li class="wy-breadcrumbs-aside">
-        
-            
-            
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/exception.rst" class="fa fa-github"> Edit on GitHub</a>
-            
-          
         
       </li>
     
@@ -260,31 +241,72 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section id="exception">
-<h1>Exception<a class="headerlink" href="#exception" title="Permalink to this heading">¶</a></h1>
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.DeserializeFormatError">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">DeserializeFormatError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#DeserializeFormatError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.DeserializeFormatError" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RuntimeError</span></code></a></p>
-<p>Raised when the deserialization format is invalid.</p>
-</dd></dl>
+  <h1>Source code for xgrammar.config</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Global configuration for XGrammar.&quot;&quot;&quot;</span>
 
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.DeserializeVersionError">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">DeserializeVersionError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#DeserializeVersionError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.DeserializeVersionError" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RuntimeError</span></code></a></p>
-<p>Raised when the serialization format is invalid.</p>
-</dd></dl>
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
 
-<dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.InvalidJSONError">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">InvalidJSONError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#InvalidJSONError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.InvalidJSONError" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RuntimeError</span></code></a></p>
-<p>Raised when the JSON is invalid.</p>
-</dd></dl>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">_core</span>
 
-</section>
 
+<div class="viewcode-block" id="get_max_recursion_depth"><a class="viewcode-back" href="../../api/python/config.html#xgrammar.get_max_recursion_depth">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">get_max_recursion_depth</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the maximum allowed recursion depth. The depth is shared per process.</span>
+
+<span class="sd">    The maximum recursion depth is determined in the following order:</span>
+
+<span class="sd">    1. Manually set via :py:func:`set_max_recursion_depth`</span>
+<span class="sd">    2. ``XGRAMMAR_MAX_RECURSION_DEPTH`` environment variable (if set and is a valid integer &lt;= 1,000,000)</span>
+<span class="sd">    3. Default value of 10,000</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    max_recursion_depth : int</span>
+<span class="sd">        The maximum allowed recursion depth.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get_max_recursion_depth</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="set_max_recursion_depth"><a class="viewcode-back" href="../../api/python/config.html#xgrammar.set_max_recursion_depth">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">set_max_recursion_depth</span><span class="p">(</span><span class="n">max_recursion_depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the maximum allowed recursion depth. The depth is shared per process. This method is</span>
+<span class="sd">    thread-safe.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    max_recursion_depth : int</span>
+<span class="sd">        The maximum allowed recursion depth.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">_core</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set_max_recursion_depth</span><span class="p">(</span><span class="n">max_recursion_depth</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="max_recursion_depth"><a class="viewcode-back" href="../../api/python/config.html#xgrammar.max_recursion_depth">[docs]</a><span class="nd">@contextmanager</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">max_recursion_depth</span><span class="p">(</span><span class="n">temp_depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A context manager for temporarily setting recursion depth.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; with recursion_depth(1000):</span>
+<span class="sd">    ...     # recursion depth is 1000 here</span>
+<span class="sd">    ...     pass</span>
+<span class="sd">    &gt;&gt;&gt; # recursion depth is restored to original value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">prev_depth</span> <span class="o">=</span> <span class="n">get_max_recursion_depth</span><span class="p">()</span>
+    <span class="n">set_max_recursion_depth</span><span class="p">(</span><span class="n">temp_depth</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">yield</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">set_max_recursion_depth</span><span class="p">(</span><span class="n">prev_depth</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="get_serialization_version"><a class="viewcode-back" href="../../api/python/config.html#xgrammar.get_serialization_version">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">get_serialization_version</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the serialization version number. The current version is &quot;v4&quot;.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    serialization_version : str</span>
+<span class="sd">        The serialization version number.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get_serialization_version</span><span class="p">()</span></div>
+</pre></div>
 
            </div>
            
@@ -292,13 +314,6 @@
           
 
 <footer>
-
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-      
-        <a href="config.html" class="btn btn-neutral float-left" title="Config" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
-    </div>
 
 <div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
 <section class="footerSec">

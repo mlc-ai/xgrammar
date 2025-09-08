@@ -1,0 +1,595 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>xgrammar.compiler &mdash; XGrammar 0.1.24 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+        <script src="../../_static/tabs.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
+        <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
+        <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+        <script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";
+window.addEventListener("load", () => mermaid.run());
+</script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html">
+          
+
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.24
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+          <li><a href="../index.html">Module code</a> <span class="br-arrow">></span></li>
+        
+      <li>xgrammar.compiler</li>
+    
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for xgrammar.compiler</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Compiling grammar for efficient token mask generation.&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">overload</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGRObject</span><span class="p">,</span> <span class="n">_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.grammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">Grammar</span><span class="p">,</span> <span class="n">StructuralTagItem</span><span class="p">,</span> <span class="n">_convert_schema_to_str</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.tokenizer_info</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenizerInfo</span>
+
+
+<div class="viewcode-block" id="CompiledGrammar"><a class="viewcode-back" href="../../api/python/compiled_grammar.html#xgrammar.CompiledGrammar">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">CompiledGrammar</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;This is the primary object to store compiled grammar.</span>
+
+<span class="sd">    A CompiledGrammar can be used to construct GrammarMatcher</span>
+<span class="sd">    to generate token masks efficiently.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Do not construct this class directly, instead</span>
+<span class="sd">    use :class:`GrammarCompiler` to construct the object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">grammar</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The original grammar.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">grammar</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">tokenizer_info</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TokenizerInfo</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The tokenizer info associated with the compiled grammar.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">tokenizer_info</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">memory_size_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The approximate memory usage of the compiled grammar in bytes.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">memory_size_bytes</span>
+
+<div class="viewcode-block" id="CompiledGrammar.serialize_json"><a class="viewcode-back" href="../../api/python/compiled_grammar.html#xgrammar.CompiledGrammar.serialize_json">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">serialize_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Serialize the compiled grammar to a JSON string. It will serialize the compiled grammar</span>
+<span class="sd">        without the tokenizer info, since the tokenizer info is shared by multiple compiled</span>
+<span class="sd">        grammars.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        The metadata of the tokenizer info is serialized and will be checked when deserializing.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        json_string : str</span>
+<span class="sd">            The JSON string.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="CompiledGrammar.deserialize_json"><a class="viewcode-back" href="../../api/python/compiled_grammar.html#xgrammar.CompiledGrammar.deserialize_json">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">deserialize_json</span><span class="p">(</span><span class="n">json_str</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">TokenizerInfo</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;CompiledGrammar&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Deserialize the compiled grammar from a JSON string and associate it with the specified</span>
+<span class="sd">        tokenizer info.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        This will check the metadata of the tokenizer info matching the serialized metadata in</span>
+<span class="sd">        json_str. If the metadata does not match, a DeserializeFormatError will be raised.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        json_str : str</span>
+<span class="sd">            The JSON string.</span>
+
+<span class="sd">        tokenizer_info : TokenizerInfo</span>
+<span class="sd">            The tokenizer info.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The compiled grammar.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        InvalidJSONError</span>
+<span class="sd">            When the JSON string is invalid.</span>
+<span class="sd">        DeserializeFormatError</span>
+<span class="sd">            When the JSON string does not follow the serialization format of the grammar, or the</span>
+<span class="sd">            tokenizer info metadata does not match.</span>
+<span class="sd">        DeserializeVersionError</span>
+<span class="sd">            When the __VERSION__ field in the JSON string is not the same as the current version.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
+            <span class="n">_core</span><span class="o">.</span><span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span><span class="n">json_str</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="GrammarCompiler"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarCompiler</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The compiler for grammars. It is associated with a certain tokenizer info, and compiles</span>
+<span class="sd">    grammars into CompiledGrammar with the tokenizer info. It allows parallel compilation with</span>
+<span class="sd">    multiple threads, and has a cache to store the compilation result, avoiding compiling the</span>
+<span class="sd">    same grammar multiple times.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="GrammarCompiler.__init__"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">TokenizerInfo</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">max_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="n">cache_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">cache_limit_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct the compiler.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        tokenizer_info : TokenizerInfo</span>
+<span class="sd">            The tokenizer info.</span>
+
+<span class="sd">        max_threads : int, default: 8</span>
+<span class="sd">            The maximum number of threads used to compile the grammar.</span>
+
+<span class="sd">        cache_enabled : bool, default: True</span>
+<span class="sd">            Whether to enable the cache.</span>
+
+<span class="sd">        cache_limit_bytes : int, default: -1</span>
+<span class="sd">            The maximum memory usage for the cache in the specified unit.</span>
+<span class="sd">            Note that the actual memory usage may slightly exceed this value.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">,</span> <span class="n">TokenizerInfo</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Please convert the tokenizer to TokenizerInfo before passing it &quot;</span>
+                <span class="s2">&quot;to GrammarCompiler.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_handle</span><span class="p">(</span>
+            <span class="n">_core</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span>
+                <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">_handle</span><span class="p">,</span> <span class="n">max_threads</span><span class="p">,</span> <span class="n">cache_enabled</span><span class="p">,</span> <span class="n">cache_limit_bytes</span>
+            <span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GrammarCompiler.compile_json_schema"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_json_schema">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_json_schema</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">any_whitespace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">indent</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">separators</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">strict_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get CompiledGrammar from the specified JSON schema and format. The indent</span>
+<span class="sd">        and separators parameters follow the same convention as in json.dumps().</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        schema : Union[str, Type[BaseModel], Dict[str, Any]]</span>
+<span class="sd">            The schema string or Pydantic model or JSON schema dict.</span>
+
+<span class="sd">        indent : Optional[int], default: None</span>
+<span class="sd">            The number of spaces for indentation. If None, the output will be in one line.</span>
+
+<span class="sd">        separators : Optional[Tuple[str, str]], default: None</span>
+<span class="sd">            Two separators used in the schema: comma and colon. Examples: (&quot;,&quot;, &quot;:&quot;), (&quot;, &quot;, &quot;: &quot;).</span>
+<span class="sd">            If None, the default separators will be used: (&quot;,&quot;, &quot;: &quot;) when the indent is not None,</span>
+<span class="sd">            and (&quot;, &quot;, &quot;: &quot;) otherwise.</span>
+
+<span class="sd">        strict_mode : bool, default: True</span>
+<span class="sd">            Whether to use strict mode. In strict mode, the generated grammar will not allow</span>
+<span class="sd">            properties and items that is not specified in the schema. This is equivalent to</span>
+<span class="sd">            setting unevaluatedProperties and unevaluatedItems to false.</span>
+
+<span class="sd">            This helps LLM to generate accurate output in the grammar-guided generation with JSON</span>
+<span class="sd">            schema.</span>
+
+<span class="sd">        max_whitespace_cnt : Optional[int], default: None</span>
+<span class="sd">            The maximum number of whitespace characters allowed between elements, such like keys, values, separators and so on.</span>
+<span class="sd">            If None, there is no limit on the number of whitespace characters.</span>
+<span class="sd">            If specified, it will limit the number of whitespace characters to at most max_whitespace_cnt.</span>
+<span class="sd">            It should be a positive integer.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The compiled grammar.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">schema_str</span> <span class="o">=</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_json_schema</span><span class="p">(</span>
+                <span class="n">schema_str</span><span class="p">,</span> <span class="n">any_whitespace</span><span class="p">,</span> <span class="n">indent</span><span class="p">,</span> <span class="n">separators</span><span class="p">,</span> <span class="n">strict_mode</span><span class="p">,</span> <span class="n">max_whitespace_cnt</span>
+            <span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GrammarCompiler.compile_builtin_json_grammar"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_builtin_json_grammar">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_builtin_json_grammar</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get CompiledGrammar from the standard JSON.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The compiled grammar.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_builtin_json_grammar</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="GrammarCompiler.compile_regex"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_regex">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_regex</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">regex</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get CompiledGrammar from the specified regex.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        regex : str</span>
+<span class="sd">            The regex string.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The compiled grammar.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_regex</span><span class="p">(</span><span class="n">regex</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="GrammarCompiler.compile_structural_tag"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_structural_tag">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_structural_tag</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compile a grammar from structural tags. See Grammar.from_structural_tag() for more</span>
+<span class="sd">        details.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        tags : List[StructuralTagItem]</span>
+<span class="sd">            The structural tags.</span>
+
+<span class="sd">        triggers : List[str]</span>
+<span class="sd">            The triggers.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The compiled grammar.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">tags_tuple</span> <span class="o">=</span> <span class="p">[(</span><span class="n">tag</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">),</span> <span class="n">tag</span><span class="o">.</span><span class="n">end</span><span class="p">)</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_structural_tag</span><span class="p">(</span><span class="n">tags_tuple</span><span class="p">,</span> <span class="n">triggers</span><span class="p">)</span>
+        <span class="p">)</span></div>
+
+    <span class="nd">@overload</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compile_grammar</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="nd">@overload</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compile_grammar</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span> <span class="o">...</span>
+
+<div class="viewcode-block" id="GrammarCompiler.compile_grammar"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_grammar">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_grammar</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">grammar</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Grammar</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compile a grammar object.</span>
+
+<span class="sd">        Overloads:</span>
+
+<span class="sd">        1. ``compile_grammar(ebnf_string: str, *, root_rule_name: str = &quot;root&quot;) -&gt; CompiledGrammar``</span>
+<span class="sd">            - Compile a grammar from an EBNF string. The string should follow the format described</span>
+<span class="sd">              in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.</span>
+
+<span class="sd">        2. ``compile_grammar(grammar: Grammar) -&gt; CompiledGrammar``</span>
+<span class="sd">            - Compile a grammar from a Grammar object.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        ebnf_string : str</span>
+<span class="sd">            The grammar string in EBNF format.</span>
+<span class="sd">        root_rule_name : str, default: &quot;root&quot;</span>
+<span class="sd">            The name of the root rule in the grammar.</span>
+<span class="sd">        grammar : Union[str, Grammar]</span>
+<span class="sd">            The grammar string or Grammar object.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The compiled grammar.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grammar</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="n">grammar</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="o">=</span><span class="n">root_rule_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="GrammarCompiler.clear_cache"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.clear_cache">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">clear_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Clear all cached compiled grammars.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">clear_cache</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="GrammarCompiler.get_cache_size_bytes"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.get_cache_size_bytes">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_cache_size_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The approximate memory usage of the cache in bytes.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">get_cache_size_bytes</span><span class="p">()</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cache_limit_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        The maximum memory usage for the cache in bytes.</span>
+<span class="sd">        Returns -1 if the cache has no memory limit.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">cache_limit_bytes</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+<div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>
