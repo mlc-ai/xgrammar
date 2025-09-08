@@ -365,7 +365,6 @@ root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</paramet
     }
 
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    print(str(ebnf_grammar[:-2]))
     assert str(ebnf_grammar[:-2]) == expected_grammar
     assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
 
