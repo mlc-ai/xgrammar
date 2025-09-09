@@ -152,7 +152,6 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
       return std::make_pair(true, false);  // The element is scanable, but not completable.
     }
     default: {
-      // TODO: check with linzhang
       XGRAMMAR_LOG(FATAL) << "The element type is not supported! The type is: "
                           << int(element_expr.type);
       XGRAMMAR_UNREACHABLE();
