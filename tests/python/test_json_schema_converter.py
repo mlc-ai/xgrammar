@@ -2244,5 +2244,54 @@ root_repeat_2_3 ::= ("" | ([ \n\t])) (=("}"))
     assert not _is_grammar_accept_string(grammar, '{    "key"  :  "value"    }')
 
 
+def test_utf8_in_enum():
+    schema = {"type": "string", "enum": ["こんにちは", "😊", "你好", "hello", "\n"]}
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '"こんにちは"')
+    assert _is_grammar_accept_string(grammar, '"😊"')
+    assert _is_grammar_accept_string(grammar, '"你好"')
+    assert _is_grammar_accept_string(grammar, '"hello"')
+    assert _is_grammar_accept_string(grammar, '"\\n"')
+
+
+def test_utf8_string_in_const():
+    schema = {"const": "常数constじょうすう\n\r\t"}
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '"常数constじょうすう\\n\\r\\t"')
+
+
+def test_utf8_object_array_in_enum():
+    schema = {
+        "type": "object",
+        "enum": [
+            {"key": "こんにちは"},
+            {"key": "😊"},
+            {"key": "你好"},
+            {"key": "hello"},
+            {"key": "\n"},
+            [123, "こんにちは", "😊", "你好", "hello", "\n"],
+        ],
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"key":"こんにちは"}')
+    assert _is_grammar_accept_string(grammar, '{"key":"😊"}')
+    assert _is_grammar_accept_string(grammar, '{"key":"你好"}')
+    assert _is_grammar_accept_string(grammar, '{"key":"hello"}')
+    assert _is_grammar_accept_string(grammar, '{"key":"\\n"}')
+    assert _is_grammar_accept_string(grammar, '[123,"こんにちは","😊","你好","hello","\\n"]')
+
+
+def test_utf8_object_const():
+    schema = {"type": "object", "const": {"key": "こんにちは常数constじょうすう\n\r\t"}}
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"key":"こんにちは常数constじょうすう\\n\\r\\t"}')
+
+
+def test_utf8_array_const():
+    schema = {"type": "array", "const": ["こんにちは", "😊", "你好", "hello", "\n"]}
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '["こんにちは","😊","你好","hello","\\n"]')
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

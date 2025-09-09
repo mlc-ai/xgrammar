@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstdio>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -265,6 +266,30 @@ inline std::optional<CharHandlingError> Latin1ToBytes(
   }
 
   return std::nullopt;
+}
+
+inline void StrToLatin1(const std::string& str, std::string* result) {
+  result->clear();
+  const char* data = str.c_str();
+
+  for (int current_idx = 0; *(data + current_idx) != '\0'; current_idx++) {
+    const unsigned char& current_char = static_cast<unsigned char>(*(data + current_idx));
+
+    // Ascii character, directly add to result.
+    if (current_char <= 0x7F) {
+      result->push_back(static_cast<char>(current_char));
+      continue;
+    }
+
+    // not Ascii character, convert to Latin-1.
+    unsigned char latin1_first_byte = 0;
+    unsigned char latin1_second_byte = 0;
+
+    latin1_first_byte = 0xC0 | (current_char >> 6);
+    latin1_second_byte = 0x80 | (current_char & 0x3F);
+    result->push_back(static_cast<char>(latin1_first_byte));
+    result->push_back(static_cast<char>(latin1_second_byte));
+  }
 }
 
 inline int HexCharToInt(char c) {

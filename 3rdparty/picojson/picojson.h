@@ -668,9 +668,9 @@ struct serialize_str_char {
       MAP('\t', "\\t");
 #undef MAP
       default:
-        if (static_cast<unsigned char>(c) < 0x20 || static_cast<unsigned char>(c) >= 0x7f) {
+        if (static_cast<unsigned char>(c) < 0x20 || c == 0x7f) {
           char buf[7];
-          SNPRINTF(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
+          SNPRINTF(buf, sizeof(buf), "\\u%04x", c & 0xff);
           copy(buf, buf + 6, oi);
         } else {
           *oi++ = c;
