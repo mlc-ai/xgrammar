@@ -2,6 +2,7 @@
 #define XGRAMMAR_EXCEPTION_H
 
 #include <stdexcept>
+#include <string>
 #include <variant>
 
 namespace xgrammar {
