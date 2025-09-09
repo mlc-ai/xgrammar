@@ -27,6 +27,7 @@ namespace xgrammar {
 
 struct ConstStringFormat;
 struct JSONSchemaFormat;
+struct QwenXmlFormat;
 struct AnyTextFormat;
 struct SequenceFormat;
 struct OrFormat;
@@ -37,6 +38,7 @@ struct TagsWithSeparatorFormat;
 using Format = std::variant<
     ConstStringFormat,
     JSONSchemaFormat,
+    QwenXmlFormat,
     AnyTextFormat,
     SequenceFormat,
     OrFormat,
@@ -56,6 +58,12 @@ struct JSONSchemaFormat {
   static constexpr const char* type = "json_schema";
   std::string json_schema;
   JSONSchemaFormat(std::string json_schema) : json_schema(std::move(json_schema)) {}
+};
+
+struct QwenXmlFormat {
+  static constexpr const char* type = "qwen_xml";
+  std::string xml_schema;
+  QwenXmlFormat(std::string xml_schema) : xml_schema(std::move(xml_schema)) {}
 };
 
 struct AnyTextFormat {

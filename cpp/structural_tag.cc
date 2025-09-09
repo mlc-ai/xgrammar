@@ -7,16 +7,16 @@
 #include <picojson.h>
 #include <xgrammar/exception.h>
 
-#include <algorithm>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
 #include "grammar_functor.h"
 #include "grammar_impl.h"
+#include "json_schema_converter.h"
 #include "support/logging.h"
 #include "support/recursion_guard.h"
 #include "support/utils.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -408,6 +408,7 @@ class StructuralTagAnalyzer {
   using FormatPtrVariant = std::variant<
       ConstStringFormat*,
       JSONSchemaFormat*,
+      QwenXmlFormat*,
       AnyTextFormat*,
       SequenceFormat*,
       OrFormat*,
@@ -424,6 +425,7 @@ class StructuralTagAnalyzer {
   // stack logics.
   std::optional<ISTError> VisitSub(ConstStringFormat* format);
   std::optional<ISTError> VisitSub(JSONSchemaFormat* format);
+  std::optional<ISTError> VisitSub(QwenXmlFormat* format);
   std::optional<ISTError> VisitSub(AnyTextFormat* format);
   std::optional<ISTError> VisitSub(SequenceFormat* format);
   std::optional<ISTError> VisitSub(OrFormat* format);
@@ -503,6 +505,10 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(ConstStringFormat* forma
 }
 
 std::optional<ISTError> StructuralTagAnalyzer::VisitSub(JSONSchemaFormat* format) {
+  return std::nullopt;
+}
+
+std::optional<ISTError> StructuralTagAnalyzer::VisitSub(QwenXmlFormat* format) {
   return std::nullopt;
 }
 
@@ -612,6 +618,7 @@ class StructuralTagGrammarConverter {
   Result<int, ISTError> Visit(const Format& format);
   Result<int, ISTError> VisitSub(const ConstStringFormat& format);
   Result<int, ISTError> VisitSub(const JSONSchemaFormat& format);
+  Result<int, ISTError> VisitSub(const QwenXmlFormat& format);
   Result<int, ISTError> VisitSub(const AnyTextFormat& format);
   Result<int, ISTError> VisitSub(const SequenceFormat& format);
   Result<int, ISTError> VisitSub(const OrFormat& format);
@@ -665,6 +672,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
   auto sub_grammar = Grammar::FromJSONSchema(format.json_schema);
+  auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
+  return ResultOk(added_root_rule_id);
+}
+
+Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const QwenXmlFormat& format) {
+  auto sub_grammar = Grammar::FromEBNF(QwenXMLToolCallingToEBNF(format.xml_schema));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }

@@ -74,6 +74,16 @@ class TagFormat(BaseModel):
     """The end tag."""
 
 
+class QwenXmlFormat(BaseModel):
+    """A format that matches Qwen XML function calls."""
+
+    type: Literal["any_text"] = "any_text"
+    """The type of the format."""
+
+    parameter_schema: Union[bool, Dict[str, Any]]
+    """The JSON schema for the parameters of the function call."""
+
+
 class TriggeredTagsFormat(BaseModel):
     """A format that matches triggered tags. It can allow any output until a trigger is
     encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
