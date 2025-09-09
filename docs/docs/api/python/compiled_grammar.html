@@ -143,6 +143,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/structural_tag.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
@@ -361,10 +363,10 @@ json_str. If the metadata does not match, a DeserializeFormatError will be raise
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><ul class="simple">
-<li><p><a class="reference internal" href="exception.html#xgrammar.InvalidJSONError" title="xgrammar.InvalidJSONError"><strong>InvalidJSONError</strong></a> – When the JSON string is invalid.</p></li>
-<li><p><a class="reference internal" href="exception.html#xgrammar.DeserializeFormatError" title="xgrammar.DeserializeFormatError"><strong>DeserializeFormatError</strong></a> – When the JSON string does not follow the serialization format of the grammar, or the
+<li><p><a class="reference internal" href="exception.html#xgrammar.exception.InvalidJSONError" title="xgrammar.exception.InvalidJSONError"><strong>InvalidJSONError</strong></a> – When the JSON string is invalid.</p></li>
+<li><p><a class="reference internal" href="exception.html#xgrammar.exception.DeserializeFormatError" title="xgrammar.exception.DeserializeFormatError"><strong>DeserializeFormatError</strong></a> – When the JSON string does not follow the serialization format of the grammar, or the
     tokenizer info metadata does not match.</p></li>
-<li><p><a class="reference internal" href="exception.html#xgrammar.DeserializeVersionError" title="xgrammar.DeserializeVersionError"><strong>DeserializeVersionError</strong></a> – When the __VERSION__ field in the JSON string is not the same as the current version.</p></li>
+<li><p><a class="reference internal" href="exception.html#xgrammar.exception.DeserializeVersionError" title="xgrammar.exception.DeserializeVersionError"><strong>DeserializeVersionError</strong></a> – When the __VERSION__ field in the JSON string is not the same as the current version.</p></li>
 </ul>
 </dd>
 </dl>

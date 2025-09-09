@@ -1,0 +1,589 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>xgrammar.structural_tag &mdash; XGrammar 0.1.24 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+        <script src="../../_static/tabs.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs"></script>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
+        <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
+        <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+        <script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";
+window.addEventListener("load", () => mermaid.run());
+</script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html">
+          
+
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.24
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/structural_tag.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+          <li><a href="../index.html">Module code</a> <span class="br-arrow">></span></li>
+        
+      <li>xgrammar.structural_tag</li>
+    
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for xgrammar.structural_tag</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Defines all structural tag formats.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="c1"># Python 3.9+</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="c1"># Python 3.8</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">typing_extensions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
+
+<span class="c1"># ---------- Basic Formats ----------</span>
+
+
+<div class="viewcode-block" id="ConstStringFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.ConstStringFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">ConstStringFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a constant string.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;const_string&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;const_string&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">value</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The constant string.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="JSONSchemaFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.JSONSchemaFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">JSONSchemaFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a JSON schema.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;json_schema&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json_schema&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">json_schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="AnyTextFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.AnyTextFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AnyTextFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches any text.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;any_text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;any_text&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span></div>
+
+
+<span class="c1"># ---------- Combinatorial Formats ----------</span>
+
+
+<div class="viewcode-block" id="SequenceFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.SequenceFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">SequenceFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a sequence of formats.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;sequence&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;sequence&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">elements</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;Format&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The elements of the sequence.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="OrFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.OrFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">OrFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches one of the formats.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;or&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;or&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">elements</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;Format&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The elements of the or.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="TagFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.TagFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tag: ``begin content end``.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;tag&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tag&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">begin</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The content of the tag. It can be any of the formats.&quot;&quot;&quot;</span>
+    <span class="n">end</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="TriggeredTagsFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.TriggeredTagsFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches triggered tags. It can allow any output until a trigger is</span>
+<span class="sd">    encountered, then dispatch to the corresponding tag; when the end tag is encountered, the</span>
+<span class="sd">    grammar will allow any following output, until the next trigger is encountered.</span>
+
+<span class="sd">    Each tag should be matched by exactly one trigger. &quot;matching&quot; means the trigger should be a</span>
+<span class="sd">    prefix of the begin tag.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        structural_tag = TriggeredTagsFormat(</span>
+<span class="sd">            triggers=[&quot;&lt;function=&quot;],</span>
+<span class="sd">            tags=[</span>
+<span class="sd">                TagFormat(</span>
+<span class="sd">                    begin=&quot;&lt;function=func1&gt;&quot;,</span>
+<span class="sd">                    content=JSONSchemaFormat(json_schema=...),</span>
+<span class="sd">                    end=&quot;&lt;/function&gt;&quot;,</span>
+<span class="sd">                ),</span>
+<span class="sd">                TagFormat(</span>
+<span class="sd">                    begin=&quot;&lt;function=func2&gt;&quot;,</span>
+<span class="sd">                    content=JSONSchemaFormat(json_schema=...),</span>
+<span class="sd">                    end=&quot;&lt;/function&gt;&quot;,</span>
+<span class="sd">                ),</span>
+<span class="sd">            ],</span>
+<span class="sd">            at_least_one=False,</span>
+<span class="sd">            stop_after_first=False,</span>
+<span class="sd">        )</span>
+
+<span class="sd">    The above structural tag can accept the following outputs::</span>
+
+<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;</span>
+<span class="sd">        &lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;</span>
+<span class="sd">        any_text&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;any_text1&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;any_text2</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;triggered_tags&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;triggered_tags&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The triggers of the triggered tags.&quot;&quot;&quot;</span>
+    <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The tags of the triggered tags.&quot;&quot;&quot;</span>
+    <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one of the tags must be generated.&quot;&quot;&quot;</span>
+    <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="TagsWithSeparatorFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.TagsWithSeparatorFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tags with separator. It can match zero, one, or more tags, separated</span>
+<span class="sd">    by the separator, with no other text allowed.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        structural_tag = TagsWithSeparatorFormat(</span>
+<span class="sd">            tags=[</span>
+<span class="sd">                TagFormat(begin=&quot;&lt;function=func1&gt;&quot;, content=JSONSchemaFormat(json_schema=...), end=&quot;&lt;/function&gt;&quot;),</span>
+<span class="sd">                TagFormat(begin=&quot;&lt;function=func2&gt;&quot;, content=JSONSchemaFormat(json_schema=...), end=&quot;&lt;/function&gt;&quot;),</span>
+<span class="sd">            ],</span>
+<span class="sd">            separator=&quot;,&quot;,</span>
+<span class="sd">            at_least_one=False,</span>
+<span class="sd">            stop_after_first=False,</span>
+<span class="sd">        )</span>
+
+<span class="sd">    The above structural tag can accept an empty string, or the following outputs::</span>
+
+<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;</span>
+<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;</span>
+<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;,&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;tags_with_separator&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tags_with_separator&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The tags of the tags with separator.&quot;&quot;&quot;</span>
+    <span class="n">separator</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The separator of the tags with separator.&quot;&quot;&quot;</span>
+    <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one of the tags must be matched.&quot;&quot;&quot;</span>
+    <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is matched.&quot;&quot;&quot;</span></div>
+
+
+<span class="c1"># ---------- Discriminated Union ----------</span>
+
+
+<span class="n">Format</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span>
+    <span class="n">Union</span><span class="p">[</span>
+        <span class="n">AnyTextFormat</span><span class="p">,</span>
+        <span class="n">ConstStringFormat</span><span class="p">,</span>
+        <span class="n">JSONSchemaFormat</span><span class="p">,</span>
+        <span class="n">OrFormat</span><span class="p">,</span>
+        <span class="n">SequenceFormat</span><span class="p">,</span>
+        <span class="n">TagFormat</span><span class="p">,</span>
+        <span class="n">TriggeredTagsFormat</span><span class="p">,</span>
+        <span class="n">TagsWithSeparatorFormat</span><span class="p">,</span>
+    <span class="p">],</span>
+    <span class="n">Field</span><span class="p">(</span><span class="n">discriminator</span><span class="o">=</span><span class="s2">&quot;type&quot;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="sd">&quot;&quot;&quot;Union of all structural tag formats.&quot;&quot;&quot;</span>
+
+
+<span class="c1"># Solve forward references</span>
+<span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;model_rebuild&quot;</span><span class="p">):</span>
+    <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TagFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+<span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;update_forward_refs&quot;</span><span class="p">):</span>
+    <span class="c1"># This is for backward compatibility with pydantic v1</span>
+    <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TagFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unsupported pydantic version&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># ---------- Top Level ----------</span>
+
+
+<div class="viewcode-block" id="StructuralTagItem"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.StructuralTagItem">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deprecated. Definition of a structural tag item.</span>
+
+<span class="sd">    See :meth:`xgrammar.Grammar.from_structural_tag` for more details.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">begin</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag.&quot;&quot;&quot;</span>
+    <span class="n">schema_</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">alias</span><span class="o">=</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The schema.&quot;&quot;&quot;</span>
+    <span class="n">end</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="StructuralTag"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.StructuralTag">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTag</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Describes a complete structural tag structure. It corresponds to</span>
+<span class="sd">    ``&quot;response_format&quot;: {&quot;type&quot;: &quot;structural_tag&quot;, &quot;format&quot;: {...}}`` in API.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;structural_tag&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;structural_tag&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type must be &quot;structural_tag&quot;.&quot;&quot;&quot;</span>
+    <span class="nb">format</span><span class="p">:</span> <span class="n">Format</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format of the structural tag. Could be any of the structural tag formats.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="StructuralTag.from_legacy_structural_tag"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.StructuralTag.from_legacy_structural_tag">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_legacy_structural_tag</span><span class="p">(</span>
+        <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StructuralTag&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a legacy structural tag item to a structural tag.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span>
+            <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;structural_tag&quot;</span><span class="p">,</span>
+            <span class="nb">format</span><span class="o">=</span><span class="n">TriggeredTagsFormat</span><span class="p">(</span>
+                <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;triggered_tags&quot;</span><span class="p">,</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="n">triggers</span><span class="p">,</span>
+                <span class="n">tags</span><span class="o">=</span><span class="p">[</span>
+                    <span class="n">TagFormat</span><span class="p">(</span>
+                        <span class="n">begin</span><span class="o">=</span><span class="n">tag</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span>
+                        <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                            <span class="n">json_schema</span><span class="o">=</span><span class="p">(</span>
+                                <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">)</span>
+                                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+                                <span class="k">else</span> <span class="p">(</span>
+                                    <span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="o">.</span><span class="n">model_json_schema</span><span class="p">()</span>
+                                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span>
+                                    <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">)</span>
+                                    <span class="k">else</span> <span class="n">tag</span><span class="o">.</span><span class="n">schema_</span>
+                                <span class="p">)</span>
+                            <span class="p">)</span>
+                        <span class="p">),</span>
+                        <span class="n">end</span><span class="o">=</span><span class="n">tag</span><span class="o">.</span><span class="n">end</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span>
+                <span class="p">],</span>
+            <span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="StructuralTag.from_json"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.StructuralTag.from_json">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_json</span><span class="p">(</span><span class="n">json_str</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="s2">&quot;StructuralTag&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a JSON string to a structural tag.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">json_str</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">model_validate_json</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">json_str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid JSON string or dictionary&quot;</span><span class="p">)</span></div></div>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;ConstStringFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;JSONSchemaFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;AnyTextFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SequenceFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;OrFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TagFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TriggeredTagsFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TagsWithSeparatorFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Format&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;StructuralTagItem&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;StructuralTag&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+<div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>

@@ -1,0 +1,1010 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Structural Tag Usage &mdash; XGrammar 0.1.24 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+        <script src="../_static/clipboard.min.js"></script>
+        <script src="../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Advanced Topics of the Structural Tag" href="advanced_structural_tag.html" />
+    <link rel="prev" title="Advanced Topics" href="advanced_topics.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html">
+          
+
+          
+            
+            <img src="../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.24
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Structural Tag Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#usage">Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#format-types">Format Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#example-1-tool-calling">Example 1: Tool calling</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-2-force-think">Example 2: Force think</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-3-think-force-tool-calling-llama-style">Example 3: Think &amp; Force tool calling (Llama style)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-4-think-force-tool-calling-deepseek-style">Example 4: Think &amp; force tool calling (DeepSeek style)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-5-force-non-thinking-mode">Example 5: Force non-thinking mode</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#compatibility-with-the-openai-tool-calling-api">Compatibility with the OpenAI Tool Calling API</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#tool-choice">Tool Choice</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#parallel-tool-calling">Parallel Tool Calling</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
+<li class="toctree-l1"><a class="reference internal" href="engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/python/index.html">XGrammar Python API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+      <li>Structural Tag Usage</li>
+    
+    
+      
+      
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/tutorials/structural_tag.md" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section class="tex2jax_ignore mathjax_ignore" id="structural-tag-usage">
+<h1>Structural Tag Usage<a class="headerlink" href="#structural-tag-usage" title="Permalink to this heading">¶</a></h1>
+<p>The structural tag API aims to provide a JSON-config-based way to precisely describe the output format of an LLM. It is more flexible and dynamic than the OpenAI API:</p>
+<ul class="simple">
+<li><p><strong>Flexible</strong>: supports various structures, including tool calling, reasoning (&lt;think&gt;…&lt;/think&gt;), etc.</p></li>
+<li><p><strong>Dynamic</strong>: allows a mixture of free-form text and structures such as tool calls, entering constrained generation when a pre-set trigger is met.</p></li>
+</ul>
+<p>It can also be used in the LLM engine to implement the OpenAI Tool Calling API with strict
+format constraints, with these benefits:</p>
+<ul class="simple">
+<li><p>Support the advanced tool calling features, such as forced tool calling, parallel tool calling, etc.</p></li>
+<li><p>Support the tool calling format of most of the LLMs available in the market with minimal effort.</p></li>
+</ul>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Permalink to this heading">¶</a></h2>
+<p>The structural tag is a response format. It’s compatible with the OpenAI API. With the
+structural tag, the request should be like:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;model&quot;: &quot;...&quot;,
+    &quot;messages&quot;: [
+        ...
+    ],
+    &quot;response_format&quot;: {
+        &quot;type&quot;: &quot;structural_tag&quot;,
+        &quot;format&quot;: {
+            &quot;type&quot;: &quot;...&quot;,
+            ...
+        }
+    }
+}
+</pre></div>
+</div>
+<p>The format field requires a format object. We provide several basic format objects, and they can be composed to allow for more complex formats. Each format object represent a “chunk” of text.</p>
+</section>
+<section id="format-types">
+<h2>Format Types<a class="headerlink" href="#format-types" title="Permalink to this heading">¶</a></h2>
+<ol class="arabic">
+<li><p><code class="docutils literal notranslate"><span class="pre">const_string</span></code></p>
+<p>The LLM output must exactly match the given string.</p>
+<p>This is useful for like force reasoning, where the LLM output must start with “Let’s think step by step”.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">json_schema</span></code></p>
+<p>The output should be a valid JSON object that matches the JSON schema.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;json_schema&quot;,
+    &quot;json_schema&quot;: {
+        ...
+    }
+}
+</pre></div>
+</div>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sequence</span></code></p>
+<p>The output should match a sequence of elements.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;sequence&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;elements&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="o">...</span>
+    <span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">or</span></code></p>
+<p>The output should follow any of the elements.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;or&quot;,
+    &quot;elements&quot;: [
+        {
+            &quot;type&quot;: &quot;...&quot;,
+        },
+        {
+            &quot;type&quot;: &quot;...&quot;,
+        },
+        ...
+    ]
+}
+</pre></div>
+</div>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tag</span></code></p>
+<p>The output must follow <code class="docutils literal notranslate"><span class="pre">begin</span> <span class="pre">content</span> <span class="pre">end</span></code>. <code class="docutils literal notranslate"><span class="pre">begin</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> are strings, and <code class="docutils literal notranslate"><span class="pre">content</span></code> can be
+any format object. This is useful for LLM outputs such as <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code> or
+<code class="docutils literal notranslate"><span class="pre">&lt;function&gt;...&lt;/function&gt;</span></code>.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">any_text</span></code></p>
+<p>The any_text format allows any text.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_text&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>We will handle it as a special case when wrapped in a tag:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_text&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>It first accepts the begin tag (can be empty), then any text <strong>except the end tag</strong>, then the
+end tag.</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code></p>
+<p>The output will match triggered tags. It can allow any output until a trigger is
+encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
+grammar will allow any following output, until the next trigger is encountered.</p>
+<p>Each tag should be matched by exactly one trigger. “matching” means the trigger should be a
+prefix of the begin tag.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;triggered_tags&quot;,
+    &quot;triggers&quot;: [&quot;&lt;function=&quot;],
+    &quot;tags&quot;: [
+        {
+            &quot;begin&quot;: &quot;...&quot;,
+            &quot;content&quot;: {
+                ...
+            },
+            &quot;end&quot;: &quot;...&quot;
+        },
+        {
+            &quot;begin&quot;: &quot;...&quot;,
+            &quot;content&quot;: {
+                ...
+            },
+            &quot;end&quot;: &quot;...&quot;
+        },
+    ],
+    &quot;at_least_one&quot;: bool,
+    &quot;stop_after_first&quot;: bool,
+}
+</pre></div>
+</div>
+<p>For example,</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;triggered_tags&quot;,
+    &quot;triggers&quot;: [&quot;&lt;function=&quot;],
+    &quot;tags&quot;: [
+        {
+            &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+            &quot;content&quot;: {
+                &quot;type&quot;: &quot;json_schema&quot;,
+                &quot;json_schema&quot;: ...
+            },
+            &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+        },
+        {
+            &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
+            &quot;content&quot;: {
+                &quot;type&quot;: &quot;json_schema&quot;,
+                &quot;json_schema&quot;: ...
+            },
+            &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+        },
+    ],
+    &quot;at_least_one&quot;: false,
+    &quot;stop_after_first&quot;: false,
+}
+</pre></div>
+</div>
+<p>The above structural tag can accept the following outputs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func2</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Jane&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+<span class="n">any_text</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="n">any_text1</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func2</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Jane&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="n">any_text2</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">at_least_one</span></code> makes sure at least one of the tags must be generated. The first tag will
+be generated at the beginning of the output.</p>
+<p><code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> will reach the end of the <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> structure after the first tag is generated. If there are following tags, they will still be generated; otherwise, the generation
+will stop.</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code></p>
+<p>The output should match zero, one, or more tags, separated by the separator, with no other text allowed.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;tags_with_separator&quot;,
+    &quot;tags&quot;: [
+        {
+            &quot;type&quot;: &quot;tag&quot;,
+            &quot;begin&quot;: &quot;...&quot;,
+            &quot;content&quot;: {
+                &quot;type&quot;: &quot;...&quot;,
+            },
+            &quot;end&quot;: &quot;...&quot;,
+        },
+    ],
+    &quot;separator&quot;: &quot;...&quot;,
+    &quot;at_least_one&quot;: bool,
+    &quot;stop_after_first&quot;: bool,
+}
+</pre></div>
+</div>
+<p>For example,</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;tags_with_separator&quot;,
+    &quot;tags&quot;: [
+        {
+            &quot;type&quot;: &quot;tag&quot;,
+            &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+            &quot;content&quot;: {
+                &quot;type&quot;: &quot;json_schema&quot;,
+                &quot;json_schema&quot;: ...
+            },
+            &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+        },
+    ],
+    &quot;separator&quot;: &quot;,&quot;,
+    &quot;at_least_one&quot;: false,
+    &quot;stop_after_first&quot;: false,
+}
+</pre></div>
+</div>
+<p>The above structural tag can accept an empty string, or the following outputs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="p">,</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func2</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Jane&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="p">,</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func2</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Jane&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="p">,</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">at_least_one</span></code> makes sure at least one of the tags must be generated.</p>
+<p><code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> will reach the end of the <code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code> structure after the first
+tag is generated. If there are following tags, they will still be generated; otherwise, the
+generation will stop.</p>
+</li>
+</ol>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Permalink to this heading">¶</a></h2>
+<section id="example-1-tool-calling">
+<h3>Example 1: Tool calling<a class="headerlink" href="#example-1-tool-calling" title="Permalink to this heading">¶</a></h3>
+<p>The structural tag can support most common tool calling formats.</p>
+<p>Llama JSON-based tool calling, Gemma:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;function_name&quot;</span><span class="p">,</span> <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="n">params</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>Corresponding structural tag:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;triggered_tags&quot;,
+        &quot;triggers&quot;: [&quot;{\&quot;name\&quot;:&quot;],
+        &quot;tags&quot;: [
+            {
+                &quot;begin&quot;: &quot;{\&quot;name\&quot;: \&quot;func1\&quot;, \&quot;parameters\&quot;: &quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;}&quot;
+            },
+            {
+                &quot;begin&quot;: &quot;{\&quot;name\&quot;: \&quot;func2\&quot;, \&quot;parameters\&quot;: &quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;}&quot;
+            },
+        ],
+    },
+}
+</pre></div>
+</div>
+<p>Llama user-defined custom tool calling:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">function_name</span><span class="o">&gt;</span><span class="n">params</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Corresponding structural tag:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;triggered_tags&quot;,
+        &quot;triggers&quot;: [&quot;&lt;function=&quot;],
+        &quot;tags&quot;: [
+            {
+                &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+            },
+            {
+                &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+            },
+        ],
+    },
+}
+</pre></div>
+</div>
+<p>Qwen 2.5/3, Hermes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">tool_call</span><span class="o">&gt;</span>
+<span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_current_temperature&quot;</span><span class="p">,</span> <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="s2">&quot;San Francisco, CA, USA&quot;</span><span class="p">}}</span>
+<span class="o">&lt;/</span><span class="n">tool_call</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Corresponding structural tag:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;triggered_tags&quot;,
+        &quot;triggers&quot;: [&quot;&lt;tool_call&gt;&quot;],
+        &quot;tags&quot;: [
+            {
+                &quot;begin&quot;: &quot;&lt;tool_call&gt;\n{\&quot;name\&quot;: \&quot;func1\&quot;, \&quot;arguments\&quot;: &quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;}\n&lt;/tool_call&gt;&quot;,
+            },
+            {
+                &quot;begin&quot;: &quot;&lt;tool_call&gt;\n{\&quot;name\&quot;: \&quot;func2\&quot;, \&quot;arguments\&quot;: &quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;}\n&lt;/tool_call&gt;&quot;,
+            },
+        ],
+    },
+}
+</pre></div>
+</div>
+<p>DeepSeek:</p>
+<p>There is a special tag <code class="docutils literal notranslate"><span class="pre">&lt;｜tool▁calls▁begin｜&gt;</span> <span class="pre">...</span> <span class="pre">&lt;｜tool▁calls▁end｜&gt;</span></code> quotes the whole tool calling part.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&lt;｜tool▁calls▁begin｜&gt;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_1
+```jsonc
+{params}
+```&lt;｜tool▁call▁end｜&gt;
+
+```jsonc
+{params}
+```&lt;｜tool▁call▁end｜&gt;&lt;｜tool▁calls▁end｜&gt;
+</pre></div>
+</div>
+<p>Corresponding structural tag:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;triggered_tags&quot;,
+        &quot;triggers&quot;: [&quot;&lt;｜tool▁calls▁begin｜&gt;&quot;],
+        &quot;tags&quot;: [
+            {
+                &quot;begin&quot;: &quot;&lt;｜tool▁calls▁begin｜&gt;&quot;,
+                &quot;end&quot;: &quot;&lt;｜tool▁calls▁end｜&gt;&quot;,
+                &quot;content&quot;: {
+                    &quot;type&quot;: &quot;tags_with_separator&quot;,
+                    &quot;separator&quot;: &quot;\n&quot;,
+                    &quot;tags&quot;: [
+                        {
+                            &quot;begin&quot;: &quot;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_1\n```jsonc\n&quot;,
+                            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                            &quot;end&quot;: &quot;\n```&lt;｜tool▁call▁end｜&gt;&quot;,
+                        },
+                        {
+                            &quot;begin&quot;: &quot;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_2\n```jsonc\n&quot;,
+                            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                            &quot;end&quot;: &quot;\n```&lt;｜tool▁call▁end｜&gt;&quot;,
+                        }
+                    ]
+                }
+            }
+        ],
+        &quot;stop_after_first&quot;: true,
+
+    },
+}
+</pre></div>
+</div>
+<p>Phi-4-mini:</p>
+<p>Similar to DeepSeek-V3, but the tool calling part is wrapped in <code class="docutils literal notranslate"><span class="pre">&lt;|tool_call|&gt;...&lt;|/tool_call|&gt;</span></code> and organized in a list.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;|</span><span class="n">tool_call</span><span class="o">|&gt;</span><span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;function_name_1&quot;</span><span class="p">,</span> <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">params</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;function_name_2&quot;</span><span class="p">,</span> <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">params</span><span class="p">}]</span><span class="o">&lt;|/</span><span class="n">tool_call</span><span class="o">|&gt;</span>
+</pre></div>
+</div>
+<p>Corresponding structural tag:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;triggered_tags&quot;,
+        &quot;triggers&quot;: [&quot;&lt;|tool_call|&gt;&quot;],
+        &quot;tags&quot;: [
+            {
+                &quot;begin&quot;: &quot;&lt;|tool_call|&gt;[&quot;,
+                &quot;end&quot;: &quot;]&lt;|/tool_call|&gt;&quot;,
+                &quot;content&quot;: {
+                    &quot;type&quot;: &quot;tags_with_separator&quot;,
+                    &quot;separator&quot;: &quot;, &quot;,
+                    &quot;tags&quot;: [
+                        {
+                            &quot;begin&quot;: &quot;{\&quot;name\&quot;: \&quot;function_name_1\&quot;, \&quot;arguments\&quot;: &quot;,
+                            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                            &quot;end&quot;: &quot;}&quot;,
+                        },
+                        {
+                            &quot;begin&quot;: &quot;{\&quot;name\&quot;: \&quot;function_name_2\&quot;, \&quot;arguments\&quot;: &quot;,
+                            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                            &quot;end&quot;: &quot;}&quot;,
+                        }
+                    ]
+                }
+            }
+        ],
+        &quot;stop_after_first&quot;: true,
+    },
+}
+</pre></div>
+</div>
+</section>
+<section id="example-2-force-think">
+<h3>Example 2: Force think<a class="headerlink" href="#example-2-force-think" title="Permalink to this heading">¶</a></h3>
+<p>The output should start with a reasoning part (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>), then can generate a mix of text and tool calls.</p>
+<p>Format:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">think</span><span class="o">&gt;</span> <span class="n">any_text</span> <span class="o">&lt;/</span><span class="n">think</span><span class="o">&gt;</span> <span class="n">any_text</span> <span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span> <span class="n">any_text</span>
+</pre></div>
+</div>
+<p>Corresponding structural tag:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;sequence&quot;,
+        &quot;elements&quot;: [
+            {
+                &quot;type&quot;: &quot;tag&quot;,
+                &quot;begin&quot;: &quot;&lt;think&gt;&quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;any_text&quot;},
+                &quot;end&quot;: &quot;&lt;/think&gt;&quot;,
+            },
+            {
+                &quot;type&quot;: &quot;triggered_tags&quot;,
+                &quot;triggers&quot;: [&quot;&lt;function=&quot;],
+                &quot;tags&quot;: [
+                    {
+                        &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+                    },
+                    {
+                        &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
+                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+                    },
+                ],
+            },
+        ],
+    },
+}
+</pre></div>
+</div>
+</section>
+<section id="example-3-think-force-tool-calling-llama-style">
+<h3>Example 3: Think &amp; Force tool calling (Llama style)<a class="headerlink" href="#example-3-think-force-tool-calling-llama-style" title="Permalink to this heading">¶</a></h3>
+<p>The output should start with a reasoning part (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>), then need to generate exactly one tool call in the tool set.</p>
+<p>Format:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">think</span><span class="o">&gt;</span> <span class="n">any_text</span> <span class="o">&lt;/</span><span class="n">think</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Corresponding structural tag:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;sequence&quot;,
+        &quot;elements&quot;: [
+            {
+                &quot;type&quot;: &quot;tag&quot;,
+                &quot;begin&quot;: &quot;&lt;think&gt;&quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;any_text&quot;},
+                &quot;end&quot;: &quot;&lt;/think&gt;&quot;,
+            },
+            {
+                &quot;type&quot;: &quot;triggered_tags&quot;,
+                &quot;triggers&quot;: [&quot;&lt;function=&quot;],
+                &quot;tags&quot;: [
+                    {
+                        &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+                    },
+                    {
+                        &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
+                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+                    },
+                ],
+                &quot;stop_after_first&quot;: true,
+                &quot;at_least_one&quot;: true,
+            },
+        ],
+    },
+}
+</pre></div>
+</div>
+</section>
+<section id="example-4-think-force-tool-calling-deepseek-style">
+<h3>Example 4: Think &amp; force tool calling (DeepSeek style)<a class="headerlink" href="#example-4-think-force-tool-calling-deepseek-style" title="Permalink to this heading">¶</a></h3>
+<p>The output should start with a reasoning part (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>), then must generate a tool call following the DeepSeek style.</p>
+<p>Config:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;sequence&quot;,
+        &quot;elements&quot;: [
+            {
+                &quot;type&quot;: &quot;tag&quot;,
+                &quot;begin&quot;: &quot;&lt;think&gt;&quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;any_text&quot;},
+                &quot;end&quot;: &quot;&lt;/think&gt;&quot;,
+            },
+            {
+                &quot;type&quot;: &quot;tag_and_text&quot;,
+                &quot;triggers&quot;: [&quot;&lt;｜tool▁calls▁begin｜&gt;&quot;],
+                &quot;tags&quot;: [
+                    {
+                        &quot;begin&quot;: &quot;&lt;｜tool▁calls▁begin｜&gt;&quot;,
+                        &quot;end&quot;: &quot;&lt;｜tool▁calls▁end｜&gt;&quot;,
+                        &quot;content&quot;: {
+                            &quot;type&quot;: &quot;tags_with_separator&quot;,
+                            &quot;separator&quot;: &quot;\n&quot;,
+                            &quot;tags&quot;: [
+                                {
+                                    &quot;begin&quot;: &quot;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_1\n```jsonc\n&quot;,
+                                    &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                                    &quot;end&quot;: &quot;\n```&lt;｜tool▁call▁end｜&gt;&quot;,
+                                },
+                                {
+                                    &quot;begin&quot;: &quot;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_2\n```jsonc\n&quot;,
+                                    &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                                    &quot;end&quot;: &quot;\n```&lt;｜tool▁call▁end｜&gt;&quot;,
+                                }
+                            ],
+                            &quot;at_least_one&quot;: true, // Note this line!
+                            &quot;stop_after_first&quot;: true, // Note this line!
+                        }
+                    }
+                ],
+                &quot;stop_after_first&quot;: true,
+            },
+        ],
+    },
+},
+</pre></div>
+</div>
+</section>
+<section id="example-5-force-non-thinking-mode">
+<h3>Example 5: Force non-thinking mode<a class="headerlink" href="#example-5-force-non-thinking-mode" title="Permalink to this heading">¶</a></h3>
+<p>Qwen-3 has a hybrid thinking mode that allows switching between thinking and non-thinking mode. Thinking mode is the same as above, while in non-thinking mode, the output would start with a empty thinking part <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;&lt;/think&gt;</span></code>, and then can generate any text.</p>
+<p>We now specify the non-thinking mode.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;sequence&quot;,
+        &quot;elements&quot;: [
+            {
+                &quot;type&quot;: &quot;const_string&quot;,
+                &quot;text&quot;: &quot;&lt;think&gt;&lt;/think&gt;&quot;
+            },
+            {
+                &quot;type&quot;: &quot;triggered_tags&quot;,
+                &quot;triggers&quot;: [&quot;&lt;tool_call&gt;&quot;],
+                &quot;tags&quot;: [
+                    {
+                        &quot;begin&quot;: &quot;&lt;tool_call&gt;\n{\&quot;name\&quot;: \&quot;func1\&quot;, \&quot;arguments\&quot;: &quot;,
+                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                        &quot;end&quot;: &quot;}\n&lt;/tool_call&gt;&quot;,
+                    },
+                    {
+                        &quot;begin&quot;: &quot;&lt;tool_call&gt;\n{\&quot;name\&quot;: \&quot;func2\&quot;, \&quot;arguments\&quot;: &quot;,
+                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                        &quot;end&quot;: &quot;}\n&lt;/tool_call&gt;&quot;,
+                    },
+                ],
+            },
+        ],
+    },
+}
+</pre></div>
+</div>
+</section>
+</section>
+<section id="compatibility-with-the-openai-tool-calling-api">
+<h2>Compatibility with the OpenAI Tool Calling API<a class="headerlink" href="#compatibility-with-the-openai-tool-calling-api" title="Permalink to this heading">¶</a></h2>
+<p>The structural tag can be used to implement the OpenAI Tool Calling API with strict format
+constraints. In LLM serving engines, you can use the <code class="docutils literal notranslate"><span class="pre">xgrammar</span></code> Python package to construct the
+structural tag and apply it to constrained decoding.</p>
+<p>In the OpenAI Tool Calling API, a set of tools is provided using JSON schema. There are also several
+features: tool choice (control at least one tool or exactly one tool is called),
+parallel tool calling (allow only one tool or multiple tools can be called in one round), etc.</p>
+<p>You can construct the structural tag according to the provided tools, and the LLM’s specific tool
+calling format. The structural tag can be used in XGrammar’s constrained decoding workflow to
+enable strict format constraints.</p>
+<section id="tool-choice">
+<h3>Tool Choice<a class="headerlink" href="#tool-choice" title="Permalink to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tool_choice</span></code> is a parameter in the OpenAI API. It can be</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">auto</span></code>: Let the model decide which tool to use</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">required</span></code>: Call at least one tool in the tool set</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;function&quot;:</span> <span class="pre">{&quot;name&quot;:</span> <span class="pre">&quot;function_name&quot;}}</span></code>: The forced mode, call exactly one specific function</p></li>
+</ul>
+<p>The required mode can be implemented by</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;triggered_tags&quot;,
+        &quot;triggers&quot;: [&quot;&lt;function=&quot;],
+        &quot;tags&quot;: [
+            {
+                &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+            },
+            {
+                &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+            },
+        ],
+        &quot;at_least_one&quot;: true,
+    },
+}
+</pre></div>
+</div>
+<p>The forced mode can be implemented by</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;tag&quot;,
+        &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+    },
+}
+</pre></div>
+</div>
+</section>
+<section id="parallel-tool-calling">
+<h3>Parallel Tool Calling<a class="headerlink" href="#parallel-tool-calling" title="Permalink to this heading">¶</a></h3>
+<p>OAI’s <code class="docutils literal notranslate"><span class="pre">parallel_tool_calls</span></code> parameter controls if the model can call multiple functions in one round.</p>
+<ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">true</span></code>, the model can call multiple functions in one round. (This is default)</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">false</span></code>, the model can call at most one function in one round.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> and <code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code> has a parameter <code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> to control if the
+generation should stop after the first tag is generated. So the <code class="docutils literal notranslate"><span class="pre">false</span></code> mode can be implemented by:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;triggered_tags&quot;,
+        &quot;triggers&quot;: [&quot;&lt;function=&quot;],
+        &quot;tags&quot;: [
+            {
+                &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+            },
+            {
+                &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
+                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
+            },
+        ],
+        &quot;stop_after_first&quot;: true,
+    },
+}
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">true</span></code> mode can be implemented by setting <code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> to <code class="docutils literal notranslate"><span class="pre">false</span></code>.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="advanced_structural_tag.html" class="btn btn-neutral float-right" title="Advanced Topics of the Structural Tag" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="advanced_topics.html" class="btn btn-neutral float-left" title="Advanced Topics" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+
+<div id="button" class="backtop"><img src="../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>
