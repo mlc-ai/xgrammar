@@ -142,6 +142,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/structural_tag.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
@@ -170,9 +172,10 @@
 <li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="config.html">Config</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Exception</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.DeserializeFormatError"><code class="docutils literal notranslate"><span class="pre">DeserializeFormatError</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.DeserializeVersionError"><code class="docutils literal notranslate"><span class="pre">DeserializeVersionError</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.InvalidJSONError"><code class="docutils literal notranslate"><span class="pre">InvalidJSONError</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.exception.DeserializeFormatError"><code class="docutils literal notranslate"><span class="pre">DeserializeFormatError</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.exception.DeserializeVersionError"><code class="docutils literal notranslate"><span class="pre">DeserializeVersionError</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.exception.InvalidJSONError"><code class="docutils literal notranslate"><span class="pre">InvalidJSONError</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.exception.InvalidStructuralTagError"><code class="docutils literal notranslate"><span class="pre">InvalidStructuralTagError</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -263,24 +266,31 @@
   <section id="exception">
 <h1>Exception<a class="headerlink" href="#exception" title="Permalink to this heading">¶</a></h1>
 <dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.DeserializeFormatError">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">DeserializeFormatError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#DeserializeFormatError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.DeserializeFormatError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="xgrammar.exception.DeserializeFormatError">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.exception.</span></span><span class="sig-name descname"><span class="pre">DeserializeFormatError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#DeserializeFormatError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.exception.DeserializeFormatError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RuntimeError</span></code></a></p>
 <p>Raised when the deserialization format is invalid.</p>
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.DeserializeVersionError">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">DeserializeVersionError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#DeserializeVersionError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.DeserializeVersionError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="xgrammar.exception.DeserializeVersionError">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.exception.</span></span><span class="sig-name descname"><span class="pre">DeserializeVersionError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#DeserializeVersionError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.exception.DeserializeVersionError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RuntimeError</span></code></a></p>
 <p>Raised when the serialization format is invalid.</p>
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="xgrammar.InvalidJSONError">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">InvalidJSONError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#InvalidJSONError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.InvalidJSONError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="xgrammar.exception.InvalidJSONError">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.exception.</span></span><span class="sig-name descname"><span class="pre">InvalidJSONError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#InvalidJSONError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.exception.InvalidJSONError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RuntimeError</span></code></a></p>
 <p>Raised when the JSON is invalid.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="xgrammar.exception.InvalidStructuralTagError">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.exception.</span></span><span class="sig-name descname"><span class="pre">InvalidStructuralTagError</span></span><a class="reference internal" href="../../_modules/xgrammar/exception.html#InvalidStructuralTagError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.exception.InvalidStructuralTagError" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RuntimeError</span></code></a></p>
+<p>Raised when the structural tag is invalid.</p>
 </dd></dl>
 
 </section>

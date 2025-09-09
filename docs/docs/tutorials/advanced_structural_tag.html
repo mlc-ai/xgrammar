@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Constrained Decoding &mdash; XGrammar 0.1.24 documentation</title>
+  <title>Advanced Topics of the Structural Tag &mdash; XGrammar 0.1.24 documentation</title>
   
 
   
@@ -44,8 +44,6 @@
         <script src="../_static/clipboard.min.js"></script>
         <script src="../_static/copybutton.js"></script>
         <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-        <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-        <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     
     <script type="text/javascript" src="../_static/js/theme.js"></script>
 
@@ -53,8 +51,8 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Workflow of XGrammar" href="workflow_of_xgrammar.html" />
-    <link rel="prev" title="Quick Start" href="../start/quick_start.html" /> 
+    <link rel="next" title="Integration with LLM Engine" href="engine_integration.html" />
+    <link rel="prev" title="Structural Tag Usage" href="structural_tag.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -142,15 +140,19 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Constrained Decoding</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#xgrammar-s-implementation">XGrammar’s Implementation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="constrained_decoding.html">Constrained Decoding</a></li>
 <li class="toctree-l1"><a class="reference internal" href="workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
 <li class="toctree-l1"><a class="reference internal" href="advanced_topics.html">Advanced Topics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="structural_tag.html">Structural Tag Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Advanced Topics of the Structural Tag</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#deprecated-api-grammar-from-structural-tag-tags-triggers">Deprecated API: <code class="docutils literal notranslate"><span class="pre">Grammar.from_structural_tag(tags,</span> <span class="pre">triggers)</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#returns">Returns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example">Example</a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
@@ -225,7 +227,7 @@
     
       <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>Constrained Decoding</li>
+      <li>Advanced Topics of the Structural Tag</li>
     
     
       
@@ -236,7 +238,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/tutorials/constrained_decoding.md" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/tutorials/advanced_structural_tag.md" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -250,31 +252,55 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="constrained-decoding">
-<h1>Constrained Decoding<a class="headerlink" href="#constrained-decoding" title="Permalink to this heading">¶</a></h1>
-<p>Constrained decoding is a technique used by XGrammar to generate structured outputs.</p>
-<p>In each step of LLM inference, XGrammar will provide a token mask to the LLM. The mask allows the LLM to generate tokens that follow the grammar, and prohibits those not.  The mask is a binary mask of the same length as the vocabulary size. In the sampling stage of LLM inference, the mask is used so that the sampled tokens must be valid in the mask.</p>
-<p><img alt="Constrained Decoding" src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/tutorials/constrained_decoding.png" /></p>
-<p>Let’s take a closer look. The binary mask applies to the logits of the LLM. It sets the logits of the tokens that are not allowed to <span class="math notranslate nohighlight">\(-\infty\)</span>, so that their probability will be <span class="math notranslate nohighlight">\(0\)</span> after softmax. Then the sampler will sample from the vaild tokens with probability <span class="math notranslate nohighlight">\(&gt;0\)</span>.</p>
-<p><img alt="Constrained Decoding Logits" src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/tutorials/constrained_decoding_logits.png" /></p>
-<p>By ensuring that each token generated by the LLM conforms to the given structure step by step, we can guarantee that the entire generation adheres to the specified structure.</p>
-<p>Constrained decoding provides these benefits to LLM applications:</p>
-<ol class="arabic simple">
-<li><p><strong>Increase generation quality.</strong> Sometimes an LLM can generate output that is nearly correct but makes mistakes in the details. For example, it might output a JSON integer field like 1.23 as a string (“1.23”), or even get the type completely wrong. Constrained decoding can ensure the output always follow the given structure.</p></li>
-<li><p><strong>Easy to parse and process.</strong> Constrained decoding ensures that the output of the LLM is clean, without extraneous text or syntax errors. This makes its output directly parsable and seamlessly integrable with downstream applications.</p></li>
-<li><p><strong>Ensure safety and avoid unexpected outputs.</strong> We can control the content generated by the LLM to prevent unexpected erroneous outputs. There have been <a class="reference external" href="https://protectai.com/blog/mcp-security-101">many recent reports</a> about safety issues in agent applications, and the ability to ensure the correctness of generated content is especially valuable for today’s agent use cases.</p></li>
-</ol>
-<p>Constrained decoding has minimal negative impact on LLM generation. This is because if the LLM is already capable of generating correct responses, applying constraints doesn’t do anything. But if the LLM fails to produce a correct answer, the constraints can at least ensure the structure is correct.</p>
-<p><strong>Note:</strong> when applying constrained decoding, it is recommended to also describe the expected output structure in the prompt. This is because constrained decoding only affects the sampling stage, but we want the LLM’s underlying probability distribution to already align with the structure as much as possible.</p>
-<section id="xgrammar-s-implementation">
-<h2>XGrammar’s Implementation<a class="headerlink" href="#xgrammar-s-implementation" title="Permalink to this heading">¶</a></h2>
-<p>In XGrammar, we store the token mask in a compressed bitset format using <code class="docutils literal notranslate"><span class="pre">int32</span></code>. Use <a class="reference internal" href="../api/python/bitmask_ops.html#xgrammar.allocate_token_bitmask" title="xgrammar.allocate_token_bitmask"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.allocate_token_bitmask</span></code></span></a> to allocate a token mask.</p>
-<p>XGrammar uses <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a> to describe the output structure (or, the grammar). It has a compilation step of the grammar to speed up the generation of the mask. The <a class="reference internal" href="../api/python/grammar_compiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarCompiler</span></code></span></a> class compiles a <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a> object into a <a class="reference internal" href="../api/python/compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code></span></a> object.</p>
-<p>The <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher</span></code></span></a> class, constructed from a <a class="reference internal" href="../api/python/compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code></span></a> object, is used to generate the mask. It is a stateful class that can be used to generate the mask for a single step of the generation. For each step, it will accept the last token generated by the LLM with <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.accept_token</span></code></span></a>, and then generate the mask with <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.fill_next_token_bitmask</span></code></span></a>. Then the mask can be used to guide the sampling of the next token.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="advanced-topics-of-the-structural-tag">
+<h1>Advanced Topics of the Structural Tag<a class="headerlink" href="#advanced-topics-of-the-structural-tag" title="Permalink to this heading">¶</a></h1>
+<section id="deprecated-api-grammar-from-structural-tag-tags-triggers">
+<h2>Deprecated API: <code class="docutils literal notranslate"><span class="pre">Grammar.from_structural_tag(tags,</span> <span class="pre">triggers)</span></code><a class="headerlink" href="#deprecated-api-grammar-from-structural-tag-tags-triggers" title="Permalink to this heading">¶</a></h2>
+<p><strong>The deprecated API is still available for backward compatibility. However, it is recommended to use the new API instead.</strong></p>
+<p>Create a grammar from structural tags. The structural tag handles the dispatching of different grammars based on the tags and triggers: it initially allows any output, until a trigger is encountered, then dispatch to the corresponding tag; when the end tag is encountered, the grammar will allow any following output, until the next trigger is encountered.</p>
+<p>The tags parameter is used to specify the output pattern. It is especially useful for LLM function calling, where the pattern is:
+<code class="docutils literal notranslate"><span class="pre">&lt;function=func_name&gt;{&quot;arg1&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;arg2&quot;:</span> <span class="pre">...}&lt;/function&gt;</span></code>.
+This pattern consists of three parts: a begin tag (<code class="docutils literal notranslate"><span class="pre">&lt;function=func_name&gt;</span></code>), a parameter list according to some schema (<code class="docutils literal notranslate"><span class="pre">{&quot;arg1&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;arg2&quot;:</span> <span class="pre">...}</span></code>), and an end tag (<code class="docutils literal notranslate"><span class="pre">&lt;/function&gt;</span></code>). This pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag. The structural tag is able to handle multiple such patterns by passing them into multiple tags.</p>
+<p>The triggers parameter is used to trigger the dispatching of different grammars. The trigger should be a prefix of a provided begin tag. When the trigger is encountered, the corresponding tag should be used to constrain the following output. There can be multiple tags matching the same trigger. Then if the trigger is encountered, the following output should match one of the tags. For example, in function calling, the triggers can be <code class="docutils literal notranslate"><span class="pre">[&quot;&lt;function=&quot;]</span></code>. Then if <code class="docutils literal notranslate"><span class="pre">&quot;&lt;function=&quot;</span></code> is encountered, the following output must match one of the tags (e.g. <code class="docutils literal notranslate"><span class="pre">&lt;function=get_weather&gt;{&quot;city&quot;:</span> <span class="pre">&quot;Beijing&quot;}&lt;/function&gt;</span></code>).</p>
+<p>The correspondence of tags and triggers is automatically determined: all tags with the same trigger will be grouped together. User should make sure any trigger is not a prefix of another trigger: then the correspondence of tags and triggers will be ambiguous.</p>
+<p>To use this grammar in grammar-guided generation, the GrammarMatcher constructed from structural tag will generate a mask for each token. When the trigger is not encountered, the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns False, meaning no token is masked). When a trigger is encountered, the mask should be enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the output logits.</p>
+<p>The benefit of this method is the token boundary between tags and triggers is automatically handled. The user does not need to worry about the token boundary.</p>
+<section id="parameters">
+<h3>Parameters<a class="headerlink" href="#parameters" title="Permalink to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>tags</strong> (<code class="docutils literal notranslate"><span class="pre">List[StructuralTagItem]</span></code>): The structural tags.</p></li>
+<li><p><strong>triggers</strong> (<code class="docutils literal notranslate"><span class="pre">List[str]</span></code>): The triggers.</p></li>
+</ul>
 </section>
-<section id="next-steps">
-<h2>Next Steps<a class="headerlink" href="#next-steps" title="Permalink to this heading">¶</a></h2>
-<p>See <a class="reference internal" href="workflow_of_xgrammar.html"><span class="doc std std-doc">Workflow of XGrammar</span></a> to learn more about the constrained decoding process.</p>
+<section id="returns">
+<h3>Returns<a class="headerlink" href="#returns" title="Permalink to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>grammar</strong> (<code class="docutils literal notranslate"><span class="pre">Grammar</span></code>): The constructed grammar.</p></li>
+</ul>
+</section>
+<section id="example">
+<h3>Example<a class="headerlink" href="#example" title="Permalink to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">Grammar</span><span class="p">,</span> <span class="n">StructuralTagItem</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Schema1</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">arg1</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">arg2</span><span class="p">:</span> <span class="nb">int</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Schema2</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">arg3</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">arg4</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+
+<span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=f&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema1</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
+    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=g&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema2</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">triggers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&lt;function=&quot;</span><span class="p">]</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="n">triggers</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
 </section>
 </section>
 
@@ -288,10 +314,10 @@
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="workflow_of_xgrammar.html" class="btn btn-neutral float-right" title="Workflow of XGrammar" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="engine_integration.html" class="btn btn-neutral float-right" title="Integration with LLM Engine" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../start/quick_start.html" class="btn btn-neutral float-left" title="Quick Start" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="structural_tag.html" class="btn btn-neutral float-left" title="Structural Tag Usage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

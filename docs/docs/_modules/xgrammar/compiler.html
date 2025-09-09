@@ -149,6 +149,8 @@ window.addEventListener("load", () => mermaid.run());
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/structural_tag.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
@@ -247,9 +249,16 @@ window.addEventListener("load", () => mermaid.run());
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">overload</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing_extensions</span><span class="w"> </span><span class="kn">import</span> <span class="n">deprecated</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGRObject</span><span class="p">,</span> <span class="n">_core</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.grammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">Grammar</span><span class="p">,</span> <span class="n">StructuralTagItem</span><span class="p">,</span> <span class="n">_convert_schema_to_str</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.grammar</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Grammar</span><span class="p">,</span>
+    <span class="n">StructuralTagItem</span><span class="p">,</span>
+    <span class="n">_convert_schema_to_str</span><span class="p">,</span>
+    <span class="n">_get_structural_tag_str_from_args</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.structural_tag</span><span class="w"> </span><span class="kn">import</span> <span class="n">StructuralTag</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.tokenizer_info</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenizerInfo</span>
 
 
@@ -455,28 +464,65 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_regex</span><span class="p">(</span><span class="n">regex</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="GrammarCompiler.compile_structural_tag"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_structural_tag">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_structural_tag</span><span class="p">(</span>
+    <span class="nd">@overload</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compile_structural_tag</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">structural_tag</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">StructuralTag</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="nd">@overload</span>
+    <span class="nd">@deprecated</span><span class="p">(</span>
+        <span class="s2">&quot;compile_structural_tag(tags, triggers) is deprecated. Compile structural tag with the &quot;</span>
+        <span class="s2">&quot;StructuralTag class instead.&quot;</span>
+    <span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compile_structural_tag</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compile a grammar from structural tags. See Grammar.from_structural_tag() for more</span>
-<span class="sd">        details.</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span> <span class="o">...</span>
+
+<div class="viewcode-block" id="GrammarCompiler.compile_structural_tag"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_structural_tag">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compile_structural_tag</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compile a grammar from a structural tag. See the Structural Tag Usage in XGrammar</span>
+<span class="sd">        documentation for its usage.</span>
+
+<span class="sd">        This method supports two calling patterns:</span>
+
+<span class="sd">        1. Single structural tag parameter:</span>
+<span class="sd">           compile_structural_tag(structural_tag)</span>
+
+<span class="sd">        2. Legacy pattern (deprecated):</span>
+<span class="sd">           compile_structural_tag(tags, triggers)</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
+<span class="sd">        structural_tag : Union[StructuralTag, str, Dict[str, Any]]</span>
+<span class="sd">            The structural tag either as a StructuralTag object, or a JSON string or a dictionary.</span>
+
 <span class="sd">        tags : List[StructuralTagItem]</span>
-<span class="sd">            The structural tags.</span>
+<span class="sd">            (Deprecated) The structural tags. Use StructuralTag class instead.</span>
 
 <span class="sd">        triggers : List[str]</span>
-<span class="sd">            The triggers.</span>
+<span class="sd">            (Deprecated) The triggers. Use StructuralTag class instead.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        compiled_grammar : CompiledGrammar</span>
-<span class="sd">            The compiled grammar.</span>
+<span class="sd">            The compiled grammar from the structural tag.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        InvalidJSONError</span>
+<span class="sd">            When the structural tag is not a valid JSON string.</span>
+<span class="sd">        InvalidStructuralTagError</span>
+<span class="sd">            When the structural tag is not valid.</span>
+<span class="sd">        TypeError</span>
+<span class="sd">            When the arguments are invalid.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        The legacy pattern compile_structural_tag(tags, triggers) is deprecated. Use the</span>
+<span class="sd">        StructuralTag class to construct structural tags instead.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">tags_tuple</span> <span class="o">=</span> <span class="p">[(</span><span class="n">tag</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">),</span> <span class="n">tag</span><span class="o">.</span><span class="n">end</span><span class="p">)</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">]</span>
+        <span class="n">structural_tag_str</span> <span class="o">=</span> <span class="n">_get_structural_tag_str_from_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_structural_tag</span><span class="p">(</span><span class="n">tags_tuple</span><span class="p">,</span> <span class="n">triggers</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_structural_tag</span><span class="p">(</span><span class="n">structural_tag_str</span><span class="p">)</span>
         <span class="p">)</span></div>
 
     <span class="nd">@overload</span>
@@ -516,8 +562,13 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">            The compiled grammar.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grammar</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-            <span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="n">grammar</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="o">=</span><span class="n">root_rule_name</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">))</span></div>
+            <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
+            <span class="p">)</span></div>
 
 <div class="viewcode-block" id="GrammarCompiler.clear_cache"><a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.clear_cache">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">clear_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Clear all cached compiled grammars.&quot;&quot;&quot;</span>

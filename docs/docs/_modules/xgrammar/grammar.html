@@ -149,6 +149,8 @@ window.addEventListener("load", () => mermaid.run());
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/structural_tag.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
@@ -245,26 +247,18 @@ window.addEventListener("load", () => mermaid.run());
 <span></span><span class="sd">&quot;&quot;&quot;This module provides classes representing grammars.&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">overload</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing_extensions</span><span class="w"> </span><span class="kn">import</span> <span class="n">deprecated</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGRObject</span><span class="p">,</span> <span class="n">_core</span>
-
-
-<div class="viewcode-block" id="StructuralTagItem"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTagItem">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A structural tag item. See :meth:`xgrammar.Grammar.from_structural_tag` for more details.&quot;&quot;&quot;</span>
-
-    <span class="n">begin</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag.&quot;&quot;&quot;</span>
-    <span class="n">schema_</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">alias</span><span class="o">=</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The schema.&quot;&quot;&quot;</span>
-    <span class="n">end</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag.&quot;&quot;&quot;</span></div>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.structural_tag</span><span class="w"> </span><span class="kn">import</span> <span class="n">StructuralTag</span><span class="p">,</span> <span class="n">StructuralTagItem</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_convert_schema_to_str</span><span class="p">(</span><span class="n">schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a schema to a string representation.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a schema to a string representation. It returns the schema in string format because</span>
+<span class="sd">    it&#39;s faster to send to C++.</span>
 
 <span class="sd">    This function handles different schema input types and converts them to a JSON string:</span>
 <span class="sd">    - Pydantic models are converted using their schema methods</span>
@@ -300,6 +294,43 @@ window.addEventListener("load", () => mermaid.run());
         <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The schema should be a string or a Pydantic model.&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_structural_tag_str_from_args</span><span class="p">(</span><span class="n">args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">kwargs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the structural tag string from the arguments. It returns the structural tag in string</span>
+<span class="sd">    format because it&#39;s faster to send to C++.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    args : List[Any]</span>
+<span class="sd">        The positional arguments.</span>
+<span class="sd">    kwargs : Dict[str, Any]</span>
+<span class="sd">        The keyword arguments.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    str</span>
+<span class="sd">        The structural tag string.</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    TypeError</span>
+<span class="sd">        When the arguments are invalid.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">(</span><span class="n">StructuralTag</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">from_legacy_structural_tag</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">(</span>
+            <span class="n">indent</span><span class="o">=</span><span class="kc">None</span>
+        <span class="p">)</span>
+    <span class="k">elif</span> <span class="s2">&quot;structural_tag&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;structural_tag&quot;</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="s2">&quot;tags&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="s2">&quot;triggers&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">from_legacy_structural_tag</span><span class="p">(</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;tags&quot;</span><span class="p">],</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;triggers&quot;</span><span class="p">]</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">(</span><span class="n">indent</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid arguments for from_structural_tag&quot;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="Grammar"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">Grammar</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
@@ -455,75 +486,72 @@ window.addEventListener("load", () => mermaid.run());
             <span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_regex</span><span class="p">(</span><span class="n">regex_string</span><span class="p">,</span> <span class="n">print_converted_ebnf</span><span class="p">)</span>
         <span class="p">)</span></div>
 
+    <span class="nd">@overload</span>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span>
+        <span class="n">structural_tag</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">StructuralTag</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="nd">@overload</span>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@deprecated</span><span class="p">(</span>
+        <span class="s2">&quot;from_structural_tag(tags, triggers) is deprecated. Construct structural tag with the &quot;</span>
+        <span class="s2">&quot;StructuralTag class instead.&quot;</span>
+    <span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span> <span class="o">...</span>
+
 <div class="viewcode-block" id="Grammar.from_structural_tag"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.from_structural_tag">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar from structural tags. The structural tag handles the dispatching</span>
-<span class="sd">        of different grammars based on the tags and triggers: it initially allows any output,</span>
-<span class="sd">        until a trigger is encountered, then dispatch to the corresponding tag; when the end tag</span>
-<span class="sd">        is encountered, the grammar will allow any following output, until the next trigger is</span>
-<span class="sd">        encountered.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar from a structural tag. See the Structural Tag Usage in XGrammar</span>
+<span class="sd">        documentation for its usage.</span>
 
-<span class="sd">        The tags parameter is used to specify the output pattern. It is especially useful for LLM</span>
-<span class="sd">        function calling, where the pattern is:</span>
-<span class="sd">        &lt;function=func_name&gt;{&quot;arg1&quot;: ..., &quot;arg2&quot;: ...}&lt;/function&gt;.</span>
-<span class="sd">        This pattern consists of three parts: a begin tag (&lt;function=func_name&gt;), a parameter list</span>
-<span class="sd">        according to some schema ({&quot;arg1&quot;: ..., &quot;arg2&quot;: ...}), and an end tag (&lt;/function&gt;). This</span>
-<span class="sd">        pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag.</span>
-<span class="sd">        The structural tag is able to handle multiple such patterns by passing them into multiple</span>
-<span class="sd">        tags.</span>
+<span class="sd">        This method supports two calling patterns:</span>
 
-<span class="sd">        The triggers parameter is used to trigger the dispatching of different grammars. The trigger</span>
-<span class="sd">        should be a prefix of a provided begin tag. When the trigger is encountered, the</span>
-<span class="sd">        corresponding tag should be used to constrain the following output. There can be multiple</span>
-<span class="sd">        tags matching the same trigger. Then if the trigger is encountered, the following output</span>
-<span class="sd">        should match one of the tags. For example, in function calling, the triggers can be</span>
-<span class="sd">        [&quot;&lt;function=&quot;]. Then if &quot;&lt;function=&quot; is encountered, the following output must match one</span>
-<span class="sd">        of the tags (e.g. &lt;function=get_weather&gt;{&quot;city&quot;: &quot;Beijing&quot;}&lt;/function&gt;).</span>
+<span class="sd">        1. Single structural tag parameter:</span>
+<span class="sd">           from_structural_tag(structural_tag)</span>
 
-<span class="sd">        The corrrespondence of tags and triggers is automatically determined: all tags with the</span>
-<span class="sd">        same trigger will be grouped together. User should make sure any trigger is not a prefix</span>
-<span class="sd">        of another trigger: then the corrrespondence of tags and triggers will be ambiguous.</span>
-
-<span class="sd">        To use this grammar in grammar-guided generation, the GrammarMatcher constructed from</span>
-<span class="sd">        structural tag will generate a mask for each token. When the trigger is not encountered,</span>
-<span class="sd">        the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns</span>
-<span class="sd">        False, meaning no token is masked). When a trigger is encountered, the mask should be</span>
-<span class="sd">        enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the</span>
-<span class="sd">        output logits.</span>
-
-<span class="sd">        The benefit of this method is the token boundary between tags and triggers is automatically</span>
-<span class="sd">        handled. The user does not need to worry about the token boundary.</span>
+<span class="sd">        2. Legacy pattern (deprecated):</span>
+<span class="sd">           from_structural_tag(tags, triggers)</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
+<span class="sd">        structural_tag : Union[StructuralTag, str, Dict[str, Any]]</span>
+<span class="sd">            The structural tag either as a StructuralTag object, or a JSON string or a dictionary.</span>
+
 <span class="sd">        tags : List[StructuralTagItem]</span>
-<span class="sd">            The structural tags.</span>
+<span class="sd">            (Deprecated) The structural tags. Use StructuralTag class instead.</span>
 
 <span class="sd">        triggers : List[str]</span>
-<span class="sd">            The triggers.</span>
+<span class="sd">            (Deprecated) The triggers. Use StructuralTag class instead.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        grammar : Grammar</span>
-<span class="sd">            The constructed grammar.</span>
+<span class="sd">            The constructed grammar from the structural tag.</span>
 
-<span class="sd">        Examples</span>
-<span class="sd">        --------</span>
-<span class="sd">        &gt;&gt;&gt; class Schema1(BaseModel):</span>
-<span class="sd">        ...     arg1: str</span>
-<span class="sd">        ...     arg2: int</span>
-<span class="sd">        &gt;&gt;&gt; class Schema2(BaseModel):</span>
-<span class="sd">        ...     arg3: float</span>
-<span class="sd">        ...     arg4: List[str]</span>
-<span class="sd">        &gt;&gt;&gt; tags = [</span>
-<span class="sd">        ...     StructuralTagItem(begin=&quot;&lt;function=f&gt;&quot;, schema=Schema1, end=&quot;&lt;/function&gt;&quot;),</span>
-<span class="sd">        ...     StructuralTagItem(begin=&quot;&lt;function=g&gt;&quot;, schema=Schema2, end=&quot;&lt;/function&gt;&quot;),</span>
-<span class="sd">        ... ]</span>
-<span class="sd">        &gt;&gt;&gt; triggers = [&quot;&lt;function=&quot;]</span>
-<span class="sd">        &gt;&gt;&gt; grammar = Grammar.from_structural_tag(tags, triggers)</span>
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        InvalidJSONError</span>
+<span class="sd">            When the structural tag is not a valid JSON string.</span>
+<span class="sd">        InvalidStructuralTagError</span>
+<span class="sd">            When the structural tag is not valid.</span>
+<span class="sd">        TypeError</span>
+<span class="sd">            When the arguments are invalid.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        The legacy pattern from_structural_tag(tags, triggers) is deprecated. Use the StructuralTag</span>
+<span class="sd">        class to construct structural tags instead.</span>
+
+<span class="sd">        For the deprecated pattern: The structural tag handles the dispatching of different grammars</span>
+<span class="sd">        based on the tags and triggers: it initially allows any output, until a trigger is</span>
+<span class="sd">        encountered, then dispatch to the corresponding tag; when the end tag is encountered, the</span>
+<span class="sd">        grammar will allow any following output, until the next trigger is encountered. See the</span>
+<span class="sd">        Advanced Topics of the Structural Tag in XGrammar documentation for its semantic.</span>
+<span class="sd">        Structural Tag in XGrammar documentation for its semantic.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">tags_tuple</span> <span class="o">=</span> <span class="p">[(</span><span class="n">tag</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">),</span> <span class="n">tag</span><span class="o">.</span><span class="n">end</span><span class="p">)</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">tags_tuple</span><span class="p">,</span> <span class="n">triggers</span><span class="p">))</span></div>
+        <span class="n">structural_tag_str</span> <span class="o">=</span> <span class="n">_get_structural_tag_str_from_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag_str</span><span class="p">))</span></div>
 
 <div class="viewcode-block" id="Grammar.builtin_json_grammar"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.builtin_json_grammar">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">builtin_json_grammar</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
