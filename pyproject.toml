@@ -78,6 +78,7 @@ sdist.include = [
   "/cpp/**/*.h",
   "/include/**/*",
   "/python/xgrammar/**/*.py",
+  "/python/xgrammar/py.typed",
 
   # Third party files
   "/3rdparty/**/*",
