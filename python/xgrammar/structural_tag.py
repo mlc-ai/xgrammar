@@ -1,7 +1,14 @@
 """Defines all structural tag formats."""
 
 import json
-from typing import Annotated, Any, Dict, List, Literal, Type, Union
+from typing import Any, Dict, List, Literal, Type, Union
+
+try:
+    # Python 3.9+
+    from typing import Annotated
+except ImportError:
+    # Python 3.8
+    from typing_extensions import Annotated
 
 from pydantic import BaseModel, Field
 
@@ -77,31 +84,33 @@ class TriggeredTagsFormat(BaseModel):
 
     Examples
     --------
-    ```
-    structural_tag = TriggeredTagsFormat(
-        triggers=["<function="],
-        tags=[
-            TagFormat(
-                begin="<function=func1>",
-                content=JSONSchemaFormat(json_schema=...),
-                end="</function>",
-            ),
-            TagFormat(
-                begin="<function=func2>",
-                content=JSONSchemaFormat(json_schema=...),
-                end="</function>",
-            ),
-        ],
-        at_least_one=False,
-        stop_after_first=False,
-    )
-    ```
-    The above structural tag can accept the following outputs:
-    ```
-    <function=func1>{"name": "John", "age": 30}</function>
-    <function=func2>{"name": "Jane", "age": 25}</function>
-    any_text<function=func1>{"name": "John", "age": 30}</function>any_text1<function=func2>{"name": "Jane", "age": 25}</function>any_text2
-    ```
+
+    .. code-block:: python
+
+        structural_tag = TriggeredTagsFormat(
+            triggers=["<function="],
+            tags=[
+                TagFormat(
+                    begin="<function=func1>",
+                    content=JSONSchemaFormat(json_schema=...),
+                    end="</function>",
+                ),
+                TagFormat(
+                    begin="<function=func2>",
+                    content=JSONSchemaFormat(json_schema=...),
+                    end="</function>",
+                ),
+            ],
+            at_least_one=False,
+            stop_after_first=False,
+        )
+
+    The above structural tag can accept the following outputs::
+
+        <function=func1>{"name": "John", "age": 30}</function>
+        <function=func2>{"name": "Jane", "age": 25}</function>
+        any_text<function=func1>{"name": "John", "age": 30}</function>any_text1<function=func2>{"name": "Jane", "age": 25}</function>any_text2
+
     """
 
     type: Literal["triggered_tags"] = "triggered_tags"
@@ -122,23 +131,24 @@ class TagsWithSeparatorFormat(BaseModel):
 
     Examples
     --------
-    ```
-    structural_tag = TagsWithSeparatorFormat(
-        tags=[
-            TagFormat(begin="<function=func1>", content=JSONSchemaFormat(json_schema=...), end="</function>"),
-            TagFormat(begin="<function=func2>", content=JSONSchemaFormat(json_schema=...), end="</function>"),
-        ],
-        separator=",",
-        at_least_one=False,
-        stop_after_first=False,
-    )
-    ```
-    The above structural tag can accept an empty string, or the following outputs:
-    ```
-    <function=func1>{"name": "John", "age": 30}</function>
-    <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>
-    <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>,<function=func1>{"name": "John", "age": 30}</function>
-    ```
+
+    .. code-block:: python
+
+        structural_tag = TagsWithSeparatorFormat(
+            tags=[
+                TagFormat(begin="<function=func1>", content=JSONSchemaFormat(json_schema=...), end="</function>"),
+                TagFormat(begin="<function=func2>", content=JSONSchemaFormat(json_schema=...), end="</function>"),
+            ],
+            separator=",",
+            at_least_one=False,
+            stop_after_first=False,
+        )
+
+    The above structural tag can accept an empty string, or the following outputs::
+
+        <function=func1>{"name": "John", "age": 30}</function>
+        <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>
+        <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>,<function=func1>{"name": "John", "age": 30}</function>
     """
 
     type: Literal["tags_with_separator"] = "tags_with_separator"
@@ -257,3 +267,18 @@ class StructuralTag(BaseModel):
             return StructuralTag.model_validate(json_str)
         else:
             raise ValueError("Invalid JSON string or dictionary")
+
+
+__all__ = [
+    "ConstStringFormat",
+    "JSONSchemaFormat",
+    "AnyTextFormat",
+    "SequenceFormat",
+    "OrFormat",
+    "TagFormat",
+    "TriggeredTagsFormat",
+    "TagsWithSeparatorFormat",
+    "Format",
+    "StructuralTagItem",
+    "StructuralTag",
+]

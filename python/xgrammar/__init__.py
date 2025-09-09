@@ -1,4 +1,4 @@
-from . import testing
+from . import exception, structural_tag, testing
 from .compiler import CompiledGrammar, GrammarCompiler
 from .config import (
     get_max_recursion_depth,
