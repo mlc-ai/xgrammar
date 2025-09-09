@@ -62,7 +62,7 @@ class OrFormat(BaseModel):
 
 
 class TagFormat(BaseModel):
-    """A format that matches a tag: `begin content end`."""
+    """A format that matches a tag: ``begin content end``."""
 
     type: Literal["tag"] = "tag"
     """The type of the format."""
@@ -218,7 +218,7 @@ class StructuralTagItem(BaseModel):
 class StructuralTag(BaseModel):
     """
     Describes a complete structural tag structure. It corresponds to
-    `"response_format": {"type": "structural_tag", "format": {...}}` in API.
+    ``"response_format": {"type": "structural_tag", "format": {...}}`` in API.
     """
 
     type: Literal["structural_tag"] = "structural_tag"
