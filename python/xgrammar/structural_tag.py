@@ -77,7 +77,7 @@ class TagFormat(BaseModel):
 class QwenXmlFormat(BaseModel):
     """A format that matches Qwen XML function calls."""
 
-    type: Literal["any_text"] = "any_text"
+    type: Literal["qwen_xml"] = "qwen_xml"
     """The type of the format."""
 
     parameter_schema: Union[bool, Dict[str, Any]]
@@ -181,6 +181,7 @@ Format = Annotated[
         AnyTextFormat,
         ConstStringFormat,
         JSONSchemaFormat,
+        QwenXmlFormat,
         OrFormat,
         SequenceFormat,
         TagFormat,

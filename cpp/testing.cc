@@ -4,14 +4,12 @@
  */
 #include <xgrammar/xgrammar.h>
 
-#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "grammar_impl.h"
 #include "grammar_parser.h"
-#include "json_schema_converter.h"
 #include "support/encoding.h"
 
 namespace xgrammar {

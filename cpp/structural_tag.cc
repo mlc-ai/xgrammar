@@ -42,6 +42,7 @@ class StructuralTagParser {
   Result<Format, ISTError> ParseFormat(const picojson::value& value);
   Result<ConstStringFormat, ISTError> ParseConstStringFormat(const picojson::object& value);
   Result<JSONSchemaFormat, ISTError> ParseJSONSchemaFormat(const picojson::object& value);
+  Result<QwenXmlFormat, ISTError> ParseQwenXmlFormat(const picojson::object& value);
   Result<AnyTextFormat, ISTError> ParseAnyTextFormat(const picojson::object& value);
   Result<SequenceFormat, ISTError> ParseSequenceFormat(const picojson::object& value);
   Result<OrFormat, ISTError> ParseOrFormat(const picojson::object& value);
@@ -118,6 +119,8 @@ Result<Format, ISTError> StructuralTagParser::ParseFormat(const picojson::value&
       return Result<Format, ISTError>::Convert(ParseTriggeredTagsFormat(obj));
     } else if (type == "tags_with_separator") {
       return Result<Format, ISTError>::Convert(ParseTagsWithSeparatorFormat(obj));
+    } else if (type == "qwen_xml") {
+      return Result<Format, ISTError>::Convert(ParseQwenXmlFormat(obj));
     } else {
       return ResultErr<ISTError>("Format type not recognized: " + type);
     }
@@ -185,6 +188,20 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
   return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false));
+}
+
+Result<QwenXmlFormat, ISTError> StructuralTagParser::ParseQwenXmlFormat(const picojson::object& obj
+) {
+  // json_schema is required.
+  auto json_schema_it = obj.find("parameter_schema");
+  if (json_schema_it == obj.end() ||
+      !(json_schema_it->second.is<picojson::object>() || json_schema_it->second.is<bool>())) {
+    return ResultErr<ISTError>(
+        "JSON schema format must have a json_schema field with a object or boolean value"
+    );
+  }
+  // here introduces a serialization/deserialization overhead; try to avoid it in the future.
+  return ResultOk<QwenXmlFormat>(json_schema_it->second.serialize(false));
 }
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
