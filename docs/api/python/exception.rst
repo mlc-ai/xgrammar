@@ -1,8 +1,9 @@
 Exception
 ==========================
 
-.. currentmodule:: xgrammar
+.. currentmodule:: xgrammar.exception
 
-.. autoclass:: xgrammar.DeserializeFormatError
-.. autoclass:: xgrammar.DeserializeVersionError
-.. autoclass:: xgrammar.InvalidJSONError
+.. autoclass:: DeserializeFormatError
+.. autoclass:: DeserializeVersionError
+.. autoclass:: InvalidJSONError
+.. autoclass:: InvalidStructuralTagError

@@ -1,26 +1,18 @@
 """This module provides classes representing grammars."""
 
 import json
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from typing_extensions import deprecated
 
 from .base import XGRObject, _core
-
-
-class StructuralTagItem(BaseModel):
-    """A structural tag item. See :meth:`xgrammar.Grammar.from_structural_tag` for more details."""
-
-    begin: str
-    """The begin tag."""
-    schema_: Union[str, Type[BaseModel], Dict[str, Any]] = Field(alias="schema")
-    """The schema."""
-    end: str
-    """The end tag."""
+from .structural_tag import StructuralTag, StructuralTagItem
 
 
 def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
-    """Convert a schema to a string representation.
+    """Convert a schema to a string representation. It returns the schema in string format because
+    it's faster to send to C++.
 
     This function handles different schema input types and converts them to a JSON string:
     - Pydantic models are converted using their schema methods
@@ -56,6 +48,43 @@ def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) 
         return json.dumps(schema)
     else:
         raise ValueError("The schema should be a string or a Pydantic model.")
+
+
+def _get_structural_tag_str_from_args(args: List[Any], kwargs: Dict[str, Any]) -> str:
+    """Get the structural tag string from the arguments. It returns the structural tag in string
+    format because it's faster to send to C++.
+
+    Parameters
+    ----------
+    args : List[Any]
+        The positional arguments.
+    kwargs : Dict[str, Any]
+        The keyword arguments.
+
+    Returns
+    -------
+    str
+        The structural tag string.
+
+    Raises
+    ------
+    TypeError
+        When the arguments are invalid.
+    """
+    if len(args) == 1 and isinstance(args[0], (StructuralTag, str, dict)):
+        return _convert_schema_to_str(args[0])
+    elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], list):
+        return StructuralTag.from_legacy_structural_tag(args[0], args[1]).model_dump_json(
+            indent=None
+        )
+    elif "structural_tag" in kwargs:
+        return _convert_schema_to_str(kwargs["structural_tag"])
+    elif "tags" in kwargs and "triggers" in kwargs:
+        return StructuralTag.from_legacy_structural_tag(
+            kwargs["tags"], kwargs["triggers"]
+        ).model_dump_json(indent=None)
+    else:
+        raise TypeError("Invalid arguments for from_structural_tag")
 
 
 class Grammar(XGRObject):
@@ -211,75 +240,72 @@ class Grammar(XGRObject):
             _core.Grammar.from_regex(regex_string, print_converted_ebnf)
         )
 
+    @overload
     @staticmethod
-    def from_structural_tag(tags: List[StructuralTagItem], triggers: List[str]) -> "Grammar":
-        """Create a grammar from structural tags. The structural tag handles the dispatching
-        of different grammars based on the tags and triggers: it initially allows any output,
-        until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
-        is encountered, the grammar will allow any following output, until the next trigger is
-        encountered.
+    def from_structural_tag(
+        structural_tag: Union[StructuralTag, str, Dict[str, Any]]
+    ) -> "Grammar": ...
 
-        The tags parameter is used to specify the output pattern. It is especially useful for LLM
-        function calling, where the pattern is:
-        <function=func_name>{"arg1": ..., "arg2": ...}</function>.
-        This pattern consists of three parts: a begin tag (<function=func_name>), a parameter list
-        according to some schema ({"arg1": ..., "arg2": ...}), and an end tag (</function>). This
-        pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag.
-        The structural tag is able to handle multiple such patterns by passing them into multiple
-        tags.
+    @overload
+    @staticmethod
+    @deprecated(
+        "from_structural_tag(tags, triggers) is deprecated. Construct structural tag with the "
+        "StructuralTag class instead."
+    )
+    def from_structural_tag(tags: List[StructuralTagItem], triggers: List[str]) -> "Grammar": ...
 
-        The triggers parameter is used to trigger the dispatching of different grammars. The trigger
-        should be a prefix of a provided begin tag. When the trigger is encountered, the
-        corresponding tag should be used to constrain the following output. There can be multiple
-        tags matching the same trigger. Then if the trigger is encountered, the following output
-        should match one of the tags. For example, in function calling, the triggers can be
-        ["<function="]. Then if "<function=" is encountered, the following output must match one
-        of the tags (e.g. <function=get_weather>{"city": "Beijing"}</function>).
+    @staticmethod
+    def from_structural_tag(*args, **kwargs) -> "Grammar":
+        """Create a grammar from a structural tag. See the Structural Tag Usage in XGrammar
+        documentation for its usage.
 
-        The corrrespondence of tags and triggers is automatically determined: all tags with the
-        same trigger will be grouped together. User should make sure any trigger is not a prefix
-        of another trigger: then the corrrespondence of tags and triggers will be ambiguous.
+        This method supports two calling patterns:
 
-        To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
-        structural tag will generate a mask for each token. When the trigger is not encountered,
-        the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
-        False, meaning no token is masked). When a trigger is encountered, the mask should be
-        enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
-        output logits.
+        1. Single structural tag parameter:
+           from_structural_tag(structural_tag)
 
-        The benefit of this method is the token boundary between tags and triggers is automatically
-        handled. The user does not need to worry about the token boundary.
+        2. Legacy pattern (deprecated):
+           from_structural_tag(tags, triggers)
 
         Parameters
         ----------
+        structural_tag : Union[StructuralTag, str, Dict[str, Any]]
+            The structural tag either as a StructuralTag object, or a JSON string or a dictionary.
+
         tags : List[StructuralTagItem]
-            The structural tags.
+            (Deprecated) The structural tags. Use StructuralTag class instead.
 
         triggers : List[str]
-            The triggers.
+            (Deprecated) The triggers. Use StructuralTag class instead.
 
         Returns
         -------
         grammar : Grammar
-            The constructed grammar.
+            The constructed grammar from the structural tag.
 
-        Examples
-        --------
-        >>> class Schema1(BaseModel):
-        ...     arg1: str
-        ...     arg2: int
-        >>> class Schema2(BaseModel):
-        ...     arg3: float
-        ...     arg4: List[str]
-        >>> tags = [
-        ...     StructuralTagItem(begin="<function=f>", schema=Schema1, end="</function>"),
-        ...     StructuralTagItem(begin="<function=g>", schema=Schema2, end="</function>"),
-        ... ]
-        >>> triggers = ["<function="]
-        >>> grammar = Grammar.from_structural_tag(tags, triggers)
+        Raises
+        ------
+        InvalidJSONError
+            When the structural tag is not a valid JSON string.
+        InvalidStructuralTagError
+            When the structural tag is not valid.
+        TypeError
+            When the arguments are invalid.
+
+        Notes
+        -----
+        The legacy pattern from_structural_tag(tags, triggers) is deprecated. Use the StructuralTag
+        class to construct structural tags instead.
+
+        For the deprecated pattern: The structural tag handles the dispatching of different grammars
+        based on the tags and triggers: it initially allows any output, until a trigger is
+        encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
+        grammar will allow any following output, until the next trigger is encountered. See the
+        Advanced Topics of the Structural Tag in XGrammar documentation for its semantic.
+        Structural Tag in XGrammar documentation for its semantic.
         """
-        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
-        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(tags_tuple, triggers))
+        structural_tag_str = _get_structural_tag_str_from_args(args, kwargs)
+        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(structural_tag_str))
 
     @staticmethod
     def builtin_json_grammar() -> "Grammar":

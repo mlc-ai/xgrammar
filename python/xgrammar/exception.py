@@ -15,8 +15,12 @@ if TYPE_CHECKING or isinstance(_core, str):
     class InvalidJSONError(RuntimeError):
         """Raised when the JSON is invalid."""
 
+    class InvalidStructuralTagError(RuntimeError):
+        """Raised when the structural tag is invalid."""
+
 else:
     # real implementation here
-    DeserializeFormatError = _core.DeserializeFormatError
-    DeserializeVersionError = _core.DeserializeVersionError
-    InvalidJSONError = _core.InvalidJSONError
+    DeserializeFormatError = _core.exception.DeserializeFormatError
+    DeserializeVersionError = _core.exception.DeserializeVersionError
+    InvalidJSONError = _core.exception.InvalidJSONError
+    InvalidStructuralTagError = _core.exception.InvalidStructuralTagError

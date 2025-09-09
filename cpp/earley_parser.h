@@ -111,10 +111,7 @@ struct ParserState {
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
-    os << "ParserState(rule_id=" << state.rule_id << ", sequence_id=" << state.sequence_id
-       << ", element_id=" << state.element_id << ", rule_start_pos=" << state.rule_start_pos
-       << ", sub_element_id=" << state.sub_element_id << ", repeat_count=" << state.repeat_count
-       << ")";
+    os << state.ToString();
     return os;
   }
 
@@ -456,10 +453,12 @@ class EarleyParser {
 
   std::string PrintStates() const {
     std::string result;
-    result += "There are " + std::to_string(scanable_state_history_.size()) + " scanable states:\n";
+    result += "There are " + std::to_string(scanable_state_history_.size()) +
+              " steps in history. Last step: [\n";
     for (const auto& state : scanable_state_history_[scanable_state_history_.size() - 1]) {
-      result += state.ToString() + "\n";
+      result += state.ToString() + ", \n";
     }
+    result += "]";
     return result;
   }
 };

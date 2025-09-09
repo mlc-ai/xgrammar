@@ -228,8 +228,8 @@ class JSONSchemaConverter {
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
       bool strict_mode,
-      std::optional<int> max_whitespace_cnt = std::nullopt,
-      JSONFormat json_format = JSONFormat::kJSON
+      std::optional<int> max_whitespace_cnt,
+      JSONFormat json_format
   );
 
   /*! \brief The root method. Convert the JSON schema to EBNF grammar string. */

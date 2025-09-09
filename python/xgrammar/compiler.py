@@ -3,9 +3,16 @@
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
+from typing_extensions import deprecated
 
 from .base import XGRObject, _core
-from .grammar import Grammar, StructuralTagItem, _convert_schema_to_str
+from .grammar import (
+    Grammar,
+    StructuralTagItem,
+    _convert_schema_to_str,
+    _get_structural_tag_str_from_args,
+)
+from .structural_tag import StructuralTag
 from .tokenizer_info import TokenizerInfo
 
 
@@ -211,28 +218,65 @@ class GrammarCompiler(XGRObject):
         """
         return CompiledGrammar._create_from_handle(self._handle.compile_regex(regex))
 
+    @overload
+    def compile_structural_tag(
+        self, structural_tag: Union[StructuralTag, str, Dict[str, Any]]
+    ) -> CompiledGrammar: ...
+
+    @overload
+    @deprecated(
+        "compile_structural_tag(tags, triggers) is deprecated. Compile structural tag with the "
+        "StructuralTag class instead."
+    )
     def compile_structural_tag(
         self, tags: List[StructuralTagItem], triggers: List[str]
-    ) -> CompiledGrammar:
-        """Compile a grammar from structural tags. See Grammar.from_structural_tag() for more
-        details.
+    ) -> CompiledGrammar: ...
+
+    def compile_structural_tag(self, *args, **kwargs) -> CompiledGrammar:
+        """Compile a grammar from a structural tag. See the Structural Tag Usage in XGrammar
+        documentation for its usage.
+
+        This method supports two calling patterns:
+
+        1. Single structural tag parameter:
+           compile_structural_tag(structural_tag)
+
+        2. Legacy pattern (deprecated):
+           compile_structural_tag(tags, triggers)
 
         Parameters
         ----------
+        structural_tag : Union[StructuralTag, str, Dict[str, Any]]
+            The structural tag either as a StructuralTag object, or a JSON string or a dictionary.
+
         tags : List[StructuralTagItem]
-            The structural tags.
+            (Deprecated) The structural tags. Use StructuralTag class instead.
 
         triggers : List[str]
-            The triggers.
+            (Deprecated) The triggers. Use StructuralTag class instead.
 
         Returns
         -------
         compiled_grammar : CompiledGrammar
-            The compiled grammar.
+            The compiled grammar from the structural tag.
+
+        Raises
+        ------
+        InvalidJSONError
+            When the structural tag is not a valid JSON string.
+        InvalidStructuralTagError
+            When the structural tag is not valid.
+        TypeError
+            When the arguments are invalid.
+
+        Notes
+        -----
+        The legacy pattern compile_structural_tag(tags, triggers) is deprecated. Use the
+        StructuralTag class to construct structural tags instead.
         """
-        tags_tuple = [(tag.begin, _convert_schema_to_str(tag.schema_), tag.end) for tag in tags]
+        structural_tag_str = _get_structural_tag_str_from_args(args, kwargs)
         return CompiledGrammar._create_from_handle(
-            self._handle.compile_structural_tag(tags_tuple, triggers)
+            self._handle.compile_structural_tag(structural_tag_str)
         )
 
     @overload
@@ -272,8 +316,13 @@ class GrammarCompiler(XGRObject):
             The compiled grammar.
         """
         if isinstance(grammar, str):
-            grammar = Grammar.from_ebnf(grammar, root_rule_name=root_rule_name)
-        return CompiledGrammar._create_from_handle(self._handle.compile_grammar(grammar._handle))
+            return CompiledGrammar._create_from_handle(
+                self._handle.compile_grammar(grammar, root_rule_name)
+            )
+        else:
+            return CompiledGrammar._create_from_handle(
+                self._handle.compile_grammar(grammar._handle)
+            )
 
     def clear_cache(self) -> None:
         """Clear all cached compiled grammars."""

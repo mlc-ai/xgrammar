@@ -152,7 +152,9 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
       return std::make_pair(true, false);  // The element is scanable, but not completable.
     }
     default: {
-      return std::make_pair(false, false);
+      XGRAMMAR_LOG(FATAL) << "The element type is not supported! The type is: "
+                          << int(element_expr.type);
+      XGRAMMAR_UNREACHABLE();
     }
   }
 }
@@ -178,6 +180,7 @@ void EarleyParser::Scan(const ParserState& state, const uint8_t ch) {
       default: {
         XGRAMMAR_LOG(FATAL) << "The element type is not supported! The type is: "
                             << int(element_expr.type);
+        XGRAMMAR_UNREACHABLE();
       }
     }
   } else {
@@ -269,19 +272,9 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   tmp_states_visited_in_queue_.Clear();
   tmp_accept_stop_token_ = false;
   tmp_states_to_be_added_.clear();
-  if (state.IsInvalid()) {
-    ExpandAndEnqueueUnexpandedState(ParserState{
-        grammar_->GetRootRuleId(),
-        ParserState::kUnexpandedRuleStartSequenceId,
-        0,
-        ParserState::kNoPrevInputPos,
-        0
-    });
-  } else {
-    // If the rule can't be expanded, we need to add it to the queue.
-    if (!ExpandAndEnqueueUnexpandedState(state)) {
-      Enqueue(state);
-    }
+  // If the rule can't be expanded, we need to add it to the queue.
+  if (!ExpandAndEnqueueUnexpandedState(state)) {
+    Enqueue(state);
   }
   rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
   while (!tmp_process_state_queue_.empty()) {

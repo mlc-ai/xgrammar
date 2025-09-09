@@ -202,7 +202,7 @@ class GrammarBuilder {
     );
   }
 
-  int32_t AddRepeat(const int32_t ref_rule_id, int32_t min_repeat_count, int32_t max_repeat_count) {
+  int32_t AddRepeat(int32_t ref_rule_id, int32_t min_repeat_count, int32_t max_repeat_count) {
     std::vector<int32_t> data({ref_rule_id, min_repeat_count, max_repeat_count});
     return AddGrammarExpr({GrammarExprType::kRepeat, data.data(), static_cast<int32_t>(data.size())}
     );
@@ -248,6 +248,10 @@ class GrammarBuilder {
    * \sa GrammarBuilder::UpdateRuleBody
    */
   int32_t AddEmptyRule(const std::string& name) { return AddRule({name, -1}); }
+
+  int32_t AddEmptyRuleWithHint(const std::string& name_hint) {
+    return AddRule({GetNewRuleName(name_hint), -1});
+  }
 
   /*!
    * \brief Update the rule body of the given rule, specified by rule id. Can be used to set the
