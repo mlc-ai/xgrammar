@@ -143,8 +143,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../tutorials/structural_tag.html">Structural Tag Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
@@ -300,8 +298,8 @@ and we follow the specification of GBNF (GGML BNF) in
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_regex" title="xgrammar.Grammar.from_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_regex</span></code></a>(regex_string, *[, ...])</p></td>
 <td><p>Create a grammar from a regular expression string.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_structural_tag" title="xgrammar.Grammar.from_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_structural_tag</span></code></a>()</p></td>
-<td><p>Create a grammar from a structural tag.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.Grammar.from_structural_tag" title="xgrammar.Grammar.from_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_structural_tag</span></code></a>(tags, triggers)</p></td>
+<td><p>Create a grammar from structural tags.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.Grammar.builtin_json_grammar" title="xgrammar.Grammar.builtin_json_grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">builtin_json_grammar</span></code></a>()</p></td>
 <td><p>Get the grammar of standard JSON.</p></td>
@@ -429,49 +427,67 @@ EBNF string will be printed. For debugging purposes. Default: False.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.Grammar.from_structural_tag">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">structural_tag</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="structural_tag.html#xgrammar.structural_tag.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.from_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.from_structural_tag" title="Permalink to this definition">¶</a></dt>
-<dt class="sig sig-object py">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="structural_tag.html#xgrammar.structural_tag.StructuralTagItem" title="xgrammar.structural_tag.StructuralTagItem"><span class="pre">StructuralTagItem</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triggers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar"><span class="pre">Grammar</span></a></span></span></dt>
-<dd><p>Create a grammar from a structural tag. See the Structural Tag Usage in XGrammar
-documentation for its usage.</p>
-<p>This method supports two calling patterns:</p>
-<ol class="arabic simple">
-<li><p>Single structural tag parameter:
-from_structural_tag(structural_tag)</p></li>
-<li><p>Legacy pattern (deprecated):
-from_structural_tag(tags, triggers)</p></li>
-</ol>
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTagItem" title="xgrammar.grammar.StructuralTagItem"><span class="pre">StructuralTagItem</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triggers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/grammar.html#Grammar.from_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.Grammar.from_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a grammar from structural tags. The structural tag handles the dispatching
+of different grammars based on the tags and triggers: it initially allows any output,
+until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
+is encountered, the grammar will allow any following output, until the next trigger is
+encountered.</p>
+<p>The tags parameter is used to specify the output pattern. It is especially useful for LLM
+function calling, where the pattern is:
+&lt;function=func_name&gt;{“arg1”: …, “arg2”: …}&lt;/function&gt;.
+This pattern consists of three parts: a begin tag (&lt;function=func_name&gt;), a parameter list
+according to some schema ({“arg1”: …, “arg2”: …}), and an end tag (&lt;/function&gt;). This
+pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag.
+The structural tag is able to handle multiple such patterns by passing them into multiple
+tags.</p>
+<p>The triggers parameter is used to trigger the dispatching of different grammars. The trigger
+should be a prefix of a provided begin tag. When the trigger is encountered, the
+corresponding tag should be used to constrain the following output. There can be multiple
+tags matching the same trigger. Then if the trigger is encountered, the following output
+should match one of the tags. For example, in function calling, the triggers can be
+[“&lt;function=”]. Then if “&lt;function=” is encountered, the following output must match one
+of the tags (e.g. &lt;function=get_weather&gt;{“city”: “Beijing”}&lt;/function&gt;).</p>
+<p>The corrrespondence of tags and triggers is automatically determined: all tags with the
+same trigger will be grouped together. User should make sure any trigger is not a prefix
+of another trigger: then the corrrespondence of tags and triggers will be ambiguous.</p>
+<p>To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
+structural tag will generate a mask for each token. When the trigger is not encountered,
+the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
+False, meaning no token is masked). When a trigger is encountered, the mask should be
+enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
+output logits.</p>
+<p>The benefit of this method is the token boundary between tags and triggers is automatically
+handled. The user does not need to worry about the token boundary.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>structural_tag</strong> (<em>Union</em><em>[</em><a class="reference internal" href="structural_tag.html#xgrammar.structural_tag.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><em>StructuralTag</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Dict</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Any</em><em>]</em><em>]</em>) – The structural tag either as a StructuralTag object, or a JSON string or a dictionary.</p></li>
-<li><p><strong>tags</strong> (<em>List</em><em>[</em><a class="reference internal" href="structural_tag.html#xgrammar.structural_tag.StructuralTagItem" title="xgrammar.structural_tag.StructuralTagItem"><em>StructuralTagItem</em></a><em>]</em>) – (Deprecated) The structural tags. Use StructuralTag class instead.</p></li>
-<li><p><strong>triggers</strong> (<em>List</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>]</em>) – (Deprecated) The triggers. Use StructuralTag class instead.</p></li>
+<li><p><strong>tags</strong> (<em>List</em><em>[</em><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><em>StructuralTagItem</em></a><em>]</em>) – The structural tags.</p></li>
+<li><p><strong>triggers</strong> (<em>List</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>]</em>) – The triggers.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>grammar</strong> – The constructed grammar from the structural tag.</p>
+<dd class="field-even"><p><strong>grammar</strong> – The constructed grammar.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference internal" href="#xgrammar.Grammar" title="xgrammar.Grammar">Grammar</a></p>
 </dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><ul class="simple">
-<li><p><a class="reference internal" href="exception.html#xgrammar.exception.InvalidJSONError" title="xgrammar.exception.InvalidJSONError"><strong>InvalidJSONError</strong></a> – When the structural tag is not a valid JSON string.</p></li>
-<li><p><a class="reference internal" href="exception.html#xgrammar.exception.InvalidStructuralTagError" title="xgrammar.exception.InvalidStructuralTagError"><strong>InvalidStructuralTagError</strong></a> – When the structural tag is not valid.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#TypeError" title="(in Python v3.12)"><strong>TypeError</strong></a> – When the arguments are invalid.</p></li>
-</ul>
-</dd>
 </dl>
-<p class="rubric">Notes</p>
-<p>The legacy pattern from_structural_tag(tags, triggers) is deprecated. Use the StructuralTag
-class to construct structural tags instead.</p>
-<p>For the deprecated pattern: The structural tag handles the dispatching of different grammars
-based on the tags and triggers: it initially allows any output, until a trigger is
-encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
-grammar will allow any following output, until the next trigger is encountered. See the
-Advanced Topics of the Structural Tag in XGrammar documentation for its semantic.
-Structural Tag in XGrammar documentation for its semantic.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span><span class="w"> </span><span class="nc">Schema1</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">arg1</span><span class="p">:</span> <span class="nb">str</span>
+<span class="gp">... </span>    <span class="n">arg2</span><span class="p">:</span> <span class="nb">int</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span><span class="w"> </span><span class="nc">Schema2</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">arg3</span><span class="p">:</span> <span class="nb">float</span>
+<span class="gp">... </span>    <span class="n">arg4</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
+<span class="gp">... </span>    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=f&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema1</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=g&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema2</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
+<span class="gp">... </span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">triggers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&lt;function=&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="n">triggers</span><span class="p">)</span>
+</pre></div>
+</div>
 </dd></dl>
 
 <dl class="py method">
@@ -555,9 +571,9 @@ using the <cite>|</cite> operator to concatenate the grammars in the list.</p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><ul class="simple">
-<li><p><a class="reference internal" href="exception.html#xgrammar.exception.InvalidJSONError" title="xgrammar.exception.InvalidJSONError"><strong>InvalidJSONError</strong></a> – When the JSON string is invalid.</p></li>
-<li><p><a class="reference internal" href="exception.html#xgrammar.exception.DeserializeFormatError" title="xgrammar.exception.DeserializeFormatError"><strong>DeserializeFormatError</strong></a> – When the JSON string does not follow the serialization format of the grammar.</p></li>
-<li><p><a class="reference internal" href="exception.html#xgrammar.exception.DeserializeVersionError" title="xgrammar.exception.DeserializeVersionError"><strong>DeserializeVersionError</strong></a> – When the __VERSION__ field in the JSON string is not the same as the current version.</p></li>
+<li><p><a class="reference internal" href="exception.html#xgrammar.InvalidJSONError" title="xgrammar.InvalidJSONError"><strong>InvalidJSONError</strong></a> – When the JSON string is invalid.</p></li>
+<li><p><a class="reference internal" href="exception.html#xgrammar.DeserializeFormatError" title="xgrammar.DeserializeFormatError"><strong>DeserializeFormatError</strong></a> – When the JSON string does not follow the serialization format of the grammar.</p></li>
+<li><p><a class="reference internal" href="exception.html#xgrammar.DeserializeVersionError" title="xgrammar.DeserializeVersionError"><strong>DeserializeVersionError</strong></a> – When the __VERSION__ field in the JSON string is not the same as the current version.</p></li>
 </ul>
 </dd>
 </dl>

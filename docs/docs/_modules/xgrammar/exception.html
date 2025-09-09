@@ -149,8 +149,6 @@ window.addEventListener("load", () => mermaid.run());
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../tutorials/structural_tag.html">Structural Tag Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
@@ -252,24 +250,20 @@ window.addEventListener("load", () => mermaid.run());
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_core</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
 
-<div class="viewcode-block" id="DeserializeFormatError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.DeserializeFormatError">[docs]</a>    <span class="k">class</span><span class="w"> </span><span class="nc">DeserializeFormatError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
+<div class="viewcode-block" id="DeserializeFormatError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.DeserializeFormatError">[docs]</a>    <span class="k">class</span><span class="w"> </span><span class="nc">DeserializeFormatError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Raised when the deserialization format is invalid.&quot;&quot;&quot;</span></div>
 
-<div class="viewcode-block" id="DeserializeVersionError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.DeserializeVersionError">[docs]</a>    <span class="k">class</span><span class="w"> </span><span class="nc">DeserializeVersionError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
+<div class="viewcode-block" id="DeserializeVersionError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.DeserializeVersionError">[docs]</a>    <span class="k">class</span><span class="w"> </span><span class="nc">DeserializeVersionError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Raised when the serialization format is invalid.&quot;&quot;&quot;</span></div>
 
-<div class="viewcode-block" id="InvalidJSONError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.InvalidJSONError">[docs]</a>    <span class="k">class</span><span class="w"> </span><span class="nc">InvalidJSONError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
+<div class="viewcode-block" id="InvalidJSONError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.InvalidJSONError">[docs]</a>    <span class="k">class</span><span class="w"> </span><span class="nc">InvalidJSONError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Raised when the JSON is invalid.&quot;&quot;&quot;</span></div>
-
-<div class="viewcode-block" id="InvalidStructuralTagError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.InvalidStructuralTagError">[docs]</a>    <span class="k">class</span><span class="w"> </span><span class="nc">InvalidStructuralTagError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Raised when the structural tag is invalid.&quot;&quot;&quot;</span></div>
 
 <span class="k">else</span><span class="p">:</span>
     <span class="c1"># real implementation here</span>
-    <span class="n">DeserializeFormatError</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">exception</span><span class="o">.</span><span class="n">DeserializeFormatError</span>
-    <span class="n">DeserializeVersionError</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">exception</span><span class="o">.</span><span class="n">DeserializeVersionError</span>
-    <span class="n">InvalidJSONError</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">exception</span><span class="o">.</span><span class="n">InvalidJSONError</span>
-    <span class="n">InvalidStructuralTagError</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">exception</span><span class="o">.</span><span class="n">InvalidStructuralTagError</span>
+    <span class="n">DeserializeFormatError</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">DeserializeFormatError</span>
+    <span class="n">DeserializeVersionError</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">DeserializeVersionError</span>
+    <span class="n">InvalidJSONError</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">InvalidJSONError</span>
 </pre></div>
 
            </div>

@@ -143,8 +143,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../tutorials/structural_tag.html">Structural Tag Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
@@ -296,8 +294,8 @@ same grammar multiple times.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_regex" title="xgrammar.GrammarCompiler.compile_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_regex</span></code></a>(regex)</p></td>
 <td><p>Get CompiledGrammar from the specified regex.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="xgrammar.GrammarCompiler.compile_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_structural_tag</span></code></a>()</p></td>
-<td><p>Compile a grammar from a structural tag.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="xgrammar.GrammarCompiler.compile_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_structural_tag</span></code></a>(tags, triggers)</p></td>
+<td><p>Compile a grammar from structural tags.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_grammar" title="xgrammar.GrammarCompiler.compile_grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_grammar</span></code></a>()</p></td>
 <td><p>Compile a grammar object.</p></td>
@@ -402,43 +400,23 @@ It should be a positive integer.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.GrammarCompiler.compile_structural_tag">
-<span class="sig-name descname"><span class="pre">compile_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">structural_tag</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="structural_tag.html#xgrammar.structural_tag.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/compiler.html#GrammarCompiler.compile_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="Permalink to this definition">¶</a></dt>
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">compile_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="structural_tag.html#xgrammar.structural_tag.StructuralTagItem" title="xgrammar.structural_tag.StructuralTagItem"><span class="pre">StructuralTagItem</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triggers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span></dt>
-<dd><p>Compile a grammar from a structural tag. See the Structural Tag Usage in XGrammar
-documentation for its usage.</p>
-<p>This method supports two calling patterns:</p>
-<ol class="arabic simple">
-<li><p>Single structural tag parameter:
-compile_structural_tag(structural_tag)</p></li>
-<li><p>Legacy pattern (deprecated):
-compile_structural_tag(tags, triggers)</p></li>
-</ol>
+<span class="sig-name descname"><span class="pre">compile_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTagItem" title="xgrammar.grammar.StructuralTagItem"><span class="pre">StructuralTagItem</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triggers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/compiler.html#GrammarCompiler.compile_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compile a grammar from structural tags. See Grammar.from_structural_tag() for more
+details.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>structural_tag</strong> (<em>Union</em><em>[</em><a class="reference internal" href="structural_tag.html#xgrammar.structural_tag.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><em>StructuralTag</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Dict</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Any</em><em>]</em><em>]</em>) – The structural tag either as a StructuralTag object, or a JSON string or a dictionary.</p></li>
-<li><p><strong>tags</strong> (<em>List</em><em>[</em><a class="reference internal" href="structural_tag.html#xgrammar.structural_tag.StructuralTagItem" title="xgrammar.structural_tag.StructuralTagItem"><em>StructuralTagItem</em></a><em>]</em>) – (Deprecated) The structural tags. Use StructuralTag class instead.</p></li>
-<li><p><strong>triggers</strong> (<em>List</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>]</em>) – (Deprecated) The triggers. Use StructuralTag class instead.</p></li>
+<li><p><strong>tags</strong> (<em>List</em><em>[</em><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTagItem" title="xgrammar.StructuralTagItem"><em>StructuralTagItem</em></a><em>]</em>) – The structural tags.</p></li>
+<li><p><strong>triggers</strong> (<em>List</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>]</em>) – The triggers.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar from the structural tag.</p>
+<dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
 </dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><ul class="simple">
-<li><p><a class="reference internal" href="exception.html#xgrammar.exception.InvalidJSONError" title="xgrammar.exception.InvalidJSONError"><strong>InvalidJSONError</strong></a> – When the structural tag is not a valid JSON string.</p></li>
-<li><p><a class="reference internal" href="exception.html#xgrammar.exception.InvalidStructuralTagError" title="xgrammar.exception.InvalidStructuralTagError"><strong>InvalidStructuralTagError</strong></a> – When the structural tag is not valid.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#TypeError" title="(in Python v3.12)"><strong>TypeError</strong></a> – When the arguments are invalid.</p></li>
-</ul>
-</dd>
 </dl>
-<p class="rubric">Notes</p>
-<p>The legacy pattern compile_structural_tag(tags, triggers) is deprecated. Use the
-StructuralTag class to construct structural tags instead.</p>
 </dd></dl>
 
 <dl class="py method">

@@ -11,7 +11,7 @@ Each serialized result have a `__VERSION__` field to indicate the serialization 
 internal data structure is changed in XGrammar, the serialization version will be updated. Use
 [`xgr.get_serialization_version`](xgrammar.get_serialization_version) to get the current serialization
 version. In deserialization, if the version in the JSON string does not match the current version,
-the deserialization will fail and raise a [`xgr.exception.DeserializeVersionError`](xgrammar.exception. DeserializeVersionError).
+the deserialization will fail and raise a [`xgr.DeserializeVersionError`](xgrammar.DeserializeVersionError).
 
 > **Note:**<br>
 > After upgrading XGrammar, the serialization format may change. If you have cached serialization
@@ -19,9 +19,9 @@ the deserialization will fail and raise a [`xgr.exception.DeserializeVersionErro
 
 Three error types are raised when deserialization fails:
 
-- [`xgr.exception.InvalidJSONError`](xgrammar.exception.InvalidJSONError): When the JSON string is invalid.
-- [`xgr.exception.DeserializeFormatError`](xgrammar.exception.DeserializeFormatError): When the JSON string does not follow the serialization format of the type.
-- [`xgr.exception.DeserializeVersionError`](xgrammar.exception.DeserializeVersionError): When the serialization version in the JSON string is not the same as the
+- [`xgr.InvalidJSONError`](xgrammar.InvalidJSONError): When the JSON string is invalid.
+- [`xgr.DeserializeFormatError`](xgrammar.DeserializeFormatError): When the JSON string does not follow the serialization format of the type.
+- [`xgr.DeserializeVersionError`](xgrammar.DeserializeVersionError): When the serialization version in the JSON string is not the same as the
   current version.
 
 ## [`xgr.Grammar`](xgrammar.Grammar)
