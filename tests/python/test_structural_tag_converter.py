@@ -71,7 +71,7 @@ def check_stag_with_instance(
 
 const_string_stag_grammar = [
     (
-        {"type": "const_string", "text": "Hello!"},
+        {"type": "const_string", "value": "Hello!"},
         r"""const_string ::= (("Hello!"))
 root ::= ((const_string))
 """,
@@ -133,7 +133,7 @@ sequence_stag_grammar = [
         {
             "type": "sequence",
             "elements": [
-                {"type": "const_string", "text": "Hello!"},
+                {"type": "const_string", "value": "Hello!"},
                 {"type": "json_schema", "json_schema": {"type": "number"}},
             ],
         },
@@ -177,7 +177,7 @@ or_stag_grammar = [
         {
             "type": "or",
             "elements": [
-                {"type": "const_string", "text": "Hello!"},
+                {"type": "const_string", "value": "Hello!"},
                 {"type": "json_schema", "json_schema": {"type": "number"}},
             ],
         },
@@ -317,8 +317,8 @@ def _get_triggered_tag_format(at_least_one: bool, stop_after_first: bool):
         "type": "triggered_tags",
         "triggers": ["A"],
         "tags": [
-            {"begin": "A1", "content": {"type": "const_string", "text": "L1"}, "end": "A"},
-            {"begin": "A2", "content": {"type": "const_string", "text": "L2"}, "end": "A"},
+            {"begin": "A1", "content": {"type": "const_string", "value": "L1"}, "end": "A"},
+            {"begin": "A2", "content": {"type": "const_string", "value": "L2"}, "end": "A"},
         ],
         "at_least_one": at_least_one,
         "stop_after_first": stop_after_first,
@@ -420,7 +420,7 @@ test_triggered_tags_corner_case_data = [
             "tags": [
                 {
                     "begin": "<start>",
-                    "content": {"type": "const_string", "text": "[TEXT]"},
+                    "content": {"type": "const_string", "value": "[TEXT]"},
                     "end": "<end>",
                 }
             ],
@@ -458,8 +458,8 @@ triggered_tag_format = {
     "type": "triggered_tags",
     "triggers": ["A"],
     "tags": [
-        {"begin": "A1", "content": {"type": "const_string", "text": "L1"}, "end": "A"},
-        {"begin": "A2", "content": {"type": "const_string", "text": "L2"}, "end": "A"},
+        {"begin": "A1", "content": {"type": "const_string", "value": "L1"}, "end": "A"},
+        {"begin": "A2", "content": {"type": "const_string", "value": "L2"}, "end": "A"},
     ],
 }
 
@@ -472,8 +472,8 @@ def _get_triggered_tag_with_outside_tag(at_least_one: bool, stop_after_first: bo
             "type": "triggered_tags",
             "triggers": ["A"],
             "tags": [
-                {"begin": "A1", "content": {"type": "const_string", "text": "L1"}, "end": "A"},
-                {"begin": "A2", "content": {"type": "const_string", "text": "L2"}, "end": "A"},
+                {"begin": "A1", "content": {"type": "const_string", "value": "L1"}, "end": "A"},
+                {"begin": "A2", "content": {"type": "const_string", "value": "L2"}, "end": "A"},
             ],
             "at_least_one": at_least_one,
             "stop_after_first": stop_after_first,
@@ -578,8 +578,8 @@ def _get_tags_with_separator_format(at_least_one: bool, stop_after_first: bool):
     return {
         "type": "tags_with_separator",
         "tags": [
-            {"begin": "A1", "content": {"type": "const_string", "text": "L1"}, "end": "A"},
-            {"begin": "A2", "content": {"type": "const_string", "text": "L2"}, "end": "A"},
+            {"begin": "A1", "content": {"type": "const_string", "value": "L1"}, "end": "A"},
+            {"begin": "A2", "content": {"type": "const_string", "value": "L2"}, "end": "A"},
         ],
         "separator": "AA",
         "at_least_one": at_least_one,
@@ -671,8 +671,8 @@ def _get_tags_with_separator_format_with_outside_tag(at_least_one: bool, stop_af
         "content": {
             "type": "tags_with_separator",
             "tags": [
-                {"begin": "A1", "content": {"type": "const_string", "text": "L1"}, "end": "A"},
-                {"begin": "A2", "content": {"type": "const_string", "text": "L2"}, "end": "A"},
+                {"begin": "A1", "content": {"type": "const_string", "value": "L1"}, "end": "A"},
+                {"begin": "A2", "content": {"type": "const_string", "value": "L2"}, "end": "A"},
             ],
             "separator": "AA",
             "at_least_one": at_least_one,
@@ -954,7 +954,7 @@ compound_stag_instance_is_accepted = [
         {
             "type": "sequence",
             "elements": [
-                {"type": "const_string", "text": "<think></think>"},
+                {"type": "const_string", "value": "<think></think>"},
                 {
                     "type": "triggered_tags",
                     "triggers": ["<tool_call>"],
@@ -1004,7 +1004,7 @@ end_string_detector_test_data = [
             "begin": "<start>",
             "content": {
                 "type": "sequence",
-                "elements": [{"type": "const_string", "text": "[TEXT]"}, {"type": "any_text"}],
+                "elements": [{"type": "const_string", "value": "[TEXT]"}, {"type": "any_text"}],
             },
             "end": "<end>",
         },
@@ -1044,7 +1044,7 @@ root ::= ((tag))
                     {
                         "type": "sequence",
                         "elements": [
-                            {"type": "const_string", "text": "[TEXT2]"},
+                            {"type": "const_string", "value": "[TEXT2]"},
                             {"type": "any_text"},
                         ],
                     },
@@ -1118,7 +1118,7 @@ root ::= ((tag_1))
                 },
                 {
                     "type": "sequence",
-                    "elements": [{"type": "const_string", "text": "[TEXT]"}, {"type": "any_text"}],
+                    "elements": [{"type": "const_string", "value": "[TEXT]"}, {"type": "any_text"}],
                 },
                 {
                     "type": "or",
@@ -1138,7 +1138,7 @@ root ::= ((tag_1))
                         {
                             "type": "sequence",
                             "elements": [
-                                {"type": "const_string", "text": "[TEXT2]"},
+                                {"type": "const_string", "value": "[TEXT2]"},
                                 {"type": "any_text"},
                             ],
                         },
@@ -1215,19 +1215,19 @@ def test_end_string_detector(
 json_format_error_test_data = [
     # JSON Parsing Errors
     (
-        '{"type": "structural_tag", "format": {"type": "const_string", "text": "hello"',
+        '{"type": "structural_tag", "format": {"type": "const_string", "value": "hello"',
         "Failed to parse JSON",
     ),
     ('"not_an_object"', "Structural tag must be an object"),
     (
-        '{"type": "wrong_type", "format": {"type": "const_string", "text": "hello"}}',
+        '{"type": "wrong_type", "format": {"type": "const_string", "value": "hello"}}',
         'Structural tag\'s type must be a string "structural_tag"',
     ),
     ('{"type": "structural_tag"}', "Structural tag must have a format field"),
     # Format Parsing Errors
     ('{"type": "structural_tag", "format": "not_an_object"}', "Format must be an object"),
     (
-        '{"type": "structural_tag", "format": {"type": 123, "text": "hello"}}',
+        '{"type": "structural_tag", "format": {"type": 123, "value": "hello"}}',
         "Format's type must be a string",
     ),
     (
@@ -1238,15 +1238,15 @@ json_format_error_test_data = [
     # ConstStringFormat Errors
     (
         '{"type": "structural_tag", "format": {"type": "const_string"}}',
-        "ConstString format must have a text field with a non-empty string",
+        "ConstString format must have a value field with a non-empty string",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "const_string", "text": 123}}',
-        "ConstString format must have a text field with a non-empty string",
+        '{"type": "structural_tag", "format": {"type": "const_string", "value": 123}}',
+        "ConstString format must have a value field with a non-empty string",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "const_string", "text": ""}}',
-        "ConstString format must have a text field with a non-empty string",
+        '{"type": "structural_tag", "format": {"type": "const_string", "value": ""}}',
+        "ConstString format must have a value field with a non-empty string",
     ),
     # JSONSchemaFormat Errors
     (
@@ -1290,11 +1290,11 @@ json_format_error_test_data = [
     ),
     # TagFormat Errors
     (
-        '{"type": "structural_tag", "format": {"type": "tag", "content": {"type": "const_string", "text": "hello"}, "end": "end"}}',
+        '{"type": "structural_tag", "format": {"type": "tag", "content": {"type": "const_string", "value": "hello"}, "end": "end"}}',
         "Tag format's begin field must be a string",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "tag", "begin": 123, "content": {"type": "const_string", "text": "hello"}, "end": "end"}}',
+        '{"type": "structural_tag", "format": {"type": "tag", "begin": 123, "content": {"type": "const_string", "value": "hello"}, "end": "end"}}',
         "Tag format's begin field must be a string",
     ),
     (
@@ -1302,32 +1302,32 @@ json_format_error_test_data = [
         "Tag format must have a content field",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "tag", "begin": "start", "content": {"type": "const_string", "text": "hello"}}}',
+        '{"type": "structural_tag", "format": {"type": "tag", "begin": "start", "content": {"type": "const_string", "value": "hello"}}}',
         "Tag format's end field must be a string",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "tag", "begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": 123}}',
+        '{"type": "structural_tag", "format": {"type": "tag", "begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": 123}}',
         "Tag format's end field must be a string",
     ),
     # TriggeredTagsFormat Errors
     (
-        '{"type": "structural_tag", "format": {"type": "triggered_tags", "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}]}}',
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
         "Triggered tags format must have a triggers field with an array",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": "not_array", "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}]}}',
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": "not_array", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
         "Triggered tags format must have a triggers field with an array",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": [], "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}]}}',
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": [], "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
         "Triggered tags format's triggers must be non-empty",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": [123], "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}]}}',
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": [123], "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
         "Triggered tags format's triggers must be non-empty strings",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": [""], "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}]}}',
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": [""], "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
         "Triggered tags format's triggers must be non-empty strings",
     ),
     (
@@ -1343,11 +1343,11 @@ json_format_error_test_data = [
         "Triggered tags format's tags must be non-empty",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": ["trigger"], "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}], "at_least_one": "not_boolean"}}',
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": ["trigger"], "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "at_least_one": "not_boolean"}}',
         "at_least_one must be a boolean",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": ["trigger"], "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}], "stop_after_first": "not_boolean"}}',
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": ["trigger"], "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "stop_after_first": "not_boolean"}}',
         "stop_after_first must be a boolean",
     ),
     # TagsWithSeparatorFormat Errors
@@ -1364,23 +1364,23 @@ json_format_error_test_data = [
         "Tags with separator format's tags must be non-empty",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}]}}',
+        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
         "Tags with separator format's separator field must be a non-empty string",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}], "separator": 123}}',
+        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": 123}}',
         "Tags with separator format's separator field must be a non-empty string",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}], "separator": ""}}',
+        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": ""}}',
         "Tags with separator format's separator field must be a non-empty string",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}], "separator": "sep", "at_least_one": "not_boolean"}}',
+        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": "sep", "at_least_one": "not_boolean"}}',
         "at_least_one must be a boolean",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "text": "hello"}, "end": "end"}], "separator": "sep", "stop_after_first": "not_boolean"}}',
+        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": "sep", "stop_after_first": "not_boolean"}}',
         "stop_after_first must be a boolean",
     ),
 ]
@@ -1399,16 +1399,16 @@ structural_tag_error_test_data = [
     {
         "type": "sequence",
         "elements": [
-            {"type": "const_string", "text": "start"},
+            {"type": "const_string", "value": "start"},
             {"type": "any_text"},  # This unlimited element in middle will cause error
-            {"type": "const_string", "text": "end"},
+            {"type": "const_string", "value": "end"},
         ],
     },
     # Analyzer Errors - Or format with mixed unlimited and limited elements
     {
         "type": "or",
         "elements": [
-            {"type": "const_string", "text": "limited"},  # Limited element
+            {"type": "const_string", "value": "limited"},  # Limited element
             {"type": "any_text"},  # Unlimited element - mix not allowed
         ],
     },
@@ -1424,7 +1424,7 @@ structural_tag_error_test_data = [
         "type": "triggered_tags",
         "triggers": ["A", "AB"],  # Both will match tag beginning with "ABC"
         "tags": [
-            {"begin": "ABC", "content": {"type": "const_string", "text": "hello"}, "end": "end"}
+            {"begin": "ABC", "content": {"type": "const_string", "value": "hello"}, "end": "end"}
         ],
     },
     # Converter Errors - Tag matches no trigger
@@ -1432,7 +1432,7 @@ structural_tag_error_test_data = [
         "type": "triggered_tags",
         "triggers": ["X", "Y"],  # Neither matches "ABC" begin
         "tags": [
-            {"begin": "ABC", "content": {"type": "const_string", "text": "hello"}, "end": "end"}
+            {"begin": "ABC", "content": {"type": "const_string", "value": "hello"}, "end": "end"}
         ],
     },
     # Cannot detect end string of tags_with_separator in sequence
@@ -1444,13 +1444,13 @@ structural_tag_error_test_data = [
                 "tags": [
                     {
                         "begin": "<start>",
-                        "content": {"type": "const_string", "text": "[TEXT]"},
+                        "content": {"type": "const_string", "value": "[TEXT]"},
                         "end": "<end>",
                     }
                 ],
                 "separator": "<sep>",
             },
-            {"type": "const_string", "text": "[TEXT]"},
+            {"type": "const_string", "value": "[TEXT]"},
         ],
     },
     # Cannot detect end string of tags_with_separator in or
@@ -1462,13 +1462,13 @@ structural_tag_error_test_data = [
                 "tags": [
                     {
                         "begin": "<start>",
-                        "content": {"type": "const_string", "text": "[TEXT]"},
+                        "content": {"type": "const_string", "value": "[TEXT]"},
                         "end": "<end>",
                     }
                 ],
                 "separator": "<sep>",
             },
-            {"type": "const_string", "text": "[TEXT]"},
+            {"type": "const_string", "value": "[TEXT]"},
         ],
     },
     # Original test cases - Detected end string of tags_with_separator is empty
@@ -1480,7 +1480,7 @@ structural_tag_error_test_data = [
             "tags": [
                 {
                     "begin": "<start2>",
-                    "content": {"type": "const_string", "text": "[TEXT]"},
+                    "content": {"type": "const_string", "value": "[TEXT]"},
                     "end": "<end2>",
                 }
             ],

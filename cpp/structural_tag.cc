@@ -162,13 +162,14 @@ Result<Format, ISTError> StructuralTagParser::ParseFormat(const picojson::value&
 Result<ConstStringFormat, ISTError> StructuralTagParser::ParseConstStringFormat(
     const picojson::object& obj
 ) {
-  // text is required.
-  auto text_it = obj.find("text");
-  if (text_it == obj.end() || !text_it->second.is<std::string>() ||
-      text_it->second.get<std::string>().empty()) {
-    return ResultErr<ISTError>("ConstString format must have a text field with a non-empty string");
+  // value is required.
+  auto value_it = obj.find("value");
+  if (value_it == obj.end() || !value_it->second.is<std::string>() ||
+      value_it->second.get<std::string>().empty()) {
+    return ResultErr<ISTError>("ConstString format must have a value field with a non-empty string"
+    );
   }
-  return ResultOk<ConstStringFormat>(text_it->second.get<std::string>());
+  return ResultOk<ConstStringFormat>(value_it->second.get<std::string>());
 }
 
 Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
@@ -656,7 +657,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::Visit(const Format& format)
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringFormat& format) {
-  auto expr = grammar_builder_.AddByteString(format.text);
+  auto expr = grammar_builder_.AddByteString(format.value);
   auto sequence_expr = grammar_builder_.AddSequence({expr});
   auto choices_expr = grammar_builder_.AddChoices({sequence_expr});
   return ResultOk(grammar_builder_.AddRuleWithHint("const_string", choices_expr));

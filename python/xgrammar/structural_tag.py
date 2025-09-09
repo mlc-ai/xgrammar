@@ -13,7 +13,7 @@ class ConstStringFormat(BaseModel):
 
     type: Literal["const_string"] = "const_string"
     """The type of the format."""
-    text: str
+    value: str
     """The constant string."""
 
 

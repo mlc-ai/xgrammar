@@ -48,8 +48,8 @@ using Format = std::variant<
 
 struct ConstStringFormat {
   static constexpr const char* type = "const_string";
-  std::string text;
-  ConstStringFormat(std::string text) : text(std::move(text)) {}
+  std::string value;
+  ConstStringFormat(std::string value) : value(std::move(value)) {}
 };
 
 struct JSONSchemaFormat {
