@@ -221,9 +221,7 @@ class GrammarCompiler(XGRObject):
     @overload
     def compile_structural_tag(
         self, structural_tag: Union[StructuralTag, str, Dict[str, Any]]
-    ) -> CompiledGrammar:
-        """Compile a grammar from a structural tag."""
-        ...
+    ) -> CompiledGrammar: ...
 
     @overload
     @deprecated(
@@ -232,27 +230,50 @@ class GrammarCompiler(XGRObject):
     )
     def compile_structural_tag(
         self, tags: List[StructuralTagItem], triggers: List[str]
-    ) -> CompiledGrammar:
-        """Compile a grammar from structural tags. See Grammar.from_structural_tag() for more
-        details.
+    ) -> CompiledGrammar: ...
+
+    def compile_structural_tag(self, *args, **kwargs) -> CompiledGrammar:
+        """Compile a grammar from a structural tag. See the Structural Tag Usage in XGrammar
+        documentation for its usage.
+
+        This method supports two calling patterns:
+
+        1. Single structural tag parameter:
+           compile_structural_tag(structural_tag)
+
+        2. Legacy pattern (deprecated):
+           compile_structural_tag(tags, triggers)
 
         Parameters
         ----------
+        structural_tag : Union[StructuralTag, str, Dict[str, Any]]
+            The structural tag either as a StructuralTag object, or a JSON string or a dictionary.
+
         tags : List[StructuralTagItem]
-            The structural tags.
+            (Deprecated) The structural tags. Use StructuralTag class instead.
 
         triggers : List[str]
-            The triggers.
+            (Deprecated) The triggers. Use StructuralTag class instead.
 
         Returns
         -------
         compiled_grammar : CompiledGrammar
-            The compiled grammar.
-        """
-        ...
+            The compiled grammar from the structural tag.
 
-    def compile_structural_tag(self, *args, **kwargs) -> CompiledGrammar:
-        """Compile a grammar from structural tag."""
+        Raises
+        ------
+        InvalidJSONError
+            When the structural tag is not a valid JSON string.
+        InvalidStructuralTagError
+            When the structural tag is not valid.
+        TypeError
+            When the arguments are invalid.
+
+        Notes
+        -----
+        The legacy pattern compile_structural_tag(tags, triggers) is deprecated. Use the
+        StructuralTag class to construct structural tags instead.
+        """
         structural_tag_str = _get_structural_tag_str_from_args(args, kwargs)
         return CompiledGrammar._create_from_handle(
             self._handle.compile_structural_tag(structural_tag_str)

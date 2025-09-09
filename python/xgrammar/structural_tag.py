@@ -1,3 +1,5 @@
+"""Defines all structural tag formats."""
+
 import json
 from typing import Annotated, Any, Dict, List, Literal, Type, Union
 
@@ -7,53 +9,148 @@ from pydantic import BaseModel, Field
 
 
 class ConstStringFormat(BaseModel):
+    """A format that matches a constant string."""
+
     type: Literal["const_string"] = "const_string"
+    """The type of the format."""
     text: str
+    """The constant string."""
 
 
 class JSONSchemaFormat(BaseModel):
+    """A format that matches a JSON schema."""
+
     type: Literal["json_schema"] = "json_schema"
+    """The type of the format."""
     json_schema: Union[bool, Dict[str, Any]]
+    """The JSON schema."""
 
 
 class AnyTextFormat(BaseModel):
+    """A format that matches any text."""
+
     type: Literal["any_text"] = "any_text"
+    """The type of the format."""
 
 
 # ---------- Combinatorial Formats ----------
 
 
 class SequenceFormat(BaseModel):
+    """A format that matches a sequence of formats."""
+
     type: Literal["sequence"] = "sequence"
+    """The type of the format."""
     elements: List["Format"]
+    """The elements of the sequence."""
 
 
 class OrFormat(BaseModel):
+    """A format that matches one of the formats."""
+
     type: Literal["or"] = "or"
+    """The type of the format."""
     elements: List["Format"]
+    """The elements of the or."""
 
 
 class TagFormat(BaseModel):
+    """A format that matches a tag: `begin content end`."""
+
     type: Literal["tag"] = "tag"
+    """The type of the format."""
     begin: str
+    """The begin tag."""
     content: "Format"
+    """The content of the tag. It can be any of the formats."""
     end: str
+    """The end tag."""
 
 
 class TriggeredTagsFormat(BaseModel):
+    """A format that matches a triggered tags. It can allow any output until a trigger is
+    encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
+    grammar will allow any following output, until the next trigger is encountered.
+
+    Each tag should be matched by exactly one trigger. "matching" means the trigger should be a
+    prefix of the begin tag.
+
+    Examples
+    --------
+    ```
+    structural_tag = TriggeredTagsFormat(
+        triggers=["<function="],
+        tags=[
+            TagFormat(
+                begin="<function=func1>",
+                content=JSONSchemaFormat(json_schema=...),
+                end="</function>",
+            ),
+            TagFormat(
+                begin="<function=func2>",
+                content=JSONSchemaFormat(json_schema=...),
+                end="</function>",
+            ),
+        ],
+        at_least_one=False,
+        stop_after_first=False,
+    )
+    ```
+    The above structural tag can accept the following outputs:
+    ```
+    <function=func1>{"name": "John", "age": 30}</function>
+    <function=func2>{"name": "Jane", "age": 25}</function>
+    any_text<function=func1>{"name": "John", "age": 30}</function>any_text1<function=func2>{"name": "Jane", "age": 25}</function>any_text2
+    ```
+    """
+
     type: Literal["triggered_tags"] = "triggered_tags"
+    """The type of the format."""
     triggers: List[str]
+    """The triggers of the triggered tags."""
     tags: List[TagFormat]
+    """The tags of the triggered tags."""
     at_least_one: bool = False
+    """Whether at least one of the tags must be generated."""
     stop_after_first: bool = False
+    """Whether to stop after the first tag is generated."""
 
 
 class TagsWithSeparatorFormat(BaseModel):
+    """A format that matches a tags with separator. It can match zero, one, or more tags, separated
+    by the separator, with no other text allowed.
+
+    Examples
+    --------
+    ```
+    structural_tag = TagsWithSeparatorFormat(
+        tags=[
+            TagFormat(begin="<function=func1>", content=JSONSchemaFormat(json_schema=...), end="</function>"),
+            TagFormat(begin="<function=func2>", content=JSONSchemaFormat(json_schema=...), end="</function>"),
+        ],
+        separator=",",
+        at_least_one=False,
+        stop_after_first=False,
+    )
+    ```
+    The above structural tag can accept an empty string, or the following outputs:
+    ```
+    <function=func1>{"name": "John", "age": 30}</function>
+    <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>
+    <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>,<function=func1>{"name": "John", "age": 30}</function>
+    ```
+    """
+
     type: Literal["tags_with_separator"] = "tags_with_separator"
+    """The type of the format."""
     tags: List[TagFormat]
+    """The tags of the tags with separator."""
     separator: str
+    """The separator of the tags with separator."""
     at_least_one: bool = False
+    """Whether at least one of the tags must be matched."""
     stop_after_first: bool = False
+    """Whether to stop after the first tag is matched."""
 
 
 # ---------- Discriminated Union ----------
@@ -72,6 +169,7 @@ Format = Annotated[
     ],
     Field(discriminator="type"),
 ]
+"""Union of all structural tag formats."""
 
 
 # Solve forward references
@@ -109,11 +207,14 @@ class StructuralTagItem(BaseModel):
 
 class StructuralTag(BaseModel):
     """
-    Top level object, corresponding to `"response_format": {"type":"structural_tag", "format":{...}}` in API
+    Describes a complete structural tag structure. It corresponds to
+    `"response_format": {"type": "structural_tag", "format": {...}}` in API.
     """
 
     type: Literal["structural_tag"] = "structural_tag"
+    """The type must be "structural_tag"."""
     format: Format
+    """The format of the structural tag. Could be any of the structural tag formats."""
 
     @staticmethod
     def from_legacy_structural_tag(
