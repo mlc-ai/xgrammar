@@ -68,7 +68,7 @@ class TagFormat(BaseModel):
 
 
 class TriggeredTagsFormat(BaseModel):
-    """A format that matches a triggered tags. It can allow any output until a trigger is
+    """A format that matches triggered tags. It can allow any output until a trigger is
     encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
     grammar will allow any following output, until the next trigger is encountered.
 

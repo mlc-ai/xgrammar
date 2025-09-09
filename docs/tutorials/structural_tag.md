@@ -2,16 +2,25 @@
 
 The structural tag API aims to provide a JSON-config-based way to precisely describe the output format of an LLM. It is more flexible and dynamic than the OpenAI API:
 
-* flexible: supports various structures, including function calling, reasoning (\<think\>...\</think\>), etc. More will be supported in the future.
-* dynamic: allows a mixture of free-form text and structures such as function calls, entering constrained generation when a pre-set trigger is met.
+* **Flexible**: supports various structures, including tool calling, reasoning (\<think\>...\</think\>), etc.
+* **Dynamic**: allows a mixture of free-form text and structures such as tool calls, entering constrained generation when a pre-set trigger is met.
+
+It can also be used in the LLM engine to implement the OpenAI Tool Calling API with strict
+format constraints, with these benefits:
+* Support the advanced tool calling features, such as forced tool calling, parallel tool calling, etc.
+* Support the tool calling format of most of the LLMs available in the market with minimal effort.
 
 ## Usage
 
-The structural tag is a response format. It's compatible with the OpenAI API.
+The structural tag is a response format. It's compatible with the OpenAI API. With the
+structural tag, the request should be like:
 
-```javascript
+```json
 {
-    ..., // other request parameters
+    "model": "...",
+    "messages": [
+        ...
+    ],
     "response_format": {
         "type": "structural_tag",
         "format": {
@@ -26,185 +35,245 @@ The format field requires a format object. We provide several basic format objec
 
 ## Format Types
 
-1. const\_string
+1. `const_string`
 
-   The LLM output must exactly match the given string.
+    The LLM output must exactly match the given string.
 
-   This is useful for like force reasoning, where the LLM output must start with "Let's think step by step".
+    This is useful for like force reasoning, where the LLM output must start with "Let's think step by step".
 
-```javascript
-{
-    "type": "const_string",
-    "text": "..."
-}
-```
+    ```json
+    {
+        "type": "const_string",
+        "value": "..."
+    }
+    ```
 
-2. JSON schema
+2. `json_schema`
 
-   The output should be a valid JSON object that matches the JSON schema.
+    The output should be a valid JSON object that matches the JSON schema.
 
-   This is similar to OpenAI's structured output API. It is a key component of the following elements.
-
-```javascript
-{
-    "type": "json_schema",
-    "json_schema": "..."
-}
-```
-
-3. sequence
-
-   Concatenate several elements into one. LLM's output must follow each element in order.
-
-```
-{
-    "type": "sequence",
-    "elements": [
-        ...
-    ]
-}
-```
-
-
-
-4. Or
-   The output should follow at least one of the elements.
-
-```
-{
-    "type": "or",
-    "elements": [
-        ...
-    ]
-}
-```
-
-5. tag
-
-   The tag represents a chunk of text starting and ending with certain strings. Say `<think>...</think>` or `<function>...</function>`. The content inside needs to follow a specific format
-
-```
-{
-    "type": "tag",
-    "begin": "...",
-    "content": {
-        ...
-    },
-    "end": "..."
-}
-```
-
-   The output should start with the "begin" value, then follow the format in "content", and end with the "end" value.
-
-
-
-6. wildcard tag
-
-   The wildcard tag is a special tag whose content allows any text except the end tag.
-
-```
-{
-    "type": "tag",
-    "begin": "...",
-    "content": {
-        "type": "any_text",
-    },
-    "end": "..."
-}
-```
-
-   The wildcard part should not contain an end tag. The end tag should not be empty.
-
-
-
-   The any\_text format cannot be used outside a tag.
-
-
-
-7. triggered\_tags
-
-   The output should be a mixture of text and tags. Each tag is selected from the tags provided in the tags field. E.g.
-
-```
-any_text tag0 any_text tag1 any_text tag2 any_text ...
-```
-
-(TODO: consider renaming to triggered\_tags)
-Config:
-
-```
-{
-    "type": "triggered_tags",
-    "triggers": ["<function="],
-    "tags": [
-        {
-            "begin": "...",
-            "content": {
-                ...
-            },
-            "end": "..."
-        },
-        {
-            "begin": "...",
-            "content": {
-                ...
-            },
-            "end": "..."
-        },
-    ],
-    "at_least_one": bool,
-    "stop_after_first": bool,
-}
-```
-
-The text and tags are separated by triggers. When a trigger is found in the output, the mode will be switched from text to tag.
-
-Each element in the tags field should be an object of the tag format.
-
-By setting the stop\_after\_first to true, this part will stop after the first tag is found.
-
-"at\_least\_one" and "stop\_after\_first" may not be implemented in the first version, but will be added in the future.
-
-8. tags\_with\_separator
-
-   The output should be an alternation of tags and string separators. Each tag is selected from the tags provided in the tags field. E.g.
-
-```
-tag0 separator tag1 separator tag2 separator ... tagx
-```
-
-   Note there is no separator before the first tag and after the last tag.
-
-
-
-   Config:
-
-```
-{
-    "type": "tags_with_separator",
-    "tags": [
-        {
-            "type": "tag", // optional
-            "begin": "..."
-            "content": {
-                ...
-            }
-            "end": "..."
-        },
-        {
-            "type": "tag", // optional
+    ```json
+    {
+        "type": "json_schema",
+        "json_schema": {
             ...
         }
-    ],
-    "separator": "...",
-    "at_least_one": bool,
-    "stop_after_first": bool
-}
-```
+    }
+    ```
 
-   "at\_least\_one" and "stop\_after\_first" may not be implemented in the first version, but will be added in the future.
+3. `sequence`
 
-There will be more formats in the future to provide more control over the output.
+    The output should match a sequence of elements.
+
+    ```
+    {
+        "type": "sequence",
+        "elements": [
+            {
+                "type": "...",
+            },
+            {
+                "type": "...",
+            },
+            ...
+        ]
+    }
+    ```
+
+4. `or`
+
+    The output should follow any of the elements.
+
+    ```json
+    {
+        "type": "or",
+        "elements": [
+            {
+                "type": "...",
+            },
+            {
+                "type": "...",
+            },
+            ...
+        ]
+    }
+    ```
+
+5. `tag`
+
+    The output must follow `begin content end`. `begin` and `end` are strings, and `content` can be
+    any format object. This is useful for LLM outputs such as `<think>...</think>` or
+    `<function>...</function>`.
+
+    ```json
+    {
+        "type": "tag",
+        "begin": "...",
+        "content": {
+            "type": "...",
+        },
+        "end": "..."
+    }
+    ```
+
+6. `any_text`
+
+    The any_text format allows any text.
+
+    ```json
+    {
+        "type": "any_text",
+    }
+    ```
+
+    We will handle it as a special case when wrapped in a tag:
+    ```json
+    {
+        "type": "tag",
+        "begin": "...",
+        "content": {
+            "type": "any_text",
+        },
+        "end": "...",
+    }
+    ```
+
+    It first accepts the begin tag (can be empty), then any text **except the end tag**, then the
+    end tag.
+
+7. `triggered_tags`
+
+    The output will match triggered tags. It can allow any output until a trigger is
+    encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
+    grammar will allow any following output, until the next trigger is encountered.
+
+    Each tag should be matched by exactly one trigger. "matching" means the trigger should be a
+    prefix of the begin tag.
+
+    ```json
+    {
+        "type": "triggered_tags",
+        "triggers": ["<function="],
+        "tags": [
+            {
+                "begin": "...",
+                "content": {
+                    ...
+                },
+                "end": "..."
+            },
+            {
+                "begin": "...",
+                "content": {
+                    ...
+                },
+                "end": "..."
+            },
+        ],
+        "at_least_one": bool,
+        "stop_after_first": bool,
+    }
+    ```
+
+    For example,
+
+    ```json
+    {
+        "type": "triggered_tags",
+        "triggers": ["<function="],
+        "tags": [
+            {
+                "begin": "<function=func1>",
+                "content": {
+                    "type": "json_schema",
+                    "json_schema": ...
+                },
+                "end": "</function>",
+            },
+            {
+                "begin": "<function=func2>",
+                "content": {
+                    "type": "json_schema",
+                    "json_schema": ...
+                },
+                "end": "</function>",
+            },
+        ],
+        "at_least_one": false,
+        "stop_after_first": false,
+    }
+    ```
+
+    The above structural tag can accept the following outputs:
+    ```
+    <function=func1>{"name": "John", "age": 30}</function>
+    <function=func2>{"name": "Jane", "age": 25}</function>
+    any_text<function=func1>{"name": "John", "age": 30}</function>any_text1<function=func2>{"name": "Jane", "age": 25}</function>any_text2
+    ```
+
+    `at_least_one` makes sure at least one of the tags must be generated. The first tag will
+    be generated at the beginning of the output.
+
+    `stop_after_first` will reach the end of the `triggered_tags` structure after the first tag is generated. If there are following tags, they will still be generated; otherwise, the generation
+    will stop.
+
+
+8. `tags_with_separator`
+
+    The output should match zero, one, or more tags, separated by the separator, with no other text allowed.
+
+    ```json
+    {
+        "type": "tags_with_separator",
+        "tags": [
+            {
+                "type": "tag",
+                "begin": "...",
+                "content": {
+                    "type": "...",
+                },
+                "end": "...",
+            },
+        ],
+        "separator": "...",
+        "at_least_one": bool,
+        "stop_after_first": bool,
+    }
+    ```
+
+    For example,
+    ```json
+    {
+        "type": "tags_with_separator",
+        "tags": [
+            {
+                "type": "tag",
+                "begin": "<function=func1>",
+                "content": {
+                    "type": "json_schema",
+                    "json_schema": ...
+                },
+                "end": "</function>",
+            },
+        ],
+        "separator": ",",
+        "at_least_one": false,
+        "stop_after_first": false,
+    }
+    ```
+
+    The above structural tag can accept an empty string, or the following outputs:
+    ```
+    <function=func1>{"name": "John", "age": 30}</function>
+    <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>
+    <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>,<function=func1>{"name": "John", "age": 30}</function>
+    ```
+
+    `at_least_one` makes sure at least one of the tags must be generated.
+
+    `stop_after_first` will reach the end of the `tags_with_separator` structure after the first
+    tag is generated. If there are following tags, they will still be generated; otherwise, the
+    generation will stop.
 
 ## Examples
 
@@ -218,9 +287,9 @@ Llama JSON-based tool calling, Gemma:
 {"name": "function_name", "parameters": params}
 ```
 
-Config:
+Corresponding structural tag:
 
-```
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -248,9 +317,9 @@ Llama user-defined custom tool calling:
 <function=function_name>params</function>
 ```
 
-Config:
+Corresponding structural tag:
 
-```
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -280,9 +349,9 @@ Qwen 2.5/3, Hermes:
 </tool_call>
 ```
 
-Config:
+Corresponding structural tag:
 
-```
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -319,13 +388,13 @@ There is a special tag `<｜tool▁calls▁begin｜> ... <｜tool▁calls▁end�
 ```<｜tool▁call▁end｜><｜tool▁calls▁end｜>
 ````
 
-Config:
+Corresponding structural tag:
 
-````
+```json
 {
     "type": "structural_tag",
     "format": {
-        "type": "tag_and_text",
+        "type": "triggered_tags",
         "triggers": ["<｜tool▁calls▁begin｜>"],
         "tags": [
             {
@@ -353,7 +422,7 @@ Config:
 
     },
 }
-````
+```
 
 Phi-4-mini:
 
@@ -363,13 +432,13 @@ Similar to DeepSeek-V3, but the tool calling part is wrapped in `<|tool_call|>..
 <|tool_call|>[{"name": "function_name_1", "arguments": params}, {"name": "function_name_2", "arguments": params}]<|/tool_call|>
 ```
 
-Config:
+Corresponding structural tag:
 
-```
+```json
 {
     "type": "structural_tag",
     "format": {
-        "type": "tag_and_text",
+        "type": "triggered_tags",
         "triggers": ["<|tool_call|>"],
         "tags": [
             {
@@ -400,7 +469,7 @@ Config:
 
 ### Example 2: Force think
 
-The output should start with a reasoning part (`<think>...</think>`), then can generate a mix of text and function calls.
+The output should start with a reasoning part (`<think>...</think>`), then can generate a mix of text and tool calls.
 
 Format:
 
@@ -408,9 +477,9 @@ Format:
 <think> any_text </think> any_text <function=func1> params </function> any_text
 ```
 
-Config:
+Corresponding structural tag:
 
-```
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -453,9 +522,9 @@ Format:
 <think> any_text </think> <function=func1> params </function>
 ```
 
-Config:
+Corresponding structural tag:
 
-```
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -496,7 +565,7 @@ The output should start with a reasoning part (`<think>...</think>`), then must 
 
 Config:
 
-````
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -540,7 +609,7 @@ Config:
         ],
     },
 },
-````
+```
 
 ### Example 5: Force non-thinking mode
 
@@ -548,7 +617,7 @@ Qwen-3 has a hybrid thinking mode that allows switching between thinking and non
 
 We now specify the non-thinking mode.
 
-```
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -579,65 +648,31 @@ We now specify the non-thinking mode.
 }
 ```
 
-## Compatibility with the OAI Function Calling API
+## Compatibility with the OpenAI Tool Calling API
 
-In addition to the OpenAI-compatible API usage described above, the structural tag also provides an equivalent Python API, which can be used to implement the OpenAI Function Calling API with strict format constraints.
+The structural tag can be used to implement the OpenAI Tool Calling API with strict format
+constraints. In LLM serving engines, you can use the `xgrammar` Python package to construct the
+structural tag and apply it to constrained decoding.
 
-### Basic Function Calling
+In the OpenAI Tool Calling API, a set of tools is provided using JSON schema. There are also several
+features: tool choice (control at least one tool or exactly one tool is called),
+parallel tool calling (allow only one tool or multiple tools can be called in one round), etc.
 
-The OpenAI API requires user to specify the tools in the request. Each tool contains a name, description, and parameters.
-
-```py
-tools = [{
-    "type": "function",
-    "function": {
-        "name": "get_weather",
-        "description": "Get current temperature for a given location.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "City and country e.g. Bogotá, Colombia"
-                }
-            },
-            "required": [
-                "location"
-            ],
-            "additionalProperties": False
-        },
-        "strict": True
-    }
-}]
-
-completion = client.chat.completions.create(
-    model="gpt-4.1",
-    messages=[{"role": "user", "content": "What is the weather like in Paris today?"}],
-    tools=tools
-)
-```
-
-To use the structural tag, we need to
-
-1. Find the tool calling format of the current model (need to be defined in the LLM engine)
-2. Construct a structural tag as in *Example 1: Tool calling*
-3. Use XGrammar to do constraint decoding with the structural tag.
-4. Use the XGrammar structural tag parser to parse the string response into a structured object.
-5. Convert the parsed result to the OpenAI Function Calling API format.
+You can construct the structural tag according to the provided tools, and the LLM's specific tool
+calling format. The structural tag can be used in XGrammar's constrained decoding workflow to
+enable strict format constraints.
 
 ### Tool Choice
 
 `tool_choice` is a parameter in the OpenAI API. It can be
 
 * `auto`: Let the model decide which tool to use
-* `required`: Call at least one tool
+* `required`: Call at least one tool in the tool set
 * `{"type": "function", "function": {"name": "function_name"}}`: The forced mode, call exactly one specific function
-
-The above basic section describes the support of the auto mode.
 
 The required mode can be implemented by
 
-```
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -662,7 +697,7 @@ The required mode can be implemented by
 
 The forced mode can be implemented by
 
-```
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -674,18 +709,17 @@ The forced mode can be implemented by
 }
 ```
 
-### Parallel Function Calling
+### Parallel Tool Calling
 
 OAI's `parallel_tool_calls` parameter controls if the model can call multiple functions in one round.
 
 * If `true`, the model can call multiple functions in one round. (This is default)
 * If `false`, the model can call at most one function in one round.
 
-The above basic section describes the support of the true mode.
+`triggered_tags` and `tags_with_separator` has a parameter `stop_after_first` to control if the
+generation should stop after the first tag is generated. So the `false` mode can be implemented by:
 
-The false mode can be implemented by
-
-```
+```json
 {
     "type": "structural_tag",
     "format": {
@@ -707,3 +741,5 @@ The false mode can be implemented by
     },
 }
 ```
+
+The `true` mode can be implemented by setting `stop_after_first` to `false`.
