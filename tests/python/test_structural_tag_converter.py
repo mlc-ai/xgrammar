@@ -52,6 +52,7 @@ if PROFILER_ON:
 def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_grammar_ebnf: str):
     structural_tag = {"type": "structural_tag", "format": structural_tag_format}
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
+    print(stag_ebnf)
     assert str(stag_ebnf) == expected_grammar_ebnf
 
 
@@ -122,6 +123,47 @@ json_schema_instance_is_accepted = [
 @pytest.mark.parametrize("stag_format, expected_grammar", json_schema_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", json_schema_instance_is_accepted)
 def test_json_schema_format(
+    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+qwen_xml_stag_grammar = [
+    (
+        {
+            "type": "qwen_xml",
+            "parameter_schema": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                "required": ["name", "age"],
+            },
+        },
+        r"""xml_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(xml_string))
+xml_string ::= ("" | ([^<>&\0-\x1f\\\r\n] xml_string) | ("\\" xml_escape xml_string) | ("&lt;" xml_string) | ("&gt;" xml_string) | ("&amp;" xml_string) | ("&quot;" xml_string) | ("&apos;" xml_string)) (=([ \n\t]*))
+xml_string_0 ::= ((xml_string)) (=([ \n\t]* "</parameter>" root_part_0))
+root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*)) (=([ \n\t]* "</parameter>"))
+root_part_0 ::= (([ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>"))
+root ::= (([ \n\t]* "<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>" root_part_0))
+root_prop_1_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
+root_1 ::= ((root))
+""",
+    )
+]
+qwen_xml_instance_is_accepted = [
+    ("<parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>", True),
+    ("<parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>", True),
+    ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
+    ("\n\t<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
+    ('<parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>', True),
+    ("<parameter=name><>Bob</parameter><parameter=age>100</parameter>", False),
+    ("<parameter=name>Bob</parameter><parameter=age>100</parameter>\t\t", False),
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", qwen_xml_stag_grammar)
+@pytest.mark.parametrize("instance, is_accepted", qwen_xml_instance_is_accepted)
+def test_qwen_xml_format(
     stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
 ):
     check_stag_with_grammar(stag_format, expected_grammar)
