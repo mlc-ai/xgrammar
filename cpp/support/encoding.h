@@ -234,6 +234,21 @@ inline std::vector<TCodepoint> ParseUTF8(const char* utf8, bool perserve_invalid
   return codepoints;
 }
 
+/*!
+  \brief Convert a Latin-1 string to a byte sequence.
+  \param latin1 The Latin-1 string.
+  \param result The output byte sequence.
+  The function will convert each Latin-1 character to its corresponding byte(s).
+  For characters in the range [0x00, 0x7F], the corresponding byte is the same as the character.
+  Otherwise, the character should be encoded in two bytes in UTF-8:
+    - First byte:  110xxxxx (0xC0 | (char >> 6))
+    - Second byte: 10xxxxxx (0x80 | (char & 0x3F))
+  Example:
+    0xC3 0xBF -> 0xFF
+    'A' -> 'A'
+  \return std::nullopt if the conversion is successful. Otherwise, return
+  CharHandlingError::kInvalidLatin1 if the Latin-1 string is invalid.
+*/
 inline std::optional<CharHandlingError> Latin1ToBytes(
     const std::string& latin1, std::string* result
 ) {
@@ -268,9 +283,23 @@ inline std::optional<CharHandlingError> Latin1ToBytes(
   return std::nullopt;
 }
 
-inline void StrToLatin1(const std::string& str, std::string* result) {
+/*!
+ \brief Convert a byte sequence to a Latin-1 string.
+ \param Bytes The input byte sequence.
+ \param result The output Latin-1 string.
+ The function will convert each byte in the input to a Latin-1 character.
+ For bytes in the range [0x00, 0x7F], the corresponding Latin-1 character is the same as the byte.
+ For bytes in the range [0x80, 0xFF], the corresponding Latin-1 character is represented by two
+ bytes in UTF-8:
+   - First byte:  110xxxxx (0xC0 | (byte >> 6))
+   - Second byte: 10xxxxxx (0x80 | (byte & 0x3F))
+  Example:
+    0xFF -> 0xC3 0xBF
+    'A' -> 'A'
+*/
+inline void ByteToLatin1(const std::string& bytes, std::string* result) {
   result->clear();
-  const char* data = str.c_str();
+  const char* data = bytes.c_str();
 
   for (int current_idx = 0; *(data + current_idx) != '\0'; current_idx++) {
     const unsigned char& current_char = static_cast<unsigned char>(*(data + current_idx));

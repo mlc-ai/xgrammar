@@ -349,7 +349,7 @@ inline picojson::value AutoSerializeJSONValue(const T& value) {
     return picojson::value(static_cast<double>(value));
   } else if constexpr (std::is_same_v<T, std::string>) {
     std::string result;
-    StrToLatin1(value, &result);
+    ByteToLatin1(value, &result);
     return picojson::value(result);
   } else if constexpr (is_std_optional<T>::value) {
     if (value.has_value()) {
