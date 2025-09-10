@@ -283,6 +283,7 @@ class StructuralTag(BaseModel):
 __all__ = [
     "ConstStringFormat",
     "JSONSchemaFormat",
+    "QwenXMLParameterFormat",
     "AnyTextFormat",
     "SequenceFormat",
     "OrFormat",
