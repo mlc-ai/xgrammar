@@ -18,6 +18,10 @@ Basic Formats
    :show-inheritance:
    :exclude-members: model_config
 
+.. autoclass:: QwenXMLParameterFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
 Combinatorial Formats
 ---------------------
 

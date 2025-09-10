@@ -53,8 +53,6 @@ class QwenXMLParameterFormat(BaseModel):
 
     The above structural tag can accept the following outputs::
 
-        <parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>
-        <parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>
         <parameter=name>Bob</parameter><parameter=age>100</parameter>
         <parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>
 
