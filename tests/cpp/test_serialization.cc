@@ -253,7 +253,7 @@ TEST(XGrammarSerializationTest, TestString) {
   {
     std::string value = "\xC3\x28";
     auto json_value = AutoSerializeJSON(value);
-    ASSERT_EQ(json_value, "\"\u00c3(\"");
+    ASSERT_EQ(json_value, u8"\"\u00c3(\"");
 
     std::string deserialized;
     auto error = AutoDeserializeJSON(&deserialized, json_value);
@@ -264,7 +264,7 @@ TEST(XGrammarSerializationTest, TestString) {
     std::string value = "我";
     auto json_value = AutoSerializeJSON(value);
     std::cout << json_value << std::endl;
-    ASSERT_EQ(json_value, "\"\u00e6\u0088\u0091\"");
+    ASSERT_EQ(json_value, u8"\"\u00e6\u0088\u0091\"");
 
     std::string deserialized;
     auto error = AutoDeserializeJSON(&deserialized, json_value);
