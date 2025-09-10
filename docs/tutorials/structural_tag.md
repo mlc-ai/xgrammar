@@ -275,6 +275,70 @@ The format field requires a format object. We provide several basic format objec
     tag is generated. If there are following tags, they will still be generated; otherwise, the
     generation will stop.
 
+
+9. `QwenXMLParameterFormat`
+
+    This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.
+
+    ```json
+    {
+        "type": "qwen_xml_parameter",
+        "json_schema": {
+            ...
+        }
+    }
+    ```
+
+    For example,
+    ```json
+    {
+        "type": "qwen_xml_parameter",
+        "json_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+            "required": ["name", "age"],
+        },
+    }
+    ```
+
+    This can accept outputs such like:
+    ```xml
+    <parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>
+    <parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>
+    <parameter=name>Bob</parameter><parameter=age>100</parameter>
+    <parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>
+    ```
+
+    Note that strings here are in XML style. Moreover, if the parameter's type is `object`, the inner `object` will still be in JSON style. For example:
+
+    ```json
+    {
+        "type": "qwen_xml_parameter",
+        "json_schema": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "object",
+                    "properties": {"street": {"type": "string"}, "city": {"type": "string"}},
+                    "required": ["street", "city"],
+                }
+            },
+            "required": ["address"],
+        },
+    }
+    ```
+
+    These are valid outputs:
+    ```xml
+    <parameter=address>{"street": "Main St", "city": "New York"}</parameter>
+    <parameter=address>{"street": "Main St", "city": "No more xml escape&<>"}</parameter>
+    ```
+
+    And this is an invalid output:
+    ```xml
+    <parameter=address><parameter=street>Main St</parameter><parameter=city>New York</parameter></parameter>
+    ```
+
 ## Examples
 
 ### Example 1: Tool calling

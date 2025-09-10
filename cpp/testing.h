@@ -23,14 +23,6 @@ Grammar _EBNFToGrammarNoNormalization(
 
 std::string _PrintGrammarFSMs(const Grammar& grammar);
 
-/*!
- * \brief Convert a function call to a Grammar.
- * \param schema The schema of the parameters of the function call.
- * \return The ebnf-grammar to match the requirements of the schema, and
- * in Qwen xml style.
- */
-std::string _QwenXMLToolCallingToEBNF(const std::string& schema);
-
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_TESTING_H_
