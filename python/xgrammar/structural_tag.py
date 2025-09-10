@@ -33,6 +33,40 @@ class JSONSchemaFormat(BaseModel):
     """The JSON schema."""
 
 
+class QwenXMLParameterFormat(BaseModel):
+    """A format that matches Qwen XML function calls.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        structural_tag = QwenXMLParameterFormat(
+            json_schema={
+                "type": "qwen_xml_parameter",
+                "json_schema": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                    "required": ["name", "age"],
+                },
+            }
+        )
+
+    The above structural tag can accept the following outputs::
+
+        <parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>
+        <parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>
+        <parameter=name>Bob</parameter><parameter=age>100</parameter>
+        <parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>
+
+    """
+
+    type: Literal["qwen_xml_parameter"] = "qwen_xml_parameter"
+    """The type of the format."""
+
+    json_schema: Union[bool, Dict[str, Any]]
+    """The JSON schema for the parameters of the function calling."""
+
+
 class AnyTextFormat(BaseModel):
     """A format that matches any text."""
 
@@ -72,16 +106,6 @@ class TagFormat(BaseModel):
     """The content of the tag. It can be any of the formats."""
     end: str
     """The end tag."""
-
-
-class QwenXMLParameterFormat(BaseModel):
-    """A format that matches Qwen XML function calls."""
-
-    type: Literal["qwen_xml_parameter"] = "qwen_xml_parameter"
-    """The type of the format."""
-
-    json_schema: Union[bool, Dict[str, Any]]
-    """The JSON schema for the parameters of the function calling."""
 
 
 class TriggeredTagsFormat(BaseModel):
