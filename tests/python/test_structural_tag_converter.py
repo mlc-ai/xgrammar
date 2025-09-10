@@ -128,11 +128,11 @@ def test_json_schema_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
-qwen_xml_stag_grammar = [
+qwen_parameter_xml_stag_grammar = [
     (
         {
-            "type": "qwen_xml",
-            "parameter_schema": {
+            "type": "qwen_xml_parameter",
+            "json_schema": {
                 "type": "object",
                 "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
                 "required": ["name", "age"],
@@ -149,7 +149,7 @@ root_1 ::= ((root))
 """,
     )
 ]
-qwen_xml_instance_is_accepted = [
+qwen_parameter_xml_instance_is_accepted = [
     ("<parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
@@ -160,9 +160,9 @@ qwen_xml_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", qwen_xml_stag_grammar)
-@pytest.mark.parametrize("instance, is_accepted", qwen_xml_instance_is_accepted)
-def test_qwen_xml_format(
+@pytest.mark.parametrize("stag_format, expected_grammar", qwen_parameter_xml_stag_grammar)
+@pytest.mark.parametrize("instance, is_accepted", qwen_parameter_xml_instance_is_accepted)
+def test_qwen_parameter_xml_format(
     stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
 ):
     check_stag_with_grammar(stag_format, expected_grammar)

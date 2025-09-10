@@ -74,14 +74,14 @@ class TagFormat(BaseModel):
     """The end tag."""
 
 
-class QwenXmlFormat(BaseModel):
+class QwenXMLParameterFormat(BaseModel):
     """A format that matches Qwen XML function calls."""
 
-    type: Literal["qwen_xml"] = "qwen_xml"
+    type: Literal["qwen_xml_parameter"] = "qwen_xml_parameter"
     """The type of the format."""
 
-    parameter_schema: Union[bool, Dict[str, Any]]
-    """The JSON schema for the parameters of the function call."""
+    json_schema: Union[bool, Dict[str, Any]]
+    """The JSON schema for the parameters of the function calling."""
 
 
 class TriggeredTagsFormat(BaseModel):
@@ -181,7 +181,7 @@ Format = Annotated[
         AnyTextFormat,
         ConstStringFormat,
         JSONSchemaFormat,
-        QwenXmlFormat,
+        QwenXMLParameterFormat,
         OrFormat,
         SequenceFormat,
         TagFormat,
