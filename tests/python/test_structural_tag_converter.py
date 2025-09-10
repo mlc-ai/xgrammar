@@ -1655,5 +1655,30 @@ def test_basic_structural_tag_utf8(stag_format: Dict[str, Any], instance: str, i
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+basic_structural_tags_instance_is_accepted = [
+    (xgr.structural_tag.ConstStringFormat(value="hello"), "hello", True),
+    (xgr.structural_tag.ConstStringFormat(value="hello"), "hello world", False),
+    (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "object"}), '{"key": "value"}', True),
+    (
+        xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "object"}),
+        '["not", "an", "object"]',
+        False,
+    ),
+    (xgr.structural_tag.AnyTextFormat(), "", True),
+    (xgr.structural_tag.AnyTextFormat(), "any text here", True),
+]
+
+
+@pytest.mark.parametrize(
+    "stag_format, instance, is_accepted", basic_structural_tags_instance_is_accepted
+)
+def test_from_structural_tag_with_StructuralTagInstance(
+    stag_format: xgr.structural_tag.Format, instance: str, is_accepted: bool
+):
+    stag = xgr.structural_tag.StructuralTag(format=stag_format)
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    assert _is_grammar_accept_string(grammar, instance) == is_accepted
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
