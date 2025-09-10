@@ -71,8 +71,14 @@ def _get_structural_tag_str_from_args(args: List[Any], kwargs: Dict[str, Any]) -
     TypeError
         When the arguments are invalid.
     """
-    if len(args) == 1 and isinstance(args[0], (StructuralTag, str, dict)):
-        return _convert_schema_to_str(args[0])
+    if len(args) == 1:
+        if isinstance(args[0], (str, dict)):
+            return _convert_schema_to_str(args[0])
+        elif isinstance(args[0], StructuralTag):
+            dict_represent = {"type": "structural_tag", "format": args[0].format.model_dump()}
+            return _convert_schema_to_str(dict_represent)
+        else:
+            raise TypeError("Invalid argument type for from_structural_tag")
     elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], list):
         return StructuralTag.from_legacy_structural_tag(args[0], args[1]).model_dump_json(
             indent=None
