@@ -8,6 +8,7 @@ from pydantic import BaseModel, RootModel
 from transformers import AutoTokenizer  # type: ignore
 
 import xgrammar as xgr
+from xgrammar.testing import _is_grammar_accept_string
 
 
 def construct_grammar():
@@ -319,6 +320,18 @@ def test_serialize_compiled_grammar_with_hf_tokenizer():
 
     assert matcher.accept_token(tokenizer.eos_token_id)
     assert matcher.is_terminated()
+
+
+def test_serialize_grammar_utf8():
+    """Test Grammar serialization with UTF-8 characters."""
+    grammar = xgr.Grammar.from_ebnf('root ::= "こんにちは" | "😊" | "你好" | "hello" | "\\n"')
+    serialized = grammar.serialize_json()
+    recovered_grammar = xgr.Grammar.deserialize_json(serialized)
+    assert _is_grammar_accept_string(recovered_grammar, "こんにちは")
+    assert _is_grammar_accept_string(recovered_grammar, "😊")
+    assert _is_grammar_accept_string(recovered_grammar, "你好")
+    assert _is_grammar_accept_string(recovered_grammar, "hello")
+    assert _is_grammar_accept_string(recovered_grammar, "\n")
 
 
 if __name__ == "__main__":
