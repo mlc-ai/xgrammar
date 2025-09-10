@@ -508,6 +508,61 @@ will stop.</p>
 tag is generated. If there are following tags, they will still be generated; otherwise, the
 generation will stop.</p>
 </li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QwenXMLParameterFormat</span></code></p>
+<p>This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;qwen_xml_parameter&quot;,
+    &quot;json_schema&quot;: {
+        ...
+    }
+}
+</pre></div>
+</div>
+<p>For example,</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;qwen_xml_parameter&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;age&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integer&quot;</span><span class="p">}},</span>
+<span class="w">        </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;age&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This can accept outputs such like:</p>
+<div class="highlight-xml notranslate"><div class="highlight"><pre><span></span>&lt;parameter=name&gt;Bob&lt;/parameter&gt;&lt;parameter=age&gt;\t100\n&lt;/parameter&gt;
+&lt;parameter=name&gt;Bob&lt;/parameter&gt;\t\n&lt;parameter=age&gt;\t100\n&lt;/parameter&gt;
+&lt;parameter=name&gt;Bob&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;
+&lt;parameter=name&gt;&quot;Bob&amp;lt;&quot;&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;
+</pre></div>
+</div>
+<p>Note that strings here are in XML style. Moreover, if the parameter’s type is <code class="docutils literal notranslate"><span class="pre">object</span></code>, the inner <code class="docutils literal notranslate"><span class="pre">object</span></code> will still be in JSON style. For example:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;qwen_xml_parameter&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;address&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;street&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;city&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+<span class="w">                </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;street&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;city&quot;</span><span class="p">],</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;address&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>These are valid outputs:</p>
+<div class="highlight-xml notranslate"><div class="highlight"><pre><span></span>&lt;parameter=address&gt;{&quot;street&quot;: &quot;Main St&quot;, &quot;city&quot;: &quot;New York&quot;}&lt;/parameter&gt;
+&lt;parameter=address&gt;{&quot;street&quot;: &quot;Main St&quot;, &quot;city&quot;: &quot;No more xml escape&amp;&lt;&gt;&quot;}&lt;/parameter&gt;
+</pre></div>
+</div>
+<p>And this is an invalid output:</p>
+<div class="highlight-xml notranslate"><div class="highlight"><pre><span></span>&lt;parameter=address&gt;&lt;parameter=street&gt;Main St&lt;/parameter&gt;&lt;parameter=city&gt;New York&lt;/parameter&gt;&lt;/parameter&gt;
+</pre></div>
+</div>
+</li>
 </ol>
 </section>
 <section id="examples">

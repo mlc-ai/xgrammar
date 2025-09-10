@@ -279,6 +279,38 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema.&quot;&quot;&quot;</span></div>
 
 
+<div class="viewcode-block" id="QwenXMLParameterFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.QwenXMLParameterFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches Qwen XML function calls.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        structural_tag = QwenXMLParameterFormat(</span>
+<span class="sd">            json_schema={</span>
+<span class="sd">                &quot;type&quot;: &quot;qwen_xml_parameter&quot;,</span>
+<span class="sd">                &quot;json_schema&quot;: {</span>
+<span class="sd">                    &quot;type&quot;: &quot;object&quot;,</span>
+<span class="sd">                    &quot;properties&quot;: {&quot;name&quot;: {&quot;type&quot;: &quot;string&quot;}, &quot;age&quot;: {&quot;type&quot;: &quot;integer&quot;}},</span>
+<span class="sd">                    &quot;required&quot;: [&quot;name&quot;, &quot;age&quot;],</span>
+<span class="sd">                },</span>
+<span class="sd">            }</span>
+<span class="sd">        )</span>
+
+<span class="sd">    The above structural tag can accept the following outputs::</span>
+
+<span class="sd">        &lt;parameter=name&gt;Bob&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;</span>
+<span class="sd">        &lt;parameter=name&gt;&quot;Bob&amp;lt;&quot;&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;qwen_xml_parameter&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;qwen_xml_parameter&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">json_schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema for the parameters of the function calling.&quot;&quot;&quot;</span></div>
+
+
 <div class="viewcode-block" id="AnyTextFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.AnyTextFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AnyTextFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches any text.&quot;&quot;&quot;</span>
 
@@ -417,6 +449,7 @@ window.addEventListener("load", () => mermaid.run());
         <span class="n">AnyTextFormat</span><span class="p">,</span>
         <span class="n">ConstStringFormat</span><span class="p">,</span>
         <span class="n">JSONSchemaFormat</span><span class="p">,</span>
+        <span class="n">QwenXMLParameterFormat</span><span class="p">,</span>
         <span class="n">OrFormat</span><span class="p">,</span>
         <span class="n">SequenceFormat</span><span class="p">,</span>
         <span class="n">TagFormat</span><span class="p">,</span>
@@ -518,6 +551,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
     <span class="s2">&quot;ConstStringFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;JSONSchemaFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;QwenXMLParameterFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;AnyTextFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;SequenceFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;OrFormat&quot;</span><span class="p">,</span>
