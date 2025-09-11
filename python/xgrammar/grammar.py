@@ -10,15 +10,39 @@ from .base import XGRObject, _core
 from .structural_tag import StructuralTag, StructuralTagItem
 
 
-def _convert_instance_to_str(schema: Union[str, Dict[str, Any], StructuralTag]) -> str:
-    if isinstance(schema, dict):
-        return json.dumps(schema)
-    elif isinstance(schema, str):
-        return schema
-    elif isinstance(schema, StructuralTag):
-        return schema.model_dump_json()
+def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]) -> str:
+    """Convert a schema to a string representation. It returns the schema in string format because
+    it's faster to send to C++.
+
+    This function handles different schema input types and converts them to a JSON string:
+    - StructuralTag.
+    - String inputs are returned as-is (assumed to be valid JSON)
+    - Dictionary inputs are converted to JSON strings
+
+    Parameters
+    ----------
+    instance : Union[str, StructuralTag, Dict[str, Any]]
+        The schema to convert, which can be a StructuralTag,
+        a JSON schema string, or a dictionary representing a JSON schema.
+
+    Returns
+    -------
+    str
+        The JSON schema as a string.
+
+    Raises
+    ------
+    ValueError, TypeError
+        If the schema type is not supported, or the dictionary is not serializable.
+    """
+    if isinstance(instance, dict):
+        return json.dumps(instance)
+    elif isinstance(instance, str):
+        return instance
+    elif isinstance(instance, StructuralTag):
+        return instance.model_dump_json()
     else:
-        raise ValueError("Invalid schema type")
+        raise ValueError("Invalid instance type")
 
 
 def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
