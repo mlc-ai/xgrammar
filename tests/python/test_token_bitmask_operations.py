@@ -359,8 +359,8 @@ def test_apply_token_bitmask_inplace_indices(
 
 
 def test_bitmask_to_boolmask():
-    bitmask_raw = torch.tensor([[0xFFFF0000, 0x0000FFFF]], dtype=torch.uint32)
-    bitmask = bitmask_raw.view(torch.int32)
+    # 0xFFFF0000, 0x0000FFFF
+    bitmask = torch.tensor([[-65536, 65535]], dtype=torch.int32)
     expected = torch.tensor(
         [[False] * 16, [True] * 16, [True] * 16, [False] * 16], dtype=torch.bool
     ).reshape(1, -1)
