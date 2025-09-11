@@ -1540,5 +1540,120 @@ def test_structural_tag_error(stag_format: Dict[str, Any]):
         xgr.Grammar.from_structural_tag(structural_tag)
 
 
+utf8_stag_format_and_instance_accepted = [
+    ({"type": "const_string", "value": "你好"}, "你好", True),
+    ({"type": "const_string", "value": "你好"}, "hello", False),
+    ({"type": "any_text"}, "😊", True),
+    (
+        {
+            "type": "sequence",
+            "elements": [
+                {"type": "const_string", "value": "开始"},
+                {"type": "json_schema", "json_schema": {"type": "string"}},
+                {"type": "const_string", "value": "结束"},
+            ],
+        },
+        '开始"中间"结束',
+        True,
+    ),
+    (
+        {
+            "type": "sequence",
+            "elements": [
+                {"type": "const_string", "value": "开始"},
+                {"type": "json_schema", "json_schema": {"type": "string"}},
+                {"type": "const_string", "value": "结束"},
+            ],
+        },
+        "开始中间内容",
+        False,
+    ),
+    (
+        {"type": "tag", "begin": "标签开始", "content": {"type": "any_text"}, "end": "标签结束"},
+        "标签开始一些内容标签结束",
+        True,
+    ),
+    (
+        {"type": "tag", "begin": "标签开始", "content": {"type": "any_text"}, "end": "标签结束"},
+        "标签开始一些内容",
+        False,
+    ),
+    (
+        {
+            "type": "or",
+            "elements": [
+                {"type": "const_string", "value": "选项一"},
+                {"type": "const_string", "value": "选项二"},
+            ],
+        },
+        "选项一",
+        True,
+    ),
+    (
+        {
+            "type": "or",
+            "elements": [
+                {"type": "const_string", "value": "选项一"},
+                {"type": "const_string", "value": "选项二"},
+            ],
+        },
+        "选项三",
+        False,
+    ),
+    (
+        {
+            "type": "tags_with_separator",
+            "tags": [{"begin": "项开始", "content": {"type": "any_text"}, "end": "项结束"}],
+            "separator": "分隔符",
+        },
+        "项开始内容1项结束分隔符项开始内容2项结束",
+        True,
+    ),
+    (
+        {
+            "type": "tags_with_separator",
+            "tags": [{"begin": "项开始", "content": {"type": "any_text"}, "end": "项结束"}],
+            "separator": "分隔符",
+        },
+        "项开始内容1项结束项开始内容2项结束",
+        False,
+    ),
+    (
+        {
+            "type": "json_schema",
+            "json_schema": {
+                "type": "object",
+                "properties": {"字段": {"type": "string"}},
+                "required": ["字段"],
+                "additionalProperties": False,
+            },
+        },
+        '{"字段": "值"}',
+        True,
+    ),
+    (
+        {
+            "type": "qwen_xml_parameter",
+            "json_schema": {
+                "type": "object",
+                "properties": {"参数": {"type": "string"}},
+                "required": ["参数"],
+                "additionalProperties": False,
+            },
+        },
+        "<parameter=参数>值</parameter>",
+        True,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "stag_format, instance, is_accepted", utf8_stag_format_and_instance_accepted
+)
+def test_basic_structural_tag_utf8(stag_format: Dict[str, Any], instance: str, is_accepted: bool):
+    """Test structural tag with UTF-8 characters"""
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
