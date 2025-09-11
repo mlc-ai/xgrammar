@@ -271,7 +271,7 @@ def _bitmask_to_bool_mask(bit_mask: torch.Tensor, vocab_size: Optional[int] = No
     bit_mask : torch.Tensor
         The bitmask tensor to convert. Should be on CPU and of type int32.
     vocab_size : Optional[int]
-        The size of the vocabulary. If provided, the output mask will be padded to this size.
+        The size of the vocabulary. If provided, the output mask will be cut to this size.
 
     Returns
     -------
