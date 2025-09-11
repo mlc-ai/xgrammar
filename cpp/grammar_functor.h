@@ -245,18 +245,9 @@ using GrammarVisitor = GrammarFunctor<void, ReturnType>;
  */
 using GrammarMutator = GrammarFunctor<int32_t, Grammar>;
 
-/*************************** Grammar manipulation methods ***************************/
 /****** All below methods are implemented as functor to hide the implementation ******/
 
-/*!
- * \brief Normalize a Grammar: expand the nested rules, combine consequent sequences and strings,
- * etc.
- */
-class GrammarNormalizer {
- public:
-  static Grammar Apply(const Grammar& grammar);
-};
-
+/*************************** Grammar Constructor ***************************/
 /*!
  * \brief Find the union of multiple grammars as a new grammar.
  */
@@ -274,11 +265,23 @@ class GrammarConcatFunctor {
 };
 
 /*!
- * \brief Analyze the grammar to find the rules that are allowed to be empty.
+ * \brief Add a sub grammar to the current builder. The return value
+ * of Apply is the new rule id of the sub grammar's root rule.
  */
-class AllowEmptyRuleAnalyzer {
+class SubGrammarAdder {
  public:
-  static std::vector<int32_t> Apply(const Grammar& grammar);
+  static int32_t Apply(GrammarBuilder* builder, const Grammar& sub_grammar);
+};
+
+/*************************** Grammar Normalizer ***************************/
+
+/*!
+ * \brief Normalize a Grammar: expand the nested rules, combine consequent sequences and strings,
+ * etc.
+ */
+class GrammarNormalizer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
 };
 
 /*!
@@ -290,12 +293,22 @@ class StructureNormalizer {
   static Grammar Apply(const Grammar& grammar);
 };
 
+/*************************** Grammar Optimizer ***************************/
+
 /*!
  * \brief Fuse the byte string elements in the grammar.
  */
 class ByteStringFuser {
  public:
   static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Analyze the grammar to find the rules that are allowed to be empty.
+ */
+class AllowEmptyRuleAnalyzer {
+ public:
+  static std::vector<int32_t> Apply(const Grammar& grammar);
 };
 
 /*!
@@ -337,14 +350,32 @@ class GrammarFSMBuilder {
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
 };
-class SubGrammarAdder {
- public:
-  static int32_t Apply(GrammarBuilder* builder, const Grammar& sub_grammar);
-};
 
+/*!
+ * \brief Normalize the repetition expression. If the context of
+ * repetition expression is nullable, then the repetition range will be
+ * normalized from {m, n} to {0, n} to reduce uncertainty.
+ */
 class RepetitionNormalizer {
  public:
-  static void Apply(Grammar* grammar);
+  static void Apply(Grammar& grammar);
+};
+
+/*!
+ * \brief Optimize the grammar when compiling.
+ * \note No matter whether the grammar is optimized, grammar optimizer will
+ * return a new grammar. The following optimization will be applied:
+ * 1. Byte fuser.
+ * 2. Rule inliner.
+ * 3. Dead code eliminator.
+ * 4. Lookahead assertion analyzer.
+ * 5. Allow-empty rule analyzer.
+ * 6. Repetition normalizer.
+ * 7. FSM builder.
+ */
+class GrammarOptimizer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
 };
 
 }  // namespace xgrammar

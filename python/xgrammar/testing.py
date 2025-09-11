@@ -388,3 +388,17 @@ class GrammarFunctor:
         return Grammar._create_from_handle(
             _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
         )
+
+    @staticmethod
+    def grammar_optimizer(grammar: Grammar) -> Grammar:
+        """Optimize the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.grammar_optimizer(grammar._handle)
+        )
+
+    @staticmethod
+    def repetition_normalizer(grammar: Grammar) -> None:
+        """Normalize the repetition expression."""
+        Grammar._create_from_handle(
+            _core.testing.grammar_functor.repetition_normalizer(grammar._handle)
+        )

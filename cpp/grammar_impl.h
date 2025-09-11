@@ -257,6 +257,9 @@ class Grammar::Impl {
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
 
+  /*! \brief Whether the grammar is optimized. */
+  bool optimized = false;
+
   friend class GrammarBuilder;
   friend class GrammarCompiler;
 
@@ -287,7 +290,9 @@ XGRAMMAR_MEMBER_TABLE(
     "per_rule_fsms",
     &Grammar::Impl::per_rule_fsms,
     "allow_empty_rule_ids",
-    &Grammar::Impl::allow_empty_rule_ids
+    &Grammar::Impl::allow_empty_rule_ids,
+    "optimized",
+    &Grammar::Impl::optimized
 );
 
 }  // namespace xgrammar
