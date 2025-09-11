@@ -1656,16 +1656,124 @@ def test_basic_structural_tag_utf8(stag_format: Dict[str, Any], instance: str, i
 
 
 basic_structural_tags_instance_is_accepted = [
+    # ConstStringFormat
     (xgr.structural_tag.ConstStringFormat(value="hello"), "hello", True),
     (xgr.structural_tag.ConstStringFormat(value="hello"), "hello world", False),
+    # JSONSchemaFormat
     (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "object"}), '{"key": "value"}', True),
-    (
-        xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "object"}),
-        '["not", "an", "object"]',
-        False,
-    ),
+    (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "string"}), '"abc"', True),
+    (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "integer"}), "123", True),
+    (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "integer"}), "abc", False),
+    # AnyTextFormat
     (xgr.structural_tag.AnyTextFormat(), "", True),
     (xgr.structural_tag.AnyTextFormat(), "any text here", True),
+    # SequenceFormat
+    (
+        xgr.structural_tag.SequenceFormat(
+            elements=[
+                xgr.structural_tag.ConstStringFormat(value="A"),
+                xgr.structural_tag.ConstStringFormat(value="B"),
+            ]
+        ),
+        "AB",
+        True,
+    ),
+    (
+        xgr.structural_tag.SequenceFormat(
+            elements=[
+                xgr.structural_tag.ConstStringFormat(value="A"),
+                xgr.structural_tag.ConstStringFormat(value="B"),
+            ]
+        ),
+        "A",
+        False,
+    ),
+    # OrFormat
+    (
+        xgr.structural_tag.OrFormat(
+            elements=[
+                xgr.structural_tag.ConstStringFormat(value="A"),
+                xgr.structural_tag.ConstStringFormat(value="B"),
+            ]
+        ),
+        "A",
+        True,
+    ),
+    (
+        xgr.structural_tag.OrFormat(
+            elements=[
+                xgr.structural_tag.ConstStringFormat(value="A"),
+                xgr.structural_tag.ConstStringFormat(value="B"),
+            ]
+        ),
+        "B",
+        True,
+    ),
+    (
+        xgr.structural_tag.OrFormat(
+            elements=[
+                xgr.structural_tag.ConstStringFormat(value="A"),
+                xgr.structural_tag.ConstStringFormat(value="B"),
+            ]
+        ),
+        "C",
+        False,
+    ),
+    # TagFormat
+    (
+        xgr.structural_tag.TagFormat(
+            begin="<b>", content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+        ),
+        "<b>text</b>",
+        True,
+    ),
+    (
+        xgr.structural_tag.TagFormat(
+            begin="<b>", content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+        ),
+        "<b>text</b",
+        False,
+    ),
+    # TagsWithSeparatorFormat
+    (
+        xgr.structural_tag.TagsWithSeparatorFormat(
+            tags=[
+                xgr.structural_tag.TagFormat(
+                    begin="<b>", content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+                )
+            ],
+            separator=",",
+        ),
+        '<b>"1"</b>,<b>"2"</b>',
+        True,
+    ),
+    (
+        xgr.structural_tag.TagsWithSeparatorFormat(
+            tags=[
+                xgr.structural_tag.TagFormat(
+                    begin="<b>", content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+                )
+            ],
+            separator=",",
+        ),
+        '<b>"1"</b><b>"2"</b>',
+        False,
+    ),
+    # QwenXMLParameterFormat
+    (
+        xgr.structural_tag.QwenXMLParameterFormat(
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}}
+        ),
+        "<parameter=name>value</parameter>",
+        True,
+    ),
+    (
+        xgr.structural_tag.QwenXMLParameterFormat(
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}}
+        ),
+        "<parameter=name>value</param>",
+        False,
+    ),
 ]
 
 
