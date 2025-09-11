@@ -11,10 +11,10 @@ from .structural_tag import StructuralTag, StructuralTagItem
 
 
 def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]) -> str:
-    """Convert a schema to a string representation. It returns the schema in string format because
+    """Convert a instance to a string representation. It returns the schema in string format because
     it's faster to send to C++.
 
-    This function handles different schema input types and converts them to a JSON string:
+    This function handles different instance input types and converts them to a JSON string:
     - StructuralTag.
     - String inputs are returned as-is (assumed to be valid JSON)
     - Dictionary inputs are converted to JSON strings
@@ -22,7 +22,7 @@ def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]
     Parameters
     ----------
     instance : Union[str, StructuralTag, Dict[str, Any]]
-        The schema to convert, which can be a StructuralTag,
+        The instance to convert, which can be a StructuralTag,
         a JSON schema string, or a dictionary representing a JSON schema.
 
     Returns
@@ -33,7 +33,7 @@ def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]
     Raises
     ------
     ValueError, TypeError
-        If the schema type is not supported, or the dictionary is not serializable.
+        If the instance type is not supported, or the dictionary is not serializable.
     """
     if isinstance(instance, dict):
         return json.dumps(instance)
