@@ -10,6 +10,17 @@ from .base import XGRObject, _core
 from .structural_tag import StructuralTag, StructuralTagItem
 
 
+def _convert_instance_to_str(schema: Union[str, Dict[str, Any], StructuralTag]) -> str:
+    if isinstance(schema, dict):
+        return json.dumps(schema)
+    elif isinstance(schema, str):
+        return schema
+    elif isinstance(schema, StructuralTag):
+        return schema.model_dump_json()
+    else:
+        raise ValueError("Invalid schema type")
+
+
 def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
     """Convert a schema to a string representation. It returns the schema in string format because
     it's faster to send to C++.
@@ -72,11 +83,8 @@ def _get_structural_tag_str_from_args(args: List[Any], kwargs: Dict[str, Any]) -
         When the arguments are invalid.
     """
     if len(args) == 1:
-        if isinstance(args[0], (str, dict)):
-            return _convert_schema_to_str(args[0])
-        elif isinstance(args[0], StructuralTag):
-            dict_represent = {"type": "structural_tag", "format": args[0].format.model_dump()}
-            return _convert_schema_to_str(dict_represent)
+        if isinstance(args[0], (str, dict, StructuralTag)):
+            return _convert_instance_to_str(args[0])
         else:
             raise TypeError("Invalid argument type for from_structural_tag")
     elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], list):
@@ -84,7 +92,7 @@ def _get_structural_tag_str_from_args(args: List[Any], kwargs: Dict[str, Any]) -
             indent=None
         )
     elif "structural_tag" in kwargs:
-        return _convert_schema_to_str(kwargs["structural_tag"])
+        return _convert_instance_to_str(kwargs["structural_tag"])
     elif "tags" in kwargs and "triggers" in kwargs:
         return StructuralTag.from_legacy_structural_tag(
             kwargs["tags"], kwargs["triggers"]
