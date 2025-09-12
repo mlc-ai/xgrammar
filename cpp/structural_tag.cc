@@ -1020,7 +1020,7 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(const std::string& st
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }
-  return ResultOk(std::move(result).Unwrap());
+  return ResultOk(GrammarNormalizer::Apply(std::move(result).Unwrap()));
 }
 
 }  // namespace xgrammar
