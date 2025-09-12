@@ -23,6 +23,8 @@ enum class JSONFormat : int {
 /*!
  * \brief Convert JSON schema string to EBNF grammar string.
  * \param schema The JSON schema string.
+ * \param any_whitespace Whether to ignore the indentation restrictions, and allow any whitespace.
+ * Default: true.
  * \param indent The number of spaces for indentation. If set to std::nullopt, the output will be
  * in one line. Default: 2.
  * \param separators Two separators used in the schema: comma and colon. Examples: {",", ":"},
@@ -34,10 +36,13 @@ enum class JSONFormat : int {
  * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
  * This helps LLM to generate accurate output in the grammar-guided generation with JSON
  * schema. Default: true.
- * \param json_format Define the root format of the object. If it's JSONFormat::kJSON,
- * then it will generate a fully JSON-style grammar. If it's JSONFormat::kXML, then it will
- * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
- * Default: JSONFormat::kJSON.
+ * \param max_whitespace_cnt The maximum number of whitespace characters for the whitespace
+ * which is used for indentation or JSON elements separation when any_whitespace is True. If
+ * std::nullopt, it means unlimited. Default: std::nullopt.
+ * \param json_format Define the root
+ * format of the object. If it's JSONFormat::kJSON, then it will generate a fully JSON-style
+ * grammar. If it's JSONFormat::kXML, then it will generate a grammar with the root format is
+ * XML-style, while the inner format is JSON-style. Default: JSONFormat::kJSON.
  * \returns The EBNF grammar string.
  */
 
@@ -54,6 +59,8 @@ std::string JSONSchemaToEBNF(
 /*!
  * \brief Convert JSON schema string to EBNF grammar string.
  * \param schema The JSON schema object.
+ * \param any_whitespace Whether to ignore the indentation restrictions, and allow any whitespace.
+ * Default: true.
  * \param indent The number of spaces for indentation. If set to std::nullopt, the output will be
  * in one line. Default: 2.
  * \param separators Two separators used in the schema: comma and colon. Examples: {",", ":"},
@@ -65,6 +72,9 @@ std::string JSONSchemaToEBNF(
  * schema. This is equivalent to setting unevaluatedProperties and unevaluatedItems to false.
  * This helps LLM to generate accurate output in the grammar-guided generation with JSON
  * schema. Default: true.
+ * \param max_whitespace_cnt The maximum number of whitespace characters for the whitespace
+ * which is used for indentation or JSON elements separation when any_whitespace is True. If
+ * std::nullopt, it means unlimited. Default: std::nullopt.
  * \param json_format Define the root format of the object. If it's JSONFormat::kJSON,
  * then it will generate a fully JSON-style grammar. If it's JSONFormat::kXML, then it will
  * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
