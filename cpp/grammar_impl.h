@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fsm.h"
@@ -167,6 +168,56 @@ class Grammar::Impl {
     return {type, data_ptr, data_len};
   }
 
+  /*! \brief Get the grammar_expr with the given id, and copy its data to the given container. */
+  GrammarExpr GetGrammarExprWithDataCopy(
+      int32_t grammar_expr_id, std::vector<int32_t>* data_copy_container
+  ) const {
+    XGRAMMAR_DCHECK(
+        grammar_expr_id >= 0 && grammar_expr_id < static_cast<int32_t>(grammar_expr_indptr_.size())
+    ) << "grammar_expr_id "
+      << grammar_expr_id << " is out of bound";
+    int start_index = grammar_expr_indptr_[grammar_expr_id];
+    auto start_ptr = grammar_expr_data_.data() + start_index;
+    auto type = static_cast<GrammarExprType>(start_ptr[0]);
+    auto data_ptr = start_ptr + 2;
+    auto data_len = start_ptr[1];
+    data_copy_container->assign(data_ptr, data_ptr + data_len);
+    return {type, data_copy_container->data(), data_len};
+  }
+
+  int32_t AddGrammarExpr(const GrammarExpr& grammar_expr) {
+    grammar_expr_indptr_.push_back(grammar_expr_data_.size());
+    grammar_expr_data_.push_back(static_cast<int32_t>(grammar_expr.type));
+    grammar_expr_data_.push_back(grammar_expr.data_len);
+    grammar_expr_data_.insert(
+        grammar_expr_data_.end(), grammar_expr.data, grammar_expr.data + grammar_expr.data_len
+    );
+    return static_cast<int32_t>(grammar_expr_indptr_.size()) - 1;
+  }
+
+  int32_t AddRule(const std::string& rule_name, int32_t body_expr_id) {
+    Rule rule{rule_name, body_expr_id, -1};
+    rules_.push_back(rule);
+    return static_cast<int32_t>(rules_.size()) - 1;
+  }
+
+  void UpdateRuleBody(int32_t rule_id, int32_t body_expr_id) {
+    XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(rules_.size()))
+        << "Rule id " << rule_id << " is out of range.";
+    rules_[rule_id].body_expr_id = body_expr_id;
+  }
+
+  void UpdateLookaheadAssertion(int32_t rule_id, int32_t lookahead_assertion_id) {
+    XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(rules_.size()))
+        << "Rule id " << rule_id << " is out of range.";
+    rules_[rule_id].lookahead_assertion_id = lookahead_assertion_id;
+  }
+
+  void UpdateLookaheadExact(int32_t rule_id, bool is_exact_lookahead = true) {
+    XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(rules_.size()))
+        << "Rule id " << rule_id << " is out of range.";
+    rules_[rule_id].is_exact_lookahead = is_exact_lookahead;
+  }
   /******************* GrammarExpr Getters *******************/
 
   /*! \brief Get the string of the byte string grammar expr. */
