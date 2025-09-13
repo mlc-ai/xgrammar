@@ -258,22 +258,6 @@ class GrammarNormalizer {
 };
 
 /*!
- * \brief Find the union of multiple grammars as a new grammar.
- */
-class GrammarUnionFunctor {
- public:
-  static Grammar Apply(const std::vector<Grammar>& grammars);
-};
-
-/*!
- * \brief Find the concatenation of multiple grammars as a new grammar.
- */
-class GrammarConcatFunctor {
- public:
-  static Grammar Apply(const std::vector<Grammar>& grammars);
-};
-
-/*!
  * \brief Analyze the grammar to find the rules that are allowed to be empty.
  */
 class AllowEmptyRuleAnalyzer {
