@@ -8,10 +8,12 @@
 
 #include <climits>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -400,6 +402,22 @@ class JSONSchemaConverter {
     int min_length = 0;
     int max_length = -1;
     std::pair<std::string, std::string> wrapper;
+    bool operator==(const StringSpec& other) const {
+      return pattern == other.pattern && min_length == other.min_length &&
+             max_length == other.max_length && wrapper == other.wrapper;
+    }
+  };
+
+  struct StringSpecHash {
+    size_t operator()(const StringSpec& spec) const {
+      return HashCombine(
+          std::hash<std::string>()(spec.pattern),
+          spec.min_length,
+          spec.max_length,
+          std::hash<std::string>()(spec.wrapper.first),
+          std::hash<std::string>()(spec.wrapper.second)
+      );
+    }
   };
 
   Result<StringSpec, SchemaError> ParseStringSchema(
@@ -558,6 +576,8 @@ class JSONSchemaConverter {
   std::unordered_map<std::string, std::string> uri_to_rule_cache_;
   // The maximum number of whitespaces allowed when any_whitespace_ is true.
   std::optional<int> max_whitespace_cnt_;
+  // The map from string spec to the rule name.
+  std::unordered_map<StringSpec, std::string, StringSpecHash> string_spec_to_rule_name_and_context_;
 
   const std::string kWhiteSpace =
       max_whitespace_cnt_.has_value()
@@ -1956,22 +1976,48 @@ std::string JSONSchemaConverter::VisitString(
     XGRAMMAR_LOG(FATAL) << std::move(string_spec_result).UnwrapErr().what();
   }
   auto string_spec = std::move(string_spec_result).Unwrap();
-  std::string result;
-  if (!string_spec.wrapper.first.empty()) {
-    result += "\"" + string_spec.wrapper.first + "\" ";
+
+  // Check if we have already generated a rule for this string spec.
+  if (string_spec_to_rule_name_and_context_.find(string_spec) !=
+      string_spec_to_rule_name_and_context_.end()) {
+    const auto& existing_rule_name = string_spec_to_rule_name_and_context_.at(string_spec);
+    return existing_rule_name;
   }
-  result += string_spec.pattern;
+
+  if (string_spec.pattern == "[\"] " + kBasicStringSub && string_spec.min_length == 0 &&
+      string_spec.max_length == -1 && string_spec.wrapper.first.empty() &&
+      string_spec.wrapper.second.empty()) {
+    // It's the creation of the basic string rule.
+    string_spec_to_rule_name_and_context_[string_spec] = kBasicString;
+    return string_spec.pattern;
+  }
+
+  if (string_spec.pattern == kXMLString && string_spec.min_length == 0 &&
+      string_spec.max_length == -1 && string_spec.wrapper.first.empty() &&
+      string_spec.wrapper.second.empty()) {
+    string_spec_to_rule_name_and_context_[string_spec] = kXMLString;
+    return kXMLString;
+  }
+
+  // Generate a new rule name for this string spec.
+  std::string spec_context;
+  if (!string_spec.wrapper.first.empty()) {
+    spec_context += "\"" + string_spec.wrapper.first + "\" ";
+  }
+  spec_context += string_spec.pattern;
   if (string_spec.min_length != 0 || string_spec.max_length != -1) {
     std::string repetition_range;
     repetition_range +=
         "{" + std::to_string(string_spec.min_length) + "," +
         (string_spec.max_length == -1 ? "" : std::to_string(string_spec.max_length)) + "}";
-    result += repetition_range;
+    spec_context += repetition_range;
   }
   if (!string_spec.wrapper.second.empty()) {
-    result += " \"" + string_spec.wrapper.second + "\"";
+    spec_context += " \"" + string_spec.wrapper.second + "\"";
   }
-  return result;
+  std::string spec_rule_name = ebnf_script_creator_.AddRule("string", spec_context);
+  string_spec_to_rule_name_and_context_[string_spec] = spec_rule_name;
+  return spec_rule_name;
 }
 
 std::string JSONSchemaConverter::VisitBoolean(
@@ -3173,6 +3219,7 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
     }
     default: {
       XGRAMMAR_LOG(FATAL) << "Unsupported JSON Format type: " << static_cast<int>(json_format);
+      XGRAMMAR_UNREACHABLE();
     }
   }
 }
