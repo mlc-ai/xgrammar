@@ -10,6 +10,43 @@ from .base import XGRObject, _core
 from .structural_tag import StructuralTag, StructuralTagItem
 
 
+def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]) -> str:
+    """Convert a instance to a string representation. It returns the schema in string format because
+    it's faster to send to C++.
+
+    This function handles different instance input types and converts them to a JSON string:
+    - StructuralTag.
+    - String inputs are returned as-is (assumed to be valid JSON)
+    - Dictionary inputs are converted to JSON strings
+
+    Parameters
+    ----------
+    instance : Union[str, StructuralTag, Dict[str, Any]]
+        The instance to convert, which can be a StructuralTag,
+        a JSON schema string, or a dictionary representing a JSON schema.
+
+    Returns
+    -------
+    str
+        The JSON schema as a string.
+
+    Raises
+    ------
+    ValueError
+        When the instance type is not supported.
+    TypeError
+        When he dictionary is not serializable.
+    """
+    if isinstance(instance, dict):
+        return json.dumps(instance)
+    elif isinstance(instance, str):
+        return instance
+    elif isinstance(instance, StructuralTag):
+        return instance.model_dump_json()
+    else:
+        raise ValueError("Invalid instance type")
+
+
 def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
     """Convert a schema to a string representation. It returns the schema in string format because
     it's faster to send to C++.
@@ -32,8 +69,10 @@ def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) 
 
     Raises
     ------
-    ValueError, TypeError
-        If the schema type is not supported, or the dictionary is not serializable.
+    ValueError
+        When the schema type is not supported.
+    TypeError
+        When the dictionary is not serializable.
     """
     if isinstance(schema, type) and issubclass(schema, BaseModel):
         if hasattr(schema, "model_json_schema"):
@@ -71,14 +110,17 @@ def _get_structural_tag_str_from_args(args: List[Any], kwargs: Dict[str, Any]) -
     TypeError
         When the arguments are invalid.
     """
-    if len(args) == 1 and isinstance(args[0], (StructuralTag, str, dict)):
-        return _convert_schema_to_str(args[0])
+    if len(args) == 1:
+        if isinstance(args[0], (str, dict, StructuralTag)):
+            return _convert_instance_to_str(args[0])
+        else:
+            raise TypeError("Invalid argument type for from_structural_tag")
     elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], list):
         return StructuralTag.from_legacy_structural_tag(args[0], args[1]).model_dump_json(
             indent=None
         )
     elif "structural_tag" in kwargs:
-        return _convert_schema_to_str(kwargs["structural_tag"])
+        return _convert_instance_to_str(kwargs["structural_tag"])
     elif "tags" in kwargs and "triggers" in kwargs:
         return StructuralTag.from_legacy_structural_tag(
             kwargs["tags"], kwargs["triggers"]
