@@ -32,8 +32,10 @@ def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]
 
     Raises
     ------
-    ValueError, TypeError
-        If the instance type is not supported, or the dictionary is not serializable.
+    ValueError
+        When the instance type is not supported.
+    TypeError
+        When he dictionary is not serializable.
     """
     if isinstance(instance, dict):
         return json.dumps(instance)
@@ -67,8 +69,10 @@ def _convert_schema_to_str(schema: Union[str, Type[BaseModel], Dict[str, Any]]) 
 
     Raises
     ------
-    ValueError, TypeError
-        If the schema type is not supported, or the dictionary is not serializable.
+    ValueError
+        When the schema type is not supported.
+    TypeError
+        When the dictionary is not serializable.
     """
     if isinstance(schema, type) and issubclass(schema, BaseModel):
         if hasattr(schema, "model_json_schema"):
