@@ -177,6 +177,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._get_masked_tokens_from_bitmask"><code class="docutils literal notranslate"><span class="pre">_get_masked_tokens_from_bitmask()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._is_single_token_bitmask"><code class="docutils literal notranslate"><span class="pre">_is_single_token_bitmask()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._bool_mask_to_bitmask"><code class="docutils literal notranslate"><span class="pre">_bool_mask_to_bitmask()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._bitmask_to_bool_mask"><code class="docutils literal notranslate"><span class="pre">_bitmask_to_bool_mask()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._get_matcher_from_grammar_and_tokenizer_info"><code class="docutils literal notranslate"><span class="pre">_get_matcher_from_grammar_and_tokenizer_info()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._get_allow_empty_rule_ids"><code class="docutils literal notranslate"><span class="pre">_get_allow_empty_rule_ids()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#xgrammar.testing._generate_range_regex"><code class="docutils literal notranslate"><span class="pre">_generate_range_regex()</span></code></a></li>
@@ -314,22 +315,25 @@ change. Don’t use them in production.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.testing._bool_mask_to_bitmask" title="xgrammar.testing._bool_mask_to_bitmask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_bool_mask_to_bitmask</span></code></a>(bool_mask)</p></td>
 <td><p>Get the bitmask from bool mask.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing._get_matcher_from_grammar_and_tokenizer_info" title="xgrammar.testing._get_matcher_from_grammar_and_tokenizer_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_get_matcher_from_grammar_and_tokenizer_info</span></code></a>(grammar)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing._bitmask_to_bool_mask" title="xgrammar.testing._bitmask_to_bool_mask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_bitmask_to_bool_mask</span></code></a>(bit_mask[, vocab_size])</p></td>
+<td><p>Convert a bitmask tensor to a boolean mask tensor.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.testing._get_matcher_from_grammar_and_tokenizer_info" title="xgrammar.testing._get_matcher_from_grammar_and_tokenizer_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_get_matcher_from_grammar_and_tokenizer_info</span></code></a>(grammar)</p></td>
 <td><p>Create a GrammarMatcher from a grammar and tokenizer info.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.testing._get_allow_empty_rule_ids" title="xgrammar.testing._get_allow_empty_rule_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_get_allow_empty_rule_ids</span></code></a>(compiled_grammar)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing._get_allow_empty_rule_ids" title="xgrammar.testing._get_allow_empty_rule_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_get_allow_empty_rule_ids</span></code></a>(compiled_grammar)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing._generate_range_regex" title="xgrammar.testing._generate_range_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_generate_range_regex</span></code></a>([start, end])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.testing._generate_range_regex" title="xgrammar.testing._generate_range_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_generate_range_regex</span></code></a>([start, end])</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.testing._generate_float_regex" title="xgrammar.testing._generate_float_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_generate_float_regex</span></code></a>([start, end])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing._generate_float_regex" title="xgrammar.testing._generate_float_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_generate_float_regex</span></code></a>([start, end])</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing._print_grammar_fsms" title="xgrammar.testing._print_grammar_fsms"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_print_grammar_fsms</span></code></a>(grammar)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.testing._print_grammar_fsms" title="xgrammar.testing._print_grammar_fsms"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_print_grammar_fsms</span></code></a>(grammar)</p></td>
 <td><p>Print the FSMs of the grammar.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.testing._qwen_xml_tool_calling_to_ebnf" title="xgrammar.testing._qwen_xml_tool_calling_to_ebnf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_qwen_xml_tool_calling_to_ebnf</span></code></a>(schema)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing._qwen_xml_tool_calling_to_ebnf" title="xgrammar.testing._qwen_xml_tool_calling_to_ebnf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_qwen_xml_tool_calling_to_ebnf</span></code></a>(schema)</p></td>
 <td><p>Convert Qwen XML tool calling schema to EBNF.</p></td>
 </tr>
 </tbody>
@@ -517,6 +521,26 @@ while False means the token is rejected.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><strong>bitmask</strong> – The rejected token bitmask.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.8)">torch.Tensor</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.testing._bitmask_to_bool_mask">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.testing.</span></span><span class="sig-name descname"><span class="pre">_bitmask_to_bool_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bit_mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.8)"><span class="pre">torch.Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.8)"><span class="pre">torch.Tensor</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/testing.html#_bitmask_to_bool_mask"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.testing._bitmask_to_bool_mask" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a bitmask tensor to a boolean mask tensor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bit_mask</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.8)"><em>torch.Tensor</em></a>) – The bitmask tensor to convert. Should be on CPU and of type int32.</p></li>
+<li><p><strong>vocab_size</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>]</em><em>, </em><em>default: None</em>) – The size of the vocabulary. If provided, the output mask will be cut to this size.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>bool_mask</strong> – The converted boolean mask tensor.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.8)">torch.Tensor</a></p>
