@@ -262,6 +262,42 @@ def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
     return bitmask.to(torch.int32)
 
 
+def _bitmask_to_bool_mask(bit_mask: torch.Tensor, vocab_size: Optional[int] = None) -> torch.Tensor:
+    """
+    Convert a bitmask tensor to a boolean mask tensor.
+
+    Parameters
+    ----------
+    bit_mask : torch.Tensor
+        The bitmask tensor to convert. Should be on CPU and of type int32.
+    vocab_size : Optional[int], default: None
+        The size of the vocabulary. If provided, the output mask will be cut to this size.
+
+    Returns
+    -------
+    bool_mask : torch.Tensor
+        The converted boolean mask tensor.
+    """
+
+    # Validate input.
+    if bit_mask.device.type != "cpu":
+        raise ValueError("bit_mask should be on CPU.")
+    if bit_mask.dtype != bitmask_dtype:
+        raise ValueError("bit_mask should be of type torch.int32.")
+
+    if vocab_size is None:
+        vocab_size = bit_mask.shape[1] * 32
+    if vocab_size > bit_mask.shape[1] * 32:
+        raise ValueError(
+            "vocab_size should be less than or equal to the size represented by bit_mask."
+        )
+
+    bool_mask = torch.zeros((bit_mask.shape[0], vocab_size), dtype=torch.bool)
+    for i in range(vocab_size):
+        bool_mask[:, i] = (bit_mask[:, i // 32] & (1 << (i % 32))) != 0
+    return bool_mask
+
+
 def _get_matcher_from_grammar_and_tokenizer_info(
     grammar: Union[Grammar, str], tokenizer_info: Optional[TokenizerInfo] = None, **kwargs
 ) -> GrammarMatcher:
