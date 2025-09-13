@@ -72,8 +72,7 @@ def check_stag_with_instance(
 const_string_stag_grammar = [
     (
         {"type": "const_string", "value": "Hello!"},
-        r"""const_string ::= (("Hello!"))
-root ::= ((const_string))
+        r"""root ::= (("Hello!"))
 """,
     )
 ]
@@ -178,8 +177,7 @@ sequence_stag_grammar = [
                 {"type": "json_schema", "json_schema": {"type": "number"}},
             ],
         },
-        r"""const_string ::= (("Hello!"))
-basic_number ::= ((basic_number_7 basic_number_3 basic_number_6))
+        r"""basic_number ::= ((basic_number_7 basic_number_3 basic_number_6))
 root ::= ((basic_number))
 basic_number_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -188,7 +186,7 @@ basic_number_4 ::= ("" | ([+\-])) (=(basic_number_5))
 basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
-sequence ::= ((const_string root))
+sequence ::= (("Hello!" root))
 root_1 ::= ((sequence))
 """,
     )
@@ -222,8 +220,7 @@ or_stag_grammar = [
                 {"type": "json_schema", "json_schema": {"type": "number"}},
             ],
         },
-        r"""const_string ::= (("Hello!"))
-basic_number ::= ((basic_number_7 basic_number_3 basic_number_6))
+        r"""basic_number ::= ((basic_number_7 basic_number_3 basic_number_6))
 root ::= ((basic_number))
 basic_number_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -232,7 +229,7 @@ basic_number_4 ::= ("" | ([+\-])) (=(basic_number_5))
 basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
-or ::= ((const_string) | (root))
+or ::= (("Hello!") | (root))
 root_1 ::= ((or))
 """,
     )
@@ -266,7 +263,7 @@ tag_stag_grammar = [
             "end": "END",
         },
         r"""basic_number ::= ((basic_number_7 basic_number_3 basic_number_6))
-root ::= ((basic_number))
+root ::= ((basic_number)) (=("END"))
 basic_number_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
 basic_number_3 ::= ("" | ("." basic_number_2)) (=(basic_number_6))
@@ -334,8 +331,7 @@ def test_any_text_format(
 any_text_only_stag_grammar = [
     (
         {"type": "any_text"},
-        r"""any_text ::= (([\0-\U0010ffff]*))
-root ::= ((any_text))
+        r"""root ::= (([\0-\U0010ffff]*))
 """,
     )
 ]
@@ -370,8 +366,8 @@ triggered_tag_stag_grammar = [
     (
         0,
         _get_triggered_tag_format(at_least_one=False, stop_after_first=False),
-        r"""const_string ::= (("L1"))
-const_string_1 ::= (("L2"))
+        r"""const_string ::= (("L1")) (=("A"))
+const_string_1 ::= (("L2")) (=("A"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
@@ -388,7 +384,7 @@ root ::= ((triggered_tags))
         r"""const_string ::= (("L1"))
 const_string_1 ::= (("L2"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
-triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
+triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A")) (=(triggered_tags_sub))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
@@ -402,8 +398,8 @@ root ::= ((triggered_tags))
     (
         2,
         _get_triggered_tag_format(at_least_one=False, stop_after_first=True),
-        r"""const_string ::= (("L1"))
-const_string_1 ::= (("L2"))
+        r"""const_string ::= (("L1")) (=("A"))
+const_string_1 ::= (("L2")) (=("A"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
@@ -417,8 +413,8 @@ root ::= ((triggered_tags))
     (
         3,
         _get_triggered_tag_format(at_least_one=True, stop_after_first=True),
-        r"""const_string ::= (("L1"))
-const_string_1 ::= (("L2"))
+        r"""const_string ::= (("L1")) (=("A"))
+const_string_1 ::= (("L2")) (=("A"))
 triggered_tags ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 root ::= ((triggered_tags))
 """,
@@ -466,8 +462,7 @@ test_triggered_tags_corner_case_data = [
                 }
             ],
         },
-        r"""const_string ::= (("[TEXT]"))
-triggered_tags_group ::= (("" const_string "<end>"))
+        r"""triggered_tags_group ::= (("[TEXT]" "<end>"))
 triggered_tags ::= TagDispatch(
   ("<start>", triggered_tags_group),
   stop_eos=true,
@@ -527,8 +522,8 @@ triggered_tag_with_outside_tag_stag_grammar = [
     (
         0,
         _get_triggered_tag_with_outside_tag(at_least_one=False, stop_after_first=False),
-        r"""const_string ::= (("L1"))
-const_string_1 ::= (("L2"))
+        r"""const_string ::= (("L1")) (=("A"))
+const_string_1 ::= (("L2")) (=("A"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
@@ -546,7 +541,7 @@ root ::= ((tag))
         r"""const_string ::= (("L1"))
 const_string_1 ::= (("L2"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
-triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
+triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A")) (=(triggered_tags_sub))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
@@ -561,8 +556,8 @@ root ::= ((tag))
     (
         2,
         _get_triggered_tag_with_outside_tag(at_least_one=False, stop_after_first=True),
-        r"""const_string ::= (("L1"))
-const_string_1 ::= (("L2"))
+        r"""const_string ::= (("L1")) (=("A"))
+const_string_1 ::= (("L2")) (=("A"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
@@ -577,9 +572,9 @@ root ::= ((tag))
     (
         3,
         _get_triggered_tag_with_outside_tag(at_least_one=True, stop_after_first=True),
-        r"""const_string ::= (("L1"))
-const_string_1 ::= (("L2"))
-triggered_tags_sub ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
+        r"""const_string ::= (("L1")) (=("A"))
+const_string_1 ::= (("L2")) (=("A"))
+triggered_tags_sub ::= (("A1" const_string "A") | ("A2" const_string_1 "A")) (=("end"))
 triggered_tags ::= ((triggered_tags_sub "end"))
 tag ::= (("begin" triggered_tags))
 root ::= ((tag))
@@ -632,25 +627,25 @@ tags_with_separator_stag_grammar = [
     (
         0,
         _get_tags_with_separator_format(at_least_one=False, stop_after_first=False),
-        r"""const_string ::= (("L1"))
+        r"""const_string ::= (("L1")) (=("A"))
 tag ::= (("A1" const_string "A"))
-const_string_1 ::= (("L2"))
+const_string_1 ::= (("L2")) (=("A"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
-tags_with_separator_sub ::= (("AA" tags_with_separator_tags tags_with_separator_sub) | "")
-tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub) | "")
+tags_with_separator_sub ::= ("" | ("AA" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
 """,
     ),
     (
         1,
         _get_tags_with_separator_format(at_least_one=True, stop_after_first=False),
-        r"""const_string ::= (("L1"))
+        r"""const_string ::= (("L1")) (=("A"))
 tag ::= (("A1" const_string "A"))
-const_string_1 ::= (("L2"))
+const_string_1 ::= (("L2")) (=("A"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
-tags_with_separator_sub ::= (("AA" tags_with_separator_tags tags_with_separator_sub) | "")
+tags_with_separator_sub ::= ("" | ("AA" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
 """,
@@ -658,21 +653,21 @@ root ::= ((tags_with_separator))
     (
         2,
         _get_tags_with_separator_format(at_least_one=False, stop_after_first=True),
-        r"""const_string ::= (("L1"))
+        r"""const_string ::= (("L1")) (=("A"))
 tag ::= (("A1" const_string "A"))
-const_string_1 ::= (("L2"))
+const_string_1 ::= (("L2")) (=("A"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
-tags_with_separator ::= ((tags_with_separator_tags) | "")
+tags_with_separator ::= ("" | (tags_with_separator_tags))
 root ::= ((tags_with_separator))
 """,
     ),
     (
         3,
         _get_tags_with_separator_format(at_least_one=True, stop_after_first=True),
-        r"""const_string ::= (("L1"))
+        r"""const_string ::= (("L1")) (=("A"))
 tag ::= (("A1" const_string "A"))
-const_string_1 ::= (("L2"))
+const_string_1 ::= (("L2")) (=("A"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
 tags_with_separator ::= ((tags_with_separator_tags))
@@ -729,9 +724,9 @@ tags_with_separator_with_outside_tag_stag_grammar = [
         _get_tags_with_separator_format_with_outside_tag(
             at_least_one=False, stop_after_first=False
         ),
-        r"""const_string ::= (("L1"))
+        r"""const_string ::= (("L1")) (=("A"))
 tag ::= (("A1" const_string "A"))
-const_string_1 ::= (("L2"))
+const_string_1 ::= (("L2")) (=("A"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
 tags_with_separator_sub ::= (("AA" tags_with_separator_tags tags_with_separator_sub) | ("end"))
@@ -743,9 +738,9 @@ root ::= ((tag_2))
     (
         1,
         _get_tags_with_separator_format_with_outside_tag(at_least_one=True, stop_after_first=False),
-        r"""const_string ::= (("L1"))
+        r"""const_string ::= (("L1")) (=("A"))
 tag ::= (("A1" const_string "A"))
-const_string_1 ::= (("L2"))
+const_string_1 ::= (("L2")) (=("A"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
 tags_with_separator_sub ::= (("AA" tags_with_separator_tags tags_with_separator_sub) | ("end"))
@@ -757,11 +752,11 @@ root ::= ((tag_2))
     (
         2,
         _get_tags_with_separator_format_with_outside_tag(at_least_one=False, stop_after_first=True),
-        r"""const_string ::= (("L1"))
+        r"""const_string ::= (("L1")) (=("A"))
 tag ::= (("A1" const_string "A"))
-const_string_1 ::= (("L2"))
+const_string_1 ::= (("L2")) (=("A"))
 tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= ((tag) | (tag_1)) (=("end"))
 tags_with_separator ::= ((tags_with_separator_tags "end") | ("end"))
 tag_2 ::= (("begin" tags_with_separator))
 root ::= ((tag_2))
@@ -770,11 +765,11 @@ root ::= ((tag_2))
     (
         3,
         _get_tags_with_separator_format_with_outside_tag(at_least_one=True, stop_after_first=True),
-        r"""const_string ::= (("L1"))
+        r"""const_string ::= (("L1")) (=("A"))
 tag ::= (("A1" const_string "A"))
-const_string_1 ::= (("L2"))
+const_string_1 ::= (("L2")) (=("A"))
 tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= ((tag) | (tag_1)) (=("end"))
 tags_with_separator ::= ((tags_with_separator_tags "end"))
 tag_2 ::= (("begin" tags_with_separator))
 root ::= ((tag_2))
@@ -1049,13 +1044,12 @@ end_string_detector_test_data = [
             },
             "end": "<end>",
         },
-        r"""const_string ::= (("[TEXT]"))
-any_text ::= TagDispatch(
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end>"),
   loop_after_dispatch=false
 )
-sequence ::= ((const_string any_text))
+sequence ::= (("[TEXT]" any_text))
 tag ::= (("<start>" sequence))
 root ::= ((tag))
 """,
@@ -1105,8 +1099,8 @@ root ::= ((tag))
   stop_str=("<end2>"),
   loop_after_dispatch=false
 )
-triggered_tags_group ::= ((">" any_text ""))
-triggered_tags_first ::= (("<start2>" any_text ""))
+triggered_tags_group ::= ((">" any_text))
+triggered_tags_first ::= (("<start2>" any_text)) (=(triggered_tags_sub))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=false,
@@ -1114,13 +1108,12 @@ triggered_tags_sub ::= TagDispatch(
   loop_after_dispatch=true
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
-const_string ::= (("[TEXT2]"))
 any_text_1 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end>"),
   loop_after_dispatch=false
 )
-sequence ::= ((const_string any_text_1))
+sequence ::= (("[TEXT2]" any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end3>"),
@@ -1192,8 +1185,8 @@ root ::= ((tag_1))
   stop_str=("<end2>"),
   loop_after_dispatch=false
 )
-triggered_tags_group ::= ((">" any_text ""))
-triggered_tags_first ::= (("<start2>" any_text ""))
+triggered_tags_group ::= ((">" any_text))
+triggered_tags_first ::= (("<start2>" any_text)) (=(triggered_tags_sub))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=true,
@@ -1201,9 +1194,8 @@ triggered_tags_sub ::= TagDispatch(
   loop_after_dispatch=true
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
-const_string ::= (("[TEXT]"))
 any_text_1 ::= (([\0-\U0010ffff]*))
-sequence ::= ((const_string any_text_1))
+sequence ::= (("[TEXT]" any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end3>"),
@@ -1211,11 +1203,10 @@ any_text_2 ::= TagDispatch(
 )
 tag ::= (("<start3>" any_text_2))
 tags_with_separator_tags ::= ((tag))
-tags_with_separator_sub ::= (("<sep>" tags_with_separator_tags tags_with_separator_sub) | "")
+tags_with_separator_sub ::= ("" | ("<sep>" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
-const_string_1 ::= (("[TEXT2]"))
 any_text_3 ::= (([\0-\U0010ffff]*))
-sequence_1 ::= ((const_string_1 any_text_3))
+sequence_1 ::= (("[TEXT2]" any_text_3))
 or ::= ((tags_with_separator) | (sequence_1))
 or_1 ::= ((triggered_tags) | (sequence) | (or))
 root ::= ((or_1))
