@@ -640,8 +640,7 @@ class GrammarCompilerNoCache {
   /*! \brief The maximum number of threads to use. */
   const int max_threads_;
   /*! \brief Mapping from the rule_id to the definite accepted token mask. */
-  std::unordered_map<int32_t, DynamicBitset>
-      definite_accepted_in_tagdispatch_since_second_char_cache_;
+  std::unordered_map<int32_t, DynamicBitset> definite_accepted_token_ids_since_second_char_cache_;
 };
 
 CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar grammar) {
@@ -697,7 +696,7 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
         definite_accepted_tokens_since_second_char.Set(i);
       }
     }
-    definite_accepted_in_tagdispatch_since_second_char_cache_[i] =
+    definite_accepted_token_ids_since_second_char_cache_[i] =
         definite_accepted_tokens_since_second_char;
   }
   // Step 3. Compute the adaptive token mask cache
@@ -719,7 +718,7 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
 
   auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
-        grammar, state, &definite_accepted_in_tagdispatch_since_second_char_cache_, false
+        grammar, state, &definite_accepted_token_ids_since_second_char_cache_, false
     );
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
         tokenizer_info_.GetVocabSize(),
