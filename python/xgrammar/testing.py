@@ -233,7 +233,7 @@ def _is_single_token_bitmask(
     )
 
 
-def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
+def bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
     """Get the bitmask from bool mask. If the bool mask does not align with the 32-bit block
     size, it will add extra 1 paddings.
 
@@ -262,7 +262,7 @@ def _bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
     return bitmask.to(torch.int32)
 
 
-def _bitmask_to_bool_mask(bit_mask: torch.Tensor, vocab_size: Optional[int] = None) -> torch.Tensor:
+def bitmask_to_bool_mask(bit_mask: torch.Tensor, vocab_size: Optional[int] = None) -> torch.Tensor:
     """
     Convert a bitmask tensor to a boolean mask tensor.
 
