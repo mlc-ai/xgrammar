@@ -36,6 +36,6 @@ body:
       description: |
         Please describe the alternatives you have considered.
       placeholder: |
-        A clear and concise description of the alternatives you have considered.
+        A clear and concise description of the alternatives you have considered, if any.
     validations:
       required: false
