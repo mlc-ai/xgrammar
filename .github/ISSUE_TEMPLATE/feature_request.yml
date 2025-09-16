@@ -3,11 +3,6 @@ description: Suggest an idea for this project
 title: "[Feature] "
 labels: ['Feature']
 
-name: 🐛 Bug Report
-description: Create a report to help us reproduce and fix the bug
-title: "[Bug] "
-labels: ['Bug']
-
 body:
   - type: checkboxes
     attributes:
