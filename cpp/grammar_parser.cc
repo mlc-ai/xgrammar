@@ -827,7 +827,7 @@ int32_t EBNFParser::HandleRepetitionRange(
   // Handle the {lower, upper} part, where 4 <= lower <= upper.
   const auto repeat_name = cur_rule_name_ + "_repeat_";
   XGRAMMAR_DCHECK(lower >= 4 && upper >= lower);
-  int cnt = 0;
+  int cnt = 1;
   if (upper != 4) {
     auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
     auto new_rule_id =
