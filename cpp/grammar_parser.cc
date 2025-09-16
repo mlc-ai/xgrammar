@@ -8,6 +8,7 @@
 #include <picojson.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -759,11 +760,50 @@ int32_t EBNFParser::HandleQuestionQuantifier(int32_t grammar_expr_id) {
 int32_t EBNFParser::HandleRepetitionRange(
     const int32_t grammar_expr_id, int64_t lower, int64_t upper
 ) {
-  bool is_unbounded = false;
-  int32_t new_element;
+  XGRAMMAR_DCHECK(lower >= 0);
+  XGRAMMAR_DCHECK(upper == -1 || upper >= lower);
+
+  // Case 1. upper is bounded and small (<=4), unzip the repetition.
+  if (upper != -1 && upper <= 4) {
+    std::vector<int32_t> choices;
+    if (lower == 0) {
+      choices.push_back(builder_.AddEmptyStr());
+      lower = 1;  // We have already handled the empty string case.
+    }
+    for (int64_t count = lower; count <= upper; ++count) {
+      std::vector<int32_t> sequence;
+      for (int64_t i = 0; i < count; ++i) {
+        sequence.push_back(grammar_expr_id);
+      }
+      choices.push_back(builder_.AddSequence(sequence));
+    }
+    return builder_.AddChoices(choices);
+  }
+
+  // Case 2. upper is unbounded or large.
+
+  // Case 2.1. lower is smaller than 4. Transform {lower, upper} into:
+  // {4, upper} | {lower} | ... | {3}.
+  std::vector<int32_t> choices;
+  if (lower < 4) {
+    if (lower == 0) {
+      choices.push_back(builder_.AddEmptyStr());
+      lower = 1;
+    }
+    for (; lower < 4; ++lower) {
+      std::vector<int32_t> sequence;
+      for (int64_t i = 0; i < lower; ++i) {
+        sequence.push_back(grammar_expr_id);
+      }
+      choices.push_back(builder_.AddSequence(sequence));
+    }
+  }
+
+  std::optional<int32_t> infinite_repetition_id = std::nullopt;
+  std::vector<int32_t> repeated_sequence;
+  // Now, we transform {lower, upper} into {max{4, lower}, upper}.
+  // Case 2.2 upper is unbounded. We will transform it into {lower} {0, inf}.
   if (upper == -1) {
-    // The repeation is unbounded, e.g. {2,}
-    is_unbounded = true;
     const auto& rule_expr = builder_.GetGrammarExpr(grammar_expr_id);
     if (rule_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass) {
       std::vector<GrammarBuilder::CharacterClassElement> character_ranges;
@@ -771,7 +811,7 @@ int32_t EBNFParser::HandleRepetitionRange(
       for (int i = 1; i < static_cast<int>(rule_expr.size()); i += 2) {
         character_ranges.push_back({rule_expr[i], rule_expr[i + 1]});
       }
-      new_element = builder_.AddCharacterClassStar(character_ranges, is_negative);
+      infinite_repetition_id = builder_.AddCharacterClassStar(character_ranges, is_negative);
     } else {
       const auto& unbounded_rule_id =
           builder_.AddEmptyRule(builder_.GetNewRuleName(cur_rule_name_ + "_repeat_inf"));
@@ -779,60 +819,43 @@ int32_t EBNFParser::HandleRepetitionRange(
           builder_.AddSequence({grammar_expr_id, builder_.AddRuleRef(unbounded_rule_id)});
       int recursion_choice = builder_.AddChoices({builder_.AddEmptyStr(), recursion_sequence});
       builder_.UpdateRuleBody(unbounded_rule_id, recursion_choice);
-      new_element = builder_.AddRuleRef(unbounded_rule_id);
+      infinite_repetition_id = builder_.AddRuleRef(unbounded_rule_id);
     }
     upper = lower;
   }
-  std::vector<int32_t> elements;
+
+  // Handle the {lower, upper} part, where 4 <= lower <= upper.
   const auto repeat_name = cur_rule_name_ + "_repeat_";
-  int cnt = 1;
-  int splited_count = lower >= 4 ? 4 : lower;
-  int nullable_splited_count = 0;
-  if (splited_count != 4) {
-    nullable_splited_count =
-        (upper - lower) >= (4 - splited_count) ? 4 - splited_count : upper - lower;
-  }
-  // The repetition sentence.
-  if (upper != (splited_count + nullable_splited_count)) {
+  int cnt = 0;
+  auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
+  auto new_rule_id =
+      builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
+  repeated_sequence.push_back(builder_.AddRepeat(new_rule_id, lower - 4, upper - 4));
+
+  for (int i = 0; i < 4; ++i) {
     auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
     auto new_rule_id =
         builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
-    elements.push_back(builder_.AddRepeat(
-        new_rule_id, lower - splited_count, upper - splited_count - nullable_splited_count
-    ));
-  }
-  // The last split_count exprs.
-
-  // The nullable exprs.
-  for (int i = 0; i < nullable_splited_count; i++) {
-    auto new_grammar_expr_id =
-        builder_.AddChoices({builder_.AddEmptyStr(), builder_.AddSequence({grammar_expr_id})});
-    auto new_rule_id =
-        builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
-    elements.push_back(builder_.AddRuleRef(new_rule_id));
+    repeated_sequence.push_back(builder_.AddRuleRef(new_rule_id));
   }
 
-  for (int i = 0; i < splited_count; i++) {
-    auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
-    auto new_rule_id =
-        builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
-    elements.push_back(builder_.AddRuleRef(new_rule_id));
-  }
-  if (is_unbounded) {
-    elements.push_back(new_element);
-  }
-  // Add the lookahead elements
-  std::vector<int32_t> lookahead_elements = elements;
-  if (elements.empty()) {
-    return builder_.AddEmptyStr();
-  }
-  for (int64_t i = 0; i < static_cast<int64_t>(elements.size() - 1); i++) {
+  // Update the lookahead information of the new rules.
+  std::vector<int32_t> lookahead_elements = repeated_sequence;
+  for (int64_t i = 0; i < static_cast<int64_t>(repeated_sequence.size() - 1); i++) {
     lookahead_elements.erase(lookahead_elements.begin());
     builder_.UpdateLookaheadAssertion(
-        builder_.GetGrammarExpr(elements[i])[0], builder_.AddSequence(lookahead_elements)
+        builder_.GetGrammarExpr(repeated_sequence[i])[0], builder_.AddSequence(lookahead_elements)
     );
   }
-  return builder_.AddSequence(elements);
+
+  // If we have infinite repetition part, add it to the sequence.
+  if (infinite_repetition_id.has_value()) {
+    repeated_sequence.push_back(infinite_repetition_id.value());
+  }
+
+  // Add the sequence to choices.
+  choices.push_back(builder_.AddSequence(repeated_sequence));
+  return builder_.AddChoices(choices);
 }
 
 int32_t EBNFParser::ParseElementWithQuantifier() {
