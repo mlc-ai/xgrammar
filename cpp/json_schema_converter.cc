@@ -3255,13 +3255,60 @@ std::string JSONSchemaConverter::VisitObject(
   }
   indentManager_->StartIndent();
 
-  if (object_spec.pattern_properties.size() > 0 ||
-      !object_spec.property_names.is<picojson::null>()) {
-    // Case 1: patternProperties or propertyNames is difined
+  if (object_spec.properties.size() > 0) {
+    //  Case 1: properties are defined
+    //  Notes: patternProperties or propertyNames is ignored when properties are defined
+    result += " " + GetPartialRuleForProperties(
+                        object_spec.properties,
+                        object_spec.required_properties,
+                        additional_property,
+                        rule_name,
+                        additional_suffix,
+                        object_spec.min_properties,
+                        object_spec.max_properties,
+                        json_format
+                    );
+    could_be_empty = object_spec.required_properties.empty() && object_spec.min_properties == 0;
+  } else if (!additional_property.is<picojson::null>() &&
+             (!additional_property.is<bool>() || additional_property.get<bool>())) {
+    // Case 2: no properties are defined and additional properties are allowed
+    //  Notes: patternProperties or propertyNames is ignored when additional properties are allowed
+    if (object_spec.max_properties != 0) {
+      std::string other_property_pattern;
+      switch (json_format) {
+        case (JSONFormat::kJSON): {
+          other_property_pattern += GetOtherPropertyPattern(
+              kBasicString, additional_property, rule_name, additional_suffix
+          );
+          result += " " + NextSeparator() + " " + other_property_pattern + " ";
+          break;
+        }
+        case (JSONFormat::kXML): {
+          other_property_pattern += GetOtherPropertyPattern(
+              kXMLVariableName, additional_property, rule_name, additional_suffix, JSONFormat::kXML
+          );
+          result += " " + other_property_pattern + " ";
+          break;
+        }
+      }
+      if (object_spec.max_properties != 0) {
+        result += GetPropertyWithNumberConstrains(
+                      NextSeparator() + " " + other_property_pattern,
+                      object_spec.min_properties,
+                      object_spec.max_properties,
+                      1
+                  ) +
+                  " " + NextSeparator(true);
+      }
+    }
+    could_be_empty = object_spec.min_properties == 0;
+  } else if (object_spec.pattern_properties.size() > 0 ||
+             !object_spec.property_names.is<picojson::null>()) {
+    // Case 3: patternProperties or propertyNames is difined
     // TODO: Here we only handle the case that additionalProperties=False
-    // TODO: The coexistence of properties, required, etc. has not been addressed yet,
-    // as it may cause schema conflicts
     // TODO: The situation of duplicate keys has not been resolved yet
+    // Notes: The priority of patternProperties is higher than propertyNames, i.e.,
+    //        if patternProperties is defined, propertyNames is ignored
 
     // Initialize the beginning sequence of a property.
     std::string beg_seq;
@@ -3341,51 +3388,6 @@ std::string JSONSchemaConverter::VisitObject(
       }
       could_be_empty = object_spec.min_properties == 0;
     }
-  } else if (object_spec.properties.size() > 0) {
-    //  Case 2: properties are defined
-    result += " " + GetPartialRuleForProperties(
-                        object_spec.properties,
-                        object_spec.required_properties,
-                        additional_property,
-                        rule_name,
-                        additional_suffix,
-                        object_spec.min_properties,
-                        object_spec.max_properties,
-                        json_format
-                    );
-    could_be_empty = object_spec.required_properties.empty() && object_spec.min_properties == 0;
-  } else if (!additional_property.is<picojson::null>() &&
-             (!additional_property.is<bool>() || additional_property.get<bool>())) {
-    // Case 3: no properties are defined and additional properties are allowed
-    if (object_spec.max_properties != 0) {
-      std::string other_property_pattern;
-      switch (json_format) {
-        case (JSONFormat::kJSON): {
-          other_property_pattern += GetOtherPropertyPattern(
-              kBasicString, additional_property, rule_name, additional_suffix
-          );
-          result += " " + NextSeparator() + " " + other_property_pattern + " ";
-          break;
-        }
-        case (JSONFormat::kXML): {
-          other_property_pattern += GetOtherPropertyPattern(
-              kXMLVariableName, additional_property, rule_name, additional_suffix, JSONFormat::kXML
-          );
-          result += " " + other_property_pattern + " ";
-          break;
-        }
-      }
-      if (object_spec.max_properties != 0) {
-        result += GetPropertyWithNumberConstrains(
-                      NextSeparator() + " " + other_property_pattern,
-                      object_spec.min_properties,
-                      object_spec.max_properties,
-                      1
-                  ) +
-                  " " + NextSeparator(true);
-      }
-    }
-    could_be_empty = object_spec.min_properties == 0;
   }
 
   indentManager_->EndIndent();
