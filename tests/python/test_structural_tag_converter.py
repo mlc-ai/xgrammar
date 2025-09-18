@@ -262,14 +262,14 @@ tag_stag_grammar = [
             "content": {"type": "json_schema", "json_schema": {"type": "number"}},
             "end": "END",
         },
-        r"""basic_number ::= ((basic_number_7 basic_number_3 basic_number_6))
+        r"""basic_number ::= ((basic_number_7 basic_number_3 basic_number_6)) (=("END"))
 root ::= ((basic_number)) (=("END"))
 basic_number_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9])) (=(basic_number_6))
 basic_number_3 ::= ("" | ("." basic_number_2)) (=(basic_number_6))
 basic_number_4 ::= ("" | ([+\-])) (=(basic_number_5))
-basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
-basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9])) (=("END"))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5)) (=("END"))
 basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
 tag ::= (("BEG" root "END"))
 root_1 ::= ((tag))

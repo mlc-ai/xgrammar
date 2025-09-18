@@ -579,7 +579,6 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     if (root_grammar_expr.type == GrammarExprType::kTagDispatch) {
       return grammar;
     }
-    std::vector<int32_t> lookahead_assertion_sequence_ids(grammar->NumRules(), -1);
     for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
       auto rule = grammar->GetRule(i);
       if (i == grammar->GetRootRuleId()) {
@@ -587,27 +586,24 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       }
       if (rule.lookahead_assertion_id != -1) {
         builder_->UpdateLookaheadExact(i, IsExactLookaheadAssertion(i));
-        lookahead_assertion_sequence_ids[i] = rule.lookahead_assertion_id;
         continue;
       }
       auto look_head_assertion_id = DetectLookaheadAssertion(i);
       if (look_head_assertion_id != -1) {
         builder_->UpdateLookaheadAssertion(i, look_head_assertion_id);
         builder_->UpdateLookaheadExact(i);
-        lookahead_assertion_sequence_ids[i] = look_head_assertion_id;
       }
     }
 
-    UpdateTailLookaheadAssertion(grammar, lookahead_assertion_sequence_ids);
+    UpdateTailLookaheadAssertion(grammar);
 
     return builder_->Get(grammar->GetRootRuleId());
   }
 
-  void UpdateTailLookaheadAssertion(
-      const Grammar& grammar, const std::vector<int32_t>& lookahead_assertion_sequence_ids
-  ) {
+  void UpdateTailLookaheadAssertion(const Grammar& grammar) {
     std::vector<std::pair<int32_t, int32_t>> referer_to_referee;
-    std::unordered_map<int32_t, std::pair<int32_t, bool>> referee_referer_has_referee;
+    std::unordered_map<int32_t, std::pair<int32_t, bool>>
+        referee_to_referer_and_referer_should_be_checked;
 
     for (int i = 0; i < static_cast<int>(grammar->NumRules()); i++) {
       if (i == grammar->GetRootRuleId()) {
@@ -621,20 +617,22 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       if (referer != -1) {
         // Record the referer and referee pair.
         referer_to_referee.push_back({referer, i});
-        referee_referer_has_referee[i] = {referer, false};
+        referee_to_referer_and_referer_should_be_checked[i] = {referer, false};
+        ;
       }
     }
 
-    for (const auto& [referer, _] : referer_to_referee) {
-      if (referee_referer_has_referee.count(referer) > 0) {
-        referee_referer_has_referee[referer].second = true;
+    for (const auto& [referer, referee] : referer_to_referee) {
+      if (referee_to_referer_and_referer_should_be_checked.count(referer) > 0) {
+        referee_to_referer_and_referer_should_be_checked[referee].second = true;
       }
     }
 
     std::queue<int32_t> lookahead_tail_reference_rules_processing_queue;
 
-    for (const auto& [referee, referer_and_has_referee] : referee_referer_has_referee) {
-      if (!referer_and_has_referee.second) {
+    for (const auto& [referee, referer_and_has_referer] :
+         referee_to_referer_and_referer_should_be_checked) {
+      if (!referer_and_has_referer.second) {
         lookahead_tail_reference_rules_processing_queue.push(referee);
       }
     }
@@ -642,26 +640,37 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     while (!lookahead_tail_reference_rules_processing_queue.empty()) {
       int32_t referee = lookahead_tail_reference_rules_processing_queue.front();
       lookahead_tail_reference_rules_processing_queue.pop();
-      if (referee_referer_has_referee.find(referee) == referee_referer_has_referee.end()) {
+
+      // If the referee has been processed, skip it.
+      if (referee_to_referer_and_referer_should_be_checked.find(referee) ==
+          referee_to_referer_and_referer_should_be_checked.end()) {
         continue;
       }
-      auto [referer, _] = referee_referer_has_referee[referee];
-      referee_referer_has_referee.erase(referee);
-      if (lookahead_assertion_sequence_ids[referer] == -1) {
+
+      // Update the map.
+      auto [referer, _] = referee_to_referer_and_referer_should_be_checked[referee];
+      referee_to_referer_and_referer_should_be_checked.erase(referee);
+      const auto& referer_rule = builder_->GetRule(referer);
+
+      // If the referer does not have lookahead assertion, skip it.
+      if (referer_rule.lookahead_assertion_id == -1) {
         continue;
       }
 
       // Update the lookahead assertion of the referee.
-      builder_->UpdateLookaheadAssertion(referee, lookahead_assertion_sequence_ids[referer]);
+      builder_->UpdateLookaheadAssertion(referee, referer_rule.lookahead_assertion_id);
       builder_->UpdateLookaheadExact(referee, IsExactLookaheadAssertion(referer));
 
       // Update the queue.
-      const auto& rule = grammar->GetRule(referee);
-      const auto& grammar_expr = grammar->GetGrammarExpr(rule.body_expr_id);
+      const auto& referee_rule = grammar->GetRule(referee);
+      const auto& grammar_expr = grammar->GetGrammarExpr(referee_rule.body_expr_id);
       if (grammar_expr.type == GrammarExprType::kTagDispatch) {
         continue;
       }
       XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kChoices);
+
+      // Since rules should be checked are all single tail reference, they will appear
+      // in other rules only once.
       for (auto sequence_id : grammar_expr) {
         auto sequence_expr = grammar->GetGrammarExpr(sequence_id);
         if (sequence_expr.type != GrammarExprType::kSequence) {
@@ -670,7 +679,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
         auto last_element = grammar->GetGrammarExpr(sequence_expr.end()[-1]);
         if (last_element.type == GrammarExprType::kRuleRef) {
           int32_t next_referee = last_element[0];
-          if (referee_referer_has_referee.count(next_referee) > 0) {
+          if (referee_to_referer_and_referer_should_be_checked.count(next_referee) > 0) {
             lookahead_tail_reference_rules_processing_queue.push(next_referee);
           }
         }
@@ -679,7 +688,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
   }
 
   bool IsExactLookaheadAssertion(int32_t rule_id) {
-    XGRAMMAR_DCHECK(base_grammar_->GetRule(rule_id).lookahead_assertion_id != -1);
+    XGRAMMAR_DCHECK(builder_->GetRule(rule_id).lookahead_assertion_id != -1);
     bool found = false;
     for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
       auto rule = base_grammar_->GetRule(i);

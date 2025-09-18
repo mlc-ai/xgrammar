@@ -488,6 +488,23 @@ rule5 ::= (("") | ("g" rule5 "h"))
     assert after == expected
 
 
+def test_lookahead_assertion_analyzer_tail_reference():
+    before = r"""root ::= rule1 "a"
+rule1 ::= rule2 | "b"
+rule2 ::= rule3 | "c"
+rule3 ::= "d" rule3 | "e"
+"""
+    expected = r"""root ::= ((rule1 "a"))
+rule1 ::= ((rule2) | ("b")) (=("a"))
+rule2 ::= ((rule3) | ("c")) (=("a"))
+rule3 ::= (("d" rule3) | ("e")) (=("a"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
+    after = str(grammar)
+    assert after == expected
+
+
 def test_flatten():
     before = """root ::= or_test sequence_test nested_test empty_test
 or_test ::= ([a] | "b") | "de" | "" | or_test | [^a-z]
