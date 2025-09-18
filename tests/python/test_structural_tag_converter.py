@@ -753,9 +753,9 @@ root ::= ((tag_2))
         2,
         _get_tags_with_separator_format_with_outside_tag(at_least_one=False, stop_after_first=True),
         r"""const_string ::= (("L1")) (=("A"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("A1" const_string "A")) (=("end"))
 const_string_1 ::= (("L2")) (=("A"))
-tag_1 ::= (("A2" const_string_1 "A"))
+tag_1 ::= (("A2" const_string_1 "A")) (=("end"))
 tags_with_separator_tags ::= ((tag) | (tag_1)) (=("end"))
 tags_with_separator ::= ((tags_with_separator_tags "end") | ("end"))
 tag_2 ::= (("begin" tags_with_separator))
@@ -766,9 +766,9 @@ root ::= ((tag_2))
         3,
         _get_tags_with_separator_format_with_outside_tag(at_least_one=True, stop_after_first=True),
         r"""const_string ::= (("L1")) (=("A"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("A1" const_string "A")) (=("end"))
 const_string_1 ::= (("L2")) (=("A"))
-tag_1 ::= (("A2" const_string_1 "A"))
+tag_1 ::= (("A2" const_string_1 "A")) (=("end"))
 tags_with_separator_tags ::= ((tag) | (tag_1)) (=("end"))
 tags_with_separator ::= ((tags_with_separator_tags "end"))
 tag_2 ::= (("begin" tags_with_separator))
