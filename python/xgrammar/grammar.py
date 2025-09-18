@@ -397,6 +397,143 @@ class Grammar(XGRObject):
         grammar_handles = [grammar._handle for grammar in grammars]
         return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
 
+    @staticmethod
+    def empty() -> "Grammar":
+        """Create an empty grammar that matches nothing.
+
+        Returns
+        -------
+        grammar : Grammar
+            The empty grammar.
+        """
+        return Grammar._create_from_handle(_core.Grammar.empty())
+
+    @staticmethod
+    def string(string: str) -> "Grammar":
+        """Create a grammar that matches a specific string.
+
+        Parameters
+        ----------
+        string : str
+            The string to match.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches the specific string.
+        """
+        return Grammar._create_from_handle(_core.Grammar.string(string))
+
+    @staticmethod
+    def character_class(string: str) -> "Grammar":
+        """Create a grammar that matches a character class.
+
+        Parameters
+        ----------
+        string : str
+            The string representing the character class, which should be in the format of
+            [a-z], [^a-z], [0-9], etc.
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches the character class.
+        """
+        if len(string) < 2 or not (string.startswith("[") and string.endswith("]")):
+            raise ValueError(
+                "The character class string should be in the format of [a-z], [^a-z], etc."
+            )
+        return Grammar._create_from_handle(_core.Grammar.character_class(string))
+
+    @staticmethod
+    def star(grammar: "Grammar") -> "Grammar":
+        """Create a grammar that matches zero or more occurrences of the given grammar.
+
+        Parameters
+        ----------
+        grammar : Grammar
+            The grammar to match zero or more occurrences of.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches zero or more occurrences of the given grammar.
+        """
+        return Grammar._create_from_handle(_core.Grammar.star(grammar._handle))
+
+    @staticmethod
+    def plus(grammar: "Grammar") -> "Grammar":
+        """Create a grammar that matches one or more occurrences of the given grammar.
+
+        Parameters
+        ----------
+        grammar : Grammar
+            The grammar to match one or more occurrences of.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches one or more occurrences of the given grammar.
+        """
+        return Grammar._create_from_handle(_core.Grammar.plus(grammar._handle))
+
+    def optional(grammar: "Grammar") -> "Grammar":
+        """Create a grammar that matches zero or one occurrence of the given grammar.
+
+        Parameters
+        ----------
+        grammar : Grammar
+            The grammar to match zero or one occurrence of.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that matches zero or one occurrence of the given grammar.
+        """
+        return Grammar._create_from_handle(_core.Grammar.optional(grammar._handle))
+
+    @staticmethod
+    def tag_dispatch(
+        tags: List[str],
+        grammars: "Grammar",
+        stop_eos: bool = True,
+        stop_str: List[str] = [],
+        loop_after_dispatch: bool = True,
+    ) -> "Grammar":
+        """Create a grammar that dispatches to different grammars based on the triggers.
+        The grammar will match the triggers, and then dispatch to the corresponding grammar
+        based on the tags.
+
+        Parameters
+        ----------
+        triggers : List[str]
+            The list of triggers. The grammar will match the triggers, and then dispatch to the
+            corresponding grammar based on the tags.
+        tags : List[Grammar]
+            The list of grammars to dispatch to. The grammar will match the triggers, and then
+            dispatch to the corresponding grammar based on the tags.
+        stop_eos : bool, default: True
+            Whether to stop the grammar when not dispatching to any grammar.
+            If True, the grammar will be able to stop when not dispatching to any grammar.
+        stop_str : List[str], default: []
+            The list of strings that will stop the grammar when matched. If the grammar matches
+            any of the strings in the list, it will stop the grammar.
+        loop_after_dispatch : bool, default: True
+            Whether to loop after dispatching to the grammar. If True, the grammar will loop
+            after dispatching to the grammar, allowing the grammar to match the triggers again.
+
+        Returns
+        -------
+        grammar : Grammar
+            The grammar that dispatches to different grammars based on the triggers.
+        """
+
+        grammar_handles = [grammar._handle for grammar in grammars]
+        return Grammar._create_from_handle(
+            _core.Grammar.tag_dispatch(
+                tags, grammar_handles, stop_eos, loop_after_dispatch, stop_str
+            )
+        )
+
     def serialize_json(self) -> str:
         """Serialize the grammar to a JSON string.
 
