@@ -13,7 +13,9 @@
 #include <optional>
 #include <queue>
 #include <set>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "fsm.h"
@@ -577,6 +579,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     if (root_grammar_expr.type == GrammarExprType::kTagDispatch) {
       return grammar;
     }
+    std::vector<int32_t> lookahead_assertion_sequence_ids(grammar->NumRules(), -1);
     for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
       auto rule = grammar->GetRule(i);
       if (i == grammar->GetRootRuleId()) {
@@ -584,15 +587,96 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       }
       if (rule.lookahead_assertion_id != -1) {
         builder_->UpdateLookaheadExact(i, IsExactLookaheadAssertion(i));
+        lookahead_assertion_sequence_ids[i] = rule.lookahead_assertion_id;
         continue;
       }
       auto look_head_assertion_id = DetectLookaheadAssertion(i);
       if (look_head_assertion_id != -1) {
         builder_->UpdateLookaheadAssertion(i, look_head_assertion_id);
         builder_->UpdateLookaheadExact(i);
+        lookahead_assertion_sequence_ids[i] = look_head_assertion_id;
       }
     }
+
+    UpdateTailLookaheadAssertion(grammar, lookahead_assertion_sequence_ids);
+
     return builder_->Get(grammar->GetRootRuleId());
+  }
+
+  void UpdateTailLookaheadAssertion(
+      const Grammar& grammar, const std::vector<int32_t>& lookahead_assertion_sequence_ids
+  ) {
+    std::vector<std::pair<int32_t, int32_t>> referer_to_referee;
+    std::unordered_map<int32_t, std::pair<int32_t, bool>> referee_referer_has_referee;
+
+    for (int i = 0; i < static_cast<int>(grammar->NumRules()); i++) {
+      if (i == grammar->GetRootRuleId()) {
+        continue;
+      }
+      auto rule = grammar->GetRule(i);
+      if (rule.lookahead_assertion_id != -1) {
+        continue;
+      }
+      int32_t referer = IsSingleTailRuleReference(i);
+      if (referer != -1) {
+        // Record the referer and referee pair.
+        referer_to_referee.push_back({referer, i});
+        referee_referer_has_referee[i] = {referer, false};
+      }
+    }
+
+    for (const auto& [referer, _] : referer_to_referee) {
+      if (referee_referer_has_referee.count(referer) > 0) {
+        referee_referer_has_referee[referer].second = true;
+      }
+    }
+
+    std::queue<int32_t> lookahead_tail_reference_rules_processing_queue;
+
+    for (const auto& [referee, referer_and_has_referee] : referee_referer_has_referee) {
+      if (!referer_and_has_referee.second) {
+        lookahead_tail_reference_rules_processing_queue.push(referee);
+      }
+    }
+
+    while (!lookahead_tail_reference_rules_processing_queue.empty()) {
+      int32_t referee = lookahead_tail_reference_rules_processing_queue.front();
+      lookahead_tail_reference_rules_processing_queue.pop();
+      if (referee_referer_has_referee.find(referee) == referee_referer_has_referee.end()) {
+        continue;
+      }
+      auto [referer, _] = referee_referer_has_referee[referee];
+      referee_referer_has_referee.erase(referee);
+      const auto& referer_rule = grammar->GetRule(referer);
+      if (referer_rule.lookahead_assertion_id == -1) {
+        continue;
+      }
+
+      // Update the lookahead assertion of the referee.
+      builder_->UpdateLookaheadAssertion(referee, lookahead_assertion_sequence_ids[referer]);
+      builder_->UpdateLookaheadExact(referee, referer_rule.is_exact_lookahead);
+
+      // Update the queue.
+      const auto& rule = grammar->GetRule(referee);
+      const auto& grammar_expr = grammar->GetGrammarExpr(rule.body_expr_id);
+      if (grammar_expr.type == GrammarExprType::kTagDispatch) {
+        continue;
+      }
+      XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kChoices);
+      for (auto sequence_id : grammar_expr) {
+        auto sequence_expr = grammar->GetGrammarExpr(sequence_id);
+        if (sequence_expr.type != GrammarExprType::kSequence) {
+          continue;
+        }
+        auto last_element = grammar->GetGrammarExpr(sequence_expr.end()[-1]);
+        if (last_element.type == GrammarExprType::kRuleRef) {
+          int32_t next_referee = last_element[0];
+          if (referee_referer_has_referee.count(next_referee) > 0) {
+            lookahead_tail_reference_rules_processing_queue.push(next_referee);
+          }
+        }
+      }
+    }
   }
 
   bool IsExactLookaheadAssertion(int32_t rule_id) {
@@ -634,6 +718,50 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       }
     }
     return found;
+  }
+
+  int32_t IsSingleTailRuleReference(int32_t rule_id) {
+    int32_t found_rule_id = -1;
+    for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+      auto rule = base_grammar_->GetRule(i);
+      auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
+
+      // If the rule is used in a TagDispatch, we consider it as not a tail reference.
+      if (grammar_expr.type == GrammarExprType::kTagDispatch) {
+        for (int j = 1; j < grammar_expr.size() - 3; j += 2) {
+          if (grammar_expr[j] == rule_id) {
+            return -1;
+          }
+        }
+        continue;
+      }
+      XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kChoices);
+
+      // Check if the rule is used in the last position of a sequence.
+      for (auto sequence_id : grammar_expr) {
+        auto sequence_expr = base_grammar_->GetGrammarExpr(sequence_id);
+        if (sequence_expr.type != GrammarExprType::kSequence) {
+          continue;
+        }
+        XGRAMMAR_DCHECK(sequence_expr.size() >= 1);
+        for (int j = 0; j < sequence_expr.size() - 1; ++j) {
+          auto element_expr = base_grammar_->GetGrammarExpr(sequence_expr[j]);
+          if (element_expr.type != GrammarExprType::kRuleRef || element_expr[0] != rule_id) {
+            continue;
+          }
+          return -1;
+        }
+        auto last_element = base_grammar_->GetGrammarExpr(sequence_expr.end()[-1]);
+        if (last_element.type == GrammarExprType::kRuleRef && last_element[0] == rule_id &&
+            i != rule_id) {
+          if (found_rule_id != -1) {
+            return -1;
+          }
+          found_rule_id = i;
+        }
+      }
+    }
+    return found_rule_id;
   }
 
   int32_t DetectLookaheadAssertion(int32_t rule_id) {
