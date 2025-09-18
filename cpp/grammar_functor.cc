@@ -647,14 +647,13 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       }
       auto [referer, _] = referee_referer_has_referee[referee];
       referee_referer_has_referee.erase(referee);
-      const auto& referer_rule = grammar->GetRule(referer);
-      if (referer_rule.lookahead_assertion_id == -1) {
+      if (lookahead_assertion_sequence_ids[referer] == -1) {
         continue;
       }
 
       // Update the lookahead assertion of the referee.
       builder_->UpdateLookaheadAssertion(referee, lookahead_assertion_sequence_ids[referer]);
-      builder_->UpdateLookaheadExact(referee, referer_rule.is_exact_lookahead);
+      builder_->UpdateLookaheadExact(referee, IsExactLookaheadAssertion(referer));
 
       // Update the queue.
       const auto& rule = grammar->GetRule(referee);
