@@ -1,0 +1,41 @@
+name: 🚀 Feature Request
+description: Suggest an idea for this project
+title: "[Feature] "
+labels: ['Feature']
+
+body:
+  - type: checkboxes
+    attributes:
+      label: Checklist
+      options:
+        - label: 1. I have searched related issues but cannot get the expected help.
+        - label: 2. The latest version does not have this feature.
+        - label: 3. I have filled all the required information below.
+        - label: 4. The feature request is in English.
+  - type: textarea
+    attributes:
+      label: requested feature
+      description: |
+        Please describe what's the requested feature.
+      placeholder: |
+        A clear and concise description of the requested feature.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Motivation
+      description: |
+        Please describe the motivation for the feature.
+      placeholder: |
+        A clear and concise description of the motivation for the feature.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Alternatives
+      description: |
+        Please describe the alternatives you have considered.
+      placeholder: |
+        A clear and concise description of the alternatives you have considered, if any.
+    validations:
+      required: false
