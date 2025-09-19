@@ -547,7 +547,9 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       XGRAMMAR_DCHECK(adaptive_token_mask.store_type == StoreType::kRejected)
           << "The store type should be kRejected, but got "
           << static_cast<int>(adaptive_token_mask.store_type);
-      IntsetIntersection(&tmp_rejected_indices_, adaptive_token_mask.rejected_indices);
+      std::vector<int32_t> tmp_union = adaptive_token_mask.rejected_indices;
+      IntsetUnion(&tmp_union, adaptive_token_mask.uncertain_indices);
+      IntsetIntersection(&tmp_rejected_indices_, tmp_union);
     }
   }
 
@@ -635,34 +637,19 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
         }
       }
 
-      // Step 2.3. Push the result to the delta list.
-      if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset ||
-          adaptive_token_mask.store_type == StoreType::kAccepted) {
-        if (accepted) {
-          tmp_accepted_bitset_.Set(sorted_decoded_vocab[cur_token_idx].first, true);
-        }
-      } else {
-        if (!accepted) {
-          tmp_rejected_indices_delta_.push_back(cur_token_idx);
-        }
+      if (accepted) {
+        tmp_accepted_bitset_.Set(sorted_decoded_vocab[cur_token_idx].first, true);
       }
 
       prev_token = &cur_token;
     }
 
     PopLastStates(prev_matched_size + 1);
-    // Step 3. Update the accepted_indices or rejected_indices
-    if (adaptive_token_mask.store_type == StoreType::kRejected) {
-      // rejected_indices = Intersect(
-      //     rejected_indices,
-      //     adaptive_token_mask.rejected_indices + rejected_indices_delta)
-      IntsetUnion(&tmp_rejected_indices_delta_, adaptive_token_mask.rejected_indices);
-      IntsetIntersection(&tmp_rejected_indices_, tmp_rejected_indices_delta_);
-    }
   }
 
   // Finally update the rejected_ids bitset
   bool can_reach_end = IsCompleted();
+  tmp_rejected_indices_ = {-1};
   SetTokenBitmask(
       bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end, false
   );
