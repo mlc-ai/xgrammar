@@ -313,7 +313,6 @@ class GrammarMatcher::Impl : public EarleyParser {
   void SetTokenBitmask(
       int32_t* bitmask_data_ptr,
       const DynamicBitset& accepted_bitset,
-      const std::vector<int32_t>& rejected_indices,
       bool can_reach_end,
       bool allow_special_token = false
   );
@@ -523,6 +522,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   tmp_accepted_bitset_.Reset();
   // {-1} means the universal set, i.e. all tokens initially
   tmp_rejected_indices_.assign({-1});
+  std::vector<int32_t> tmp_uncertain_indices;
 
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "FillNextTokenBitmask: index=" << index
@@ -551,6 +551,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       IntsetUnion(&tmp_union, adaptive_token_mask.uncertain_indices);
       IntsetIntersection(&tmp_rejected_indices_, tmp_union);
     }
+    IntsetUnion(&tmp_uncertain_indices, adaptive_token_mask.uncertain_indices);
   }
 
   int current_ptr = 0;
@@ -565,94 +566,61 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       tmp_accepted_bitset_.Set(sorted_decoded_vocab[i].first, true);
     }
   }
+  const std::string* prev_token = nullptr;
+  int prev_matched_size = 0;
+  int last_rejected_uncertain_range = 0;
 
-  for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
-
-    // For each ParserState, we will check every uncertain token and put them into the accepted or
-    // rejected list.
-
-    // Step 2. Update the accepted tokens in accepted_indices_delta, or the rejected tokens in
-    // rejected_indices_delta.
-
-    // If the accepted tokens are saved, it means it is likely to be smaller than the rejected
-    // tokens, so we will just find the accepted tokens, and vice versa.
-
-    tmp_rejected_indices_delta_.clear();
-
-    // Examine only the current one ParserState
-    PushOneStateToCheck(state);
-
-    const std::string* prev_token = nullptr;
-    int prev_matched_size = 0;
-    if (debug_print) {
-      XGRAMMAR_LOG(INFO) << "The ParserState is " << state << ", the mask is "
-                         << adaptive_token_mask.Print(tokenizer_info_);
+  for (const auto& cur_token_idx : tmp_uncertain_indices) {
+    // Check if the current token is already accepted. If it is, we can skip it.
+    if (tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first] ||
+        cur_token_idx < last_rejected_uncertain_range) {
+      continue;
     }
-    int last_rejected_uncertain_range = 0;
-    for (const auto& cur_token_idx : adaptive_token_mask.uncertain_indices) {
-      // Check if the current token is already accepted. If it is, we can skip it.
-      if (tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
-        continue;
+
+    const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
+    bool accepted = true;
+
+    // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
+    // We can reuse the previous matched size to avoid unnecessary matching.
+    if (prev_token) {
+      int lcp_len =
+          std::mismatch(cur_token.begin(), cur_token.end(), prev_token->begin(), prev_token->end())
+              .first -
+          cur_token.begin();
+      if (lcp_len > prev_matched_size) {
+        last_rejected_uncertain_range = subtree_range[cur_token_idx];
+        accepted = false;
+      } else if (lcp_len < prev_matched_size) {
+        PopLastStates(prev_matched_size - lcp_len);
       }
+      prev_matched_size = std::min(prev_matched_size, lcp_len);
+    }
 
-      // Check if the current token is in the rejected range. i.e. check if the current token
-      // is on the subtree of the rejected token.
-      if (cur_token_idx < last_rejected_uncertain_range) {
-        if (adaptive_token_mask.store_type == StoreType::kRejected) {
-          tmp_rejected_indices_delta_.push_back(cur_token_idx);
-        }
-        continue;
-      }
-
-      const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
-      bool accepted = true;
-
-      // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
-      // We can reuse the previous matched size to avoid unnecessary matching.
-      if (prev_token) {
-        int lcp_len = std::mismatch(
-                          cur_token.begin(), cur_token.end(), prev_token->begin(), prev_token->end()
-                      )
-                          .first -
-                      cur_token.begin();
-        if (lcp_len > prev_matched_size) {
+    // Step 2.2. Find if the current token is accepted or rejected.
+    if (accepted) {
+      for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
+        if (!Advance(cur_token[j])) {
           last_rejected_uncertain_range = subtree_range[cur_token_idx];
           accepted = false;
-        } else if (lcp_len < prev_matched_size) {
-          PopLastStates(prev_matched_size - lcp_len);
+          break;
         }
-        prev_matched_size = std::min(prev_matched_size, lcp_len);
+        prev_matched_size = j + 1;
       }
-
-      // Step 2.2. Find if the current token is accepted or rejected.
-      if (accepted) {
-        for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
-          if (!Advance(cur_token[j])) {
-            last_rejected_uncertain_range = subtree_range[cur_token_idx];
-            accepted = false;
-            break;
-          }
-          prev_matched_size = j + 1;
-        }
-      }
-
-      if (accepted) {
-        tmp_accepted_bitset_.Set(sorted_decoded_vocab[cur_token_idx].first, true);
-      }
-
-      prev_token = &cur_token;
     }
 
-    PopLastStates(prev_matched_size + 1);
+    if (accepted) {
+      tmp_accepted_bitset_.Set(sorted_decoded_vocab[cur_token_idx].first, true);
+    }
+
+    prev_token = &cur_token;
   }
+
+  PopLastStates(prev_matched_size);
 
   // Finally update the rejected_ids bitset
   bool can_reach_end = IsCompleted();
   tmp_rejected_indices_ = {-1};
-  SetTokenBitmask(
-      bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end, false
-  );
+  SetTokenBitmask(bitmask_data_ptr, tmp_accepted_bitset_, can_reach_end, false);
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
@@ -778,7 +746,6 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
 void GrammarMatcher::Impl::SetTokenBitmask(
     int32_t* bitmask_data_ptr,
     const DynamicBitset& accepted_bitset,
-    const std::vector<int32_t>& rejected_indices,
     bool can_reach_end,
     bool allow_special_token
 ) {
@@ -790,44 +757,18 @@ void GrammarMatcher::Impl::SetTokenBitmask(
   DynamicBitset next_token_bitset(
       tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
   );
-  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  next_token_bitset = accepted_bitset;
 
-  if (rejected_indices.size() == 1 && rejected_indices[0] == -1) {
-    // If rejected_indices is the universal set, the final accepted token set is just
-    // accepted_indices
-    next_token_bitset = accepted_bitset;
+  if (allow_special_token) {
+    for (int id : tokenizer_info_.GetSpecialTokenIds()) {
+      next_token_bitset.Set(id, true);
+    }
+  }
 
-    if (allow_special_token) {
-      for (int id : tokenizer_info_.GetSpecialTokenIds()) {
-        next_token_bitset.Set(id, true);
-      }
-    }
-
-    if (can_reach_end) {
-      // add end tokens
-      for (int id : stop_token_ids_) {
-        next_token_bitset.Set(id, true);
-      }
-    }
-  } else {
-    // Otherwise, the final rejected token set is (rejected_indices \ accepted_indices)
-    next_token_bitset.Set();
-
-    for (auto i : rejected_indices) {
-      auto id = sorted_decoded_vocab[i].first;
-      if (!accepted_bitset[id]) {
-        next_token_bitset.Set(id, false);
-      }
-    }
-    if (!allow_special_token) {
-      for (int id : tokenizer_info_.GetSpecialTokenIds()) {
-        next_token_bitset.Set(id, false);
-      }
-    }
-    if (!can_reach_end) {
-      for (int id : stop_token_ids_) {
-        next_token_bitset.Set(id, false);
-      }
+  if (can_reach_end) {
+    // add end tokens
+    for (int id : stop_token_ids_) {
+      next_token_bitset.Set(id, true);
     }
   }
 }
