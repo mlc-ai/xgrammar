@@ -6,13 +6,14 @@
 #ifndef XGRAMMAR_SUPPORT_THREAD_POOL_H_
 #define XGRAMMAR_SUPPORT_THREAD_POOL_H_
 
+#include <atomic>
 #include <condition_variable>
+#include <cstddef>
 #include <functional>
 #include <future>
 #include <mutex>
 #include <queue>
 #include <thread>
-#include <type_traits>
 #include <vector>
 
 #include "logging.h"
@@ -35,8 +36,9 @@ class ThreadPool {
    */
   ThreadPool(size_t num_threads = std::thread::hardware_concurrency()) {
     // Initialize thread pool with num_threads threads
-    for (size_t i = 0; i < num_threads; ++i) {
-      workers_.emplace_back([this] {
+    workers_.resize(num_threads);
+    for (auto& worker : workers_) {
+      worker = std::thread([this] {
         while (true) {
           std::function<void()> task;
           {
@@ -75,8 +77,7 @@ class ThreadPool {
     auto task = std::make_shared<std::packaged_task<return_type()>>(
         std::bind(std::forward<F>(f), std::forward<Args>(args)...)
     );
-
-    std::shared_future<return_type> res = task->get_future().share();
+    auto res = task->get_future().share();
 
     {
       std::unique_lock<std::mutex> lock(queue_mutex_);
@@ -98,21 +99,20 @@ class ThreadPool {
    * \param args Arguments to pass to the function
    * \note Tasks are executed asynchronously by the worker threads.
    */
-  template <class F, class... Args>
-  void Execute(F&& f, Args&&... args) {
+  void Execute(std::function<void()> f) {
     {
       std::unique_lock<std::mutex> lock(queue_mutex_);
       XGRAMMAR_CHECK(!shutdown_) << "Cannot execute task in stopped ThreadPool";
       ++unfinished_task_count_;  // Increment task count
 
       // Directly add the task without wrapping
-      task_queue_.emplace(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+      task_queue_.emplace(std::move(f));
     }
     queue_condition_.notify_one();
   }
 
   void Wait() {
-    std::unique_lock<std::mutex> lock(queue_mutex_);
+    auto lock = std::unique_lock{queue_mutex_};
     tasks_done_condition_.wait(lock, [this] { return unfinished_task_count_ == 0; });
   }
 
@@ -147,6 +147,8 @@ class ThreadPool {
   ThreadPool& operator=(const ThreadPool&) = delete;
   ThreadPool& operator=(ThreadPool&&) = delete;
 
+  std::size_t NumThreads() const { return workers_.size(); }
+
  private:
   void TaskComplete() {
     std::unique_lock<std::mutex> lock(queue_mutex_);
@@ -170,6 +172,34 @@ class ThreadPool {
   bool shutdown_ = false;
   /*! \brief Number of unfinished tasks */
   int unfinished_task_count_ = 0;
+};
+
+class TaskCounter {
+ public:
+  template <typename F>
+  void CompleteOne(F&& f) {
+    const auto lock = std::lock_guard{mutex_};
+    std::forward<F>(f)();
+    const auto working = working_.fetch_sub(1, std::memory_order_relaxed) - 1;
+    if (working == 0 && waiting_ > 0) cv_.notify_all();
+  }
+
+  // This can be called by other threads, so we must use atomic.
+  // We don't rely on any happens before relationship, so we use relaxed order.
+  std::size_t AddOne() { return working_.fetch_add(1, std::memory_order_relaxed) + 1; }
+
+  void Wait() {
+    auto lock = std::unique_lock{mutex_};
+    ++waiting_;
+    cv_.wait(lock, [this] { return working_.load(std::memory_order_relaxed) == 0; });
+    --waiting_;
+  }
+
+ private:
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  std::size_t waiting_ = 0;
+  std::atomic_size_t working_ = 0;
 };
 
 inline void ParallelFor(int low, int high, int num_threads, std::function<void(int)> f) {

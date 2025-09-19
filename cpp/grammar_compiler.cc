@@ -20,6 +20,7 @@
 #include "grammar_functor.h"
 #include "grammar_impl.h"
 #include "support/logging.h"
+#include "support/reflection.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
 #include "support/utils.h"
@@ -544,7 +545,12 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
 class GrammarCompilerNoCache {
  public:
   GrammarCompilerNoCache(const TokenizerInfo& tokenizer_info, int max_threads)
-      : tokenizer_info_(tokenizer_info), max_threads_(max_threads) {}
+      : tokenizer_info_(tokenizer_info), thread_pool_() {
+    if (max_threads > 1) {
+      /// NOTE: maybe we can allow max_threads = 1, and use 0 as no extra thread.
+      thread_pool_.emplace(max_threads);
+    }
+  }
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -571,8 +577,9 @@ class GrammarCompilerNoCache {
 
   /*! \brief The vocabulary associated with this storage class. */
   const TokenizerInfo tokenizer_info_;
-  /*! \brief The maximum number of threads to use. */
-  const int max_threads_;
+
+  /*! \brief The persistent thread pool for multi-threading. */
+  std::optional<ThreadPool> thread_pool_;
 };
 
 CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar grammar) {
@@ -597,12 +604,9 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
   // TODO(Charlie): Figure out how to support ThreadPool and std::mutex in WebAssembly.
   // Only declare ThreadPool and mutex if max_threads > 1, so when max_threads = 1, we do
   // not need ThreadPool or std::mutex, which throws error in runtime in WebAssembly.
-  std::optional<ThreadPool> thread_pool;
-  std::optional<std::mutex> adaptive_token_mask_cache_mutex;
-
-  if (max_threads_ > 1) {
-    thread_pool.emplace(max_threads_);
-    adaptive_token_mask_cache_mutex.emplace();
+  std::optional<TaskCounter> task_counter;
+  if (thread_pool_) {
+    task_counter.emplace();
   }
 
   auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
@@ -613,9 +617,10 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
         tokenizer_info_.GetTrieSubtreeNodesRange(),
         is_root_rule
     );
-    if (max_threads_ > 1) {
-      std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
-      compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
+    if (thread_pool_) {
+      task_counter->CompleteOne([&] {
+        compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
+      });
     } else {
       compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
     }
@@ -623,8 +628,9 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
 
   auto add_task_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     // Execute depending on whether we use thread_pool
-    if (max_threads_ > 1) {
-      thread_pool->Execute([add_adaptive_token_mask, state, is_root_rule]() {
+    if (thread_pool_) {
+      task_counter->AddOne();
+      thread_pool_->Execute([add_adaptive_token_mask, state, is_root_rule] {
         add_adaptive_token_mask(state, is_root_rule);
       });
     } else {
@@ -685,8 +691,8 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
     }
   }
 
-  if (max_threads_ > 1) {
-    thread_pool->Join();
+  if (thread_pool_) {
+    task_counter->Wait();
   }
 
   return CompiledGrammar(compiled_grammar_impl);
@@ -916,7 +922,7 @@ CompiledGrammar GrammarCompiler::Impl::Compute(const UnionKey& key) {
         } else if constexpr (std::is_same_v<KeyType, BuiltinJSONGrammarKey>) {
           return this->no_cache_compiler_.CompileBuiltinJSONGrammar();
         } else {
-          XGRAMMAR_UNREACHABLE();
+          static_assert(detail::reflection::false_v<KeyType>, "non-exhaustive visitor!");
         }
       },
       key
