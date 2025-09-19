@@ -713,9 +713,7 @@ bool RepeatDetector::IsVisited(const ParserState& state) const {
 
 void RepeatDetector::Insert(const ParserState& state) {
   if (size_ == transition_threshold_) {
-    for (const auto& s : visited_vector_) {
-      visited_set_.insert(s);
-    }
+    visited_set_.insert(visited_vector_.begin(), visited_vector_.begin() + size_);
   }
   size_++;
   if (size_ > transition_threshold_) {
