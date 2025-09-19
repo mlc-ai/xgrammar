@@ -543,6 +543,24 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       for (auto idx : adaptive_token_mask.accepted_indices) {
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
+    } else {
+      XGRAMMAR_DCHECK(adaptive_token_mask.store_type == StoreType::kRejected)
+          << "The store type should be kRejected, but got "
+          << static_cast<int>(adaptive_token_mask.store_type);
+      IntsetIntersection(&tmp_rejected_indices_, adaptive_token_mask.rejected_indices);
+    }
+  }
+
+  int current_ptr = 0;
+
+  if (tmp_rejected_indices_.size() != 1 || tmp_rejected_indices_[0] != -1) {
+    for (int i = 0; i < static_cast<int>(sorted_decoded_vocab.size()); i++) {
+      if (current_ptr < static_cast<int>(tmp_rejected_indices_.size()) &&
+          i == tmp_rejected_indices_[current_ptr]) {
+        current_ptr++;
+        continue;
+      }
+      tmp_accepted_bitset_.Set(sorted_decoded_vocab[i].first, true);
     }
   }
 

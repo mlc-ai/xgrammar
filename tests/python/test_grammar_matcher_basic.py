@@ -106,7 +106,7 @@ def test_fill_next_token_bitmask(
     rejected_sizes = []
 
     for i, c in enumerate(input_bytes):
-        matcher.fill_next_token_bitmask(token_bitmask)
+        matcher.fill_next_token_bitmask(token_bitmask, debug_print=True)
         rejected_token_ids = _get_masked_tokens_from_bitmask(
             token_bitmask, tokenizer_info.vocab_size
         )
