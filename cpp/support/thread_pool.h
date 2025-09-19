@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <functional>
+#include <future>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -57,6 +58,37 @@ class ThreadPool {
         }
       });
     }
+  }
+
+  /*!
+   * \brief Add a new task to be executed by the thread pool.
+   * \tparam F Type of the function to execute
+   * \tparam Args Types of the arguments to pass to the function
+   * \param f Function to execute
+   * \param args Arguments to pass to the function
+   * \return std::shared_future containing the result of the function call
+   * \note Tasks are executed in FIFO order but may complete in any order.
+   */
+  template <class F, class... Args>
+  auto Submit(F&& f, Args&&... args) -> std::shared_future<std::invoke_result_t<F, Args...>> {
+    using return_type = std::invoke_result_t<F, Args...>;
+
+    // Package the task with its arguments into a shared pointer
+    auto task = std::make_shared<std::packaged_task<return_type()>>(
+        std::bind(std::forward<F>(f), std::forward<Args>(args)...)
+    );
+    auto res = task->get_future().share();
+
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      XGRAMMAR_CHECK(!shutdown_) << "Cannot submit task to stopped ThreadPool";
+      ++unfinished_task_count_;  // Increment task count
+
+      // Directly add the task without wrapping
+      task_queue_.emplace([task]() { (*task)(); });
+    }
+    queue_condition_.notify_one();
+    return res;
   }
 
   /*!
