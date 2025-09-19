@@ -619,7 +619,6 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
 
   // Finally update the rejected_ids bitset
   bool can_reach_end = IsCompleted();
-  tmp_rejected_indices_ = {-1};
   SetTokenBitmask(bitmask_data_ptr, tmp_accepted_bitset_, can_reach_end, false);
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
