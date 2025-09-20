@@ -351,7 +351,6 @@ class PlusNormalizerImpl : public GrammarMutator {
   Grammar Apply(const Grammar& grammar) final {
     InitGrammar(grammar);
     InitBuilder(grammar);
-    XGRAMMAR_LOG(INFO) << grammar;
     for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
       NormalizePlusRule(i);
     }
