@@ -61,7 +61,7 @@ The format field requires a format object. We provide several basic format objec
     }
     ```
 
-3. GrammarFormat
+3. `grammar`
 
     This format can be used to match a given ebnf grammar.
     ```json
