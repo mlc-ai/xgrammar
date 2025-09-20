@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/grammar_constructor.cc
+ * \file xgrammar/grammar_functor.cc
  */
 
 #include "grammar_functor.h"
@@ -9,13 +9,13 @@
 
 #include <bitset>
 #include <cstdint>
+#include <queue>
 #include <set>
 #include <vector>
 
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
-#include "queue"
 #include "support/encoding.h"
 #include "support/logging.h"
 #include "xgrammar/grammar.h"
