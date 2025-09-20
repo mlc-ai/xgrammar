@@ -472,7 +472,6 @@ class StructureNormalizerImpl : public GrammarMutator {
  * The normalizer applies the following transformations in order:
  * 1. SingleElementExprEliminator - Eliminates single element expressions
  * 2. NestedRuleUnwrapper - Unwraps nested rules
- * 3. ByteStringFuser - Fuses consecutive byte strings
  */
 class GrammarNormalizerImpl {
  public:
@@ -1572,7 +1571,7 @@ class GrammarOptimizerImpl {
  public:
   static Grammar Apply(const Grammar& grammar) {
     Grammar result = ByteStringFuser::Apply(grammar);
-    result = RuleInliner::Apply(grammar);
+    result = RuleInliner::Apply(result);
     result = DeadCodeEliminator::Apply(result);
     result = LookaheadAssertionAnalyzer::Apply(result);
     result->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(result);
