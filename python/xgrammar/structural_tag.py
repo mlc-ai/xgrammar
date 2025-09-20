@@ -72,6 +72,16 @@ class AnyTextFormat(BaseModel):
     """The type of the format."""
 
 
+class GrammarFormat(BaseModel):
+    """A format that matches an ebnf grammar."""
+
+    type: Literal["grammar"] = "grammar"
+    """The type of the format."""
+
+    grammar: str
+    """The ebnf grammar."""
+
+
 # ---------- Combinatorial Formats ----------
 
 
@@ -203,6 +213,7 @@ Format = Annotated[
         AnyTextFormat,
         ConstStringFormat,
         JSONSchemaFormat,
+        GrammarFormat,
         QwenXMLParameterFormat,
         OrFormat,
         SequenceFormat,
@@ -307,6 +318,7 @@ __all__ = [
     "JSONSchemaFormat",
     "QwenXMLParameterFormat",
     "AnyTextFormat",
+    "GrammarFormat",
     "SequenceFormat",
     "OrFormat",
     "TagFormat",
