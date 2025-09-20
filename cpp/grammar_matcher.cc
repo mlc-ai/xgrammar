@@ -534,6 +534,10 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
 
   for (const auto& state : latest_states) {
     auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
+    if (debug_print) {
+      XGRAMMAR_LOG(INFO) << "The ParserState is " << state << ", the mask is "
+                         << adaptive_token_mask_it->second.Print(tokenizer_info_);
+    }
     XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
     latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
