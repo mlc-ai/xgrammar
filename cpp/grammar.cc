@@ -7,8 +7,7 @@
 
 #include <string>
 
-#include "grammar_constructor.h"
-#include "grammar_normalizer.h"
+#include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_printer.h"
 #include "json_schema_converter.h"

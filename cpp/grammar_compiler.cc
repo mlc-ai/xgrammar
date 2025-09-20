@@ -19,7 +19,6 @@
 #include "fsm.h"
 #include "grammar_functor.h"
 #include "grammar_impl.h"
-#include "grammar_optimizer.h"
 #include "support/logging.h"
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"

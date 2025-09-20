@@ -13,8 +13,7 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
-#include "../grammar_normalizer.h"
-#include "../grammar_optimizer.h"
+#include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
 #include "../testing.h"

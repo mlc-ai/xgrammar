@@ -10,9 +10,8 @@
 #include <string>
 #include <string_view>
 
-#include "grammar_constructor.h"
+#include "grammar_functor.h"
 #include "grammar_impl.h"
-#include "grammar_normalizer.h"
 #include "json_schema_converter.h"
 #include "support/logging.h"
 #include "support/recursion_guard.h"
