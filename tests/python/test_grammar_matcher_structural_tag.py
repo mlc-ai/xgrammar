@@ -9,7 +9,7 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
-    GrammarOptimizer,
+    GrammarFunctor,
     _get_masked_tokens_from_bitmask,
     _is_grammar_accept_string,
 )
@@ -102,7 +102,7 @@ def test_structural_tag():
     triggers = ["<function=f", "<function=g"]
 
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
-    grammar = GrammarOptimizer.apply(grammar)
+    grammar = GrammarFunctor.grammar_optimizer(grammar)
 
     assert str(grammar) == expected_grammar_test_structural_tag
 
