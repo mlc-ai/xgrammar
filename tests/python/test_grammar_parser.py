@@ -795,5 +795,32 @@ def test_error_consecutive_quantifiers():
         xgr.Grammar.from_ebnf(grammar_str)
 
 
+def test_repetition_normalizer():
+    """Test the repetition normalizer. If the context is nullable, then the min repetition time will be reduced to 0."""
+    before = "root ::= ([0-9]*){100, 1000}"
+    expected_grammar = r"""root ::= ((root_repeat_1{0, 996} root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_1 ::= (([0-9]*)) (=(root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_2 ::= (([0-9]*)) (=(root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_3 ::= (([0-9]*)) (=(root_repeat_4 root_repeat_5))
+root_repeat_4 ::= (([0-9]*)) (=(root_repeat_5))
+root_repeat_5 ::= (([0-9]*))
+"""
+    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.grammar_optimizer(grammar)
+    assert expected_grammar == str(grammar)
+
+    before = "root ::= ([0-9]){100, 1000}"
+    expected_grammar = r"""root ::= ((root_repeat_1{96, 996} root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_1 ::= (([0-9])) (=(root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_2 ::= (([0-9])) (=(root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_3 ::= (([0-9])) (=(root_repeat_4 root_repeat_5))
+root_repeat_4 ::= (([0-9])) (=(root_repeat_5))
+root_repeat_5 ::= (([0-9]))
+"""
+    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.grammar_optimizer(grammar)
+    assert expected_grammar == str(grammar)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

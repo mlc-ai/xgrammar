@@ -390,10 +390,10 @@ class GrammarFunctor:
         )
 
     @staticmethod
-    def grammar_optimizer(grammr: Grammar) -> Grammar:
+    def grammar_optimizer(grammar: Grammar) -> Grammar:
         """Optimize the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.grammar_optimizer(grammr._handle)
+            _core.testing.grammar_functor.grammar_optimizer(grammar._handle)
         )
 
     @staticmethod
