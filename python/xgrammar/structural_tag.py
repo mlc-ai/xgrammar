@@ -77,6 +77,7 @@ class GrammarFormat(BaseModel):
 
     type: Literal["grammar"] = "grammar"
     """The type of the format."""
+
     grammar: str
     """The ebnf grammar."""
 
