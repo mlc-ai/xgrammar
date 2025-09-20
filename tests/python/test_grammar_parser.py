@@ -693,16 +693,16 @@ def test_e2e_to_string_roundtrip():
     """Checks the printed result can be parsed, and the parsing-printing process is idempotent."""
     before = r"""root ::= ((b c) | (b root))
 b ::= ((b_1 d))
-c ::= ((c_1))
+c ::= (([acep-z] [acep-z]*))
 d ::= ((d_1))
 b_1 ::= ("" | ("b" b_1)) (=(d))
-c_1 ::= (([acep-z] c_1) | ([acep-z])) (=("d"))
 d_1 ::= ("" | ("d"))
 """
     grammar_1 = xgr.Grammar.from_ebnf(before)
     output_string_1 = str(grammar_1)
     grammar_2 = xgr.Grammar.from_ebnf(output_string_1)
     output_string_2 = str(grammar_2)
+    print(output_string_1)
     assert before == output_string_1
     assert output_string_1 == output_string_2
 
