@@ -38,15 +38,14 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   GrammarMatcherForTokenMaskCache(
       const Grammar& grammar,
       const ParserState& init_state,
-      const std::unordered_map<int32_t, DynamicBitset>*
-          definite_accepted_in_tagdispatch_since_second_char_cache,
+      const std::unordered_map<int32_t, DynamicBitset>&
+          tag_dispatch_rule_id_to_second_slicing_bitset,
       const bool& need_expand = true
   )
       : EarleyParser(grammar, init_state),
         init_rule_id(init_state.rule_id),
         initial_state(init_state),
-        definite_accepted_in_tagdispatch_since_second_char_cache(
-            definite_accepted_in_tagdispatch_since_second_char_cache
+        tag_dispatch_rule_id_to_second_slicing_bitset(tag_dispatch_rule_id_to_second_slicing_bitset
         ) {}
   /*!
    * \brief Get the adaptive token mask for the given ParserState.
@@ -98,9 +97,16 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   // The initial state of the parser.
   ParserState initial_state;
 
-  // The definite accepted bitset in tag dispatch rules since the second character.
-  const std::unordered_map<int32_t, DynamicBitset>*
-      definite_accepted_in_tagdispatch_since_second_char_cache;
+  /*!
+   \brief This is a mapping from TagDispatch rule id to the bitset used for second slicing.
+   \note If a rule is a TagDispatch rule, then there will be an AC automaton for its triggers.
+    Which means that it can accept a lot of tokens. However, it will be slow to check a lot of
+    tokens. The DynamicBitset here is used to do a second slicing: if a token's substr(1, n - 1)
+    can be accepted by the start state of the AC automaton, then it will be True in the bitset.
+    When we check a token, we first check if its first character can transit to the start state.
+    If yes, then we check if it is in the bitset. If yes, then we accept it directly.
+  */
+  const std::unordered_map<int32_t, DynamicBitset>& tag_dispatch_rule_id_to_second_slicing_bitset;
 
   // Temporary data for GetAdaptiveTokenMask.
   std::vector<int32_t> tmp_accepted_indices_;
@@ -358,12 +364,8 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       grammar_->GetGrammarExpr(grammar_->GetRule(init_rule_id).body_expr_id).type ==
       Grammar::Impl::GrammarExprType::kTagDispatch;
   if (is_tag_dispatch_rule) {
-    XGRAMMAR_DCHECK(definite_accepted_in_tagdispatch_since_second_char_cache != nullptr);
-    XGRAMMAR_DCHECK(
-        definite_accepted_in_tagdispatch_since_second_char_cache->count(init_rule_id) > 0
-    );
-    definite_accepted_bitset =
-        &definite_accepted_in_tagdispatch_since_second_char_cache->at(init_rule_id);
+    XGRAMMAR_DCHECK(tag_dispatch_rule_id_to_second_slicing_bitset.count(init_rule_id) > 0);
+    definite_accepted_bitset = &tag_dispatch_rule_id_to_second_slicing_bitset.at(init_rule_id);
   }
 
   const std::string* prev_token = nullptr;
@@ -640,7 +642,7 @@ class GrammarCompilerNoCache {
   /*! \brief The maximum number of threads to use. */
   const int max_threads_;
   /*! \brief Mapping from the rule_id to the definite accepted token mask. */
-  std::unordered_map<int32_t, DynamicBitset> definite_accepted_token_ids_since_second_char_cache_;
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
 };
 
 CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar grammar) {
@@ -696,8 +698,7 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
         definite_accepted_tokens_since_second_char.Set(i);
       }
     }
-    definite_accepted_token_ids_since_second_char_cache_[i] =
-        definite_accepted_tokens_since_second_char;
+    tag_dispatch_rule_id_to_second_slicing_bitset[i] = definite_accepted_tokens_since_second_char;
   }
   // Step 3. Compute the adaptive token mask cache
   // The token mask cache is computed for these positions in the grammar:
@@ -718,7 +719,7 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
 
   auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
-        grammar, state, &definite_accepted_token_ids_since_second_char_cache_, false
+        grammar, state, tag_dispatch_rule_id_to_second_slicing_bitset, false
     );
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
         tokenizer_info_.GetVocabSize(),
