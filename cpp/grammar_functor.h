@@ -337,14 +337,35 @@ class GrammarFSMBuilder {
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
 };
+
+/*!
+ * \brief Add a sub-grammar into the current grammar builder.
+ */
 class SubGrammarAdder {
  public:
   static int32_t Apply(GrammarBuilder* builder, const Grammar& sub_grammar);
 };
 
+/*!
+ * \brief Normalize the repetition in the grammar. If the context of a repeat
+ * is nullable, it will be converted from {min, max} to {0, max}.
+ */
+
 class RepetitionNormalizer {
  public:
   static void Apply(Grammar* grammar);
+};
+
+/*!
+ * \brief Normalize the plus quantifier in the grammar.
+ * rule ::= character_class rule | character_class
+ * will be converted to
+ * rule ::= character_class character_class*
+ */
+
+class PlusNormalizer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
 };
 
 }  // namespace xgrammar
