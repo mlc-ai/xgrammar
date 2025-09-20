@@ -368,6 +368,11 @@ class PlusNormalizer {
   static Grammar Apply(const Grammar& grammar);
 };
 
+class SingleRuleInliner {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_GRAMMAR_FUNCTOR_H_
