@@ -432,6 +432,7 @@ root::="a"  "b" ("c""d"
     expected = """root ::= (("abcde") | ("f") | ("g"))
 """
     grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -443,6 +444,7 @@ def test_nest():
 root_1 ::= (("b") | ("cd"))
 """
     grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -453,6 +455,7 @@ def test_empty_parentheses():
     expected = """root ::= (("ab"))
 """
     grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -593,7 +596,7 @@ rule4 ::= (("g") | ("h"))
 @pytest.mark.parametrize("before, expected", before__expected__test_dead_code_eliminator)
 def test_dead_code_eliminator(before: str, expected: str):
     grammar = _ebnf_to_grammar_no_normalization(before)
-    after = xgr.testing.GrammarOptimizer.dead_code_eliminator(grammar)
+    after = xgr.testing.GrammarFunctor.dead_code_eliminator(grammar)
     assert str(after) == expected
 
 
@@ -697,6 +700,7 @@ sign ::= ("" | ("+") | ("-"))
 """
 
     grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 

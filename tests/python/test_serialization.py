@@ -51,10 +51,10 @@ def test_serialize_grammar():
     serialized = grammar.serialize_json()
     expected_json = {
         "rules": [["rule1", 4, -1, False], ["root_rule", 8, -1, False]],
-        "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28],
+        "grammar_expr_data": [0, 5, 8, 12, 14, 18, 21, 24, 28],
         "grammar_expr_indptr": [
             # fmt: off
-            3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7
+            1,3,1,48,57,4,1,0,5,2,0,1,3,0,6,2,3,2,4,1,0,0,1,97,5,2,5,6,6,1,7
             # fmt: on
         ],
         "root_rule_id": 1,
@@ -65,6 +65,7 @@ def test_serialize_grammar():
         "__VERSION__": "v6",
     }
     # The fsms are the same one, but the start state and end states are different.
+    print(serialized)
     assert json.loads(serialized) == expected_json
 
 

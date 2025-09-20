@@ -596,7 +596,6 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
   // not need ThreadPool or std::mutex, which throws error in runtime in WebAssembly.
   std::optional<ThreadPool> thread_pool;
   std::optional<std::mutex> adaptive_token_mask_cache_mutex;
-  XGRAMMAR_LOG(INFO) << compiled_grammar_impl->grammar;
   if (max_threads_ > 1) {
     thread_pool.emplace(max_threads_);
     adaptive_token_mask_cache_mutex.emplace();
