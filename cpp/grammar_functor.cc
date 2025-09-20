@@ -381,8 +381,7 @@ class ByteStringFuserImpl : public GrammarMutator {
  * \brief Inline rules that can be inlined.
  *
  * Now we only inline rule references that:
- * 1. at the beginning of a sequence
- * 2. The rule should be a sequence of choices, cannot be empty, cannot refer to other rules
+ * 1. The rule should be a sequence of choices, cannot be empty, cannot refer to other rules
  */
 class RuleInlinerImpl : public GrammarMutator {
  public:
@@ -399,39 +398,35 @@ class RuleInlinerImpl : public GrammarMutator {
         continue;
       }
       XGRAMMAR_ICHECK(choice_expr.type == GrammarExprType::kSequence);
-      auto first_element = base_grammar_->GetGrammarExpr(choice_expr[0]);
-      if (first_element.type != GrammarExprType::kRuleRef) {
-        new_choice_ids.push_back(VisitExpr(choice_expr));
-        continue;
-      }
-      auto rule_ref_id = first_element[0];
-      if (can_rule_be_inlined_.count(rule_ref_id) == 0) {
-        can_rule_be_inlined_[rule_ref_id] = CheckIfRuleCanBeInlined(rule_ref_id);
-      }
-      if (!can_rule_be_inlined_[rule_ref_id]) {
-        new_choice_ids.push_back(VisitExpr(choice_expr));
-        continue;
-      }
-
-      // Do inlining
-      std::vector<int32_t> other_elements;
-      for (int i = 1; i < choice_expr.size(); ++i) {
-        other_elements.push_back(VisitExpr(choice_expr[i]));
-      }
-
-      auto ref_rule = base_grammar_->GetRule(rule_ref_id);
-      auto ref_grammar_expr = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
-
-      for (auto ref_choice_id : ref_grammar_expr) {
-        auto ref_choice_expr = base_grammar_->GetGrammarExpr(ref_choice_id);
-        XGRAMMAR_ICHECK(ref_choice_expr.type == GrammarExprType::kSequence);
-        std::vector<int32_t> choice_to_add;
-        for (auto ref_element_id : ref_choice_expr) {
-          choice_to_add.push_back(VisitExpr(ref_element_id));
+      std::vector<int32_t> new_sequence_elements;
+      for (const auto& element_id : choice_expr) {
+        const auto& element = base_grammar_->GetGrammarExpr(element_id);
+        if (element.type != GrammarExprType::kRuleRef) {
+          new_sequence_elements.push_back(VisitExpr(element));
+          continue;
         }
-        choice_to_add.insert(choice_to_add.end(), other_elements.begin(), other_elements.end());
-        new_choice_ids.push_back(builder_->AddSequence(choice_to_add));
+
+        auto rule_ref_id = element[0];
+        if (can_rule_be_inlined_.count(rule_ref_id) == 0) {
+          can_rule_be_inlined_[rule_ref_id] = CheckIfRuleCanBeInlined(rule_ref_id);
+        }
+        if (!can_rule_be_inlined_[rule_ref_id]) {
+          new_choice_ids.push_back(VisitExpr(choice_expr));
+          continue;
+        }
+
+        auto ref_rule = base_grammar_->GetRule(rule_ref_id);
+        auto ref_grammar_expr = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
+
+        for (auto ref_choice_id : ref_grammar_expr) {
+          auto ref_choice_expr = base_grammar_->GetGrammarExpr(ref_choice_id);
+          XGRAMMAR_ICHECK(ref_choice_expr.type == GrammarExprType::kSequence);
+          for (auto ref_element_id : ref_choice_expr) {
+            new_sequence_elements.push_back(VisitExpr(ref_element_id));
+          }
+        }
       }
+      new_choice_ids.push_back(builder_->AddSequence(new_sequence_elements));
     }
     return builder_->AddChoices(new_choice_ids);
   }
