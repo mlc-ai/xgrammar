@@ -8,7 +8,11 @@ from pydantic import BaseModel
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
+from xgrammar.testing import (
+    GrammarFunctor,
+    _get_masked_tokens_from_bitmask,
+    _is_grammar_accept_string,
+)
 
 
 def test_utf8():
@@ -53,19 +57,19 @@ root_1 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string_1 root_p
 basic_integer_1_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_escape_2 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_2))
 basic_string_sub_2 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_2) | ("\\" basic_escape_2 basic_string_sub_2)) (=([ \n\t]* [,}\]:]))
-basic_number ::= ((basic_number_7 basic_number_3 basic_number_6)) (=(root_part_0_2 [ \n\t]* "}"))
+basic_number_9 ::= ((basic_number_7_2 basic_number_3_2 basic_number_6_2)) (=(root_part_0_2 [ \n\t]* "}"))
 basic_string_2 ::= (("\"" basic_string_sub_2))
 root_prop_1 ::= (("[" [ \n\t]* basic_string_2 root_prop_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 root_part_0_2 ::= (([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1)) (=([ \n\t]* "}"))
-root_2 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number root_part_0_2 [ \n\t]* "}")) (=("</function>"))
-basic_number_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
-basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
-basic_number_3 ::= ("" | ("." basic_number_2)) (=(basic_number_6))
-basic_number_4 ::= ("" | ([+\-])) (=(basic_number_5))
-basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
-basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+root_2 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_9 root_part_0_2 [ \n\t]* "}")) (=("</function>"))
+basic_number_1_2 ::= ("" | ("-")) (=([1-9] [0-9]*))
+basic_number_2_2 ::= (([0-9] basic_number_2_2) | ([0-9]))
+basic_number_3_2 ::= ("" | ("." basic_number_2_2)) (=(basic_number_6_2))
+basic_number_4_2 ::= ("" | ([+\-])) (=(basic_number_5_2))
+basic_number_5_2 ::= (([0-9] basic_number_5_2) | ([0-9]))
+basic_number_6_2 ::= ("" | ([eE] basic_number_4_2 basic_number_5_2))
 root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1)) (=([ \n\t]* "]"))
-basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
+basic_number_7_2 ::= (("0") | (basic_number_1_2 [1-9] [0-9]*)) (=(basic_number_3_2 basic_number_6_2))
 triggered_tags_group ::= (("1>" root "</function>") | ("2>" root_1 "</function>"))
 triggered_tags_group_1 ::= ((">" root_2 "</function>"))
 triggered_tags ::= TagDispatch(
@@ -98,6 +102,8 @@ def test_structural_tag():
     triggers = ["<function=f", "<function=g"]
 
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
+    grammar = GrammarFunctor.grammar_optimizer(grammar)
+
     assert str(grammar) == expected_grammar_test_structural_tag
 
     accepted_inputs = [

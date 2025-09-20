@@ -432,6 +432,7 @@ root::="a"  "b" ("c""d"
     expected = """root ::= (("abcde") | ("f") | ("g"))
 """
     grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -443,6 +444,7 @@ def test_nest():
 root_1 ::= (("b") | ("cd"))
 """
     grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -453,6 +455,7 @@ def test_empty_parentheses():
     expected = """root ::= (("ab"))
 """
     grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -697,6 +700,7 @@ sign ::= ("" | ("+") | ("-"))
 """
 
     grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
     after = str(grammar)
     assert after == expected
 
@@ -789,6 +793,33 @@ def test_error_consecutive_quantifiers():
         RuntimeError, match="EBNF parser error at line 1, column 14: Expect element, but got ?"
     ):
         xgr.Grammar.from_ebnf(grammar_str)
+
+
+def test_repetition_normalizer():
+    """Test the repetition normalizer. If the context is nullable, then the min repetition time will be reduced to 0."""
+    before = "root ::= ([0-9]*){100, 1000}"
+    expected_grammar = r"""root ::= ((root_repeat_1{0, 996} root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_1 ::= (([0-9]*)) (=(root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_2 ::= (([0-9]*)) (=(root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_3 ::= (([0-9]*)) (=(root_repeat_4 root_repeat_5))
+root_repeat_4 ::= (([0-9]*)) (=(root_repeat_5))
+root_repeat_5 ::= (([0-9]*))
+"""
+    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.grammar_optimizer(grammar)
+    assert expected_grammar == str(grammar)
+
+    before = "root ::= ([0-9]){100, 1000}"
+    expected_grammar = r"""root ::= ((root_repeat_1{96, 996} root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_1 ::= (([0-9])) (=(root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_2 ::= (([0-9])) (=(root_repeat_3 root_repeat_4 root_repeat_5))
+root_repeat_3 ::= (([0-9])) (=(root_repeat_4 root_repeat_5))
+root_repeat_4 ::= (([0-9])) (=(root_repeat_5))
+root_repeat_5 ::= (([0-9]))
+"""
+    grammar = xgr.Grammar.from_ebnf(before)
+    grammar = GrammarFunctor.grammar_optimizer(grammar)
+    assert expected_grammar == str(grammar)
 
 
 if __name__ == "__main__":

@@ -245,18 +245,9 @@ using GrammarVisitor = GrammarFunctor<void, ReturnType>;
  */
 using GrammarMutator = GrammarFunctor<int32_t, Grammar>;
 
-/*************************** Grammar manipulation methods ***************************/
 /****** All below methods are implemented as functor to hide the implementation ******/
 
-/*!
- * \brief Normalize a Grammar: expand the nested rules, combine consequent sequences and strings,
- * etc.
- */
-class GrammarNormalizer {
- public:
-  static Grammar Apply(const Grammar& grammar);
-};
-
+/*************************** Grammar Constructor ***************************/
 /*!
  * \brief Find the union of multiple grammars as a new grammar.
  */
@@ -273,12 +264,20 @@ class GrammarConcatFunctor {
   static Grammar Apply(const std::vector<Grammar>& grammars);
 };
 
-/*!
- * \brief Analyze the grammar to find the rules that are allowed to be empty.
- */
-class AllowEmptyRuleAnalyzer {
+class SubGrammarAdder {
  public:
-  static std::vector<int32_t> Apply(const Grammar& grammar);
+  static int32_t Apply(GrammarBuilder* builder, const Grammar& sub_grammar);
+};
+
+/*************************** Grammar Normalizer ***************************/
+
+/*!
+ * \brief Normalize a Grammar: expand the nested rules, combine consequent sequences and strings,
+ * etc.
+ */
+class GrammarNormalizer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
 };
 
 /*!
@@ -290,12 +289,23 @@ class StructureNormalizer {
   static Grammar Apply(const Grammar& grammar);
 };
 
+/*************************** Grammar Optimizer ***************************/
+
 /*!
  * \brief Fuse the byte string elements in the grammar.
  */
+
 class ByteStringFuser {
  public:
   static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Analyze the grammar to find the rules that are allowed to be empty.
+ */
+class AllowEmptyRuleAnalyzer {
+ public:
+  static std::vector<int32_t> Apply(const Grammar& grammar);
 };
 
 /*!
@@ -337,14 +347,15 @@ class GrammarFSMBuilder {
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
 };
-class SubGrammarAdder {
- public:
-  static int32_t Apply(GrammarBuilder* builder, const Grammar& sub_grammar);
-};
 
 class RepetitionNormalizer {
  public:
-  static void Apply(Grammar* grammar);
+  static void Apply(Grammar& grammar);
+};
+
+class GrammarOptimizer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
 };
 
 }  // namespace xgrammar
