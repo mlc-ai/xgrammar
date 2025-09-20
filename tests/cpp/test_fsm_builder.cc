@@ -10,7 +10,7 @@
 
 #include "fsm.h"
 #include "fsm_builder.h"
-#include "grammar_optimizer.h"
+#include "grammar_functor.h"
 #include "xgrammar/grammar.h"
 
 using namespace xgrammar;

@@ -350,7 +350,7 @@ def _qwen_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str,
     return _core.testing._qwen_xml_tool_calling_to_ebnf(schema_str)
 
 
-class GrammarNormalizer:
+class GrammarFunctor:
     """A utility class for transforming grammars. These methods are called during grammar parsing.
     For test purposes."""
 
@@ -358,43 +358,47 @@ class GrammarNormalizer:
     def structure_normalizer(grammar: Grammar) -> Grammar:
         """Normalize the structure of the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_normalizer.structure_normalizer(grammar._handle)
-        )
-
-    @staticmethod
-    def byte_string_fuser(grammar: Grammar) -> Grammar:
-        """Fuse the byte string elements in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_normalizer.byte_string_fuser(grammar._handle)
-        )
-
-
-class GrammarOptimizer:
-    """A utility class for optimizing grammars. These methods are called during grammar compilation.
-    For test purposes."""
-
-    @staticmethod
-    def apply(grammar: Grammar) -> Grammar:
-        """Optimize the grammar."""
-        return Grammar._create_from_handle(_core.testing.grammar_optimizer.apply(grammar._handle))
-
-    @staticmethod
-    def dead_code_eliminator(grammar: Grammar) -> Grammar:
-        """Eliminate the not referenced rules in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_optimizer.dead_code_eliminator(grammar._handle)
-        )
-
-    @staticmethod
-    def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
-        """Analyze and add lookahead assertions in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_optimizer.lookahead_assertion_analyzer(grammar._handle)
+            _core.testing.grammar_functor.structure_normalizer(grammar._handle)
         )
 
     @staticmethod
     def rule_inliner(grammar: Grammar) -> Grammar:
         """Inline some rule references in the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_optimizer.rule_inliner(grammar._handle)
+            _core.testing.grammar_functor.rule_inliner(grammar._handle)
+        )
+
+    @staticmethod
+    def byte_string_fuser(grammar: Grammar) -> Grammar:
+        """Fuse the byte string elements in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.byte_string_fuser(grammar._handle)
+        )
+
+    @staticmethod
+    def dead_code_eliminator(grammar: Grammar) -> Grammar:
+        """Eliminate the not referenced rules in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.dead_code_eliminator(grammar._handle)
+        )
+
+    @staticmethod
+    def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
+        """Analyze and add lookahead assertions in the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
+        )
+
+    @staticmethod
+    def grammar_optimizer(grammr: Grammar) -> Grammar:
+        """Optimize the grammar."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.grammar_optimizer(grammr._handle)
+        )
+
+    @staticmethod
+    def repetition_normalizer(grammar: Grammar) -> None:
+        """Normalize the repetition expression."""
+        Grammar._create_from_handle(
+            _core.testing.grammar_functor.repetition_normalizer(grammar._handle)
         )

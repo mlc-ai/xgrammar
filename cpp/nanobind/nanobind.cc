@@ -300,14 +300,14 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def("_print_grammar_fsms", &_PrintGrammarFSMs);
 
-  auto pyGrammarNormalizerModule = pyTestingModule.def_submodule("grammar_normalizer");
-  pyGrammarNormalizerModule.def("structure_normalizer", &StructureNormalizer::Apply)
-      .def("byte_string_fuser", &ByteStringFuser::Apply);
-  auto pyGrammarOptimizerModule = pyTestingModule.def_submodule("grammar_optimizer");
-  pyGrammarOptimizerModule.def("apply", &GrammarOptimizer::Apply)
+  auto pyGrammarFunctorModule = pyTestingModule.def_submodule("grammar_functor");
+  pyGrammarFunctorModule.def("structure_normalizer", &StructureNormalizer::Apply)
+      .def("byte_string_fuser", &ByteStringFuser::Apply)
       .def("rule_inliner", &RuleInliner::Apply)
       .def("dead_code_eliminator", &DeadCodeEliminator::Apply)
-      .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply);
+      .def("lookahead_assertion_analyzer", &LookaheadAssertionAnalyzer::Apply)
+      .def("grammar_optimizer", &GrammarOptimizer::Apply)
+      .def("repetition_normalizer", &RepetitionNormalizer::Apply);
 
   auto pyKernelsModule = m.def_submodule("kernels");
   pyKernelsModule.def(

@@ -350,7 +350,7 @@ class GrammarFSMBuilder {
 
 class RepetitionNormalizer {
  public:
-  static void Apply(Grammar* grammar);
+  static void Apply(Grammar& grammar);
 };
 
 class GrammarOptimizer {
