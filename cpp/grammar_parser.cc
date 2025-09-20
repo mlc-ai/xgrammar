@@ -828,26 +828,22 @@ int32_t EBNFParser::HandleRepetitionRange(
   const auto repeat_name = cur_rule_name_ + "_repeat_";
   XGRAMMAR_DCHECK(lower >= 4 && upper >= lower);
   int cnt = 1;
+
+  // The repetition body.
   if (upper != 4) {
     auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
     auto new_rule_id =
         builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
     repeated_sequence.push_back(builder_.AddRepeat(new_rule_id, lower - 4, upper - 4));
-  }
-  for (int i = 0; i < 4; ++i) {
-    auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
-    auto new_rule_id =
-        builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
-    repeated_sequence.push_back(builder_.AddRuleRef(new_rule_id));
+    builder_.UpdateLookaheadAssertion(
+        new_rule_id,
+        builder_.AddSequence({grammar_expr_id, grammar_expr_id, grammar_expr_id, grammar_expr_id})
+    );
   }
 
-  // Update the lookahead information of the new rules.
-  std::vector<int32_t> lookahead_elements = repeated_sequence;
-  for (int64_t i = 0; i < static_cast<int64_t>(repeated_sequence.size() - 1); i++) {
-    lookahead_elements.erase(lookahead_elements.begin());
-    builder_.UpdateLookaheadAssertion(
-        builder_.GetGrammarExpr(repeated_sequence[i])[0], builder_.AddSequence(lookahead_elements)
-    );
+  // Add the last 4 grammar_expr_id to the sequence.
+  for (int i = 0; i < 4; ++i) {
+    repeated_sequence.push_back(grammar_expr_id);
   }
 
   // If we have infinite repetition part, add it to the sequence.
