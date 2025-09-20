@@ -552,6 +552,10 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(AnyTextFormat* format) {
   return std::nullopt;
 }
 
+std::optional<ISTError> StructuralTagAnalyzer::VisitSub(GrammarFormat* format) {
+  return std::nullopt;
+}
+
 std::optional<ISTError> StructuralTagAnalyzer::VisitSub(SequenceFormat* format) {
   for (size_t i = 0; i < format->elements.size() - 1; ++i) {
     auto& element = format->elements[i];
