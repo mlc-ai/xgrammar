@@ -37,6 +37,10 @@ void EarleyParser::PopLastStates(int32_t cnt) {
   rule_id_to_completable_states_.PopBack(cnt);
   is_completed_.erase(is_completed_.end() - cnt, is_completed_.end());
   scanable_state_history_.PopBack(cnt);
+  repeat_rule_id_to_max_left_repeat_count_.erase(
+      repeat_rule_id_to_max_left_repeat_count_.end() - cnt,
+      repeat_rule_id_to_max_left_repeat_count_.end()
+  );
 }
 
 void EarleyParser::Complete(const ParserState& state) {
@@ -138,7 +142,16 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
       const int32_t& max_repeat_count = element_expr[2];
       // If the current repeat count is less than the max repeat count,
       // we can expand the next rule reference element.
-      XGRAMMAR_DCHECK(state.repeat_count <= max_repeat_count);
+      XGRAMMAR_DCHECK(state.repeat_count < max_repeat_count);
+      if (tmp_repeat_rule_id_to_max_left_repeat_count_.count(element_expr[0]) == 0) {
+        tmp_repeat_rule_id_to_max_left_repeat_count_[element_expr[0]] =
+            max_repeat_count - state.repeat_count;
+      } else {
+        tmp_repeat_rule_id_to_max_left_repeat_count_[element_expr[0]] = std::max(
+            tmp_repeat_rule_id_to_max_left_repeat_count_[element_expr[0]],
+            max_repeat_count - state.repeat_count
+        );
+      }
       ExpandNextRuleRefElement(state, grammar_expr, &element_expr);
       if (state.repeat_count >= min_repeat_count) {
         Enqueue(ParserState{
@@ -205,6 +218,7 @@ bool EarleyParser::Advance(const uint8_t ch) {
       << "The tmp_process_state_queue_ should be empty before the scan.";
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
+  tmp_repeat_rule_id_to_max_left_repeat_count_.clear();
   tmp_accept_stop_token_ = false;
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   // Scan all the scanable states.
@@ -234,6 +248,7 @@ bool EarleyParser::Advance(const uint8_t ch) {
   // Check if the grammar is completed, and add the scannable states to the history.
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  repeat_rule_id_to_max_left_repeat_count_.push_back(tmp_repeat_rule_id_to_max_left_repeat_count_);
   return true;
 }
 
@@ -261,6 +276,7 @@ EarleyParser::EarleyParser(
     rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
     is_completed_.push_back(false);
     scanable_state_history_.PushBack({init});
+    repeat_rule_id_to_max_left_repeat_count_.push_back({});
     return;
   }
 
@@ -272,6 +288,7 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   tmp_states_visited_in_queue_.Clear();
   tmp_accept_stop_token_ = false;
   tmp_states_to_be_added_.clear();
+  tmp_repeat_rule_id_to_max_left_repeat_count_.clear();
   // If the rule can't be expanded, we need to add it to the queue.
   if (!ExpandAndEnqueueUnexpandedState(state)) {
     Enqueue(state);
@@ -290,11 +307,13 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  repeat_rule_id_to_max_left_repeat_count_.push_back(tmp_repeat_rule_id_to_max_left_repeat_count_);
 }
 
 void EarleyParser::Reset() {
   rule_id_to_completable_states_.PopBack(rule_id_to_completable_states_.size());
   scanable_state_history_.PopBack(scanable_state_history_.size());
+  repeat_rule_id_to_max_left_repeat_count_.clear();
   is_completed_.clear();
   stop_token_is_accepted_ = false;
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());

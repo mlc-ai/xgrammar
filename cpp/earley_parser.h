@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <ostream>
 #include <queue>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -260,6 +261,15 @@ class EarleyParser {
   /*! \brief Check if the stop token is accepted. */
   bool stop_token_is_accepted_ = false;
 
+  /*! \brief The tmp map to store the maximum left repeat count for the repeated rules. */
+  std::unordered_map<int32_t, int32_t> tmp_repeat_rule_id_to_max_left_repeat_count_;
+
+  /*!
+   * \brief Map to store the maximum left repeat count for the repeated rules.
+   * It is useful when the repeated rule is quite relaxed, like .{0, 255}.
+   */
+  std::vector<std::unordered_map<int32_t, int32_t>> repeat_rule_id_to_max_left_repeat_count_;
+
   /*!
    * \brief Check if the state has been added into the queue.
    * \param state The state to check.
@@ -448,6 +458,7 @@ class EarleyParser {
     rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
     is_completed_.push_back(is_completed_.back());
     scanable_state_history_.PushBack(&state, 1);
+    repeat_rule_id_to_max_left_repeat_count_.push_back({});
     return;
   }
 
@@ -460,6 +471,10 @@ class EarleyParser {
     }
     result += "]";
     return result;
+  }
+
+  const std::unordered_map<int32_t, int32_t>& GetRepeatRuleIdToMaxLeftRepeatCount() const {
+    return repeat_rule_id_to_max_left_repeat_count_.back();
   }
 };
 
