@@ -159,6 +159,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#parallel-tool-calling">Parallel Tool Calling</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
@@ -318,6 +319,26 @@ structural tag, the request should be like:</p>
 }
 </pre></div>
 </div>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">grammar</span></code></p>
+<p>This format can be used to match a given ebnf grammar.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;grammar&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;grammar&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>We can use it as the context of other structural tags as well. When using grammar constraints, you need to be especially careful. If the grammar is too general (for example .*), it will cause the subsequent constraints to become ineffective.</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">regex</span></code></p>
+<p>This format can be used to match a given ebnf grammar.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;regex&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;pattern&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>We can use it as the context of other structural tags as well. As GrammarFormat, if the regex pattern is too general, it will cause the subsequent constraints to become inefficient as well.</p>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">sequence</span></code></p>
 <p>The output should match a sequence of elements.</p>
@@ -993,6 +1014,13 @@ generation should stop after the first tag is generated. So the <code class="doc
 </div>
 <p>The <code class="docutils literal notranslate"><span class="pre">true</span></code> mode can be implemented by setting <code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> to <code class="docutils literal notranslate"><span class="pre">false</span></code>.</p>
 </section>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Permalink to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>For API reference, see <a class="reference internal" href="../api/python/structural_tag.html"><span class="doc std std-doc">Structural Tag API Reference</span></a>.</p></li>
+<li><p>For advanced usage, see <a class="reference internal" href="advanced_structural_tag.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a>.</p></li>
+</ul>
 </section>
 </section>
 

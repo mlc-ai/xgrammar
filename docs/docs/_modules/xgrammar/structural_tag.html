@@ -261,7 +261,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="c1"># ---------- Basic Formats ----------</span>
 
 
-<div class="viewcode-block" id="ConstStringFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.ConstStringFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">ConstStringFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="ConstStringFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.ConstStringFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">ConstStringFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a constant string.&quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;const_string&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;const_string&quot;</span>
@@ -270,7 +270,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The constant string.&quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="JSONSchemaFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.JSONSchemaFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">JSONSchemaFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="JSONSchemaFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.JSONSchemaFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">JSONSchemaFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a JSON schema.&quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;json_schema&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json_schema&quot;</span>
@@ -279,7 +279,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema.&quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="QwenXMLParameterFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.QwenXMLParameterFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="QwenXMLParameterFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.QwenXMLParameterFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches Qwen XML function calls.</span>
 
 <span class="sd">    Examples</span>
@@ -311,17 +311,37 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema for the parameters of the function calling.&quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="AnyTextFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.AnyTextFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AnyTextFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="AnyTextFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.AnyTextFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AnyTextFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches any text.&quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;any_text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;any_text&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span></div>
 
 
+<div class="viewcode-block" id="GrammarFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.GrammarFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches an ebnf grammar.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;grammar&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;grammar&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">grammar</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The ebnf grammar.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="RegexFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.RegexFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">RegexFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a regex pattern.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;regex&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;regex&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">pattern</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The regex pattern.&quot;&quot;&quot;</span></div>
+
+
 <span class="c1"># ---------- Combinatorial Formats ----------</span>
 
 
-<div class="viewcode-block" id="SequenceFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.SequenceFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">SequenceFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="SequenceFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.SequenceFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">SequenceFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a sequence of formats.&quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;sequence&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;sequence&quot;</span>
@@ -330,7 +350,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The elements of the sequence.&quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="OrFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.OrFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">OrFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="OrFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.OrFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">OrFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches one of the formats.&quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;or&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;or&quot;</span>
@@ -339,7 +359,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The elements of the or.&quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="TagFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.TagFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="TagFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TagFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tag: ``begin content end``.&quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;tag&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tag&quot;</span>
@@ -352,7 +372,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag.&quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="TriggeredTagsFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.TriggeredTagsFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="TriggeredTagsFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TriggeredTagsFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches triggered tags. It can allow any output until a trigger is</span>
 <span class="sd">    encountered, then dispatch to the corresponding tag; when the end tag is encountered, the</span>
 <span class="sd">    grammar will allow any following output, until the next trigger is encountered.</span>
@@ -403,7 +423,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="TagsWithSeparatorFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.TagsWithSeparatorFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="TagsWithSeparatorFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TagsWithSeparatorFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tags with separator. It can match zero, one, or more tags, separated</span>
 <span class="sd">    by the separator, with no other text allowed.</span>
 
@@ -449,6 +469,8 @@ window.addEventListener("load", () => mermaid.run());
         <span class="n">AnyTextFormat</span><span class="p">,</span>
         <span class="n">ConstStringFormat</span><span class="p">,</span>
         <span class="n">JSONSchemaFormat</span><span class="p">,</span>
+        <span class="n">GrammarFormat</span><span class="p">,</span>
+        <span class="n">RegexFormat</span><span class="p">,</span>
         <span class="n">QwenXMLParameterFormat</span><span class="p">,</span>
         <span class="n">OrFormat</span><span class="p">,</span>
         <span class="n">SequenceFormat</span><span class="p">,</span>
@@ -480,7 +502,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="c1"># ---------- Top Level ----------</span>
 
 
-<div class="viewcode-block" id="StructuralTagItem"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.StructuralTagItem">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="StructuralTagItem"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTagItem">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Deprecated. Definition of a structural tag item.</span>
 
 <span class="sd">    See :meth:`xgrammar.Grammar.from_structural_tag` for more details.</span>
@@ -494,7 +516,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag.&quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="StructuralTag"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.StructuralTag">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTag</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="StructuralTag"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTag">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTag</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Describes a complete structural tag structure. It corresponds to</span>
 <span class="sd">    ``&quot;response_format&quot;: {&quot;type&quot;: &quot;structural_tag&quot;, &quot;format&quot;: {...}}`` in API.</span>
@@ -505,7 +527,7 @@ window.addEventListener("load", () => mermaid.run());
     <span class="nb">format</span><span class="p">:</span> <span class="n">Format</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The format of the structural tag. Could be any of the structural tag formats.&quot;&quot;&quot;</span>
 
-<div class="viewcode-block" id="StructuralTag.from_legacy_structural_tag"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.StructuralTag.from_legacy_structural_tag">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="StructuralTag.from_legacy_structural_tag"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTag.from_legacy_structural_tag">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_legacy_structural_tag</span><span class="p">(</span>
         <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StructuralTag&quot;</span><span class="p">:</span>
@@ -537,7 +559,7 @@ window.addEventListener("load", () => mermaid.run());
             <span class="p">),</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="StructuralTag.from_json"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.structural_tag.StructuralTag.from_json">[docs]</a>    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="StructuralTag.from_json"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTag.from_json">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_json</span><span class="p">(</span><span class="n">json_str</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="s2">&quot;StructuralTag&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a JSON string to a structural tag.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">json_str</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
@@ -553,6 +575,8 @@ window.addEventListener("load", () => mermaid.run());
     <span class="s2">&quot;JSONSchemaFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;QwenXMLParameterFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;AnyTextFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;GrammarFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RegexFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;SequenceFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;OrFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;TagFormat&quot;</span><span class="p">,</span>

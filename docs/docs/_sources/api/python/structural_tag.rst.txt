@@ -3,6 +3,26 @@ Structural Tag
 
 .. currentmodule:: xgrammar.structural_tag
 
+This page contains the API reference for the structural tag. For its usage, see
+:doc:`Structural Tag Usage <../../tutorials/structural_tag>`.
+
+
+Top Level Classes
+-----------------
+
+.. autoclass:: xgrammar.StructuralTag
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autoclass:: StructuralTagItem
+   :show-inheritance:
+   :exclude-members: model_config
+
+Format Union
+------------
+
+.. autodata:: Format
+
 Basic Formats
 -------------
 
@@ -15,6 +35,14 @@ Basic Formats
    :exclude-members: model_config
 
 .. autoclass:: AnyTextFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autoclass:: GrammarFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autoclass:: RegexFormat
    :show-inheritance:
    :exclude-members: model_config
 
@@ -42,21 +70,5 @@ Combinatorial Formats
    :exclude-members: model_config
 
 .. autoclass:: TagsWithSeparatorFormat
-   :show-inheritance:
-   :exclude-members: model_config
-
-Format Union
-------------
-
-.. autodata:: Format
-
-Top Level Classes
------------------
-
-.. autoclass:: StructuralTagItem
-   :show-inheritance:
-   :exclude-members: model_config
-
-.. autoclass:: StructuralTag
    :show-inheritance:
    :exclude-members: model_config
