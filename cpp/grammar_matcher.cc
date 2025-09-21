@@ -8,6 +8,9 @@
 
 #include <xgrammar/matcher.h>
 
+#include <algorithm>
+#include <bitset>
+#include <cctype>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -548,6 +551,36 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
 
   for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    const auto& last_repetition_time = GetRepeatRuleIdToMaxLeftRepeatCount();
+    int last_rejected_uncertain_range = 0;
+    bool is_in_repetition = last_repetition_time.find(state.rule_id) != last_repetition_time.end();
+    bool speculative_accept = false;
+    int repeat_time = is_in_repetition ? last_repetition_time.at(state.rule_id) : 0;
+    std::bitset<256> speculative_accepted_chars;
+    if (is_in_repetition) {
+      const auto& rule = grammar_->GetRule(state.rule_id);
+      const auto& rule_body = grammar_->GetGrammarExpr(rule.body_expr_id);
+      if (rule_body.size() == 1) {
+        const auto& sequence = grammar_->GetGrammarExpr(rule_body[0]);
+        if (sequence.type == GrammarExprType::kSequence && sequence.size() == 1) {
+          const auto& sub_sequence = grammar_->GetGrammarExpr(sequence[0]);
+          if (sub_sequence.type == GrammarExprType::kCharacterClass) {
+            speculative_accept = true;
+            bool is_negative = sub_sequence[0];
+            for (int i = 1; i < sub_sequence.size(); i += 2) {
+              int left_char = static_cast<uint8_t>(sub_sequence[i]);
+              int right_char = static_cast<uint8_t>(sub_sequence[i + 1]);
+              for (int c = left_char; c <= right_char; ++c) {
+                speculative_accepted_chars[c] = true;
+              }
+            }
+            if (is_negative) {
+              speculative_accepted_chars = ~speculative_accepted_chars;
+            }
+          }
+        }
+      }
+    }
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -569,7 +602,6 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       XGRAMMAR_LOG(INFO) << "The ParserState is " << state << ", the mask is "
                          << adaptive_token_mask.Print(tokenizer_info_);
     }
-    int last_rejected_uncertain_range = 0;
     for (const auto& cur_token_idx : adaptive_token_mask.uncertain_indices) {
       // Check if the current token is already accepted. If it is, we can skip it.
       if (tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
@@ -586,6 +618,21 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       }
 
       const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
+
+      if (speculative_accept && static_cast<int32_t>(cur_token.size()) < (repeat_time + 4)) {
+        bool all_accepted = true;
+        for (const auto& ch : cur_token) {
+          if (!isascii(ch) || !speculative_accepted_chars[static_cast<uint8_t>(ch)]) {
+            all_accepted = false;
+            break;
+          }
+        }
+        if (all_accepted) {
+          tmp_accepted_bitset_.Set(sorted_decoded_vocab[cur_token_idx].first, true);
+          continue;
+        }
+      }
+
       bool accepted = true;
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.

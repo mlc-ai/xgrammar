@@ -473,7 +473,7 @@ class EarleyParser {
     return result;
   }
 
-  const std::unordered_map<int32_t, int32_t>& GetRepeatRuleIdToMaxLeftRepeatCount() const {
+  const std::unordered_map<int32_t, int32_t> GetRepeatRuleIdToMaxLeftRepeatCount() const {
     return repeat_rule_id_to_max_left_repeat_count_.back();
   }
 };
