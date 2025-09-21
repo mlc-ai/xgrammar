@@ -619,7 +619,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
 
       const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
 
-      if (speculative_accept && static_cast<int32_t>(cur_token.size()) < (repeat_time + 4)) {
+      if (speculative_accept && static_cast<int32_t>(cur_token.size()) < (repeat_time + 10)) {
         bool all_accepted = true;
         for (const auto& ch : cur_token) {
           if (!isascii(ch) || !speculative_accepted_chars[static_cast<uint8_t>(ch)]) {

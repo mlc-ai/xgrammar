@@ -428,6 +428,7 @@ class EBNFParser {
  public:
   /*! \brief The logic of parsing the grammar string. */
   Grammar Parse(const std::vector<EBNFLexer::Token>& tokens, const std::string& root_rule_name);
+  const int kRepetitionThreshold = 10;
 
  private:
   using Rule = Grammar::Impl::Rule;
@@ -763,8 +764,8 @@ int32_t EBNFParser::HandleRepetitionRange(
   XGRAMMAR_DCHECK(lower >= 0);
   XGRAMMAR_DCHECK(upper == -1 || upper >= lower);
 
-  // Case 1. upper is bounded and small (<=4), unzip the repetition.
-  if (upper != -1 && upper <= 4) {
+  // Case 1. upper is bounded and small (<=threshold), unzip the repetition.
+  if (upper != -1 && upper <= kRepetitionThreshold) {
     std::vector<int32_t> choices;
     if (lower == 0) {
       choices.push_back(builder_.AddEmptyStr());
@@ -782,15 +783,15 @@ int32_t EBNFParser::HandleRepetitionRange(
 
   // Case 2. upper is unbounded or large.
 
-  // Case 2.1. lower is smaller than 4. Transform {lower, upper} into:
-  // {4, upper} | {lower} | ... | {3}.
+  // Case 2.1. lower is smaller than threshold. Transform {lower, upper} into:
+  // {threshold, upper} | {lower} | ... | {threshold}.
   std::vector<int32_t> choices;
-  if (lower < 4) {
+  if (lower < kRepetitionThreshold) {
     if (lower == 0) {
       choices.push_back(builder_.AddEmptyStr());
       lower = 1;
     }
-    for (; lower < 4; ++lower) {
+    for (; lower < kRepetitionThreshold; ++lower) {
       std::vector<int32_t> sequence;
       for (int64_t i = 0; i < lower; ++i) {
         sequence.push_back(grammar_expr_id);
@@ -801,7 +802,7 @@ int32_t EBNFParser::HandleRepetitionRange(
 
   std::optional<int32_t> infinite_repetition_id = std::nullopt;
   std::vector<int32_t> repeated_sequence;
-  // Now, we transform {lower, upper} into {max{4, lower}, upper}.
+  // Now, we transform {lower, upper} into {max{threshold, lower}, upper}.
   // Case 2.2 upper is unbounded. We will transform it into {lower} {0, inf}.
   if (upper == -1) {
     const auto& rule_expr = builder_.GetGrammarExpr(grammar_expr_id);
@@ -824,25 +825,24 @@ int32_t EBNFParser::HandleRepetitionRange(
     upper = lower;
   }
 
-  // Handle the {lower, upper} part, where 4 <= lower <= upper.
-  const auto repeat_name = cur_rule_name_ + "_repeat_";
-  XGRAMMAR_DCHECK(lower >= 4 && upper >= lower);
-  int cnt = 1;
+  // Handle the {lower, upper} part, where threshold <= lower <= upper.
+  const auto repeat_name = cur_rule_name_ + "_repeat_1";
+  XGRAMMAR_DCHECK(lower >= kRepetitionThreshold && upper >= lower);
 
   // The repetition body.
-  if (upper != 4) {
+  if (upper != kRepetitionThreshold) {
+    XGRAMMAR_DCHECK(upper > kRepetitionThreshold);
     auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
-    auto new_rule_id =
-        builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
-    repeated_sequence.push_back(builder_.AddRepeat(new_rule_id, lower - 4, upper - 4));
-    builder_.UpdateLookaheadAssertion(
-        new_rule_id,
-        builder_.AddSequence({grammar_expr_id, grammar_expr_id, grammar_expr_id, grammar_expr_id})
+    auto new_rule_id = builder_.AddRuleWithHint(repeat_name, new_grammar_expr_id);
+    repeated_sequence.push_back(
+        builder_.AddRepeat(new_rule_id, lower - kRepetitionThreshold, upper - kRepetitionThreshold)
     );
+    std::vector<int32_t> repetition_lookahead(kRepetitionThreshold, grammar_expr_id);
+    builder_.UpdateLookaheadAssertion(new_rule_id, builder_.AddSequence(repetition_lookahead));
   }
 
-  // Add the last 4 grammar_expr_id to the sequence.
-  for (int i = 0; i < 4; ++i) {
+  // Add the last threshold grammar_expr_id to the sequence.
+  for (int i = 0; i < kRepetitionThreshold; ++i) {
     repeated_sequence.push_back(grammar_expr_id);
   }
 
