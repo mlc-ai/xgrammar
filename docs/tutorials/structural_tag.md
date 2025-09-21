@@ -819,3 +819,8 @@ generation should stop after the first tag is generated. So the `false` mode can
 ```
 
 The `true` mode can be implemented by setting `stop_after_first` to `false`.
+
+## Next Steps
+
+* For API reference, see [Structural Tag API Reference](../api/python/structural_tag).
+* For advanced usage, see [Advanced Topics of the Structural Tag](advanced_structural_tag).
