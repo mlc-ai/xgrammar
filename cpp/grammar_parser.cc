@@ -764,7 +764,7 @@ int32_t EBNFParser::HandleRepetitionRange(
   XGRAMMAR_DCHECK(lower >= 0);
   XGRAMMAR_DCHECK(upper == -1 || upper >= lower);
 
-  // Case 1. upper is bounded and small (<=threshold), unzip the repetition.
+  // Case 1. small (<=threshold), unzip the repetition.
   if (upper != -1 && upper <= kRepetitionThreshold) {
     std::vector<int32_t> choices;
     if (lower == 0) {
@@ -783,10 +783,35 @@ int32_t EBNFParser::HandleRepetitionRange(
 
   // Case 2. upper is unbounded or large.
 
-  // Case 2.1. lower is smaller than threshold. Transform {lower, upper} into:
+  // Case 2.1.1. lower is smaller than threshold, and upper is large. Transform {lower, upper} into:
   // {threshold, upper} | {lower} | ... | {threshold}.
+  // Case 2.1.2. lower is smaller than threshold, and upper is unbounded. Unzip the
+  // {lower} repetition, and add a star expression.
   std::vector<int32_t> choices;
   if (lower < kRepetitionThreshold) {
+    if (upper == -1) {
+      int infinite_repetition_id = -1;
+      const auto& rule_expr = builder_.GetGrammarExpr(grammar_expr_id);
+      if (rule_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass) {
+        std::vector<GrammarBuilder::CharacterClassElement> character_ranges;
+        bool is_negative = rule_expr[0];
+        for (int i = 1; i < static_cast<int>(rule_expr.size()); i += 2) {
+          character_ranges.push_back({rule_expr[i], rule_expr[i + 1]});
+        }
+        infinite_repetition_id = builder_.AddCharacterClassStar(character_ranges, is_negative);
+      } else {
+        const auto& unbounded_rule_id =
+            builder_.AddEmptyRule(builder_.GetNewRuleName(cur_rule_name_ + "_repeat_inf"));
+        int recursion_sequence =
+            builder_.AddSequence({grammar_expr_id, builder_.AddRuleRef(unbounded_rule_id)});
+        int recursion_choice = builder_.AddChoices({builder_.AddEmptyStr(), recursion_sequence});
+        builder_.UpdateRuleBody(unbounded_rule_id, recursion_choice);
+        infinite_repetition_id = builder_.AddRuleRef(unbounded_rule_id);
+      }
+      std::vector<int32_t> sequence(lower, grammar_expr_id);
+      sequence.push_back(infinite_repetition_id);
+      return builder_.AddSequence(sequence);
+    }
     if (lower == 0) {
       choices.push_back(builder_.AddEmptyStr());
       lower = 1;
