@@ -6,7 +6,7 @@ import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import GrammarFunctor, _is_grammar_accept_string
+from xgrammar.testing import _is_grammar_accept_string
 
 PROFILER_ON = True
 tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
