@@ -52,6 +52,7 @@ if PROFILER_ON:
 def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_grammar_ebnf: str):
     structural_tag = {"type": "structural_tag", "format": structural_tag_format}
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
+    print(stag_ebnf)
     assert str(stag_ebnf) == expected_grammar_ebnf
 
 
@@ -199,6 +200,33 @@ def test_ebnf_grammar_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+regex_stag_grammar = [
+    (
+        {"type": "regex", "pattern": "Hello![0-9]+"},
+        r"""root ::= (("Hello!" root_1))
+root_1 ::= (([0-9] root_1) | ([0-9]))
+root_2 ::= ((root))
+""",
+    )
+]
+regex_instance_is_accepted = [
+    ("Hello!12345", True),
+    ("Hello!0", True),
+    ("Hello!", False),
+    ("Hello!123a", False),
+    ("Hi!123", False),
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", regex_stag_grammar)
+@pytest.mark.parametrize("instance, is_accepted", regex_instance_is_accepted)
+def test_regex_format(
+    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 sequence_stag_grammar = [
     (
         {
@@ -207,10 +235,11 @@ sequence_stag_grammar = [
                 {"type": "const_string", "value": "Hello!"},
                 {"type": "json_schema", "json_schema": {"type": "number"}},
                 {"type": "grammar", "grammar": 'root ::= "" | [-+*/]'},
+                {"type": "regex", "pattern": "[simple]?"},
             ],
         },
         r"""basic_number ::= ((basic_number_7 basic_number_3 basic_number_6))
-root ::= ((basic_number)) (=(root_1))
+root ::= ((basic_number)) (=(root_1 root_2))
 basic_number_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
 basic_number_3 ::= ("" | ("." basic_number_2)) (=(basic_number_6))
@@ -218,9 +247,11 @@ basic_number_4 ::= ("" | ([+\-])) (=(basic_number_5))
 basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
-root_1 ::= ("" | ([\-+*/]))
-sequence ::= (("Hello!" root root_1))
-root_2 ::= ((sequence))
+root_1 ::= ("" | ([\-+*/])) (=(root_2))
+root_2 ::= ((root_1_1))
+root_1_1 ::= ("" | ([simple]))
+sequence ::= (("Hello!" root root_1 root_2))
+root_3 ::= ((sequence))
 """,
     )
 ]
@@ -235,6 +266,9 @@ sequence_instance_is_accepted = [
     ("Hello!123+", True),
     ("Hello!123-", True),
     ("Hello!123!", False),
+    ("Hello!123s", True),
+    ("Hello!123+s", True),
+    ("Hello!123q", False),
 ]
 
 
