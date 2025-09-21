@@ -14,7 +14,9 @@ namespace xgrammar {
 /*!
  * \brief Convert a regex string to EBNF grammar string.
  */
-std::string RegexToEBNF(const std::string& regex, bool with_rule_name = true);
+std::string RegexToEBNF(
+    const std::string& regex, bool with_rule_name = true, bool allow_quotes = true
+);
 
 }  // namespace xgrammar
 

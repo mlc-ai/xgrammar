@@ -3180,7 +3180,7 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
                             << "supported yet, ignoring minLength/maxLength/format";
     }
     std::string regex_pattern = schema.at("pattern").get<std::string>();
-    std::string converted_regex = RegexToEBNF(regex_pattern, false);
+    std::string converted_regex = RegexToEBNF(regex_pattern, false, false);
     string_spec.pattern = converted_regex;
     return ResultOk(string_spec);
   }
@@ -3287,7 +3287,7 @@ std::string JSONSchemaConverter::VisitObject(
 
           std::string property_pattern;
           if (json_format == JSONFormat::kJSON) {
-            property_pattern += "\"\\\"\"" + RegexToEBNF(prop_name, false) + "\"\\\"\" " +
+            property_pattern += "\"\\\"\"" + RegexToEBNF(prop_name, false, false) + "\"\\\"\" " +
                                 colon_pattern_ + " " + value;
           } else {
             property_pattern += "\"<parameter=\" " + RegexToEBNF(prop_name, false) + " \">\" " +
