@@ -1844,7 +1844,7 @@ basic_structural_tags_instance_is_accepted = [
 def test_from_structural_tag_with_structural_tag_instance(
     stag_format: xgr.structural_tag.Format, instance: str, is_accepted: bool
 ):
-    stag = xgr.structural_tag.StructuralTag(format=stag_format)
+    stag = xgr.StructuralTag(format=stag_format)
     grammar = xgr.Grammar.from_structural_tag(stag)
     assert _is_grammar_accept_string(grammar, instance) == is_accepted
 
