@@ -343,7 +343,33 @@ basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 bas
 tag ::= (("BEG" root "END"))
 root_1 ::= ((tag))
 """,
-    )
+    ),
+    (
+        {
+            "type": "tag",
+            "begin": "BEG",
+            "content": {"type": "grammar", "grammar": "root ::= [+\\-]?[1-9][0-9]*"},
+            "end": "END",
+        },
+        r"""root ::= ((root_1 [1-9] [0-9]*)) (=("END"))
+root_1 ::= ("" | ([+\-])) (=([1-9] [0-9]*))
+tag ::= (("BEG" root "END"))
+root_2 ::= ((tag))
+""",
+    ),
+    (
+        {
+            "type": "tag",
+            "begin": "BEG",
+            "content": {"type": "regex", "pattern": "[+\\-]?[1-9][0-9]*"},
+            "end": "END",
+        },
+        r"""root ::= ((root_1 [1-9] [0-9]*)) (=("END"))
+root_1 ::= ("" | ([+\-])) (=([1-9] [0-9]*))
+tag ::= (("BEG" root "END"))
+root_2 ::= ((tag))
+""",
+    ),
 ]
 
 
