@@ -73,7 +73,20 @@ The format field requires a format object. We provide several basic format objec
 
     We can use it as the context of other structural tags as well. When using grammar constraints, you need to be especially careful. If the grammar is too general (for example .*), it will cause the subsequent constraints to become ineffective.
 
-4. `sequence`
+4. `regex`
+
+    This format can be used to match a given ebnf grammar.
+    ```json
+    {
+        "type": "regex",
+        "pattern": "..."
+    }
+    ```
+
+    We can use it as the context of other structural tags as well. As GrammarFormat, if the regex pattern is too general, it will cause the subsequent constraints to become inefficient as well.
+
+
+5. `sequence`
 
     The output should match a sequence of elements.
 
@@ -92,7 +105,7 @@ The format field requires a format object. We provide several basic format objec
     }
     ```
 
-5. `or`
+6. `or`
 
     The output should follow any of the elements.
 
@@ -111,7 +124,7 @@ The format field requires a format object. We provide several basic format objec
     }
     ```
 
-6. `tag`
+7. `tag`
 
     The output must follow `begin content end`. `begin` and `end` are strings, and `content` can be
     any format object. This is useful for LLM outputs such as `<think>...</think>` or
@@ -128,7 +141,7 @@ The format field requires a format object. We provide several basic format objec
     }
     ```
 
-7. `any_text`
+8. `any_text`
 
     The any_text format allows any text.
 
@@ -153,7 +166,7 @@ The format field requires a format object. We provide several basic format objec
     It first accepts the begin tag (can be empty), then any text **except the end tag**, then the
     end tag.
 
-8. `triggered_tags`
+9. `triggered_tags`
 
     The output will match triggered tags. It can allow any output until a trigger is
     encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
@@ -230,7 +243,7 @@ The format field requires a format object. We provide several basic format objec
     will stop.
 
 
-9. `tags_with_separator`
+10. `tags_with_separator`
 
     The output should match zero, one, or more tags, separated by the separator, with no other text allowed.
 
@@ -288,7 +301,7 @@ The format field requires a format object. We provide several basic format objec
     generation will stop.
 
 
-10. `QwenXMLParameterFormat`
+11. `QwenXMLParameterFormat`
 
     This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.
 
