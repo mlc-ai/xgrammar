@@ -168,6 +168,64 @@ def test_qwen_parameter_xml_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+ebnf_grammar_stag_grammar = [
+    (
+        {
+            "type": "grammar",
+            "grammar": r"""root ::= "Hello!" number
+            number ::= [0-9] | [0-9] number""",
+        },
+        r"""root ::= (("Hello!" number))
+number ::= (([0-9]) | ([0-9] number))
+root_1 ::= ((root))
+""",
+    )
+]
+ebnf_grammar_instance_is_accepted = [
+    ("Hello!12345", True),
+    ("Hello!0", True),
+    ("Hello!", False),
+    ("Hello!123a", False),
+    ("Hi!123", False),
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", ebnf_grammar_stag_grammar)
+@pytest.mark.parametrize("instance, is_accepted", ebnf_grammar_instance_is_accepted)
+def test_ebnf_grammar_format(
+    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+regex_stag_grammar = [
+    (
+        {"type": "regex", "pattern": "Hello![0-9]+"},
+        r"""root ::= (("Hello!" root_1))
+root_1 ::= (([0-9] root_1) | ([0-9]))
+root_2 ::= ((root))
+""",
+    )
+]
+regex_instance_is_accepted = [
+    ("Hello!12345", True),
+    ("Hello!0", True),
+    ("Hello!", False),
+    ("Hello!123a", False),
+    ("Hi!123", False),
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", regex_stag_grammar)
+@pytest.mark.parametrize("instance, is_accepted", regex_instance_is_accepted)
+def test_regex_format(
+    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 sequence_stag_grammar = [
     (
         {
@@ -175,10 +233,12 @@ sequence_stag_grammar = [
             "elements": [
                 {"type": "const_string", "value": "Hello!"},
                 {"type": "json_schema", "json_schema": {"type": "number"}},
+                {"type": "grammar", "grammar": 'root ::= "" | [-+*/]'},
+                {"type": "regex", "pattern": "[simple]?"},
             ],
         },
         r"""basic_number ::= ((basic_number_7 basic_number_3 basic_number_6))
-root ::= ((basic_number))
+root ::= ((basic_number)) (=(root_1 root_2))
 basic_number_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
 basic_number_3 ::= ("" | ("." basic_number_2)) (=(basic_number_6))
@@ -186,8 +246,11 @@ basic_number_4 ::= ("" | ([+\-])) (=(basic_number_5))
 basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 basic_number_6))
-sequence ::= (("Hello!" root))
-root_1 ::= ((sequence))
+root_1 ::= ("" | ([\-+*/])) (=(root_2))
+root_2 ::= ((root_1_1))
+root_1_1 ::= ("" | ([simple]))
+sequence ::= (("Hello!" root root_1 root_2))
+root_3 ::= ((sequence))
 """,
     )
 ]
@@ -199,6 +262,12 @@ sequence_instance_is_accepted = [
     ("Hello!", False),
     ("123Hello!", False),
     ("???", False),
+    ("Hello!123+", True),
+    ("Hello!123-", True),
+    ("Hello!123!", False),
+    ("Hello!123s", True),
+    ("Hello!123+s", True),
+    ("Hello!123q", False),
 ]
 
 
@@ -274,7 +343,33 @@ basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*)) (=(basic_number_3 bas
 tag ::= (("BEG" root "END"))
 root_1 ::= ((tag))
 """,
-    )
+    ),
+    (
+        {
+            "type": "tag",
+            "begin": "BEG",
+            "content": {"type": "grammar", "grammar": "root ::= [+\\-]?[1-9][0-9]*"},
+            "end": "END",
+        },
+        r"""root ::= ((root_1 [1-9] [0-9]*)) (=("END"))
+root_1 ::= ("" | ([+\-])) (=([1-9] [0-9]*))
+tag ::= (("BEG" root "END"))
+root_2 ::= ((tag))
+""",
+    ),
+    (
+        {
+            "type": "tag",
+            "begin": "BEG",
+            "content": {"type": "regex", "pattern": "[+\\-]?[1-9][0-9]*"},
+            "end": "END",
+        },
+        r"""root ::= ((root_1 [1-9] [0-9]*)) (=("END"))
+root_1 ::= ("" | ([+\-])) (=([1-9] [0-9]*))
+tag ::= (("BEG" root "END"))
+root_2 ::= ((tag))
+""",
+    ),
 ]
 
 
@@ -1774,7 +1869,7 @@ basic_structural_tags_instance_is_accepted = [
 def test_from_structural_tag_with_structural_tag_instance(
     stag_format: xgr.structural_tag.Format, instance: str, is_accepted: bool
 ):
-    stag = xgr.structural_tag.StructuralTag(format=stag_format)
+    stag = xgr.StructuralTag(format=stag_format)
     grammar = xgr.Grammar.from_structural_tag(stag)
     assert _is_grammar_accept_string(grammar, instance) == is_accepted
 
