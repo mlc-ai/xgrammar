@@ -52,6 +52,7 @@ if PROFILER_ON:
 def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_grammar_ebnf: str):
     structural_tag = {"type": "structural_tag", "format": structural_tag_format}
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
+    print(stag_ebnf)
     assert str(stag_ebnf) == expected_grammar_ebnf
 
 
@@ -243,7 +244,7 @@ def test_ebnf_grammar_format(
 regex_stag_grammar = [
     (
         {"type": "regex", "pattern": "Hello![0-9]+"},
-        r"""root ::= (("Hello!" root_1))
+        r"""root ::= (("H" "e" "l" "l" "o" "!" root_1))
 root_1 ::= (([0-9] root_1) | ([0-9]))
 root_2 ::= ((root))
 """,
@@ -300,8 +301,11 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*))
-sequence ::= ((const_string root))
-root_1 ::= ((sequence))
+root_1 ::= ("" | ([\-+*/]))
+root_2 ::= ((root_1_1))
+root_1_1 ::= ("" | ([simple]))
+sequence ::= ((const_string root root_1 root_2))
+root_3 ::= ((sequence))
 """,
     )
 ]
@@ -427,8 +431,8 @@ root_1 ::= ((tag))
             "content": {"type": "grammar", "grammar": "root ::= [+\\-]?[1-9][0-9]*"},
             "end": "END",
         },
-        r"""root ::= ((root_1 [1-9] [0-9]*)) (=("END"))
-root_1 ::= ("" | ([+\-])) (=([1-9] [0-9]*))
+        r"""root ::= ((root_1 [1-9] [0-9]*))
+root_1 ::= ("" | ([+\-]))
 tag ::= (("BEG" root "END"))
 root_2 ::= ((tag))
 """,
@@ -440,8 +444,8 @@ root_2 ::= ((tag))
             "content": {"type": "regex", "pattern": "[+\\-]?[1-9][0-9]*"},
             "end": "END",
         },
-        r"""root ::= ((root_1 [1-9] [0-9]*)) (=("END"))
-root_1 ::= ("" | ([+\-])) (=([1-9] [0-9]*))
+        r"""root ::= ((root_1 [1-9] [0-9]*))
+root_1 ::= ("" | ([+\-]))
 tag ::= (("BEG" root "END"))
 root_2 ::= ((tag))
 """,
