@@ -82,6 +82,16 @@ class GrammarFormat(BaseModel):
     """The ebnf grammar."""
 
 
+class RegexFormat(BaseModel):
+    """A format that matches a regex pattern."""
+
+    type: Literal["regex"] = "regex"
+    """The type of the format."""
+
+    pattern: str
+    """The regex pattern."""
+
+
 # ---------- Combinatorial Formats ----------
 
 
@@ -214,6 +224,7 @@ Format = Annotated[
         ConstStringFormat,
         JSONSchemaFormat,
         GrammarFormat,
+        RegexFormat,
         QwenXMLParameterFormat,
         OrFormat,
         SequenceFormat,
@@ -319,6 +330,7 @@ __all__ = [
     "QwenXMLParameterFormat",
     "AnyTextFormat",
     "GrammarFormat",
+    "RegexFormat",
     "SequenceFormat",
     "OrFormat",
     "TagFormat",

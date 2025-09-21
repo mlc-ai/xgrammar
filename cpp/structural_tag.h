@@ -12,7 +12,6 @@
 
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -30,6 +29,7 @@ struct JSONSchemaFormat;
 struct QwenXmlParameterFormat;
 struct AnyTextFormat;
 struct GrammarFormat;
+struct RegexFormat;
 struct SequenceFormat;
 struct OrFormat;
 struct TagFormat;
@@ -42,6 +42,7 @@ using Format = std::variant<
     QwenXmlParameterFormat,
     AnyTextFormat,
     GrammarFormat,
+    RegexFormat,
     SequenceFormat,
     OrFormat,
     TagFormat,
@@ -72,6 +73,12 @@ struct GrammarFormat {
   static constexpr const char* type = "grammar";
   std::string grammar;
   GrammarFormat(std::string grammar) : grammar(std::move(grammar)) {}
+};
+
+struct RegexFormat {
+  static constexpr const char* type = "regex";
+  std::string pattern;
+  RegexFormat(std::string pattern) : pattern(std::move(pattern)) {}
 };
 
 struct AnyTextFormat {
