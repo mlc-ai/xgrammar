@@ -71,7 +71,7 @@ The format field requires a format object. We provide several basic format objec
     }
     ```
 
-    We can use it as the context of other structural tags as well.
+    We can use it as the context of other structural tags as well. When using grammar constraints, you need to be especially careful. If the grammar is too general (for example .*), it will cause the subsequent constraints to become ineffective.
 
 4. `sequence`
 
