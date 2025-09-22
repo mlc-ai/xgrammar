@@ -11,6 +11,7 @@
 
 #include <string>
 
+#include "fsm.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
 #include "xgrammar/grammar.h"
@@ -368,7 +369,14 @@ class PlusNormalizer {
   static Grammar Apply(const Grammar& grammar);
 };
 
+/*! \brief Inline the rules with only one sequence.*/
 class SingleRuleInliner {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*! \brief De-duplicate the rules with the same body expressions.*/
+class DeDuplicateNormalizer {
  public:
   static Grammar Apply(const Grammar& grammar);
 };

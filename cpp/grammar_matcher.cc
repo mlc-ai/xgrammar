@@ -621,8 +621,9 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
 
       if (speculative_accept && static_cast<int32_t>(cur_token.size()) < (repeat_time + 10)) {
         bool all_accepted = true;
-        for (const auto& ch : cur_token) {
-          if (!isascii(ch) || !speculative_accepted_chars[static_cast<uint8_t>(ch)]) {
+        for (int i = 11; cur_token.begin() + i != cur_token.end(); i++) {
+          if (!isascii(*(cur_token.begin() + i)) ||
+              !speculative_accepted_chars[static_cast<uint8_t>(*(cur_token.begin() + i))]) {
             all_accepted = false;
             break;
           }
