@@ -52,7 +52,6 @@ if PROFILER_ON:
 def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_grammar_ebnf: str):
     structural_tag = {"type": "structural_tag", "format": structural_tag_format}
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
-    print(stag_ebnf)
     assert str(stag_ebnf) == expected_grammar_ebnf
 
 
@@ -176,9 +175,7 @@ ebnf_grammar_stag_grammar = [
             "grammar": r"""root ::= "Hello!" number
             number ::= [0-9] | [0-9] number""",
         },
-        r"""root ::= (("Hello!" number))
-number ::= (([0-9]) | ([0-9] number))
-root_1 ::= ((root))
+        r"""root_1 ::= (("Hello!" [0-9] [0-9]*))
 """,
     )
 ]
@@ -203,9 +200,7 @@ def test_ebnf_grammar_format(
 regex_stag_grammar = [
     (
         {"type": "regex", "pattern": "Hello![0-9]+"},
-        r"""root ::= (("Hello!" root_1))
-root_1 ::= (([0-9] root_1) | ([0-9]))
-root_2 ::= ((root))
+        r"""root_1 ::= (("Hello!" [0-9] [0-9]*))
 """,
     )
 ]
