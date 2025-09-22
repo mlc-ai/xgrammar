@@ -11,7 +11,6 @@
 
 #include <string>
 
-#include "fsm.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
 #include "xgrammar/grammar.h"
@@ -351,7 +350,6 @@ class SubGrammarAdder {
  * \brief Normalize the repetition in the grammar. If the context of a repeat
  * is nullable, it will be converted from {min, max} to {0, max}.
  */
-
 class RepetitionNormalizer {
  public:
   static void Apply(Grammar* grammar);
@@ -363,7 +361,6 @@ class RepetitionNormalizer {
  * will be converted to
  * rule ::= character_class character_class*
  */
-
 class PlusNormalizer {
  public:
   static Grammar Apply(const Grammar& grammar);
@@ -371,12 +368,6 @@ class PlusNormalizer {
 
 /*! \brief Inline the rules with only one sequence.*/
 class SingleRuleInliner {
- public:
-  static Grammar Apply(const Grammar& grammar);
-};
-
-/*! \brief De-duplicate the rules with the same body expressions.*/
-class DeDuplicateNormalizer {
  public:
   static Grammar Apply(const Grammar& grammar);
 };

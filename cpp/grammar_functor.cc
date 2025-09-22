@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <bitset>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <queue>
 #include <set>
@@ -484,8 +483,7 @@ class RuleInlinerImpl : public GrammarMutator {
         new_choice_ids.push_back(VisitExpr(i));
         continue;
       }
-      XGRAMMAR_ICHECK(choice_expr.type == GrammarExprType::kSequence)
-          << static_cast<int>(choice_expr.type);
+      XGRAMMAR_ICHECK(choice_expr.type == GrammarExprType::kSequence);
       auto first_element = base_grammar_->GetGrammarExpr(choice_expr[0]);
       if (first_element.type != GrammarExprType::kRuleRef) {
         new_choice_ids.push_back(VisitExpr(choice_expr));
