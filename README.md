@@ -58,15 +58,19 @@ Please visit our [documentation](https://xgrammar.mlc.ai/docs/) to get started w
 - [Quick start](https://xgrammar.mlc.ai/docs/start/quick_start)
 
 
-## Adoption
+## Collaborators
 
-XGrammar has been adopted by many projects and companies, including but not limited to:
+XGrammar has been widely adopted in industry, open-source projects, and academia. Our collaborators include:
 
 <div align="center">
 
+[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/nvidia.svg" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
+&emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/databricks.svg" height=50/>](https://www.databricks.com/)
 &emsp;
-[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/nvidia.svg" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
+[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/xai.png" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
+&emsp;
+[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/deepseek.png" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/modular.svg" height=50/>](https://www.modular.com/)
 &emsp;
