@@ -32,7 +32,7 @@ class RegexConverter {
     }
     regex_codepoints_.push_back(0);  // Add a null terminator
   }
-  std::string Convert();
+  std::string Convert(bool allow_quotes);
 
  private:
   /**
@@ -289,7 +289,7 @@ void RegexConverter::HandleGroupModifier() {
   }
 }
 
-std::string RegexConverter::Convert() {
+std::string RegexConverter::Convert(bool allow_quotes) {
   start_ = regex_codepoints_.data();
   current_ = start_;
   end_ = start_ + regex_codepoints_.size() - 1;
@@ -366,7 +366,11 @@ std::string RegexConverter::Convert() {
       AddEBNFSegment(HandleEscape());
     } else if (*current_ == '.') {
       is_empty = false;
-      AddEBNFSegment(R"([\u0000-\U0010FFFF])");
+      if (allow_quotes) {
+        AddEBNFSegment(R"([\u0000-\U0010FFFF])");
+      } else {
+        AddEBNFSegment(R"([^"])");
+      }
       ++current_;
     } else {
       is_empty = false;
@@ -384,12 +388,12 @@ std::string RegexConverter::Convert() {
   return result_ebnf_;
 }
 
-std::string RegexToEBNF(const std::string& regex, bool with_rule_name) {
+std::string RegexToEBNF(const std::string& regex, bool with_rule_name, bool allow_quotes) {
   RegexConverter converter(regex);
   if (with_rule_name) {
-    return "root ::= " + converter.Convert() + "\n";
+    return "root ::= " + converter.Convert(allow_quotes) + "\n";
   } else {
-    return converter.Convert();
+    return converter.Convert(allow_quotes);
   }
 }
 

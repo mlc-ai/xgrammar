@@ -144,16 +144,16 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
     int last_accept_pos = i - 1;
     for (int pos = i; pos < token_len; ++pos) {
       if (!Advance(token[pos])) {
+        // Case 1. The whole rule is finished.
+        if (IsCompleted()) {
+          // accepted chars: pos - i + 1
+          // we need to rollback the pushed initial state as well
+          PopLastStates(pos - i + 1);
+          return {accepted, can_reach_end};
+        }
         break;
       }
       last_accept_pos = pos;
-      // Case 1. The whole rule is finished.
-      if (IsCompleted()) {
-        // accepted chars: pos - i + 1
-        // we need to rollback the pushed initial state as well
-        PopLastStates(pos - i + 2);
-        return {accepted, can_reach_end};
-      }
     }
     // Case 2. The whole token is accepted
     if (last_accept_pos == token_len - 1) {

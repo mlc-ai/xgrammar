@@ -89,7 +89,7 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
     bnf_string : str
         The BNF grammar string converted from the input regex.
     """
-    return _core.testing._regex_to_ebnf(regex, with_rule_name)
+    return _core.testing._regex_to_ebnf(regex, with_rule_name, True)
 
 
 def _ebnf_to_grammar_no_normalization(ebnf_string: str, root_rule_name: str = "root") -> Grammar:

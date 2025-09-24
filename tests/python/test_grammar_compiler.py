@@ -168,7 +168,7 @@ grammar_expected_test_get_allow_empty_rule_ids = [
         r"""root ::= [a]* [b]* rule1
 rule1 ::= [abc]* [def]*
 """,
-        [0, 1],
+        [0],  # because inlined.
     ),
 ]
 
