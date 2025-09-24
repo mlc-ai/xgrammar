@@ -765,6 +765,14 @@ class SubGrammarAdderImpl : public GrammarMutator {
     );
   }
 
+  int32_t VisitTagDispatch(const GrammarExpr& grammar_expr) final {
+    Grammar::Impl::TagDispatch tag_dispatch = base_grammar_->GetTagDispatch(grammar_expr);
+    for (auto& [tag, grammar_rule_id] : tag_dispatch.tag_rule_pairs) {
+      grammar_rule_id = new_rule_ids_names[grammar_rule_id].first;
+    }
+    return builder_->AddTagDispatch(tag_dispatch);
+  }
+
   std::vector<std::pair<int32_t, std::string>> new_rule_ids_names;
 };
 
@@ -1624,14 +1632,6 @@ class RepetitionNormalizerImpl {
 
 Grammar GrammarNormalizer::Apply(const Grammar& grammar) {
   return GrammarNormalizerImpl().Apply(grammar);
-}
-
-Grammar GrammarUnionFunctor::Apply(const std::vector<Grammar>& grammars) {
-  return GrammarUnionFunctorImpl().Apply(grammars);
-}
-
-Grammar GrammarConcatFunctor::Apply(const std::vector<Grammar>& grammars) {
-  return GrammarConcatFunctorImpl().Apply(grammars);
 }
 
 std::vector<int32_t> AllowEmptyRuleAnalyzer::Apply(const Grammar& grammar) {
