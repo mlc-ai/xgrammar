@@ -173,6 +173,7 @@ root_repeat_inf ::= ("" | ("a" root_repeat_inf))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
+    print(after)
     assert after == expected
 
 
