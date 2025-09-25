@@ -338,12 +338,12 @@ g ::= "g" {0}
 """
 
     expected = """root ::= ((a b c d e f g))
-a ::= (("a") | ("aa"))
+a ::= (("a") | ("a" "a"))
 b ::= ((a) | ("b") | (b_1 b_2) | (b_3 b_4 b_5) | (b_6 b_7 b_8 b_9) | (b_10 b_11 b_12 b_13 b_14))
-c ::= ("" | ("c") | ("cc"))
+c ::= ("" | ("c") | ("c" "c"))
 d ::= ((d_repeat_inf))
-e ::= (("ee" e_repeat_inf))
-f ::= (("fff"))
+e ::= (("e" "e" e_repeat_inf))
+f ::= (("f" "f" "f"))
 g ::= ("")
 d_repeat_inf ::= ("" | ("d" d_repeat_inf))
 e_repeat_inf ::= ("" | ("e" e_repeat_inf))
@@ -777,24 +777,16 @@ def test_error_consecutive_quantifiers():
 def test_repetition_normalizer():
     """Test the repetition normalizer. If the context is nullable, then the min repetition time will be reduced to 0."""
     before = "root ::= ([0-9]*){100, 1000}"
-    expected_grammar = r"""root ::= ((root_repeat_1{0, 996} root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_1 ::= (([0-9]*)) (=(root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_2 ::= (([0-9]*)) (=(root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_3 ::= (([0-9]*)) (=(root_repeat_4 root_repeat_5))
-root_repeat_4 ::= (([0-9]*)) (=(root_repeat_5))
-root_repeat_5 ::= (([0-9]*))
+    expected_grammar = r"""root ::= ((root_repeat_1{0, 985} [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]*))
+root_repeat_1 ::= (([0-9]*)) (=([0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]*))
 """
     grammar = xgr.Grammar.from_ebnf(before)
     grammar = GrammarFunctor.grammar_optimizer(grammar)
     assert expected_grammar == str(grammar)
 
     before = "root ::= ([0-9]){100, 1000}"
-    expected_grammar = r"""root ::= ((root_repeat_1{96, 996} root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_1 ::= (([0-9])) (=(root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_2 ::= (([0-9])) (=(root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_3 ::= (([0-9])) (=(root_repeat_4 root_repeat_5))
-root_repeat_4 ::= (([0-9])) (=(root_repeat_5))
-root_repeat_5 ::= (([0-9]))
+    expected_grammar = r"""root ::= ((root_repeat_1{85, 985} [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9]))
+root_repeat_1 ::= (([0-9])) (=([0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9]))
 """
     grammar = xgr.Grammar.from_ebnf(before)
     grammar = GrammarFunctor.grammar_optimizer(grammar)
