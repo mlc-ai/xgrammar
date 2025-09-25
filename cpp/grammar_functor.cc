@@ -1537,17 +1537,18 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(
 
 class RepetitionNormalizerImpl {
  public:
-  void Apply(Grammar& grammar) {
-    for (int i = 0; i < grammar->NumGrammarExprs(); ++i) {
-      auto expr = grammar->GetGrammarExpr(i);
+  void Apply(Grammar* grammar) {
+    auto& grammar_ref = *grammar;
+    for (int i = 0; i < grammar_ref->NumGrammarExprs(); ++i) {
+      auto expr = grammar_ref->GetGrammarExpr(i);
       if (expr.type != Grammar::Impl::GrammarExprType::kRepeat) {
         continue;
       }
       int repeat_rule_id = expr[0];
-      grammar->GetRule(repeat_rule_id).is_exact_lookahead = true;
+      grammar_ref->GetRule(repeat_rule_id).is_exact_lookahead = true;
       if (std::binary_search(
-              grammar->allow_empty_rule_ids.begin(),
-              grammar->allow_empty_rule_ids.end(),
+              grammar_ref->allow_empty_rule_ids.begin(),
+              grammar_ref->allow_empty_rule_ids.end(),
               repeat_rule_id
           )) {
         // The repeated rule can be empty, so we need to normalize it.
@@ -1565,7 +1566,7 @@ class GrammarOptimizerImpl {
     result = DeadCodeEliminator::Apply(result);
     result = LookaheadAssertionAnalyzer::Apply(result);
     result->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(result);
-    RepetitionNormalizer::Apply(result);
+    RepetitionNormalizer::Apply(&result);
     GrammarFSMBuilder::Apply(&result);
     result->optimized = true;
     return result;
@@ -1633,7 +1634,7 @@ Grammar StructureNormalizer::Apply(const Grammar& grammar) {
 
 void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl().Apply(grammar); }
 
-void RepetitionNormalizer::Apply(Grammar& grammar) { RepetitionNormalizerImpl().Apply(grammar); }
+void RepetitionNormalizer::Apply(Grammar* grammar) { RepetitionNormalizerImpl().Apply(grammar); }
 
 FSMWithStartEnd GrammarFSMBuilder::RuleRef(const GrammarExpr& expr) {
   return GrammarFSMBuilderImpl::RuleRef(expr);

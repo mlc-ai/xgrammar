@@ -52,7 +52,6 @@ if PROFILER_ON:
 def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_grammar_ebnf: str):
     structural_tag = {"type": "structural_tag", "format": structural_tag_format}
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
-    print(stag_ebnf)
     assert str(stag_ebnf) == expected_grammar_ebnf
 
 
