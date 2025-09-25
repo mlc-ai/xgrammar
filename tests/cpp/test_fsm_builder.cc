@@ -5,15 +5,12 @@
 
 #include <gtest/gtest.h>
 
-#include <chrono>
 #include <cstdint>
-#include <iostream>
 #include <vector>
 
 #include "fsm.h"
 #include "fsm_builder.h"
 #include "grammar_functor.h"
-#include "support/logging.h"
 #include "xgrammar/grammar.h"
 
 using namespace xgrammar;

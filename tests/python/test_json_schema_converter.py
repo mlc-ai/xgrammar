@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, TypeAdapter, create_model
 
 import xgrammar as xgr
 from xgrammar.testing import (
+    GrammarFunctor,
     _generate_float_regex,
     _generate_range_regex,
     _is_grammar_accept_string,
@@ -2192,7 +2193,7 @@ root_repeat_2_3 ::= ("" | ([ \n\t])) (=("}"))
 """
     schema = {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]}
     grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=True, max_whitespace_cnt=2)
-
+    grammar = GrammarFunctor.grammar_optimizer(grammar)
     assert grammar is not None
     assert str(grammar) == expected_grammar
     assert _is_grammar_accept_string(grammar, '{  "key"  :  "value"  }')
