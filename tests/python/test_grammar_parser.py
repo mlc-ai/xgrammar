@@ -168,12 +168,11 @@ def test_repetition_range_min_only():
     """Test repetition range with only min {n,}."""
     before = """root ::= "a"{2,}
 """
-    expected = """root ::= (((("a" "a") | ("a" "a" "a") | ("a" "a" "a" "a" root_repeat_inf))))
+    expected = """root ::= ((("a" "a" root_repeat_inf)))
 root_repeat_inf ::= ("" | ("a" root_repeat_inf))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
-    print(after)
     assert after == expected
 
 
@@ -340,13 +339,12 @@ g ::= "g" {0}
 
     expected = """root ::= ((a b c d e f g))
 a ::= (("a") | ("aa"))
-b ::= ((a) | ("b") | (b_1 b_2) | (b_3 b_4 b_5) | (b_repeat_1{0, 1} b_6 b_7 b_8 b_9))
+b ::= ((a) | ("b") | (b_1 b_2) | (b_3 b_4 b_5) | (b_6 b_7 b_8 b_9) | (b_10 b_11 b_12 b_13 b_14))
 c ::= ("" | ("c") | ("cc"))
-d ::= ("" | ("d") | ("dd") | ("ddd") | ("dddd" d_repeat_inf))
-e ::= (("ee") | ("eee") | ("eeee" e_repeat_inf))
+d ::= ((d_repeat_inf))
+e ::= (("ee" e_repeat_inf))
 f ::= (("fff"))
 g ::= ("")
-b_repeat_1 ::= ((a) | ("b")) (=(b_repeat_1_1 b_repeat_1_2 b_repeat_1_3 b_repeat_1_4))
 d_repeat_inf ::= ("" | ("d" d_repeat_inf))
 e_repeat_inf ::= ("" | ("e" e_repeat_inf))
 b_1 ::= ((a) | ("b"))
@@ -358,10 +356,11 @@ b_6 ::= ((a) | ("b"))
 b_7 ::= ((a) | ("b"))
 b_8 ::= ((a) | ("b"))
 b_9 ::= ((a) | ("b"))
-b_repeat_1_1 ::= ((a) | ("b"))
-b_repeat_1_2 ::= ((a) | ("b"))
-b_repeat_1_3 ::= ((a) | ("b"))
-b_repeat_1_4 ::= ((a) | ("b"))
+b_10 ::= ((a) | ("b"))
+b_11 ::= ((a) | ("b"))
+b_12 ::= ((a) | ("b"))
+b_13 ::= ((a) | ("b"))
+b_14 ::= ((a) | ("b"))
 """
 
     grammar = _ebnf_to_grammar_no_normalization(before)

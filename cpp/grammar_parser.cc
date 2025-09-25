@@ -763,8 +763,7 @@ int32_t EBNFParser::HandleRepetitionRange(
   static const int64_t kUnzipThreshold = 15;
   XGRAMMAR_DCHECK(lower >= 0);
   XGRAMMAR_DCHECK(upper == -1 || upper >= lower);
-
-  // Case 1. upper is bounded and small (<=kUnzipThreshold), unzip the repetition.
+  // Case 1. small (<=threshold), unzip the repetition.
   if (upper != -1 && upper <= kUnzipThreshold) {
     std::vector<int32_t> choices;
     if (lower == 0) {
@@ -783,10 +782,35 @@ int32_t EBNFParser::HandleRepetitionRange(
 
   // Case 2. upper is unbounded or large.
 
-  // Case 2.1. lower is smaller than kUnzipThreshold. Transform {lower, upper} into:
-  // {kUnzipThreshold, upper} | {lower} | ... | {kUnzipThreshold - 1}.
+  // Case 2.1.1. lower is smaller than threshold, and upper is large. Transform {lower, upper} into:
+  // {threshold, upper} | {lower} | ... | {threshold}.
+  // Case 2.1.2. lower is smaller than threshold, and upper is unbounded. Unzip the
+  // {lower} repetition, and add a star expression.
   std::vector<int32_t> choices;
   if (lower < kUnzipThreshold) {
+    if (upper == -1) {
+      int infinite_repetition_id = -1;
+      const auto& rule_expr = builder_.GetGrammarExpr(grammar_expr_id);
+      if (rule_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass) {
+        std::vector<GrammarBuilder::CharacterClassElement> character_ranges;
+        bool is_negative = rule_expr[0];
+        for (int i = 1; i < static_cast<int>(rule_expr.size()); i += 2) {
+          character_ranges.push_back({rule_expr[i], rule_expr[i + 1]});
+        }
+        infinite_repetition_id = builder_.AddCharacterClassStar(character_ranges, is_negative);
+      } else {
+        const auto& unbounded_rule_id =
+            builder_.AddEmptyRule(builder_.GetNewRuleName(cur_rule_name_ + "_repeat_inf"));
+        int recursion_sequence =
+            builder_.AddSequence({grammar_expr_id, builder_.AddRuleRef(unbounded_rule_id)});
+        int recursion_choice = builder_.AddChoices({builder_.AddEmptyStr(), recursion_sequence});
+        builder_.UpdateRuleBody(unbounded_rule_id, recursion_choice);
+        infinite_repetition_id = builder_.AddRuleRef(unbounded_rule_id);
+      }
+      std::vector<int32_t> sequence(lower, grammar_expr_id);
+      sequence.push_back(infinite_repetition_id);
+      return builder_.AddSequence(sequence);
+    }
     if (lower == 0) {
       choices.push_back(builder_.AddEmptyStr());
       lower = 1;
@@ -802,7 +826,7 @@ int32_t EBNFParser::HandleRepetitionRange(
 
   std::optional<int32_t> infinite_repetition_id = std::nullopt;
   std::vector<int32_t> repeated_sequence;
-  // Now, we transform {lower, upper} into {max{kUnzipThreshold, lower}, upper}.
+  // Now, we transform {lower, upper} into {max{threshold, lower}, upper}.
   // Case 2.2 upper is unbounded. We will transform it into {lower} {0, inf}.
   if (upper == -1) {
     const auto& rule_expr = builder_.GetGrammarExpr(grammar_expr_id);
@@ -825,31 +849,31 @@ int32_t EBNFParser::HandleRepetitionRange(
     upper = lower;
   }
 
-  // Handle the {lower, upper} part, where kUnzipThreshold <= lower <= upper.
-  const auto repeat_name = cur_rule_name_ + "_repeat_";
+  // Handle the {lower, upper} part, where threshold <= lower <= upper.
+  const auto repeat_name = cur_rule_name_ + "_repeat_1";
   XGRAMMAR_DCHECK(lower >= kUnzipThreshold && upper >= lower);
-  int cnt = 1;
-
-  // The repetition body.
-  if (upper != kUnzipThreshold) {
-    auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
-    auto new_rule_id =
-        builder_.AddRuleWithHint(repeat_name + std::to_string(cnt++), new_grammar_expr_id);
-    repeated_sequence.push_back(
-        builder_.AddRepeat(new_rule_id, lower - kUnzipThreshold, upper - kUnzipThreshold)
-    );
-    builder_.UpdateLookaheadAssertion(
-        new_rule_id,
-        builder_.AddSequence({grammar_expr_id, grammar_expr_id, grammar_expr_id, grammar_expr_id})
-    );
-  }
 
   // If we have infinite repetition part, add it to the sequence.
   if (infinite_repetition_id.has_value()) {
     repeated_sequence.push_back(infinite_repetition_id.value());
   }
 
-  // Add the last kUnzipThreshold grammar_expr_id to the sequence.
+  // The repetition body.
+  if (upper != kUnzipThreshold) {
+    XGRAMMAR_DCHECK(upper > kUnzipThreshold);
+    auto new_grammar_expr_id = builder_.AddChoices({builder_.AddSequence({grammar_expr_id})});
+    auto new_rule_id = builder_.AddRuleWithHint(repeat_name, new_grammar_expr_id);
+    auto new_repeated_ref_rule_expr = builder_.AddChoices({builder_.AddSequence(
+        {builder_.AddRepeat(new_rule_id, lower - kUnzipThreshold, upper - kUnzipThreshold)}
+    )});
+    auto new_repeated_rule_id =
+        builder_.AddRuleWithHint(repeat_name + "_inner", new_repeated_ref_rule_expr);
+    repeated_sequence.push_back(builder_.AddRuleRef(new_repeated_rule_id));
+    std::vector<int32_t> repetition_lookahead(kUnzipThreshold, grammar_expr_id);
+    builder_.UpdateLookaheadAssertion(new_rule_id, builder_.AddSequence(repetition_lookahead));
+  }
+
+  // Add the last threshold grammar_expr_id to the sequence.
   for (int i = 0; i < kUnzipThreshold; ++i) {
     repeated_sequence.push_back(grammar_expr_id);
   }
