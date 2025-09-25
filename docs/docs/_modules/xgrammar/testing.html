@@ -633,6 +633,20 @@ window.addEventListener("load", () => mermaid.run());
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Analyze and add lookahead assertions in the grammar.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">lookahead_assertion_analyzer</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GrammarFunctor.grammar_optimizer"><a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.grammar_optimizer">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">grammar_optimizer</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Optimize the grammar.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
+            <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">grammar_optimizer</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GrammarFunctor.repetition_normalizer"><a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.repetition_normalizer">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">repetition_normalizer</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Normalize the repetition expression.&quot;&quot;&quot;</span>
+        <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
+            <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">repetition_normalizer</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
         <span class="p">)</span></div></div>
 </pre></div>
 

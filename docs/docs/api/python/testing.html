@@ -190,6 +190,8 @@
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.byte_string_fuser"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor.byte_string_fuser()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.dead_code_eliminator"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor.dead_code_eliminator()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.lookahead_assertion_analyzer"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor.lookahead_assertion_analyzer()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.grammar_optimizer"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor.grammar_optimizer()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.repetition_normalizer"><code class="docutils literal notranslate"><span class="pre">GrammarFunctor.repetition_normalizer()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -623,6 +625,12 @@ For test purposes.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.lookahead_assertion_analyzer" title="xgrammar.testing.GrammarFunctor.lookahead_assertion_analyzer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">lookahead_assertion_analyzer</span></code></a>(grammar)</p></td>
 <td><p>Analyze and add lookahead assertions in the grammar.</p></td>
 </tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.grammar_optimizer" title="xgrammar.testing.GrammarFunctor.grammar_optimizer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">grammar_optimizer</span></code></a>(grammar)</p></td>
+<td><p>Optimize the grammar.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.testing.GrammarFunctor.repetition_normalizer" title="xgrammar.testing.GrammarFunctor.repetition_normalizer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">repetition_normalizer</span></code></a>(grammar)</p></td>
+<td><p>Normalize the repetition expression.</p></td>
+</tr>
 </tbody>
 </table>
 <dl class="py method">
@@ -653,6 +661,18 @@ For test purposes.</p>
 <dt class="sig sig-object py" id="xgrammar.testing.GrammarFunctor.lookahead_assertion_analyzer">
 <em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">lookahead_assertion_analyzer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">grammar</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/testing.html#GrammarFunctor.lookahead_assertion_analyzer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.testing.GrammarFunctor.lookahead_assertion_analyzer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Analyze and add lookahead assertions in the grammar.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.testing.GrammarFunctor.grammar_optimizer">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">grammar_optimizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">grammar</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/testing.html#GrammarFunctor.grammar_optimizer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.testing.GrammarFunctor.grammar_optimizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Optimize the grammar.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.testing.GrammarFunctor.repetition_normalizer">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">repetition_normalizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">grammar</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/testing.html#GrammarFunctor.repetition_normalizer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.testing.GrammarFunctor.repetition_normalizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Normalize the repetition expression.</p>
 </dd></dl>
 
 </dd></dl>
