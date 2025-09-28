@@ -79,7 +79,6 @@ endif()
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/nanobind)
-  install(TARGETS xgrammar_bindings DESTINATION .)
 endif()
 
 if(XGRAMMAR_BUILD_CXX_TESTS)
