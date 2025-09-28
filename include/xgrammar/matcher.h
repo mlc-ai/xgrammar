@@ -142,6 +142,23 @@ class GrammarMatcher {
    */
   std::string _DebugPrintInternalState() const;
 
+  /*!
+    \brief A batched version of FillNextTokenBitmask for better efficiency.
+    \param matchers The array of GrammarMatcher objects.
+    \param next_token_bitmask The pre-allocated DLTensor to store the result bitmasks.
+    \param index The index of the batch to process. Default is 0.
+    \param max_thread The maximum number of threads to use. Default is 16.
+    \param debug_print Whether to print debug information. Default is false.
+    \return A vector of bytes indicating whether each bitmask needs to be applied (not all-true).
+  */
+  static std::vector<uint8_t> BatchedFillNextTokenBitmask(
+      std::vector<GrammarMatcher>* matchers,
+      DLTensor* next_token_bitmask,
+      int index = 0,
+      int max_thread = 16,
+      bool debug_print = false
+  );
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcher);
 };
 

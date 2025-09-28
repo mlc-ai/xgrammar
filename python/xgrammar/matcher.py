@@ -400,3 +400,37 @@ class GrammarMatcher(XGRObject):
             The internal state of the matcher.
         """
         return self._handle._debug_print_internal_state()
+
+
+def batched_accept_token(matchers: List[GrammarMatcher], tokens: List[int]) -> None:
+    """Accept a batch of tokens for multiple matchers.
+
+    Parameters
+    ----------
+    matchers : List[GrammarMatcher]
+        The list of matchers to accept tokens for.
+
+    tokens : List[int]
+        The list of tokens to accept.
+    """
+    for matcher, token in zip(matchers, tokens):
+        matcher.accept_token(token)
+
+
+def batched_fill_next_token_bitmask(
+    matchers: List[GrammarMatcher], bitmask: ArrayLike, max_threads: int = 16
+) -> None:
+    """Fill the next token bitmask for multiple matchers.
+
+    Parameters
+    ----------
+    matchers : List[GrammarMatcher]
+        The list of matchers to fill the bitmask for.
+
+    bitmask : ArrayLike
+        The bitmask to fill.
+
+    max_threads : int, default: 16
+        The maximum number of threads to use for filling the bitmask.
+    """
+    pass

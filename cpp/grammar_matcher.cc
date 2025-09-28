@@ -292,6 +292,14 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string _DebugPrintInternalState() const { return PrintStates(); }
 
+  static std::vector<uint8_t> BatchedFillNextTokenBitmask(
+      std::vector<GrammarMatcher>* matchers,
+      DLTensor* next_token_bitmask,
+      int index = 0,
+      int max_thread = 16,
+      bool debug_print = false
+  );
+
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
 
@@ -852,6 +860,17 @@ int GrammarMatcher::Impl::GetNextUncertainToken(
   }
 }
 
+std::vector<uint8_t> GrammarMatcher::Impl::BatchedFillNextTokenBitmask(
+    std::vector<GrammarMatcher>* matchers,
+    DLTensor* next_token_bitmask,
+    int index,
+    int max_thread,
+    bool debug_print
+) {
+  // TODO(Linzhang): parallel implementation.
+  return {};
+}
+
 GrammarMatcher::GrammarMatcher(
     const CompiledGrammar& compiled_grammar,
     std::optional<std::vector<int>> override_stop_tokens,
@@ -892,6 +911,18 @@ const std::vector<int>& GrammarMatcher::GetStopTokenIds() const {
 
 std::string GrammarMatcher::_DebugPrintInternalState() const {
   return pimpl_->_DebugPrintInternalState();
+}
+
+std::vector<uint8_t> GrammarMatcher::BatchedFillNextTokenBitmask(
+    std::vector<GrammarMatcher>* matchers,
+    DLTensor* next_token_bitmask,
+    int index,
+    int max_thread,
+    bool debug_print
+) {
+  return Impl::BatchedFillNextTokenBitmask(
+      matchers, next_token_bitmask, index, max_thread, debug_print
+  );
 }
 
 }  // namespace xgrammar
