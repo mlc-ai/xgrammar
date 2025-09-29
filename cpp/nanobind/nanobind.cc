@@ -79,7 +79,7 @@ bool GrammarMatcher_FillNextTokenBitmask(
 }
 
 std::vector<uint8_t> GrammarMatcher_BatchedFillNextTokenMask(
-    std::vector<GrammarMatcher>& matchers,
+    std::vector<GrammarMatcher*>* matchers,
     nb::ndarray<> arr,
     int32_t index,
     int32_t max_thread,
@@ -100,7 +100,7 @@ std::vector<uint8_t> GrammarMatcher_BatchedFillNextTokenMask(
       reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
 
   return GrammarMatcher::BatchedFillNextTokenBitmask(
-      &matchers, bitmask_dltensor_ptr, index, max_thread, debug_print
+      matchers, bitmask_dltensor_ptr, index, max_thread, debug_print
   );
 }
 
@@ -263,7 +263,7 @@ NB_MODULE(xgrammar_bindings, m) {
           &GrammarMatcher_FillNextTokenBitmask,
           nb::call_guard<nb::gil_scoped_release>()
       )
-      .def(
+      .def_static(
           "batched_fill_next_token_bitmask",
           &GrammarMatcher_BatchedFillNextTokenMask,
           nb::call_guard<nb::gil_scoped_release>()

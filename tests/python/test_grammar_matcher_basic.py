@@ -450,5 +450,52 @@ def test_batched_accept_token(grammars: List[str], inputs: List[int], expecteds:
     assert results == expecteds
 
 
+def test_batched_fill_next_token_bitmask():
+    grammars = ['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"', "root ::= [a-z0-9]+"]
+    vocab = [
+        # fmt: off
+        "<s>", "</s>", "a", "b", "c", "1", "2", "3", "123a", "ab",
+        # fmt: on
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+
+    matchers = [
+        _get_matcher_from_grammar_and_tokenizer_info(xgr.Grammar.from_ebnf(grammar), tokenizer_info)
+        for grammar in grammars
+    ]
+
+    batch_size = len(matchers)
+    token_bitmask = xgr.allocate_token_bitmask(batch_size, tokenizer_info.vocab_size)
+
+    input_str = ["a", "1", "a", "123a"]
+
+    expected_accepted_tokens = [
+        [[2], [5, 6, 7], [2, 9], [2, 3, 4, 5, 6, 7, 8, 9]],
+        [[1], [1, 5, 6, 7], [3], [1, 2, 3, 4, 5, 6, 7, 8, 9]],
+    ]
+
+    result = xgr.GrammarMatcher.batched_fill_next_token_bitmask(
+        matchers, token_bitmask, max_threads=2
+    )
+    assert result == [True, True, True, False]
+
+    for i in range(batch_size):
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask[i : i + 1], tokenizer_info.vocab_size
+        )
+        accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
+        assert accepted == expected_accepted_tokens[0][i]
+
+    assert xgr.GrammarMatcher.batched_accept_string(matchers, input_str) == [True, True, True, True]
+    assert result == [True, True, True, False]
+
+    for i in range(batch_size):
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask[i : i + 1], tokenizer_info.vocab_size
+        )
+        accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
+        assert accepted == expected_accepted_tokens[1][i]
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
