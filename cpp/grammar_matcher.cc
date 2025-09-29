@@ -329,6 +329,18 @@ class GrammarMatcher::Impl : public EarleyParser {
       bool debug_print = false
   );
 
+  static std::vector<uint8_t> BatchedAcceptString(
+      std::vector<GrammarMatcher>* matchers,
+      const std::vector<std::string>& input_strs,
+      bool debug_print = false
+  );
+
+  static std::vector<uint8_t> BatchedAcceptToken(
+      std::vector<GrammarMatcher>* matchers,
+      const std::vector<int32_t>& token_ids,
+      bool debug_print = false
+  );
+
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
 
@@ -920,6 +932,36 @@ std::vector<uint8_t> GrammarMatcher::Impl::BatchedFillNextTokenBitmask(
   return mask_applied;
 }
 
+std::vector<uint8_t> GrammarMatcher::Impl::BatchedAcceptString(
+    std::vector<GrammarMatcher>* matchers,
+    const std::vector<std::string>& input_strs,
+    bool debug_print
+) {
+  XGRAMMAR_CHECK(matchers->size() == input_strs.size())
+      << "The size of matchers (" << matchers->size() << ") and input_strs (" << input_strs.size()
+      << ") should be the same.";
+  std::vector<uint8_t> accepted(matchers->size());
+  for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
+    auto& matcher = (*matchers)[i];
+    accepted[i] = matcher->AcceptString(input_strs[i], debug_print);
+  }
+  return accepted;
+}
+
+std::vector<uint8_t> GrammarMatcher::Impl::BatchedAcceptToken(
+    std::vector<GrammarMatcher>* matchers, const std::vector<int32_t>& token_ids, bool debug_print
+) {
+  XGRAMMAR_CHECK(matchers->size() == token_ids.size())
+      << "The size of matchers (" << matchers->size() << ") and token_ids (" << token_ids.size()
+      << ") should be the same.";
+  std::vector<uint8_t> accepted(matchers->size());
+  for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
+    auto& matcher = (*matchers)[i];
+    accepted[i] = matcher->AcceptToken(token_ids[i], debug_print);
+  }
+  return accepted;
+}
+
 GrammarMatcher::GrammarMatcher(
     const CompiledGrammar& compiled_grammar,
     std::optional<std::vector<int>> override_stop_tokens,
@@ -972,6 +1014,20 @@ std::vector<uint8_t> GrammarMatcher::BatchedFillNextTokenBitmask(
   return Impl::BatchedFillNextTokenBitmask(
       matchers, next_token_bitmask, index, max_thread, debug_print
   );
+}
+
+std::vector<uint8_t> GrammarMatcher::BatchedAcceptString(
+    std::vector<GrammarMatcher>* matchers,
+    const std::vector<std::string>& input_strs,
+    bool debug_print
+) {
+  return Impl::BatchedAcceptString(matchers, input_strs, debug_print);
+}
+
+std::vector<uint8_t> GrammarMatcher::BatchedAcceptToken(
+    std::vector<GrammarMatcher>* matchers, const std::vector<int32_t>& token_ids, bool debug_print
+) {
+  return Impl::BatchedAcceptToken(matchers, token_ids, debug_print);
 }
 
 }  // namespace xgrammar

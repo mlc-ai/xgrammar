@@ -268,6 +268,16 @@ NB_MODULE(xgrammar_bindings, m) {
           &GrammarMatcher_BatchedFillNextTokenMask,
           nb::call_guard<nb::gil_scoped_release>()
       )
+      .def_static(
+          "batched_accept_string",
+          &GrammarMatcher::BatchedAcceptString,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "batched_accept_token",
+          &GrammarMatcher::BatchedAcceptToken,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
       .def(
           "find_jump_forward_string",
           &GrammarMatcher::FindJumpForwardString,

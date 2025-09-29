@@ -450,7 +450,9 @@ class GrammarMatcher(XGRObject):
         )
 
     @staticmethod
-    def batched_accept_token(matchers: List["GrammarMatcher"], tokens: List[int]) -> List[bool]:
+    def batched_accept_token(
+        matchers: List["GrammarMatcher"], tokens: List[int], debug_print: bool = False
+    ) -> List[bool]:
         """Accept a batch of tokens for multiple matchers.
 
         Parameters
@@ -461,7 +463,15 @@ class GrammarMatcher(XGRObject):
         tokens : List[int]
             The list of tokens to accept.
 
-                    Raises
+        debug_print : bool, default: False
+            Whether to print information about generated bitmask. Helpful for debugging.
+
+        Returns
+        -------
+        accepted : List[bool]
+            A list of booleans indicating whether each token was accepted by its corresponding matcher.
+
+        Raises
         ------
         RuntimeError
             If the sizes of matchers and tokens do not match.
@@ -472,13 +482,13 @@ class GrammarMatcher(XGRObject):
                 + f"Got {len(matchers)} matchers and {len(tokens)} tokens."
             )
 
-        accept_token = []
-        for matcher, token in zip(matchers, tokens):
-            accept_token.append(matcher.accept_token(token))
-        return accept_token
+        matcher_handles = [matcher._handle for matcher in matchers]
+        return _core.GrammarMatcher.batched_accept_token(matcher_handles, tokens, debug_print)
 
     @staticmethod
-    def batched_accept_string(matchers: List["GrammarMatcher"], strings: List[str]) -> List[bool]:
+    def batched_accept_string(
+        matchers: List["GrammarMatcher"], strings: List[str], debug_print: bool = False
+    ) -> List[bool]:
         """Accept a batch of strings for multiple matchers.
 
         Parameters
@@ -498,7 +508,5 @@ class GrammarMatcher(XGRObject):
                 "The sizes of matchers and strings do not match. "
                 + f"Got {len(matchers)} matchers and {len(strings)} strings."
             )
-        accept_string = []
-        for matcher, string in zip(matchers, strings):
-            accept_string.append(matcher.accept_string(string))
-        return accept_string
+        matcher_handles = [matcher._handle for matcher in matchers]
+        return _core.GrammarMatcher.batched_accept_string(matcher_handles, strings, debug_print)

@@ -159,6 +159,32 @@ class GrammarMatcher {
       bool debug_print = false
   );
 
+  /*!
+   * \brief A batched version of AcceptString for better efficiency.
+   * \param matchers The array of GrammarMatcher objects.
+   * \param input_strs The array of input strings to be accepted.
+   * \param debug_print Whether to print debug information. Default is false.
+   * \return A vector of bytes indicating whether each string is accepted.
+   */
+  static std::vector<uint8_t> BatchedAcceptString(
+      std::vector<GrammarMatcher>* matchers,
+      const std::vector<std::string>& input_strs,
+      bool debug_print = false
+  );
+
+  /*!
+   * \brief A batched version of AcceptToken for better efficiency.
+   * \param matchers The array of GrammarMatcher objects.
+   * \param token_ids The array of token ids to be accepted.
+   * \param debug_print Whether to print debug information. Default is false.
+   * \return A vector of bytes indicating whether each token is accepted.
+   */
+  static std::vector<uint8_t> BatchedAcceptToken(
+      std::vector<GrammarMatcher>* matchers,
+      const std::vector<int32_t>& token_ids,
+      bool debug_print = false
+  );
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcher);
 };
 
