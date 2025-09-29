@@ -152,7 +152,7 @@ class GrammarMatcher {
     \return A vector of bytes indicating whether each bitmask needs to be applied (not all-true).
   */
   static std::vector<uint8_t> BatchedFillNextTokenBitmask(
-      std::vector<GrammarMatcher*>* matchers,
+      const std::vector<GrammarMatcher*>& matchers,
       DLTensor* next_token_bitmask,
       int index = 0,
       int max_thread = 16,
