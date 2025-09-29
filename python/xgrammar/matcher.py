@@ -401,36 +401,82 @@ class GrammarMatcher(XGRObject):
         """
         return self._handle._debug_print_internal_state()
 
+    @staticmethod
+    def batched_fill_next_token_bitmask(
+        matchers: List["GrammarMatcher"],
+        bitmask: ArrayLike,
+        index: int = 0,
+        max_threads: int = 16,
+        debug_print: bool = False,
+    ) -> List[bool]:
+        """Fill the next token bitmask for multiple matchers.
 
-def batched_accept_token(matchers: List[GrammarMatcher], tokens: List[int]) -> None:
-    """Accept a batch of tokens for multiple matchers.
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to fill the bitmask for.
 
-    Parameters
-    ----------
-    matchers : List[GrammarMatcher]
-        The list of matchers to accept tokens for.
+        bitmask : ArrayLike
+            The bitmask to fill.
 
-    tokens : List[int]
-        The list of tokens to accept.
-    """
-    for matcher, token in zip(matchers, tokens):
-        matcher.accept_token(token)
+        index : int, default: 0
 
+        max_threads : int, default: 16
+            The maximum number of threads to use for filling the bitmask.
+                    index : int, default: 0
+            The batch id of the bitmask.
 
-def batched_fill_next_token_bitmask(
-    matchers: List[GrammarMatcher], bitmask: ArrayLike, max_threads: int = 16
-) -> None:
-    """Fill the next token bitmask for multiple matchers.
+        debug_print : bool, default: False
+            Whether to print information about generated bitmask. Helpful for debugging.
+                    Returns
 
-    Parameters
-    ----------
-    matchers : List[GrammarMatcher]
-        The list of matchers to fill the bitmask for.
+        Returns
+        -------
+        need_apply : List[bool]
+            Whether the bitmask need to be applied (not all-true). An optimization: if False,
+            this means the bitmask is already all-true, so no need to apply it.
 
-    bitmask : ArrayLike
-        The bitmask to fill.
+        Raises
+        ------
+        RuntimeError
+            If the bitmask is invalid (not on CPU, not int32, shape mismatch).
 
-    max_threads : int, default: 16
-        The maximum number of threads to use for filling the bitmask.
-    """
-    pass
+            If the recursion depth is exceeded.
+        """
+        return GrammarMatcher._create_from_handle(
+            _core.batched_fill_next_token_mask(matchers, bitmask, index, max_threads, debug_print)
+        )
+
+    @staticmethod
+    def batched_accept_token(matchers: List["GrammarMatcher"], tokens: List[int]) -> List[bool]:
+        """Accept a batch of tokens for multiple matchers.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to accept tokens for.
+
+        tokens : List[int]
+            The list of tokens to accept.
+        """
+        accept_token = []
+        for matcher, token in zip(matchers, tokens):
+            accept_token.append(matcher.accept_token(token))
+        return accept_token
+
+    @staticmethod
+    def batched_accept_string(matchers: List["GrammarMatcher"], strings: List[str]) -> List[bool]:
+        """Accept a batch of strings for multiple matchers.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to accept tokens for.
+
+        strings : List[str]
+            The list of tokens to accept.
+        """
+        accept_string = []
+        for matcher, token in zip(matchers, strings):
+            accept_string.append(matcher.accept_string(token))
+        return accept_string

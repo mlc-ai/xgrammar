@@ -13,12 +13,16 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
+#include <cstdint>
+#include <vector>
+
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
 #include "../testing.h"
 #include "python_methods.h"
 #include "xgrammar/exception.h"
+#include "xgrammar/matcher.h"
 
 namespace nb = nanobind;
 
@@ -72,6 +76,32 @@ bool GrammarMatcher_FillNextTokenBitmask(
       reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
 
   return matcher.FillNextTokenBitmask(bitmask_dltensor_ptr, index, debug_print);
+}
+
+std::vector<uint8_t> GrammarMatcher_BatchedFillNextTokenMask(
+    std::vector<GrammarMatcher>& matchers,
+    nb::ndarray<> arr,
+    int32_t index,
+    int32_t max_thread,
+    bool debug_print
+) {
+  if (arr.ndim() != 2 && arr.ndim() != 3) {
+    throw std::runtime_error("batched_token_bitmask tensor must be 2D or 3D");
+  }
+  if (arr.device_type() != nb::device::cpu::value) {
+    throw std::runtime_error("token_bitmask array must be on CPU");
+  }
+  if (arr.dtype() != nb::dtype<int32_t>()) {
+    throw std::runtime_error("token_bitmask array must be int32");
+  }
+  static_assert(sizeof(arr) == sizeof(void*) + sizeof(nb::dlpack::dltensor));
+
+  DLTensor* bitmask_dltensor_ptr =
+      reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
+
+  return GrammarMatcher::BatchedFillNextTokenBitmask(
+      &matchers, bitmask_dltensor_ptr, index, max_thread, debug_print
+  );
 }
 
 std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
@@ -231,6 +261,11 @@ NB_MODULE(xgrammar_bindings, m) {
       .def(
           "fill_next_token_bitmask",
           &GrammarMatcher_FillNextTokenBitmask,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def(
+          "batched_fill_next_token_bitmask",
+          &GrammarMatcher_BatchedFillNextTokenMask,
           nb::call_guard<nb::gil_scoped_release>()
       )
       .def(

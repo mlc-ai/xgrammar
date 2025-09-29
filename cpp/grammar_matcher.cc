@@ -915,6 +915,7 @@ std::vector<uint8_t> GrammarMatcher::Impl::BatchedFillNextTokenBitmask(
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
       thread_pool.Execute([fill_next_token_mask, i]() { fill_next_token_mask(i); });
     }
+    thread_pool.Join();
   }
   return mask_applied;
 }
