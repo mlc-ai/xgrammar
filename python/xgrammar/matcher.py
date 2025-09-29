@@ -499,6 +499,15 @@ class GrammarMatcher(XGRObject):
         strings : List[str]
             The list of tokens to accept.
 
+        debug_print : bool, default: False
+            Whether to print information about generated bitmask. Helpful for debugging.
+
+        Returns
+        -------
+        accepted : List[bool]
+            A list of booleans indicating whether each string was accepted by its corresponding matcher.
+
+        Raises
         ------
         RuntimeError
             If the sizes of matchers and strings do not match.
