@@ -458,7 +458,18 @@ class GrammarMatcher(XGRObject):
 
         tokens : List[int]
             The list of tokens to accept.
+
+                    Raises
+        ------
+        RuntimeError
+            If the sizes of matchers and tokens do not match.
         """
+        if len(matchers) != len(tokens):
+            raise RuntimeError(
+                "The sizes of matchers and tokens do not match. "
+                + f"Got {len(matchers)} matchers and {len(tokens)} tokens."
+            )
+
         accept_token = []
         for matcher, token in zip(matchers, tokens):
             accept_token.append(matcher.accept_token(token))
@@ -475,8 +486,17 @@ class GrammarMatcher(XGRObject):
 
         strings : List[str]
             The list of tokens to accept.
+
+        ------
+        RuntimeError
+            If the sizes of matchers and strings do not match.
         """
+        if len(matchers) != len(strings):
+            raise RuntimeError(
+                "The sizes of matchers and strings do not match. "
+                + f"Got {len(matchers)} matchers and {len(strings)} strings."
+            )
         accept_string = []
-        for matcher, token in zip(matchers, strings):
-            accept_string.append(matcher.accept_string(token))
+        for matcher, string in zip(matchers, strings):
+            accept_string.append(matcher.accept_string(string))
         return accept_string

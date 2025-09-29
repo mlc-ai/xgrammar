@@ -396,5 +396,59 @@ def test_fill_next_token_bitmask_errors():
     matcher.fill_next_token_bitmask(bitmask_correct)
 
 
+test_batched_accept_string_grammars_inputs_expecteds = [
+    (['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'], ["a", "123", "ab"], [True, True, True]),
+    (
+        ['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'],
+        ["b", "123a", "d"],
+        [False, False, False],
+    ),
+    (
+        ['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'],
+        ["a", "123a", "ab"],
+        [True, False, True],
+    ),
+    (['root ::= "a"'], ["a"], [True]),
+    (['root ::= "a"'], ["b"], [False]),
+]
+
+
+@pytest.mark.parametrize(
+    "grammars, inputs, expecteds", test_batched_accept_string_grammars_inputs_expecteds
+)
+def test_batched_accept_string(grammars: List[str], inputs: List[str], expecteds: List[bool]):
+    matchers = [_get_matcher_from_grammar(grammar) for grammar in grammars]
+    results = xgr.GrammarMatcher.batched_accept_string(matchers, inputs)
+    assert results == expecteds
+
+
+test_batched_accept_token_grammars_inputs_expecteds = [
+    (['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'], [2, 5, 2], [True, True, True]),
+    (['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'], [3, 2, 4], [False, False, False]),
+    (['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'], [2, 8, 9], [True, False, True]),
+    (['root ::= "a"'], [2], [True]),
+    (['root ::= "a"'], [3], [False]),
+]
+
+
+@pytest.mark.parametrize(
+    "grammars, inputs, expecteds", test_batched_accept_token_grammars_inputs_expecteds
+)
+def test_batched_accept_token(grammars: List[str], inputs: List[int], expecteds: List[bool]):
+    vocab = [
+        # fmt: off
+        "<s>", "</s>", "a", "b", "c", "1", "2", "3", "123a", "ab",
+        # fmt: on
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+
+    matchers = [
+        _get_matcher_from_grammar_and_tokenizer_info(xgr.Grammar.from_ebnf(grammar), tokenizer_info)
+        for grammar in grammars
+    ]
+    results = xgr.GrammarMatcher.batched_accept_token(matchers, inputs)
+    assert results == expecteds
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
