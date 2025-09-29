@@ -559,5 +559,50 @@ def test_batched_fill_next_token_bitmask_3d_tensor():
         assert accepted == expected_accepted_tokens[1][i]
 
 
+@pytest.mark.hf_token_required
+def test_batched_fill_next_token_bitmask_pressure():
+    tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
+    input_str = '{"id": 1,"name": "Example"}'
+    rejected_token_size = [
+        # fmt: off
+            31989, 31912, 270, 270, 270, 31973, 31846, 31846, 31948, 31915, 270, 270, 270, 270,
+            270, 31973, 31846, 31846, 263, 263, 263, 263, 263, 263, 263, 263, 31974, 31999,
+        # fmt: on
+    ]
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    matchers = [
+        _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
+        for _ in range(len(input_str) + 1)
+    ]
+    input_strs = list(input_str[:i] for i in range(len(input_str))) + [input_str]
+    xgr.GrammarMatcher.batched_accept_string(matchers, input_strs)
+
+    bitmask_2d = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
+    xgr.GrammarMatcher.batched_fill_next_token_bitmask(matchers, bitmask_2d, max_threads=2)
+    for i in range(len(matchers)):
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            bitmask_2d[i], tokenizer_info.vocab_size
+        )
+        assert len(rejected_token_ids) == rejected_token_size[i], (
+            i,
+            len(rejected_token_ids),
+            rejected_token_size[i],
+        )
+
+    bitmask_3d = xgr.allocate_token_bitmask(len(matchers) * 2, tokenizer_info.vocab_size)
+    bitmask_3d = bitmask_3d.view(len(matchers), 2, -1)
+    xgr.GrammarMatcher.batched_fill_next_token_bitmask(matchers, bitmask_3d, max_threads=2, index=1)
+    for i in range(len(matchers)):
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            bitmask_3d[i][1], tokenizer_info.vocab_size
+        )
+        assert len(rejected_token_ids) == rejected_token_size[i], (
+            i,
+            len(rejected_token_ids),
+            rejected_token_size[i],
+        )
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
