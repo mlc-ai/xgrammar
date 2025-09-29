@@ -79,7 +79,7 @@ bool GrammarMatcher_FillNextTokenBitmask(
 }
 
 std::vector<uint8_t> GrammarMatcher_BatchedFillNextTokenMask(
-    const std::vector<GrammarMatcher*>& matchers,
+    std::vector<GrammarMatcher>* matchers,
     nb::ndarray<> arr,
     int32_t index,
     int32_t max_thread,

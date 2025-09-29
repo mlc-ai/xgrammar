@@ -443,8 +443,10 @@ class GrammarMatcher(XGRObject):
 
             If the recursion depth is exceeded.
         """
+        matcher_handles = [matcher._handle for matcher in matchers]
+
         return _core.GrammarMatcher.batched_fill_next_token_bitmask(
-            matchers, bitmask, index, max_threads, debug_print
+            matcher_handles, bitmask, index, max_threads, debug_print
         )
 
     @staticmethod
