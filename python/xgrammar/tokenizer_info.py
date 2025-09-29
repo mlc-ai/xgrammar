@@ -139,6 +139,7 @@ class TokenizerInfo(XGRObject):
             and hasattr(tokenizer.tokenizer, "sp_model")
             and isinstance(tokenizer.tokenizer.sp_model, sentencepiece.SentencePieceProcessor)
         ) or (
+            # Support Teuken-7B-instruct-v0.6
             hasattr(tokenizer, "tok")
             and isinstance(tokenizer.tok, sentencepiece.SentencePieceProcessor)
         )
