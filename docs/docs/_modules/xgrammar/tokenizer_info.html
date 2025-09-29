@@ -384,6 +384,10 @@ window.addEventListener("load", () => mermaid.run());
             <span class="nb">hasattr</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;tokenizer&quot;</span><span class="p">)</span>
             <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;sp_model&quot;</span><span class="p">)</span>
             <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">sp_model</span><span class="p">,</span> <span class="n">sentencepiece</span><span class="o">.</span><span class="n">SentencePieceProcessor</span><span class="p">)</span>
+        <span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="c1"># Support Teuken-7B-instruct-v0.6</span>
+            <span class="nb">hasattr</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;tok&quot;</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">tok</span><span class="p">,</span> <span class="n">sentencepiece</span><span class="o">.</span><span class="n">SentencePieceProcessor</span><span class="p">)</span>
         <span class="p">)</span>
 
         <span class="k">return</span> <span class="n">has_sp_model_attr</span> <span class="ow">or</span> <span class="n">has_nested_sp_model_attr</span>
@@ -519,6 +523,8 @@ window.addEventListener("load", () => mermaid.run());
                 <span class="n">sp_model</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">sp_model</span>
             <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;tokenizer&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;sp_model&quot;</span><span class="p">):</span>
                 <span class="n">sp_model</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">sp_model</span>
+            <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;tok&quot;</span><span class="p">):</span>
+                <span class="n">sp_model</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">tok</span>
 
             <span class="k">if</span> <span class="n">stop_token_ids</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;eos_token_id&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">eos_token_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
