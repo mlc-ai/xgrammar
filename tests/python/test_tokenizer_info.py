@@ -45,6 +45,7 @@ tokenizer_path__vocab_type__prepend_space = [
     ("deepseek-ai/DeepSeek-R1", xgr.VocabType.BYTE_LEVEL, False),
     ("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", xgr.VocabType.BYTE_LEVEL, False),
     ("deepseek-ai/DeepSeek-R1-Distill-Llama-8B", xgr.VocabType.BYTE_LEVEL, False),
+    ("openGPT-X/Teuken-7B-instruct-v0.6", xgr.VocabType.BYTE_FALLBACK, True),
 ]
 
 tokenizer_paths = [path for path, *_ in tokenizer_path__vocab_type__prepend_space]

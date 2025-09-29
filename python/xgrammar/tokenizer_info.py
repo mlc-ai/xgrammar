@@ -138,6 +138,10 @@ class TokenizerInfo(XGRObject):
             hasattr(tokenizer, "tokenizer")
             and hasattr(tokenizer.tokenizer, "sp_model")
             and isinstance(tokenizer.tokenizer.sp_model, sentencepiece.SentencePieceProcessor)
+        ) or (
+            # Support Teuken-7B-instruct-v0.6
+            hasattr(tokenizer, "tok")
+            and isinstance(tokenizer.tok, sentencepiece.SentencePieceProcessor)
         )
 
         return has_sp_model_attr or has_nested_sp_model_attr
@@ -273,6 +277,8 @@ class TokenizerInfo(XGRObject):
                 sp_model = tokenizer.sp_model
             elif hasattr(tokenizer, "tokenizer") and hasattr(tokenizer.tokenizer, "sp_model"):
                 sp_model = tokenizer.tokenizer.sp_model
+            elif hasattr(tokenizer, "tok"):
+                sp_model = tokenizer.tok
 
             if stop_token_ids is None:
                 if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
