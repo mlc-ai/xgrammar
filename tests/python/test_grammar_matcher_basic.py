@@ -504,5 +504,60 @@ def test_batched_fill_next_token_bitmask():
         assert accepted == expected_accepted_tokens[1][i]
 
 
+def test_batched_fill_next_token_bitmask_3d_tensor():
+    grammars = ['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"', "root ::= [a-z0-9]+"]
+    vocab = [
+        # fmt: off
+        "ab", "</s>", "a", "b", "c", "1", "2", "3", "123a"
+        # fmt: on
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+
+    matchers = [
+        _get_matcher_from_grammar_and_tokenizer_info(xgr.Grammar.from_ebnf(grammar), tokenizer_info)
+        for grammar in grammars
+    ]
+
+    batch_size = len(matchers)
+    token_bitmask = xgr.allocate_token_bitmask(2 * batch_size, tokenizer_info.vocab_size)
+    token_bitmask = token_bitmask.view(batch_size, 2, -1)
+
+    input_str = ["a", "1", "a", "123a"]
+
+    expected_accepted_tokens = [
+        [[2], [5, 6, 7], [0, 2], [0, 2, 3, 4, 5, 6, 7, 8]],
+        [[1], [1, 5, 6, 7], [3], [0, 1, 2, 3, 4, 5, 6, 7, 8]],
+    ]
+
+    result = xgr.GrammarMatcher.batched_fill_next_token_bitmask(
+        matchers, token_bitmask, max_threads=2, index=0
+    )
+
+    assert result == [True, True, True, True]
+
+    for i in range(batch_size):
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask[i][0], tokenizer_info.vocab_size
+        )
+        accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
+        accepted.sort()
+        assert accepted == expected_accepted_tokens[0][i]
+
+    assert xgr.GrammarMatcher.batched_accept_string(matchers, input_str) == [True, True, True, True]
+
+    result = xgr.GrammarMatcher.batched_fill_next_token_bitmask(
+        matchers, token_bitmask, max_threads=2, index=1
+    )
+    assert result == [True, True, True, False]
+
+    for i in range(batch_size):
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask[i][1], tokenizer_info.vocab_size
+        )
+        accepted = list(set(range(len(vocab))) - set(rejected_token_ids))
+        accepted.sort()
+        assert accepted == expected_accepted_tokens[1][i]
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
