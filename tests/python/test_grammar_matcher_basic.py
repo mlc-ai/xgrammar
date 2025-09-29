@@ -575,7 +575,7 @@ def test_batched_fill_next_token_bitmask_pressure():
         _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
         for _ in range(len(input_str) + 1)
     ]
-    input_strs = list(input_str[:i] for i in range(len(input_str))) + [input_str]
+    input_strs = [input_str[:i] for i in range(len(input_str))] + [input_str]
     xgr.GrammarMatcher.batched_accept_string(matchers, input_strs)
 
     bitmask_2d = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
@@ -620,7 +620,7 @@ def test_batched_fill_next_token_bitmask_pressure_single_thread():
         _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
         for _ in range(len(input_str) + 1)
     ]
-    input_strs = list(input_str[:i] for i in range(len(input_str))) + [input_str]
+    input_strs = [input_str[:i] for i in range(len(input_str))] + [input_str]
     xgr.GrammarMatcher.batched_accept_string(matchers, input_strs)
 
     bitmask_2d = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
