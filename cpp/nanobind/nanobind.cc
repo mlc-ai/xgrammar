@@ -78,7 +78,7 @@ bool GrammarMatcher_FillNextTokenBitmask(
   return matcher.FillNextTokenBitmask(bitmask_dltensor_ptr, index, debug_print);
 }
 
-std::vector<uint8_t> GrammarMatcher_BatchFillNextTokenMask(
+void GrammarMatcher_BatchFillNextTokenMask(
     std::vector<GrammarMatcher>* matchers,
     nb::ndarray<> arr,
     int32_t index,
@@ -99,7 +99,7 @@ std::vector<uint8_t> GrammarMatcher_BatchFillNextTokenMask(
   DLTensor* bitmask_dltensor_ptr =
       reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
 
-  return GrammarMatcher::BatchFillNextTokenBitmask(
+  GrammarMatcher::BatchFillNextTokenBitmask(
       matchers, bitmask_dltensor_ptr, index, max_thread, debug_print
   );
 }

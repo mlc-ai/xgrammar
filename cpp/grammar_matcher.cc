@@ -321,7 +321,7 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string _DebugPrintInternalState() const { return PrintStates(); }
 
-  static std::vector<uint8_t> BatchFillNextTokenBitmask(
+  static void BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       int index = 0,
@@ -901,18 +901,17 @@ int GrammarMatcher::Impl::GetNextUncertainToken(
   }
 }
 
-std::vector<uint8_t> GrammarMatcher::Impl::BatchFillNextTokenBitmask(
+void GrammarMatcher::Impl::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     int index,
     int max_thread,
     bool debug_print
 ) {
-  std::vector<uint8_t> mask_applied(matchers->size());
   if (max_thread == 1) {
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
       auto& matcher = (*matchers)[i];
-      mask_applied[i] = matcher->FillNextTokenBitmask(next_token_bitmask, index, i, debug_print);
+      matcher->FillNextTokenBitmask(next_token_bitmask, index, i, debug_print);
     }
   } else {
     XGRAMMAR_CHECK(max_thread > 0);
@@ -921,15 +920,13 @@ std::vector<uint8_t> GrammarMatcher::Impl::BatchFillNextTokenBitmask(
     );
     auto fill_next_token_mask = [&](int32_t batch_id) {
       auto& matcher = (*matchers)[batch_id];
-      mask_applied[batch_id] =
-          matcher->FillNextTokenBitmask(next_token_bitmask, index, batch_id, debug_print);
+      matcher->FillNextTokenBitmask(next_token_bitmask, index, batch_id, debug_print);
     };
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
       thread_pool.Execute([fill_next_token_mask, i]() { fill_next_token_mask(i); });
     }
     thread_pool.Join();
   }
-  return mask_applied;
 }
 
 std::vector<uint8_t> GrammarMatcher::Impl::BatchedAcceptString(
@@ -1004,16 +1001,14 @@ std::string GrammarMatcher::_DebugPrintInternalState() const {
   return pimpl_->_DebugPrintInternalState();
 }
 
-std::vector<uint8_t> GrammarMatcher::BatchFillNextTokenBitmask(
+void GrammarMatcher::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     int index,
     int max_thread,
     bool debug_print
 ) {
-  return Impl::BatchFillNextTokenBitmask(
-      matchers, next_token_bitmask, index, max_thread, debug_print
-  );
+  Impl::BatchFillNextTokenBitmask(matchers, next_token_bitmask, index, max_thread, debug_print);
 }
 
 std::vector<uint8_t> GrammarMatcher::BatchAcceptString(

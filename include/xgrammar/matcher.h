@@ -149,9 +149,8 @@ class GrammarMatcher {
     \param index The index of the batch to process. Default is 0.
     \param max_thread The maximum number of threads to use. Default is 16.
     \param debug_print Whether to print debug information. Default is false.
-    \return A vector of bytes indicating whether each bitmask needs to be applied (not all-true).
   */
-  static std::vector<uint8_t> BatchFillNextTokenBitmask(
+  static void BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       int index = 0,
