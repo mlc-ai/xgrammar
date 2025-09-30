@@ -147,7 +147,8 @@ class GrammarMatcher {
     \param matchers The array of GrammarMatcher objects.
     \param next_token_bitmask The pre-allocated DLTensor to store the result bitmasks.
     \param indices The optional array of indices to specify which matcher corresponds to which slice
-    of the bitmask tensor. If not provided, all matchers will write to the same slice (index 0).
+    of the bitmask tensor. If not provided, all matchers will write to the corresponding
+    indices(matchers[i] to next_token_bitmask[i]).
     \param max_thread The maximum number of threads to use. Default is 16.
     \param debug_print Whether to print debug information. Default is false.
   */
