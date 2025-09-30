@@ -249,11 +249,6 @@ class GrammarMatcher(XGRObject):
         -------
         accepted : bool
             Whether the token is accepted.
-
-        Raises
-        ------
-        RuntimeError
-            If the recursion depth is exceeded.
         """
         return self._handle.accept_token(token_id, debug_print)
 
@@ -275,11 +270,6 @@ class GrammarMatcher(XGRObject):
         -------
         accepted : bool
             Whether the string is accepted.
-
-        Raises
-        ------
-        RuntimeError
-            If the recursion depth is exceeded.
         """
         return self._handle.accept_string(input_str, debug_print)
 
@@ -314,8 +304,6 @@ class GrammarMatcher(XGRObject):
         ------
         RuntimeError
             If the bitmask is invalid (not on CPU, not int32, shape mismatch).
-
-            If the recursion depth is exceeded.
         """
         return self._handle.fill_next_token_bitmask(bitmask, index, debug_print)
 
@@ -330,11 +318,6 @@ class GrammarMatcher(XGRObject):
         -------
         jump_forward_string : str
             The jump-forward string.
-
-        Raises
-        ------
-        RuntimeError
-            If the recursion depth is exceeded.
         """
         return self._handle.find_jump_forward_string()
 
@@ -445,8 +428,6 @@ class GrammarMatcher(XGRObject):
         ------
         RuntimeError
             If the bitmask is invalid (not on CPU, not int32, shape mismatch).
-
-            If the recursion depth is exceeded.
         """
         matcher_handles = [matcher._handle for matcher in matchers]
 
@@ -486,7 +467,9 @@ class GrammarMatcher(XGRObject):
 
     @staticmethod
     def batch_accept_string(
-        matchers: List["GrammarMatcher"], strings: List[str], debug_print: bool = False
+        matchers: List["GrammarMatcher"],
+        strings: List[Union[str, bytes]],
+        debug_print: bool = False,
     ) -> List[bool]:
         """Accept a batch of strings for multiple matchers.
 
@@ -495,8 +478,8 @@ class GrammarMatcher(XGRObject):
         matchers : List[GrammarMatcher]
             The list of matchers to accept tokens for.
 
-        strings : List[str]
-            The list of tokens to accept.
+        strings : List[Union[str, bytes]]
+            The list of strings to accept.
 
         debug_print : bool, default: False
             Whether to print information about generated bitmask. Helpful for debugging.
