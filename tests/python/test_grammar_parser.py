@@ -146,10 +146,7 @@ def test_repetition_range_exact():
     """Test repetition range with exact count {n}."""
     before = """root ::= "a"{3}
 """
-    expected = """root ::= (((root_repeat_1 root_repeat_2 root_repeat_3)))
-root_repeat_1 ::= (("a")) (=(root_repeat_2 root_repeat_3))
-root_repeat_2 ::= (("a")) (=(root_repeat_3))
-root_repeat_3 ::= (("a"))
+    expected = """root ::= (((("a" "a" "a"))))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
@@ -160,11 +157,7 @@ def test_repetition_range_min_max():
     """Test repetition range with min and max {n,m}."""
     before = """root ::= "a"{2,4}
 """
-    expected = """root ::= (((root_repeat_1 root_repeat_2 root_repeat_3 root_repeat_4)))
-root_repeat_1 ::= ("" | ("a")) (=(root_repeat_2 root_repeat_3 root_repeat_4))
-root_repeat_2 ::= ("" | ("a")) (=(root_repeat_3 root_repeat_4))
-root_repeat_3 ::= (("a")) (=(root_repeat_4))
-root_repeat_4 ::= (("a"))
+    expected = """root ::= (((("a" "a") | ("a" "a" "a") | ("a" "a" "a" "a"))))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
@@ -175,10 +168,8 @@ def test_repetition_range_min_only():
     """Test repetition range with only min {n,}."""
     before = """root ::= "a"{2,}
 """
-    expected = """root ::= (((root_repeat_1 root_repeat_2 root_repeat_inf)))
+    expected = """root ::= ((("a" "a" root_repeat_inf)))
 root_repeat_inf ::= ("" | ("a" root_repeat_inf))
-root_repeat_1 ::= (("a")) (=(root_repeat_2 root_repeat_inf))
-root_repeat_2 ::= (("a")) (=(root_repeat_inf))
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
@@ -273,12 +264,9 @@ rule1 ::= [a-z]{1,3} (=":")
 rule2 ::= [0-9]+ "." [0-9]*
 """
     expected = """root ::= (("start" root_1 "end"))
-rule1 ::= (((rule1_repeat_1 rule1_repeat_2 rule1_repeat_3))) (=((":")))
+rule1 ::= (((([a-z]) | ([a-z] [a-z]) | ([a-z] [a-z] [a-z])))) (=((":")))
 rule2 ::= ((rule2_1 "." [0-9]*))
 root_1 ::= ((((rule1) | (rule2)) root_1) | ((rule1) | (rule2)))
-rule1_repeat_1 ::= ("" | ([a-z])) (=(rule1_repeat_2 rule1_repeat_3))
-rule1_repeat_2 ::= ("" | ([a-z])) (=(rule1_repeat_3))
-rule1_repeat_3 ::= (([a-z]))
 rule2_1 ::= (([0-9] rule2_1) | [0-9])
 """
     grammar = _ebnf_to_grammar_no_normalization(before)
@@ -350,29 +338,29 @@ g ::= "g" {0}
 """
 
     expected = """root ::= ((a b c d e f g))
-a ::= ((a_repeat_1 a_repeat_2))
-b ::= ((b_repeat_1{0, 1} b_repeat_2 b_repeat_3 b_repeat_4 b_repeat_5))
-c ::= ((c_repeat_1 c_repeat_2))
+a ::= (("a") | ("a" "a"))
+b ::= ((a) | ("b") | (b_1 b_2) | (b_3 b_4 b_5) | (b_6 b_7 b_8 b_9) | (b_10 b_11 b_12 b_13 b_14))
+c ::= ("" | ("c") | ("c" "c"))
 d ::= ((d_repeat_inf))
-e ::= ((e_repeat_1 e_repeat_2 e_repeat_inf))
-f ::= ((f_repeat_1 f_repeat_2 f_repeat_3))
+e ::= (("e" "e" e_repeat_inf))
+f ::= (("f" "f" "f"))
 g ::= ("")
-a_repeat_1 ::= ("" | ("a")) (=(a_repeat_2))
-a_repeat_2 ::= (("a"))
-b_repeat_1 ::= ((a) | ("b")) (=(b_repeat_2 b_repeat_3 b_repeat_4 b_repeat_5))
-b_repeat_2 ::= ("" | (a) | ("b")) (=(b_repeat_3 b_repeat_4 b_repeat_5))
-b_repeat_3 ::= ("" | (a) | ("b")) (=(b_repeat_4 b_repeat_5))
-b_repeat_4 ::= ("" | (a) | ("b")) (=(b_repeat_5))
-b_repeat_5 ::= ((a) | ("b"))
-c_repeat_1 ::= ("" | ("c")) (=(c_repeat_2))
-c_repeat_2 ::= ("" | ("c"))
 d_repeat_inf ::= ("" | ("d" d_repeat_inf))
 e_repeat_inf ::= ("" | ("e" e_repeat_inf))
-e_repeat_1 ::= (("e")) (=(e_repeat_2 e_repeat_inf))
-e_repeat_2 ::= (("e")) (=(e_repeat_inf))
-f_repeat_1 ::= (("f")) (=(f_repeat_2 f_repeat_3))
-f_repeat_2 ::= (("f")) (=(f_repeat_3))
-f_repeat_3 ::= (("f"))
+b_1 ::= ((a) | ("b"))
+b_2 ::= ((a) | ("b"))
+b_3 ::= ((a) | ("b"))
+b_4 ::= ((a) | ("b"))
+b_5 ::= ((a) | ("b"))
+b_6 ::= ((a) | ("b"))
+b_7 ::= ((a) | ("b"))
+b_8 ::= ((a) | ("b"))
+b_9 ::= ((a) | ("b"))
+b_10 ::= ((a) | ("b"))
+b_11 ::= ((a) | ("b"))
+b_12 ::= ((a) | ("b"))
+b_13 ::= ((a) | ("b"))
+b_14 ::= ((a) | ("b"))
 """
 
     grammar = _ebnf_to_grammar_no_normalization(before)
@@ -789,24 +777,16 @@ def test_error_consecutive_quantifiers():
 def test_repetition_normalizer():
     """Test the repetition normalizer. If the context is nullable, then the min repetition time will be reduced to 0."""
     before = "root ::= ([0-9]*){100, 1000}"
-    expected_grammar = r"""root ::= ((root_repeat_1{0, 996} root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_1 ::= (([0-9]*)) (=(root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_2 ::= (([0-9]*)) (=(root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_3 ::= (([0-9]*)) (=(root_repeat_4 root_repeat_5))
-root_repeat_4 ::= (([0-9]*)) (=(root_repeat_5))
-root_repeat_5 ::= (([0-9]*))
+    expected_grammar = r"""root ::= ((root_repeat_1{0, 985} [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]*))
+root_repeat_1 ::= (([0-9]*)) (=([0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]* [0-9]*))
 """
     grammar = xgr.Grammar.from_ebnf(before)
     grammar = GrammarFunctor.grammar_optimizer(grammar)
     assert expected_grammar == str(grammar)
 
     before = "root ::= ([0-9]){100, 1000}"
-    expected_grammar = r"""root ::= ((root_repeat_1{96, 996} root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_1 ::= (([0-9])) (=(root_repeat_2 root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_2 ::= (([0-9])) (=(root_repeat_3 root_repeat_4 root_repeat_5))
-root_repeat_3 ::= (([0-9])) (=(root_repeat_4 root_repeat_5))
-root_repeat_4 ::= (([0-9])) (=(root_repeat_5))
-root_repeat_5 ::= (([0-9]))
+    expected_grammar = r"""root ::= ((root_repeat_1{85, 985} [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9]))
+root_repeat_1 ::= (([0-9])) (=([0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9] [0-9]))
 """
     grammar = xgr.Grammar.from_ebnf(before)
     grammar = GrammarFunctor.grammar_optimizer(grammar)
