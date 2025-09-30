@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -33,57 +34,33 @@ int32_t GetBitmaskSize(int vocab_size) { return DynamicBitset::GetBufferSize(voc
 
 DLDataType GetBitmaskDLType() { return DLDataType{kDLInt, 32, 1}; }
 
-int32_t* CheckAndGetBitmaskPtr(
-    const DLTensor& token_bitmask, int vocab_size, int index, int batch_id = -1
-) {
+int32_t* CheckAndGetBitmaskPtr(const DLTensor& token_bitmask, int vocab_size, int index) {
   XGRAMMAR_CHECK(token_bitmask.dtype.code == kDLInt && token_bitmask.dtype.bits == 32)
       << "The provied bitmask's dtype is not valid: should be int32";
+
+  int32_t buffer_size = GetBitmaskSize(vocab_size);
+  if (token_bitmask.ndim == 1) {
+    XGRAMMAR_CHECK(token_bitmask.shape[0] == buffer_size)
+        << "The provided bitmask's shape is not valid: should be (" << buffer_size << ", )";
+    XGRAMMAR_CHECK(index == 0) << "The index should be 0 when the bitmask is 1D";
+  } else {
+    XGRAMMAR_CHECK(token_bitmask.ndim == 2)
+        << "The provided bitmask's shape is not valid: should be (batch_size, " << buffer_size
+        << ")";
+    XGRAMMAR_CHECK(token_bitmask.shape[1] == buffer_size)
+        << "The provided bitmask's shape is not valid: should be (batch_size, " << buffer_size
+        << ")";
+    XGRAMMAR_CHECK(index >= 0 && index < token_bitmask.shape[0])
+        << "The provided index is out of bounds";
+  }
+
   XGRAMMAR_CHECK(
       token_bitmask.device.device_type == kDLCPU ||
       token_bitmask.device.device_type == kDLCUDAHost ||
       token_bitmask.device.device_type == kDLROCMHost
   ) << "The provided bitmask's device is not valid: should be CPU";
 
-  int32_t buffer_size = GetBitmaskSize(vocab_size);
-
-  // If batch_id == -1, then the bitmask is for a single matcher.
-  if (batch_id == -1) {
-    if (token_bitmask.ndim == 1) {
-      XGRAMMAR_CHECK(token_bitmask.shape[0] == buffer_size)
-          << "The provided bitmask's shape is not valid: should be (" << buffer_size << ", )";
-      XGRAMMAR_CHECK(index == 0) << "The index should be 0 when the bitmask is 1D";
-    } else {
-      XGRAMMAR_CHECK(token_bitmask.ndim == 2)
-          << "The provided bitmask's shape is not valid: should be (batch_size, " << buffer_size
-          << ")";
-      XGRAMMAR_CHECK(token_bitmask.shape[1] == buffer_size)
-          << "The provided bitmask's shape is not valid: should be (batch_size, " << buffer_size
-          << ")";
-      XGRAMMAR_CHECK(index >= 0 && index < token_bitmask.shape[0])
-          << "The provided index is out of bounds";
-    }
-    return reinterpret_cast<int32_t*>(token_bitmask.data) + index * buffer_size;
-  }
-
-  XGRAMMAR_DCHECK(batch_id >= 0);
-  if (token_bitmask.ndim == 2) {
-    XGRAMMAR_CHECK(token_bitmask.shape[1] == buffer_size)
-        << "The provided bitmask's shape is not valid: should be (matcher_number, " << buffer_size
-        << ")";
-    XGRAMMAR_CHECK(index == 0) << "The index should be 0 when the bitmask is 1D";
-    return reinterpret_cast<int32_t*>(token_bitmask.data) + batch_id * buffer_size;
-  }
-
-  XGRAMMAR_CHECK(token_bitmask.ndim == 3)
-      << "The provided bitmask's shape is not valid: should be (matcher_number, batch_size, "
-      << buffer_size << ")";
-  XGRAMMAR_CHECK(token_bitmask.shape[2] == buffer_size)
-      << "The provided bitmask's shape is not valid: should be (matcher_number, batch_size, "
-      << buffer_size << ")";
-  XGRAMMAR_CHECK(index >= 0 && index < token_bitmask.shape[1])
-      << "The provided index is out of bounds";
-  return reinterpret_cast<int32_t*>(token_bitmask.data) +
-         (batch_id * token_bitmask.shape[1] + index) * buffer_size;
+  return reinterpret_cast<int32_t*>(token_bitmask.data) + index * buffer_size;
 }
 
 void _DebugGetMaskedTokensFromBitmask(
@@ -303,9 +280,7 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   bool AcceptString(const std::string& input_str, bool debug_print = false);
 
-  bool FillNextTokenBitmask(
-      DLTensor* next_token_bitmask, int index, int batch_id = -1, bool debug_print = false
-  );
+  bool FillNextTokenBitmask(DLTensor* next_token_bitmask, int index, bool debug_print = false);
 
   std::string FindJumpForwardString();
 
@@ -324,7 +299,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   static void BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
-      int index = 0,
+      const std::optional<std::vector<int32_t>>& indices = std::nullopt,
       int max_thread = 16,
       bool debug_print = false
   );
@@ -549,13 +524,13 @@ bool GrammarMatcher::Impl::IsTokenBitmaskAllTrue(int32_t* bitmask_data_ptr) {
 }
 
 bool GrammarMatcher::Impl::FillNextTokenBitmask(
-    DLTensor* next_token_bitmask, int index, int batch_id, bool debug_print
+    DLTensor* next_token_bitmask, int index, bool debug_print
 ) {
   XGRAMMAR_CHECK(!IsStopTokenAccepted())
       << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
          "find the next token mask";
   int32_t* bitmask_data_ptr =
-      CheckAndGetBitmaskPtr(*next_token_bitmask, tokenizer_info_.GetVocabSize(), index, batch_id);
+      CheckAndGetBitmaskPtr(*next_token_bitmask, tokenizer_info_.GetVocabSize(), index);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
   const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
@@ -904,14 +879,22 @@ int GrammarMatcher::Impl::GetNextUncertainToken(
 void GrammarMatcher::Impl::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
-    int index,
+    const std::optional<std::vector<int32_t>>& indices,
     int max_thread,
     bool debug_print
 ) {
+  XGRAMMAR_CHECK(!indices.has_value() || indices->size() == matchers->size())
+      << "The size of indices (" << (indices.has_value() ? indices->size() : 0)
+      << ") should be the same as the size of matchers (" << matchers->size() << ").";
+
   if (max_thread == 1) {
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
       auto& matcher = (*matchers)[i];
-      matcher->FillNextTokenBitmask(next_token_bitmask, index, i, debug_print);
+      int index = indices.has_value() ? (*indices)[i] : i;
+      XGRAMMAR_CHECK(index >= 0 && index < next_token_bitmask->shape[0])
+          << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
+          << ") for batch_id " << i << ".";
+      matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
     }
   } else {
     XGRAMMAR_CHECK(max_thread > 0);
@@ -920,7 +903,11 @@ void GrammarMatcher::Impl::BatchFillNextTokenBitmask(
     );
     auto fill_next_token_mask = [&](int32_t batch_id) {
       auto& matcher = (*matchers)[batch_id];
-      matcher->FillNextTokenBitmask(next_token_bitmask, index, batch_id, debug_print);
+      int index = indices.has_value() ? (*indices)[batch_id] : batch_id;
+      XGRAMMAR_CHECK(index >= 0 && index < next_token_bitmask->shape[0])
+          << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
+          << ") for batch_id " << batch_id << ".";
+      matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
     };
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
       thread_pool.Execute([fill_next_token_mask, i]() { fill_next_token_mask(i); });
@@ -1004,11 +991,11 @@ std::string GrammarMatcher::_DebugPrintInternalState() const {
 void GrammarMatcher::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
-    int index,
+    const std::optional<std::vector<int32_t>>& indices,
     int max_thread,
     bool debug_print
 ) {
-  Impl::BatchFillNextTokenBitmask(matchers, next_token_bitmask, index, max_thread, debug_print);
+  Impl::BatchFillNextTokenBitmask(matchers, next_token_bitmask, indices, max_thread, debug_print);
 }
 
 std::vector<uint8_t> GrammarMatcher::BatchAcceptString(

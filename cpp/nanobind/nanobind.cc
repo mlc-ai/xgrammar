@@ -14,6 +14,9 @@
 #include <xgrammar/xgrammar.h>
 
 #include <cstdint>
+#include <optional>
+#include <thread>
+#include <variant>
 #include <vector>
 
 #include "../grammar_functor.h"
@@ -81,12 +84,12 @@ bool GrammarMatcher_FillNextTokenBitmask(
 void GrammarMatcher_BatchFillNextTokenMask(
     std::vector<GrammarMatcher>* matchers,
     nb::ndarray<> arr,
-    int32_t index,
-    int32_t max_thread,
+    std::optional<std::vector<int32_t>> indices,
+    std::variant<int32_t, std::string> max_thread,
     bool debug_print
 ) {
-  if (arr.ndim() != 2 && arr.ndim() != 3) {
-    throw std::runtime_error("batched_token_bitmask tensor must be 2D or 3D");
+  if (arr.ndim() != 2) {
+    throw std::runtime_error("batched_token_bitmask tensor must be 2D");
   }
   if (arr.device_type() != nb::device::cpu::value) {
     throw std::runtime_error("token_bitmask array must be on CPU");
@@ -99,8 +102,21 @@ void GrammarMatcher_BatchFillNextTokenMask(
   DLTensor* bitmask_dltensor_ptr =
       reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
 
+  int unwrapped_max_thread;
+
+  if (std::holds_alternative<std::string>(max_thread)) {
+    if (std::get<std::string>(max_thread) == "auto") {
+      unwrapped_max_thread = std::min(std::thread::hardware_concurrency() / 2, 1u);
+    } else {
+      throw std::runtime_error("max_thread must be an integer or 'auto'");
+    }
+  } else {
+    XGRAMMAR_CHECK(std::get<int32_t>(max_thread) > 0) << "max_thread must be positive";
+    unwrapped_max_thread = std::get<int32_t>(max_thread);
+  }
+
   GrammarMatcher::BatchFillNextTokenBitmask(
-      matchers, bitmask_dltensor_ptr, index, max_thread, debug_print
+      matchers, bitmask_dltensor_ptr, indices, unwrapped_max_thread, debug_print
   );
 }
 
