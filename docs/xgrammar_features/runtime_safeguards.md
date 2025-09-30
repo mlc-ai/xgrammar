@@ -15,7 +15,7 @@ If the recursion depth exceeds the limit,
 the matcher operations (including [`xgr.GrammarMatcher.accept_token`](xgrammar.GrammarMatcher.accept_token),
 [`xgr.GrammarMatcher.accept_string`](xgrammar.GrammarMatcher.accept_string), [`xgr.GrammarMatcher.fill_next_token_bitmask`](xgrammar.GrammarMatcher.fill_next_token_bitmask),
 [`xgr.GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)) will raise
-`RuntimeError`.
+`RuntimeError`(before XGrammar v0.1.21).
 
 You can also use the [`xgr.max_recursion_depth`](xgrammar.max_recursion_depth) context manager to set the maximum
 recursion depth for a code block.
@@ -26,6 +26,8 @@ from xgrammar import max_recursion_depth
 with max_recursion_depth(10000):
     matcher.accept_token(token_id)
 ```
+
+After XGrammar v0.1.21, the pushdown automaton parser was replaced with an Earley parser, and the recursion depth cannot be infinite anymore. Thus, the feature was removed.
 
 ## Cache Size Limit
 
