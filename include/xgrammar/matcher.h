@@ -151,7 +151,7 @@ class GrammarMatcher {
     \param debug_print Whether to print debug information. Default is false.
     \return A vector of bytes indicating whether each bitmask needs to be applied (not all-true).
   */
-  static std::vector<uint8_t> BatchedFillNextTokenBitmask(
+  static std::vector<uint8_t> BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       int index = 0,
@@ -166,7 +166,7 @@ class GrammarMatcher {
    * \param debug_print Whether to print debug information. Default is false.
    * \return A vector of bytes indicating whether each string is accepted.
    */
-  static std::vector<uint8_t> BatchedAcceptString(
+  static std::vector<uint8_t> BatchAcceptString(
       std::vector<GrammarMatcher>* matchers,
       const std::vector<std::string>& input_strs,
       bool debug_print = false
@@ -179,7 +179,7 @@ class GrammarMatcher {
    * \param debug_print Whether to print debug information. Default is false.
    * \return A vector of bytes indicating whether each token is accepted.
    */
-  static std::vector<uint8_t> BatchedAcceptToken(
+  static std::vector<uint8_t> BatchAcceptToken(
       std::vector<GrammarMatcher>* matchers,
       const std::vector<int32_t>& token_ids,
       bool debug_print = false

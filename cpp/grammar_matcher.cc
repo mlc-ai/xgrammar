@@ -321,7 +321,7 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string _DebugPrintInternalState() const { return PrintStates(); }
 
-  static std::vector<uint8_t> BatchedFillNextTokenBitmask(
+  static std::vector<uint8_t> BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       int index = 0,
@@ -901,7 +901,7 @@ int GrammarMatcher::Impl::GetNextUncertainToken(
   }
 }
 
-std::vector<uint8_t> GrammarMatcher::Impl::BatchedFillNextTokenBitmask(
+std::vector<uint8_t> GrammarMatcher::Impl::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     int index,
@@ -1004,19 +1004,19 @@ std::string GrammarMatcher::_DebugPrintInternalState() const {
   return pimpl_->_DebugPrintInternalState();
 }
 
-std::vector<uint8_t> GrammarMatcher::BatchedFillNextTokenBitmask(
+std::vector<uint8_t> GrammarMatcher::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     int index,
     int max_thread,
     bool debug_print
 ) {
-  return Impl::BatchedFillNextTokenBitmask(
+  return Impl::BatchFillNextTokenBitmask(
       matchers, next_token_bitmask, index, max_thread, debug_print
   );
 }
 
-std::vector<uint8_t> GrammarMatcher::BatchedAcceptString(
+std::vector<uint8_t> GrammarMatcher::BatchAcceptString(
     std::vector<GrammarMatcher>* matchers,
     const std::vector<std::string>& input_strs,
     bool debug_print
@@ -1024,7 +1024,7 @@ std::vector<uint8_t> GrammarMatcher::BatchedAcceptString(
   return Impl::BatchedAcceptString(matchers, input_strs, debug_print);
 }
 
-std::vector<uint8_t> GrammarMatcher::BatchedAcceptToken(
+std::vector<uint8_t> GrammarMatcher::BatchAcceptToken(
     std::vector<GrammarMatcher>* matchers, const std::vector<int32_t>& token_ids, bool debug_print
 ) {
   return Impl::BatchedAcceptToken(matchers, token_ids, debug_print);
