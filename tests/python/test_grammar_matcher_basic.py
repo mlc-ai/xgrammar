@@ -588,7 +588,7 @@ def test_batch_fill_next_token_bitmask_pressure_shuffled():
     input_strs = [input_str[:i] for i in range(len(input_str))] + [input_str]
     xgr.GrammarMatcher.batch_accept_string(matchers, input_strs)
 
-    shuffled_indices = [i for i in range(len(matchers))]
+    shuffled_indices = list(range(len(matchers)))
     random.shuffle(shuffled_indices)
     bitmask_2d = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
     xgr.GrammarMatcher.batch_fill_next_token_bitmask(matchers, bitmask_2d, shuffled_indices)
