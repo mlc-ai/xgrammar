@@ -84,12 +84,12 @@ bool GrammarMatcher_FillNextTokenBitmask(
 void GrammarMatcher_BatchFillNextTokenMask(
     std::vector<GrammarMatcher>* matchers,
     nb::ndarray<> arr,
-    std::optional<std::vector<int32_t>> indices,
+    const std::optional<std::vector<int32_t>>& indices,
     std::variant<int32_t, std::string> max_thread,
     bool debug_print
 ) {
   if (arr.ndim() != 2) {
-    throw std::runtime_error("batched_token_bitmask tensor must be 2D");
+    throw std::runtime_error("batch_token_bitmask tensor must be 2D");
   }
   if (arr.device_type() != nb::device::cpu::value) {
     throw std::runtime_error("token_bitmask array must be on CPU");
@@ -306,11 +306,16 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_static(
           "batch_fill_next_token_bitmask",
           &GrammarMatcher_BatchFillNextTokenMask,
+          nb::arg("matchers"),
+          nb::arg("batch_token_bitmask"),
+          nb::arg("indices").none(),
+          nb::arg("max_thread") = "auto",
+          nb::arg("debug_print") = false,
           nb::call_guard<nb::gil_scoped_release>()
       )
       .def_static(
           "batch_accept_string",
-          &GrammarMatcher::BatchAcceptString,
+          &GrammarMatcher_BatchAcceptString,
           nb::call_guard<nb::gil_scoped_release>()
       )
       .def_static(
