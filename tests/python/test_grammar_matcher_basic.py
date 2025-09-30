@@ -397,7 +397,7 @@ def test_fill_next_token_bitmask_errors():
 
 
 test_batch_accept_string_grammars_inputs_expecteds = [
-    (['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'], ["a", "123", "ab"], [True, True, True]),
+    (['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'], ["a", b"123", "ab"], [True, True, True]),
     (
         ['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'],
         ["b", "123a", "d"],
@@ -405,18 +405,25 @@ test_batch_accept_string_grammars_inputs_expecteds = [
     ),
     (
         ['root ::= "a"', "root ::= [0-9]+", 'root ::= "ab"'],
-        ["a", "123a", "ab"],
+        ["a", b"123a", b"ab"],
         [True, False, True],
     ),
     (['root ::= "a"'], ["a"], [True]),
     (['root ::= "a"'], ["b"], [False]),
+    (
+        ['root ::= "你好"', 'root ::= "こんにちは"', 'root ::= "안녕하세요"'],
+        ["你好", "こんにちは", "안녕하세요"],
+        [True, True, True],
+    ),
 ]
 
 
 @pytest.mark.parametrize(
     "grammars, inputs, expecteds", test_batch_accept_string_grammars_inputs_expecteds
 )
-def test_batch_accept_string(grammars: List[str], inputs: List[str], expecteds: List[bool]):
+def test_batch_accept_string(
+    grammars: List[str], inputs: List[Union[str, bytes]], expecteds: List[bool]
+):
     matchers = [_get_matcher_from_grammar(grammar) for grammar in grammars]
     results = xgr.GrammarMatcher.batch_accept_string(matchers, inputs)
     assert results == expecteds

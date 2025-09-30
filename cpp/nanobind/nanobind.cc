@@ -122,7 +122,7 @@ void GrammarMatcher_BatchFillNextTokenMask(
 
 std::vector<uint8_t> GrammarMatcher_BatchAcceptString(
     std::vector<GrammarMatcher>* matchers,
-    const nb::typed<nb::list, std::variant<std::string, nb::bytes>>& input_strs,
+    const std::vector<std::variant<nb::bytes, std::string>>& input_strs,
     bool debug_print
 ) {
   if (matchers->size() != input_strs.size()) {
@@ -131,12 +131,10 @@ std::vector<uint8_t> GrammarMatcher_BatchAcceptString(
   std::vector<uint8_t> accepted(matchers->size());
   for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
     std::string input_str;
-    if (nb::bytes result; nb::try_cast(input_strs[i], result)) {
-      input_str = result.c_str();
-    } else if (nb::str result; nb::try_cast(input_strs[i], result)) {
-      input_str = result.c_str();
+    if (std::holds_alternative<std::string>(input_strs[i])) {
+      input_str = std::get<std::string>(input_strs[i]);
     } else {
-      throw nb::type_error("Expected str or bytes for input_strs");
+      input_str = std::get<nb::bytes>(input_strs[i]).c_str();
     }
     auto& matcher = (*matchers)[i];
     accepted[i] = matcher.AcceptString(input_str, debug_print);
