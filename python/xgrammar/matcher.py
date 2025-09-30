@@ -416,13 +416,6 @@ class GrammarMatcher(XGRObject):
 
         debug_print : bool, default: False
             Whether to print information about generated bitmask. Helpful for debugging.
-                    Returns
-
-        Returns
-        -------
-        need_apply : List[bool]
-            Whether the bitmask need to be applied (not all-true). An optimization: if False,
-            this means the bitmask is already all-true, so no need to apply it.
 
         Raises
         ------
@@ -431,7 +424,7 @@ class GrammarMatcher(XGRObject):
         """
         matcher_handles = [matcher._handle for matcher in matchers]
 
-        return _core.GrammarMatcher.batch_fill_next_token_bitmask(
+        _core.GrammarMatcher.batch_fill_next_token_bitmask(
             matcher_handles, bitmask, indices, max_threads, debug_print
         )
 
