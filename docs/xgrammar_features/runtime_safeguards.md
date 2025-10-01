@@ -27,7 +27,7 @@ with max_recursion_depth(10000):
     matcher.accept_token(token_id)
 ```
 
-After XGrammar v0.1.21, the pushdown automaton parser was replaced with an Earley parser, and the recursion depth cannot be infinite anymore. Thus, the feature was removed.
+After XGrammar v0.1.21, the pushdown automaton parser was replaced with an Earley parser, and there is no recursion involved. So the recursion will never be exceed during parsing, and the exception will not be raised.
 
 ## Cache Size Limit
 
