@@ -404,8 +404,6 @@ class GrammarMatcher(XGRObject):
             Bitmask_batch_size could be larger than the actual batch size to allow padding.
             Bitmask_size equals to ceil(vocab_size/32), and could be computed through
             xgrammar.allocate_token_bitmask.
-
-
         indices : Optional[List[int]], default: None
             A list of indices to specify which rows in the bitmask to fill. If None, fill
             the bitmask [0:len(matchers))].
