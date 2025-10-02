@@ -300,7 +300,7 @@ class GrammarMatcher::Impl : public EarleyParser {
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       const std::optional<std::vector<int32_t>>& indices = std::nullopt,
-      int max_thread = 16,
+      int max_threads = 16,
       bool debug_print = false
   );
 
@@ -880,14 +880,14 @@ void GrammarMatcher::Impl::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     const std::optional<std::vector<int32_t>>& indices,
-    int max_thread,
+    int max_threads,
     bool debug_print
 ) {
   XGRAMMAR_CHECK(!indices.has_value() || indices->size() == matchers->size())
       << "The size of indices (" << (indices.has_value() ? indices->size() : 0)
       << ") should be the same as the size of matchers (" << matchers->size() << ").";
 
-  if (max_thread == 1) {
+  if (max_threads == 1) {
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
       auto& matcher = (*matchers)[i];
       int index = indices.has_value() ? (*indices)[i] : i;
@@ -897,9 +897,9 @@ void GrammarMatcher::Impl::BatchFillNextTokenBitmask(
       matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
     }
   } else {
-    XGRAMMAR_CHECK(max_thread > 0);
+    XGRAMMAR_CHECK(max_threads > 0);
     ThreadPool thread_pool(
-        std::min(std::thread::hardware_concurrency(), static_cast<uint32_t>(max_thread))
+        std::min(std::thread::hardware_concurrency(), static_cast<uint32_t>(max_threads))
     );
     auto fill_next_token_mask = [&](int32_t batch_id) {
       auto& matcher = (*matchers)[batch_id];
@@ -992,10 +992,10 @@ void GrammarMatcher::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     const std::optional<std::vector<int32_t>>& indices,
-    int max_thread,
+    int max_threads,
     bool debug_print
 ) {
-  Impl::BatchFillNextTokenBitmask(matchers, next_token_bitmask, indices, max_thread, debug_print);
+  Impl::BatchFillNextTokenBitmask(matchers, next_token_bitmask, indices, max_threads, debug_print);
 }
 
 std::vector<uint8_t> GrammarMatcher::BatchAcceptString(

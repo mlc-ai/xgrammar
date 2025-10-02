@@ -149,14 +149,14 @@ class GrammarMatcher {
     \param indices The optional array of indices to specify which matcher corresponds to which slice
     of the bitmask tensor. If not provided, all matchers will write to the corresponding
     indices(matchers[i] to next_token_bitmask[i]).
-    \param max_thread The maximum number of threads to use. Default is 16.
+    \param max_threads The maximum number of threads to use. Default is 16.
     \param debug_print Whether to print debug information. Default is false.
   */
   static void BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       const std::optional<std::vector<int32_t>>& indices = std::nullopt,
-      int max_thread = 16,
+      int max_threads = 16,
       bool debug_print = false
   );
 
