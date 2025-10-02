@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace xgrammar {
@@ -156,7 +157,7 @@ class GrammarMatcher {
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       const std::optional<std::vector<int32_t>>& indices = std::nullopt,
-      int max_threads = 16,
+      std::variant<int32_t, std::string> max_threads = 16,
       bool debug_print = false
   );
 
