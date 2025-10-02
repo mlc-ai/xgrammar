@@ -1,7 +1,7 @@
 """Defines all structural tag formats."""
 
 import json
-from typing import Any, Dict, List, Literal, Type, Union
+from typing import Any, Dict, List, Literal, Type, Union, Optional
 
 try:
     # Python 3.9+
@@ -11,6 +11,31 @@ except ImportError:
     from typing_extensions import Annotated
 
 from pydantic import BaseModel, Field
+
+class ParserTag(BaseModel):
+    """Metadata for structure tags to allow output parsing."""
+
+    capture_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Identifier that the parser can use to collect this node's content."
+        ),
+    )
+    combine: Optional[str] = Field(
+        default=None,
+        description=(
+            "Instruction for the parser on how to combine multiple nodes with the same capture_id. Options are"
+            " 'append' or 'concat'. 'append' will create a list of values, while 'concat' will concatenate"
+            " them into a single string. When 'append' is used the output will always be a list, even if there is"
+            " only one item. 'concat' will always return a string, and can only be used for string values."
+        ),
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Catch-all to allow us to sneak in extra data later if we need it."
+        ),
+    )
 
 # ---------- Basic Formats ----------
 
@@ -31,6 +56,8 @@ class JSONSchemaFormat(BaseModel):
     """The type of the format."""
     json_schema: Union[bool, Dict[str, Any]]
     """The JSON schema."""
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
 
 
 class QwenXMLParameterFormat(BaseModel):
@@ -64,12 +91,18 @@ class QwenXMLParameterFormat(BaseModel):
     json_schema: Union[bool, Dict[str, Any]]
     """The JSON schema for the parameters of the function calling."""
 
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
+
 
 class AnyTextFormat(BaseModel):
     """A format that matches any text."""
 
     type: Literal["any_text"] = "any_text"
     """The type of the format."""
+
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
 
 
 class GrammarFormat(BaseModel):
@@ -90,6 +123,9 @@ class RegexFormat(BaseModel):
 
     pattern: str
     """The regex pattern."""
+
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
 
 
 # ---------- Combinatorial Formats ----------
