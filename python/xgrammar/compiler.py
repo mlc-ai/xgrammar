@@ -281,7 +281,7 @@ class GrammarCompiler(XGRObject):
 
     @overload
     def compile_grammar(
-        self, ebnf_string: str, *, root_rule_name: str = "root"
+        self, ebnf_string: str, /, *, root_rule_name: str = "root"
     ) -> CompiledGrammar: ...
 
     @overload
