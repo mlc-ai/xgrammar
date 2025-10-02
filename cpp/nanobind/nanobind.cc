@@ -112,21 +112,16 @@ std::vector<uint8_t> GrammarMatcher_BatchAcceptString(
     const std::vector<std::variant<nb::bytes, std::string>>& input_strs,
     bool debug_print
 ) {
-  if (matchers->size() != input_strs.size()) {
-    throw std::runtime_error("The size of matchers and input_strs must be the same");
-  }
-  std::vector<uint8_t> accepted(matchers->size());
-  for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
-    std::string input_str;
-    if (std::holds_alternative<std::string>(input_strs[i])) {
-      input_str = std::get<std::string>(input_strs[i]);
+  std::vector<std::string> input_strs_converted;
+  input_strs_converted.reserve(input_strs.size());
+  for (const auto& str : input_strs) {
+    if (std::holds_alternative<std::string>(str)) {
+      input_strs_converted.emplace_back(std::get<std::string>(str));
     } else {
-      input_str = std::get<nb::bytes>(input_strs[i]).c_str();
+      input_strs_converted.emplace_back(std::get<nb::bytes>(str).c_str());
     }
-    auto& matcher = (*matchers)[i];
-    accepted[i] = matcher.AcceptString(input_str, debug_print);
   }
-  return accepted;
+  return GrammarMatcher::BatchAcceptString(matchers, input_strs_converted);
 }
 
 std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
