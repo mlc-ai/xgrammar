@@ -411,7 +411,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
   int pos = 0;
   for (auto char_value : token) {
-    if (!Advance(char_value)) {
+    if (!Advance(char_value, debug_print)) {
       if (debug_print) {
         XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token)
                            << "> rejected at position " << pos << ", char "
@@ -447,7 +447,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
 
   int accepted_cnt = 0;
   for (auto char_value : input_str) {
-    if (!Advance(char_value)) {
+    if (!Advance(char_value, debug_print)) {
       if (debug_print) {
         XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" is rejected at "
                            << "position " << accepted_cnt << ", char " << EscapeString(char_value);
