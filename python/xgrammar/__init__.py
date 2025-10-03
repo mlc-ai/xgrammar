@@ -15,6 +15,7 @@ from .exception import (
 )
 from .grammar import Grammar, StructuralTagItem
 from .matcher import (
+    BatchGrammarMatcher,
     GrammarMatcher,
     allocate_token_bitmask,
     apply_token_bitmask_inplace,

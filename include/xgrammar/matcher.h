@@ -143,6 +143,22 @@ class GrammarMatcher {
    */
   std::string _DebugPrintInternalState() const;
 
+  XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcher);
+};
+
+/*!
+ * \brief A batched version of GrammarMatcher for better efficiency. It supports batch processing
+ * of multiple GrammarMatcher objects in parallel.
+ *
+ * \details This class provides batched versions of the core methods of GrammarMatcher, including
+ * FillNextTokenBitmask, AcceptString, and AcceptToken. It utilizes multi-threading to process
+ * multiple GrammarMatcher objects simultaneously, significantly improving efficiency when dealing
+ * with a large number of matchers.
+ */
+class BatchGrammarMatcher {
+ public:
+  BatchGrammarMatcher(std::variant<std::string, int32_t> max_threads = "auto");
+
   /*!
     \brief A batched version of FillNextTokenBitmask for better efficiency.
     \param matchers The array of GrammarMatcher objects.
@@ -150,14 +166,12 @@ class GrammarMatcher {
     \param indices The optional array of indices to specify which matcher corresponds to which slice
     of the bitmask tensor. If not provided, all matchers will write to the corresponding
     indices(matchers[i] to next_token_bitmask[i]).
-    \param max_threads The maximum number of threads to use. Default is 16.
     \param debug_print Whether to print debug information. Default is false.
   */
-  static void BatchFillNextTokenBitmask(
+  void BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       const std::optional<std::vector<int32_t>>& indices = std::nullopt,
-      std::variant<int32_t, std::string> max_threads = 16,
       bool debug_print = false
   );
 
@@ -187,7 +201,7 @@ class GrammarMatcher {
       bool debug_print = false
   );
 
-  XGRAMMAR_DEFINE_PIMPL_METHODS(GrammarMatcher);
+  XGRAMMAR_DEFINE_PIMPL_METHODS(BatchGrammarMatcher);
 };
 
 }  // namespace xgrammar

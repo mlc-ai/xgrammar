@@ -384,12 +384,29 @@ class GrammarMatcher(XGRObject):
         """
         return self._handle._debug_print_internal_state()
 
-    @staticmethod
+
+class BatchGrammarMatcher(XGRObject):
+    """A batch version of GrammarMatcher that can fill the next token bitmask for multiple
+    matchers in parallel. It utilizes multiple threads to speed up the computation. It is
+    especially useful when the batch size is large.
+    """
+
+    def __init__(self, max_threads: Union[int, Literal["auto"]] = "auto") -> None:
+        """Construct the batch grammar matcher.
+        Parameters
+        ----------
+        max_threads : Union[int, Literal["auto"]], default: "auto"
+            The maximum number of threads to use for parallel processing. If set to "auto", the
+            max_threads will be set to std::thread::hardware_concurrency() / 2.
+        """
+
+        self._init_handle(_core.BatchGrammarMatcher(max_threads))
+
     def batch_fill_next_token_bitmask(
+        self,
         matchers: List["GrammarMatcher"],
         bitmask: ArrayLike,
         indices: Optional[List[int]] = None,
-        max_threads: Union[int, Literal["auto"]] = "auto",
         debug_print: bool = False,
     ) -> None:
         """Fill the next token bitmask for multiple matchers.
@@ -404,13 +421,10 @@ class GrammarMatcher(XGRObject):
             Bitmask_batch_size could be larger than the actual batch size to allow padding.
             Bitmask_size equals to ceil(vocab_size/32), and could be computed through
             xgrammar.allocate_token_bitmask.
+
         indices : Optional[List[int]], default: None
             A list of indices to specify which rows in the bitmask to fill. If None, fill
             the bitmask [0:len(matchers))].
-
-        max_threads : Union[int, Literal["auto"]], default: "auto"
-            The maximum number of threads to use for filling the bitmask. If "auto",
-            use (std::thread::hardware_concurrency() / 2) threads.
 
         debug_print : bool, default: False
             Whether to print information about generated bitmask. Helpful for debugging.
@@ -422,9 +436,7 @@ class GrammarMatcher(XGRObject):
         """
         matcher_handles = [matcher._handle for matcher in matchers]
 
-        _core.GrammarMatcher.batch_fill_next_token_bitmask(
-            matcher_handles, bitmask, indices, max_threads, debug_print
-        )
+        self._handle.batch_fill_next_token_bitmask(matcher_handles, bitmask, indices, debug_print)
 
     @staticmethod
     def batch_accept_token(
@@ -454,7 +466,7 @@ class GrammarMatcher(XGRObject):
             If the sizes of matchers and tokens do not match.
         """
         matcher_handles = [matcher._handle for matcher in matchers]
-        return _core.GrammarMatcher.batch_accept_token(matcher_handles, tokens, debug_print)
+        return _core.BatchGrammarMatcher.batch_accept_token(matcher_handles, tokens, debug_print)
 
     @staticmethod
     def batch_accept_string(
@@ -486,4 +498,4 @@ class GrammarMatcher(XGRObject):
             If the sizes of matchers and strings do not match.
         """
         matcher_handles = [matcher._handle for matcher in matchers]
-        return _core.GrammarMatcher.batch_accept_string(matcher_handles, strings, debug_print)
+        return _core.BatchGrammarMatcher.batch_accept_string(matcher_handles, strings, debug_print)

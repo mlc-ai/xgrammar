@@ -82,6 +82,7 @@ bool GrammarMatcher_FillNextTokenBitmask(
 }
 
 void GrammarMatcher_BatchFillNextTokenMask(
+    BatchGrammarMatcher& batch_matcher,
     std::vector<GrammarMatcher>* matchers,
     nb::ndarray<> arr,
     const std::optional<std::vector<int32_t>>& indices,
@@ -102,9 +103,7 @@ void GrammarMatcher_BatchFillNextTokenMask(
   DLTensor* bitmask_dltensor_ptr =
       reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
 
-  GrammarMatcher::BatchFillNextTokenBitmask(
-      matchers, bitmask_dltensor_ptr, indices, max_threads, debug_print
-  );
+  batch_matcher.BatchFillNextTokenBitmask(matchers, bitmask_dltensor_ptr, indices, debug_print);
 }
 
 std::vector<uint8_t> GrammarMatcher_BatchAcceptString(
@@ -121,7 +120,7 @@ std::vector<uint8_t> GrammarMatcher_BatchAcceptString(
       input_strs_converted.emplace_back(std::get<nb::bytes>(str).c_str());
     }
   }
-  return GrammarMatcher::BatchAcceptString(matchers, input_strs_converted);
+  return BatchGrammarMatcher::BatchAcceptString(matchers, input_strs_converted);
 }
 
 std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
@@ -259,7 +258,29 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("clear_cache", &GrammarCompiler::ClearCache)
       .def("get_cache_size_bytes", &GrammarCompiler::GetCacheSizeBytes)
       .def_prop_ro("cache_limit_bytes", &GrammarCompiler::CacheLimitBytes);
-
+  auto pyBatchGrammarMatcher = nb::class_<BatchGrammarMatcher>(m, "BatchGrammarMatcher");
+  pyBatchGrammarMatcher
+      .def(nb::init<std::variant<std::string, int32_t>>(), nb::arg("max_threads") = "auto")
+      .def(
+          "batch_fill_next_token_bitmask",
+          &GrammarMatcher_BatchFillNextTokenMask,
+          nb::arg("matchers"),
+          nb::arg("batch_token_bitmask"),
+          nb::arg("indices").none(),
+          nb::arg("max_thread") = "auto",
+          nb::arg("debug_print") = false,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "batch_accept_string",
+          &GrammarMatcher_BatchAcceptString,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "batch_accept_token",
+          &BatchGrammarMatcher::BatchAcceptToken,
+          nb::call_guard<nb::gil_scoped_release>()
+      );
   auto pyGrammarMatcher = nb::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher
       .def(
@@ -281,26 +302,6 @@ NB_MODULE(xgrammar_bindings, m) {
       .def(
           "fill_next_token_bitmask",
           &GrammarMatcher_FillNextTokenBitmask,
-          nb::call_guard<nb::gil_scoped_release>()
-      )
-      .def_static(
-          "batch_fill_next_token_bitmask",
-          &GrammarMatcher_BatchFillNextTokenMask,
-          nb::arg("matchers"),
-          nb::arg("batch_token_bitmask"),
-          nb::arg("indices").none(),
-          nb::arg("max_thread") = "auto",
-          nb::arg("debug_print") = false,
-          nb::call_guard<nb::gil_scoped_release>()
-      )
-      .def_static(
-          "batch_accept_string",
-          &GrammarMatcher_BatchAcceptString,
-          nb::call_guard<nb::gil_scoped_release>()
-      )
-      .def_static(
-          "batch_accept_token",
-          &GrammarMatcher::BatchAcceptToken,
           nb::call_guard<nb::gil_scoped_release>()
       )
       .def(

@@ -426,7 +426,7 @@ def test_batch_accept_string(
     grammars: List[str], inputs: List[Union[str, bytes]], expecteds: List[bool]
 ):
     matchers = [_get_matcher_from_grammar(grammar) for grammar in grammars]
-    results = xgr.GrammarMatcher.batch_accept_string(matchers, inputs)
+    results = xgr.BatchGrammarMatcher.batch_accept_string(matchers, inputs)
     assert results == expecteds
 
 
@@ -454,7 +454,7 @@ def test_batch_accept_token(grammars: List[str], inputs: List[int], expecteds: L
         _get_matcher_from_grammar_and_tokenizer_info(xgr.Grammar.from_ebnf(grammar), tokenizer_info)
         for grammar in grammars
     ]
-    results = xgr.GrammarMatcher.batch_accept_token(matchers, inputs)
+    results = xgr.BatchGrammarMatcher.batch_accept_token(matchers, inputs)
     assert results == expecteds
 
 
@@ -482,7 +482,8 @@ def test_batch_fill_next_token_bitmask():
         [[1], [1, 5, 6, 7], [3], [0, 1, 2, 3, 4, 5, 6, 7, 8]],
     ]
 
-    xgr.GrammarMatcher.batch_fill_next_token_bitmask(matchers, token_bitmask, max_threads=2)
+    batch_grammar_matcher = xgr.BatchGrammarMatcher(2)
+    batch_grammar_matcher.batch_fill_next_token_bitmask(matchers, token_bitmask)
 
     for i in range(batch_size):
         rejected_token_ids = _get_masked_tokens_from_bitmask(
@@ -492,9 +493,14 @@ def test_batch_fill_next_token_bitmask():
         accepted.sort()
         assert accepted == expected_accepted_tokens[0][i]
 
-    assert xgr.GrammarMatcher.batch_accept_string(matchers, input_str) == [True, True, True, True]
+    assert xgr.BatchGrammarMatcher.batch_accept_string(matchers, input_str) == [
+        True,
+        True,
+        True,
+        True,
+    ]
 
-    xgr.GrammarMatcher.batch_fill_next_token_bitmask(matchers, token_bitmask, max_threads=2)
+    batch_grammar_matcher.batch_fill_next_token_bitmask(matchers, token_bitmask)
 
     for i in range(batch_size):
         rejected_token_ids = _get_masked_tokens_from_bitmask(
@@ -522,10 +528,11 @@ def test_batch_fill_next_token_bitmask_pressure():
         for _ in range(len(input_str) + 1)
     ]
     input_strs = [input_str[:i] for i in range(len(input_str))] + [input_str]
-    xgr.GrammarMatcher.batch_accept_string(matchers, input_strs)
+    xgr.BatchGrammarMatcher.batch_accept_string(matchers, input_strs)
 
     bitmask_2d = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
-    xgr.GrammarMatcher.batch_fill_next_token_bitmask(matchers, bitmask_2d, max_threads=2)
+    batch_grammar_matcher = xgr.BatchGrammarMatcher(2)
+    batch_grammar_matcher.batch_fill_next_token_bitmask(matchers, bitmask_2d)
     for i in range(len(matchers)):
         rejected_token_ids = _get_masked_tokens_from_bitmask(
             bitmask_2d[i], tokenizer_info.vocab_size
@@ -554,10 +561,11 @@ def test_batch_fill_next_token_bitmask_pressure_single_thread():
         for _ in range(len(input_str) + 1)
     ]
     input_strs = [input_str[:i] for i in range(len(input_str))] + [input_str]
-    xgr.GrammarMatcher.batch_accept_string(matchers, input_strs)
+    xgr.BatchGrammarMatcher.batch_accept_string(matchers, input_strs)
 
     bitmask_2d = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
-    xgr.GrammarMatcher.batch_fill_next_token_bitmask(matchers, bitmask_2d, max_threads=1)
+    batch_grammar_matcher = xgr.BatchGrammarMatcher(1)
+    batch_grammar_matcher.batch_fill_next_token_bitmask(matchers, bitmask_2d)
     for i in range(len(matchers)):
         rejected_token_ids = _get_masked_tokens_from_bitmask(
             bitmask_2d[i], tokenizer_info.vocab_size
@@ -586,12 +594,13 @@ def test_batch_fill_next_token_bitmask_pressure_shuffled():
         for _ in range(len(input_str) + 1)
     ]
     input_strs = [input_str[:i] for i in range(len(input_str))] + [input_str]
-    xgr.GrammarMatcher.batch_accept_string(matchers, input_strs)
+    xgr.BatchGrammarMatcher.batch_accept_string(matchers, input_strs)
 
     shuffled_indices = list(range(len(matchers)))
     random.shuffle(shuffled_indices)
     bitmask_2d = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
-    xgr.GrammarMatcher.batch_fill_next_token_bitmask(matchers, bitmask_2d, shuffled_indices)
+    batch_grammar_matcher = xgr.BatchGrammarMatcher()
+    batch_grammar_matcher.batch_fill_next_token_bitmask(matchers, bitmask_2d, shuffled_indices)
     for i in range(len(matchers)):
         rejected_token_ids = _get_masked_tokens_from_bitmask(
             bitmask_2d[shuffled_indices[i]], tokenizer_info.vocab_size
