@@ -956,16 +956,16 @@ std::string JSONSchemaConverter::URIToRule(const std::string& uri) {
     }
   }
 
-  picojson::value current = json_schema_;
+  picojson::value* current = &json_schema_;
   for (const auto& part : parts) {
-    XGRAMMAR_CHECK(current.is<picojson::object>() && current.contains(part))
-        << "Cannot find field " << part << " in " << current.serialize(false);
-    current = current.get(part);
+    XGRAMMAR_CHECK(current->is<picojson::object>() && current->contains(part))
+        << "Cannot find field " << part << " in " << current->serialize(false);
+    current = &(current->get(part));
   }
 
   auto new_rule_name = ebnf_script_creator_.AllocateRuleName(new_rule_name_perfix);
   uri_to_rule_cache_[uri] = new_rule_name;
-  auto body = VisitSchema(current, new_rule_name);
+  auto body = VisitSchema(*current, new_rule_name);
   ebnf_script_creator_.AddRuleWithAllocatedName(new_rule_name, body);
   return new_rule_name;
 }
