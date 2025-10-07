@@ -56,6 +56,7 @@ class StructuralTagParser {
   Result<TagsWithSeparatorFormat, ISTError> ParseTagsWithSeparatorFormat(
       const picojson::object& value
   );
+  Result<std::optional<ParserTag>, ISTError> ParseParserTag(const picojson::object& value);
 
   int parse_format_recursion_depth_ = 0;
 };
@@ -182,6 +183,49 @@ Result<ConstStringFormat, ISTError> StructuralTagParser::ParseConstStringFormat(
   return ResultOk<ConstStringFormat>(value_it->second.get<std::string>());
 }
 
+Result<std::optional<ParserTag>, ISTError> StructuralTagParser::ParseParserTag(
+    const picojson::object& obj
+) {
+  auto parser_tag_it = obj.find("parser_tag");
+  if (parser_tag_it == obj.end() || parser_tag_it->second.is<picojson::null>()) {
+    return ResultOk<std::optional<ParserTag>>(std::nullopt);
+  }
+  if (!parser_tag_it->second.is<picojson::object>()) {
+    return ResultErr<ISTError>("parser_tag must be an object");
+  }
+  const auto& parser_tag_obj = parser_tag_it->second.get<picojson::object>();
+  ParserTag parser_tag;
+  for (const auto& kv : parser_tag_obj) {
+    if (kv.first == "capture_id") {
+      if (!kv.second.is<std::string>()) {
+        return ResultErr<ISTError>("parser_tag.capture_id must be a string");
+      }
+      parser_tag.capture_id = kv.second.get<std::string>();
+    } else if (kv.first == "combine") {
+      if (!kv.second.is<std::string>()) {
+        return ResultErr<ISTError>("parser_tag.combine must be a string");
+      }
+      parser_tag.combine = kv.second.get<std::string>();
+    } else if (kv.first == "metadata") {
+      if (kv.second.is<picojson::null>()) {
+        continue;
+      }
+      if (!kv.second.is<picojson::object>()) {
+        return ResultErr<ISTError>("parser_tag.metadata must be an object if present");
+      }
+      parser_tag.metadata_json = kv.second.serialize(false);
+    } else {
+      return ResultErr<ISTError>("Unknown field in parser_tag: " + kv.first);
+    }
+  }
+
+  if (!parser_tag.capture_id && !parser_tag.combine && !parser_tag.metadata_json) {
+    return ResultOk<std::optional<ParserTag>>(std::nullopt);
+  }
+
+  return ResultOk<std::optional<ParserTag>>(std::move(parser_tag));
+}
+
 Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     const picojson::object& obj
 ) {
@@ -190,11 +234,17 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
   if (json_schema_it == obj.end() ||
       !(json_schema_it->second.is<picojson::object>() || json_schema_it->second.is<bool>())) {
     return ResultErr<ISTError>(
-        "JSON schema format must have a json_schema field with a object or boolean value"
+      "JSON schema format must have a json_schema field with a object or boolean value"
     );
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
-  return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false));
+  auto parser_tag = ParseParserTag(obj);
+  if (parser_tag.IsErr()) {
+    return ResultErr<ISTError>(std::move(parser_tag).UnwrapErr());
+  }
+  return ResultOk<JSONSchemaFormat>(
+      json_schema_it->second.serialize(false), std::move(parser_tag).Unwrap()
+  );
 }
 
 Result<QwenXmlParameterFormat, ISTError> StructuralTagParser::ParseQwenXmlParameterFormat(
@@ -205,20 +255,34 @@ Result<QwenXmlParameterFormat, ISTError> StructuralTagParser::ParseQwenXmlParame
   if (json_schema_it == obj.end() ||
       !(json_schema_it->second.is<picojson::object>() || json_schema_it->second.is<bool>())) {
     return ResultErr<ISTError>(
-        "Qwen XML Parameter format must have a json_schema field with a object or boolean value"
+      "Qwen XML Parameter format must have a json_schema field with a object or boolean value"
     );
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
-  return ResultOk<QwenXmlParameterFormat>(json_schema_it->second.serialize(false));
+  auto parser_tag = ParseParserTag(obj);
+  if (parser_tag.IsErr()) {
+    return ResultErr<ISTError>(std::move(parser_tag).UnwrapErr());
+  }
+  return ResultOk<QwenXmlParameterFormat>(
+      json_schema_it->second.serialize(false), std::move(parser_tag).Unwrap()
+  );
 }
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
 ) {
-  // obj should not have any fields other than "type"
-  if (obj.size() > 1 || (obj.size() == 1 && obj.begin()->first != "type")) {
-    return ResultErr<ISTError>("Any text format should not have any fields other than type");
+  auto parser_tag = ParseParserTag(obj);
+  if (parser_tag.IsErr()) {
+    return ResultErr<ISTError>(std::move(parser_tag).UnwrapErr());
   }
-  return ResultOk<AnyTextFormat>();
+  for (const auto& kv : obj) {
+    if (kv.first == "type" || kv.first == "parser_tag") {
+      continue;
+    }
+    return ResultErr<ISTError>(
+        "Any text format should not have fields other than type or parser_tag"
+    );
+  }
+  return ResultOk<AnyTextFormat>(std::move(parser_tag).Unwrap());
 }
 
 Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const picojson::object& obj
@@ -239,7 +303,13 @@ Result<RegexFormat, ISTError> StructuralTagParser::ParseRegexFormat(const picojs
       pattern_it->second.get<std::string>().empty()) {
     return ResultErr<ISTError>("Regex format must have a pattern field with a non-empty string");
   }
-  return ResultOk<RegexFormat>(pattern_it->second.get<std::string>());
+  auto parser_tag = ParseParserTag(obj);
+  if (parser_tag.IsErr()) {
+    return ResultErr<ISTError>(std::move(parser_tag).UnwrapErr());
+  }
+  return ResultOk<RegexFormat>(
+      pattern_it->second.get<std::string>(), std::move(parser_tag).Unwrap()
+  );
 }
 
 Result<SequenceFormat, ISTError> StructuralTagParser::ParseSequenceFormat(
@@ -320,10 +390,15 @@ Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::
   if (end_it == obj.end() || !end_it->second.is<std::string>()) {
     return ResultErr<ISTError>("Tag format's end field must be a string");
   }
+  auto parser_tag = ParseParserTag(obj);
+  if (parser_tag.IsErr()) {
+    return ResultErr<ISTError>(std::move(parser_tag).UnwrapErr());
+  }
   return ResultOk<TagFormat>(
       begin_it->second.get<std::string>(),
       std::make_shared<Format>(std::move(content).Unwrap()),
-      end_it->second.get<std::string>()
+      end_it->second.get<std::string>(),
+      std::move(parser_tag).Unwrap()
   );
 }
 
@@ -383,8 +458,16 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
     }
     stop_after_first = stop_after_first_it->second.get<bool>();
   }
+  auto parser_tag = ParseParserTag(obj);
+  if (parser_tag.IsErr()) {
+    return ResultErr<ISTError>(std::move(parser_tag).UnwrapErr());
+  }
   return ResultOk<TriggeredTagsFormat>(
-      std::move(triggers), std::move(tags), at_least_one, stop_after_first
+      std::move(triggers),
+      std::move(tags),
+      at_least_one,
+      stop_after_first,
+      std::move(parser_tag).Unwrap()
   );
 }
 
@@ -435,8 +518,16 @@ Result<TagsWithSeparatorFormat, ISTError> StructuralTagParser::ParseTagsWithSepa
     }
     stop_after_first = stop_after_first_it->second.get<bool>();
   }
+  auto parser_tag = ParseParserTag(obj);
+  if (parser_tag.IsErr()) {
+    return ResultErr<ISTError>(std::move(parser_tag).UnwrapErr());
+  }
   return ResultOk<TagsWithSeparatorFormat>(
-      std::move(tags), separator_it->second.get<std::string>(), at_least_one, stop_after_first
+      std::move(tags),
+      separator_it->second.get<std::string>(),
+      at_least_one,
+      stop_after_first,
+      std::move(parser_tag).Unwrap()
   );
 }
 
