@@ -18,7 +18,8 @@ class ParserTag(BaseModel):
     capture_id: Optional[str] = Field(
         default=None,
         description=(
-            "Identifier that the parser can use to collect this node's content."
+            "Identifier that the parser can use to collect this node's content or serve as a prefix for"
+            " descendants."
         ),
     )
     combine: Optional[str] = Field(
@@ -160,6 +161,8 @@ class TagFormat(BaseModel):
     """The content of the tag. It can be any of the formats."""
     end: str
     """The end tag."""
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
 
 
 class TriggeredTagsFormat(BaseModel):
@@ -211,6 +214,8 @@ class TriggeredTagsFormat(BaseModel):
     """Whether at least one of the tags must be generated."""
     stop_after_first: bool = False
     """Whether to stop after the first tag is generated."""
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
 
 
 class TagsWithSeparatorFormat(BaseModel):
@@ -249,6 +254,8 @@ class TagsWithSeparatorFormat(BaseModel):
     """Whether at least one of the tags must be matched."""
     stop_after_first: bool = False
     """Whether to stop after the first tag is matched."""
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
 
 
 # ---------- Discriminated Union ----------
@@ -361,6 +368,7 @@ class StructuralTag(BaseModel):
 
 
 __all__ = [
+    "ParserTag",
     "ConstStringFormat",
     "JSONSchemaFormat",
     "QwenXMLParameterFormat",
