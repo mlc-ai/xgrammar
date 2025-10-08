@@ -8,8 +8,12 @@
 
 #include <xgrammar/matcher.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <optional>
+#include <thread>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "compiled_grammar_impl.h"
@@ -19,6 +23,7 @@
 #include "support/encoding.h"
 #include "support/int_set.h"
 #include "support/logging.h"
+#include "support/thread_pool.h"
 #include "testing.h"
 
 namespace xgrammar {
@@ -341,6 +346,52 @@ class GrammarMatcher::Impl : public EarleyParser {
   DynamicBitset tmp_accepted_bitset_;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
+};
+
+class BatchGrammarMatcher::Impl {
+ public:
+  Impl(std::variant<std::string, int32_t> max_threads) {
+    if (std::holds_alternative<int32_t>(max_threads)) {
+      int32_t num_threads = std::get<int32_t>(max_threads);
+      XGRAMMAR_CHECK(num_threads >= 1)
+          << "The num_threads should be at least 1, but got " << num_threads;
+      if (num_threads > 1) {
+        if (num_threads > static_cast<int32_t>(std::thread::hardware_concurrency())) {
+          XGRAMMAR_LOG(WARNING) << "The num_threads " << num_threads << " is larger than the "
+                                << "number of hardware threads. Using "
+                                << static_cast<int32_t>(std::thread::hardware_concurrency())
+                                << " instead.";
+        }
+        max_threads_ =
+            std::min(num_threads, static_cast<int32_t>(std::thread::hardware_concurrency()));
+      }
+    } else {
+      std::string str = std::get<std::string>(max_threads);
+      XGRAMMAR_CHECK(str == "auto");
+      max_threads_ = std::thread::hardware_concurrency() / 2;
+    }
+  }
+
+  void BatchFillNextTokenBitmask(
+      std::vector<GrammarMatcher>* matchers,
+      DLTensor* next_token_bitmask,
+      const std::optional<std::vector<int32_t>>& indices,
+      bool debug_print
+  );
+
+  static std::vector<uint8_t> BatchAcceptToken(
+      std::vector<GrammarMatcher>* matchers, const std::vector<int32_t>& token_ids, bool debug_print
+  );
+
+  static std::vector<uint8_t> BatchAcceptString(
+      std::vector<GrammarMatcher>* matchers,
+      const std::vector<std::string>& input_strs,
+      bool debug_print
+  );
+
+ private:
+  std::optional<ThreadPool> thread_pool_ = std::nullopt;
+  int32_t max_threads_ = 1;
 };
 
 bool GrammarMatcher::Impl::AcceptStopToken() {
@@ -852,6 +903,75 @@ int GrammarMatcher::Impl::GetNextUncertainToken(
   }
 }
 
+void BatchGrammarMatcher::Impl::BatchFillNextTokenBitmask(
+    std::vector<GrammarMatcher>* matchers,
+    DLTensor* next_token_bitmask,
+    const std::optional<std::vector<int32_t>>& indices,
+    bool debug_print
+) {
+  XGRAMMAR_CHECK(!indices.has_value() || indices->size() == matchers->size())
+      << "The size of indices (" << (indices.has_value() ? indices->size() : 0)
+      << ") should be the same as the size of matchers (" << matchers->size() << ").";
+  // Initialize the thread pool if needed. It should be initialized each time,
+  // because ThreadPool cannot be reused after Join().
+  if (max_threads_ > 1) {
+    thread_pool_.emplace(max_threads_);
+  }
+  if (!thread_pool_.has_value()) {
+    for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
+      auto& matcher = (*matchers)[i];
+      int index = indices.has_value() ? (*indices)[i] : i;
+      XGRAMMAR_CHECK(index >= 0 && index < next_token_bitmask->shape[0])
+          << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
+          << ") for batch_id " << i << ".";
+      matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
+    }
+  } else {
+    auto fill_next_token_mask = [&](int32_t batch_id) {
+      auto& matcher = (*matchers)[batch_id];
+      int index = indices.has_value() ? (*indices)[batch_id] : batch_id;
+      XGRAMMAR_CHECK(index >= 0 && index < next_token_bitmask->shape[0])
+          << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
+          << ") for batch_id " << batch_id << ".";
+      matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
+    };
+    for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
+      thread_pool_->Execute([fill_next_token_mask, i]() { fill_next_token_mask(i); });
+    }
+    thread_pool_->Join();
+  }
+}
+
+std::vector<uint8_t> BatchGrammarMatcher::Impl::BatchAcceptString(
+    std::vector<GrammarMatcher>* matchers,
+    const std::vector<std::string>& input_strs,
+    bool debug_print
+) {
+  XGRAMMAR_CHECK(matchers->size() == input_strs.size())
+      << "The size of matchers (" << matchers->size() << ") and input_strs (" << input_strs.size()
+      << ") should be the same.";
+  std::vector<uint8_t> accepted(matchers->size());
+  for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
+    auto& matcher = (*matchers)[i];
+    accepted[i] = matcher->AcceptString(input_strs[i], debug_print);
+  }
+  return accepted;
+}
+
+std::vector<uint8_t> BatchGrammarMatcher::Impl::BatchAcceptToken(
+    std::vector<GrammarMatcher>* matchers, const std::vector<int32_t>& token_ids, bool debug_print
+) {
+  XGRAMMAR_CHECK(matchers->size() == token_ids.size())
+      << "The size of matchers (" << matchers->size() << ") and token_ids (" << token_ids.size()
+      << ") should be the same.";
+  std::vector<uint8_t> accepted(matchers->size());
+  for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
+    auto& matcher = (*matchers)[i];
+    accepted[i] = matcher->AcceptToken(token_ids[i], debug_print);
+  }
+  return accepted;
+}
+
 GrammarMatcher::GrammarMatcher(
     const CompiledGrammar& compiled_grammar,
     std::optional<std::vector<int>> override_stop_tokens,
@@ -893,5 +1013,31 @@ const std::vector<int>& GrammarMatcher::GetStopTokenIds() const {
 std::string GrammarMatcher::_DebugPrintInternalState() const {
   return pimpl_->_DebugPrintInternalState();
 }
+
+void BatchGrammarMatcher::BatchFillNextTokenBitmask(
+    std::vector<GrammarMatcher>* matchers,
+    DLTensor* next_token_bitmask,
+    const std::optional<std::vector<int32_t>>& indices,
+    bool debug_print
+) {
+  return pimpl_->BatchFillNextTokenBitmask(matchers, next_token_bitmask, indices, debug_print);
+}
+
+std::vector<uint8_t> BatchGrammarMatcher::BatchAcceptString(
+    std::vector<GrammarMatcher>* matchers,
+    const std::vector<std::string>& input_strs,
+    bool debug_print
+) {
+  return Impl::BatchAcceptString(matchers, input_strs, debug_print);
+}
+
+std::vector<uint8_t> BatchGrammarMatcher::BatchAcceptToken(
+    std::vector<GrammarMatcher>* matchers, const std::vector<int32_t>& token_ids, bool debug_print
+) {
+  return Impl::BatchAcceptToken(matchers, token_ids, debug_print);
+}
+
+BatchGrammarMatcher::BatchGrammarMatcher(std::variant<std::string, int32_t> max_threads)
+    : pimpl_(std::make_shared<BatchGrammarMatcher::Impl>(max_threads)) {}
 
 }  // namespace xgrammar

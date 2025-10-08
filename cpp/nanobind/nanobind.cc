@@ -13,12 +13,19 @@
 #include <nanobind/stl/vector.h>
 #include <xgrammar/xgrammar.h>
 
+#include <cstdint>
+#include <optional>
+#include <thread>
+#include <variant>
+#include <vector>
+
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
 #include "../testing.h"
 #include "python_methods.h"
 #include "xgrammar/exception.h"
+#include "xgrammar/matcher.h"
 
 namespace nb = nanobind;
 
@@ -72,6 +79,48 @@ bool GrammarMatcher_FillNextTokenBitmask(
       reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
 
   return matcher.FillNextTokenBitmask(bitmask_dltensor_ptr, index, debug_print);
+}
+
+void GrammarMatcher_BatchFillNextTokenMask(
+    BatchGrammarMatcher& batch_matcher,
+    std::vector<GrammarMatcher>* matchers,
+    nb::ndarray<> arr,
+    const std::optional<std::vector<int32_t>>& indices,
+    std::variant<int32_t, std::string> max_threads,
+    bool debug_print
+) {
+  if (arr.ndim() != 2) {
+    throw std::runtime_error("batch_token_bitmask tensor must be 2D");
+  }
+  if (arr.device_type() != nb::device::cpu::value) {
+    throw std::runtime_error("token_bitmask array must be on CPU");
+  }
+  if (arr.dtype() != nb::dtype<int32_t>()) {
+    throw std::runtime_error("token_bitmask array must be int32");
+  }
+  static_assert(sizeof(arr) == sizeof(void*) + sizeof(nb::dlpack::dltensor));
+
+  DLTensor* bitmask_dltensor_ptr =
+      reinterpret_cast<::DLTensor*>(reinterpret_cast<char*>(&arr) + sizeof(void*));
+
+  batch_matcher.BatchFillNextTokenBitmask(matchers, bitmask_dltensor_ptr, indices, debug_print);
+}
+
+std::vector<uint8_t> GrammarMatcher_BatchAcceptString(
+    std::vector<GrammarMatcher>* matchers,
+    const std::vector<std::variant<nb::bytes, std::string>>& input_strs,
+    bool debug_print
+) {
+  std::vector<std::string> input_strs_converted;
+  input_strs_converted.reserve(input_strs.size());
+  for (const auto& str : input_strs) {
+    if (std::holds_alternative<std::string>(str)) {
+      input_strs_converted.emplace_back(std::get<std::string>(str));
+    } else {
+      input_strs_converted.emplace_back(std::get<nb::bytes>(str).c_str());
+    }
+  }
+  return BatchGrammarMatcher::BatchAcceptString(matchers, input_strs_converted);
 }
 
 std::vector<nanobind::bytes> TokenizerInfo_GetDecodedVocab(const TokenizerInfo& tokenizer) {
@@ -209,7 +258,29 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("clear_cache", &GrammarCompiler::ClearCache)
       .def("get_cache_size_bytes", &GrammarCompiler::GetCacheSizeBytes)
       .def_prop_ro("cache_limit_bytes", &GrammarCompiler::CacheLimitBytes);
-
+  auto pyBatchGrammarMatcher = nb::class_<BatchGrammarMatcher>(m, "BatchGrammarMatcher");
+  pyBatchGrammarMatcher
+      .def(nb::init<std::variant<std::string, int32_t>>(), nb::arg("max_threads") = "auto")
+      .def(
+          "batch_fill_next_token_bitmask",
+          &GrammarMatcher_BatchFillNextTokenMask,
+          nb::arg("matchers"),
+          nb::arg("batch_token_bitmask"),
+          nb::arg("indices").none(),
+          nb::arg("max_thread") = "auto",
+          nb::arg("debug_print") = false,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "batch_accept_string",
+          &GrammarMatcher_BatchAcceptString,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "batch_accept_token",
+          &BatchGrammarMatcher::BatchAcceptToken,
+          nb::call_guard<nb::gil_scoped_release>()
+      );
   auto pyGrammarMatcher = nb::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher
       .def(

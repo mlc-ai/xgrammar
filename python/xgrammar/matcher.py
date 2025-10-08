@@ -4,7 +4,7 @@ token.
 
 import math
 import warnings
-from typing import List, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 import torch
 from numpy.typing import ArrayLike
@@ -249,11 +249,6 @@ class GrammarMatcher(XGRObject):
         -------
         accepted : bool
             Whether the token is accepted.
-
-        Raises
-        ------
-        RuntimeError
-            If the recursion depth is exceeded.
         """
         return self._handle.accept_token(token_id, debug_print)
 
@@ -275,11 +270,6 @@ class GrammarMatcher(XGRObject):
         -------
         accepted : bool
             Whether the string is accepted.
-
-        Raises
-        ------
-        RuntimeError
-            If the recursion depth is exceeded.
         """
         return self._handle.accept_string(input_str, debug_print)
 
@@ -314,8 +304,6 @@ class GrammarMatcher(XGRObject):
         ------
         RuntimeError
             If the bitmask is invalid (not on CPU, not int32, shape mismatch).
-
-            If the recursion depth is exceeded.
         """
         return self._handle.fill_next_token_bitmask(bitmask, index, debug_print)
 
@@ -330,11 +318,6 @@ class GrammarMatcher(XGRObject):
         -------
         jump_forward_string : str
             The jump-forward string.
-
-        Raises
-        ------
-        RuntimeError
-            If the recursion depth is exceeded.
         """
         return self._handle.find_jump_forward_string()
 
@@ -400,3 +383,119 @@ class GrammarMatcher(XGRObject):
             The internal state of the matcher.
         """
         return self._handle._debug_print_internal_state()
+
+
+class BatchGrammarMatcher(XGRObject):
+    """A batch version of GrammarMatcher that can fill the next token bitmask for multiple
+    matchers in parallel. It utilizes multiple threads to speed up the computation. It is
+    especially useful when the batch size is large.
+    """
+
+    def __init__(self, max_threads: Union[int, Literal["auto"]] = "auto") -> None:
+        """Construct the batch grammar matcher.
+        Parameters
+        ----------
+        max_threads : Union[int, Literal["auto"]], default: "auto"
+            The maximum number of threads to use for parallel processing. If set to "auto", the
+            max_threads will be set to std::thread::hardware_concurrency() / 2.
+        """
+
+        self._init_handle(_core.BatchGrammarMatcher(max_threads))
+
+    def batch_fill_next_token_bitmask(
+        self,
+        matchers: List["GrammarMatcher"],
+        bitmask: ArrayLike,
+        indices: Optional[List[int]] = None,
+        debug_print: bool = False,
+    ) -> None:
+        """Fill the next token bitmask for multiple matchers.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to fill the bitmask for.
+
+        bitmask : ArrayLike
+            Must be a 2-dimensional int32 tensor with shape (bitmask_batch_size, bitmask_size).
+            Bitmask_batch_size could be larger than the actual batch size to allow padding.
+            Bitmask_size equals to ceil(vocab_size/32), and could be computed through
+            xgrammar.allocate_token_bitmask.
+
+        indices : Optional[List[int]], default: None
+            A list of indices to specify which rows in the bitmask to fill. If None, fill
+            the bitmask [0:len(matchers))].
+
+        debug_print : bool, default: False
+            Whether to print information about generated bitmask. Helpful for debugging.
+
+        Raises
+        ------
+        RuntimeError
+            If the bitmask is invalid (not on CPU, not int32, shape mismatch).
+        """
+        matcher_handles = [matcher._handle for matcher in matchers]
+
+        self._handle.batch_fill_next_token_bitmask(matcher_handles, bitmask, indices, debug_print)
+
+    @staticmethod
+    def batch_accept_token(
+        matchers: List["GrammarMatcher"], tokens: List[int], debug_print: bool = False
+    ) -> List[bool]:
+        """Accept a batch of tokens for multiple matchers.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to accept tokens for.
+
+        tokens : List[int]
+            The list of tokens to accept.
+
+        debug_print : bool, default: False
+            Whether to print information about generated bitmask. Helpful for debugging.
+
+        Returns
+        -------
+        accepted : List[bool]
+            A list of booleans indicating whether each token was accepted by its corresponding matcher.
+
+        Raises
+        ------
+        RuntimeError
+            If the sizes of matchers and tokens do not match.
+        """
+        matcher_handles = [matcher._handle for matcher in matchers]
+        return _core.BatchGrammarMatcher.batch_accept_token(matcher_handles, tokens, debug_print)
+
+    @staticmethod
+    def batch_accept_string(
+        matchers: List["GrammarMatcher"],
+        strings: List[Union[str, bytes]],
+        debug_print: bool = False,
+    ) -> List[bool]:
+        """Accept a batch of strings for multiple matchers.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to accept tokens for.
+
+        strings : List[Union[str, bytes]]
+            The list of strings to accept.
+
+        debug_print : bool, default: False
+            Whether to print information about generated bitmask. Helpful for debugging.
+
+        Returns
+        -------
+        accepted : List[bool]
+            A list of booleans indicating whether each string was accepted by its corresponding matcher.
+
+        Raises
+        ------
+        RuntimeError
+            If the sizes of matchers and strings do not match.
+        """
+        matcher_handles = [matcher._handle for matcher in matchers]
+        return _core.BatchGrammarMatcher.batch_accept_string(matcher_handles, strings, debug_print)
