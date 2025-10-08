@@ -263,7 +263,7 @@ depth. The maximum recursion depth is set per process.The default maximum recurs
 the matcher operations (including <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.accept_token</span></code></span></a>,
 <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_string" title="xgrammar.GrammarMatcher.accept_string"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.accept_string</span></code></span></a>, <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.fill_next_token_bitmask</span></code></span></a>,
 <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.find_jump_forward_string</span></code></span></a>) will raise
-<code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>(before XGrammar v0.1.21).</p>
 <p>You can also use the <a class="reference internal" href="../api/python/config.html#xgrammar.max_recursion_depth" title="xgrammar.max_recursion_depth"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.max_recursion_depth</span></code></span></a> context manager to set the maximum
 recursion depth for a code block.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">max_recursion_depth</span>
@@ -272,6 +272,7 @@ recursion depth for a code block.</p>
     <span class="n">matcher</span><span class="o">.</span><span class="n">accept_token</span><span class="p">(</span><span class="n">token_id</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>After XGrammar v0.1.21, the pushdown automaton parser was replaced with an Earley parser, and there is no recursion involved. So the recursion will never be exceed during parsing, and the exception will not be raised.</p>
 </section>
 <section id="cache-size-limit">
 <h2>Cache Size Limit<a class="headerlink" href="#cache-size-limit" title="Permalink to this heading">¶</a></h2>
