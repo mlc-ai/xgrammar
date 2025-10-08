@@ -1,7 +1,10 @@
 """Defines all structural tag formats."""
 
 import json
-from typing import Any, Dict, List, Literal, Type, Union, Optional
+import re
+from dataclasses import dataclass
+from json import JSONDecoder
+from typing import Any, Dict, List, Literal, Optional, Type, Union
 
 try:
     # Python 3.9+
@@ -18,7 +21,8 @@ class ParserTag(BaseModel):
     capture_id: Optional[str] = Field(
         default=None,
         description=(
-            "Identifier that the parser can use to collect this node's content."
+            "Identifier that the parser can use to collect this node's content or serve as a prefix for"
+            " descendants."
         ),
     )
     combine: Optional[str] = Field(
@@ -160,6 +164,8 @@ class TagFormat(BaseModel):
     """The content of the tag. It can be any of the formats."""
     end: str
     """The end tag."""
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
 
 
 class TriggeredTagsFormat(BaseModel):
@@ -211,6 +217,8 @@ class TriggeredTagsFormat(BaseModel):
     """Whether at least one of the tags must be generated."""
     stop_after_first: bool = False
     """Whether to stop after the first tag is generated."""
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
 
 
 class TagsWithSeparatorFormat(BaseModel):
@@ -249,6 +257,8 @@ class TagsWithSeparatorFormat(BaseModel):
     """Whether at least one of the tags must be matched."""
     stop_after_first: bool = False
     """Whether to stop after the first tag is matched."""
+    parser_tag: Optional[ParserTag] = None
+    """Optional information for output parsing."""
 
 
 # ---------- Discriminated Union ----------
@@ -360,7 +370,249 @@ class StructuralTag(BaseModel):
             raise ValueError("Invalid JSON string or dictionary")
 
 
+_JSON_DECODER = JSONDecoder()
+
+
+@dataclass
+class _ParseNode:
+    format: Format
+    payload: Any = None
+    children: List["_ParseNode"] = None
+
+    def __post_init__(self) -> None:
+        if self.children is None:
+            self.children = []
+
+
+def _parse_format(format_obj: Format, text: str) -> _ParseNode:
+    if isinstance(format_obj, ConstStringFormat):
+        if text != format_obj.value:
+            raise ValueError("Const string does not match expected value")
+        return _ParseNode(format=format_obj, payload=format_obj.value)
+    if isinstance(format_obj, JSONSchemaFormat):
+        try:
+            value, end_index = _JSON_DECODER.raw_decode(text)
+        except ValueError as exc:  # pragma: no cover - passthrough for context
+            raise ValueError("Failed to parse JSON content") from exc
+        remainder = text[end_index:]
+        if remainder.strip():
+            raise ValueError("Unexpected trailing content after JSON value")
+        return _ParseNode(format=format_obj, payload=value)
+    if isinstance(format_obj, QwenXMLParameterFormat):
+        raise NotImplementedError("Parsing Qwen XML parameter format is not supported yet")
+    if isinstance(format_obj, AnyTextFormat):
+        return _ParseNode(format=format_obj, payload=text)
+    if isinstance(format_obj, GrammarFormat):
+        raise NotImplementedError("Parsing generic grammar formats is not supported")
+    if isinstance(format_obj, RegexFormat):
+        if not re.fullmatch(format_obj.pattern, text, flags=re.DOTALL):
+            raise ValueError("Text does not match required regular expression")
+        return _ParseNode(format=format_obj, payload=text)
+    if isinstance(format_obj, SequenceFormat):
+        raise NotImplementedError("Parsing sequence formats is not implemented")
+    if isinstance(format_obj, OrFormat):
+        raise NotImplementedError("Parsing or formats is not implemented")
+    if isinstance(format_obj, TagFormat):
+        return _parse_tag(format_obj, text)
+    if isinstance(format_obj, TriggeredTagsFormat):
+        return _parse_triggered_tags(format_obj, text)
+    if isinstance(format_obj, TagsWithSeparatorFormat):
+        return _parse_tags_with_separator(format_obj, text)
+    raise TypeError(f"Unsupported structural tag format: {type(format_obj)!r}")
+
+
+def _parse_tag(format_obj: TagFormat, text: str) -> _ParseNode:
+    if not text.startswith(format_obj.begin):
+        raise ValueError("Tag begin delimiter not found where expected")
+    if format_obj.end == "":
+        raise ValueError("Parsing tags without explicit end delimiters is not supported")
+    if not text.endswith(format_obj.end):
+        raise ValueError("Tag end delimiter not found where expected")
+    inner_text = text[len(format_obj.begin) : len(text) - len(format_obj.end)]
+    child_node = _parse_format(format_obj.content, inner_text)
+    return _ParseNode(format=format_obj, children=[child_node])
+
+
+def _parse_triggered_tags(format_obj: TriggeredTagsFormat, text: str) -> _ParseNode:
+    idx = 0
+    length = len(text)
+    children: List[_ParseNode] = []
+    while idx < length:
+        while idx < length and text[idx].isspace():
+            idx += 1
+        if idx >= length:
+            break
+        matched_tag = None
+        for tag in format_obj.tags:
+            if text.startswith(tag.begin, idx):
+                matched_tag = tag
+                break
+        if matched_tag is None:
+            if text[idx:].strip():
+                raise ValueError("Unexpected content encountered inside triggered tags")
+            break
+        end_idx = text.find(matched_tag.end, idx + len(matched_tag.begin))
+        if end_idx == -1:
+            raise ValueError("Failed to locate end delimiter for triggered tag")
+        tag_text = text[idx : end_idx + len(matched_tag.end)]
+        child_node = _parse_tag(matched_tag, tag_text)
+        children.append(child_node)
+        idx = end_idx + len(matched_tag.end)
+        if format_obj.stop_after_first:
+            break
+    if format_obj.at_least_one and not children:
+        raise ValueError("Expected at least one triggered tag but found none")
+    if text[idx:].strip():
+        raise ValueError("Unexpected trailing content after triggered tags")
+    return _ParseNode(format=format_obj, children=children)
+
+
+def _parse_tags_with_separator(format_obj: TagsWithSeparatorFormat, text: str) -> _ParseNode:
+    if text == "":
+        if format_obj.at_least_one:
+            raise ValueError("Expected at least one tag before separator")
+        return _ParseNode(format=format_obj)
+    idx = 0
+    length = len(text)
+    children: List[_ParseNode] = []
+    while idx < length:
+        matched_tag = None
+        for tag in format_obj.tags:
+            if text.startswith(tag.begin, idx):
+                matched_tag = tag
+                break
+        if matched_tag is None:
+            raise ValueError("Unable to match tag at current position when parsing separated tags")
+        end_idx = text.find(matched_tag.end, idx + len(matched_tag.begin))
+        if end_idx == -1:
+            raise ValueError("Failed to locate end delimiter for separated tag")
+        tag_text = text[idx : end_idx + len(matched_tag.end)]
+        child_node = _parse_tag(matched_tag, tag_text)
+        children.append(child_node)
+        idx = end_idx + len(matched_tag.end)
+        if idx == length:
+            break
+        if not text.startswith(format_obj.separator, idx):
+            raise ValueError("Expected separator between tags")
+        idx += len(format_obj.separator)
+    return _ParseNode(format=format_obj, children=children)
+
+
+def _extract_item(value: Dict[str, Any]) -> Any:
+    if isinstance(value, dict) and set(value.keys()) == {"item"}:
+        return value["item"]
+    return value
+
+
+def _merge_dicts(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
+    if not update:
+        return base
+    result = dict(base)
+    for key, value in update.items():
+        if key not in result:
+            result[key] = value
+            continue
+        existing = result[key]
+        if isinstance(existing, dict) and isinstance(value, dict):
+            result[key] = _merge_dicts(existing, value)
+        elif isinstance(existing, list) and isinstance(value, list):
+            result[key] = existing + value
+        elif existing == value:
+            continue
+        else:
+            raise ValueError(f"Conflicting captures for field '{key}'")
+    return result
+
+
+def _wrap_capture(parser_tag: ParserTag, value: Any) -> Dict[str, Any]:
+    capture_id = parser_tag.capture_id
+    if capture_id is None:
+        return {}
+    combine = parser_tag.combine
+    if combine is None:
+        prepared_value = value
+    elif combine == "append":
+        if value is None:
+            prepared_value = []
+        elif isinstance(value, list):
+            prepared_value = value
+        else:
+            prepared_value = [value]
+    elif combine == "concat":
+        if value is None:
+            prepared_value = ""
+        elif isinstance(value, list):
+            prepared_value = "".join(str(item) for item in value)
+        else:
+            prepared_value = str(value)
+    else:
+        raise ValueError(f"Unsupported combine strategy: {combine}")
+
+    if capture_id == "":
+        if isinstance(prepared_value, dict):
+            return prepared_value
+        raise ValueError("Empty capture_id requires a dictionary value")
+
+    segments = capture_id.split(".")
+    nested: Any = prepared_value
+    for segment in reversed(segments):
+        nested = {segment: nested}
+    return nested
+
+
+def _aggregate_parse_tree(node: _ParseNode) -> Dict[str, Any]:
+    fmt = node.format
+    child_results = [_aggregate_parse_tree(child) for child in node.children]
+
+    if isinstance(fmt, (TriggeredTagsFormat, TagsWithSeparatorFormat)):
+        values = [_extract_item(result) for result in child_results if result]
+        node_value: Any = values
+        aggregated_children: Dict[str, Any] = {}
+    elif isinstance(fmt, TagFormat):
+        aggregated_children = {}
+        for result in child_results:
+            aggregated_children = _merge_dicts(aggregated_children, result)
+        node_value = aggregated_children
+    elif isinstance(fmt, (JSONSchemaFormat, AnyTextFormat, RegexFormat, ConstStringFormat)):
+        aggregated_children = {}
+        node_value = node.payload
+    else:
+        aggregated_children = {}
+        for result in child_results:
+            aggregated_children = _merge_dicts(aggregated_children, result)
+        node_value = aggregated_children if aggregated_children else node.payload
+
+    parser_tag = getattr(fmt, "parser_tag", None)
+    if parser_tag:
+        captured = _wrap_capture(parser_tag, node_value)
+        if parser_tag.capture_id:
+            return captured
+    return aggregated_children
+
+
+def parse_structural_tag_output(
+    structural_tag: Union[StructuralTag, BaseModel, Dict[str, Any], str], text: str
+) -> Dict[str, Any]:
+    """Parse ``text`` according to ``structural_tag`` using parser-tag annotations."""
+
+    if isinstance(structural_tag, (str, dict)):
+        structural_tag = StructuralTag.from_json(structural_tag)
+        format_obj: Format = structural_tag.format
+    elif isinstance(structural_tag, StructuralTag):
+        format_obj = structural_tag.format
+    elif isinstance(structural_tag, BaseModel):
+        format_obj = structural_tag  # type: ignore[assignment]
+    else:
+        raise TypeError(
+            "structural_tag must be a StructuralTag, Format instance, dict, or JSON string"
+        )
+
+    parse_tree = _parse_format(format_obj, text)
+    return _aggregate_parse_tree(parse_tree)
+
+
 __all__ = [
+    "ParserTag",
     "ConstStringFormat",
     "JSONSchemaFormat",
     "QwenXMLParameterFormat",
@@ -375,4 +627,5 @@ __all__ = [
     "Format",
     "StructuralTagItem",
     "StructuralTag",
+    "parse_structural_tag_output",
 ]

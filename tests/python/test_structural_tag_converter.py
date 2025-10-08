@@ -1959,5 +1959,70 @@ def test_from_structural_tag_with_structural_tag_instance(
     assert _is_grammar_accept_string(grammar, instance) == is_accepted
 
 
+def test_parser_tag_prefix_on_triggered_tags():
+    stag_format = xgr.structural_tag.TriggeredTagsFormat(
+        triggers=["<tool_call="],
+        tags=[
+            xgr.structural_tag.TagFormat(
+                begin="<tool_call=name>",
+                content=xgr.structural_tag.JSONSchemaFormat(
+                    json_schema={
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "arguments": {"type": "object"},
+                        },
+                    },
+                    parser_tag={"capture_id": "arguments"},
+                ),
+                end="</tool_call>",
+                parser_tag={"capture_id": "tool_calls.item"},
+            )
+        ],
+        parser_tag={"capture_id": "tool_calls", "combine": "append"},
+    )
+
+    stag = xgr.StructuralTag(format=stag_format)
+    dumped = stag.model_dump()
+
+    assert dumped["format"]["parser_tag"] == {
+        "capture_id": "tool_calls",
+        "combine": "append",
+    }
+    assert dumped["format"]["tags"][0]["parser_tag"] == {
+        "capture_id": "tool_calls.item",
+    }
+    assert dumped["format"]["tags"][0]["content"]["parser_tag"] == {
+        "capture_id": "arguments",
+    }
+
+
+def test_parser_tag_prefix_on_tags_with_separator():
+    stag_format = xgr.structural_tag.TagsWithSeparatorFormat(
+        tags=[
+            xgr.structural_tag.TagFormat(
+                begin="<message>",
+                content=xgr.structural_tag.AnyTextFormat(
+                    parser_tag={"capture_id": "content"}
+                ),
+                end="</message>",
+            )
+        ],
+        separator=",",
+        parser_tag={"capture_id": "messages", "combine": "append"},
+    )
+
+    stag = xgr.StructuralTag(format=stag_format)
+    dumped = stag.model_dump()
+
+    assert dumped["format"]["parser_tag"] == {
+        "capture_id": "messages",
+        "combine": "append",
+    }
+    assert dumped["format"]["tags"][0]["content"]["parser_tag"] == {
+        "capture_id": "content",
+    }
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

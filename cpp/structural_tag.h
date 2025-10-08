@@ -24,6 +24,7 @@ namespace xgrammar {
 
 // TODO(yixin): Consider moving the definition to Public API.
 
+struct ParserTag;
 struct ConstStringFormat;
 struct JSONSchemaFormat;
 struct QwenXmlParameterFormat;
@@ -51,6 +52,12 @@ using Format = std::variant<
 
 /******************** Basic Formats ********************/
 
+struct ParserTag {
+  std::optional<std::string> capture_id;
+  std::optional<std::string> combine;
+  std::optional<std::string> metadata_json;
+};
+
 struct ConstStringFormat {
   static constexpr const char* type = "const_string";
   std::string value;
@@ -60,13 +67,19 @@ struct ConstStringFormat {
 struct JSONSchemaFormat {
   static constexpr const char* type = "json_schema";
   std::string json_schema;
-  JSONSchemaFormat(std::string json_schema) : json_schema(std::move(json_schema)) {}
+  std::optional<ParserTag> parser_tag;
+  JSONSchemaFormat(std::string json_schema, std::optional<ParserTag> parser_tag = std::nullopt)
+      : json_schema(std::move(json_schema)), parser_tag(std::move(parser_tag)) {}
 };
 
 struct QwenXmlParameterFormat {
   static constexpr const char* type = "qwen_xml";
   std::string xml_schema;
-  QwenXmlParameterFormat(std::string xml_schema) : xml_schema(std::move(xml_schema)) {}
+  std::optional<ParserTag> parser_tag;
+  QwenXmlParameterFormat(
+      std::string xml_schema, std::optional<ParserTag> parser_tag = std::nullopt
+  )
+      : xml_schema(std::move(xml_schema)), parser_tag(std::move(parser_tag)) {}
 };
 
 struct GrammarFormat {
@@ -78,12 +91,17 @@ struct GrammarFormat {
 struct RegexFormat {
   static constexpr const char* type = "regex";
   std::string pattern;
-  RegexFormat(std::string pattern) : pattern(std::move(pattern)) {}
+  std::optional<ParserTag> parser_tag;
+  RegexFormat(std::string pattern, std::optional<ParserTag> parser_tag = std::nullopt)
+      : pattern(std::move(pattern)), parser_tag(std::move(parser_tag)) {}
 };
 
 struct AnyTextFormat {
   static constexpr const char* type = "any_text";
-  AnyTextFormat() {}
+  std::optional<ParserTag> parser_tag;
+
+  AnyTextFormat(std::optional<ParserTag> parser_tag = std::nullopt)
+      : parser_tag(std::move(parser_tag)) {}
 
  private:
   // Detected in StructuralTagAnalyzer
@@ -123,9 +141,18 @@ struct TagFormat {
   std::string begin;
   std::shared_ptr<Format> content;
   std::string end;
+  std::optional<ParserTag> parser_tag;
 
-  TagFormat(std::string begin, std::shared_ptr<Format> content, std::string end)
-      : begin(std::move(begin)), content(std::move(content)), end(std::move(end)) {}
+  TagFormat(
+      std::string begin,
+      std::shared_ptr<Format> content,
+      std::string end,
+      std::optional<ParserTag> parser_tag = std::nullopt
+  )
+      : begin(std::move(begin)),
+        content(std::move(content)),
+        end(std::move(end)),
+        parser_tag(std::move(parser_tag)) {}
 };
 
 struct TriggeredTagsFormat {
@@ -134,17 +161,20 @@ struct TriggeredTagsFormat {
   std::vector<TagFormat> tags;
   bool at_least_one = false;
   bool stop_after_first = false;
+  std::optional<ParserTag> parser_tag;
 
   TriggeredTagsFormat(
       std::vector<std::string> triggers,
       std::vector<TagFormat> tags,
       bool at_least_one,
-      bool stop_after_first
+      bool stop_after_first,
+      std::optional<ParserTag> parser_tag = std::nullopt
   )
       : triggers(std::move(triggers)),
         tags(std::move(tags)),
         at_least_one(at_least_one),
-        stop_after_first(stop_after_first) {}
+        stop_after_first(stop_after_first),
+        parser_tag(std::move(parser_tag)) {}
 
  private:
   // Detected in StructuralTagAnalyzer
@@ -159,14 +189,20 @@ struct TagsWithSeparatorFormat {
   std::string separator;
   bool at_least_one = false;
   bool stop_after_first = false;
+  std::optional<ParserTag> parser_tag;
 
   TagsWithSeparatorFormat(
-      std::vector<TagFormat> tags, std::string separator, bool at_least_one, bool stop_after_first
+      std::vector<TagFormat> tags,
+      std::string separator,
+      bool at_least_one,
+      bool stop_after_first,
+      std::optional<ParserTag> parser_tag = std::nullopt
   )
       : tags(std::move(tags)),
         separator(std::move(separator)),
         at_least_one(at_least_one),
-        stop_after_first(stop_after_first) {}
+        stop_after_first(stop_after_first),
+        parser_tag(std::move(parser_tag)) {}
 
  private:
   // Detected in StructuralTagAnalyzer
