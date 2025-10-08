@@ -956,11 +956,11 @@ std::string JSONSchemaConverter::URIToRule(const std::string& uri) {
     }
   }
 
-  picojson::value current = json_schema_;
+  auto current = std::cref(json_schema_);
   for (const auto& part : parts) {
-    XGRAMMAR_CHECK(current.is<picojson::object>() && current.contains(part))
-        << "Cannot find field " << part << " in " << current.serialize(false);
-    current = current.get(part);
+    XGRAMMAR_CHECK(current.get().is<picojson::object>() && current.get().contains(part))
+        << "Cannot find field " << part << " in " << current.get().serialize(false);
+    current = current.get().get(part);
   }
 
   auto new_rule_name = ebnf_script_creator_.AllocateRuleName(new_rule_name_perfix);
