@@ -221,7 +221,6 @@ class GrammarBuilder {
   /*! \brief Add a rule and return the rule id. */
   int32_t AddRule(const Rule& rule) {
     int32_t id = grammar_->rules_.size();
-    auto rules = grammar_->rules_;
     grammar_->rules_.push_back(rule);
     XGRAMMAR_CHECK(rule_name_to_id_.count(rule.name) == 0);
     rule_name_to_id_[rule.name] = id;
