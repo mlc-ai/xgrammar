@@ -276,20 +276,24 @@ class EarleyParser {
 
   /*!
    * \brief The completion operation of the Earley parser.
+   * \param state The state to be completed.
+   * \param debug_print Whether to print the debug information.
    * \details The reason is that if the state can't be scanned, then
    * add it into the next states is useless. Moreover, the end
    * of the grammar is used to check if the grammar is completed,
    * so it should be added into the next states.
    */
-  void Complete(const ParserState& state);
+  void Complete(const ParserState& state, bool debug_print = false);
 
   /*!
    * \brief The prediction operation of the Earley parser.
+   * \param state The state to be predicted.
+   * \param debug_print Whether to print the debug information.
    * \return First: If the state scanable, or the state is the end of the grammar,
    * then return true, otherwise return false.
    * \return Second: If the state is completable, then return true, otherwise return false.
    */
-  std::pair<bool, bool> Predict(const ParserState& state);
+  std::pair<bool, bool> Predict(const ParserState& state, bool debug_print = false);
 
   /*!
    * \brief Handle the unexpanded rule, used for pushing initial state.
@@ -307,16 +311,21 @@ class EarleyParser {
    * \param grammar_expr The grammar expression to be expanded.
    * \param sub_grammar_expr The sub grammar expression to be expanded, especially
    * when the rule is a kSequence, and the sub rule is a kRuleRef.
+   * \param debug_print Whether to print the debug information.
    */
   void ExpandNextRuleRefElement(
-      const ParserState& state, const GrammarExpr& grammar_expr, const GrammarExpr* sub_grammar_expr
+      const ParserState& state,
+      const GrammarExpr& grammar_expr,
+      const GrammarExpr* sub_grammar_expr,
+      bool debug_print = false
   );
 
   /*!
    * \brief Expand the rule, used for RuleRef and kTagDispatch.
    * \param state The state to be expanded, and it's should be on the FSM.
+   * \param debug_print Whether to print the debug information.
    */
-  void ExpandNextRuleRefElementOnFSM(const ParserState& state);
+  void ExpandNextRuleRefElementOnFSM(const ParserState& state, bool debug_print = false);
 
   /*!
    * \brief Advance the parser to the next state, with the sub sequence is kCharacterClass.
@@ -396,10 +405,11 @@ class EarleyParser {
   /*!
    * \brief From the current states, advance to the next state.
    * \param ch The character to be advanced.
+   * \param debug_print Whether to print the debug information.
    * \return True if the character is accepted, false otherwise.
    * \note If the character isn't accepted, then the states won't be changed.
    */
-  bool Advance(const uint8_t ch);
+  bool Advance(const uint8_t ch, bool debug_print = false);
 
   /*!
    * \brief Remove the newly added states.
