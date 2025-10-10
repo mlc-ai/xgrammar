@@ -1,7 +1,7 @@
 """This module provides classes representing grammars."""
 
 import json
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, get_args, overload
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
 from typing_extensions import deprecated
