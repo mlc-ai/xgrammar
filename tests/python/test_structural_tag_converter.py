@@ -10,7 +10,7 @@ from xgrammar.structural_tag import Format, StructuralTag
 from xgrammar.testing import _is_grammar_accept_string
 
 PROFILER_ON = True
-tokenizer_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
 
 
 class Profiler:
