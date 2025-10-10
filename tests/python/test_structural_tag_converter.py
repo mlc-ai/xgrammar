@@ -1,15 +1,16 @@
 import sys
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Union
 
 import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
+from xgrammar.structural_tag import Format, StructuralTag
 from xgrammar.testing import _is_grammar_accept_string
 
 PROFILER_ON = True
-tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
+tokenizer_id = "meta-llama/Meta-Llama-3-8B-Instruct"
 
 
 class Profiler:
@@ -22,13 +23,16 @@ class Profiler:
             self.tokenizer_info, max_threads=16, cache_enabled=False
         )
 
-    def profile_stag(self, structural_tag_format: Dict[str, Any], instance: str):
-        structural_tag = {"type": "structural_tag", "format": structural_tag_format}
+    def profile_stag(
+        self, structural_tag: Union[Dict[str, Any], StructuralTag, Format], instance: str
+    ):
+        if isinstance(structural_tag, Dict):
+            structural_tag = {"type": "structural_tag", "format": structural_tag}
         time_begin = time.monotonic_ns()
         compiled_grammar = self.compiler.compile_structural_tag(structural_tag)
         time_end = time.monotonic_ns()
         compiler_duration = time_end - time_begin
-        print(f"Compiling structural tag {structural_tag_format}")
+        print(f"Compiling structural tag {structural_tag}")
         print(f"Compile time: {compiler_duration / 1000 / 1000} ms")
         matcher = xgr.GrammarMatcher(compiled_grammar)
         token_bitmask = xgr.allocate_token_bitmask(1, self.tokenizer_info.vocab_size)
@@ -63,6 +67,33 @@ def check_stag_with_instance(
 ):
     structural_tag = {"type": "structural_tag", "format": structural_tag_format}
     stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    accepted = _is_grammar_accept_string(stag_grammar, instance, debug_print=debug_print)
+    assert accepted == is_accepted
+    if PROFILER_ON:
+        profiler.profile_stag(structural_tag_format, instance)
+
+
+def check_stag_with_instance_in_stag_style(
+    structural_tag: StructuralTag,
+    instance: str,
+    is_accepted: bool = True,
+    debug_print: bool = False,
+):
+    stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    accepted = _is_grammar_accept_string(stag_grammar, instance, debug_print=debug_print)
+    assert accepted == is_accepted
+    if PROFILER_ON:
+        profiler.profile_stag(structural_tag, instance)
+
+
+def check_stag_with_instance_in_format_style(
+    structural_tag_format: Format,
+    instance: str,
+    is_accepted: bool = True,
+    debug_print: bool = False,
+):
+
+    stag_grammar = xgr.Grammar.from_structural_tag(structural_tag_format)
     accepted = _is_grammar_accept_string(stag_grammar, instance, debug_print=debug_print)
     assert accepted == is_accepted
     if PROFILER_ON:
@@ -1952,6 +1983,17 @@ basic_structural_tags_instance_is_accepted = [
     "stag_format, instance, is_accepted", basic_structural_tags_instance_is_accepted
 )
 def test_from_structural_tag_with_structural_tag_instance(
+    stag_format: xgr.structural_tag.Format, instance: str, is_accepted: bool
+):
+    stag = xgr.StructuralTag(format=stag_format)
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    assert _is_grammar_accept_string(grammar, instance) == is_accepted
+
+
+@pytest.mark.parametrize(
+    "stag_format, instance, is_accepted", basic_structural_tags_instance_is_accepted
+)
+def test_from_structural_tag_with_format_instance(
     stag_format: xgr.structural_tag.Format, instance: str, is_accepted: bool
 ):
     stag = xgr.StructuralTag(format=stag_format)

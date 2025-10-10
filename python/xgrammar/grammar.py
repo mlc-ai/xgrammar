@@ -1,13 +1,13 @@
 """This module provides classes representing grammars."""
 
 import json
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, get_args, overload
 
 from pydantic import BaseModel
 from typing_extensions import deprecated
 
 from .base import XGRObject, _core
-from .structural_tag import StructuralTag, StructuralTagItem
+from .structural_tag import Format, StructuralTag, StructuralTagItem
 
 
 def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]) -> str:
@@ -111,8 +111,12 @@ def _get_structural_tag_str_from_args(args: List[Any], kwargs: Dict[str, Any]) -
         When the arguments are invalid.
     """
     if len(args) == 1:
+        possible_formats = get_args(Format)
         if isinstance(args[0], (str, dict, StructuralTag)):
             return _convert_instance_to_str(args[0])
+        elif any(isinstance(args[0], fmt) for fmt in possible_formats):
+            structural_tag = StructuralTag(format=args[0])
+            return _convert_instance_to_str(structural_tag)
         else:
             raise TypeError("Invalid argument type for from_structural_tag")
     elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], list):
@@ -285,7 +289,7 @@ class Grammar(XGRObject):
     @overload
     @staticmethod
     def from_structural_tag(
-        structural_tag: Union[StructuralTag, str, Dict[str, Any]]
+        structural_tag: Union[StructuralTag, str, Dict[str, Any], Format]
     ) -> "Grammar": ...
 
     @overload
@@ -311,8 +315,9 @@ class Grammar(XGRObject):
 
         Parameters
         ----------
-        structural_tag : Union[StructuralTag, str, Dict[str, Any]]
+        structural_tag : Union[StructuralTag, str, Dict[str, Any], Format]
             The structural tag either as a StructuralTag object, or a JSON string or a dictionary.
+            If the input is a format enum, it will be converted to a StructuralTag object automatically.
 
         tags : List[StructuralTagItem]
             (Deprecated) The structural tags. Use StructuralTag class instead.

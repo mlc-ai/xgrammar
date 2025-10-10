@@ -12,7 +12,7 @@ from .grammar import (
     _convert_schema_to_str,
     _get_structural_tag_str_from_args,
 )
-from .structural_tag import StructuralTag
+from .structural_tag import Format, StructuralTag
 from .tokenizer_info import TokenizerInfo
 
 
@@ -220,7 +220,7 @@ class GrammarCompiler(XGRObject):
 
     @overload
     def compile_structural_tag(
-        self, structural_tag: Union[StructuralTag, str, Dict[str, Any]]
+        self, structural_tag: Union[StructuralTag, str, Dict[str, Any], Format]
     ) -> CompiledGrammar: ...
 
     @overload
@@ -246,8 +246,9 @@ class GrammarCompiler(XGRObject):
 
         Parameters
         ----------
-        structural_tag : Union[StructuralTag, str, Dict[str, Any]]
+        structural_tag : Union[StructuralTag, str, Dict[str, Any], Format]
             The structural tag either as a StructuralTag object, or a JSON string or a dictionary.
+            If the input is a format enum, it will be converted to a StructuralTag object automatically.
 
         tags : List[StructuralTagItem]
             (Deprecated) The structural tags. Use StructuralTag class instead.
