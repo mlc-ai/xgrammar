@@ -12,6 +12,17 @@ PROFILER_ON = True
 tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
 
 
+@pytest.fixture(autouse=True)
+def disable_profiler(request):
+    global PROFILER_ON
+    markexpr = getattr(request.config.option, "markexpr", "") or request.config.getoption(
+        "markexpr", ""
+    )
+    hf_token_not_provided = "not hf_token_required" in (markexpr or "")
+    if hf_token_not_provided:
+        PROFILER_ON = False
+
+
 class Profiler:
     def __init__(self, tokenizer_id: str):
         tokenizer = AutoTokenizer.from_pretrained(
