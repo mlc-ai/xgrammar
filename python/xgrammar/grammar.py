@@ -111,7 +111,7 @@ def _get_structural_tag_str_from_args(args: List[Any], kwargs: Dict[str, Any]) -
         When the arguments are invalid.
     """
     if len(args) == 1:
-        possible_formats = get_args(Format)
+        possible_formats = Format.__args__[0].__args__
         if isinstance(args[0], (str, dict, StructuralTag)):
             return _convert_instance_to_str(args[0])
         elif any(isinstance(args[0], fmt) for fmt in possible_formats):
