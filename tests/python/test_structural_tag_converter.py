@@ -1986,8 +1986,7 @@ def test_from_structural_tag_with_structural_tag_instance(
     stag_format: xgr.structural_tag.Format, instance: str, is_accepted: bool
 ):
     stag = xgr.StructuralTag(format=stag_format)
-    grammar = xgr.Grammar.from_structural_tag(stag)
-    assert _is_grammar_accept_string(grammar, instance) == is_accepted
+    check_stag_with_instance_in_stag_style(stag, instance, is_accepted)
 
 
 @pytest.mark.parametrize(
@@ -1996,9 +1995,7 @@ def test_from_structural_tag_with_structural_tag_instance(
 def test_from_structural_tag_with_format_instance(
     stag_format: xgr.structural_tag.Format, instance: str, is_accepted: bool
 ):
-    stag = xgr.StructuralTag(format=stag_format)
-    grammar = xgr.Grammar.from_structural_tag(stag)
-    assert _is_grammar_accept_string(grammar, instance) == is_accepted
+    check_stag_with_instance_in_format_style(stag_format, instance, is_accepted)
 
 
 if __name__ == "__main__":
