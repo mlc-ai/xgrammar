@@ -1,29 +1,12 @@
 import sys
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _is_grammar_accept_string
-
-PROFILER_ON = True
-tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
-
-
-@pytest.fixture(autouse=True)
-def disable_profiler(request):
-    global PROFILER_ON
-    global profiler
-    markexpr = getattr(request.config.option, "markexpr", "") or request.config.getoption(
-        "markexpr", ""
-    )
-    hf_token_not_provided = "not hf_token_required" in (markexpr or "")
-    if hf_token_not_provided:
-        PROFILER_ON = False
-    if PROFILER_ON:
-        profiler = Profiler(tokenizer_id)
 
 
 class Profiler:
@@ -57,6 +40,25 @@ class Profiler:
 
             duration = time_end - time_begin
             print(f"Time to generate mask: {duration / 1000} us, Character: '{char}'")
+
+
+profiler: Optional[Profiler] = None
+PROFILER_ON = True
+tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
+
+
+@pytest.fixture(autouse=True)
+def disable_profiler(request):
+    global PROFILER_ON
+    global profiler
+    markexpr = getattr(request.config.option, "markexpr", "") or request.config.getoption(
+        "markexpr", ""
+    )
+    hf_token_not_provided = "not hf_token_required" in (markexpr or "")
+    if hf_token_not_provided:
+        PROFILER_ON = False
+    else:
+        profiler = Profiler(tokenizer_id)
 
 
 def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_grammar_ebnf: str):
