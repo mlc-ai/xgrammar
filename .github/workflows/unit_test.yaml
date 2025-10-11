@@ -31,14 +31,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14, macos-13]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14, macos-15-intel]
         python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
         exclude:
-          - os: macos-13
+          - os: macos-15-intel
             python: '3.13'
             # The reason for the exclusion is that pytorch distribution
-            # can't be found by pip on macos-13 with python 3.13.
-
+            # can't be found by pip on macos-15-intel with python 3.13.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
