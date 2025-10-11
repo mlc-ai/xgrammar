@@ -1,11 +1,12 @@
 import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
+from xgrammar.structural_tag import StructuralTag
 from xgrammar.testing import _is_grammar_accept_string
 
 
@@ -68,13 +69,17 @@ def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_gram
 
 
 def check_stag_with_instance(
-    structural_tag_format: Dict[str, Any],
+    structural_tag_format: Union[Dict[str, Any], StructuralTag],
     instance: str,
     is_accepted: bool = True,
     debug_print: bool = False,
 ):
-    structural_tag = {"type": "structural_tag", "format": structural_tag_format}
-    stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    stag_grammar = ""
+    if isinstance(structural_tag_format, StructuralTag):
+        stag_grammar = xgr.Grammar.from_structural_tag(structural_tag_format)
+    else:
+        structural_tag = {"type": "structural_tag", "format": structural_tag_format}
+        stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
     accepted = _is_grammar_accept_string(stag_grammar, instance, debug_print=debug_print)
     assert accepted == is_accepted
     if PROFILER_ON:
@@ -1967,8 +1972,7 @@ def test_from_structural_tag_with_structural_tag_instance(
     stag_format: xgr.structural_tag.Format, instance: str, is_accepted: bool
 ):
     stag = xgr.StructuralTag(format=stag_format)
-    grammar = xgr.Grammar.from_structural_tag(stag)
-    assert _is_grammar_accept_string(grammar, instance) == is_accepted
+    check_stag_with_instance(stag_format, instance, is_accepted)
 
 
 if __name__ == "__main__":
