@@ -20,8 +20,13 @@ class Profiler:
             self.tokenizer_info, max_threads=16, cache_enabled=False
         )
 
-    def profile_stag(self, structural_tag_format: Dict[str, Any], instance: str):
-        structural_tag = {"type": "structural_tag", "format": structural_tag_format}
+    def profile_stag(
+        self, structural_tag_format: Union[Dict[str, Any], StructuralTag], instance: str
+    ):
+        if isinstance(structural_tag_format, StructuralTag):
+            structural_tag = structural_tag_format
+        else:
+            structural_tag = {"type": "structural_tag", "format": structural_tag_format}
         time_begin = time.monotonic_ns()
         compiled_grammar = self.compiler.compile_structural_tag(structural_tag)
         time_end = time.monotonic_ns()
@@ -74,7 +79,6 @@ def check_stag_with_instance(
     is_accepted: bool = True,
     debug_print: bool = False,
 ):
-    stag_grammar = ""
     if isinstance(structural_tag_format, StructuralTag):
         stag_grammar = xgr.Grammar.from_structural_tag(structural_tag_format)
     else:
@@ -1972,7 +1976,7 @@ def test_from_structural_tag_with_structural_tag_instance(
     stag_format: xgr.structural_tag.Format, instance: str, is_accepted: bool
 ):
     stag = xgr.StructuralTag(format=stag_format)
-    check_stag_with_instance(stag_format, instance, is_accepted)
+    check_stag_with_instance(stag, instance, is_accepted)
 
 
 if __name__ == "__main__":
