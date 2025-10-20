@@ -13,6 +13,7 @@
 #include <iostream>
 #include <memory>
 
+#include "../../cpp/json_schema_converter.h"
 #include "../../cpp/testing.h"
 
 // #include "../../cpp/support/logging.h"
@@ -144,7 +145,13 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   function("vecIntToView", &vecIntToView);
 
   // Testing methods
-  function("_JSONSchemaToEBNF", &_JSONSchemaToEBNF);
+  function(
+      "_JSONSchemaToEBNF",
+      select_overload<std::string(
+          const std::string&, bool, std::optional<int>, std::optional<std::pair<std::string, std::string>>,
+          bool, std::optional<int>, JSONFormat
+      )>(&JSONSchemaToEBNF)
+  );
   function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);
 
   class_<Grammar>("Grammar")
@@ -166,7 +173,10 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .constructor<const TokenizerInfo&, int, bool>()
       .function("CompileJSONSchema", &GrammarCompiler::CompileJSONSchema)
       .function("CompileBuiltinJSONGrammar", &GrammarCompiler::CompileBuiltinJSONGrammar)
-      .function("CompileGrammar", &GrammarCompiler::CompileGrammar)
+      .function(
+          "CompileGrammar",
+          select_overload<CompiledGrammar(const Grammar&)>(&GrammarCompiler::CompileGrammar)
+      )
       .function("ClearCache", &GrammarCompiler::ClearCache);
 
   class_<GrammarMatcher>("GrammarMatcher")
@@ -179,5 +189,5 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("Reset", &GrammarMatcher::Reset)
       .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
       .function("Rollback", &GrammarMatcher::Rollback)
-      .function("_DebugAcceptString", &GrammarMatcher::_DebugAcceptString);
+      .function("AcceptString", &GrammarMatcher::AcceptString);
 }
