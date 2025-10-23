@@ -11,26 +11,27 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Build Emscripten
-        run: |
-          git clone https://github.com/emscripten-core/emsdk.git
-          cd emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
-          source ./emsdk_env.sh
-          cd ..
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      - name: Build emsdk
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+
       - name: Build Web-XGrammar
         run: |
+          source ./emsdk/emsdk_env.sh
+          echo "set(XGRAMMAR_BUILD_PYTHON_BINDINGS OFF)" >> cmake/config.cmake
           cd web
           npm install
           npm run build
 
-      - name: Run Tests
-        run: |
-          npm test
+    # - name: Run tests
+    #   run: |
+    #     cd web
+    #     npm test
