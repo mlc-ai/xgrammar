@@ -11,6 +11,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Build Emscripten
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          source ./emsdk_env.sh
+          cd ..
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -24,3 +33,7 @@ jobs:
           source /path/to/emsdk_env.sh
           npm install
           npm run build
+
+      - name: Run Tests
+        run: |
+          npm test
