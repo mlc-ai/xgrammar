@@ -27,6 +27,7 @@ jobs:
 
       - name: Build Web-XGrammar
         run: |
+          cd web
           npm install
           npm run build
 
