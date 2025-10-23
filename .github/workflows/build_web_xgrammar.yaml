@@ -1,0 +1,26 @@
+name: Build Web-XGrammar
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+
+      - name: Build Web-XGrammar
+        run: |
+          source /path/to/emsdk_env.sh
+          npm install
+          npm run build
