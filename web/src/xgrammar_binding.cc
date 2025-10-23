@@ -148,8 +148,13 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   function(
       "_JSONSchemaToEBNF",
       select_overload<std::string(
-          const std::string&, bool, std::optional<int>, std::optional<std::pair<std::string, std::string>>,
-          bool, std::optional<int>, JSONFormat
+          const std::string&,
+          bool,
+          std::optional<int>,
+          std::optional<std::pair<std::string, std::string>>,
+          bool,
+          std::optional<int>,
+          JSONFormat
       )>(&JSONSchemaToEBNF)
   );
   function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);
