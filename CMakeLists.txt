@@ -51,10 +51,16 @@ else()
   if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS "-O3 ${CMAKE_CXX_FLAGS}")
   endif()
-
-  set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter \
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "riscv64")
+    message(STATUS "RISC-V 64-bit target detected, disabling LTO to prevent linker errors.")
+    set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter \
+-Woverloaded-virtual ${CMAKE_CXX_FLAGS}"
+    )
+  else()
+    set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter \
 -Woverloaded-virtual -flto=auto ${CMAKE_CXX_FLAGS}"
-  )
+    )
+  endif()
 endif()
 
 set(XGRAMMAR_INCLUDE_PATH ${PROJECT_SOURCE_DIR}/3rdparty/picojson
