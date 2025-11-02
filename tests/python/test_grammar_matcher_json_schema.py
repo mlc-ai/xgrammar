@@ -11,6 +11,7 @@ import xgrammar as xgr
 from xgrammar.testing import (
     _get_masked_tokens_from_bitmask,
     _get_matcher_from_grammar_and_tokenizer_info,
+    _is_grammar_accept_string,
 )
 
 
@@ -552,6 +553,21 @@ def test_regression_empty_property_key_regex():
     }
     _ = xgr.Grammar.from_json_schema(schema)
     assert _ is not None
+
+
+def test_json_schema_number_without_constraint():
+    schema = {"type": "object", "properties": {"value": {"type": "number"}}, "required": ["value"]}
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"value": -0.5}')
+    assert _is_grammar_accept_string(grammar, '{"value": -1.5}')
+    assert _is_grammar_accept_string(grammar, '{"value": 0}')
+    assert _is_grammar_accept_string(grammar, '{"value": 1234567890}')
+    assert _is_grammar_accept_string(grammar, '{"value": 3.14159}')
+    assert _is_grammar_accept_string(grammar, '{"value": 1e10}')
+    assert _is_grammar_accept_string(grammar, '{"value": -2.5E-3}')
+    assert _is_grammar_accept_string(grammar, '{"value": 0.0}')
+    assert _is_grammar_accept_string(grammar, '{"value": -0.0}')
+    assert not _is_grammar_accept_string(grammar, '{"value": "abc"}')
 
 
 if __name__ == "__main__":
