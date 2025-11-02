@@ -53,19 +53,19 @@ root_1 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string_1 root_p
 basic_integer_1_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_escape_2 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_2))
 basic_string_sub_2 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_2) | ("\\" basic_escape_2 basic_string_sub_2)) (=([ \n\t]* [,}\]:]))
-basic_number_9 ::= ((basic_number_7_2 basic_number_3_2 basic_number_6_2)) (=(root_part_0_2 [ \n\t]* "}"))
+basic_number_9 ::= ((basic_number_1_2 basic_number_7_2 basic_number_3_2 basic_number_6_2)) (=(root_part_0_2 [ \n\t]* "}"))
 basic_string_2 ::= (("\"" basic_string_sub_2))
 root_prop_1 ::= (("[" [ \n\t]* basic_string_2 root_prop_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 root_part_0_2 ::= (([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1)) (=([ \n\t]* "}"))
 root_2 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_9 root_part_0_2 [ \n\t]* "}")) (=("</function>"))
-basic_number_1_2 ::= ("" | ("-")) (=([1-9] [0-9]*))
+basic_number_1_2 ::= ("" | ("-")) (=(basic_number_7_2 basic_number_3_2 basic_number_6_2))
 basic_number_2_2 ::= (([0-9] basic_number_2_2) | ([0-9]))
 basic_number_3_2 ::= ("" | ("." basic_number_2_2)) (=(basic_number_6_2))
 basic_number_4_2 ::= ("" | ([+\-])) (=(basic_number_5_2))
 basic_number_5_2 ::= (([0-9] basic_number_5_2) | ([0-9]))
 basic_number_6_2 ::= ("" | ([eE] basic_number_4_2 basic_number_5_2))
 root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1)) (=([ \n\t]* "]"))
-basic_number_7_2 ::= (("0") | (basic_number_1_2 [1-9] [0-9]*)) (=(basic_number_3_2 basic_number_6_2))
+basic_number_7_2 ::= (("0") | ([1-9] [0-9]*)) (=(basic_number_3_2 basic_number_6_2))
 triggered_tags_group ::= (("1>" root "</function>") | ("2>" root_1 "</function>"))
 triggered_tags_group_1 ::= ((">" root_2 "</function>"))
 triggered_tags ::= TagDispatch(
@@ -82,7 +82,7 @@ expected_grammar_test_structural_tag_before_optimization = r"""basic_escape ::= 
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
-basic_number ::= ((basic_number_7 basic_number_3 basic_number_6))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
 basic_string ::= (("\"" basic_string_sub))
 basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
@@ -99,12 +99,12 @@ basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
-basic_number_7 ::= (("0") | (basic_number_1 [1-9] [0-9]*))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
 basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
 basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
-basic_number_8 ::= ((basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
 basic_string_1 ::= (("\"" basic_string_sub_1))
 basic_boolean_1 ::= (("true") | ("false"))
 basic_null_1 ::= (("null"))
@@ -121,12 +121,12 @@ basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
 basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
-basic_number_7_1 ::= (("0") | (basic_number_1_1 [1-9] [0-9]*))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
 basic_escape_2 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_2 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_2) | ("\\" basic_escape_2 basic_string_sub_2)) (=([ \n\t]* [,}\]:]))
 basic_any_2 ::= ((basic_number_9) | (basic_string_2) | (basic_boolean_2) | (basic_null_2) | (basic_array_3) | (basic_object_3))
 basic_integer_3 ::= (("0") | (basic_integer_1_2 [1-9] [0-9]*))
-basic_number_9 ::= ((basic_number_7_2 basic_number_3_2 basic_number_6_2))
+basic_number_9 ::= ((basic_number_1_2 basic_number_7_2 basic_number_3_2 basic_number_6_2))
 basic_string_2 ::= (("\"" basic_string_sub_2))
 basic_boolean_2 ::= (("true") | ("false"))
 basic_null_2 ::= (("null"))
@@ -145,7 +145,7 @@ basic_number_6_2 ::= ("" | ([eE] basic_number_4_2 basic_number_5_2))
 basic_array_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_2 basic_array_1_2))
 basic_object_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 [ \n\t]* ":" [ \n\t]* basic_any_2 basic_object_1_2))
 root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1))
-basic_number_7_2 ::= (("0") | (basic_number_1_2 [1-9] [0-9]*))
+basic_number_7_2 ::= (("0") | ([1-9] [0-9]*))
 triggered_tags_group ::= (("1>" root "</function>") | ("2>" root_1 "</function>"))
 triggered_tags_group_1 ::= ((">" root_2 "</function>"))
 triggered_tags ::= TagDispatch(
@@ -178,7 +178,6 @@ def test_structural_tag():
     triggers = ["<function=f", "<function=g"]
 
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
-
     assert str(grammar) == expected_grammar_test_structural_tag_before_optimization
 
     accepted_inputs = [
@@ -212,7 +211,6 @@ def test_structural_tag_compiler():
 
     compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
     compiled_grammar = compiler.compile_structural_tag(tags, triggers)
-
     assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag_after_optimization
 
 
