@@ -1963,7 +1963,7 @@ std::string JSONSchemaConverter::VisitNumber(
     return converted_regex;
   }
 
-  return "(\"0\" | \"-\"? [1-9] [0-9]*) (\".\" [0-9]+)? ([eE] [+-]? [0-9]+)?";
+  return " \"-\"? (\"0\" | [1-9] [0-9]*) (\".\" [0-9]+)? ([eE] [+-]? [0-9]+)?";
 }
 
 std::string JSONSchemaConverter::VisitString(
