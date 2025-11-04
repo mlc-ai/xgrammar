@@ -47,6 +47,17 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
     std::optional<std::vector<int>> indices
 );
 
+void Kernels_ApplyTokenBitmaskInplaceCPUBF16(
+    intptr_t logits_ptr,
+    std::pair<int64_t, int64_t> logits_shape,
+    std::pair<int64_t, int64_t> logits_strides,
+    intptr_t bitmask_ptr,
+    std::pair<int64_t, int64_t> bitmask_shape,
+    std::pair<int64_t, int64_t> bitmask_strides,
+    int vocab_size,
+    std::optional<std::vector<int>> indices
+);
+
 std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_grammar);
 
 Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json);

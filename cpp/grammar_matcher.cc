@@ -6,6 +6,7 @@
  * implements the basic matching algorithm from strings to grammar.
  */
 
+#include <dlpack/dlpack.h>
 #include <xgrammar/matcher.h>
 
 #include <algorithm>
@@ -85,6 +86,73 @@ std::pair<bool, int> _IsSingleTokenBitmask(const DLTensor& bitmask, int vocab_si
   }
 }
 
+void ApplyMaskFP32(
+    DLTensor* logits,
+    const DLTensor& bitmask,
+    int vocab_size,
+    std::optional<std::vector<int>> indices
+) {
+  std::pair<int, int> logits_shape =
+      logits->ndim == 2
+          ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
+          : std::make_pair(1, static_cast<int>(logits->shape[0]));
+  int logits_stride0 = logits->strides[0];
+  int bitmask_stride0 = bitmask.strides[0];
+  if (indices.has_value()) {
+    for (auto idx : indices.value()) {
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
+      DynamicBitset bitset(vocab_size, data_ptr);
+      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
+      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+        logits_ptr[i] = -std::numeric_limits<float>::infinity();
+      }
+    }
+  } else {
+    for (int idx = 0; idx < logits_shape.first; ++idx) {
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
+      DynamicBitset bitset(vocab_size, data_ptr);
+      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
+      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+        logits_ptr[i] = -std::numeric_limits<float>::infinity();
+      }
+    }
+  }
+}
+
+void ApplyMaskBF16(
+    DLTensor* logits,
+    const DLTensor& bitmask,
+    int vocab_size,
+    std::optional<std::vector<int>> indices
+) {
+  const uint16_t kMinusInfinityBF16 = 0xff80;
+  std::pair<int, int> logits_shape =
+      logits->ndim == 2
+          ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
+          : std::make_pair(1, static_cast<int>(logits->shape[0]));
+  int logits_stride0 = logits->strides[0];
+  int bitmask_stride0 = bitmask.strides[0];
+  if (indices.has_value()) {
+    for (auto idx : indices.value()) {
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
+      DynamicBitset bitset(vocab_size, data_ptr);
+      auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
+      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+        logits_ptr[i] = kMinusInfinityBF16;
+      }
+    }
+  } else {
+    for (int idx = 0; idx < logits_shape.first; ++idx) {
+      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
+      DynamicBitset bitset(vocab_size, data_ptr);
+      auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
+      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
+        logits_ptr[i] = kMinusInfinityBF16;
+      }
+    }
+  }
+}
+
 void ApplyTokenBitmaskInplaceCPU(
     DLTensor* logits,
     const DLTensor& bitmask,
@@ -107,8 +175,10 @@ void ApplyTokenBitmaskInplaceCPU(
 
   // Check type
   XGRAMMAR_CHECK(
-      logits->dtype.code == kDLFloat && logits->dtype.bits == 32 && logits->dtype.lanes == 1
-  ) << "The provided logits's dtype is not valid: should be float32";
+      ((logits->dtype.code == kDLFloat && logits->dtype.bits == 32) ||
+       logits->dtype.code == kDLBfloat && logits->dtype.bits == 16) &&
+      logits->dtype.lanes == 1
+  ) << "The provided logits's dtype is not valid: should be float32 or bfloat16";
   XGRAMMAR_CHECK(
       bitmask.dtype.code == kDLInt && bitmask.dtype.bits == 32 && bitmask.dtype.lanes == 1
   ) << "The provided bitmask's dtype is not valid: should be int32";
@@ -118,12 +188,10 @@ void ApplyTokenBitmaskInplaceCPU(
       logits->ndim == 2
           ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
           : std::make_pair(1, static_cast<int>(logits->shape[0]));
-  int logits_stride0 = logits->strides[0];
   std::pair<int, int> bitmask_shape =
       bitmask.ndim == 2
           ? std::make_pair(static_cast<int>(bitmask.shape[0]), static_cast<int>(bitmask.shape[1]))
           : std::make_pair(1, static_cast<int>(bitmask.shape[0]));
-  int bitmask_stride0 = bitmask.strides[0];
 
   XGRAMMAR_CHECK(
       vocab_size <= bitmask_shape.second * DynamicBitset::BITS_PER_BLOCK &&
@@ -138,24 +206,13 @@ void ApplyTokenBitmaskInplaceCPU(
   }
 
   // Apply mask
-  if (indices.has_value()) {
-    for (auto idx : indices.value()) {
-      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
-      DynamicBitset bitset(vocab_size, data_ptr);
-      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
-      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = -std::numeric_limits<float>::infinity();
-      }
-    }
+  if (logits->dtype.code == kDLFloat && logits->dtype.bits == 32) {
+    ApplyMaskFP32(logits, bitmask, vocab_size, indices);
+  } else if (logits->dtype.code == kDLBfloat && logits->dtype.bits == 16) {
+    ApplyMaskBF16(logits, bitmask, vocab_size, indices);
   } else {
-    for (int idx = 0; idx < logits_shape.first; ++idx) {
-      uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
-      DynamicBitset bitset(vocab_size, data_ptr);
-      auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
-      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = -std::numeric_limits<float>::infinity();
-      }
-    }
+    XGRAMMAR_LOG(FATAL
+    ) << "The provided logits's dtype is not valid: should be float32 or bfloat16";
   }
 }
 

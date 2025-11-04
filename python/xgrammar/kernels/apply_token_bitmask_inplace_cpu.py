@@ -18,8 +18,8 @@ def apply_token_bitmask_inplace_cpu(
         raise ValueError("logits must be on CPU")
     if bitmask.device.type != "cpu":
         raise ValueError("bitmask must be on CPU")
-    if logits.dtype != torch.float32:
-        raise ValueError("logits must be of type float32")
+    if logits.dtype != torch.float32 and logits.dtype != torch.bfloat16:
+        raise ValueError("logits must be of type float32 or bfloat16")
     if bitmask.dtype != torch.int32:
         raise ValueError("bitmask must be of type int32")
     if logits.dim() != 1 and logits.dim() != 2:

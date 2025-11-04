@@ -5,6 +5,7 @@
 
 #include "python_methods.h"
 
+#include <dlpack/dlpack.h>
 #include <xgrammar/xgrammar.h>
 
 #include <array>
@@ -100,6 +101,44 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
       DLDevice{kDLCPU, 0},
       2,
       DLDataType{kDLFloat, 32, 1},
+      logits_shape_arr.data(),
+      logits_strides_arr.data(),
+      0
+  };
+
+  DLTensor bitmask_dltensor{
+      reinterpret_cast<void*>(bitmask_ptr),
+      DLDevice{kDLCPU, 0},
+      2,
+      GetBitmaskDLType(),
+      bitmask_shape_arr.data(),
+      bitmask_strides_arr.data(),
+      0
+  };
+
+  ApplyTokenBitmaskInplaceCPU(&logits_dltensor, bitmask_dltensor, vocab_size, indices);
+}
+
+void Kernels_ApplyTokenBitmaskInplaceCPUBF16(
+    intptr_t logits_ptr,
+    std::pair<int64_t, int64_t> logits_shape,
+    std::pair<int64_t, int64_t> logits_strides,
+    intptr_t bitmask_ptr,
+    std::pair<int64_t, int64_t> bitmask_shape,
+    std::pair<int64_t, int64_t> bitmask_strides,
+    int vocab_size,
+    std::optional<std::vector<int>> indices
+) {
+  std::array<int64_t, 2> logits_shape_arr = {logits_shape.first, logits_shape.second};
+  std::array<int64_t, 2> logits_strides_arr = {logits_strides.first, logits_strides.second};
+  std::array<int64_t, 2> bitmask_shape_arr = {bitmask_shape.first, bitmask_shape.second};
+  std::array<int64_t, 2> bitmask_strides_arr = {bitmask_strides.first, bitmask_strides.second};
+
+  DLTensor logits_dltensor{
+      reinterpret_cast<void*>(logits_ptr),
+      DLDevice{kDLCPU, 0},
+      2,
+      DLDataType{kDLBfloat, 16, 1},
       logits_shape_arr.data(),
       logits_strides_arr.data(),
       0
