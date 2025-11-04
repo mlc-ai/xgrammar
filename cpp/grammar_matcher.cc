@@ -176,7 +176,7 @@ void ApplyTokenBitmaskInplaceCPU(
   // Check type
   XGRAMMAR_CHECK(
       ((logits->dtype.code == kDLFloat && logits->dtype.bits == 32) ||
-       logits->dtype.code == kDLBfloat && logits->dtype.bits == 16) &&
+       (logits->dtype.code == kDLBfloat && logits->dtype.bits == 16)) &&
       logits->dtype.lanes == 1
   ) << "The provided logits's dtype is not valid: should be float32 or bfloat16";
   XGRAMMAR_CHECK(

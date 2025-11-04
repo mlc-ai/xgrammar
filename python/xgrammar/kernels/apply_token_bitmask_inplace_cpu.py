@@ -18,8 +18,6 @@ def apply_token_bitmask_inplace_cpu(
         raise ValueError("logits must be on CPU")
     if bitmask.device.type != "cpu":
         raise ValueError("bitmask must be on CPU")
-    if logits.dtype != torch.float32 and logits.dtype != torch.bfloat16:
-        raise ValueError("logits must be of type float32 or bfloat16")
     if bitmask.dtype != torch.int32:
         raise ValueError("bitmask must be of type int32")
     if logits.dim() != 1 and logits.dim() != 2:
@@ -43,13 +41,27 @@ def apply_token_bitmask_inplace_cpu(
 
     vocab_size = min(logits.shape[-1], bitmask.shape[-1] * 32) if vocab_size is None else vocab_size
 
-    _core.kernels.apply_token_bitmask_inplace_cpu(
-        logits.data_ptr(),
-        logits_shape,
-        logits_stride,
-        bitmask.data_ptr(),
-        bitmask_shape,
-        bitmask_stride,
-        vocab_size,
-        indices,
-    )
+    if logits.dtype == torch.float32:
+        _core.kernels.apply_token_bitmask_inplace_cpu(
+            logits.data_ptr(),
+            logits_shape,
+            logits_stride,
+            bitmask.data_ptr(),
+            bitmask_shape,
+            bitmask_stride,
+            vocab_size,
+            indices,
+        )
+    elif logits.dtype == torch.bfloat16:
+        _core.kernels.apply_token_bitmask_inplace_cpu_bf16(
+            logits.data_ptr(),
+            logits_shape,
+            logits_stride,
+            bitmask.data_ptr(),
+            bitmask_shape,
+            bitmask_stride,
+            vocab_size,
+            indices,
+        )
+    else:
+        raise ValueError("logits must be of type float32 or bfloat16")
