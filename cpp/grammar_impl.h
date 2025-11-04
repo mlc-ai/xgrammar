@@ -125,7 +125,7 @@ class Grammar::Impl {
     // tag_expr should be a byte string, and rule_id should be a rule id.
     // loop_after_dispatch is a bool.
     kTagDispatch,
-    // data format: [grammar_expr_id, min_repeat_count, max_repeat_count]
+    // data format: [rule_id, min_repeat_count, max_repeat_count]
     kRepeat,
   };
 
