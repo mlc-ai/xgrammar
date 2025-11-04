@@ -827,7 +827,8 @@ int32_t EBNFParser::HandleRepetitionRange(
     return LegacyHandleRepetitionRange(grammar_expr_id, lower, upper);
   }
 
-  // Case 2. upper is unbounded or large.
+  // Case 2. upper is unbounded, and lower is large (>threshold).
+  // Or upper is bounded, but upper > threshold.
 
   // Case 2.1.1. lower is smaller than threshold, and upper is large. Transform {lower, upper} into:
   // {threshold, upper} | {lower, threshold}
