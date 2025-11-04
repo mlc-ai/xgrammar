@@ -174,11 +174,8 @@ void ApplyTokenBitmaskInplaceCPU(
       << "The provided bitmask's shape is not valid: should be 2D or 1D";
 
   // Check type
-  XGRAMMAR_CHECK(
-      ((logits->dtype.code == kDLFloat && logits->dtype.bits == 32) ||
-       (logits->dtype.code == kDLBfloat && logits->dtype.bits == 16)) &&
-      logits->dtype.lanes == 1
-  ) << "The provided logits's dtype is not valid: should be float32 or bfloat16";
+  XGRAMMAR_CHECK(logits->dtype.lanes == 1)
+      << "The provided logits's dtype is not valid: lanes should be 1";
   XGRAMMAR_CHECK(
       bitmask.dtype.code == kDLInt && bitmask.dtype.bits == 32 && bitmask.dtype.lanes == 1
   ) << "The provided bitmask's dtype is not valid: should be int32";
