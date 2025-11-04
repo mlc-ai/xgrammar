@@ -407,7 +407,7 @@ def test_apply_token_bitmask_inplace_cpu_bf16():
     "logits_batch_size, bitmask_batch_size, vocab_size, indices",
     logits_batch_size__bitmask_batch_size__vocab_size__indices,
 )
-def test_apply_token_bitmask_inplace_indices(
+def test_apply_token_bitmask_inplace_indices_bf16(
     logits_batch_size: int, bitmask_batch_size: int, vocab_size: int, indices: List[int]
 ):
 
