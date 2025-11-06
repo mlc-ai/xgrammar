@@ -636,6 +636,12 @@ class GrammarCompilerNoCache {
  private:
   /*! \brief The main logic. Compile the grammar with multi-threading. */
   CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
+  /*! \brief Optimization for TagDispatch: Precompute the definitely accepted tokens. */
+  void TagDispatchOptimization(decltype(std::make_shared<CompiledGrammar::Impl>()
+  ) compiled_grammar_impl);
+  /*! \brief Generate the token mask cache for all scannable states. */
+  void GenerateTokenMaskCacheForScannableStates(decltype(std::make_shared<CompiledGrammar::Impl>()
+  ) compiled_grammar_impl);
 
   /*! \brief The vocabulary associated with this storage class. */
   const TokenizerInfo tokenizer_info_;
@@ -646,15 +652,22 @@ class GrammarCompilerNoCache {
 };
 
 CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
-  using GrammarExprType = Grammar::Impl::GrammarExprType;
-
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
-
   compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
+  TagDispatchOptimization(compiled_grammar_impl);
+  GenerateTokenMaskCacheForScannableStates(compiled_grammar_impl);
+  return CompiledGrammar(compiled_grammar_impl);
+}
+
+void GrammarCompilerNoCache::TagDispatchOptimization(
+    decltype(std::make_shared<CompiledGrammar::Impl>()) compiled_grammar_impl
+) {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  tag_dispatch_rule_id_to_second_slicing_bitset.clear();
 
   // Optimization for TagDispatch: Precompute the definitely accepted tokens.
   for (int i = 0; i < compiled_grammar_impl->grammar->NumRules(); i++) {
@@ -697,13 +710,13 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
     }
     tag_dispatch_rule_id_to_second_slicing_bitset[i] = definite_accepted_tokens_since_second_char;
   }
-  // Step 3. Compute the adaptive token mask cache
-  // The token mask cache is computed for these positions in the grammar:
-  // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)
-  // 2. All byte strings (with element_in_string=0, 1, 2, ...)
-  // since other positions will be expanded to the above positions
+}
 
-  // TODO(Charlie): Figure out how to support ThreadPool and std::mutex in WebAssembly.
+void GrammarCompilerNoCache::GenerateTokenMaskCacheForScannableStates(
+    decltype(std::make_shared<CompiledGrammar::Impl>()) compiled_grammar_impl
+) {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+
   // Only declare ThreadPool and mutex if max_threads > 1, so when max_threads = 1, we do
   // not need ThreadPool or std::mutex, which throws error in runtime in WebAssembly.
   std::optional<ThreadPool> thread_pool;
@@ -712,7 +725,9 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
     thread_pool.emplace(max_threads_);
     adaptive_token_mask_cache_mutex.emplace();
   }
+  // TODO(Charlie): Figure out how to support ThreadPool and std::mutex in WebAssembly.
 
+  // Function to add adaptive token mask for a given parser state.
   auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
         compiled_grammar_impl->grammar, state, tag_dispatch_rule_id_to_second_slicing_bitset, false
@@ -744,6 +759,8 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
 
   auto root_rule_id = compiled_grammar_impl->grammar->GetRootRuleId();
 
+  // Iterate through all rules and their scannable states to generate the adaptive token mask, since
+  // unscanable states will be expanded to the scannable states.
   for (int32_t rule_id = 0; rule_id < static_cast<int>(compiled_grammar_impl->grammar->NumRules());
        ++rule_id) {
     auto rule = compiled_grammar_impl->grammar->GetRule(rule_id);
@@ -799,8 +816,6 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
   if (max_threads_ > 1) {
     thread_pool->Join();
   }
-
-  return CompiledGrammar(compiled_grammar_impl);
 }
 
 CompiledGrammar GrammarCompilerNoCache::CompileBuiltinJSONGrammar() {
