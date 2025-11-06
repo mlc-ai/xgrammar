@@ -161,6 +161,19 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::optional<const DynamicBitset*>& definite_accepted_bitset
   );
 
+  /*! \brief Find the common prefix size with the previous token.
+      \param token The current token.
+      \param prev_token The previous token.
+      \param prev_matched_size The matched size of the previous token.
+      \param accepted Whether the current token is accepted.
+   */
+  void FindCommonPrefixWithPreviousToken(
+      const std::string& token,
+      const std::string*& prev_token,
+      int* prev_matched_size,
+      bool* accepted
+  );
+
   // The id of the initial rule.
   int32_t init_rule_id;
 
@@ -620,6 +633,34 @@ bool GrammarMatcherForTokenMaskCache::ApplySpeculativeCalculation(
   return false;
 }
 
+void GrammarMatcherForTokenMaskCache::FindCommonPrefixWithPreviousToken(
+    const std::string& token, const std::string*& prev_token, int* prev_matched_size, bool* accepted
+) {
+  if (prev_token != nullptr) {
+    int lcp_len =
+        std::mismatch(token.begin(), token.end(), prev_token->begin(), prev_token->end()).first -
+        token.begin();
+    if (lcp_len > *prev_matched_size) {
+      // Case 1. The common prefix is rejected by the matcher in the last token. Reject
+      // directly.
+      *accepted = false;
+    } else if (lcp_len < *prev_matched_size) {
+      // Case 2. The common prefix is shorter than the previous matched size. Rollback
+      // the non-common part.
+      PopLastStates(*prev_matched_size - lcp_len);
+      tmp_can_reach_end_stack_.erase(
+          tmp_can_reach_end_stack_.end() - (*prev_matched_size - lcp_len),
+          tmp_can_reach_end_stack_.end()
+      );
+      tmp_can_reach_end_prefix_or_stack_.erase(
+          tmp_can_reach_end_prefix_or_stack_.end() - (*prev_matched_size - lcp_len),
+          tmp_can_reach_end_prefix_or_stack_.end()
+      );
+    }
+    *prev_matched_size = std::min(*prev_matched_size, lcp_len);
+  }
+}
+
 bool GrammarMatcherForTokenMaskCache::CheckTokensInInterval(
     const TokenizerInfo& tokenizer_info,
     const std::pair<int, int>& interval,
@@ -661,30 +702,7 @@ bool GrammarMatcherForTokenMaskCache::CheckTokensInInterval(
     // Many tokens may contain the same prefix, so we will avoid unnecessary matching
     // by finding the longest common prefix with the previous token.
     bool accepted = true;
-    if (prev_token != nullptr) {
-      int lcp_len =
-          std::mismatch(token.begin(), token.end(), prev_token->begin(), prev_token->end()).first -
-          token.begin();
-      if (lcp_len > *prev_matched_size) {
-        // Case 1. The common prefix is rejected by the matcher in the last token. Reject
-        // directly.
-        accepted = false;
-      } else if (lcp_len < *prev_matched_size) {
-        // Case 2. The common prefix is shorter than the previous matched size. Rollback
-        // the non-common part.
-        PopLastStates(*prev_matched_size - lcp_len);
-        tmp_can_reach_end_stack_.erase(
-            tmp_can_reach_end_stack_.end() - (*prev_matched_size - lcp_len),
-            tmp_can_reach_end_stack_.end()
-        );
-        tmp_can_reach_end_prefix_or_stack_.erase(
-            tmp_can_reach_end_prefix_or_stack_.end() - (*prev_matched_size - lcp_len),
-            tmp_can_reach_end_prefix_or_stack_.end()
-        );
-      }
-      *prev_matched_size = std::min(*prev_matched_size, lcp_len);
-    }
-
+    FindCommonPrefixWithPreviousToken(token, prev_token, prev_matched_size, &accepted);
     prev_token = &token;
 
     if (accepted) {
@@ -727,10 +745,9 @@ bool GrammarMatcherForTokenMaskCache::CheckTokensInInterval(
       } else {
         tmp_rejected_indices_.push_back(i);
         *last_rejected_range = subtree_nodes_range[i];
-        fill_reject_indices =
-            tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
-                ? false
-                : fill_reject_indices;
+        if (tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD) {
+          fill_reject_indices = false;
+        }
       }
     }
   }
@@ -898,8 +915,8 @@ void GrammarCompilerNoCache::GenerateTokenMaskCacheForScannableStates(
 
   auto root_rule_id = compiled_grammar_impl->grammar->GetRootRuleId();
 
-  // Iterate through all rules and their scannable states to generate the adaptive token mask, since
-  // unscanable states will be expanded to the scannable states.
+  // Iterate through all rules and their scannable states to generate the adaptive token mask,
+  // since unscanable states will be expanded to the scannable states.
   for (int32_t rule_id = 0; rule_id < static_cast<int>(compiled_grammar_impl->grammar->NumRules());
        ++rule_id) {
     auto rule = compiled_grammar_impl->grammar->GetRule(rule_id);
