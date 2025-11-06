@@ -118,21 +118,21 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   );
 
   /*! \brief Check each token in a given interval.
-      \param tokenizer_info The tokenizer info.
-      \param interval The interval to check.
-      \param speculative_calculation_applied Whether to use speculative calculation.
-      \param speculative_mask The speculative mask for speculative calculation.
-      \param definite_accepted_bitset The definite accepted bitset for TagDispatch rules.
-      \param is_root_rule Whether to consider the parent rule. If false, there will be
-      no uncertain tokens. Useful for the root rule.
-      \param fill_reject_indices Whether to fill the rejected indices.
-      \param last_rejected_range The last rejected subtree range. If a token's index is less than
-      this value, it will be rejected directly.
-      \param prev_token The previous token parsed in the parser.
-      \param prev_matched_size The matched size of the previous token.
-      \return True if the rejected indices are filled as usual, False otherwise.
-      \note All the tokens in the given interval will be divided into accepted, rejected and
-     uncertain tokens.
+   *  \param tokenizer_info The tokenizer info.
+   *  \param interval The interval to check.
+   *  \param speculative_calculation_applied Whether to use speculative calculation.
+   *  \param speculative_mask The speculative mask for speculative calculation.
+   *   \param definite_accepted_bitset The definite accepted bitset for TagDispatch rules.
+   *   \param is_root_rule Whether to consider the parent rule. If false, there will be
+   *   no uncertain tokens. Useful for the root rule.
+   *   \param fill_reject_indices Whether to fill the rejected indices.
+   *   \param last_rejected_range The last rejected subtree range. If a token's index is less than
+   *   this value, it will be rejected directly.
+   *   \param prev_token The previous token parsed in the parser.
+   *   \param prev_matched_size The matched size of the previous token.
+   *   \return True if the rejected indices are filled as usual, False otherwise.
+   *   \note All the tokens in the given interval will be divided into accepted, rejected and
+   *  uncertain tokens.
    */
   bool CheckTokensInInterval(
       const TokenizerInfo& tokenizer_info,
@@ -148,11 +148,11 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   );
 
   /*! \brief Apply speculative calculation for a token.
-      \param token The token to check.
-      \param index The index of the token in the vocabulary.
-      \param speculative_mask The speculative mask for speculative calculation.
-      \param definite_accepted_bitset The definite accepted bitset for TagDispatch rules.
-      \return True if the token is accepted by speculative calculation, False otherwise.
+   *  \param token The token to check.
+   *  \param index The index of the token in the vocabulary.
+   *  \param speculative_mask The speculative mask for speculative calculation.
+   *  \param definite_accepted_bitset The definite accepted bitset for TagDispatch rules.
+   *  \return True if the token is accepted by speculative calculation, False otherwise.
    */
   bool ApplySpeculativeCalculation(
       const std::string& token,
@@ -162,10 +162,10 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   );
 
   /*! \brief Find the common prefix size with the previous token.
-      \param token The current token.
-      \param prev_token The previous token.
-      \param prev_matched_size The matched size of the previous token.
-      \param accepted Whether the current token is accepted.
+   *  \param token The current token.
+   *  \param prev_token The previous token.
+   *  \param prev_matched_size The matched size of the previous token.
+   *  \param accepted Whether the current token is accepted.
    */
   void FindCommonPrefixWithPreviousToken(
       const std::string& token,
@@ -174,21 +174,21 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       bool* accepted
   );
 
-  // The id of the initial rule.
+  /*! \brief The id of the initial rule. */
   int32_t init_rule_id;
 
-  // The initial state of the parser.
+  /*! \brief The initial state of the parser. */
   ParserState initial_state;
 
   /*!
-   \brief This is a mapping from TagDispatch rule id to the bitset used for second slicing.
-   \note If a rule is a TagDispatch rule, then there will be an AC automaton for its triggers.
-    Which means that it can accept a lot of tokens. However, it will be slow to check a lot of
-    tokens. The DynamicBitset here is used to do a second slicing: if a token's substr(1, n - 1)
-    can be accepted by the start state of the AC automaton, then it will be True in the bitset.
-    When we check a token, we first check if its first character can transit to the start state.
-    If yes, then we check if it is in the bitset. If yes, then we accept it directly.
-  */
+   * \brief This is a mapping from TagDispatch rule id to the bitset used for second slicing.
+   * \note If a rule is a TagDispatch rule, then there will be an AC automaton for its triggers.
+   *  Which means that it can accept a lot of tokens. However, it will be slow to check a lot of
+   *  tokens. The DynamicBitset here is used to do a second slicing: if a token's substr(1, n - 1)
+   *  can be accepted by the start state of the AC automaton, then it will be True in the bitset.
+   *  When we check a token, we first check if its first character can transit to the start state.
+   *  If yes, then we check if it is in the bitset. If yes, then we accept it directly.
+   */
   const std::unordered_map<int32_t, DynamicBitset>& tag_dispatch_rule_id_to_second_slicing_bitset;
 
   // Temporary data for GetAdaptiveTokenMask.
@@ -802,7 +802,6 @@ class GrammarCompilerNoCache {
   const TokenizerInfo tokenizer_info_;
   /*! \brief The maximum number of threads to use. */
   const int max_threads_;
-  /*! \brief Mapping from the rule_id to the definite accepted token mask. */
 };
 
 CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
