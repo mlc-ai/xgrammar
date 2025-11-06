@@ -97,7 +97,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    * \brief Check all intervals for possible tokens.
    * \param tokenizer_info The tokenizer info.
    * \param possible_intervals The possible intervals for tokens.
-   * \param speculative_calculation Whether to use speculative calculation.
+   * \param speculative_calculation_applied Whether to use speculative calculation.
    * \param speculative_mask The speculative mask for speculative calculation.
    * \param definite_accepted_bitset The definite accepted bitset for TagDispatch rules.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
@@ -109,7 +109,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   bool CheckAllPossibleTokens(
       const TokenizerInfo& tokenizer_info,
       const std::vector<std::pair<int32_t, int32_t>>& possible_intervals,
-      bool speculative_calculation,
+      bool speculative_calculation_applied,
       const std::bitset<256>& speculative_mask,
       const std::optional<const DynamicBitset*>& definite_accepted_bitset,
       bool is_root_rule,
@@ -119,7 +119,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   /*! \brief Check each token in a given interval.
       \param tokenizer_info The tokenizer info.
       \param interval The interval to check.
-      \param speculative_calculation Whether to use speculative calculation.
+      \param speculative_calculation_applied Whether to use speculative calculation.
       \param speculative_mask The speculative mask for speculative calculation.
       \param definite_accepted_bitset The definite accepted bitset for TagDispatch rules.
       \param is_root_rule Whether to consider the parent rule. If false, there will be
@@ -136,7 +136,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   bool CheckTokensInInterval(
       const TokenizerInfo& tokenizer_info,
       const std::pair<int, int>& interval,
-      bool speculative_calculation,
+      bool speculative_calculation_applied,
       const std::bitset<256>& speculative_mask,
       const std::optional<const DynamicBitset*>& definite_accepted_bitset,
       bool is_root_rule,
@@ -144,6 +144,20 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       int* last_rejected_range,
       const std::string* prev_token,
       int* prev_matched_size
+  );
+
+  /*! \brief Apply speculative calculation for a token.
+      \param token The token to check.
+      \param index The index of the token in the vocabulary.
+      \param speculative_mask The speculative mask for speculative calculation.
+      \param definite_accepted_bitset The definite accepted bitset for TagDispatch rules.
+      \return True if the token is accepted by speculative calculation, False otherwise.
+   */
+  bool ApplySpeculativeCalculation(
+      const std::string& token,
+      int32_t index,
+      const std::bitset<256>& speculative_mask,
+      const std::optional<const DynamicBitset*>& definite_accepted_bitset
   );
 
   // The id of the initial rule.
@@ -397,15 +411,15 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterOptimization
     }
   }
 
-  bool speculative_calculation = false;
+  bool speculative_calculation_applied = false;
   std::bitset<256> speculative_mask;
   if (init_rule_id == -1 || !grammar_->per_rule_fsms[init_rule_id].has_value()) {
-    speculative_calculation =
+    speculative_calculation_applied =
         GetSpeculativeCalculation(sorted_decoded_vocab).first &&
         (possible_token_num >= static_cast<int>(sorted_decoded_vocab.size() / 4));
     speculative_mask = first_char_mask;
   } else {
-    std::tie(speculative_calculation, speculative_mask) =
+    std::tie(speculative_calculation_applied, speculative_mask) =
         GetSpeculativeCalculation(sorted_decoded_vocab);
   }
 
@@ -421,7 +435,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterOptimization
   fill_reject_indices = CheckAllPossibleTokens(
       tokenizer_info,
       possible_intervals,
-      speculative_calculation,
+      speculative_calculation_applied,
       speculative_mask,
       definite_accepted_bitset,
       is_root_rule,
@@ -526,7 +540,7 @@ std::bitset<256> GrammarMatcherForTokenMaskCache::GetFirstCharacterMask() {
 bool GrammarMatcherForTokenMaskCache::CheckAllPossibleTokens(
     const TokenizerInfo& tokenizer_info,
     const std::vector<std::pair<int32_t, int32_t>>& possible_intervals,
-    bool speculative_calculation,
+    bool speculative_calculation_applied,
     const std::bitset<256>& speculative_mask,
     const std::optional<const DynamicBitset*>& definite_accepted_bitset,
     bool is_root_rule,
@@ -540,7 +554,7 @@ bool GrammarMatcherForTokenMaskCache::CheckAllPossibleTokens(
     fill_reject_indices = CheckTokensInInterval(
         tokenizer_info,
         interval,
-        speculative_calculation,
+        speculative_calculation_applied,
         speculative_mask,
         definite_accepted_bitset,
         is_root_rule,
@@ -565,10 +579,50 @@ bool GrammarMatcherForTokenMaskCache::CheckAllPossibleTokens(
   return fill_reject_indices;
 }
 
+bool GrammarMatcherForTokenMaskCache::ApplySpeculativeCalculation(
+    const std::string& token,
+    int32_t index,
+    const std::bitset<256>& speculative_mask,
+    const std::optional<const DynamicBitset*>& definite_accepted_bitset
+) {
+  // This optimization is useful for simple self-recursive rules, like string content.
+  // Optimization for tag dispatch rules.
+  if (definite_accepted_bitset.has_value()) {
+    // If the token is empty, it must be accepted.
+    if (token.empty()) {
+      tmp_accepted_indices_.push_back(index);
+      return true;
+    }
+    // If the token doesn't contain tags or stop strings since the second character, and it
+    // will transit to the start state after consuming the first character, it must be
+    // accepted.
+    if (speculative_mask[static_cast<uint8_t>(token[0])] &&
+        (*definite_accepted_bitset.value())[index]) {
+      tmp_accepted_indices_.push_back(index);
+      return true;
+    }
+  } else {
+    bool all_accepted = true;
+    for (char ch : token) {
+      // If the first character is not the ascii character or can't be accepted by the
+      // first character mask, we need to check them in the parser.
+      if (isascii(ch) == 0 || !speculative_mask[static_cast<uint8_t>(ch)]) {
+        all_accepted = false;
+        break;
+      }
+    }
+    if (all_accepted) {
+      tmp_accepted_indices_.push_back(index);
+      return true;
+    }
+  }
+  return false;
+}
+
 bool GrammarMatcherForTokenMaskCache::CheckTokensInInterval(
     const TokenizerInfo& tokenizer_info,
     const std::pair<int, int>& interval,
-    bool speculative_calculation,
+    bool speculative_calculation_applied,
     const std::bitset<256>& speculative_mask,
     const std::optional<const DynamicBitset*>& definite_accepted_bitset,
     bool is_root_rule,
@@ -596,37 +650,11 @@ bool GrammarMatcherForTokenMaskCache::CheckTokensInInterval(
     }
 
     const auto& token = sorted_decoded_vocab[i].second;
-    // This optimization is useful for simple self-recursive rules, like string content.
-    if (speculative_calculation) {
-      // Optimization for tag dispatch rules.
-      if (definite_accepted_bitset.has_value()) {
-        // If the token is empty, it must be accepted.
-        if (token.empty()) {
-          tmp_accepted_indices_.push_back(i);
-          continue;
-        }
-        // If the token doesn't contain tags or stop strings since the second character, and it
-        // will transit to the start state after consuming the first character, it must be
-        // accepted.
-        if (speculative_mask[static_cast<uint8_t>(token[0])] &&
-            (*definite_accepted_bitset.value())[i]) {
-          tmp_accepted_indices_.push_back(i);
-          continue;
-        }
-      } else {
-        bool all_accepted = true;
-        for (char ch : token) {
-          // If the first character is not the ascii character or can't be accepted by the
-          // first character mask, we need to check them in the parser.
-          if (isascii(ch) == 0 || !speculative_mask[static_cast<uint8_t>(ch)]) {
-            all_accepted = false;
-            break;
-          }
-        }
-        if (all_accepted) {
-          tmp_accepted_indices_.push_back(i);
-          continue;
-        }
+    if (speculative_calculation_applied) {
+      bool speculative_accepted =
+          ApplySpeculativeCalculation(token, i, speculative_mask, definite_accepted_bitset);
+      if (speculative_accepted) {
+        continue;
       }
     }
     // Many tokens may contain the same prefix, so we will avoid unnecessary matching
