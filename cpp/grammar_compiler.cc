@@ -77,7 +77,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   );
 
   /*!
-   * \brief Check if speculative calculation will be applied.
+   * \brief Check if speculative calculation will be applied. It will detect self-recursive-like
+   * patterns, and utilize them to optimize the token mask calculation.
    * \return first: whether speculative calculation is applicable.
    * \return second: part of the first character mask,
    * which can be used in speculative calculation.
@@ -733,7 +734,7 @@ bool GrammarMatcherForTokenMaskCache::CheckTokensInInterval(
       }
     }
   }
-  return false;
+  return fill_reject_indices;
 }
 
 /******************* GrammarCompilerNoCache *******************/
