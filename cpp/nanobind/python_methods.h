@@ -36,7 +36,7 @@ std::pair<bool, int> Testing_IsSingleTokenBitmask(
     intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
 );
 
-void Kernels_ApplyTokenBitmaskInplaceCPU(
+void Kernels_ApplyTokenBitmaskInplaceCPUFP32(
     intptr_t logits_ptr,
     std::pair<int64_t, int64_t> logits_shape,
     std::pair<int64_t, int64_t> logits_strides,

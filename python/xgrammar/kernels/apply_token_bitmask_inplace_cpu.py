@@ -42,7 +42,7 @@ def apply_token_bitmask_inplace_cpu(
     vocab_size = min(logits.shape[-1], bitmask.shape[-1] * 32) if vocab_size is None else vocab_size
 
     if logits.dtype == torch.float32:
-        _core.kernels.apply_token_bitmask_inplace_cpu(
+        _core.kernels.apply_token_bitmask_inplace_cpu_fp32(
             logits.data_ptr(),
             logits_shape,
             logits_stride,
