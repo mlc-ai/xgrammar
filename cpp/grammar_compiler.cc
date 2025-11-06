@@ -95,6 +95,15 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
 
   /*!
    * \brief Check all intervals for possible tokens.
+   * \param tokenizer_info The tokenizer info.
+   * \param possible_intervals The possible intervals for tokens.
+   * \param speculative_calculation Whether to use speculative calculation.
+   * \param speculative_mask The speculative mask for speculative calculation.
+   * \param definite_accepted_bitset The definite accepted bitset for TagDispatch rules.
+   * \param is_root_rule Whether to consider the parent rule. If false, there will be
+   * no uncertain tokens. Useful for the root rule.
+   * \param fill_reject_indices Whether to fill the rejected indices.
+   * \return True if the rejected indices are filled as usual, False otherwise.
    * \note All the possible tokens will be divided into accepted, rejected and uncertain tokens.
    */
   bool CheckAllPossibleTokens(
@@ -105,6 +114,36 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::optional<const DynamicBitset*>& definite_accepted_bitset,
       bool is_root_rule,
       bool fill_reject_indices
+  );
+
+  /*! \brief Check each token in a given interval.
+      \param tokenizer_info The tokenizer info.
+      \param interval The interval to check.
+      \param speculative_calculation Whether to use speculative calculation.
+      \param speculative_mask The speculative mask for speculative calculation.
+      \param definite_accepted_bitset The definite accepted bitset for TagDispatch rules.
+      \param is_root_rule Whether to consider the parent rule. If false, there will be
+      no uncertain tokens. Useful for the root rule.
+      \param fill_reject_indices Whether to fill the rejected indices.
+      \param last_rejected_range The last rejected subtree range. If a token's index is less than
+      this value, it will be rejected directly.
+      \param prev_token The previous token parsed in the parser.
+      \param prev_matched_size The matched size of the previous token.
+      \return True if the rejected indices are filled as usual, False otherwise.
+      \note All the tokens in the given interval will be divided into accepted, rejected and
+     uncertain tokens.
+   */
+  bool CheckTokensInInterval(
+      const TokenizerInfo& tokenizer_info,
+      const std::pair<int, int>& interval,
+      bool speculative_calculation,
+      const std::bitset<256>& speculative_mask,
+      const std::optional<const DynamicBitset*>& definite_accepted_bitset,
+      bool is_root_rule,
+      bool fill_reject_indices,
+      int* last_rejected_range,
+      const std::string* prev_token,
+      int* prev_matched_size
   );
 
   // The id of the initial rule.
@@ -495,139 +534,21 @@ bool GrammarMatcherForTokenMaskCache::CheckAllPossibleTokens(
 ) {
   int prev_matched_size = 0;
   int last_rejected_range = 0;
-  const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
-  const auto& subtree_nodes_range = tokenizer_info.GetTrieSubtreeNodesRange();
-  const bool& is_exact_lookahead = grammar_->GetRule(init_rule_id).is_exact_lookahead;
   const std::string* prev_token = nullptr;
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
-    for (int i = interval.first; i < interval.second; ++i) {
-      // Check if the current token is in the rejected range. i.e. check if the current token
-      // is on the subtree of the rejected token.
-      if (i < last_rejected_range) {
-        if (fill_reject_indices) {
-          tmp_rejected_indices_.push_back(i);
-          if (tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD) {
-            fill_reject_indices = false;
-          }
-        } else {
-          i = last_rejected_range - 1;
-        }
-        continue;
-      }
-
-      const auto& token = sorted_decoded_vocab[i].second;
-      // This optimization is useful for simple self-recursive rules, like string content.
-      if (speculative_calculation) {
-        // Optimization for tag dispatch rules.
-        if (definite_accepted_bitset.has_value()) {
-          // If the token is empty, it must be accepted.
-          if (token.empty()) {
-            tmp_accepted_indices_.push_back(i);
-            continue;
-          }
-          // If the token doesn't contain tags or stop strings since the second character, and it
-          // will transit to the start state after consuming the first character, it must be
-          // accepted.
-          if (speculative_mask[static_cast<uint8_t>(token[0])] &&
-              (*definite_accepted_bitset.value())[i]) {
-            tmp_accepted_indices_.push_back(i);
-            continue;
-          }
-        } else {
-          bool all_accepted = true;
-          for (char ch : token) {
-            // If the first character is not the ascii character or can't be accepted by the
-            // first character mask, we need to check them in the parser.
-            if (isascii(ch) == 0 || !speculative_mask[static_cast<uint8_t>(ch)]) {
-              all_accepted = false;
-              break;
-            }
-          }
-          if (all_accepted) {
-            tmp_accepted_indices_.push_back(i);
-            continue;
-          }
-        }
-      }
-      // Many tokens may contain the same prefix, so we will avoid unnecessary matching
-      // by finding the longest common prefix with the previous token.
-      bool accepted = true;
-      if (prev_token != nullptr) {
-        int lcp_len =
-            std::mismatch(token.begin(), token.end(), prev_token->begin(), prev_token->end())
-                .first -
-            token.begin();
-        if (lcp_len > prev_matched_size) {
-          // Case 1. The common prefix is rejected by the matcher in the last token. Reject
-          // directly.
-          accepted = false;
-        } else if (lcp_len < prev_matched_size) {
-          // Case 2. The common prefix is shorter than the previous matched size. Rollback
-          // the non-common part.
-          PopLastStates(prev_matched_size - lcp_len);
-          tmp_can_reach_end_stack_.erase(
-              tmp_can_reach_end_stack_.end() - (prev_matched_size - lcp_len),
-              tmp_can_reach_end_stack_.end()
-          );
-          tmp_can_reach_end_prefix_or_stack_.erase(
-              tmp_can_reach_end_prefix_or_stack_.end() - (prev_matched_size - lcp_len),
-              tmp_can_reach_end_prefix_or_stack_.end()
-          );
-        }
-        prev_matched_size = std::min(prev_matched_size, lcp_len);
-      }
-
-      prev_token = &token;
-
-      if (accepted) {
-        // Accept the rest chars one by one.
-        for (int j = prev_matched_size; j < static_cast<int>(token.size()); ++j) {
-          if (!Advance(token[j])) {
-            accepted = false;
-            break;
-          }
-          tmp_can_reach_end_stack_.push_back(IsCompleted());
-          tmp_can_reach_end_prefix_or_stack_.push_back(
-              tmp_can_reach_end_stack_.back() || tmp_can_reach_end_prefix_or_stack_.back()
-          );
-          prev_matched_size = j + 1;
-        }
-      }
-
-      bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
-
-      if (accepted) {
-        tmp_accepted_indices_.push_back(i);
-      } else {
-        auto lookahead_result_pair = IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_);
-        if (can_reach_end && !is_root_rule && lookahead_result_pair.first &&
-            prev_matched_size > 0) {
-          // 1. If the current rule is the root rule (is_root_rule=true), there are no
-          // uncertain tokens. Not accepted tokens are just rejected.
-          // 2. If a token cannot pass the lookahead assertion, it is rejected.
-          if ((!lookahead_result_pair.second) && is_exact_lookahead) {
-            tmp_accepted_indices_.push_back(i);
-          } else {
-            tmp_uncertain_indices_.push_back(i);
-            // On the subtree, they are all uncertain tokens.
-            if (lookahead_result_pair.second) {
-              for (int j = i + 1; j < subtree_nodes_range[i]; ++j) {
-                tmp_uncertain_indices_.push_back(j);
-              }
-              i = subtree_nodes_range[i] - 1;  // Skip the subtree nodes.
-            }
-          }
-        } else {
-          tmp_rejected_indices_.push_back(i);
-          last_rejected_range = subtree_nodes_range[i];
-          fill_reject_indices =
-              tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
-                  ? false
-                  : fill_reject_indices;
-        }
-      }
-    }
+    fill_reject_indices = CheckTokensInInterval(
+        tokenizer_info,
+        interval,
+        speculative_calculation,
+        speculative_mask,
+        definite_accepted_bitset,
+        is_root_rule,
+        fill_reject_indices,
+        &last_rejected_range,
+        prev_token,
+        &prev_matched_size
+    );
     if (interval_idx != possible_intervals.size() - 1 && fill_reject_indices) {
       const auto& next_interval = possible_intervals[interval_idx + 1];
       for (int i = interval.second; i < next_interval.first; ++i) {
@@ -642,6 +563,149 @@ bool GrammarMatcherForTokenMaskCache::CheckAllPossibleTokens(
   // Rollback the last matched part.
   PopLastStates(prev_matched_size);
   return fill_reject_indices;
+}
+
+bool GrammarMatcherForTokenMaskCache::CheckTokensInInterval(
+    const TokenizerInfo& tokenizer_info,
+    const std::pair<int, int>& interval,
+    bool speculative_calculation,
+    const std::bitset<256>& speculative_mask,
+    const std::optional<const DynamicBitset*>& definite_accepted_bitset,
+    bool is_root_rule,
+    bool fill_reject_indices,
+    int* last_rejected_range,
+    const std::string* prev_token,
+    int* prev_matched_size
+) {
+  const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
+  const auto& subtree_nodes_range = tokenizer_info.GetTrieSubtreeNodesRange();
+  const bool& is_exact_lookahead = grammar_->GetRule(init_rule_id).is_exact_lookahead;
+  for (int i = interval.first; i < interval.second; ++i) {
+    // Check if the current token is in the rejected range. i.e. check if the current token
+    // is on the subtree of the rejected token.
+    if (i < *last_rejected_range) {
+      if (fill_reject_indices) {
+        tmp_rejected_indices_.push_back(i);
+        if (tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD) {
+          fill_reject_indices = false;
+        }
+      } else {
+        i = *last_rejected_range - 1;
+      }
+      continue;
+    }
+
+    const auto& token = sorted_decoded_vocab[i].second;
+    // This optimization is useful for simple self-recursive rules, like string content.
+    if (speculative_calculation) {
+      // Optimization for tag dispatch rules.
+      if (definite_accepted_bitset.has_value()) {
+        // If the token is empty, it must be accepted.
+        if (token.empty()) {
+          tmp_accepted_indices_.push_back(i);
+          continue;
+        }
+        // If the token doesn't contain tags or stop strings since the second character, and it
+        // will transit to the start state after consuming the first character, it must be
+        // accepted.
+        if (speculative_mask[static_cast<uint8_t>(token[0])] &&
+            (*definite_accepted_bitset.value())[i]) {
+          tmp_accepted_indices_.push_back(i);
+          continue;
+        }
+      } else {
+        bool all_accepted = true;
+        for (char ch : token) {
+          // If the first character is not the ascii character or can't be accepted by the
+          // first character mask, we need to check them in the parser.
+          if (isascii(ch) == 0 || !speculative_mask[static_cast<uint8_t>(ch)]) {
+            all_accepted = false;
+            break;
+          }
+        }
+        if (all_accepted) {
+          tmp_accepted_indices_.push_back(i);
+          continue;
+        }
+      }
+    }
+    // Many tokens may contain the same prefix, so we will avoid unnecessary matching
+    // by finding the longest common prefix with the previous token.
+    bool accepted = true;
+    if (prev_token != nullptr) {
+      int lcp_len =
+          std::mismatch(token.begin(), token.end(), prev_token->begin(), prev_token->end()).first -
+          token.begin();
+      if (lcp_len > *prev_matched_size) {
+        // Case 1. The common prefix is rejected by the matcher in the last token. Reject
+        // directly.
+        accepted = false;
+      } else if (lcp_len < *prev_matched_size) {
+        // Case 2. The common prefix is shorter than the previous matched size. Rollback
+        // the non-common part.
+        PopLastStates(*prev_matched_size - lcp_len);
+        tmp_can_reach_end_stack_.erase(
+            tmp_can_reach_end_stack_.end() - (*prev_matched_size - lcp_len),
+            tmp_can_reach_end_stack_.end()
+        );
+        tmp_can_reach_end_prefix_or_stack_.erase(
+            tmp_can_reach_end_prefix_or_stack_.end() - (*prev_matched_size - lcp_len),
+            tmp_can_reach_end_prefix_or_stack_.end()
+        );
+      }
+      *prev_matched_size = std::min(*prev_matched_size, lcp_len);
+    }
+
+    prev_token = &token;
+
+    if (accepted) {
+      // Accept the rest chars one by one.
+      for (int j = *prev_matched_size; j < static_cast<int>(token.size()); ++j) {
+        if (!Advance(token[j])) {
+          accepted = false;
+          break;
+        }
+        tmp_can_reach_end_stack_.push_back(IsCompleted());
+        tmp_can_reach_end_prefix_or_stack_.push_back(
+            tmp_can_reach_end_stack_.back() || tmp_can_reach_end_prefix_or_stack_.back()
+        );
+        *prev_matched_size = j + 1;
+      }
+    }
+
+    bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
+
+    if (accepted) {
+      tmp_accepted_indices_.push_back(i);
+    } else {
+      auto lookahead_result_pair = IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_);
+      if (can_reach_end && !is_root_rule && lookahead_result_pair.first && *prev_matched_size > 0) {
+        // 1. If the current rule is the root rule (is_root_rule=true), there are no
+        // uncertain tokens. Not accepted tokens are just rejected.
+        // 2. If a token cannot pass the lookahead assertion, it is rejected.
+        if ((!lookahead_result_pair.second) && is_exact_lookahead) {
+          tmp_accepted_indices_.push_back(i);
+        } else {
+          tmp_uncertain_indices_.push_back(i);
+          // On the subtree, they are all uncertain tokens.
+          if (lookahead_result_pair.second) {
+            for (int j = i + 1; j < subtree_nodes_range[i]; ++j) {
+              tmp_uncertain_indices_.push_back(j);
+            }
+            i = subtree_nodes_range[i] - 1;  // Skip the subtree nodes.
+          }
+        }
+      } else {
+        tmp_rejected_indices_.push_back(i);
+        *last_rejected_range = subtree_nodes_range[i];
+        fill_reject_indices =
+            tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                ? false
+                : fill_reject_indices;
+      }
+    }
+  }
+  return false;
 }
 
 /******************* GrammarCompilerNoCache *******************/
