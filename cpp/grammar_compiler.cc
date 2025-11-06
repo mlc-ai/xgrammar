@@ -86,6 +86,13 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab
   );
 
+  /*!
+   * \brief Get the first character mask for the initial state. i.e. which characters can be
+   * accepted as the first character in the initial state.
+   * \return The first character mask.
+   */
+  std::bitset<256> GetFirstCharacterMask();
+
   // The id of the initial rule.
   int32_t init_rule_id;
 
@@ -371,10 +378,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       if (i < last_rejected_range) {
         if (fill_reject_indices) {
           tmp_rejected_indices_.push_back(i);
-          fill_reject_indices =
-              tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
-                  ? false
-                  : fill_reject_indices;
+          if (tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD) {
+            fill_reject_indices = false;
+          }
         } else {
           i = last_rejected_range - 1;
         }
@@ -498,9 +504,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       for (int i = interval.second; i < next_interval.first; ++i) {
         tmp_rejected_indices_.push_back(i);
       }
-      fill_reject_indices = tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
-                                ? false
-                                : fill_reject_indices;
+      if (tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD) {
+        fill_reject_indices = false;
+      }
     }
   }
 
@@ -532,6 +538,25 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
   // the rule when matching until this character. Store it in a stack for later rollback.
   tmp_can_reach_end_stack_.push_back(false);
   tmp_can_reach_end_prefix_or_stack_.push_back(false);
+  std::bitset<256> first_character_mask = GetFirstCharacterMask();
+  bool rejected_indices_are_filled =
+      GetTokenMaskWithFirstCharacterCheck(tokenizer_info, first_character_mask, is_root_rule);
+  if (rejected_indices_are_filled) {
+    return AdaptiveTokenMask(
+        vocab_size,
+        sorted_decoded_vocab,
+        tmp_accepted_indices_,
+        tmp_rejected_indices_,
+        tmp_uncertain_indices_
+    );
+  } else {
+    return AdaptiveTokenMask(
+        vocab_size, sorted_decoded_vocab, tmp_accepted_indices_, tmp_uncertain_indices_
+    );
+  }
+}
+
+std::bitset<256> GrammarMatcherForTokenMaskCache::GetFirstCharacterMask() {
   std::bitset<256> first_character_mask;
   const auto& sequence = grammar_->GetGrammarExpr(initial_state.sequence_id);
   if (!grammar_->per_rule_fsms[init_rule_id].has_value()) {
@@ -579,21 +604,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
       }
     }
   }
-  bool rejected_indices_are_filled =
-      GetTokenMaskWithFirstCharacterCheck(tokenizer_info, first_character_mask, is_root_rule);
-  if (rejected_indices_are_filled) {
-    return AdaptiveTokenMask(
-        vocab_size,
-        sorted_decoded_vocab,
-        tmp_accepted_indices_,
-        tmp_rejected_indices_,
-        tmp_uncertain_indices_
-    );
-  } else {
-    return AdaptiveTokenMask(
-        vocab_size, sorted_decoded_vocab, tmp_accepted_indices_, tmp_uncertain_indices_
-    );
-  }
+  return first_character_mask;
 }
 
 /******************* GrammarCompilerNoCache *******************/
