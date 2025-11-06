@@ -629,18 +629,22 @@ class GrammarCompilerNoCache {
   /*! \brief The main logic. Compile the grammar with multi-threading. */
   CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
   /*! \brief Optimization for TagDispatch: Precompute the definitely accepted tokens. */
-  void TagDispatchOptimization(decltype(std::make_shared<CompiledGrammar::Impl>()
-  ) compiled_grammar_impl);
+  void TagDispatchOptimization(
+      decltype(std::make_shared<CompiledGrammar::Impl>()) compiled_grammar_impl,
+      std::unordered_map<int32_t, DynamicBitset>* tag_dispatch_rule_id_to_second_slicing_bitset
+  );
   /*! \brief Generate the token mask cache for all scannable states. */
-  void GenerateTokenMaskCacheForScannableStates(decltype(std::make_shared<CompiledGrammar::Impl>()
-  ) compiled_grammar_impl);
+  void GenerateTokenMaskCacheForScannableStates(
+      decltype(std::make_shared<CompiledGrammar::Impl>()) compiled_grammar_impl,
+      const std::unordered_map<int32_t, DynamicBitset>&
+          tag_dispatch_rule_id_to_second_slicing_bitset
+  );
 
   /*! \brief The vocabulary associated with this storage class. */
   const TokenizerInfo tokenizer_info_;
   /*! \brief The maximum number of threads to use. */
   const int max_threads_;
   /*! \brief Mapping from the rule_id to the definite accepted token mask. */
-  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
 };
 
 CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
@@ -650,16 +654,20 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
-  TagDispatchOptimization(compiled_grammar_impl);
-  GenerateTokenMaskCacheForScannableStates(compiled_grammar_impl);
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
+  TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_rule_id_to_second_slicing_bitset);
+  GenerateTokenMaskCacheForScannableStates(
+      compiled_grammar_impl, tag_dispatch_rule_id_to_second_slicing_bitset
+  );
   return CompiledGrammar(compiled_grammar_impl);
 }
 
 void GrammarCompilerNoCache::TagDispatchOptimization(
-    decltype(std::make_shared<CompiledGrammar::Impl>()) compiled_grammar_impl
+    decltype(std::make_shared<CompiledGrammar::Impl>()) compiled_grammar_impl,
+    std::unordered_map<int32_t, DynamicBitset>* tag_dispatch_rule_id_to_second_slicing_bitset
 ) {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
-  tag_dispatch_rule_id_to_second_slicing_bitset.clear();
+  tag_dispatch_rule_id_to_second_slicing_bitset->clear();
 
   // Optimization for TagDispatch: Precompute the definitely accepted tokens.
   for (int i = 0; i < compiled_grammar_impl->grammar->NumRules(); i++) {
@@ -700,12 +708,14 @@ void GrammarCompilerNoCache::TagDispatchOptimization(
         definite_accepted_tokens_since_second_char.Set(i);
       }
     }
-    tag_dispatch_rule_id_to_second_slicing_bitset[i] = definite_accepted_tokens_since_second_char;
+    (*tag_dispatch_rule_id_to_second_slicing_bitset)[i] =
+        definite_accepted_tokens_since_second_char;
   }
 }
 
 void GrammarCompilerNoCache::GenerateTokenMaskCacheForScannableStates(
-    decltype(std::make_shared<CompiledGrammar::Impl>()) compiled_grammar_impl
+    decltype(std::make_shared<CompiledGrammar::Impl>()) compiled_grammar_impl,
+    const std::unordered_map<int32_t, DynamicBitset>& tag_dispatch_rule_id_to_second_slicing_bitset
 ) {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
 
