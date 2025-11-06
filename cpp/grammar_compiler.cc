@@ -143,7 +143,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       bool is_root_rule,
       bool fill_reject_indices,
       int* last_rejected_range,
-      const std::string* prev_token,
+      const std::string*& prev_token,
       int* prev_matched_size
   );
 
@@ -629,7 +629,7 @@ bool GrammarMatcherForTokenMaskCache::CheckTokensInInterval(
     bool is_root_rule,
     bool fill_reject_indices,
     int* last_rejected_range,
-    const std::string* prev_token,
+    const std::string*& prev_token,
     int* prev_matched_size
 ) {
   const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
