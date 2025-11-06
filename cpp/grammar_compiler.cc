@@ -27,6 +27,7 @@
 #include "support/thread_safe_cache.h"
 #include "support/utils.h"
 #include "xgrammar/grammar.h"
+#include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
 
@@ -52,12 +53,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
    * no uncertain tokens. Useful for the root rule.
    */
-  AdaptiveTokenMask GetAdaptiveTokenMask(
-      size_t vocab_size,
-      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
-      const std::vector<int32_t>& subtree_nodes_range,
-      bool is_root_rule
-  );
+  AdaptiveTokenMask GetAdaptiveTokenMask(const TokenizerInfo& tokenizer_info, bool is_root_rule);
 
   /*!
    * \brief Get the token mask for the given ParserState.
@@ -69,9 +65,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    * It's used to determine which construction function will be used.
    */
   bool GetTokenMaskWithFirstCharacterCheck(
-      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
+      const TokenizerInfo& tokenizer_info,
       const std::bitset<256>& first_char_mask,
-      const std::vector<int>& subtree_nodes_range,
       bool is_root_rule
   );
 
@@ -321,12 +316,11 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
 }
 
 bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
-    const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
-    const std::bitset<256>& first_char_mask,
-    const std::vector<int>& subtree_nodes_range,
-    bool is_root_rule
+    const TokenizerInfo& tokenizer_info, const std::bitset<256>& first_char_mask, bool is_root_rule
 ) {
   // the pair (a, b) means [a, b). Intialize the possible intervals.
+  const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
+  const auto& subtree_nodes_range = tokenizer_info.GetTrieSubtreeNodesRange();
   std::vector<std::pair<int32_t, int32_t>> possible_intervals;
   int possible_token_num =
       GetPossibleTokenIntervals(sorted_decoded_vocab, first_char_mask, possible_intervals);
@@ -527,11 +521,10 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 }
 
 AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
-    size_t vocab_size,
-    const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
-    const std::vector<int32_t>& subtree_nodes_range,
-    bool is_root_rule
+    const TokenizerInfo& tokenizer_info, bool is_root_rule
 ) {
+  const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
+  const int vocab_size = tokenizer_info.GetVocabSize();
   tmp_accepted_indices_.clear();
   tmp_rejected_indices_.clear();
   tmp_uncertain_indices_.clear();
@@ -586,9 +579,8 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
       }
     }
   }
-  bool rejected_indices_are_filled = GetTokenMaskWithFirstCharacterCheck(
-      sorted_decoded_vocab, first_character_mask, subtree_nodes_range, is_root_rule
-  );
+  bool rejected_indices_are_filled =
+      GetTokenMaskWithFirstCharacterCheck(tokenizer_info, first_character_mask, is_root_rule);
   if (rejected_indices_are_filled) {
     return AdaptiveTokenMask(
         vocab_size,
@@ -732,12 +724,8 @@ void GrammarCompilerNoCache::GenerateTokenMaskCacheForScannableStates(
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
         compiled_grammar_impl->grammar, state, tag_dispatch_rule_id_to_second_slicing_bitset, false
     );
-    auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
-        tokenizer_info_.GetVocabSize(),
-        tokenizer_info_.GetSortedDecodedVocab(),
-        tokenizer_info_.GetTrieSubtreeNodesRange(),
-        is_root_rule
-    );
+    auto cur_adaptive_token_mask_cache =
+        grammar_matcher.GetAdaptiveTokenMask(tokenizer_info_, is_root_rule);
     if (max_threads_ > 1) {
       std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
       compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
