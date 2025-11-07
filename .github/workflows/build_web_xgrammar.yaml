@@ -1,0 +1,38 @@
+name: Build Web-XGrammar
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build emsdk
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+
+      - name: Build Web-XGrammar
+        run: |
+          source ./emsdk/emsdk_env.sh
+          echo "set(XGRAMMAR_BUILD_PYTHON_BINDINGS OFF)" >> cmake/config.cmake
+          cd web
+          npm install
+          npm run build
+
+    # TODO(Linzhang): Tests will fail currently. Need further maintenance.
+    # - name: Run tests
+    #   run: |
+    #     cd web
+    #     npm test
