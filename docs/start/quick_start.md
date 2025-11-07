@@ -62,9 +62,9 @@ generated_ids = generated_ids[0][len(model_inputs.input_ids[0]) :]
 print(tokenizer.decode(generated_ids, skip_special_tokens=True))
 ```
 
-## Very Important Notice
+## Notice: Generation Quality
 
-When applying constrained decoding, it is recommended to **also describe the expected output structure in the prompt**. This is because constrained decoding only affects the sampling stage, but we want the LLM’s underlying probability distribution to already align with the structure as much as possible.
+When applying constrained decoding, it is recommended to **clearly describe the expected output structure in the prompt**. This is because constrained decoding only affects the sampling stage, but we want the LLM’s underlying probability distribution to already align with the structure as much as possible.
 
 ## What to Do Next
 
