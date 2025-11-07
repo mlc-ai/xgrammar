@@ -10,7 +10,6 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <mutex>
 #include <optional>
 #include <type_traits>
 #include <unordered_map>
@@ -726,14 +725,13 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammarImpl(Grammar gr
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)
   // 2. All byte strings (with element_in_string=0, 1, 2, ...)
   // since other positions will be expanded to the above positions
-
-  using TaskCounter = std::conditional_t<kUseMultiThread, ThreadPool::TaskCounter, EmptyHolder>;
-  using TokenMaskMutex = std::conditional_t<kUseMultiThread, std::mutex, EmptyHolder>;
-
-  [[maybe_unused]]
-  auto thread_pool = TaskCounter{*thread_pool_};
-  [[maybe_unused]]
-  auto adaptive_token_mask_cache_mutex = TokenMaskMutex{};
+  [[maybe_unused]] auto task_counter = [&] {
+    if constexpr (kUseMultiThread) {
+      return thread_pool_->CreateTaskCounter();
+    } else {
+      return 0;
+    }
+  }();
 
   const auto get_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
@@ -751,11 +749,14 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammarImpl(Grammar gr
   const auto add_task_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     // Execute depending on whether we use thread_pool
     if constexpr (kUseMultiThread) {
-      thread_pool.Submit([=, &adaptive_token_mask_cache_mutex] {
-        auto cache = get_adaptive_token_mask(state, is_root_rule);
-        const auto lock = std::lock_guard{adaptive_token_mask_cache_mutex};
-        compiled_grammar_impl->adaptive_token_mask_cache[state] = std::move(cache);
-      });
+      task_counter.Submit(
+          // parallel part: construct the mask
+          [=] { return get_adaptive_token_mask(state, is_root_rule); },
+          // protected region, insert into the cache
+          [=](AdaptiveTokenMask&& cache) {
+            compiled_grammar_impl->adaptive_token_mask_cache.try_emplace(state, std::move(cache));
+          }
+      );
     } else {
       compiled_grammar_impl->adaptive_token_mask_cache.try_emplace(
           state, get_adaptive_token_mask(state, is_root_rule)
@@ -818,7 +819,7 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammarImpl(Grammar gr
   }
 
   if constexpr (kUseMultiThread) {
-    thread_pool.WaitUntilComplete();
+    task_counter.WaitUntilComplete();
   }
 
   return CompiledGrammar(compiled_grammar_impl);

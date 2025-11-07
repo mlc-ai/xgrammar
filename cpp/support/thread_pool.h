@@ -31,10 +31,14 @@ class ThreadPool {
  public:
   struct TaskCounter {
    public:
-    explicit TaskCounter(ThreadPool& pool) : m_pool(pool), m_rate_limit(GetLimit(pool)) {
-      m_pool.active_tasks_++;
-    }
-    TaskCounter(ThreadPool& pool, std::size_t limit) : m_pool(pool), m_rate_limit(limit) {
+    // A dummy callback that does nothing
+    inline static constexpr auto kCallback = [] {};
+    inline static constexpr auto kNoLimit = std::numeric_limits<std::size_t>::max();
+
+    explicit TaskCounter(ThreadPool& pool) : TaskCounter(pool, GetLimit(pool)) {}
+    explicit TaskCounter(ThreadPool& pool, std::size_t limit)
+        : m_active(0), m_pool(pool), m_rate_limit(limit) {
+      XGRAMMAR_CHECK(m_rate_limit > 0) << "TaskCounter rate limit must be greater than zero.";
       m_pool.active_tasks_++;
     }
 
@@ -44,20 +48,52 @@ class ThreadPool {
     TaskCounter& operator=(const TaskCounter&) = delete;
     TaskCounter& operator=(TaskCounter&&) = delete;
 
-    void WaitUntilComplete() { return this->WaitUntil(0); }
+    void WaitUntilComplete() {
+      auto lock = std::unique_lock{m_mutex};
+      m_cv.wait(lock, [this] { return m_active == 0; });
+    }
 
-    template <typename F>
-    void Submit(F&& f) {
-      auto function = std::function{[this, task = std::forward<F>(f)] {
-        task();
-        m_active.fetch_sub(1, std::memory_order_relaxed);
-        m_cv.notify_all();
+    template <typename F, typename C = const decltype(kCallback)&>
+    void Submit(F&& f, C&& c = kCallback) {
+      using ResultType = std::invoke_result_t<F>;
+      static_assert(
+          std::is_void_v<ResultType> || std::is_invocable_v<C, ResultType>,
+          "Callback must be invocable with the result of the task."
+      );
+
+      // real task to be executed by the thread pool
+      auto fn = std::function{[this, task = std::forward<F>(f), callback = std::forward<C>(c)] {
+        if constexpr (std::is_void_v<ResultType>) {
+          task();
+          if (HasRateLimit()) {
+            const auto lock = std::lock_guard{m_mutex};
+            callback();
+            m_active -= 1;
+          }
+          m_cv.notify_all();
+        } else {
+          auto result = task();
+          if (HasRateLimit()) {
+            const auto lock = std::lock_guard{m_mutex};
+            callback(std::move(result));
+            m_active -= 1;
+          }
+          m_cv.notify_all();
+        }
       }};
-      this->WaitUntil(m_rate_limit);
-      m_active.fetch_add(1, std::memory_order_relaxed);
+
+      // rate limiting before submitting the task
+      if (HasRateLimit()) {
+        const auto rate_limit = m_rate_limit;
+        auto lock = std::unique_lock{m_mutex};
+        m_active += 1;
+        m_cv.wait(lock, [this, rate_limit] { return m_active <= rate_limit; });
+      }
+
+      // emplace the task into the thread pool
       {
         const auto lock = std::lock_guard{m_pool.queue_mutex_};
-        m_pool.task_queue_.push(std::move(function));
+        m_pool.task_queue_.push(std::move(fn));
       }
       m_pool.queue_condition_.notify_one();
     }
@@ -70,19 +106,12 @@ class ThreadPool {
    private:
     friend class ThreadPool;
 
+    bool HasRateLimit() const { return m_rate_limit != kNoLimit; }
+
     // default no limit, yet we can still implement rate limiting if needed
-    static std::size_t GetLimit([[maybe_unused]] ThreadPool& pool) {
-      return std::numeric_limits<std::size_t>::max();
-    }
+    static std::size_t GetLimit([[maybe_unused]] ThreadPool& pool) { return kNoLimit; }
 
-    void WaitUntil(const std::size_t target) {
-      auto lock = std::unique_lock{m_mutex};
-      m_cv.wait(lock, [this, target] {
-        return m_active.load(std::memory_order_relaxed) <= target;
-      });
-    }
-
-    std::atomic_size_t m_active{0};
+    std::size_t m_active;
     std::condition_variable m_cv;
     std::mutex m_mutex;
     ThreadPool& m_pool;
