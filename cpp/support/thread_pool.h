@@ -65,7 +65,7 @@ class ThreadPool {
       auto fn = std::function{[this, task = std::forward<F>(f), callback = std::forward<C>(c)] {
         if constexpr (std::is_void_v<ResultType>) {
           task();
-          if (HasRateLimit()) {
+          {
             const auto lock = std::lock_guard{m_mutex};
             callback();
             m_active -= 1;
@@ -73,7 +73,7 @@ class ThreadPool {
           m_cv.notify_all();
         } else {
           auto result = task();
-          if (HasRateLimit()) {
+          {
             const auto lock = std::lock_guard{m_mutex};
             callback(std::move(result));
             m_active -= 1;
@@ -83,11 +83,10 @@ class ThreadPool {
       }};
 
       // rate limiting before submitting the task
-      if (HasRateLimit()) {
-        const auto rate_limit = m_rate_limit;
+      {
         auto lock = std::unique_lock{m_mutex};
         m_active += 1;
-        m_cv.wait(lock, [this, rate_limit] { return m_active <= rate_limit; });
+        m_cv.wait(lock, [this] { return m_active <= m_rate_limit; });
       }
 
       // emplace the task into the thread pool
@@ -105,8 +104,6 @@ class ThreadPool {
 
    private:
     friend class ThreadPool;
-
-    bool HasRateLimit() const { return m_rate_limit != kNoLimit; }
 
     // default no limit, yet we can still implement rate limiting if needed
     static std::size_t GetLimit([[maybe_unused]] ThreadPool& pool) { return kNoLimit; }
