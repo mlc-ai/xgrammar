@@ -86,7 +86,7 @@ std::pair<bool, int> _IsSingleTokenBitmask(const DLTensor& bitmask, int vocab_si
   }
 }
 
-void ApplyMaskFP32(
+void ApplyMaskFp32(
     DLTensor* logits,
     const DLTensor& bitmask,
     int vocab_size,
@@ -119,13 +119,13 @@ void ApplyMaskFP32(
   }
 }
 
-void ApplyMaskBF16(
+void ApplyMaskBf16(
     DLTensor* logits,
     const DLTensor& bitmask,
     int vocab_size,
     std::optional<std::vector<int>> indices
 ) {
-  const uint16_t kMinusInfinityBF16 = 0xff80;
+  const uint16_t kMinusInfinityBf16 = 0xff80;
   std::pair<int, int> logits_shape =
       logits->ndim == 2
           ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
@@ -138,7 +138,7 @@ void ApplyMaskBF16(
       DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = kMinusInfinityBF16;
+        logits_ptr[i] = kMinusInfinityBf16;
       }
     }
   } else {
@@ -147,7 +147,7 @@ void ApplyMaskBF16(
       DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = kMinusInfinityBF16;
+        logits_ptr[i] = kMinusInfinityBf16;
       }
     }
   }
@@ -204,9 +204,9 @@ void ApplyTokenBitmaskInplaceCPU(
 
   // Apply mask
   if (logits->dtype.code == kDLFloat && logits->dtype.bits == 32) {
-    ApplyMaskFP32(logits, bitmask, vocab_size, indices);
+    ApplyMaskFp32(logits, bitmask, vocab_size, indices);
   } else if (logits->dtype.code == kDLBfloat && logits->dtype.bits == 16) {
-    ApplyMaskBF16(logits, bitmask, vocab_size, indices);
+    ApplyMaskBf16(logits, bitmask, vocab_size, indices);
   } else {
     XGRAMMAR_LOG(FATAL
     ) << "The provided logits's dtype is not valid: should be float32 or bfloat16";

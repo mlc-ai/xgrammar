@@ -208,8 +208,8 @@ batch_size__vocab_size__masked_cnt__stride__logits_dtype = [
 def test_apply_token_bitmask_inplace_kernel_large(
     batch_size: int, vocab_size: int, masked_cnt: int, stride: int, logits_dtype: str, impl: str
 ):
-    if impl == "cpu" and logits_dtype != "float32":
-        pytest.skip(reason="CPU implementation supports float32 only")
+    if impl == "cpu" and (logits_dtype != "float32" and logits_dtype != "bfloat16"):
+        pytest.skip(reason="CPU implementation supports float32 and bfloat16 only")
     elif impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
 

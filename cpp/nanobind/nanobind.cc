@@ -384,7 +384,7 @@ NB_MODULE(xgrammar_bindings, m) {
   pyKernelsModule
       .def(
           "apply_token_bitmask_inplace_cpu_fp32",
-          &Kernels_ApplyTokenBitmaskInplaceCPUFP32,
+          &Kernels_ApplyTokenBitmaskInplaceCPUFp32,
           nb::arg("logits_ptr"),
           nb::arg("logits_shape"),
           nb::arg("logits_strides"),
@@ -397,7 +397,7 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def(
           "apply_token_bitmask_inplace_cpu_bf16",
-          &Kernels_ApplyTokenBitmaskInplaceCPUBF16,
+          &Kernels_ApplyTokenBitmaskInplaceCPUBf16,
           nb::arg("logits_ptr"),
           nb::arg("logits_shape"),
           nb::arg("logits_strides"),
