@@ -637,7 +637,11 @@ class GrammarCompilerNoCache {
  private:
   /*! \brief The main logic. Compile the grammar with multi-threading. */
   CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
-
+  /*! \brief Optimization for TagDispatch.
+   *  \param compiled_grammar_impl the compiled_grammar to be optimized.
+   *  \param tag_dispatch_rule_id_to_second_slicing_bitset Return value. Mapping from the rule_id to
+   * the definite accepted token mask.
+   */
   void TagDispatchOptimization(
       std::shared_ptr<CompiledGrammar::Impl> compiled_grammar_impl,
       std::unordered_map<int32_t, DynamicBitset>* tag_dispatch_rule_id_to_second_slicing_bitset
