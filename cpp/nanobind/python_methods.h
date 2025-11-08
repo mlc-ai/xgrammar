@@ -36,7 +36,7 @@ std::pair<bool, int> Testing_IsSingleTokenBitmask(
     intptr_t token_bitmask_ptr, std::vector<int64_t> shape, int32_t vocab_size, int32_t index
 );
 
-void Kernels_ApplyTokenBitmaskInplaceCPUFp32(
+void Kernels_ApplyTokenBitmaskInplaceCPU(
     intptr_t logits_ptr,
     std::pair<int64_t, int64_t> logits_shape,
     std::pair<int64_t, int64_t> logits_strides,
@@ -44,18 +44,8 @@ void Kernels_ApplyTokenBitmaskInplaceCPUFp32(
     std::pair<int64_t, int64_t> bitmask_shape,
     std::pair<int64_t, int64_t> bitmask_strides,
     int vocab_size,
-    std::optional<std::vector<int>> indices
-);
-
-void Kernels_ApplyTokenBitmaskInplaceCPUBf16(
-    intptr_t logits_ptr,
-    std::pair<int64_t, int64_t> logits_shape,
-    std::pair<int64_t, int64_t> logits_strides,
-    intptr_t bitmask_ptr,
-    std::pair<int64_t, int64_t> bitmask_shape,
-    std::pair<int64_t, int64_t> bitmask_strides,
-    int vocab_size,
-    std::optional<std::vector<int>> indices
+    std::optional<std::vector<int>> indices,
+    std::string logit_type
 );
 
 std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_grammar);

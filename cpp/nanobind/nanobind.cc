@@ -381,33 +381,20 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("repetition_normalizer", &RepetitionNormalizer::Apply);
 
   auto pyKernelsModule = m.def_submodule("kernels");
-  pyKernelsModule
-      .def(
-          "apply_token_bitmask_inplace_cpu_fp32",
-          &Kernels_ApplyTokenBitmaskInplaceCPUFp32,
-          nb::arg("logits_ptr"),
-          nb::arg("logits_shape"),
-          nb::arg("logits_strides"),
-          nb::arg("bitmask_ptr"),
-          nb::arg("bitmask_shape"),
-          nb::arg("bitmask_strides"),
-          nb::arg("vocab_size"),
-          nb::arg("indices").none(),
-          nb::call_guard<nb::gil_scoped_release>()
-      )
-      .def(
-          "apply_token_bitmask_inplace_cpu_bf16",
-          &Kernels_ApplyTokenBitmaskInplaceCPUBf16,
-          nb::arg("logits_ptr"),
-          nb::arg("logits_shape"),
-          nb::arg("logits_strides"),
-          nb::arg("bitmask_ptr"),
-          nb::arg("bitmask_shape"),
-          nb::arg("bitmask_strides"),
-          nb::arg("vocab_size"),
-          nb::arg("indices").none(),
-          nb::call_guard<nb::gil_scoped_release>()
-      );
+  pyKernelsModule.def(
+      "apply_token_bitmask_inplace_cpu",
+      &Kernels_ApplyTokenBitmaskInplaceCPU,
+      nb::arg("logits_ptr"),
+      nb::arg("logits_shape"),
+      nb::arg("logits_strides"),
+      nb::arg("bitmask_ptr"),
+      nb::arg("bitmask_shape"),
+      nb::arg("bitmask_strides"),
+      nb::arg("vocab_size"),
+      nb::arg("indices").none(),
+      nb::arg("logit_type"),
+      nb::call_guard<nb::gil_scoped_release>()
+  );
 
   auto pyConfigModule = m.def_submodule("config");
   pyConfigModule

@@ -86,12 +86,14 @@ std::pair<bool, int> _IsSingleTokenBitmask(const DLTensor& bitmask, int vocab_si
   }
 }
 
-void ApplyMaskFp32(
+void ApplyMask32Bits(
     DLTensor* logits,
     const DLTensor& bitmask,
     int vocab_size,
     std::optional<std::vector<int>> indices
 ) {
+  XGRAMMAR_CHECK(logits->dtype.code == kDLFloat && logits->dtype.bits == 32)
+      << "The provided logits's dtype is not valid: should be float32";
   std::pair<int, int> logits_shape =
       logits->ndim == 2
           ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
@@ -119,13 +121,28 @@ void ApplyMaskFp32(
   }
 }
 
-void ApplyMaskBf16(
+void ApplyMask16Bits(
     DLTensor* logits,
     const DLTensor& bitmask,
     int vocab_size,
     std::optional<std::vector<int>> indices
 ) {
+  XGRAMMAR_CHECK(logits->dtype.bits == 16)
+      << "The provided logits's dtype is not valid: should be bfloat16 or float16";
+  uint16_t kMinusInfinity;
   const uint16_t kMinusInfinityBf16 = 0xff80;
+  const uint16_t kMinusInfinityFp16 = 0xfc00;
+  switch (logits->dtype.code) {
+    case kDLBfloat:
+      kMinusInfinity = kMinusInfinityBf16;
+      break;
+    case kDLFloat:
+      kMinusInfinity = kMinusInfinityFp16;
+      break;
+    default:
+      XGRAMMAR_LOG(FATAL
+      ) << "The provided logits's dtype is not valid: should be bfloat16 or float16";
+  }
   std::pair<int, int> logits_shape =
       logits->ndim == 2
           ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
@@ -138,7 +155,7 @@ void ApplyMaskBf16(
       DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = kMinusInfinityBf16;
+        logits_ptr[i] = kMinusInfinity;
       }
     }
   } else {
@@ -147,7 +164,7 @@ void ApplyMaskBf16(
       DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = kMinusInfinityBf16;
+        logits_ptr[i] = kMinusInfinity;
       }
     }
   }
@@ -203,13 +220,13 @@ void ApplyTokenBitmaskInplaceCPU(
   }
 
   // Apply mask
-  if (logits->dtype.code == kDLFloat && logits->dtype.bits == 32) {
-    ApplyMaskFp32(logits, bitmask, vocab_size, indices);
-  } else if (logits->dtype.code == kDLBfloat && logits->dtype.bits == 16) {
-    ApplyMaskBf16(logits, bitmask, vocab_size, indices);
+  if (logits->dtype.bits == 32) {
+    ApplyMask32Bits(logits, bitmask, vocab_size, indices);
+  } else if (logits->dtype.bits == 16) {
+    ApplyMask16Bits(logits, bitmask, vocab_size, indices);
   } else {
     XGRAMMAR_LOG(FATAL
-    ) << "The provided logits's dtype is not valid: should be float32 or bfloat16";
+    ) << "The provided logits's dtype is not valid: should be float32 or float16/bfloat16";
   }
 }
 
