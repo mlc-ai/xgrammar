@@ -78,4 +78,4 @@ def apply_token_bitmask_inplace_cpu(
             "float16",
         )
     else:
-        raise ValueError("logits must be of type float32 or bfloat16")
+        raise ValueError("logits must be of type float32 or bfloat16/float16")
