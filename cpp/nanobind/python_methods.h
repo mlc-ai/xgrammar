@@ -44,7 +44,8 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
     std::pair<int64_t, int64_t> bitmask_shape,
     std::pair<int64_t, int64_t> bitmask_strides,
     int vocab_size,
-    std::optional<std::vector<int>> indices
+    std::optional<std::vector<int>> indices,
+    std::string logit_type
 );
 
 std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_grammar);

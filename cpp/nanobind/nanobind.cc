@@ -392,6 +392,7 @@ NB_MODULE(xgrammar_bindings, m) {
       nb::arg("bitmask_strides"),
       nb::arg("vocab_size"),
       nb::arg("indices").none(),
+      nb::arg("logit_type"),
       nb::call_guard<nb::gil_scoped_release>()
   );
 

@@ -208,9 +208,7 @@ batch_size__vocab_size__masked_cnt__stride__logits_dtype = [
 def test_apply_token_bitmask_inplace_kernel_large(
     batch_size: int, vocab_size: int, masked_cnt: int, stride: int, logits_dtype: str, impl: str
 ):
-    if impl == "cpu" and logits_dtype != "float32":
-        pytest.skip(reason="CPU implementation supports float32 only")
-    elif impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
+    if impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
 
     kernel = get_apply_token_bitmask_kernel(impl)
@@ -387,6 +385,42 @@ def test_bool_mask_bitmask_roundtrip(batch_size: int, vocab_size: int):
     bitmask = bool_mask_to_bitmask(bool_mask)
     bool_mask_converted = bitmask_to_bool_mask(bitmask, vocab_size=vocab_size)
     assert torch.equal(bool_mask, bool_mask_converted)
+
+
+def test_apply_token_bitmask_inplace_cpu_bf16():
+
+    neginf = float("-inf")
+    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool, device="cpu")
+    bitmask = torch.tensor([0b1010101010], dtype=torch.int32, device="cpu")
+    logits = torch.tensor(
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], dtype=torch.bfloat16, device="cpu"
+    )
+    expected = torch.where(bool_mask, logits, neginf)
+
+    xgr.apply_token_bitmask_inplace(logits, bitmask)
+    torch.testing.assert_close(logits, expected)
+
+
+@pytest.mark.parametrize(
+    "logits_batch_size, bitmask_batch_size, vocab_size, indices",
+    logits_batch_size__bitmask_batch_size__vocab_size__indices,
+)
+def test_apply_token_bitmask_inplace_indices_bf16(
+    logits_batch_size: int, bitmask_batch_size: int, vocab_size: int, indices: List[int]
+):
+
+    logits = torch.ones(logits_batch_size, vocab_size, dtype=torch.bfloat16)
+    bool_mask = torch.zeros(bitmask_batch_size, vocab_size, dtype=torch.bool)
+    bitmask = bool_mask_to_bitmask(bool_mask)
+    kernel = get_apply_token_bitmask_kernel("cpu")
+
+    logits_expected = logits.clone()
+    logits_expected[indices] = torch.masked_fill(
+        logits_expected[indices], ~bool_mask[indices], float("-inf")
+    )
+
+    kernel(logits, bitmask, indices=indices)
+    torch.testing.assert_close(logits, logits_expected)
 
 
 if __name__ == "__main__":
