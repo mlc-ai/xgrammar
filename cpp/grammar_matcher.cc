@@ -460,6 +460,12 @@ class BatchGrammarMatcher::Impl {
       bool debug_print
   );
 
+  void InitThreadPoolOnce() {
+    if (!thread_pool_.has_value() && max_threads_ > 1) {
+      thread_pool_.emplace(max_threads_);
+    }
+  }
+
  private:
   std::optional<ThreadPool> thread_pool_ = std::nullopt;
   int32_t max_threads_ = 1;
@@ -983,33 +989,25 @@ void BatchGrammarMatcher::Impl::BatchFillNextTokenBitmask(
   XGRAMMAR_CHECK(!indices.has_value() || indices->size() == matchers->size())
       << "The size of indices (" << (indices.has_value() ? indices->size() : 0)
       << ") should be the same as the size of matchers (" << matchers->size() << ").";
-  // Initialize the thread pool if needed. It should be initialized each time,
-  // because ThreadPool cannot be reused after Join().
-  if (max_threads_ > 1) {
-    thread_pool_.emplace(max_threads_);
-  }
+  this->InitThreadPoolOnce();
+  auto fill_next_token_mask = [&](int i) {
+    auto& matcher = (*matchers)[i];
+    int index = indices.has_value() ? (*indices)[i] : i;
+    XGRAMMAR_CHECK(index >= 0 && index < next_token_bitmask->shape[0])
+        << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
+        << ") for batch_id " << i << ".";
+    matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
+  };
   if (!thread_pool_.has_value()) {
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
-      auto& matcher = (*matchers)[i];
-      int index = indices.has_value() ? (*indices)[i] : i;
-      XGRAMMAR_CHECK(index >= 0 && index < next_token_bitmask->shape[0])
-          << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
-          << ") for batch_id " << i << ".";
-      matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
+      fill_next_token_mask(i);
     }
   } else {
-    auto fill_next_token_mask = [&](int32_t batch_id) {
-      auto& matcher = (*matchers)[batch_id];
-      int index = indices.has_value() ? (*indices)[batch_id] : batch_id;
-      XGRAMMAR_CHECK(index >= 0 && index < next_token_bitmask->shape[0])
-          << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
-          << ") for batch_id " << batch_id << ".";
-      matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
-    };
+    auto task_counter = thread_pool_->CreateTaskCounter();
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
-      thread_pool_->Execute([fill_next_token_mask, i]() { fill_next_token_mask(i); });
+      task_counter.Submit([fill_next_token_mask, i] { fill_next_token_mask(i); });
     }
-    thread_pool_->Join();
+    task_counter.WaitUntilComplete();
   }
 }
 

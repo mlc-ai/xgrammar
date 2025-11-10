@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -29,6 +30,12 @@
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
+
+struct EmptyHolder {
+  EmptyHolder() = default;
+  template <typename... Args>
+  explicit EmptyHolder(Args&&...) {}
+};
 
 /************** AdaptiveTokenMaskCache Generator **************/
 
@@ -57,7 +64,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
       const std::vector<int32_t>& subtree_nodes_range,
       bool is_root_rule
-  );
+  ) &&;
 
   /*!
    * \brief Get the token mask for the given ParserState.
@@ -531,7 +538,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
     const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
     const std::vector<int32_t>& subtree_nodes_range,
     bool is_root_rule
-) {
+) && {
   tmp_accepted_indices_.clear();
   tmp_rejected_indices_.clear();
   tmp_uncertain_indices_.clear();
@@ -590,17 +597,20 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
       sorted_decoded_vocab, first_character_mask, subtree_nodes_range, is_root_rule
   );
   if (rejected_indices_are_filled) {
-    return AdaptiveTokenMask(
+    return AdaptiveTokenMask{
         vocab_size,
         sorted_decoded_vocab,
-        tmp_accepted_indices_,
-        tmp_rejected_indices_,
-        tmp_uncertain_indices_
-    );
+        std::move(tmp_accepted_indices_),
+        std::move(tmp_rejected_indices_),
+        std::move(tmp_uncertain_indices_),
+    };
   } else {
-    return AdaptiveTokenMask(
-        vocab_size, sorted_decoded_vocab, tmp_accepted_indices_, tmp_uncertain_indices_
-    );
+    return AdaptiveTokenMask{
+        vocab_size,
+        sorted_decoded_vocab,
+        std::move(tmp_accepted_indices_),
+        std::move(tmp_uncertain_indices_),
+    };
   }
 }
 
@@ -611,8 +621,10 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
  */
 class GrammarCompilerNoCache {
  public:
-  GrammarCompilerNoCache(const TokenizerInfo& tokenizer_info, int max_threads)
-      : tokenizer_info_(tokenizer_info), max_threads_(max_threads) {}
+  GrammarCompilerNoCache(const TokenizerInfo& tokenizer_info, const int max_threads)
+      : tokenizer_info_(tokenizer_info) {
+    if (max_threads > 1) thread_pool_.emplace(max_threads);
+  }
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -635,17 +647,28 @@ class GrammarCompilerNoCache {
 
  private:
   /*! \brief The main logic. Compile the grammar with multi-threading. */
-  CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
+  CompiledGrammar MultiThreadCompileGrammar(Grammar grammar) {
+    // dispatch based on whether thread_pool_ is set
+    if (thread_pool_) {
+      return MultiThreadCompileGrammarImpl<true>(std::move(grammar));
+    } else {
+      return MultiThreadCompileGrammarImpl<false>(std::move(grammar));
+    }
+  }
+
+  template <bool kUseMultiThread>
+  CompiledGrammar MultiThreadCompileGrammarImpl(Grammar grammar);
 
   /*! \brief The vocabulary associated with this storage class. */
   const TokenizerInfo tokenizer_info_;
   /*! \brief The maximum number of threads to use. */
-  const int max_threads_;
+  std::optional<ThreadPool> thread_pool_;
   /*! \brief Mapping from the rule_id to the definite accepted token mask. */
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
 };
 
-CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
+template <bool kUseMultiThread>
+CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammarImpl(Grammar grammar_unoptimized) {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
 
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
@@ -702,47 +725,46 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)
   // 2. All byte strings (with element_in_string=0, 1, 2, ...)
   // since other positions will be expanded to the above positions
+  [[maybe_unused]] auto task_counter = [&] {
+    if constexpr (kUseMultiThread) {
+      return thread_pool_->CreateTaskCounter();
+    } else {
+      return 0;
+    }
+  }();
 
-  // TODO(Charlie): Figure out how to support ThreadPool and std::mutex in WebAssembly.
-  // Only declare ThreadPool and mutex if max_threads > 1, so when max_threads = 1, we do
-  // not need ThreadPool or std::mutex, which throws error in runtime in WebAssembly.
-  std::optional<ThreadPool> thread_pool;
-  std::optional<std::mutex> adaptive_token_mask_cache_mutex;
-  if (max_threads_ > 1) {
-    thread_pool.emplace(max_threads_);
-    adaptive_token_mask_cache_mutex.emplace();
-  }
-
-  auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
+  const auto get_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
         compiled_grammar_impl->grammar, state, tag_dispatch_rule_id_to_second_slicing_bitset, false
     );
-    auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
-        tokenizer_info_.GetVocabSize(),
-        tokenizer_info_.GetSortedDecodedVocab(),
-        tokenizer_info_.GetTrieSubtreeNodesRange(),
-        is_root_rule
-    );
-    if (max_threads_ > 1) {
-      std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
-      compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
-    } else {
-      compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
-    }
+    return std::move(grammar_matcher)
+        .GetAdaptiveTokenMask(
+            tokenizer_info_.GetVocabSize(),
+            tokenizer_info_.GetSortedDecodedVocab(),
+            tokenizer_info_.GetTrieSubtreeNodesRange(),
+            is_root_rule
+        );
   };
 
-  auto add_task_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
+  const auto add_task_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     // Execute depending on whether we use thread_pool
-    if (max_threads_ > 1) {
-      thread_pool->Execute([add_adaptive_token_mask, state, is_root_rule]() {
-        add_adaptive_token_mask(state, is_root_rule);
-      });
+    if constexpr (kUseMultiThread) {
+      task_counter.Submit(
+          // parallel part: construct the mask
+          [=] { return get_adaptive_token_mask(state, is_root_rule); },
+          // protected region, insert into the cache
+          [=](AdaptiveTokenMask&& cache) {
+            compiled_grammar_impl->adaptive_token_mask_cache.try_emplace(state, std::move(cache));
+          }
+      );
     } else {
-      add_adaptive_token_mask(state, is_root_rule);
+      compiled_grammar_impl->adaptive_token_mask_cache.try_emplace(
+          state, get_adaptive_token_mask(state, is_root_rule)
+      );
     }
   };
 
-  auto root_rule_id = compiled_grammar_impl->grammar->GetRootRuleId();
+  const auto root_rule_id = compiled_grammar_impl->grammar->GetRootRuleId();
 
   for (int32_t rule_id = 0; rule_id < static_cast<int>(compiled_grammar_impl->grammar->NumRules());
        ++rule_id) {
@@ -796,8 +818,8 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
     }
   }
 
-  if (max_threads_ > 1) {
-    thread_pool->Join();
+  if constexpr (kUseMultiThread) {
+    task_counter.WaitUntilComplete();
   }
 
   return CompiledGrammar(compiled_grammar_impl);
