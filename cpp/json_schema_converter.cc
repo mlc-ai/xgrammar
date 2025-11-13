@@ -6,10 +6,12 @@
 
 #include <picojson.h>
 
+#include <algorithm>
 #include <climits>
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <numeric>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -2464,33 +2466,54 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
       rule_names.back() = "\"\"";
     }
 
-    // construct 0~(len(properties) - 2) rules
-    for (int i = properties.size() - 2; i >= 0; --i) {
-      const std::string& prop_pattern = prop_patterns[i + 1];
-      const std::string& last_rule_name = rule_names[i + 1];
-      std::string cur_rule_body = mid_sep + " " + prop_pattern + " " + last_rule_name;
-      if (!required.count(properties[i + 1].first)) {
-        cur_rule_body = last_rule_name + " | " + cur_rule_body;
-      } else {
-        is_required[i + 1] = true;
-      }
-      std::string cur_rule_name = rule_name + "_part_" + std::to_string(i);
-      cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
-      rule_names[i] = cur_rule_name;
-    }
-    if (required.count(properties[0].first)) {
-      is_required[0] = true;
-    }
+    int len_properties = properties.size();
+    std::vector<size_t> indices(len_properties);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::vector<std::string> rules;
 
-    // construct the root rule
-    for (int i = 0; i < static_cast<int>(properties.size()); ++i) {
-      if (i != 0) {
-        res += " | ";
+    do {
+      // reset state
+      rule_names.assign(len_properties - 1, "");
+      is_required.assign(len_properties, false);
+      std::string rule = "";
+
+      // construct (len_properties - 1) rules
+      for (int i = len_properties - 2; i >= 0; --i) {
+        size_t idx = indices[i + 1];
+
+        const std::string& prop_pattern = prop_patterns[idx];
+        const std::string& last_rule_name = rule_names[i + 1];
+        std::string cur_rule_body = mid_sep + " " + prop_pattern + " " + last_rule_name;
+        if (!required.count(properties[idx].first)) {
+          cur_rule_body = last_rule_name + " | " + cur_rule_body;
+        } else {
+          is_required[i + 1] = true;
+        }
+        std::string cur_rule_name = rule_name + "_part_" + std::to_string(i);
+        cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
+        rule_names[i] = cur_rule_name;
       }
-      res += "(" + prop_patterns[i] + " " + rule_names[i] + ")";
-      if (is_required[i]) {
-        break;
+
+      if (required.count(properties[indices[0]].first)) {
+        is_required[0] = true;
       }
+
+      // construct the root rule
+      for (int i = 0; i < len_properties; ++i) {
+        if (i != 0) {
+          rule += " | ";
+        }
+        rule += "(" + prop_patterns[indices[i]] + " " + rule_names[i] + ")";
+        if (is_required[i]) {
+          break;
+        }
+      }
+      rules.push_back(std::move(rule));
+    } while (std::next_permutation(indices.begin(), indices.end()));
+
+    for (size_t i = 0; i < rules.size(); ++i) {
+      if (i > 0) res += " | ";
+      res += rules[i];
     }
 
     if (allow_additional && required.empty()) {
