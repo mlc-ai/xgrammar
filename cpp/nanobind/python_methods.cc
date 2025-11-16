@@ -5,6 +5,7 @@
 
 #include "python_methods.h"
 
+#include <dlpack/dlpack.h>
 #include <xgrammar/xgrammar.h>
 
 #include <array>
@@ -88,18 +89,30 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
     std::pair<int64_t, int64_t> bitmask_shape,
     std::pair<int64_t, int64_t> bitmask_strides,
     int vocab_size,
-    std::optional<std::vector<int>> indices
+    std::optional<std::vector<int>> indices,
+    std::string logit_type
 ) {
   std::array<int64_t, 2> logits_shape_arr = {logits_shape.first, logits_shape.second};
   std::array<int64_t, 2> logits_strides_arr = {logits_strides.first, logits_strides.second};
   std::array<int64_t, 2> bitmask_shape_arr = {bitmask_shape.first, bitmask_shape.second};
   std::array<int64_t, 2> bitmask_strides_arr = {bitmask_strides.first, bitmask_strides.second};
 
+  DLDataType logit_dtype;
+  if (logit_type == "float32") {
+    logit_dtype = DLDataType{kDLFloat, 32, 1};
+  } else if (logit_type == "float16") {
+    logit_dtype = DLDataType{kDLFloat, 16, 1};
+  } else if (logit_type == "bfloat16") {
+    logit_dtype = DLDataType{kDLBfloat, 16, 1};
+  } else {
+    XGRAMMAR_LOG(FATAL) << "Unsupported logit type: " << logit_type;
+  }
+
   DLTensor logits_dltensor{
       reinterpret_cast<void*>(logits_ptr),
       DLDevice{kDLCPU, 0},
       2,
-      DLDataType{kDLFloat, 32, 1},
+      logit_dtype,
       logits_shape_arr.data(),
       logits_strides_arr.data(),
       0
