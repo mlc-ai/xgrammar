@@ -83,6 +83,21 @@ else()
   target_compile_definitions(xgrammar PUBLIC XGRAMMAR_ENABLE_CPPTRACE=0)
 endif()
 
+install(TARGETS xgrammar)
+install(
+  DIRECTORY ${CMAKE_SOURCE_DIR}/include/xgrammar
+  DESTINATION include
+  FILES_MATCHING
+  PATTERN "*.h"
+)
+# Install DLPack headers from the submodule
+install(
+  DIRECTORY ${CMAKE_SOURCE_DIR}/3rdparty/dlpack/include/dlpack
+  DESTINATION include
+  FILES_MATCHING
+  PATTERN "*.h"
+)
+
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/nanobind)
   install(TARGETS xgrammar_bindings DESTINATION .)
