@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "../grammar_impl.h"
+#include "../structural_tag.h"
 #include "../support/logging.h"
 #include "../support/utils.h"
 #include "xgrammar/exception.h"
@@ -137,6 +138,16 @@ std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_gramma
 
 Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json) {
   auto result = Grammar::FromStructuralTag(structural_tag_json);
+  if (std::holds_alternative<StructuralTagError>(result)) {
+    ThrowVariantError(std::get<StructuralTagError>(result));
+  }
+  return std::get<Grammar>(result);
+}
+
+Grammar Grammar_FromStructuralTagTemplate(
+    const std::string& template_json_str, const std::string& kwargs_json_str
+) {
+  auto result = FromStructuralTagTemplate(template_json_str, kwargs_json_str);
   if (std::holds_alternative<StructuralTagError>(result)) {
     ThrowVariantError(std::get<StructuralTagError>(result));
   }

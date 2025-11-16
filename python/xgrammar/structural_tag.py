@@ -29,7 +29,7 @@ class JSONSchemaFormat(BaseModel):
 
     type: Literal["json_schema"] = "json_schema"
     """The type of the format."""
-    json_schema: Union[bool, Dict[str, Any]]
+    json_schema: Union[bool, Dict[str, Any], str]
     """The JSON schema."""
 
 
@@ -61,7 +61,7 @@ class QwenXMLParameterFormat(BaseModel):
     type: Literal["qwen_xml_parameter"] = "qwen_xml_parameter"
     """The type of the format."""
 
-    json_schema: Union[bool, Dict[str, Any]]
+    json_schema: Union[bool, Dict[str, Any], str]
     """The JSON schema for the parameters of the function calling."""
 
 
