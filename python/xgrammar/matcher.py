@@ -393,6 +393,7 @@ class BatchGrammarMatcher(XGRObject):
 
     def __init__(self, max_threads: Union[int, Literal["auto"]] = "auto") -> None:
         """Construct the batch grammar matcher.
+
         Parameters
         ----------
         max_threads : Union[int, Literal["auto"]], default: "auto"
