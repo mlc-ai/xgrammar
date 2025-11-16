@@ -431,3 +431,45 @@ class Grammar(XGRObject):
             When the __VERSION__ field in the JSON string is not the same as the current version.
         """
         return Grammar._create_from_handle(_core.Grammar.deserialize_json(json_string))
+
+    @staticmethod
+    def from_structural_tag_template(
+        template_structural_tag: Union[str, Dict[str, Any], StructuralTag],
+        **kwargs: Union[List[Dict[str, Any]], Dict[str, Any], str],
+    ) -> "Grammar":
+        """Apply a structural tag template to create a grammar. The template is a JSON string
+        representing a structural tag, with placeholders for the tag items, or a dictionary.
+        The placeholders are specified as keyword arguments, where the key is the placeholder
+        name, and the value is a list of tag items to replace the placeholder.
+
+        Parameters
+        ----------
+        template_structural_tag : Union[str, Dict[str, Any], StructuralTag]
+            The structural tag template as a JSON string or a dictionary.
+        **kwargs : Union[List[Dict[str, Any]], Dict[str, Any], str]
+            The placeholders and their corresponding tag items.
+
+        Returns
+        -------
+        grammar : Grammar
+            The constructed grammar from the structural tag template.
+
+        Raises
+        ------
+        ValueError
+            When the template_json_str is not a string or a dictionary.
+        TypeError
+            When the values in kwargs are not lists of dictionaries.
+        InvalidJSONError
+            When the template_json_str is not a valid JSON string.
+        InvalidStructuralTagError
+            When the structural tag template is not valid, or the values for
+            the placeholders are not found in kwargs.
+        """
+
+        template_json_str = _convert_instance_to_str(template_structural_tag)
+        kwargs_json_str = json.dumps(obj=kwargs)
+
+        return Grammar._create_from_handle(
+            _core.Grammar.from_structural_tag_template(template_json_str, kwargs_json_str)
+        )

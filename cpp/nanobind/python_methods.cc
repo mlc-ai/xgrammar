@@ -18,6 +18,7 @@
 #include "../support/logging.h"
 #include "../support/utils.h"
 #include "xgrammar/exception.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -141,6 +142,26 @@ Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json) {
     ThrowVariantError(std::get<StructuralTagError>(result));
   }
   return std::get<Grammar>(result);
+}
+
+Grammar Grammar_FromStructuralTagTemplate(
+    const std::string& template_json_str, const std::string& kwargs_json_str
+) {
+  auto result = Grammar::FromStructuralTagTemplate(template_json_str, kwargs_json_str);
+  if (std::holds_alternative<StructuralTagError>(result)) {
+    ThrowVariantError(std::get<StructuralTagError>(result));
+  }
+  return std::get<Grammar>(result);
+}
+
+std::string StructuralTag_FromTemplate(
+    const std::string& structural_tag_template_json, const std::string& values_json_str
+) {
+  auto result = FromTemplate(structural_tag_template_json, values_json_str);
+  if (result.IsErr()) {
+    ThrowVariantError(std::move(result).UnwrapErr());
+  }
+  return std::move(result).Unwrap().ToJSON();
 }
 
 Grammar Grammar_DeserializeJSON(const std::string& json_string) {
