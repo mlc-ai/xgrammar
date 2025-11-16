@@ -100,10 +100,7 @@ def apply_token_bitmask_inplace_triton(
 
     if indices is not None:
         indices_cpu = torch.tensor(indices, dtype=torch.int32)
-        indices = indices_cpu.to(
-            device=logits.device, 
-            non_blocking=True,
-        )
+        indices = indices_cpu.to(device=logits.device, non_blocking=True)
 
     grid = (NUM_SMS,)
 
