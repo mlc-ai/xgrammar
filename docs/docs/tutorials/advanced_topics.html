@@ -145,6 +145,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Advanced Topics</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#multi-threaded-grammar-compilation-and-cache">Multi-threaded Grammar Compilation and Cache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#handle-padding-to-the-llm-output-logits">Handle Padding to the LLM Output Logits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#generate-token-masks-in-a-batch">Generate Token Masks in a Batch</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="structural_tag.html">Structural Tag Usage</a></li>
@@ -295,6 +296,32 @@
 <span class="n">vocab_size</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">vocab_size</span>
 </pre></div>
 </div>
+</section>
+<section id="generate-token-masks-in-a-batch">
+<h2>Generate Token Masks in a Batch<a class="headerlink" href="#generate-token-masks-in-a-batch" title="Permalink to this heading">¶</a></h2>
+<p>XGrammar provides a new class <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher" title="xgrammar.BatchGrammarMatcher"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.BatchGrammarMatcher</span></code></span></a> for users to generate token masks in a batch.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">batch_grammar_matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="p">(</span><span class="n">max_threads</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">BatchGrammarMatcher</span></code> needs a parameter <code class="docutils literal notranslate"><span class="pre">max_threads</span></code> to initialize. It represents the maximum threads in <code class="docutils literal notranslate"><span class="pre">fill_next_token_mask</span></code>. If not set, it will use std::thread::hardware_concurrency() / 2 as the default value.</p>
+<p><code class="docutils literal notranslate"><span class="pre">BatchGrammarMatcher</span></code> has three methods: <code class="docutils literal notranslate"><span class="pre">batch_fill_next_token_bitmask</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_accept_token</span></code>, and <code class="docutils literal notranslate"><span class="pre">batch_accept_string</span></code> to handle the mask generation tasks. Here is an example to use <code class="docutils literal notranslate"><span class="pre">batch_fill_next_token_bitmask</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">matchers</span> <span class="o">=</span> <span class="p">[</span><span class="n">grammar_matcher_1</span><span class="p">,</span> <span class="n">grammar_matcher_2</span><span class="p">,</span> <span class="n">grammar_matcher_3</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+<span class="n">batch_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">matchers</span><span class="p">)</span>
+<span class="n">token_bitmask</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">allocate_token_bitmask</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span>
+<span class="n">batch_grammar_matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="p">(</span><span class="n">max_threads</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+<span class="n">batch_grammar_matcher</span><span class="o">.</span><span class="n">batch_fill_next_token_bitmask</span><span class="p">(</span><span class="n">matchers</span><span class="p">,</span> <span class="n">token_bitmask</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Each matcher will store its token mask in the corresponding tensor. For <code class="docutils literal notranslate"><span class="pre">batch_accept_token</span></code> and <code class="docutils literal notranslate"><span class="pre">batch_accept_string</span></code>, each matcher will try to accept the corresponding token_id/str.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>    <span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">token_id_1</span><span class="p">,</span> <span class="n">token_id_2</span><span class="p">,</span> <span class="n">token_id_3</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="o">.</span><span class="n">batch_accept_token</span><span class="p">(</span><span class="n">matchers</span><span class="p">,</span> <span class="n">inputs</span><span class="p">)</span> <span class="c1"># List[Bool]</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>    <span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">str_1</span><span class="p">,</span> <span class="n">str_2</span><span class="p">,</span> <span class="n">str_3</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="o">.</span><span class="n">batch_accept_string</span><span class="p">(</span><span class="n">matchers</span><span class="p">,</span> <span class="n">inputs</span><span class="p">)</span> <span class="c1"># List[Bool]</span>
+</pre></div>
+</div>
+<p>Each boolean value in <code class="docutils literal notranslate"><span class="pre">results</span></code> represents whether the input is accepted by the corresponding matcher.</p>
 </section>
 </section>
 

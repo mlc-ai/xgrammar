@@ -140,6 +140,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#preparation">Preparation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#compile-grammar">Compile Grammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#generate-with-grammar">Generate with grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#notice-generation-quality">Notice: Generation Quality</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#what-to-do-next">What to Do Next</a></li>
 </ul>
 </li>
@@ -308,6 +309,10 @@ specification.</p>
 <span class="nb">print</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">generated_ids</span><span class="p">,</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
 </pre></div>
 </div>
+</section>
+<section id="notice-generation-quality">
+<h2>Notice: Generation Quality<a class="headerlink" href="#notice-generation-quality" title="Permalink to this heading">¶</a></h2>
+<p>When applying constrained decoding, it is recommended to <strong>clearly describe the expected output structure in the prompt</strong>. This is because constrained decoding only affects the sampling stage, but we want the LLM’s underlying probability distribution to already align with the structure as much as possible.</p>
 </section>
 <section id="what-to-do-next">
 <h2>What to Do Next<a class="headerlink" href="#what-to-do-next" title="Permalink to this heading">¶</a></h2>

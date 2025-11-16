@@ -631,14 +631,15 @@ window.addEventListener("load", () => mermaid.run());
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">_debug_print_internal_state</span><span class="p">()</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">BatchGrammarMatcher</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
+<div class="viewcode-block" id="BatchGrammarMatcher"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">BatchGrammarMatcher</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A batch version of GrammarMatcher that can fill the next token bitmask for multiple</span>
 <span class="sd">    matchers in parallel. It utilizes multiple threads to speed up the computation. It is</span>
 <span class="sd">    especially useful when the batch size is large.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">max_threads</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="BatchGrammarMatcher.__init__"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">max_threads</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct the batch grammar matcher.</span>
+
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        max_threads : Union[int, Literal[&quot;auto&quot;]], default: &quot;auto&quot;</span>
@@ -646,9 +647,9 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">            max_threads will be set to std::thread::hardware_concurrency() / 2.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_init_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="p">(</span><span class="n">max_threads</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="p">(</span><span class="n">max_threads</span><span class="p">))</span></div>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">batch_fill_next_token_bitmask</span><span class="p">(</span>
+<div class="viewcode-block" id="BatchGrammarMatcher.batch_fill_next_token_bitmask"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.batch_fill_next_token_bitmask">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">batch_fill_next_token_bitmask</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">],</span>
         <span class="n">bitmask</span><span class="p">:</span> <span class="n">ArrayLike</span><span class="p">,</span>
@@ -682,9 +683,9 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">matcher_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">matcher</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">matcher</span> <span class="ow">in</span> <span class="n">matchers</span><span class="p">]</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">batch_fill_next_token_bitmask</span><span class="p">(</span><span class="n">matcher_handles</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">batch_fill_next_token_bitmask</span><span class="p">(</span><span class="n">matcher_handles</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
-    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="BatchGrammarMatcher.batch_accept_token"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.batch_accept_token">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">batch_accept_token</span><span class="p">(</span>
         <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">],</span> <span class="n">tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">bool</span><span class="p">]:</span>
@@ -712,9 +713,9 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">            If the sizes of matchers and tokens do not match.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">matcher_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">matcher</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">matcher</span> <span class="ow">in</span> <span class="n">matchers</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="o">.</span><span class="n">batch_accept_token</span><span class="p">(</span><span class="n">matcher_handles</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="o">.</span><span class="n">batch_accept_token</span><span class="p">(</span><span class="n">matcher_handles</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
-    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="BatchGrammarMatcher.batch_accept_string"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.batch_accept_string">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">batch_accept_string</span><span class="p">(</span>
         <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">],</span>
         <span class="n">strings</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">]],</span>
@@ -744,7 +745,7 @@ window.addEventListener("load", () => mermaid.run());
 <span class="sd">            If the sizes of matchers and strings do not match.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">matcher_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">matcher</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">matcher</span> <span class="ow">in</span> <span class="n">matchers</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="o">.</span><span class="n">batch_accept_string</span><span class="p">(</span><span class="n">matcher_handles</span><span class="p">,</span> <span class="n">strings</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="o">.</span><span class="n">batch_accept_string</span><span class="p">(</span><span class="n">matcher_handles</span><span class="p">,</span> <span class="n">strings</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
