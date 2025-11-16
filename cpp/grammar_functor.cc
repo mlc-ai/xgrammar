@@ -73,6 +73,18 @@ class SubGrammarAdderImpl : public GrammarMutator {
     );
   }
 
+  int32_t VisitTagDispatch(const GrammarExpr& grammar_expr) final {
+    Grammar::Impl::TagDispatch old_tag_dispatch = base_grammar_->GetTagDispatch(grammar_expr);
+    Grammar::Impl::TagDispatch new_tag_dispatch;
+    new_tag_dispatch.stop_eos = old_tag_dispatch.stop_eos;
+    for (const auto& [tag, rule_id] : old_tag_dispatch.tag_rule_pairs) {
+      new_tag_dispatch.tag_rule_pairs.emplace_back(tag, new_rule_ids_names[rule_id].first);
+    }
+    new_tag_dispatch.stop_str = old_tag_dispatch.stop_str;
+    new_tag_dispatch.loop_after_dispatch = old_tag_dispatch.loop_after_dispatch;
+    return builder_->AddTagDispatch(new_tag_dispatch);
+  }
+
   std::vector<std::pair<int32_t, std::string>> new_rule_ids_names;
 };
 

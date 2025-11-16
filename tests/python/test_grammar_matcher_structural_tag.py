@@ -1,5 +1,6 @@
 import json
 import sys
+import threading
 import time
 from typing import List
 
@@ -338,6 +339,37 @@ def test_utf8_structural_tag_begin_end():
     ]
     triggers = ["<｜tool▁calls▁begin｜>"]
     _ = compiler.compile_structural_tag(structures, triggers)
+
+
+@pytest.mark.hf_token_required
+def test_pressure_structural_tag():
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(model, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1)
+    threads = []
+    start = "start"
+    schema = {"type": "object", "properties": {"arg": {"type": "string"}}}
+    end = "end"
+
+    def worker(idx: int):
+        tag = xgr.StructuralTagItem(begin=start, schema=schema, end=end)
+        triggers = [start]
+        stag_grammar = xgr.Grammar.from_structural_tag([tag], triggers)
+        start_grammar = xgr.Grammar.from_ebnf("root ::= [a-z] root | [a-z]")
+        grammar = start_grammar
+        for _ in range(idx):
+            grammar = grammar.concat(grammar, start_grammar)
+        final_grammar = xgr.Grammar.concat(grammar, stag_grammar)
+        _ = compiler.compile_grammar(final_grammar)
+
+    for i in range(128):
+        t = threading.Thread(target=worker, args=(i,))
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
 
 
 if __name__ == "__main__":
