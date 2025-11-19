@@ -99,7 +99,8 @@ def apply_token_bitmask_inplace_triton(
     num_rows = len(indices) if indices is not None else logits.shape[0] if logits.ndim == 2 else 1
 
     if indices is not None:
-        indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
+        indices_cpu = torch.tensor(indices, dtype=torch.int32)
+        indices = indices_cpu.to(device=logits.device, non_blocking=True)
 
     grid = (NUM_SMS,)
 
