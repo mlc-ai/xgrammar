@@ -1,14 +1,14 @@
-git user_name, github user_name
-Linzhang Li,Seven-Streams
-Yuchuan,Seven-Streams
-Alexander Jiang,zanderjiang
-Zac Bowling,zbowling
-Yixin Dong,Ubospica
-Ruihang Lai,MasterJH5574
-Charlie Ruan,CharlieFRuan
-Tianqi Chen,tqchen
-Alex Trotta,Ahajha
-Jialin Ouyang,Jialin
-Yi Wang,wangkuiyi
-Enwei Zhu,syuoni
-Zihao Ye,yezihao
+git user_name, github user_name, replacement user_name(due to write access)
+Alex Trotta,Ahajha,Ubospica
+Alexander Jiang,zanderjiang,Ubospica
+Charlie Ruan,CharlieFRuan,CharlieFRuan
+Enwei Zhu,syuoni,Ubospica
+Jialin Ouyang,Jialin,Ubospica
+Linzhang Li,Seven-Streams,Seven-Streams
+Ruihang Lai,MasterJH5574,MasterJH5574
+Tianqi Chen,tqchen,tqchen
+Zac Bowling,zbowling,Ubospica
+Yi Wang,wangkuiyi,Ubospica
+Yixin Dong,Ubospica,Ubospica
+Yuchuan,Seven-Streams,Seven-Streams
+Zihao Ye,yezihao,Ubospica
