@@ -3,9 +3,9 @@ owners(){
   for f in $(git ls-files); do
     # filename
     echo -n "$f "
-    # author emails if loc distribution >= 30%
-    git fame --show=name,email -snwMC --incl "$f" | tr '/' '|' \
-      | awk -F '|' '(NR>6 && $6>=30) {print $2}' \
+    # authors if loc distribution >= 30%
+    git fame -snwMC --incl "$f" | tr '/' '|' \
+      | awk -F '|' '(NR>6 && $6>=30) { sub(/^ +/, "", $2); print "@"$2 }' \
       | xargs echo
   done
 }
