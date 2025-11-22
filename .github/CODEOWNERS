@@ -1,224 +1,225 @@
 .clang-format @Ubospica
-.cmake-format.yaml @Yixin Dong
-.github/ISSUE_TEMPLATE/bug_report.yml @Linzhang Li
-.github/ISSUE_TEMPLATE/feature_request.yml @Linzhang Li
-.github/workflows/benchmark.yaml @Alexander Jiang
-.github/workflows/build_and_release.yaml @Zac Bowling
-.github/workflows/build_web_xgrammar.yaml @Linzhang Li @DarkSharpness
-.github/workflows/close_issues.yaml @Linzhang Li @Yixin Dong
-.github/workflows/documentation.yaml @Ruihang Lai
+.cmake-format.yaml @Ubospica
+.github/CODEOWNERS @Seven-Streams
+.github/ISSUE_TEMPLATE/bug_report.yml @Seven-Streams
+.github/ISSUE_TEMPLATE/feature_request.yml @Seven-Streams
+.github/name_mapping.csv
+.github/workflows/benchmark.yaml @zanderjiang
+.github/workflows/build_and_release.yaml @zbowling
+.github/workflows/build_web_xgrammar.yaml @Seven-Streams @DarkSharpness
+.github/workflows/close_issues.yaml @Seven-Streams @Ubospica
+.github/workflows/documentation.yaml @MasterJH5574
 .github/workflows/routine_unit_test.yaml @DarkSharpness
-.github/workflows/tmate.yaml @Yixin Dong
+.github/workflows/tmate.yaml @Ubospica
 .github/workflows/unit_test.yaml @DarkSharpness
 .gitignore @Ubospica
-.gitmodules @Yixin Dong @Ubospica
-.pre-commit-config.yaml @Ubospica @Yixin Dong
-.yamlfmt @Yixin Dong
+.gitmodules @Ubospica @Ubospica
+.pre-commit-config.yaml @Ubospica @Ubospica
+.yamlfmt @Ubospica
 3rdparty/cpptrace
 3rdparty/dlpack
 3rdparty/googletest
 3rdparty/picojson/picojson.h @Ubospica
 3rdparty/picojson/test_picojson.cpp @Ubospica
-CMakeLists.txt @Yixin Dong
-CODEOWNERS @Yuchuan
-CONTRIBUTING.md @Yuchuan
+CMakeLists.txt @Ubospica
+CONTRIBUTING.md @Seven-Streams
 LICENSE @Ubospica
 NOTICE @Tianqi Chen
-README.md @Yixin Dong
+README.md @Ubospica
 assets/logo.png
-assets/logo.svg @Yixin Dong
+assets/logo.svg @Ubospica
 assets/logo_square.png
-cmake/config.cmake @Yixin Dong @Linzhang Li
-cpp/compiled_grammar.cc @Yixin Dong @DarkSharpness
-cpp/compiled_grammar_impl.h @Yixin Dong @DarkSharpness
+cmake/config.cmake @Ubospica @Seven-Streams
+cpp/compiled_grammar.cc @Ubospica @DarkSharpness
+cpp/compiled_grammar_impl.h @Ubospica @DarkSharpness
 cpp/config.cc @DarkSharpness
-cpp/earley_parser.cc @Linzhang Li
-cpp/earley_parser.h @Linzhang Li
-cpp/ebnf_script_creator.h @Yixin Dong
-cpp/fsm.cc @Linzhang Li @Yixin Dong
-cpp/fsm.h @Yixin Dong
-cpp/fsm_builder.cc @Yixin Dong @Linzhang Li
-cpp/fsm_builder.h @Yixin Dong
+cpp/earley_parser.cc @Seven-Streams
+cpp/earley_parser.h @Seven-Streams
+cpp/ebnf_script_creator.h @Ubospica
+cpp/fsm.cc @Seven-Streams @Ubospica
+cpp/fsm.h @Ubospica
+cpp/fsm_builder.cc @Ubospica @Seven-Streams
+cpp/fsm_builder.h @Ubospica
 cpp/grammar.cc @Ubospica
-cpp/grammar_builder.h @Ubospica @Yixin Dong
-cpp/grammar_compiler.cc @Linzhang Li @Yixin Dong
-cpp/grammar_functor.cc @Linzhang Li @Yixin Dong
-cpp/grammar_functor.h @Yixin Dong @Ubospica
-cpp/grammar_impl.h @Ubospica @Yixin Dong
-cpp/grammar_matcher.cc @Yixin Dong @Ubospica
-cpp/grammar_parser.cc @Yixin Dong
-cpp/grammar_parser.h @Yixin Dong @Ubospica
-cpp/grammar_printer.cc @Ubospica @Yixin Dong
-cpp/grammar_printer.h @Ubospica @Yixin Dong
+cpp/grammar_builder.h @Ubospica @Ubospica
+cpp/grammar_compiler.cc @Seven-Streams @Ubospica
+cpp/grammar_functor.cc @Seven-Streams @Ubospica
+cpp/grammar_functor.h @Ubospica @Ubospica
+cpp/grammar_impl.h @Ubospica @Ubospica
+cpp/grammar_matcher.cc @Ubospica @Ubospica
+cpp/grammar_parser.cc @Ubospica
+cpp/grammar_parser.h @Ubospica @Ubospica
+cpp/grammar_printer.cc @Ubospica @Ubospica
+cpp/grammar_printer.h @Ubospica @Ubospica
 cpp/json_schema_converter.cc
-cpp/json_schema_converter.h @Yixin Dong @Linzhang Li
-cpp/nanobind/CMakeLists.txt @Alex Trotta @Yixin Dong
+cpp/json_schema_converter.h @Ubospica @Seven-Streams
+cpp/nanobind/CMakeLists.txt @Alex Trotta @Ubospica
 cpp/nanobind/nanobind.cc @Alex Trotta
-cpp/nanobind/python_methods.cc @Yixin Dong
-cpp/nanobind/python_methods.h @Yixin Dong
-cpp/regex_converter.cc @Yixin Dong
-cpp/regex_converter.h @Yixin Dong
-cpp/structural_tag.cc @Yixin Dong
-cpp/structural_tag.h @Yixin Dong
-cpp/support/compact_2d_array.h @Yixin Dong
+cpp/nanobind/python_methods.cc @Ubospica
+cpp/nanobind/python_methods.h @Ubospica
+cpp/regex_converter.cc @Ubospica
+cpp/regex_converter.h @Ubospica
+cpp/structural_tag.cc @Ubospica
+cpp/structural_tag.h @Ubospica
+cpp/support/compact_2d_array.h @Ubospica
 cpp/support/container.h @DarkSharpness
-cpp/support/cpptrace.h @Yixin Dong
-cpp/support/dynamic_bitset.h @Ubospica @Yixin Dong
+cpp/support/cpptrace.h @Ubospica
+cpp/support/dynamic_bitset.h @Ubospica @Ubospica
 cpp/support/encoding.h @Ubospica
 cpp/support/int_set.h @Ubospica
 cpp/support/json_serializer.h @DarkSharpness
 cpp/support/logging.cc @Ubospica
 cpp/support/logging.h @Ubospica
-cpp/support/memory_size.h @Yixin Dong @DarkSharpness
-cpp/support/recursion_guard.cc @Yixin Dong
-cpp/support/recursion_guard.h @Yixin Dong
+cpp/support/memory_size.h @Ubospica @DarkSharpness
+cpp/support/recursion_guard.cc @Ubospica
+cpp/support/recursion_guard.h @Ubospica
 cpp/support/reflection.h @DarkSharpness
-cpp/support/thread_pool.h @Yixin Dong
-cpp/support/thread_safe_cache.h @DarkSharpness @Yixin Dong
-cpp/support/union_find_set.h @Linzhang Li
-cpp/support/utils.h @Yixin Dong
-cpp/testing.cc @Yixin Dong
-cpp/testing.h @Yixin Dong
-cpp/tokenizer_info.cc @Yixin Dong
-cpp/tokenizer_info_impl.h @Yixin Dong @DarkSharpness
-docs/.gitignore @Ruihang Lai @Yixin Dong
-docs/Makefile @Ruihang Lai
-docs/README.md @Ruihang Lai
-docs/_static/css/fix_text_selection.css @Yixin Dong
+cpp/support/thread_pool.h @Ubospica
+cpp/support/thread_safe_cache.h @DarkSharpness @Ubospica
+cpp/support/union_find_set.h @Seven-Streams
+cpp/support/utils.h @Ubospica
+cpp/testing.cc @Ubospica
+cpp/testing.h @Ubospica
+cpp/tokenizer_info.cc @Ubospica
+cpp/tokenizer_info_impl.h @Ubospica @DarkSharpness
+docs/.gitignore @MasterJH5574 @Ubospica
+docs/Makefile @MasterJH5574
+docs/README.md @MasterJH5574
+docs/_static/css/fix_text_selection.css @Ubospica
 docs/_static/img/logo.png
-docs/_static/img/mlc-logo-with-text-landscape.svg @Ruihang Lai
-docs/api/python/bitmask_ops.rst @Yixin Dong
-docs/api/python/compiled_grammar.rst @Yixin Dong
-docs/api/python/config.rst @Yixin Dong
-docs/api/python/exception.rst @Yixin Dong
-docs/api/python/grammar.rst @Yixin Dong
-docs/api/python/grammar_compiler.rst @Yixin Dong
-docs/api/python/grammar_matcher.rst @Yixin Dong
-docs/api/python/index.rst @Yixin Dong
-docs/api/python/structural_tag.rst @Yixin Dong
-docs/api/python/testing.rst @Yixin Dong
-docs/api/python/tokenizer_info.rst @Yixin Dong
-docs/build_docs.sh @Yixin Dong
-docs/conf.py @Yixin Dong @Ruihang Lai
-docs/developer_guide/building_docs.md @Yixin Dong
-docs/developer_guide/code_coverage.md @Yixin Dong @Linzhang Li
-docs/index.rst @Yixin Dong
-docs/requirements.txt @Yixin Dong
-docs/start/installation.md @Yixin Dong
-docs/start/quick_start.md @Yixin Dong @Charlie Ruan
-docs/tutorials/advanced_structural_tag.md @Yixin Dong
-docs/tutorials/advanced_topics.md @Yixin Dong @Linzhang Li
-docs/tutorials/constrained_decoding.md @Yixin Dong
-docs/tutorials/ebnf_guided_generation.md @Charlie Ruan @Yixin Dong
-docs/tutorials/engine_integration.md @Charlie Ruan @Yixin Dong
-docs/tutorials/json_generation.md @Charlie Ruan @Yixin Dong
-docs/tutorials/structural_tag.md @Yixin Dong
-docs/tutorials/workflow_of_xgrammar.md @Yixin Dong
-docs/wrap_run_llm.py @Yixin Dong
-docs/xgrammar_features/javascript_api.md @Yixin Dong
-docs/xgrammar_features/runtime_safeguards.md @Yixin Dong
-docs/xgrammar_features/serialization.md @DarkSharpness @Yixin Dong
-examples/benchmark/README.md @Jialin Ouyang @Yixin Dong
+docs/_static/img/mlc-logo-with-text-landscape.svg @MasterJH5574
+docs/api/python/bitmask_ops.rst @Ubospica
+docs/api/python/compiled_grammar.rst @Ubospica
+docs/api/python/config.rst @Ubospica
+docs/api/python/exception.rst @Ubospica
+docs/api/python/grammar.rst @Ubospica
+docs/api/python/grammar_compiler.rst @Ubospica
+docs/api/python/grammar_matcher.rst @Ubospica
+docs/api/python/index.rst @Ubospica
+docs/api/python/structural_tag.rst @Ubospica
+docs/api/python/testing.rst @Ubospica
+docs/api/python/tokenizer_info.rst @Ubospica
+docs/build_docs.sh @Ubospica
+docs/conf.py @Ubospica @MasterJH5574
+docs/developer_guide/building_docs.md @Ubospica
+docs/developer_guide/code_coverage.md @Ubospica @Seven-Streams
+docs/index.rst @Ubospica
+docs/requirements.txt @Ubospica
+docs/start/installation.md @Ubospica
+docs/start/quick_start.md @Ubospica @CharlieFRuan
+docs/tutorials/advanced_structural_tag.md @Ubospica
+docs/tutorials/advanced_topics.md @Ubospica @Seven-Streams
+docs/tutorials/constrained_decoding.md @Ubospica
+docs/tutorials/ebnf_guided_generation.md @CharlieFRuan @Ubospica
+docs/tutorials/engine_integration.md @CharlieFRuan @Ubospica
+docs/tutorials/json_generation.md @CharlieFRuan @Ubospica
+docs/tutorials/structural_tag.md @Ubospica
+docs/tutorials/workflow_of_xgrammar.md @Ubospica
+docs/wrap_run_llm.py @Ubospica
+docs/xgrammar_features/javascript_api.md @Ubospica
+docs/xgrammar_features/runtime_safeguards.md @Ubospica
+docs/xgrammar_features/serialization.md @DarkSharpness @Ubospica
+examples/benchmark/README.md @Jialin Ouyang @Ubospica
 examples/benchmark/bench_apply_token_bitmask_inplace.py @Jialin Ouyang @Enwei Zhu
-examples/benchmark/bench_grammar_compile_mask_gen.py @Yixin Dong
-examples/benchmark/cibench_grammar_compile_mask_gen.py @Alexander Jiang
-examples/hf_transformers/transformers_example.py @Charlie Ruan
-include/xgrammar/compiler.h @Yixin Dong
+examples/benchmark/bench_grammar_compile_mask_gen.py @Ubospica
+examples/benchmark/cibench_grammar_compile_mask_gen.py @zanderjiang
+examples/hf_transformers/transformers_example.py @CharlieFRuan
+include/xgrammar/compiler.h @Ubospica
 include/xgrammar/config.h @DarkSharpness
-include/xgrammar/exception.h @Yixin Dong @DarkSharpness
-include/xgrammar/grammar.h @Yixin Dong
-include/xgrammar/matcher.h @Yixin Dong
-include/xgrammar/object.h @Yixin Dong @Ubospica
-include/xgrammar/tokenizer_info.h @Yixin Dong @DarkSharpness
-include/xgrammar/xgrammar.h @Yixin Dong @Ubospica
-pyproject.toml @Zac Bowling
-python/xgrammar/__init__.py @Yixin Dong
-python/xgrammar/base.py @Yixin Dong
-python/xgrammar/compiler.py @Yixin Dong
-python/xgrammar/config.py @Yixin Dong
+include/xgrammar/exception.h @Ubospica @DarkSharpness
+include/xgrammar/grammar.h @Ubospica
+include/xgrammar/matcher.h @Ubospica
+include/xgrammar/object.h @Ubospica @Ubospica
+include/xgrammar/tokenizer_info.h @Ubospica @DarkSharpness
+include/xgrammar/xgrammar.h @Ubospica @Ubospica
+pyproject.toml @zbowling
+python/xgrammar/__init__.py @Ubospica
+python/xgrammar/base.py @Ubospica
+python/xgrammar/compiler.py @Ubospica
+python/xgrammar/config.py @Ubospica
 python/xgrammar/contrib/__init__.py
-python/xgrammar/contrib/hf.py @Charlie Ruan
+python/xgrammar/contrib/hf.py @CharlieFRuan
 python/xgrammar/contrib/mlxlm.py @Yi Wang
-python/xgrammar/exception.py @DarkSharpness @Yixin Dong
-python/xgrammar/grammar.py @Yixin Dong
-python/xgrammar/kernels/__init__.py @Yixin Dong
+python/xgrammar/exception.py @DarkSharpness @Ubospica
+python/xgrammar/grammar.py @Ubospica
+python/xgrammar/kernels/__init__.py @Ubospica
 python/xgrammar/kernels/apply_token_bitmask_inplace_cpu.py @Jialin Ouyang
-python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.cu @Enwei Zhu @Yixin Dong
-python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.py @Zac Bowling @Enwei Zhu
-python/xgrammar/kernels/apply_token_bitmask_inplace_torch_compile.py @Yixin Dong
-python/xgrammar/kernels/apply_token_bitmask_inplace_triton.py @Yixin Dong @Zihao Ye
+python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.cu @Enwei Zhu @Ubospica
+python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.py @zbowling @Enwei Zhu
+python/xgrammar/kernels/apply_token_bitmask_inplace_torch_compile.py @Ubospica
+python/xgrammar/kernels/apply_token_bitmask_inplace_triton.py @Ubospica @Zihao Ye
 python/xgrammar/kernels/apply_token_bitmask_mlx.py @Yi Wang
-python/xgrammar/matcher.py @Yixin Dong
+python/xgrammar/matcher.py @Ubospica
 python/xgrammar/py.typed
-python/xgrammar/structural_tag.py @Yixin Dong
+python/xgrammar/structural_tag.py @Ubospica
 python/xgrammar/support/__init__.py
-python/xgrammar/support/logging.py @Ruihang Lai
-python/xgrammar/testing.py @Yixin Dong
-python/xgrammar/tokenizer_info.py @Yixin Dong
-scripts/build-environment.yaml @Ruihang Lai
-scripts/docker/bash.sh @Ruihang Lai
-scripts/generate_code_owner.bash @Yuchuan
-scripts/gh_deploy_site.sh @Ruihang Lai
+python/xgrammar/support/logging.py @MasterJH5574
+python/xgrammar/testing.py @Ubospica
+python/xgrammar/tokenizer_info.py @Ubospica
+scripts/build-environment.yaml @MasterJH5574
+scripts/docker/bash.sh @MasterJH5574
+scripts/generate_code_owner.bash @Seven-Streams
+scripts/gh_deploy_site.sh @MasterJH5574
 scripts/lint.sh @Ubospica
-scripts/local_deploy_site.sh @Ruihang Lai @Yixin Dong
-scripts/release_new_version.sh @Yixin Dong
-scripts/run_coverage.sh @Linzhang Li
-scripts/run_ctest.sh @Yixin Dong
-scripts/support/build_site.sh @Ruihang Lai @Yixin Dong
-site/.gitignore @Ruihang Lai
-site/CNAME @Ruihang Lai
-site/Gemfile @Ruihang Lai
-site/_config.yml @Ruihang Lai
-site/_includes/arrow.svg @Ruihang Lai
-site/_includes/github.svg @Ruihang Lai
-site/_includes/head.html @Ruihang Lai
-site/_includes/hero.html @Ruihang Lai
-site/assets/css/hero.scss @Ruihang Lai
-site/index.md @Ruihang Lai
-tests/README.md @Charlie Ruan
-tests/cpp/test_fsm.cc @Linzhang Li
-tests/cpp/test_fsm_builder.cc @Linzhang Li
-tests/cpp/test_parser.cc @Yixin Dong
+scripts/local_deploy_site.sh @MasterJH5574 @Ubospica
+scripts/release_new_version.sh @Ubospica
+scripts/run_coverage.sh @Seven-Streams
+scripts/run_ctest.sh @Ubospica
+scripts/support/build_site.sh @MasterJH5574 @Ubospica
+site/.gitignore @MasterJH5574
+site/CNAME @MasterJH5574
+site/Gemfile @MasterJH5574
+site/_config.yml @MasterJH5574
+site/_includes/arrow.svg @MasterJH5574
+site/_includes/github.svg @MasterJH5574
+site/_includes/head.html @MasterJH5574
+site/_includes/hero.html @MasterJH5574
+site/assets/css/hero.scss @MasterJH5574
+site/index.md @MasterJH5574
+tests/README.md @CharlieFRuan
+tests/cpp/test_fsm.cc @Seven-Streams
+tests/cpp/test_fsm_builder.cc @Seven-Streams
+tests/cpp/test_parser.cc @Ubospica
 tests/cpp/test_serialization.cc @DarkSharpness
-tests/cpp/test_thread_pool.cc @Yixin Dong
-tests/cpp/test_thread_safe_cache.cc @Yixin Dong
-tests/cpp/test_utils.h @Yixin Dong
-tests/python/test_function_calling_converter.py @Linzhang Li
-tests/python/test_grammar_compiler.py @Yixin Dong
-tests/python/test_grammar_matcher_basic.py @Yixin Dong
-tests/python/test_grammar_matcher_ebnf.py @Ubospica @Yixin Dong
-tests/python/test_grammar_matcher_json.py @Ubospica @Yixin Dong
-tests/python/test_grammar_matcher_json_schema.py @Yixin Dong @Alexander Jiang
-tests/python/test_grammar_matcher_macro.py @Yixin Dong @Linzhang Li
-tests/python/test_grammar_matcher_regex.py @Yixin Dong
-tests/python/test_grammar_matcher_structural_tag.py @Yixin Dong @Linzhang Li
-tests/python/test_grammar_parser.py @Yixin Dong
-tests/python/test_grammar_parser_macro.py @Yixin Dong @Linzhang Li
-tests/python/test_grammar_union_concat.py @Yixin Dong @Linzhang Li
-tests/python/test_json_schema_converter.py @Yixin Dong
-tests/python/test_recursion_depth.py @Yixin Dong
-tests/python/test_regex_converter.py @Yixin Dong
+tests/cpp/test_thread_pool.cc @Ubospica
+tests/cpp/test_thread_safe_cache.cc @Ubospica
+tests/cpp/test_utils.h @Ubospica
+tests/python/test_function_calling_converter.py @Seven-Streams
+tests/python/test_grammar_compiler.py @Ubospica
+tests/python/test_grammar_matcher_basic.py @Ubospica
+tests/python/test_grammar_matcher_ebnf.py @Ubospica @Ubospica
+tests/python/test_grammar_matcher_json.py @Ubospica @Ubospica
+tests/python/test_grammar_matcher_json_schema.py @Ubospica @zanderjiang
+tests/python/test_grammar_matcher_macro.py @Ubospica @Seven-Streams
+tests/python/test_grammar_matcher_regex.py @Ubospica
+tests/python/test_grammar_matcher_structural_tag.py @Ubospica @Seven-Streams
+tests/python/test_grammar_parser.py @Ubospica
+tests/python/test_grammar_parser_macro.py @Ubospica @Seven-Streams
+tests/python/test_grammar_union_concat.py @Ubospica @Seven-Streams
+tests/python/test_json_schema_converter.py @Ubospica
+tests/python/test_recursion_depth.py @Ubospica
+tests/python/test_regex_converter.py @Ubospica
 tests/python/test_serialization.py @DarkSharpness
-tests/python/test_structural_tag_converter.py @Yixin Dong
-tests/python/test_token_bitmask_operations.py @Yixin Dong
-tests/python/test_tokenizer_info.py @Yixin Dong
-web/.eslintignore @Charlie Ruan
-web/.eslintrc.cjs @Charlie Ruan
-web/.gitignore @Charlie Ruan
-web/README.md @Charlie Ruan
-web/build.sh @Charlie Ruan
-web/config.cmake @Charlie Ruan
-web/example/package.json @Charlie Ruan
-web/example/src/example.html @Charlie Ruan
-web/example/src/example.ts @Charlie Ruan
-web/example/tsconfig.json @Charlie Ruan
-web/jest.config.cjs @Charlie Ruan
-web/package-lock.json @Charlie Ruan
-web/package.json @Charlie Ruan
-web/rollup.config.js @Charlie Ruan
-web/run_test.sh @Charlie Ruan
-web/src/index.ts @Charlie Ruan
-web/src/xgrammar.ts @Charlie Ruan
-web/src/xgrammar_binding.cc @Charlie Ruan
-web/tests/grammar.test.ts @Charlie Ruan
-web/tsconfig.json @Charlie Ruan
+tests/python/test_structural_tag_converter.py @Ubospica
+tests/python/test_token_bitmask_operations.py @Ubospica
+tests/python/test_tokenizer_info.py @Ubospica
+web/.eslintignore @CharlieFRuan
+web/.eslintrc.cjs @CharlieFRuan
+web/.gitignore @CharlieFRuan
+web/README.md @CharlieFRuan
+web/build.sh @CharlieFRuan
+web/config.cmake @CharlieFRuan
+web/example/package.json @CharlieFRuan
+web/example/src/example.html @CharlieFRuan
+web/example/src/example.ts @CharlieFRuan
+web/example/tsconfig.json @CharlieFRuan
+web/jest.config.cjs @CharlieFRuan
+web/package-lock.json @CharlieFRuan
+web/package.json @CharlieFRuan
+web/rollup.config.js @CharlieFRuan
+web/run_test.sh @CharlieFRuan
+web/src/index.ts @CharlieFRuan
+web/src/xgrammar.ts @CharlieFRuan
+web/src/xgrammar_binding.cc @CharlieFRuan
+web/tests/grammar.test.ts @CharlieFRuan
+web/tsconfig.json @CharlieFRuan

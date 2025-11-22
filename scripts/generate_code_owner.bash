@@ -1,7 +1,7 @@
 # bash syntax function for current directory git repository
 owners(){
-  for f in $(git ls-files); do
-    # filename
+  for f in $(git ls-files | sort -u); do
+    # directory path
     echo -n "$f "
     # authors if loc distribution >= 30%
     git fame -snwMC --incl "$f" | tr '/' '|' \
@@ -17,4 +17,7 @@ owners | tee .github/CODEOWNERS
 owners \
   | tqdm --total $(git ls-files | wc -l) \
     --unit file --desc "Generating CODEOWNERS" \
-  > ../.github/CODEOWNERS
+  > .github/CODEOWNERS
+
+# Replace all the names with GitHub usernames
+python scripts/name_replace.py .github/name_mappings.csv .github/CODEOWNERS
