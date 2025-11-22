@@ -3,7 +3,7 @@
 .github/CODEOWNERS @Seven-Streams
 .github/ISSUE_TEMPLATE/bug_report.yml @Seven-Streams
 .github/ISSUE_TEMPLATE/feature_request.yml @Seven-Streams
-.github/name_mapping.csv
+.github/name_mappings.csv @Seven-Streams
 .github/workflows/benchmark.yaml @zanderjiang
 .github/workflows/build_and_release.yaml @zbowling
 .github/workflows/build_web_xgrammar.yaml @Seven-Streams @DarkSharpness
@@ -24,7 +24,7 @@
 CMakeLists.txt @Ubospica
 CONTRIBUTING.md @Seven-Streams
 LICENSE @Ubospica
-NOTICE @Tianqi Chen
+NOTICE @ tqchen
 README.md @Ubospica
 assets/logo.png
 assets/logo.svg @Ubospica
@@ -53,8 +53,8 @@ cpp/grammar_printer.cc @Ubospica @Ubospica
 cpp/grammar_printer.h @Ubospica @Ubospica
 cpp/json_schema_converter.cc
 cpp/json_schema_converter.h @Ubospica @Seven-Streams
-cpp/nanobind/CMakeLists.txt @Alex Trotta @Ubospica
-cpp/nanobind/nanobind.cc @Alex Trotta
+cpp/nanobind/CMakeLists.txt @ Ahajha @Ubospica
+cpp/nanobind/nanobind.cc @ Ahajha
 cpp/nanobind/python_methods.cc @Ubospica
 cpp/nanobind/python_methods.h @Ubospica
 cpp/regex_converter.cc @Ubospica
@@ -119,8 +119,8 @@ docs/wrap_run_llm.py @Ubospica
 docs/xgrammar_features/javascript_api.md @Ubospica
 docs/xgrammar_features/runtime_safeguards.md @Ubospica
 docs/xgrammar_features/serialization.md @DarkSharpness @Ubospica
-examples/benchmark/README.md @Jialin Ouyang @Ubospica
-examples/benchmark/bench_apply_token_bitmask_inplace.py @Jialin Ouyang @Enwei Zhu
+examples/benchmark/README.md @ Jialin @Ubospica
+examples/benchmark/bench_apply_token_bitmask_inplace.py @ Jialin @ syuoni
 examples/benchmark/bench_grammar_compile_mask_gen.py @Ubospica
 examples/benchmark/cibench_grammar_compile_mask_gen.py @zanderjiang
 examples/hf_transformers/transformers_example.py @CharlieFRuan
@@ -139,16 +139,16 @@ python/xgrammar/compiler.py @Ubospica
 python/xgrammar/config.py @Ubospica
 python/xgrammar/contrib/__init__.py
 python/xgrammar/contrib/hf.py @CharlieFRuan
-python/xgrammar/contrib/mlxlm.py @Yi Wang
+python/xgrammar/contrib/mlxlm.py @ wangkuiyi
 python/xgrammar/exception.py @DarkSharpness @Ubospica
 python/xgrammar/grammar.py @Ubospica
 python/xgrammar/kernels/__init__.py @Ubospica
-python/xgrammar/kernels/apply_token_bitmask_inplace_cpu.py @Jialin Ouyang
-python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.cu @Enwei Zhu @Ubospica
-python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.py @zbowling @Enwei Zhu
+python/xgrammar/kernels/apply_token_bitmask_inplace_cpu.py @ Jialin
+python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.cu @ syuoni @Ubospica
+python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.py @zbowling @ syuoni
 python/xgrammar/kernels/apply_token_bitmask_inplace_torch_compile.py @Ubospica
-python/xgrammar/kernels/apply_token_bitmask_inplace_triton.py @Ubospica @Zihao Ye
-python/xgrammar/kernels/apply_token_bitmask_mlx.py @Yi Wang
+python/xgrammar/kernels/apply_token_bitmask_inplace_triton.py @Ubospica @ yezihao
+python/xgrammar/kernels/apply_token_bitmask_mlx.py @ wangkuiyi
 python/xgrammar/matcher.py @Ubospica
 python/xgrammar/py.typed
 python/xgrammar/structural_tag.py @Ubospica
