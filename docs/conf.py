@@ -86,7 +86,6 @@ autodoc_default_options = {
 autodoc_pydantic_model_show_json = True
 autodoc_pydantic_settings_show_json = False
 
-
 # -- Other Options --------------------------------------------------------
 
 templates_path = []
