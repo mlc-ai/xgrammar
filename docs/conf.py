@@ -41,6 +41,7 @@ extensions = [
     "sphinx_reredirects",
     "sphinx_tabs.tabs",
     "sphinx_toolbox.collapse",
+    "sphinxcontrib.autodoc_pydantic",
     "sphinxcontrib.httpdomain",
     "sphinxcontrib.mermaid",
 ]
@@ -81,6 +82,10 @@ autodoc_default_options = {
     "inherited-members": False,
     "member-order": "bysource",
 }
+
+autodoc_pydantic_model_show_json = True
+autodoc_pydantic_settings_show_json = False
+
 
 # -- Other Options --------------------------------------------------------
 
