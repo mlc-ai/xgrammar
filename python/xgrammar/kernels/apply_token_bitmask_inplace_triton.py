@@ -85,10 +85,13 @@ def apply_token_bitmask_inplace_triton(
 ):
     NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
     BLOCK_SIZE = 4096
-    if torch.version.hip is not None:
-        WARP_SIZE = 64  # For AMD GPUs
+
+    arch = torch.cuda.get_device_properties(0).gcnArchName
+    if torch.version.hip is not None and "gfx1" not in arch:
+        # For AMD GPUs (non-Navi)
+        WARP_SIZE = 64
     else:
-        WARP_SIZE = 32  # For Nvidia GPUs
+        WARP_SIZE = 32
 
     assert bitmask.dtype == torch.int32, "bitmask must be of type int32"
 
