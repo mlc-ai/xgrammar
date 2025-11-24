@@ -2,18 +2,40 @@
 
 import json
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
-try:
-    import sentencepiece
-except ImportError:
-    sentencepiece = None
-try:
-    import tiktoken
-except ImportError:
-    tiktoken = None
+if TYPE_CHECKING:
+    try:
+        import sentencepiece
+    except ImportError:
+        pass
 
-from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
+    try:
+        import tiktoken
+    except ImportError:
+        pass
+
+    try:
+        from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
+    except ImportError:
+        pass
+else:
+    try:
+        import sentencepiece
+    except ImportError:
+        sentencepiece = None
+
+    try:
+        import tiktoken
+    except ImportError:
+        tiktoken = None
+
+    try:
+        from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
+    except ImportError:
+        PreTrainedTokenizerBase = Any
+        PreTrainedTokenizerFast = Any
 
 from .base import XGRObject, _core
 from .support import logging
@@ -166,7 +188,7 @@ class TokenizerInfo(XGRObject):
 
         Parameters
         ----------
-        tokenizer : PreTrainedTokenizerBase
+        tokenizer : transformers.PreTrainedTokenizerBase
             The huggingface tokenizer.
 
         vocab_size : Optional[int], default: None
@@ -262,6 +284,7 @@ class TokenizerInfo(XGRObject):
                         "stop_token_ids is neither provided by user nor found from the tokenizer. "
                         "It will be automatically detected."
                     )
+
             return TokenizerInfo(
                 encoded_vocab,
                 VocabType.RAW,
