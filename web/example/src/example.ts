@@ -208,7 +208,7 @@ async function structuralTagExample() {
   for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
     encodedVocab.push(tokenizer.idToToken(tokenId));
   }
-  
+
   // 5. Create compiler and compile the structural tag grammar
   const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
   const compiledGrammar = await compiler.compileStructuralTag(structuralTag);
@@ -237,7 +237,7 @@ async function structuralTagExample() {
       throw Error("Expect token to be accepted");
     }
   }
-  
+
   // 9. Clean up
   matcher.dispose();
   compiledGrammar.dispose();

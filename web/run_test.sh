@@ -4,7 +4,7 @@ set -euxo pipefail
 # Ensure latest TypeScript output exists before running Jest ESM suite.
 npx tsc -p tsconfig.json
 
-# The wasm binding is produced by emcc in src/. Copy this into lib/ so 
+# The wasm binding is produced by emcc in src/. Copy this into lib/ so
 # package entry (which points at lib/) can load it during tests.
 if [[ ! -f src/xgrammar_binding.js ]]; then
   echo "Missing src/xgrammar_binding.js. Run ./build.sh first." >&2
