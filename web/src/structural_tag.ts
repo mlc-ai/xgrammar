@@ -130,7 +130,7 @@ export class StructuralTagItem {
         throw new Error("Schema string must be a JSON object or boolean.");
       } catch (err) {
         throw new Error(
-          `Failed to parse schema string "${this.schema}": ${(err as Error).message}`,
+          `Failed to parse schema string "${this.schema}": ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }

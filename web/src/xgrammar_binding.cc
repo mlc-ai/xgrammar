@@ -195,7 +195,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       )>(&JSONSchemaToEBNF)
   );
   function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);
-  function("EBNFToGrammarNormalization", &_EBNFToGrammarNoNormalization);
+  function("EBNFToGrammarNoNormalization", &_EBNFToGrammarNoNormalization);
 
   class_<Grammar>("Grammar")
       .function("ToString", &Grammar::ToString)
