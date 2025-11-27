@@ -83,6 +83,7 @@ autodoc_default_options = {
     "member-order": "bysource",
 }
 
+autodoc_pydantic_model_show_field_summary = False
 autodoc_pydantic_model_show_json = True
 autodoc_pydantic_settings_show_json = False
 
