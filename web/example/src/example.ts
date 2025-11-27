@@ -1,4 +1,4 @@
-import { Grammar, GrammarMatcher, TokenizerInfo, GrammarCompiler, CompiledGrammar, Testings } from "@mlc-ai/web-xgrammar"
+import { GrammarMatcher, TokenizerInfo, GrammarCompiler, CompiledGrammar, Testings, StructuralTag } from "@mlc-ai/web-xgrammar"
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 import { Type, Static } from "@sinclair/typebox";
 
@@ -26,7 +26,7 @@ async function getTokenizerInfoAndTokenizerFromUrl(
 }
 
 async function jsonExample() {
-  console.log("json example");
+  console.log("Running JSON Example");
   const result = await getTokenizerInfoAndTokenizerFromUrl(
     "https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_0-MLC/raw/main/tokenizer.json",
     "byte_level",
@@ -51,6 +51,7 @@ async function jsonExample() {
     if (!grammarMatcher.isTerminated()) {
       const bitmask = await grammarMatcher.getNextTokenBitmask();
       // For debugging, we can check the rejected token IDs from the mask
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const rejectedIDs = await Testings.debugGetMaskedTokensFromBitmask(
         bitmask,
         tokenizerInfo.getVocabSize()
@@ -72,7 +73,7 @@ async function jsonExample() {
 }
 
 async function jsonSchemaExample() {
-  console.log("json schema example");
+  console.log("Running JSON Schema Example");
   // 0. Prepare a schema
   const T = Type.Object({
     name: Type.String(),
@@ -144,6 +145,7 @@ async function jsonSchemaExample() {
     if (!grammarMatcher.isTerminated()) {
       const bitmask = await grammarMatcher.getNextTokenBitmask();
       // For debugging, we can check the rejected token IDs from the mask
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const rejectedIDs = await Testings.debugGetMaskedTokensFromBitmask(
         bitmask,
         tokenizerInfo.getVocabSize()
@@ -165,9 +167,88 @@ async function jsonSchemaExample() {
 }
 
 
+async function structuralTagExample() {
+  console.log("Running Structural Tag Example");
+
+  // 1. Define the schema for our function
+  const weatherSchema = Type.Object({
+    city: Type.String(),
+    is_celsius: Type.Boolean()
+  });
+
+  // 2. Create structural tag for our function
+  const structuralTag: StructuralTag = {
+    type: "structural_tag",
+    format: {
+      type: "triggered_tags",
+      triggers: ["<function="],
+      tags: [
+        {
+          type: "tag",
+          begin: "<function=get_weather>",
+          end: "</function>",
+          content: { type: "json_schema", json_schema: weatherSchema },
+        },
+      ],
+    },
+  };
+
+  // 3. Load tokenizer
+  const result = await getTokenizerInfoAndTokenizerFromUrl(
+    "https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_0-MLC/raw/main/tokenizer.json",
+    "byte_level",
+    false,
+  );
+  const tokenizerInfo = result[0];
+  const tokenizer = result[1];
+
+  // 4. Get encoded vocabulary
+  const encodedVocab = [];
+  const vocabSize = tokenizer.getVocabSize();
+  for (let tokenId = 0; tokenId < vocabSize; tokenId++) {
+    encodedVocab.push(tokenizer.idToToken(tokenId));
+  }
+  
+  // 5. Create compiler and compile the structural tag grammar
+  const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+  const compiledGrammar = await compiler.compileStructuralTag(structuralTag);
+
+  // 6. Create the grammar matcher
+  const matcher = await GrammarMatcher.createGrammarMatcher(compiledGrammar);
+
+  // 7. Test with sample input
+  const testInput = `I need to check the weather.<function=get_weather>{"city": "New York", "is_celsius": false}</function> Thanks!`;
+  console.log("Testing with input:", testInput);
+
+  // 8. Process the input character by character
+  const encodedTokens = tokenizer.encode(testInput);
+  for (let i = 0; i < encodedTokens.length; i++) {
+    const bitmask = await matcher.getNextTokenBitmask();
+    // For debugging, we can check the rejected token IDs from the mask
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const rejectedIDs = await Testings.debugGetMaskedTokensFromBitmask(
+      bitmask,
+      tokenizerInfo.getVocabSize()
+    );
+
+    const curToken = encodedTokens[i];
+    const accepted = matcher.acceptToken(curToken);
+    if (!accepted) {
+      throw Error("Expect token to be accepted");
+    }
+  }
+  
+  // 9. Clean up
+  matcher.dispose();
+  compiledGrammar.dispose();
+  compiler.dispose();
+  tokenizerInfo.dispose();
+}
+
 async function testAll() {
   await jsonExample();
   await jsonSchemaExample();
+  await structuralTagExample();
 }
 
 testAll();

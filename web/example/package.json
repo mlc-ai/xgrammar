@@ -1,6 +1,6 @@
 {
     "name": "web-xgrammar-example",
-    "version": "0.1.0",
+    "version": "0.1.27",
     "private": true,
     "type": "module",
     "scripts": {
@@ -8,8 +8,8 @@
     },
     "browser": {},
     "devDependencies": {
-        "@mlc-ai/web-xgrammar": "0.1.0",
-        "@mlc-ai/web-tokenizers": "^0.1.5",
+        "@mlc-ai/web-xgrammar": "^0.1.27",
+        "@mlc-ai/web-tokenizers": "^0.1.6",
         "buffer": "^5.7.1",
         "parcel": "^2.8.3",
         "process": "^0.11.10",
