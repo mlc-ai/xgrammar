@@ -14,9 +14,8 @@
 #include <memory>
 
 #include "../../cpp/json_schema_converter.h"
+#include "../../cpp/support/utils.h"
 #include "../../cpp/testing.h"
-
-// #include "../../cpp/support/logging.h"
 
 namespace xgrammar {
 // Override logging mechanism
@@ -32,6 +31,30 @@ void LogMessageImpl(const std::string& file, int lineno, int level, const std::s
       "[WARNING] ",
   };
   std::cout << level_strings_[level] << file << ":" << lineno << ": " << message << std::endl;
+}
+
+/*!
+ * \brief Helper that unwraps Grammar::FromStructuralTag by throwing variant errors.
+ */
+Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json) {
+  auto result = Grammar::FromStructuralTag(structural_tag_json);
+  if (std::holds_alternative<StructuralTagError>(result)) {
+    ThrowVariantError(std::get<StructuralTagError>(result));
+  }
+  return std::get<Grammar>(result);
+}
+
+/*!
+ * \brief Wrapper for GrammarCompiler::CompileStructuralTag that validates the structural tag JSON.
+ */
+CompiledGrammar GrammarCompiler_CompileStructuralTag(
+    GrammarCompiler& compiler, const std::string& structural_tag_json
+) {
+  auto result = Grammar::FromStructuralTag(structural_tag_json);
+  if (std::holds_alternative<StructuralTagError>(result)) {
+    ThrowVariantError(std::get<StructuralTagError>(result));
+  }
+  return compiler.CompileStructuralTag(structural_tag_json);
 }
 
 }  // namespace xgrammar
@@ -103,7 +126,7 @@ std::vector<int> Testing_DebugGetMaskedTokensFromBitmask(
   tensor.device = DLDevice{kDLCPU, 0};
   tensor.ndim = 1;
   tensor.dtype = DLDataType{kDLInt, 32, 1};  // int32
-  std::vector<int64_t> shape = {token_bitmask.size()};
+  std::vector<int64_t> shape = {static_cast<int64_t>(token_bitmask.size())};
   tensor.shape = &shape[0];
   std::vector<int64_t> strides = {1};
   tensor.strides = &strides[0];
@@ -121,16 +144,30 @@ emscripten::val vecIntToView(const std::vector<int>& vec) {
   return emscripten::val(typed_memory_view(vec.size(), vec.data()));
 }
 
+std::vector<std::string> VecStringFromJSArray(const emscripten::val& js_array) {
+  return emscripten::vecFromJSArray<std::string>(js_array);
+}
+
+std::vector<int> VecIntFromJSArray(const emscripten::val& js_array) {
+  return emscripten::vecFromJSArray<int>(js_array);
+}
 EMSCRIPTEN_BINDINGS(xgrammar) {
+  enum_<xgrammar::JSONFormat>("JSONFormat")
+      .value("kJSON", xgrammar::JSONFormat::kJSON)
+      .value("kXML", xgrammar::JSONFormat::kXML);
+
   // Register std::optional used in Grammar::FromJSONSchema
   register_optional<int>();
+  value_object<std::pair<std::string, std::string>>("StringPair")
+      .field("first", &std::pair<std::string, std::string>::first)
+      .field("second", &std::pair<std::string, std::string>::second);
   register_optional<std::pair<std::string, std::string>>();
 
   // Register std::vector<std::string> for TokenizerInfo.GetDecodedVocab()
   register_vector<std::string>("VectorString");
   function(
       "vecStringFromJSArray",
-      select_overload<std::vector<std::string>(const emscripten::val&)>(&vecFromJSArray)
+      select_overload<std::vector<std::string>(const emscripten::val&)>(&VecStringFromJSArray)
   );
 
   // Register std::optional<std::vector<int>> for GrammarMatcher_Init
@@ -138,7 +175,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   register_optional<std::vector<int>>();
   function(
       "vecIntFromJSArray",
-      select_overload<std::vector<int>(const emscripten::val&)>(&vecFromJSArray)
+      select_overload<std::vector<int>(const emscripten::val&)>(&VecIntFromJSArray)
   );
 
   // Register view so we can read std::vector<int32_t> as Int32Array in JS without copying
@@ -158,12 +195,14 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       )>(&JSONSchemaToEBNF)
   );
   function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);
+  function("EBNFToGrammarNormalization", &_EBNFToGrammarNoNormalization);
 
   class_<Grammar>("Grammar")
       .function("ToString", &Grammar::ToString)
       .class_function("FromEBNF", &Grammar::FromEBNF)
       .class_function("FromJSONSchema", &Grammar::FromJSONSchema)
-      .class_function("BuiltinJSONGrammar", &Grammar::BuiltinJSONGrammar);
+      .class_function("BuiltinJSONGrammar", &Grammar::BuiltinJSONGrammar)
+      .class_function("FromStructuralTag", &Grammar_FromStructuralTag);
 
   class_<TokenizerInfo>("TokenizerInfo")
       .constructor(&TokenizerInfo_Init)
@@ -182,6 +221,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
           "CompileGrammar",
           select_overload<CompiledGrammar(const Grammar&)>(&GrammarCompiler::CompileGrammar)
       )
+      .function("CompileStructuralTag", &GrammarCompiler_CompileStructuralTag)
       .function("ClearCache", &GrammarCompiler::ClearCache);
 
   class_<GrammarMatcher>("GrammarMatcher")
