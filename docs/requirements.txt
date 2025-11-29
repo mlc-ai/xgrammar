@@ -1,3 +1,4 @@
+autodoc-pydantic
 autodocsumm
 ipykernel
 ipywidgets
