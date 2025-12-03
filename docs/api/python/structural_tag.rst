@@ -26,49 +26,49 @@ Format Union
 Basic Formats
 -------------
 
-.. autoclass:: ConstStringFormat
+.. autopydantic_model:: ConstStringFormat
    :show-inheritance:
    :exclude-members: model_config
 
-.. autoclass:: JSONSchemaFormat
+.. autopydantic_model:: JSONSchemaFormat
    :show-inheritance:
    :exclude-members: model_config
 
-.. autoclass:: AnyTextFormat
+.. autopydantic_model:: AnyTextFormat
    :show-inheritance:
    :exclude-members: model_config
 
-.. autoclass:: GrammarFormat
+.. autopydantic_model:: GrammarFormat
    :show-inheritance:
    :exclude-members: model_config
 
-.. autoclass:: RegexFormat
+.. autopydantic_model:: RegexFormat
    :show-inheritance:
    :exclude-members: model_config
 
-.. autoclass:: QwenXMLParameterFormat
+.. autopydantic_model:: QwenXMLParameterFormat
    :show-inheritance:
    :exclude-members: model_config
 
 Combinatorial Formats
 ---------------------
 
-.. autoclass:: SequenceFormat
+.. autopydantic_model:: SequenceFormat
    :show-inheritance:
    :exclude-members: model_config
 
-.. autoclass:: OrFormat
+.. autopydantic_model:: OrFormat
    :show-inheritance:
    :exclude-members: model_config
 
-.. autoclass:: TagFormat
+.. autopydantic_model:: TagFormat
    :show-inheritance:
    :exclude-members: model_config
 
-.. autoclass:: TriggeredTagsFormat
+.. autopydantic_model:: TriggeredTagsFormat
    :show-inheritance:
    :exclude-members: model_config
 
-.. autoclass:: TagsWithSeparatorFormat
+.. autopydantic_model:: TagsWithSeparatorFormat
    :show-inheritance:
    :exclude-members: model_config
