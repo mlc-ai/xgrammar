@@ -251,7 +251,8 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def(
           "compile_grammar",
-          [](GrammarCompiler& self, const std::string& ebnf_str, const std::string& root_rule_name
+          [](
+              GrammarCompiler& self, const std::string& ebnf_str, const std::string& root_rule_name
           ) { return self.CompileGrammar(ebnf_str, root_rule_name); },
           nb::call_guard<nb::gil_scoped_release>()
       )
@@ -369,7 +370,39 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("start").none(),
           nb::arg("end").none()
       )
-      .def("_print_grammar_fsms", &_PrintGrammarFSMs);
+      .def("_print_grammar_fsms", &_PrintGrammarFSMs)
+      .def(
+          "_traverse_draft_tree",
+          [](nb::ndarray<> retrieve_next_token,
+             nb::ndarray<> retrieve_next_sibling,
+             nb::ndarray<> draft_tokens,
+             GrammarMatcher& matcher,
+             nb::ndarray<> bitmask) {
+            // Convert ndarrays to DLTensors
+            static_assert(
+                sizeof(retrieve_next_token) == sizeof(void*) + sizeof(nb::dlpack::dltensor)
+            );
+            DLTensor* next_token_ptr = reinterpret_cast<DLTensor*>(
+                reinterpret_cast<char*>(&retrieve_next_token) + sizeof(void*)
+            );
+            DLTensor* next_sibling_ptr = reinterpret_cast<DLTensor*>(
+                reinterpret_cast<char*>(&retrieve_next_sibling) + sizeof(void*)
+            );
+            DLTensor* draft_tokens_ptr =
+                reinterpret_cast<DLTensor*>(reinterpret_cast<char*>(&draft_tokens) + sizeof(void*));
+            DLTensor* bitmask_ptr =
+                reinterpret_cast<DLTensor*>(reinterpret_cast<char*>(&bitmask) + sizeof(void*));
+            TraverseDraftTree(
+                next_token_ptr, next_sibling_ptr, draft_tokens_ptr, matcher, bitmask_ptr
+            );
+          },
+          nb::arg("retrieve_next_token"),
+          nb::arg("retrieve_next_sibling"),
+          nb::arg("draft_tokens"),
+          nb::arg("matcher"),
+          nb::arg("bitmask"),
+          nb::call_guard<nb::gil_scoped_release>()
+      );
 
   auto pyGrammarFunctorModule = pyTestingModule.def_submodule("grammar_functor");
   pyGrammarFunctorModule.def("structure_normalizer", &StructureNormalizer::Apply)

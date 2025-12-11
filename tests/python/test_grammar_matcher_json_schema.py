@@ -521,7 +521,12 @@ def test_regression_accept_invalid_token():
     )
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info=tokenizer_info)
     ctx = grammar_compiler.compile_json_schema(
-        schema="""{"type": "object", "properties": {"value": {"type": ["string", "null"], "maxLength": 10}, "nested": {"type": "object", "properties": {"value": {"type": ["string", "null"]}, "nested_nested": {"type": "array", "items": {"type": ["string", "null"]}}}, "required": ["value", "nested_nested"], "maxItems": 10, "minItems": 1}}, "required": ["value", "nested"], "additionalProperties": false}"""
+        schema="""
+{"type": "object", "properties": {"value": {"type": ["string", "null"], "maxLength": 10},
+"nested": {"type": "object", "properties": {"value": {"type": ["string", "null"]},
+"nested_nested": {"type": "array", "items": {"type": ["string", "null"]}}},
+"required": ["value", "nested_nested"], "maxItems": 10, "minItems": 1}},
+"required": ["value", "nested"], "additionalProperties": false}"""
     )
     matcher = xgr.GrammarMatcher(ctx, max_rollback_tokens=200, override_stop_tokens=None)
     token_bitmask = xgr.allocate_token_bitmask(vocab_size=vocab_size, batch_size=7)

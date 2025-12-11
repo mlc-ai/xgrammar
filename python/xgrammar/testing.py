@@ -350,6 +350,41 @@ def _qwen_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str,
     return _core.testing._qwen_xml_tool_calling_to_ebnf(schema_str)
 
 
+def _traverse_draft_tree(
+    retrieve_next_token: torch.Tensor,
+    retrieve_next_sibling: torch.Tensor,
+    draft_tokens: torch.Tensor,
+    matcher: "GrammarMatcher",
+    allocate_token_bitmask: torch.Tensor,
+) -> None:
+    """Traverse the tree constructed by the draft model to generate the logits mask.
+
+    Parameters
+    ----------
+    retrieve_next_token : torch.Tensor
+        1D int32 tensor where retrieve_next_token[i] gives the index of the child node
+        of node i, or -1 if no child exists.
+    retrieve_next_sibling : torch.Tensor
+        1D int32 tensor where retrieve_next_sibling[i] gives the index of the sibling node
+        of node i, or -1 if no sibling exists.
+    draft_tokens : torch.Tensor
+        1D int32 tensor of draft token ids at each position in the tree.
+    matcher : GrammarMatcher
+        The grammar matcher to use for validation.
+    allocate_token_bitmask : torch.Tensor
+        2D int32 tensor (num_nodes x bitmask_size) to store the generated bitmasks.
+    """
+    assert retrieve_next_token.shape == retrieve_next_sibling.shape == draft_tokens.shape
+
+    _core.testing._traverse_draft_tree(
+        retrieve_next_token,
+        retrieve_next_sibling,
+        draft_tokens,
+        matcher._handle,
+        allocate_token_bitmask,
+    )
+
+
 class GrammarFunctor:
     """A utility class for transforming grammars. These methods are called during grammar parsing.
     For test purposes."""
