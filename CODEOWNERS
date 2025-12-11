@@ -1,0 +1,22 @@
+# source files
+/include @Ubospica  @Seven-Streams @DarkSharpness
+/cpp/nanobind @Ubospica
+/cpp/support @Ubospica @DarkSharpness
+/cpp/*.cc @Ubospica @Seven-Streams @DarkSharpness
+/cpp/*.h @Ubospica @Seven-Streams @DarkSharpness
+/python @Ubospica
+/web @CharlieFRuan
+
+# tests
+tests/cpp @Ubospica @Seven-Streams @DarkSharpness
+tests/python @Ubospica @Seven-Streams
+
+# Miscellaneous
+/.github @Ubospica @Seven-Streams
+/3rdparty @Ubospica
+/assets @Ubospica
+/cmake @Ubospica
+/docs @Ubospica @Seven-Streams
+/examples @Ubospica
+/scripts @Ubospica
+/site @Ubospica
