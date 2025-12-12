@@ -435,7 +435,7 @@ class Grammar(XGRObject):
     @staticmethod
     def from_structural_tag_template(
         template_structural_tag: Union[str, Dict[str, Any], StructuralTag],
-        **kwargs: List[Dict[str, Any]] | Dict[str, Any] | str,
+        **kwargs: Union[List[Dict[str, Any]] | Dict[str, Any] | str],
     ) -> "Grammar":
         """Apply a structural tag template to create a grammar. The template is a JSON string
         representing a structural tag, with placeholders for the tag items, or a dictionary.
@@ -446,7 +446,7 @@ class Grammar(XGRObject):
         ----------
         template_structural_tag : Union[str, Dict[str, Any], StructuralTag]
             The structural tag template as a JSON string or a dictionary.
-        **kwargs : List[Dict[str, Any]]
+        **kwargs : Union[List[Dict[str, Any]] | Dict[str, Any] | str]
             The placeholders and their corresponding tag items.
 
         Returns
