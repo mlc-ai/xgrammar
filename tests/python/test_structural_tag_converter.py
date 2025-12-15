@@ -53,7 +53,7 @@ PROFILER_ON = True
 tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True, scope="module")
 def disable_profiler(request):
     global PROFILER_ON
     global profiler
