@@ -1,7 +1,8 @@
 """Test the speculative decoding utilities."""
 
-import pytest
 import sys
+
+import pytest
 import torch
 
 import xgrammar as xgr
