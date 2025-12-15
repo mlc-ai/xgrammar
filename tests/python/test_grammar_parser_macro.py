@@ -21,6 +21,7 @@ def test_tag_dispatch():
 rule1 ::= "a"
 rule2 ::= "b"
 """
+
     expected = """root ::= ((TagDispatch(
   ("tag1", rule1),
   ("tag2", rule2),
