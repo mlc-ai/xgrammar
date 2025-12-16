@@ -1,4 +1,30 @@
-import Module from "./xgrammar_binding";
+import Module from "./xgrammar_binding.js";
+import {
+  StructuralTagItem as StructuralTagItemImpl,
+  structuralTagArgsToJSONString,
+} from "./structural_tag.js";
+import type {
+  StructuralTagItem,
+  StructuralTagLike,
+} from "./structural_tag.js";
+
+export { StructuralTagItemImpl as StructuralTagItem };
+export type {
+  AnyTextFormat,
+  ConstStringFormat,
+  GrammarFormat,
+  JSONSchemaFormat,
+  QwenXMLParameterFormat,
+  RegexFormat,
+  SequenceFormat,
+  StructuralTag,
+  StructuralTagFormat,
+  StructuralTagLike,
+  TagFormat,
+  TagsWithSeparatorFormat,
+  TriggeredTagsFormat,
+  OrFormat,
+} from "./structural_tag.js";
 
 let binding: any = null;
 
@@ -6,6 +32,19 @@ async function asyncInitBinding() {
   if (binding == null) {
     binding = await Module();
   }
+}
+
+type SeparatorPair = { first: string; second: string };
+
+function toSeparatorPair(separators?: [string, string]): SeparatorPair | undefined {
+  if (separators === undefined) {
+    return undefined;
+  }
+  const [comma, colon] = separators;
+  if (comma === undefined || colon === undefined) {
+    throw new Error("Argument separators must contain exactly two string entries.");
+  }
+  return { first: comma, second: colon };
 }
 
 /**
@@ -16,37 +55,49 @@ export class Testings {
    * Convert JSON schema string to EBNF grammar string. For test purposes.
    *
    * @param {string} schema The schema string.
+   * @param {boolean} [anyWhitespace=true] Whether to ignore the indentation
+   * restrictions, and allow any whitespace.
    * @param {number} [indent=2] The number of spaces for indentation. If -1, the grammar will
    * enforce the output to be in one line.
    * @param {[string, string]} [separators] Two separators that will be enforced by the grammar:
    * comma and colon. Examples: (",", ":"), (", ", ": "). If undefined, the default separators will
    * be used: (",", ": ") when the indent is not undefined, and (", ", ": ") otherwise. This follows
-   * the convention in Python's json.dumps(). Currently unsupported and will use the default value.
+   * the convention in Python's json.dumps().
    * @param {boolean} [strictMode=true] Whether to use strict mode. In strict mode, the generated
    * grammar will not allow properties and items that is not specified in the schema. This is
    * equivalent to setting unevaluatedProperties and unevaluatedItems to false.
+   * @param {number} [maxWhitespaceCnt] Maximum number of whitespace characters allowed between
+   * JSON elements when anyWhitespace is true. Undefined means unlimited.
+   * @param {"json" | "xml"} [jsonFormat="json"] The JSON schema output format.
    * @returns {string} The EBNF grammar string.
    */
   static async _jsonSchemaToEBNF(
     schema: string,
+    anyWhitespace: boolean = true,
     indent = 2,
     separators?: [string, string],
-    strictMode = true
+    strictMode = true,
+    maxWhitespaceCnt?: number,
+    jsonFormat: "json" | "xml" = "json"
   ): Promise<string> {
-    // TODO(Charlie): Add support for separators, which requires binding std::pair
-    // in emscripten
-    if (separators !== undefined) {
-      throw new Error(
-        `Argument separators is not supported yet, please leave it as undefined, and the ` +
-        `default value (",", ": ") will be used.`
-      );
-    }
+    const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
     // indent being -1 is equivalent to not having a value for the std::optional arg in C++.
     // This is a workaround to Typescript not being able to express Optional value like Python; if
     // user specifies indent to be undefined, it still becomes 2.
-    let optionalIndent: number | undefined = indent == -1 ? undefined : indent;
-    return binding._JSONSchemaToEBNF(schema, optionalIndent, separators, strictMode);
+    const optionalIndent: number | undefined = indent == -1 ? undefined : indent;
+    const formatEnum = jsonFormat === "xml"
+      ? binding.JSONFormat.kXML
+      : binding.JSONFormat.kJSON;
+    return binding._JSONSchemaToEBNF(
+      schema,
+      anyWhitespace,
+      optionalIndent,
+      separatorsPair,
+      strictMode,
+      maxWhitespaceCnt,
+      formatEnum
+    );
   }
 
   /**
@@ -73,6 +124,48 @@ export class Testings {
     const rejectedIDsInt32Array = binding.vecIntToView(rejectedIDsIntVector).slice();
     rejectedIDsIntVector.delete();
     return rejectedIDsInt32Array;
+  }
+
+  /**
+   * Convert a BNF grammar string to a Grammar object without normalization. For test
+   * purposes. The result grammar cannot be compiled / used in GrammarMatcher.
+   *
+   * @param {string} ebnfString The EBNF grammar string to be converted.
+   * @param {string} [rootRule="root"] The name of the root rule. Default: "root".
+   * @returns {Grammar} The unnormalized Grammar object converted from the input BNF grammar string.
+   */
+  static async ebnfToGrammarNoNormalization(
+    ebnfString: string,
+    rootRule: string = "root"
+  ): Promise<Grammar> {
+    await asyncInitBinding();
+    return new Grammar(new binding.EBNFToGrammarNoNormalization(ebnfString, rootRule));
+  }
+
+  /**
+   * Given a grammar and an input string, check if the grammar accepts the input string.
+   * No tokenizer information is needed. Only for testing purposes.
+   */
+  static async isGrammarAcceptString(
+    grammar: Grammar,
+    inputString: string,
+    debugPrint: boolean = false,
+  ): Promise<boolean> {
+    await asyncInitBinding();
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo([]);
+    const grammarCompiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo, false);
+    const compiledGrammar = await grammarCompiler.compileGrammar(grammar);
+    const matcher = await GrammarMatcher.createGrammarMatcher(compiledGrammar, undefined, true);
+    const accepted = matcher._acceptString(inputString, debugPrint);
+    const isTerminated = matcher.isTerminated();
+    matcher.dispose();
+    compiledGrammar.dispose();
+    grammarCompiler.dispose();
+    tokenizerInfo.dispose();
+    if (!accepted) {
+      return false;
+    }
+    return isTerminated;
   }
 }
 
@@ -137,38 +230,47 @@ export class Grammar {
    * format of the schema of a JSON file. We will parse the schema and generate a BNF grammar.
    *
    * @param {string} schema The schema string.
+   * @param {boolean} [anyWhitespace=true] Whether to ignore the indentation
+   * restrictions, and allow any whitespace.
    * @param {number} [indent=2] The number of spaces for indentation. If -1, the grammar will
    * enforce the output to be in one line.
    * @param {[string, string]} [separators] Two separators that will be enforced by the grammar:
    * comma and colon. Examples: (",", ":"), (", ", ": "). If undefined, the default separators will
    * be used: (",", ": ") when the indent is not undefined, and (", ", ": ") otherwise. This follows
-   * the convention in Python's json.dumps(). Currently unsupported and will use the default value.
+   * the convention in Python's json.dumps().
    * @param {boolean} [strictMode=true] Whether to use strict mode. In strict mode, the generated
    * grammar will not allow properties and items that is not specified in the schema. This is
    * equivalent to setting unevaluatedProperties and unevaluatedItems to false.
+   * @param {number} [maxWhitespaceCnt] Maximum number of whitespace characters allowed between
+   * JSON elements when anyWhitespace is true. Undefined means unlimited.
    * @returns {Grammar} The generated BNF grammar.
    */
   static async fromJSONSchema(
     schema: string,
+    anyWhitespace: boolean = true,
     indent = 2,
     separators?: [string, string],
-    strictMode = true
+    strictMode = true,
+    maxWhitespaceCnt?: number
   ): Promise<Grammar> {
-    // TODO(Charlie): Add support for separators, which requires binding std::pair
-    // in emscripten
-    if (separators !== undefined) {
-      throw new Error(
-        `Argument separators is not supported yet, please leave it as undefined, and the ` +
-        `default value (",", ": ") will be used.`
-      );
-    }
+    const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
     // indent being -1 is equivalent to not having a value for the std::optional arg in C++.
     // This is a workaround to Typescript not being able to express Optional value like Python; if
     // user specifies indent to be undefined, it still becomes 2.
-    let optionalIndent: number | undefined = indent == -1 ? undefined : indent;
+    const optionalIndent: number | undefined = indent == -1 ? undefined : indent;
+    // print_converted_ebnf is always false for the web version
+    const printConvertedEBNF = false;
     return new Grammar(
-      new binding.Grammar.FromJSONSchema(schema, optionalIndent, separators, strictMode));
+      new binding.Grammar.FromJSONSchema(
+        schema,
+        anyWhitespace,
+        optionalIndent,
+        separatorsPair,
+        strictMode,
+        maxWhitespaceCnt,
+        printConvertedEBNF
+      ));
   }
 
   /**
@@ -177,6 +279,67 @@ export class Grammar {
    */
   toString(): string {
     return this.handle.ToString();
+  }
+
+
+  /**
+   * Create a grammar from structural tags. The structural tag handles the dispatching
+   * of different grammars based on the tags and triggers: it initially allows any output,
+   * until a trigger is encountered, then dispatch to the corresponding tag; when the end tag
+   * is encountered, the grammar will allow any following output, until the next trigger is
+   * encountered.
+   * The tags parameter is used to specify the output pattern. It is especially useful for LLM
+   * function calling, where the pattern is:
+   * <function=func_name>{"arg1": ..., "arg2": ...}</function>.
+   * This pattern consists of three parts: a begin tag (<function=func_name>), a parameter list
+   * according to some schema ({"arg1": ..., "arg2": ...}), and an end tag (</function>). This
+   * pattern can be described in a StructuralTagItem with a begin tag, a schema, and an end tag.
+   * The structural tag is able to handle multiple such patterns by passing them into multiple
+   * tags.
+   *
+   * The triggers parameter is used to trigger the dispatching of different grammars. The trigger
+   * should be a prefix of a provided begin tag. When the trigger is encountered, the
+   * corresponding tag should be used to constrain the following output. There can be multiple
+   * tags matching the same trigger. Then if the trigger is encountered, the following output
+   * should match one of the tags. For example, in function calling, the triggers can be
+   * ["<function="]. Then if "<function=" is encountered, the following output must match one
+   * of the tags (e.g. <function=get_weather>{"city": "Beijing"}</function>).
+   *
+   * The correspondence of tags and triggers is automatically determined: all tags with the
+   * same trigger will be grouped together. User should make sure any trigger is not a prefix
+   * of another trigger: then the correspondence of tags and triggers will be ambiguous.
+   *
+   * To use this grammar in grammar-guided generation, the GrammarMatcher constructed from
+   * structural tag will generate a mask for each token. When the trigger is not encountered,
+   * the mask will likely be all-1 and not have to be used (fill_next_token_bitmask returns
+   * False, meaning no token is masked). When a trigger is encountered, the mask should be
+   * enforced (fill_next_token_bitmask will return True, meaning some token is masked) to the
+   * output logits.
+   *
+   * The benefit of this method is the token boundary between tags and triggers is automatically
+   * handled. The user does not need to worry about the token boundary.
+   *
+   * There are two ways to construct a structural tag grammar:
+   *
+   * 1. Preferred: `Grammar.fromStructuralTag(structuralTag)` where `structuralTag` can be a JSON
+   *    string, a `StructuralTag` object, or any of the structural tag format objects.
+   * 2. Deprecated: `Grammar.fromStructuralTag(tags, triggers)` which accepts the legacy
+   *    `StructuralTagItem[]` and trigger prefixes.
+   *
+   * @param {StructuralTag | string | StructuralTagFormat | StructuralTagItem[]} structuralTagOrTags
+   * The structural tag definition or legacy structural tag items.
+   * @param {string[]} [triggers] Deprecated trigger list when using the legacy API.
+   * @returns {Grammar} The grammar created from the structural tag definition.
+   */
+  static async fromStructuralTag(structuralTag: StructuralTagLike): Promise<Grammar>;
+  static async fromStructuralTag(tags: StructuralTagItem[], triggers: string[]): Promise<Grammar>;
+  static async fromStructuralTag(
+    structuralTagOrTags: StructuralTagLike | StructuralTagItem[],
+    triggers?: string[],
+  ): Promise<Grammar> {
+    await asyncInitBinding();
+    const structuralTagJSON = structuralTagArgsToJSONString(structuralTagOrTags, triggers);
+    return new Grammar(binding.Grammar.FromStructuralTag(structuralTagJSON));
   }
 }
 
@@ -232,8 +395,8 @@ export class TokenizerInfo {
    */
   static async createTokenizerInfo(
     encodedVocab: string[],
-    vocabType: string,
-    prependSpaceInTokenization: boolean,
+    vocabType: string = "raw",
+    prependSpaceInTokenization: boolean = false,
     vocabSize?: number,
     stopTokenIds?: number[] | number,
   ): Promise<TokenizerInfo> {
@@ -334,38 +497,43 @@ export class GrammarCompiler {
    * format of the schema of a JSON file. We will parse the schema and generate a BNF grammar.
    *
    * @param {string} schema The schema string.
+   * @param {boolean} [anyWhitespace=true] Whether to ignore the indentation
+   * restrictions, and allow any whitespace.
    * @param {number} [indent=2] The number of spaces for indentation. If -1, the grammar will
    * enforce the output to be in one line.
    * @param {[string, string]} [separators] Two separators that will be enforced by the grammar:
    * comma and colon. Examples: (",", ":"), (", ", ": "). If undefined, the default separators will
    * be used: (",", ": ") when the indent is not undefined, and (", ", ": ") otherwise. This follows
-   * the convention in Python's json.dumps(). Currently unsupported and will use the default value.
+   * the convention in Python's json.dumps().
    * @param {boolean} [strictMode=true] Whether to use strict mode. In strict mode, the generated
    * grammar will not allow properties and items that is not specified in the schema. This is
    * equivalent to setting unevaluatedProperties and unevaluatedItems to false.
+   * @param {number} [maxWhitespaceCnt] Maximum number of whitespace characters allowed between
+   * JSON elements when anyWhitespace is true. Undefined means unlimited.
    * @returns {CompiledGrammar} The compiled grammar for the specified JSON schema.
    */
   async compileJSONSchema(
     schema: string,
+    anyWhitespace: boolean = true,
     indent = 2,
     separators?: [string, string],
-    strictMode = true
+    strictMode = true,
+    maxWhitespaceCnt?: number
   ): Promise<CompiledGrammar> {
-    // TODO(Charlie): Add support for separators, which requires binding std::pair
-    // in emscripten
-    if (separators !== undefined) {
-      throw new Error(
-        `Argument separators is not supported yet, please leave it as undefined, and the ` +
-        `default value (",", ": ") will be used.`
-      );
-    }
+    const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
     // indent being -1 is equivalent to not having a value for the std::optional arg in C++.
     // This is a workaround to Typescript not being able to express Optional value like Python; if
     // user specifies indent to be undefined, it still becomes 2.
-    let optionalIndent: number | undefined = indent == -1 ? undefined : indent;
+    const optionalIndent: number | undefined = indent == -1 ? undefined : indent;
     return new CompiledGrammar(
-      this.handle.CompileJSONSchema(schema, optionalIndent, separators, strictMode));
+      this.handle.CompileJSONSchema(
+        schema,
+        anyWhitespace,
+        optionalIndent,
+        separatorsPair,
+        strictMode,
+        maxWhitespaceCnt));
   }
 
   /**
@@ -395,7 +563,7 @@ export class GrammarCompiler {
    */
   async compileGrammar(grammar: Grammar): Promise<CompiledGrammar>;
   async compileGrammar(grammar: string, rootRule?: string): Promise<CompiledGrammar>;
-  async compileGrammar(grammar: string | Grammar, rootRule: string="root"): Promise<CompiledGrammar> {
+  async compileGrammar(grammar: string | Grammar, rootRule: string = "root"): Promise<CompiledGrammar> {
     await asyncInitBinding();
     if (typeof grammar === "string") {
       const grammarObj = await Grammar.fromEBNF(grammar, rootRule);
@@ -403,6 +571,25 @@ export class GrammarCompiler {
     } else {
       return new CompiledGrammar(this.handle.CompileGrammar(grammar.handle));
     }
+  }
+
+  /**
+   * Compile a grammar from structural tags. See Grammar.fromStructuralTag() for more details.
+   *
+   * @param {StructuralTag | string | StructuralTagFormat | StructuralTagItem[]} structuralTagOrTags
+   * The structural tag definition or legacy structural tag items.
+   * @param {string[]} [triggers] Deprecated trigger list when using the legacy API.
+   * @returns {CompiledGrammar} The compiled grammar.
+   */
+  async compileStructuralTag(structuralTag: StructuralTagLike): Promise<CompiledGrammar>;
+  async compileStructuralTag(tags: StructuralTagItem[], triggers: string[]): Promise<CompiledGrammar>;
+  async compileStructuralTag(
+    structuralTagOrTags: StructuralTagLike | StructuralTagItem[],
+    triggers?: string[],
+  ): Promise<CompiledGrammar> {
+    await asyncInitBinding();
+    const structuralTagJSON = structuralTagArgsToJSONString(structuralTagOrTags, triggers);
+    return new CompiledGrammar(this.handle.CompileStructuralTag(structuralTagJSON));
   }
 }
 
@@ -444,14 +631,14 @@ export class GrammarMatcher {
    * @param {CompiledGrammar} compiledGrammar A compiled grammar from GrammarCompiler.
    * @param {number[] | number} [overrideStopTokens=undefined] Stop tokens to override the default ones.
    * @param {boolean} [terminateWithoutStopToken=false] Whether to terminate without stop token.
-   * @param {number} [maxRollbackTokens=0] Max rollback tokens.
+   * @param {number} [maxRollbackTokens=-1] [Deprecated] Max rollback tokens.
    * @returns {GrammarMatcher} The constructed GrammarMatcher.
    */
   static async createGrammarMatcher(
     compiledGrammar: CompiledGrammar,
     overrideStopTokens?: number[] | number,
     terminateWithoutStopToken: boolean = false,
-    maxRollbackTokens: number = 0,
+    maxRollbackTokens: number = -1,
   ): Promise<GrammarMatcher> {
     await asyncInitBinding();
     // Convert overrideStopTokens to std::vector<int> if not undefined
@@ -492,8 +679,8 @@ export class GrammarMatcher {
    * @param {boolean} [verbose=false] To print debugging info
    * @returns {boolean} Whether the input string is accepted.
    */
-  _debugAcceptString(inputStr: string, verbose: boolean = false): boolean {
-    return this.handle._DebugAcceptString(inputStr, verbose);
+  _acceptString(inputStr: string, verbose: boolean = false): boolean {
+    return this.handle.AcceptString(inputStr, verbose);
   }
 
   /**
