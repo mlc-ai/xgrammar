@@ -1,11 +1,15 @@
 {
   "compilerOptions": {
+    "target": "es2022",
     "declaration": true,
     "outDir": "lib",
     "declarationMap": true,
     "esModuleInterop": true,
     "strict": true,
     "noImplicitAny": false, // to allow importing xgrammar_binding.js
+    "module": "esnext",
+    "moduleResolution": "node",
+    "lib": ["dom", "es2022"]
   },
   "include": [
     "src"

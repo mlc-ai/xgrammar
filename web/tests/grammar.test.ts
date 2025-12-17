@@ -4,7 +4,7 @@
  * thoroughly since that is done in `tests/python`.
  */
 import { describe, expect, test } from "@jest/globals";
-import { Grammar, GrammarCompiler, CompiledGrammar, TokenizerInfo, GrammarMatcher, Testings } from "..";
+import { Grammar, GrammarCompiler, TokenizerInfo, GrammarMatcher, Testings, StructuralTagItem } from "..";
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 
 async function getTokenizerInfoFromUrl(tokenizerUrl: string, vocabType: string, prependSpace: boolean): Promise<TokenizerInfo> {
@@ -25,18 +25,21 @@ async function getTokenizerInfoFromUrl(tokenizerUrl: string, vocabType: string, 
 
 describe("Test all Grammar APIs", () => {
   const ebnf_grammar = String.raw`basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
-basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= ("[" "" basic_any (", " basic_any)* "" "]") | "[]"
-basic_object ::= ("{" "" basic_string ": " basic_any (", " basic_string ": " basic_any)* "" "}") | "{}"
+basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 root_prop_1 ::= basic_boolean | basic_null
 root_prop_2 ::= basic_number | basic_null
-root ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " root_prop_1 ", ")? "\"size\"" ": " root_prop_2 (", " "\"name\"" ": " basic_string)? "" "}"
+root_part_2 ::= "" | [ \n\t]* "," [ \n\t]* "\"name\"" [ \n\t]* ":" [ \n\t]* basic_string ""
+root_part_1 ::= [ \n\t]* "," [ \n\t]* "\"size\"" [ \n\t]* ":" [ \n\t]* root_prop_2 root_part_2
+root_part_0 ::= root_part_1 | [ \n\t]* "," [ \n\t]* "\"opt_bool\"" [ \n\t]* ":" [ \n\t]* root_prop_1 root_part_1
+root ::= "{" [ \n\t]* (("\"num\"" [ \n\t]* ":" [ \n\t]* basic_integer root_part_0) | ("\"opt_bool\"" [ \n\t]* ":" [ \n\t]* root_prop_1 root_part_1) | ("\"size\"" [ \n\t]* ":" [ \n\t]* root_prop_2 root_part_2)) [ \n\t]* "}"
 `;
 
   /**
@@ -53,10 +56,9 @@ root ::= "{" "" ("\"num\"" ": " basic_integer ", ")? ("\"opt_bool\"" ": " root_p
     const before = `root ::= ((b c) | (b root))
 b ::= ((b_1 d [a]*))
 c ::= ((c_1))
-d ::= ((d_1))
-b_1 ::= ("" | ("b" b_1))
-c_1 ::= ((c_2 c_1) | (c_2))
-c_2 ::= (([acep-z]))
+d ::= ((d_1)) (=([a]*))
+b_1 ::= ("" | ("b" b_1)) (=(d [a]*))
+c_1 ::= (([acep-z] c_1) | ([acep-z]))
 d_1 ::= ("" | ("d"))
 `;
     const grammar1 = await Grammar.fromEBNF(before)
@@ -65,43 +67,73 @@ d_1 ::= ("" | ("d"))
   });
 
   test("Test Grammar.fromJSONSchema()", async () => {
-    const grammar = await Grammar.fromJSONSchema(schema);
+    const grammar = await Grammar.fromJSONSchema(schema, false);
     const outputStr = grammar.toString();
     expect(outputStr == "").toEqual(false);
   });
 
   test("Test _jsonSchemaToEBNF", async () => {
     // Equivalent to test_optional() in test_json_schema_converter.py
-    const grammar = await Testings._jsonSchemaToEBNF(schema, -1);
+    const grammar = await Testings._jsonSchemaToEBNF(schema, true, -1);
     expect(grammar).toEqual(ebnf_grammar);
   });
 
   test("Test indent _jsonSchemaToEBNF", async () => {
-    const grammar0 = await Testings._jsonSchemaToEBNF(schema, -1);
-    const grammar1 = await Testings._jsonSchemaToEBNF(schema);
-    const grammar2 = await Testings._jsonSchemaToEBNF(schema, 2);
+    const grammar0 = await Testings._jsonSchemaToEBNF(schema, false, -1);
+    const grammar1 = await Testings._jsonSchemaToEBNF(schema, false);
+    const grammar2 = await Testings._jsonSchemaToEBNF(schema, false, 2);
     expect(grammar1).toEqual(grammar2);
     expect(grammar0).not.toEqual(grammar2);
   });
 
   test("Test indent Grammar.fromJSONSchema()", async () => {
-    const grammar0 = (await Grammar.fromJSONSchema(schema, -1)).toString();
-    const grammar1 = (await Grammar.fromJSONSchema(schema)).toString();
-    const grammar2 = (await Grammar.fromJSONSchema(schema, 2)).toString();
+    const grammar0 = (await Grammar.fromJSONSchema(schema, false, -1)).toString();
+    const grammar1 = (await Grammar.fromJSONSchema(schema, false)).toString();
+    const grammar2 = (await Grammar.fromJSONSchema(schema, false, 2)).toString();
     expect(grammar1).toEqual(grammar2);
     expect(grammar0).not.toEqual(grammar2);
-  });
-
-  test("Test jsonSchema() argument separators not supported yet", async () => {
-    expect(async () => {
-      const grammar = await Grammar.fromJSONSchema(schema, 2, [",", ":"]);
-    }).rejects.toThrow("Argument separators is not supported yet");
   });
 
   test("Test Grammar.builtinJSONGrammar()", async () => {
     const grammar = await Grammar.builtinJSONGrammar();
     const outputStr = grammar.toString();
     expect(outputStr == "").toEqual(false);
+  });
+
+  test("Test Grammar.fromStructuralTag()", async () => {
+    const schemaObject = {
+      type: "object",
+      properties: {
+        city: { type: "string" },
+        unit: { enum: ["celsius", "fahrenheit"] },
+      },
+      required: ["city"],
+      additionalProperties: false,
+    };
+    const structuralTag = {
+      type: "structural_tag" as const,
+      format: {
+        type: "triggered_tags" as const,
+        triggers: ["<function="],
+        tags: [
+          {
+            type: "tag" as const,
+            begin: "<function=get_weather>",
+            end: "</function>",
+            content: {
+              type: "json_schema" as const,
+              json_schema: schemaObject,
+            },
+          },
+        ],
+      },
+    };
+    const grammar = await Grammar.fromStructuralTag(structuralTag);
+    const legacyGrammar = await Grammar.fromStructuralTag(
+      [new StructuralTagItem("<function=get_weather>", JSON.stringify(schemaObject), "</function>")],
+      ["<function="],
+    );
+    expect(grammar.toString()).toEqual(legacyGrammar.toString());
   });
 });
 
@@ -176,9 +208,9 @@ describe("Test CompiledGrammar and GrammarCompiler", () => {
       false,
     );
     const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
-    const compiledGrammar0 = await compiler.compileJSONSchema(schema, -1);
-    const compiledGrammar1 = await compiler.compileJSONSchema(schema);
-    const compiledGrammar2 = await compiler.compileJSONSchema(schema, 2);
+    const compiledGrammar0 = await compiler.compileJSONSchema(schema, false, -1);
+    const compiledGrammar1 = await compiler.compileJSONSchema(schema, false);
+    const compiledGrammar2 = await compiler.compileJSONSchema(schema, false, 2);
     const outputStr0 = compiledGrammar0.grammar().toString();
     const outputStr1 = compiledGrammar1.grammar().toString();
     const outputStr2 = compiledGrammar2.grammar().toString();
@@ -196,10 +228,9 @@ describe("Test CompiledGrammar and GrammarCompiler", () => {
     const before = `root ::= ((b c) | (b root))
 b ::= ((b_1 d [a]*))
 c ::= ((c_1))
-d ::= ((d_1))
-b_1 ::= ("" | ("b" b_1))
-c_1 ::= ((c_2 c_1) | (c_2))
-c_2 ::= (([acep-z]))
+d ::= ((d_1)) (=([a]*))
+b_1 ::= ("" | ("b" b_1)) (=(d [a]*))
+c_1 ::= (([acep-z] c_1) | ([acep-z]))
 d_1 ::= ("" | ("d"))
 `;
     const tokenizerInfo = await getTokenizerInfoFromUrl(
@@ -248,8 +279,8 @@ describe("Test GrammarMatcher E2E", () => {
     const expected = [
       ["{"],
       ['"', "}", "\n", " ", '"a":true'],
-      ["a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", " "],
-      ["a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", " "],
+      ["<s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", " "],
+      ["<s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", " "],
       [':"', ":", "\n", " "],
       ['"', "{", "6", "\n", " "],
       ["}", ", ", "6", "\n", " "],
@@ -359,7 +390,8 @@ describe("Test GrammarMatcher E2E", () => {
       5,
     );
     tokenizerInfo.dispose();
-    expect(matcher.getMaxRollbackTokens()).toEqual(5);
+    // Max rollback tokens is deprecated
+    expect(matcher.getMaxRollbackTokens()).toEqual(-1);
 
     // 2. Test
     const input_ids_splitted: number[][] = [];
@@ -533,7 +565,7 @@ describe("Test json schema E2E", () => {
     const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
 
     // 4. Instantiate matcher
-    const grammar = await compiler.compileJSONSchema(schemaStr, 2);
+    const grammar = await compiler.compileJSONSchema(schemaStr, true, 2);
     const matcher = await GrammarMatcher.createGrammarMatcher(grammar);
     const inputIds = tokenizer.encode(instanceStr);
 
@@ -579,7 +611,7 @@ describe("Test json schema E2E", () => {
     const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
 
     // 4. Instantiate matcher
-    const grammar = await compiler.compileJSONSchema(schemaStr, 2);
+    const grammar = await compiler.compileJSONSchema(schemaStr, true, 2);
     const matcher = await GrammarMatcher.createGrammarMatcher(grammar);
 
     // 5. Expect to accept all inputIds
@@ -588,7 +620,7 @@ describe("Test json schema E2E", () => {
       await matcher.getNextTokenBitmask();
       // if use acceptToken, the first token of instanceStr will be encoded as 426, `_{`,
       // while the matcher only accepts 29912, `{`, and another token of `<0x??>`
-      const accepted = matcher._debugAcceptString(inputStr);
+      const accepted = matcher._acceptString(inputStr);
       expect(accepted).toEqual(true);
     }
 
