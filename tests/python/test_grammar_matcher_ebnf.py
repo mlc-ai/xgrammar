@@ -507,7 +507,7 @@ def test_positive_utf8_character_class_cyrillic():
     like [а-я] should work correctly.
     """
     # Cyrillic lowercase range а-я (U+0430 to U+044F)
-    ebnf_grammar_str = 'root ::= [а-я]+'
+    ebnf_grammar_str = "root ::= [а-я]+"
     grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
 
     # Single Cyrillic character should be accepted
@@ -525,7 +525,7 @@ def test_positive_utf8_character_class_cyrillic():
     assert not _is_grammar_accept_string(grammar, "")  # empty
 
     # Test uppercase Cyrillic range
-    ebnf_grammar_upper = 'root ::= [А-Я]+'
+    ebnf_grammar_upper = "root ::= [А-Я]+"
     grammar_upper = xgr.Grammar.from_ebnf(ebnf_grammar_upper)
     assert _is_grammar_accept_string(grammar_upper, "А")  # U+0410
     assert _is_grammar_accept_string(grammar_upper, "Я")  # U+042F
@@ -533,7 +533,7 @@ def test_positive_utf8_character_class_cyrillic():
     assert not _is_grammar_accept_string(grammar_upper, "привет")  # lowercase
 
     # Test mixed Cyrillic range
-    ebnf_grammar_mixed = 'root ::= [а-яА-ЯёЁ]+'
+    ebnf_grammar_mixed = "root ::= [а-яА-ЯёЁ]+"
     grammar_mixed = xgr.Grammar.from_ebnf(ebnf_grammar_mixed)
     assert _is_grammar_accept_string(grammar_mixed, "Привет")
     assert _is_grammar_accept_string(grammar_mixed, "ёлка")
@@ -546,7 +546,7 @@ def test_positive_utf8_character_class_cjk():
     Tests Chinese/Japanese/Korean characters which use 3-byte UTF-8 encoding.
     """
     # CJK Unified Ideographs range (subset): 一-龥 (U+4E00 to U+9FA5)
-    ebnf_grammar_str = 'root ::= [一-龥]+'
+    ebnf_grammar_str = "root ::= [一-龥]+"
     grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
 
     # Single CJK character
@@ -565,7 +565,7 @@ def test_positive_utf8_character_class_cjk():
     assert not _is_grammar_accept_string(grammar, "")  # empty
 
     # Test Japanese Hiragana range: あ-ん (U+3041 to U+3093)
-    ebnf_hiragana = 'root ::= [あ-ん]+'
+    ebnf_hiragana = "root ::= [あ-ん]+"
     grammar_hiragana = xgr.Grammar.from_ebnf(ebnf_hiragana)
     assert _is_grammar_accept_string(grammar_hiragana, "あ")  # U+3041
     assert _is_grammar_accept_string(grammar_hiragana, "ん")  # U+3093
@@ -580,7 +580,7 @@ def test_positive_utf8_character_class_emoji():
     """
     # Emoji range: Miscellaneous Symbols and Pictographs (U+1F300 to U+1F5FF)
     # Note: Using a smaller range for reliable testing
-    ebnf_grammar_str = 'root ::= [😀-😿]+'  # U+1F600 to U+1F63F (Emoticons)
+    ebnf_grammar_str = "root ::= [😀-😿]+"  # U+1F600 to U+1F63F (Emoticons)
     grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
 
     # Single emoji
@@ -603,7 +603,7 @@ def test_positive_utf8_character_class_mixed_ranges():
     Tests combining ASCII, 2-byte, 3-byte, and 4-byte UTF-8 characters.
     """
     # Mix of ASCII, Cyrillic, and CJK
-    ebnf_grammar_str = 'root ::= [a-zа-я一-龥]+'
+    ebnf_grammar_str = "root ::= [a-zа-я一-龥]+"
     grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
 
     # Individual ranges
@@ -622,7 +622,7 @@ def test_positive_utf8_character_class_mixed_ranges():
 def test_positive_utf8_single_char_class():
     """Test positive character class with single UTF-8 character (not a range)."""
     # Single Cyrillic character (not a range)
-    ebnf_grammar_str = 'root ::= [а]+'
+    ebnf_grammar_str = "root ::= [а]+"
     grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
 
     assert _is_grammar_accept_string(grammar, "а")
@@ -631,7 +631,7 @@ def test_positive_utf8_single_char_class():
     assert not _is_grammar_accept_string(grammar, "a")  # ASCII 'a' is different from Cyrillic 'а'
 
     # Single CJK character
-    ebnf_grammar_cjk = 'root ::= [中]+'
+    ebnf_grammar_cjk = "root ::= [中]+"
     grammar_cjk = xgr.Grammar.from_ebnf(ebnf_grammar_cjk)
     assert _is_grammar_accept_string(grammar_cjk, "中")
     assert _is_grammar_accept_string(grammar_cjk, "中中中")
