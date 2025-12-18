@@ -3,6 +3,7 @@ token.
 """
 
 import math
+import os
 import warnings
 from typing import List, Literal, Optional, Tuple, Union
 
@@ -22,6 +23,7 @@ def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
 
 
 _FULL_MASK = torch.tensor(-1, dtype=bitmask_dtype)
+_DISABLE_TOKEN_BITMASK_COMPILE = os.getenv("XGRAMMAR_DISABLE_TOKEN_BITMASK_COMPILE", "0") == "1"
 
 
 def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
@@ -140,6 +142,11 @@ def apply_token_bitmask_inplace(
         from .kernels.apply_token_bitmask_inplace_cpu import apply_token_bitmask_inplace_cpu
 
         apply_token_bitmask_inplace_cpu(logits, bitmask, vocab_size, indices)
+
+    elif _DISABLE_TOKEN_BITMASK_COMPILE:
+        from .kernels.apply_token_bitmask_inplace_torch import apply_token_bitmask_inplace_torch
+
+        apply_token_bitmask_inplace_torch(logits, bitmask, vocab_size, indices)
 
     elif logits.device.type == "cuda":
         from .kernels.apply_token_bitmask_inplace_triton import apply_token_bitmask_inplace_triton
