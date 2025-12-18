@@ -1,7 +1,7 @@
 # Structural Tag Templates
 
 Based on the [structural tags](./structural_tag.md), structural tag templates provides a more convineient method for users to generate grammars to describe the grammar to constrain the LLMs' output.
-In general, structural tag templates support placeholders in the structural tags, which are in the form of `\{\{(var_name([])?)(\.var_name([])?)\}\}`, such as `{{A.name}}`, `{{A[].name}}`, `{{A.name[].other}}`. `var_name[]` means that the value is an array, and it will be automatically expanded with the users' input. `var_name` means that the values is a terminal value, and it will be automatically replaced with the input. Users can use `xgrammar.Grammar.from_structural_tag_template()` to generate a `xgrammar.Grammar`. Here, `template_json_str` is the structural tag templates, and kwargs are a series of values. For example, the template structural tag `stag` contains `{{A[].name}}` and `{{A[].age}}`, then the users can use `xgrammar.Grammar.from_structural_tag_template(stag, A=A)` to generate the grammar, where `A=[{"name":..., "age":...},.{"name":...,"age":...}, ...]`. This function will replace the placeholders automatically.
+In general, structural tag templates support placeholders in the structural tags, which are in the form of `\{\{(var_name([])?)(\.var_name([])?)\}\}`, such as `{{A.name}}`, `{{A[].name}}`, `{{A.name[].other}}`. `var_name[]` means that the value is an array, and it will be automatically expanded with the users' input. `var_name` means that the values is a terminal value, and it will be automatically replaced with the input. Users can use `xgrammar.Grammar.from_structural_tag_template()` to generate a `xgrammar.Grammar`. Here, `template_json_str` is the structural tag templates, and kwargs are a series of values. For example, the structural tag template `stag` contains `{{A[].name}}` and `{{A[].age}}`, then the users can use `xgrammar.Grammar.from_structural_tag_template(stag, A=A)` to generate the grammar, where `A=[{"name":..., "age":...},.{"name":...,"age":...}, ...]`. This function will replace the placeholders automatically.
 
 ## Template Placeholders in Formats
 
@@ -77,27 +77,27 @@ Template placeholders are not allowed in `triggers` and `separators`.
 
 Template placeholders cannot be directly contained in these formats.
 
-## InValid Structural Tag Templates
+## Common Invalid Patterns
 
 ### Type 1: Mingled Scope
 
-Not all the structural tag templates are valid. For example, the mingled formats mentioned above are not valid structural tag templates. Besides, there are some other situations where the template structural tag cannot be compiled. For example:
+Not all the structural tag templates are valid. For example, the mingled formats mentioned above are not valid structural tag templates. Besides, there are some other situations where the structural tag template cannot be compiled. For example:
 
 ```json
 {
     "type": "sequence",
     "elements": [
             {
-            "type": "const_string",
-            "value": "{{A[].value1}}"
+                "type": "const_string",
+                "value": "{{A[].value1}}"
             },
             {
-            "type": "const_string",
-            "value": "{{B[].value1}}"
+                "type": "const_string",
+                "value": "{{B[].value1}}"
             },
             {
-            "type": "const_string",
-            "value": "{{A[].value2}}"
+                "type": "const_string",
+                "value": "{{A[].value2}}"
             },
         ]
 }
@@ -115,12 +115,12 @@ Stuctural tag templates allow users to create placeholders like `a[].b[].c`. How
     "type": "sequence",
     "elements": [
             {
-            "type": "const_string",
-            "value": "{{A[].value1[]}}"
+                "type": "const_string",
+                "value": "{{A[].value1[]}}"
             },
             {
-            "type": "const_string",
-            "value": "{{A[].value2[]}}"
+                "type": "const_string",
+                "value": "{{A[].value2[]}}"
             },
         ]
 }
@@ -133,12 +133,12 @@ is not allowed. for each value, it should have at most one array in each layer. 
     "type": "sequence",
     "elements": [
             {
-            "type": "const_string",
-            "value": "{{A[].value1[]}}"
+                "type": "const_string",
+                "value": "{{A[].value1[]}}"
             },
             {
-            "type": "const_string",
-            "value": "{{A[].value1[].value2[]}}"
+                "type": "const_string",
+                "value": "{{A[].value1[].value2[]}}"
             },
         ]
 }
@@ -151,12 +151,12 @@ Besides, strucutral tag templates like this is also allowed:
     "type": "sequence",
     "elements": [
             {
-            "type": "const_string",
-            "value": "{{A[].value1[]}}"
+                "type": "const_string",
+                "value": "{{A[].value1[]}}"
             },
             {
-            "type": "const_string",
-            "value": "{{B[].value2[]}}"
+                "type": "const_string",
+                "value": "{{B[].value2[]}}"
             },
         ]
 }
