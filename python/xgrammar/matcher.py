@@ -142,6 +142,12 @@ def apply_token_bitmask_inplace(
         from .kernels.apply_token_bitmask_inplace_cpu import apply_token_bitmask_inplace_cpu
 
         apply_token_bitmask_inplace_cpu(logits, bitmask, vocab_size, indices)
+        
+    elif _DISABLE_TOKEN_BITMASK_COMPILE:
+         from .kernels.apply_token_bitmask_inplace_torch import (
+            apply_token_bitmask_inplace_torch
+        )
+        apply_token_bitmask_inplace_torch(logits, bitmask, vocab_size, indices)
 
     elif logits.device.type == "cuda":
         from .kernels.apply_token_bitmask_inplace_triton import apply_token_bitmask_inplace_triton
@@ -150,12 +156,8 @@ def apply_token_bitmask_inplace(
     else:
         from .kernels.apply_token_bitmask_inplace_torch_compile import (
             apply_token_bitmask_inplace_torch_compile,
-            apply_token_bitmask_inplace_torch
         )
-        if _DISABLE_TOKEN_BITMASK_COMPILE:
-            apply_token_bitmask_inplace_torch(logits, bitmask, vocab_size, indices)
-        else:
-            apply_token_bitmask_inplace_torch_compile(logits, bitmask, vocab_size, indices)
+        apply_token_bitmask_inplace_torch_compile(logits, bitmask, vocab_size, indices)
 
 
 class GrammarMatcher(XGRObject):
