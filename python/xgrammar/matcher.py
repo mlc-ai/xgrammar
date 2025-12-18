@@ -22,7 +22,9 @@ def get_bitmask_shape(batch_size: int, vocab_size: int) -> Tuple[int, int]:
 
 
 _FULL_MASK = torch.tensor(-1, dtype=bitmask_dtype)
-
+_DISABLE_TOKEN_BITMASK_COMPILE = (
+    os.getenv("XGRAMMAR_DISABLE_TOKEN_BITMASK_COMPILE", "0") == "1"
+)
 
 def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
     """Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on
@@ -148,9 +150,12 @@ def apply_token_bitmask_inplace(
     else:
         from .kernels.apply_token_bitmask_inplace_torch_compile import (
             apply_token_bitmask_inplace_torch_compile,
+            apply_token_bitmask_inplace_torch
         )
-
-        apply_token_bitmask_inplace_torch_compile(logits, bitmask, vocab_size, indices)
+        if _DISABLE_TOKEN_BITMASK_COMPILE:
+            apply_token_bitmask_inplace_torch(logits, bitmask, vocab_size, indices)
+        else:
+            apply_token_bitmask_inplace_torch_compile(logits, bitmask, vocab_size, indices)
 
 
 class GrammarMatcher(XGRObject):
