@@ -125,8 +125,8 @@ class TokenizerInfo(XGRObject):
         return has_tiktoken_encoding or filename_pattern
 
     @staticmethod
-    def _is_bpe_style_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
-        """Checking whether the tokenizer has a BPE-like whitespace conversion.
+    def _is_byte_level_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
+        """Checking whether the tokenizer has byte-level whitespace conversion.
 
         Parameters
         ----------
@@ -135,8 +135,8 @@ class TokenizerInfo(XGRObject):
 
         Returns
         -------
-        is_bpe_style : bool
-            The tokenizer is BPE-style.
+        is_byte_level : bool
+            The tokenizer has byte-level whitespace conversion.
         """
         if tiktoken is None:
             return False
@@ -289,7 +289,7 @@ class TokenizerInfo(XGRObject):
                         "It will be automatically detected."
                     )
             vocab_type = VocabType.RAW
-            if TokenizerInfo._is_bpe_style_tokenizer(tokenizer):
+            if TokenizerInfo._is_byte_level_tokenizer(tokenizer):
                 # Some tiktoken tokenizers subclassed from PretrainedTokenizerBase
                 # also perform byte-level conversion.
                 # e.g. Kimi-K2-Instruct
