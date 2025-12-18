@@ -1,3 +1,5 @@
+from typing import Literal
+
 from .structural_tag import (
     AnyTextFormat,
     JSONSchemaFormat,
@@ -7,7 +9,7 @@ from .structural_tag import (
     TriggeredTagsFormat,
 )
 
-# ---------- Template Structural Tag ----------
+# ---------- Structural Tag Template ----------
 
 _structural_tag_registry = {}
 
@@ -22,11 +24,14 @@ def _register_template_structural_tag_format(name: str):
     return decorator
 
 
-def get_builtin_template_structural_tag(format_type: str) -> StructuralTag:
-    """Get builtin template structural tag format by format type.
-    In all the template structural tag formats, users should provide
+SupportedTemplateName = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek", "harmony"]
+
+
+def get_builtin_structural_tag_template(format_type: SupportedTemplateName) -> StructuralTag:
+    """Get builtin structural tag template format by format type.
+    In all the structural tag template formats, users should provide
     a list of tools, each tool should have a "name" and "parameters" field.
-    to use the template structural tag format. Besides, for the OpenAI Harmony Response Format,
+    to use the structural tag template format. Besides, for the OpenAI Harmony Response Format,
     users should also provide a list of builtin tools, each builtin tool should have a "name"
     and "parameters" field.
 
@@ -108,7 +113,7 @@ def _get_kimi_structral_tag_template() -> StructuralTag:
     Returns
     -------
     StructuralTag
-        A template structural tag format dictionary.
+        A structural tag template format dictionary.
         This format is used by Kimi-v2 and other models that follow the same style.
 
     """
@@ -133,7 +138,7 @@ def _get_deepseek_structural_tag_template() -> StructuralTag:
     Returns
     -------
     StructuralTag
-        A template structural tag format dictionary.
+        A structural tag template format dictionary.
         This format is used by Deepseek-v3.1 and other models that follow the same style.
 
     """
@@ -158,7 +163,7 @@ def _get_qwen_coder_structural_tag_template() -> StructuralTag:
     Returns
     -------
     StructuralTag
-        A template structural tag format dictionary.
+        A structural tag template format dictionary.
         This format is used by Qwen3 Coder and other models that follow the same style.
     """
     return StructuralTag(
@@ -182,7 +187,7 @@ def _get_qwen_structural_tag_template() -> StructuralTag:
     Returns
     -------
     StructuralTag
-        A template structural tag format dictionary.
+        A structural tag template format dictionary.
         This format is used by Qwen3 and other models that follow the same style.
 
     """
@@ -207,7 +212,7 @@ def _get_harmony_structural_tag_template() -> StructuralTag:
     Returns
     -------
     StructuralTag
-        A template structural tag format dictionary.
+        A structural tag template format dictionary.
         This format is in OpenAI Harmony Response Format, which is used by GPT-oss
         and other models that follow the same style.
 

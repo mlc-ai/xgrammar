@@ -164,17 +164,17 @@ Besides, strucutral tag templates like this is also allowed:
 
 ## Builtin Structural Tag Templates: Prepared for LLMs' tool-calling
 
-There are several builtin structural tag templates, designed for different LLMs' tool-calling formats. Users can get the builtin structural tag templates with `xgrammar.builtin_structural_tag_template.get_builtin_template_structural_tag(format_type: str)`. Currently, these `format_type`s are supported: `Llama`, `kimi`, `deepseek`, `qwen_coder`, `qwen`, `harmony`.
+There are several builtin structural tag templates, designed for different LLMs' tool-calling formats. Users can get the builtin structural tag templates with `xgrammar.builtin_structural_tag_template.get_builtin_structural_tag_template(format_type: SupportedTemplateName)`. Currently, these `format_type`s are supported: `Llama`, `kimi`, `deepseek`, `qwen_coder`, `qwen`, `harmony`.
 For `llama`, `kimi`, `deepseek`, `qwen_coder`, `qwen`, users need to provide a value `tools=[{"name":..., "parameters":...}, ...]` for the structural tag templates. For `harmony` format, users must provide both `tools=[{"name":..., "parameters":...}]` and `builtin_tools=[{"name":..., "parameters":...}, ...]` for the template. These templates will force the LLMs to output the correct function-calling formats, with other natural language outputs.
 
 For example, if we want to generate a grammar to constrain the output of a Llama model to output text or valid tool-calling, we can use the following code:
 
 ```python
 from xgrammar import Grammar
-from xgrammar.builtin_structural_tag_template import get_builtin_template_structural_tag
+from xgrammar.builtin_structural_tag_template import get_builtin_structural_tag_template
 
 # Get the llama-style strucutural tag template.
-template_stag_format = get_builtin_template_structural_tag("llama")
+template_stag_format = get_builtin_structural_tag_template("llama")
 
 # Define the tools. 'name' and 'parameters' are required.
 tools = [

@@ -3575,7 +3575,7 @@ def test_builtin_template_values(
     instance_is_accepted_tuples: List[Tuple[str, bool]],
 ):
     """Test builtin format with template values"""
-    template_stag_format = xgr.builtin_structural_tag_template.get_builtin_template_structural_tag(
+    template_stag_format = xgr.builtin_structural_tag_template.get_builtin_structural_tag_template(
         builtin_format_type
     )
 
