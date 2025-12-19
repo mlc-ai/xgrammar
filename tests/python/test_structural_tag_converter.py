@@ -6,7 +6,6 @@ import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.builtin_structural_tag_template import SupportedTemplateNames
 from xgrammar.structural_tag import StructuralTag
 from xgrammar.testing import _is_grammar_accept_string
 
@@ -4290,7 +4289,7 @@ def test_builtin_template_efficiency(model_name: str, function_number: int):
 
 
 @pytest.mark.parametrize("function_number", function_numbers)
-def test_builtin_template_efficiency(function_number: int):
+def test_harmony_builtin_template_efficiency(function_number: int):
     tools = example_tools[:function_number]
     builtin_template = xgr.builtin_structural_tag_template.get_builtin_structural_tag_template(
         "harmony"
