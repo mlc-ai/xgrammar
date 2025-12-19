@@ -14,8 +14,8 @@ from .structural_tag import (
 _structural_tag_registry = {}
 
 
-def _register_template_structural_tag_format(name: str):
-    """Register a structural tag format."""
+def _register_structural_tag_template(name: str):
+    """Register a structural tag template."""
 
     def decorator(func):
         _structural_tag_registry[name] = func
@@ -24,10 +24,10 @@ def _register_template_structural_tag_format(name: str):
     return decorator
 
 
-SupportedTemplateName = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek", "harmony"]
+SupportedTemplateNames = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek", "harmony"]
 
 
-def get_builtin_structural_tag_template(format_type: SupportedTemplateName) -> StructuralTag:
+def get_builtin_structural_tag_template(format_type: SupportedTemplateNames) -> StructuralTag:
     """Get builtin structural tag template format by format type.
     In all the structural tag template formats, users should provide
     a list of tools, each tool should have a "name" and "parameters" field.
@@ -59,9 +59,15 @@ def get_builtin_structural_tag_template(format_type: SupportedTemplateName) -> S
 
     Parameters
     ----------
-    format_type : str
-        The format type, must be one of the registered format types:
-        "Llama", "Kimi", "Deepseek", "Qwen_Coder", "Qwen", "Harmony".
+    format_type : SupportedTemplateNames
+        The format type of the structural tag template.
+        Currrently supported format types are:
+        - "llama": Llama style structural tag format.
+        - "qwen": Qwen style structural tag format.
+        - "qwen_coder": Qwen Coder style structural tag format.
+        - "kimi": Kimi style structural tag format.
+        - "deepseek": Deepseek style structural tag format.
+        - "harmony": OpenAI Harmony Response Format.
 
     Returns
     -------
@@ -81,7 +87,7 @@ def get_builtin_structural_tag_template(format_type: SupportedTemplateName) -> S
     return func()
 
 
-@_register_template_structural_tag_format("llama")
+@_register_structural_tag_template("llama")
 def _get_llama_structural_tag_template() -> StructuralTag:
     """Get Llama style structural tag format.
 
@@ -106,7 +112,7 @@ def _get_llama_structural_tag_template() -> StructuralTag:
     )
 
 
-@_register_template_structural_tag_format("kimi")
+@_register_structural_tag_template("kimi")
 def _get_kimi_structral_tag_template() -> StructuralTag:
     """Get Kimi style structural tag format.
 
@@ -131,7 +137,7 @@ def _get_kimi_structral_tag_template() -> StructuralTag:
     )
 
 
-@_register_template_structural_tag_format("deepseek")
+@_register_structural_tag_template("deepseek")
 def _get_deepseek_structural_tag_template() -> StructuralTag:
     """Get Deepseek style structural tag format.
 
@@ -156,7 +162,7 @@ def _get_deepseek_structural_tag_template() -> StructuralTag:
     )
 
 
-@_register_template_structural_tag_format("qwen_coder")
+@_register_structural_tag_template("qwen_coder")
 def _get_qwen_coder_structural_tag_template() -> StructuralTag:
     """Get Qwen Coder style structural tag format.
 
@@ -180,7 +186,7 @@ def _get_qwen_coder_structural_tag_template() -> StructuralTag:
     )
 
 
-@_register_template_structural_tag_format("qwen")
+@_register_structural_tag_template("qwen")
 def _get_qwen_structural_tag_template() -> StructuralTag:
     """Get Qwen style structural tag format.
 
@@ -205,7 +211,7 @@ def _get_qwen_structural_tag_template() -> StructuralTag:
     )
 
 
-@_register_template_structural_tag_format("harmony")
+@_register_structural_tag_template("harmony")
 def _get_harmony_structural_tag_template() -> StructuralTag:
     """Get harmony style structural tag format.
 
