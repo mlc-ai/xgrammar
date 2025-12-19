@@ -729,6 +729,32 @@ window.addEventListener("load", load);
         <span class="k">return</span> <span class="n">has_tiktoken_encoding</span> <span class="ow">or</span> <span class="n">filename_pattern</span>
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_byte_level_tokenizer</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">:</span> <span class="n">PreTrainedTokenizerBase</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Checking whether the tokenizer has byte-level whitespace conversion.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        tokenizer : PreTrainedTokenizerBase</span>
+<span class="sd">            The huggingface tokenizer.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        is_byte_level : bool</span>
+<span class="sd">            The tokenizer has byte-level whitespace conversion.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">tiktoken</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="c1"># check the tokenizer with r&#39; &#39; encode</span>
+        <span class="n">new_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">new_ids</span><span class="o">.</span><span class="fm">__len__</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">new_tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">convert_ids_to_tokens</span><span class="p">(</span><span class="n">new_ids</span><span class="p">)</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">new_tokens</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="c1"># the tokenizer has a BPE-like whitespace conversion</span>
+        <span class="k">return</span> <span class="n">token</span> <span class="o">==</span> <span class="s2">&quot;Ġ&quot;</span>
+
+    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_sentencepiece_tokenizer</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">:</span> <span class="n">PreTrainedTokenizerBase</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">sentencepiece</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
@@ -866,9 +892,15 @@ window.addEventListener("load", load);
                         <span class="s2">&quot;stop_token_ids is neither provided by user nor found from the tokenizer. &quot;</span>
                         <span class="s2">&quot;It will be automatically detected.&quot;</span>
                     <span class="p">)</span>
+            <span class="n">vocab_type</span> <span class="o">=</span> <span class="n">VocabType</span><span class="o">.</span><span class="n">RAW</span>
+            <span class="k">if</span> <span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">_is_byte_level_tokenizer</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">):</span>
+                <span class="c1"># Some tiktoken tokenizers subclassed from PretrainedTokenizerBase</span>
+                <span class="c1"># also perform byte-level conversion.</span>
+                <span class="c1"># e.g. Kimi-K2-Instruct</span>
+                <span class="n">vocab_type</span> <span class="o">=</span> <span class="n">VocabType</span><span class="o">.</span><span class="n">BYTE_LEVEL</span>
             <span class="k">return</span> <span class="n">TokenizerInfo</span><span class="p">(</span>
                 <span class="n">encoded_vocab</span><span class="p">,</span>
-                <span class="n">VocabType</span><span class="o">.</span><span class="n">RAW</span><span class="p">,</span>
+                <span class="n">vocab_type</span><span class="p">,</span>
                 <span class="n">vocab_size</span><span class="o">=</span><span class="n">vocab_size</span><span class="p">,</span>
                 <span class="n">stop_token_ids</span><span class="o">=</span><span class="n">stop_token_ids</span><span class="p">,</span>
                 <span class="n">add_prefix_space</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
