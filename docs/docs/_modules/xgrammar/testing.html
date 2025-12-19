@@ -966,20 +966,18 @@ window.addEventListener("load", load);
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    retrieve_next_token : torch.Tensor</span>
-<span class="sd">        1D int32 tensor where retrieve_next_token[i] gives the index of the child node</span>
+<span class="sd">        1D int64 tensor where retrieve_next_token[i] gives the index of the child node</span>
 <span class="sd">        of node i, or -1 if no child exists.</span>
 <span class="sd">    retrieve_next_sibling : torch.Tensor</span>
-<span class="sd">        1D int32 tensor where retrieve_next_sibling[i] gives the index of the sibling node</span>
+<span class="sd">        1D int64 tensor where retrieve_next_sibling[i] gives the index of the sibling node</span>
 <span class="sd">        of node i, or -1 if no sibling exists.</span>
 <span class="sd">    draft_tokens : torch.Tensor</span>
-<span class="sd">        1D int32 tensor of draft token ids at each position in the tree.</span>
+<span class="sd">        1D int64 tensor of draft token ids at each position in the tree.</span>
 <span class="sd">    matcher : GrammarMatcher</span>
 <span class="sd">        The grammar matcher to use for validation.</span>
 <span class="sd">    allocate_token_bitmask : torch.Tensor</span>
 <span class="sd">        2D int32 tensor (num_nodes x bitmask_size) to store the generated bitmasks.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">assert</span> <span class="n">retrieve_next_token</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">retrieve_next_sibling</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">draft_tokens</span><span class="o">.</span><span class="n">shape</span>
-
     <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_traverse_draft_tree</span><span class="p">(</span>
         <span class="n">retrieve_next_token</span><span class="p">,</span>
         <span class="n">retrieve_next_sibling</span><span class="p">,</span>

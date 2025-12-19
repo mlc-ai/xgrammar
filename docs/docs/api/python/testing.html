@@ -613,11 +613,11 @@ process.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>retrieve_next_token</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.9)"><em>torch.Tensor</em></a>) – 1D int32 tensor where retrieve_next_token[i] gives the index of the child node
+<li><p><strong>retrieve_next_token</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.9)"><em>torch.Tensor</em></a>) – 1D int64 tensor where retrieve_next_token[i] gives the index of the child node
 of node i, or -1 if no child exists.</p></li>
-<li><p><strong>retrieve_next_sibling</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.9)"><em>torch.Tensor</em></a>) – 1D int32 tensor where retrieve_next_sibling[i] gives the index of the sibling node
+<li><p><strong>retrieve_next_sibling</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.9)"><em>torch.Tensor</em></a>) – 1D int64 tensor where retrieve_next_sibling[i] gives the index of the sibling node
 of node i, or -1 if no sibling exists.</p></li>
-<li><p><strong>draft_tokens</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.9)"><em>torch.Tensor</em></a>) – 1D int32 tensor of draft token ids at each position in the tree.</p></li>
+<li><p><strong>draft_tokens</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.9)"><em>torch.Tensor</em></a>) – 1D int64 tensor of draft token ids at each position in the tree.</p></li>
 <li><p><strong>matcher</strong> (<a class="reference internal" href="grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><em>GrammarMatcher</em></a>) – The grammar matcher to use for validation.</p></li>
 <li><p><strong>allocate_token_bitmask</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.9)"><em>torch.Tensor</em></a>) – 2D int32 tensor (num_nodes x bitmask_size) to store the generated bitmasks.</p></li>
 </ul>
