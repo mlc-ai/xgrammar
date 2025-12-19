@@ -66,6 +66,10 @@ CompiledGrammar CompiledGrammar_DeserializeJSON(
     const std::string& json_string, const TokenizerInfo& tokenizer
 );
 
+std::string StructuralTag_FromTemplate(
+    const std::string& structural_tag_template_json, const std::string& values_json_str
+);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_NANOBIND_PYTHON_METHODS_H_

@@ -79,7 +79,6 @@ std::variant<Grammar, StructuralTagError> Grammar::FromStructuralTagTemplate(
     return std::move(result).UnwrapErr();
   }
   auto structural_tag = std::move(result).Unwrap();
-  XGRAMMAR_LOG(INFO) << structural_tag.ToJSON();
   return StructuralTagToGrammar(structural_tag.ToJSON()).ToVariant();
 }
 

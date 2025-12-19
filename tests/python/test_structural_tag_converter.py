@@ -102,8 +102,6 @@ def check_template_stag_with_grammar(
     else:
         structural_tag = {"type": "structural_tag", "format": structural_tag_format}
         grammar = xgr.Grammar.from_structural_tag_template(structural_tag, **kwargs)
-    print(str(grammar))
-    print(expected_grammar_ebnf)
     assert str(grammar) == expected_grammar_ebnf
 
 

@@ -154,6 +154,16 @@ Grammar Grammar_FromStructuralTagTemplate(
   return std::get<Grammar>(result);
 }
 
+std::string StructuralTag_FromTemplate(
+    const std::string& structural_tag_template_json, const std::string& values_json_str
+) {
+  auto result = FromTemplate(structural_tag_template_json, values_json_str);
+  if (result.IsErr()) {
+    ThrowVariantError(std::move(result).UnwrapErr());
+  }
+  return std::move(result).Unwrap().ToJSON();
+}
+
 Grammar Grammar_DeserializeJSON(const std::string& json_string) {
   auto result = Grammar::DeserializeJSON(json_string);
   if (std::holds_alternative<SerializationError>(result)) {

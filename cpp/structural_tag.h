@@ -13,12 +13,10 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <variant>
 #include <vector>
 
 #include "support/encoding.h"
-#include "support/json_serializer.h"
 #include "support/utils.h"
 
 namespace xgrammar {

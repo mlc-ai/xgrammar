@@ -12,6 +12,8 @@ except ImportError:
 
 from pydantic import BaseModel, Field
 
+from .base import _core
+
 # ---------- Basic Formats ----------
 
 
@@ -342,6 +344,13 @@ class StructuralTag(BaseModel):
         StructuralTag
             The generated StructuralTag.
         """
+
+        from .grammar import _convert_instance_to_str
+
+        template_json_str = _convert_instance_to_str(template)
+        kwargs_json_str = json.dumps(obj=kwargs)
+
+        return StructuralTag.from_json(_core.from_template(template_json_str, kwargs_json_str))
 
 
 __all__ = [

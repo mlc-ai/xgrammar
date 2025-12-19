@@ -448,6 +448,8 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::call_guard<nb::gil_scoped_release>()
       );
 
+  m.def("from_template", &StructuralTag_FromTemplate, nb::call_guard<nb::gil_scoped_release>());
+
   auto pyExceptionModule = m.def_submodule("exception");
   nb::exception<DeserializeFormatError>{
       pyExceptionModule, "DeserializeFormatError", PyExc_RuntimeError
