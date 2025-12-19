@@ -16,7 +16,42 @@ Each `const_string` format can contain multiple placeholders, but they must be f
 }
 ```
 
-Is allowed. And the output is constrained to `It is a dog.` and `Is it a dog?`. However, if the provided values are `Begin=[{"word": "It is"}, {"word": "Is it"}], End=[{"word": "."}, {"word": "?"}]`, and the template is
+Is allowed. With the following codes:
+
+```python
+A = [{"begin": "It is", "end":"."}, {"begin": "Is it", "end": "?"}]
+stag_template = {
+    "type": "structural_tag",
+    "format": {
+        "type": "const_string",
+        "value": "{{A[].begin}} a dog{{A[].end}}"
+    }
+}
+stag = StructuralTag.from_template(stag_template, A=A)
+```
+
+ And the output is:
+
+ ```json
+ {
+    "type":"structural_tag",
+    "format": {
+        "type": "or",
+        "elements": [
+            {
+                "type": "const_string",
+                "value": "It is a dog."
+            },
+            {
+                "type": "const_string",
+                "value": "Is is a dog?"
+            }
+        ]
+    }
+ }
+ ```
+
+  However, if the provided values are `Begin=[{"word": "It is"}, {"word": "Is it"}], End=[{"word": "."}, {"word": "?"}]`, and the template is
 
 ```json
 {

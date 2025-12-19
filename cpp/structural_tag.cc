@@ -1755,6 +1755,8 @@ StructuralTagTemplateFiller::VisitExpandBasicFormat(
   auto result = format_to_placeholder_names_.find(format_json_str);
   XGRAMMAR_DCHECK(result != format_to_placeholder_names_.end());
   auto& placeholders = result->second;
+  int longest_array_placeholder_length = 0;
+  const Layers* longest_array_layer = nullptr;
 
   // Step 2. Compare the placeholders with the current expanded placeholders.
   for (const auto& placeholder : placeholders) {
@@ -1783,53 +1785,59 @@ StructuralTagTemplateFiller::VisitExpandBasicFormat(
       }
     }
 
-    // Step 2.2. If the placeholder is not expanded, we need to expand it.
-    for (int i = min_of_size; i < last_array_length; ++i) {
-      const auto& ph = placeholder[i];
-      if (!placeholder[i].is_array) {
-        AddExpandInfo(ph, kNotArray, &added_layers_count);
-        continue;
-      }
-
-      auto current_value = std::cref(*values_);
-      for (const auto& expanded_placeholder : current_expanded_placeholder_and_index_) {
-        XGRAMMAR_DCHECK(current_value.get().contains(expanded_placeholder.first.name));
-        if (expanded_placeholder.first.is_array) {
-          XGRAMMAR_DCHECK(current_value.get().is<picojson::object>());
-          XGRAMMAR_DCHECK(
-              current_value.get().get(expanded_placeholder.first.name).is<picojson::array>()
-          );
-          current_value = current_value.get()
-                              .get(expanded_placeholder.first.name)
-                              .get<picojson::array>()[expanded_placeholder.second];
-        } else {
-          current_value = current_value.get().get(expanded_placeholder.first.name);
-        }
-      }
-      if (!current_value.get().is<picojson::object>() || (!current_value.get().contains(ph.name))) {
-        return ResultErr(InvalidStructuralTagError(
-            "Placeholder name '" + ph.name +
-            "' not found in values, which is required for the template: '" + format_value + "'"
-        ));
-      }
-      current_value = current_value.get().get(ph.name);
-      expanded = true;
-      for (int index = 0;
-           index < static_cast<int>(current_value.get().get<picojson::array>().size());
-           ++index) {
-        AddExpandInfo(ph, index, &added_layers_count);
-        auto tmp_formats = VisitExpandBasicFormat(format_json_str, format_value);
-        if (tmp_formats.IsErr()) {
-          return tmp_formats;
-        }
-        auto unwrapped_tmp_formats = std::move(tmp_formats).Unwrap();
-        result_strs.insert(
-            result_strs.end(), unwrapped_tmp_formats.begin(), unwrapped_tmp_formats.end()
-        );
-        RemoveExpandInfo(&added_layers_count);
-      }
-      break;  // Only expand one placeholder at a time.
+    if (last_array_length > longest_array_placeholder_length) {
+      longest_array_placeholder_length = last_array_length;
+      longest_array_layer = &placeholder;
     }
+  }
+
+  // Step 2.2. If the placeholder is not expanded, we need to expand it.
+
+  for (int i = current_expanded_placeholder_and_index_.size(); i < longest_array_placeholder_length;
+       ++i) {
+    const auto& ph = longest_array_layer->at(i);
+    if (!ph.is_array) {
+      AddExpandInfo(ph, kNotArray, &added_layers_count);
+      continue;
+    }
+
+    auto current_value = std::cref(*values_);
+    for (const auto& expanded_placeholder : current_expanded_placeholder_and_index_) {
+      XGRAMMAR_DCHECK(current_value.get().contains(expanded_placeholder.first.name));
+      if (expanded_placeholder.first.is_array) {
+        XGRAMMAR_DCHECK(current_value.get().is<picojson::object>());
+        XGRAMMAR_DCHECK(
+            current_value.get().get(expanded_placeholder.first.name).is<picojson::array>()
+        );
+        current_value = current_value.get()
+                            .get(expanded_placeholder.first.name)
+                            .get<picojson::array>()[expanded_placeholder.second];
+      } else {
+        current_value = current_value.get().get(expanded_placeholder.first.name);
+      }
+    }
+    if (!current_value.get().is<picojson::object>() || (!current_value.get().contains(ph.name))) {
+      return ResultErr(InvalidStructuralTagError(
+          "Placeholder name '" + ph.name +
+          "' not found in values, which is required for the template: '" + format_value + "'"
+      ));
+    }
+    current_value = current_value.get().get(ph.name);
+    expanded = true;
+    for (int index = 0; index < static_cast<int>(current_value.get().get<picojson::array>().size());
+         ++index) {
+      AddExpandInfo(ph, index, &added_layers_count);
+      auto tmp_formats = VisitExpandBasicFormat(format_json_str, format_value);
+      if (tmp_formats.IsErr()) {
+        return tmp_formats;
+      }
+      auto unwrapped_tmp_formats = std::move(tmp_formats).Unwrap();
+      result_strs.insert(
+          result_strs.end(), unwrapped_tmp_formats.begin(), unwrapped_tmp_formats.end()
+      );
+      RemoveExpandInfo(&added_layers_count);
+    }
+    break;  // Only expand one placeholder at a time.
   }
 
   if (expanded) {

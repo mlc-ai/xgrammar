@@ -2069,6 +2069,21 @@ root ::= ((or))
 """,
         [("a是", True), ("b是", True), ("c是", True), ("d是", False)],
     ),
+    (
+        {"type": "const_string", "value": "{{strings[].begin}} a dog{{strings[].end}}"},
+        [{"begin": "It is", "end": "."}, {"begin": "Is it", "end": "?"}],
+        r"""const_string ::= (("It is a dog."))
+const_string_1 ::= (("Is it a dog\?"))
+or ::= ((const_string) | (const_string_1))
+root ::= ((or))
+""",
+        [
+            ("It is a dog.", True),
+            ("Is it a dog?", True),
+            ("It is a dog?", False),
+            ("Is it a dog.", False),
+        ],
+    ),
 ]
 
 
