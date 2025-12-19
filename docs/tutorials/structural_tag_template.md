@@ -51,7 +51,7 @@ stag = StructuralTag.from_template(stag_template, A=A)
  }
  ```
 
-  However, if the provided values are `Begin=[{"word": "It is"}, {"word": "Is it"}], End=[{"word": "."}, {"word": "?"}]`, and the template is
+However, if the provided values are `Begin=[{"word": "It is"}, {"word": "Is it"}], End=[{"word": "."}, {"word": "?"}]`, and the template is
 
 ```json
 {
@@ -73,7 +73,56 @@ If the template placeholder is in these formats' value, **only if** the value is
 }
 ```
 
-can be automatically replaced with the given `schemas`. However, this format will not be replaced:
+can be automatically replaced with the given `schemas`. For example:
+
+```python
+schemas = [
+    {
+        "value": r"""{"type":"object", "properties": {"arg": {"type": "string"}}, "required": ["arg"]}"""
+    },
+    {
+        "value": r"""{"type":"string"}"""
+    }
+]
+stag_template = {
+    "type": "structural_tag",
+    "format": {"type": "json_schema", "json_schema": "{{schemas[].value}}"}
+}
+stag = StructuralTag.from_template(stag_template, schemas=schemas)
+```
+
+Then the result will be:
+
+```json
+ {
+    "type":"structural_tag",
+    "format": {
+        "type": "or",
+        "elements": [
+            {
+                "type": "json_schema",
+                "json_schema": {
+                    "type":"object",
+                    "properties": {
+                        "arg": {"type": "string"}
+                    },
+                    "required": ["arg"]
+                }
+            },
+            {
+                "type": "json_schema",
+                "json_schema": {
+                    "type":"string"
+                }
+            }
+        ]
+    }
+ }
+
+```
+
+
+However, this format will not be replaced:
 
 ```json
 {
@@ -96,7 +145,7 @@ For a tag, it is allowed to contain a placeholder in the `begin` and `end` field
     "begin": "<function={{tools[].name}}",
     "content": {
         "type": "json_schema",
-        "json_schema": "{{tools[].args}}"
+        "json_schema": "{{tools[].parameters}}"
         },
     "end": "</function>"
 }
@@ -106,7 +155,79 @@ This format will be expanded into a `tag` format or an `or` format, or a series 
 
 4. `triggered_tags`, `tags_with_separator`
 
-Template placeholders are not allowed in `triggers` and `separators`.
+Template placeholders are not allowed in `triggers` and `separators`. The expansion rules are shown in the `tag` format. For example:
+
+```python
+tools = [
+    {
+        "name": "Calculator",
+        "description": "A calculator that can perform basic arithmetic operations.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "operation": {
+                    "type": "string",
+                    "enum": ["add", "subtract", "multiply", "divide"],
+                },
+                "a": {"type": "number"},
+                "b": {"type": "number"},
+            },
+            "required": ["operation", "a", "b"],
+        },
+    },
+    {
+        "name": "Weather",
+        "description": "A tool to get the current weather in a specified location.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "The name of the city or location to get the weather for.",
+                }
+            },
+            "required": ["location"],
+        },
+    },
+]
+stag_template = {
+    "type": "structural_tag",
+    "format": {
+        "type": "triggered_tags",
+        "triggers": ["<function="],
+        "tags": [{
+            "type": "tag",
+            "begin": "<function={{tools[].name}}",
+            "content": {
+                "type": "json_schema",
+                "json_schema": "{{tools[].parameters}}"
+                },
+            "end": "</function>"
+        }]
+    }
+}
+stag = StructuralTag.from_template(stag_template, tools=tools)
+```
+
+Then the result will be:
+
+```json
+{
+    "type": "structural_tag",
+    "format": [{
+        "type": "tag",
+        "begin": "<function=Calculator",
+        "content": "..."
+        "end": "</function>"
+    },
+    {
+        "type": "tag",
+        "begin": "<function=Weather",
+        "content": "..."
+        "end": "</function>"
+    }]
+}
+```
 
 5. `sequence`, `or`, `any_text`
 

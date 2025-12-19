@@ -2037,7 +2037,7 @@ root ::= ((or))
         r"""const_string ::= (("a"))
 const_string_1 ::= (("b"))
 const_string_2 ::= (("c"))
-or ::= ((const_string) | (const_string_1) | (const_string_2))
+or ::= ((const_string) | (const_string_1) |f (const_string_2))
 root ::= ((or))
 """,
         [("a", True), ("b", True), ("c", True), ("d", False)],
