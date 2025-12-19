@@ -544,6 +544,36 @@ def test_regression_accept_invalid_token():
         matcher.fill_next_token_bitmask(token_bitmask, i)
 
 
+@pytest.mark.hf_token_required
+def test_regression_accept_kimi_tokenizer_token():
+    config = AutoConfig.from_pretrained("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)
+    vocab_size = config.vocab_size
+    ids = tokenizer.encode(
+        r'{"command": "find ./ -name *.txt ", "security_risk": "LOW"}', add_special_tokens=True
+    )
+    tokens = tokenizer.convert_ids_to_tokens(ids)
+
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(
+        tokenizer, vocab_size=vocab_size, stop_token_ids=[tokenizer.eos_token_id]
+    )
+    grammar_compiler = xgr.GrammarCompiler(tokenizer_info=tokenizer_info)
+    schema = {
+        "type": "object",
+        "properties": {
+            "command": {"type": "string"},
+            "security_risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
+        },
+        "required": ["command"],
+    }
+    ctx = grammar_compiler.compile_json_schema(schema=json.dumps(schema))
+    matcher = xgr.GrammarMatcher(ctx, max_rollback_tokens=200, override_stop_tokens=None)
+    for i, token in zip(ids, tokens):
+        assert matcher.accept_token(i)
+    matcher.accept_token(tokenizer.eos_token_id)  # accept EOS
+    assert matcher.is_terminated()
+
+
 def test_regression_empty_property_key_regex():
     schema = {
         "type": "object",
