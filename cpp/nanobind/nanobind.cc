@@ -251,8 +251,7 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def(
           "compile_grammar",
-          [](
-              GrammarCompiler& self, const std::string& ebnf_str, const std::string& root_rule_name
+          [](GrammarCompiler& self, const std::string& ebnf_str, const std::string& root_rule_name
           ) { return self.CompileGrammar(ebnf_str, root_rule_name); },
           nb::call_guard<nb::gil_scoped_release>()
       )
