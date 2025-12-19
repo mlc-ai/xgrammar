@@ -15,10 +15,10 @@
 #include <vector>
 
 #include "../grammar_impl.h"
-#include "../structural_tag.h"
 #include "../support/logging.h"
 #include "../support/utils.h"
 #include "xgrammar/exception.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -147,7 +147,7 @@ Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json) {
 Grammar Grammar_FromStructuralTagTemplate(
     const std::string& template_json_str, const std::string& kwargs_json_str
 ) {
-  auto result = FromStructuralTagTemplate(template_json_str, kwargs_json_str);
+  auto result = Grammar::FromStructuralTagTemplate(template_json_str, kwargs_json_str);
   if (std::holds_alternative<StructuralTagError>(result)) {
     ThrowVariantError(std::get<StructuralTagError>(result));
   }

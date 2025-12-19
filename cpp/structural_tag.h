@@ -17,6 +17,8 @@
 #include <variant>
 #include <vector>
 
+#include "support/encoding.h"
+#include "support/json_serializer.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -56,7 +58,9 @@ struct ConstStringFormat {
   static constexpr const char* type = "const_string";
   std::string value;
   ConstStringFormat(std::string value) : value(std::move(value)) {}
-  std::string ToJSON() const { return "{\"type\": \"const_string\", \"value\": " + value + "}"; }
+  std::string ToJSON() const {
+    return "{\"type\": \"const_string\", \"value\": \"" + EscapeJSONString(value) + "\"}";
+  }
 };
 
 struct JSONSchemaFormat {
@@ -69,11 +73,11 @@ struct JSONSchemaFormat {
 };
 
 struct QwenXmlParameterFormat {
-  static constexpr const char* type = "qwen_xml";
+  static constexpr const char* type = "qwen_xml_parameter";
   std::string xml_schema;
   QwenXmlParameterFormat(std::string xml_schema) : xml_schema(std::move(xml_schema)) {}
   std::string ToJSON() const {
-    return "{\"type\": \"qwen_xml\", \"xml_schema\": " + xml_schema + "}";
+    return "{\"type\": \"qwen_xml_parameter\", \"json_schema\": " + xml_schema + "}";
   }
 };
 
@@ -81,14 +85,18 @@ struct GrammarFormat {
   static constexpr const char* type = "grammar";
   std::string grammar;
   GrammarFormat(std::string grammar) : grammar(std::move(grammar)) {}
-  std::string ToJSON() const { return "{\"type\": \"grammar\", \"grammar\": " + grammar + "}"; }
+  std::string ToJSON() const {
+    return "{\"type\": \"grammar\", \"grammar\": \"" + EscapeJSONString(grammar) + "\"}";
+  }
 };
 
 struct RegexFormat {
   static constexpr const char* type = "regex";
   std::string pattern;
   RegexFormat(std::string pattern) : pattern(std::move(pattern)) {}
-  std::string ToJSON() const { return "{\"type\": \"regex\", \"pattern\": " + pattern + "}"; }
+  std::string ToJSON() const {
+    return "{\"type\": \"regex\", \"pattern\": \"" + EscapeJSONString(pattern) + "\"}";
+  }
 };
 
 struct AnyTextFormat {
@@ -198,6 +206,12 @@ struct StructuralTag {
   Format format;
 
   StructuralTag(Format format) : format(std::move(format)) {}
+  std::string ToJSON() const {
+    std::string repr = "{\"type\": \"structural_tag\", \"format\": ";
+    repr += std::visit([&](auto&& arg) -> std::string { return arg.ToJSON(); }, format);
+    repr += "}";
+    return repr;
+  }
 };
 
 /******************** Conversion API ********************/
@@ -211,13 +225,13 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(const std::string& st
 
 /*!
  * \brief Apply a structural tag template with given values to generate a structural tag, and
- * convert it to a grammar.
+ * convert it to a structural tag.
  * \param structural_tag_template_json The JSON string of the structural tag template.
  * \param values_json_str The json string of the values to fill in the template.
- * \return A grammar if the application is successful, otherwise an error message in
+ * \return A structural tag if the application is successful, otherwise an error message in
  * StructuralTagError.
  */
-std::variant<Grammar, StructuralTagError> FromStructuralTagTemplate(
+Result<StructuralTag, StructuralTagError> FromTemplate(
     const std::string& structural_tag_template_json, const std::string& values_json_str
 );
 

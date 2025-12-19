@@ -23,6 +23,9 @@
 #include "grammar_impl.h"
 #include "json_schema_converter.h"
 #include "regex_converter.h"
+#include "support/dynamic_bitset.h"
+#include "support/encoding.h"
+#include "support/json_serializer.h"
 #include "support/logging.h"
 #include "support/recursion_guard.h"
 #include "support/utils.h"
@@ -2368,8 +2371,8 @@ std::string OrFormat::ToJSON() const {
 }
 
 std::string TagFormat::ToJSON() const {
-  std::string repr =
-      "{\"type\": \"tag\", \"begin\": \"" + begin + "\", \"end\": \"" + end + "\", \"content\": ";
+  std::string repr = "{\"type\": \"tag\", \"begin\": \"" + EscapeJSONString(begin) +
+                     "\", \"end\": \"" + EscapeJSONString(end) + "\", \"content\": ";
   repr += std::visit([&](auto&& arg) -> std::string { return arg.ToJSON(); }, *content);
   repr += "}";
   return repr;
@@ -2378,12 +2381,12 @@ std::string TagFormat::ToJSON() const {
 std::string TriggeredTagsFormat::ToJSON() const {
   std::string repr = "{\"type\": \"triggered_tags\", \"triggers\": [";
   for (size_t i = 0; i < triggers.size(); ++i) {
-    repr += "\"" + triggers[i] + "\"";
+    repr += "\"" + EscapeJSONString(triggers[i]) + "\"";
     if (i != triggers.size() - 1) {
       repr += ", ";
     }
   }
-  repr += "], tags: [";
+  repr += "], \"tags\": [";
   for (size_t i = 0; i < tags.size(); ++i) {
     repr += tags[i].ToJSON();
     if (i != tags.size() - 1) {
@@ -2403,7 +2406,7 @@ std::string TagsWithSeparatorFormat::ToJSON() const {
       repr += ", ";
     }
   }
-  repr += "], \"separator\": \"" + separator + "\"";
+  repr += "], \"separator\": \"" + EscapeJSONString(separator) + "\"";
   repr += ", \"at_least_one\": " + std::string(at_least_one ? "true" : "false");
   repr += ", \"stop_after_first\": " + std::string(stop_after_first ? "true" : "false") + "}";
   return repr;
@@ -2428,7 +2431,7 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(const std::string& st
   return ResultOk(GrammarNormalizer::Apply(std::move(result).Unwrap()));
 }
 
-Result<Grammar, StructuralTagError> ApplyStructuralTagTemplate(
+Result<StructuralTag, StructuralTagError> FromTemplate(
     const std::string& structural_tag_template_json, const std::string& values_json_str
 ) {
   // Step 1. Parse the input values.
@@ -2445,26 +2448,7 @@ Result<Grammar, StructuralTagError> ApplyStructuralTagTemplate(
   auto structural_tag_raw = std::move(structural_tag_result_raw).Unwrap();
 
   // Step 3. Replace the elements.
-  auto filled_stag_result = FillTemplateWithValues(structural_tag_raw, values);
-  if (filled_stag_result.IsErr()) {
-    return ResultErr(std::move(filled_stag_result).UnwrapErr());
-  }
-  auto filled_stag = std::move(filled_stag_result).Unwrap();
-  auto stag_err = StructuralTagAnalyzer().Analyze(&filled_stag);
-  if (stag_err.has_value()) {
-    return ResultErr(std::move(stag_err).value());
-  }
-  auto grammar_result = StructuralTagGrammarConverter().Convert(filled_stag);
-  if (grammar_result.IsErr()) {
-    return ResultErr(std::move(grammar_result).UnwrapErr());
-  }
-  return ResultOk(GrammarNormalizer::Apply(std::move(grammar_result).Unwrap()));
-}
-
-std::variant<Grammar, StructuralTagError> FromStructuralTagTemplate(
-    const std::string& structural_tag_template_json, const std::string& values_json_str
-) {
-  return ApplyStructuralTagTemplate(structural_tag_template_json, values_json_str).ToVariant();
+  return FillTemplateWithValues(structural_tag_raw, values);
 }
 
 }  // namespace xgrammar

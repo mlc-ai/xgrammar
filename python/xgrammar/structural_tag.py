@@ -323,6 +323,26 @@ class StructuralTag(BaseModel):
         else:
             raise ValueError("Invalid JSON string or dictionary")
 
+    @staticmethod
+    def from_template(
+        template: Union[str, Dict[str, Any], "StructuralTag"], **kwargs
+    ) -> "StructuralTag":
+        """Create a StructuralTag from a template name and additional parameters.
+
+        Parameters
+        ----------
+        template : Union[str, Dict[str, Any], StructuralTag]
+            The template string, dictionary, or StructuralTag instance.
+
+        **kwargs
+            Additional parameters to customize the StructuralTag.
+
+        Returns
+        -------
+        StructuralTag
+            The generated StructuralTag.
+        """
+
 
 __all__ = [
     "ConstStringFormat",
