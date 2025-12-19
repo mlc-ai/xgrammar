@@ -57,14 +57,14 @@ std::string _PrintGrammarFSMs(const Grammar& grammar) {
   return result;
 }
 
-namespace {
+namespace details {
 
 void DFS(
     int32_t curr,
     int32_t parent_pos,
-    const int32_t* retrieve_next_token,
-    const int32_t* retrieve_next_sibling,
-    const int32_t* draft_tokens,
+    const int64_t* retrieve_next_token,
+    const int64_t* retrieve_next_sibling,
+    const int64_t* draft_tokens,
     GrammarMatcher& matcher,
     DLTensor* bitmask
 ) {
@@ -117,7 +117,7 @@ void DFS(
   }
 }
 
-}  // namespace
+}  // namespace details
 
 void TraverseDraftTree(
     const DLTensor* retrieve_next_token,
@@ -126,13 +126,31 @@ void TraverseDraftTree(
     GrammarMatcher& matcher,
     DLTensor* bitmask
 ) {
-  DFS(0,
+  // Check dtype
+  XGRAMMAR_CHECK(retrieve_next_token->dtype.code == kDLInt && retrieve_next_token->dtype.bits == 64)
+      << "The retrieve_next_token tensor must be int64";
+  XGRAMMAR_CHECK(
+      retrieve_next_sibling->dtype.code == kDLInt && retrieve_next_sibling->dtype.bits == 64
+  ) << "The retrieve_next_sibling tensor must be int64";
+  XGRAMMAR_CHECK(draft_tokens->dtype.code == kDLInt && draft_tokens->dtype.bits == 64)
+      << "The draft_tokens tensor must be int64";
+  XGRAMMAR_CHECK(bitmask->dtype.code == kDLInt && bitmask->dtype.bits == 32)
+      << "The bitmask tensor must be int32";
+
+  XGRAMMAR_CHECK(retrieve_next_token->shape[0] == retrieve_next_sibling->shape[0])
+      << "The retrieve_next_token and retrieve_next_sibling tensors must have the same length";
+  XGRAMMAR_CHECK(retrieve_next_token->shape[0] == draft_tokens->shape[0])
+      << "The retrieve_next_token and draft_tokens tensors must have the same length";
+
+  details::DFS(
+      0,
       -1,
-      reinterpret_cast<const int32_t*>(retrieve_next_token->data),
-      reinterpret_cast<const int32_t*>(retrieve_next_sibling->data),
-      reinterpret_cast<const int32_t*>(draft_tokens->data),
+      reinterpret_cast<const int64_t*>(retrieve_next_token->data),
+      reinterpret_cast<const int64_t*>(retrieve_next_sibling->data),
+      reinterpret_cast<const int64_t*>(draft_tokens->data),
       matcher,
-      bitmask);
+      bitmask
+  );
 }
 
 }  // namespace xgrammar
