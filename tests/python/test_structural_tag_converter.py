@@ -6,6 +6,7 @@ import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
+from xgrammar.builtin_structural_tag_template import SupportedTemplateNames
 from xgrammar.structural_tag import StructuralTag
 from xgrammar.testing import _is_grammar_accept_string
 
@@ -102,6 +103,8 @@ def check_template_stag_with_grammar(
     else:
         structural_tag = {"type": "structural_tag", "format": structural_tag_format}
         grammar = xgr.Grammar.from_structural_tag_template(structural_tag, **kwargs)
+    print(grammar)
+    print(expected_grammar_ebnf)
     assert str(grammar) == expected_grammar_ebnf
 
 
@@ -2037,7 +2040,7 @@ root ::= ((or))
         r"""const_string ::= (("a"))
 const_string_1 ::= (("b"))
 const_string_2 ::= (("c"))
-or ::= ((const_string) | (const_string_1) |f (const_string_2))
+or ::= ((const_string) | (const_string_1) | (const_string_2))
 root ::= ((or))
 """,
         [("a", True), ("b", True), ("c", True), ("d", False)],
@@ -3917,6 +3920,397 @@ def test_nested_array_template(
     for instance, is_accepted in instance_is_accepted_tuples:
         check_template_stag_with_instance(
             template_stag_format, instance, is_accepted, **template_values
+        )
+
+
+example_tools = [
+    {
+        "name": "search_web",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search keywords or a full query string; must not be empty",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "Maximum number of results to return",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "summarize_text",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Original text to be summarized"},
+                "max_length": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "description": "Maximum length of the summary in tokens or characters",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "translate_text",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Text to be translated"},
+                "target_language": {
+                    "type": "string",
+                    "description": "Target language code, e.g. en, zh, ja",
+                },
+                "source_language": {
+                    "type": "string",
+                    "description": "Source language code; optional, auto-detected if omitted",
+                },
+            },
+            "required": ["text", "target_language"],
+        },
+    },
+    {
+        "name": "extract_keywords",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Input text"},
+                "top_k": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Number of keywords to extract",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "classify_text",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Text to be classified"},
+                "labels": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Candidate label list",
+                },
+                "multi_label": {
+                    "type": "boolean",
+                    "description": "Whether multiple labels are allowed",
+                },
+            },
+            "required": ["text", "labels"],
+        },
+    },
+    {
+        "name": "sentiment_analysis",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Text used for sentiment analysis"},
+                "granularity": {
+                    "type": "string",
+                    "enum": ["document", "sentence"],
+                    "description": "Granularity level of analysis",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "generate_code",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Description of the code generation requirement",
+                },
+                "language": {
+                    "type": "string",
+                    "description": "Target programming language, e.g. python, cpp",
+                },
+                "style": {"type": "string", "description": "Desired code style or conventions"},
+            },
+            "required": ["prompt", "language"],
+        },
+    },
+    {
+        "name": "explain_code",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "Code snippet to be explained"},
+                "language": {"type": "string", "description": "Programming language of the code"},
+                "detail_level": {
+                    "type": "string",
+                    "enum": ["brief", "detailed"],
+                    "description": "Level of explanation detail",
+                },
+            },
+            "required": ["code"],
+        },
+    },
+    {
+        "name": "refactor_code",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "Original code"},
+                "language": {"type": "string", "description": "Programming language"},
+                "style": {
+                    "type": "string",
+                    "description": "Refactoring goal, e.g. performance or readability",
+                },
+            },
+            "required": ["code", "language"],
+        },
+    },
+    {
+        "name": "answer_question",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "User question"},
+                "context": {
+                    "type": "string",
+                    "description": "Optional background or reference information",
+                },
+            },
+            "required": ["question"],
+        },
+    },
+    {
+        "name": "generate_sql",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "Natural language description of the SQL query",
+                },
+                "dialect": {"type": "string", "description": "SQL dialect, e.g. mysql, postgres"},
+                "tables": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Available table names",
+                },
+            },
+            "required": ["description"],
+        },
+    },
+    {
+        "name": "analyze_data",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "description": "Input dataset, typically a structured array",
+                },
+                "operation": {
+                    "type": "string",
+                    "description": "Analysis operation, e.g. statistics or aggregation",
+                },
+                "group_by": {"type": "string", "description": "Field used for grouping"},
+            },
+            "required": ["data", "operation"],
+        },
+    },
+    {
+        "name": "format_text",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Original text"},
+                "format": {
+                    "type": "string",
+                    "enum": ["markdown", "html", "latex"],
+                    "description": "Target output format",
+                },
+            },
+            "required": ["text", "format"],
+        },
+    },
+    {
+        "name": "detect_language",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Text whose language is to be detected"}
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "generate_test_cases",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "function_description": {
+                    "type": "string",
+                    "description": "Description of function behavior and constraints",
+                },
+                "language": {"type": "string", "description": "Target language for the test cases"},
+                "count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Number of test cases to generate",
+                },
+            },
+            "required": ["function_description", "language"],
+        },
+    },
+    {
+        "name": "rewrite_text",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Original text"},
+                "tone": {
+                    "type": "string",
+                    "description": "Desired tone, e.g. formal or conversational",
+                },
+                "length_constraint": {
+                    "type": "string",
+                    "description": "Length requirement, e.g. shorter or longer",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "extract_entities",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Input text"},
+                "entity_types": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Entity types to extract, e.g. person or location",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "generate_outline",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "Topic or title"},
+                "depth": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "description": "Depth level of the outline",
+                },
+            },
+            "required": ["topic"],
+        },
+    },
+    {
+        "name": "chat_completion",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "messages": {
+                    "type": "array",
+                    "description": "List of conversation messages, each with role and content",
+                },
+                "temperature": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 2,
+                    "description": "Controls randomness of generation",
+                },
+                "max_tokens": {
+                    "type": "integer",
+                    "description": "Maximum number of tokens to generate",
+                },
+            },
+            "required": ["messages"],
+        },
+    },
+    {
+        "name": "evaluate_answer",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "Original question"},
+                "answer": {"type": "string", "description": "Answer to be evaluated"},
+                "criteria": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Evaluation criteria, e.g. correctness or completeness",
+                },
+            },
+            "required": ["question", "answer"],
+        },
+    },
+]
+
+
+builtin_model_names = ["llama", "qwen", "qwen_coder", "deepseek", "kimi"]
+function_numbers = [5, 20]
+
+
+@pytest.mark.parametrize("model_name", builtin_model_names)
+@pytest.mark.parametrize("function_number", function_numbers)
+def test_builtin_template_efficiency(model_name: str, function_number: int):
+    tools = example_tools[:function_number]
+    builtin_template = xgr.builtin_structural_tag_template.get_builtin_structural_tag_template(
+        model_name
+    )
+
+    start_time = time.monotonic_ns()
+    grammar = xgr.Grammar.from_structural_tag_template(builtin_template, tools=tools)
+    end_time = time.monotonic_ns()
+    print(
+        f"Model: {model_name}, Function number: {function_number}, Conversion Time: {(end_time - start_time) / 1e6} ms."
+    )
+
+    if profiler is not None:
+        start_time = time.monotonic_ns()
+        _ = profiler.compiler.compile_grammar(grammar)
+        end_time = time.monotonic_ns()
+        print(
+            f"Model: {model_name}, Function number: {function_number}, Compilation Time: {(end_time - start_time) / 1e6} ms."
+        )
+
+
+@pytest.mark.parametrize("function_number", function_numbers)
+def test_builtin_template_efficiency(function_number: int):
+    tools = example_tools[:function_number]
+    builtin_template = xgr.builtin_structural_tag_template.get_builtin_structural_tag_template(
+        "harmony"
+    )
+
+    start_time = time.monotonic_ns()
+    grammar = xgr.Grammar.from_structural_tag_template(
+        builtin_template, tools=tools, builtin_tools=tools
+    )
+    end_time = time.monotonic_ns()
+    print(
+        f"Model: harmony, Function number: {function_number}, Conversion Time: {(end_time - start_time) / 1e6} ms."
+    )
+
+    if profiler is not None:
+        start_time = time.monotonic_ns()
+        _ = profiler.compiler.compile_grammar(grammar)
+        end_time = time.monotonic_ns()
+        print(
+            f"Model: harmony, Function number: {function_number}, Compilation Time: {(end_time - start_time) / 1e6} ms."
         )
 
 
