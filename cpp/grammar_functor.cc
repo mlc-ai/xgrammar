@@ -1670,6 +1670,44 @@ class ByteStringFuserImpl : public GrammarMutator {
   }
 };
 
+class RootRuleRenamerImpl {
+ public:
+  static Grammar Apply(const Grammar& grammar) {
+    // If the root name is "root", return directly.
+    if (grammar->GetRootRule().name == "root") {
+      return grammar;
+    }
+
+    // Collect all the rule names.
+    std::unordered_set<std::string> rule_names;
+    int root_name_rule_id = -1;
+    for (int i = 0; i < grammar->NumRules(); i++) {
+      const auto& rule_name = grammar->GetRule(i).name;
+      if (rule_name == "root") {
+        root_name_rule_id = i;
+      }
+      rule_names.insert(rule_name);
+    }
+
+    // Rename the rules.
+    Grammar grammar_copy = grammar;
+    grammar_copy->GetRule(grammar_copy->GetRootRuleId()).name = "root";
+    if (root_name_rule_id != -1) {
+      std::string rule_prefix = "root_";
+      for (int i = 0; i <= grammar_copy->NumRules(); i++) {
+        std::string new_rule_name = rule_prefix + std::to_string(i);
+        if (rule_names.find(new_rule_name) == rule_names.end()) {
+          grammar_copy->GetRule(root_name_rule_id).name = new_rule_name;
+          break;
+        }
+        XGRAMMAR_DCHECK(i != grammar_copy->NumRules())
+            << "The rule must be renamed successfully after (n + 1) times of iterations.";
+      }
+    }
+    return grammar_copy;
+  }
+};
+
 /*************************** Forward grammar constructors to their impl ***************************/
 
 Grammar GrammarUnionFunctor::Apply(const std::vector<Grammar>& grammars) {
@@ -1750,6 +1788,10 @@ Grammar GrammarOptimizer::Apply(const Grammar& grammar) {
 
 Grammar ByteStringFuser::Apply(const Grammar& grammar) {
   return ByteStringFuserImpl().Apply(grammar);
+}
+
+Grammar RootRuleRenamer::Apply(const Grammar& grammar) {
+  return RootRuleRenamerImpl().Apply(grammar);
 }
 
 }  // namespace xgrammar

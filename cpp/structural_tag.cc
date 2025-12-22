@@ -1113,7 +1113,9 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(const std::string& st
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }
-  return ResultOk(GrammarNormalizer::Apply(std::move(result).Unwrap()));
+  auto unwrapped_result = std::move(result).Unwrap();
+  auto renamed_grammar = RootRuleRenamer().Apply(unwrapped_result);
+  return ResultOk(GrammarNormalizer::Apply(std::move(renamed_grammar)));
 }
 
 }  // namespace xgrammar
