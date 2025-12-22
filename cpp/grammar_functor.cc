@@ -479,7 +479,10 @@ class GrammarNormalizerImpl {
  public:
   GrammarNormalizerImpl() = default;
 
-  Grammar Apply(const Grammar& grammar) { return StructureNormalizerImpl().Apply(grammar); }
+  Grammar Apply(const Grammar& grammar) {
+    auto renamed_grammar = RootRuleRenamer().Apply(grammar);
+    return StructureNormalizerImpl().Apply(renamed_grammar);
+  }
 };
 
 /*************************** Impl of grammar optimizers ***************************/
