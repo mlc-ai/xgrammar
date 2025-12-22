@@ -132,7 +132,7 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root ::= (("{" [ \n\t]* "\"a\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"a\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -143,7 +143,7 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-root_1 ::= ((root))
+root ::= ((root_0))
 """,
     )
 ]
@@ -194,7 +194,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*))
 root_part_0 ::= (([ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>"))
-root ::= (([ \n\t]* "<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>" root_part_0))
+root_0 ::= (([ \n\t]* "<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>" root_part_0))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -206,7 +206,7 @@ basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 root_prop_1_1 ::= ("" | ("-"))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-root_1 ::= ((root))
+root ::= ((root_0))
 """,
     )
 ]
@@ -237,9 +237,9 @@ ebnf_grammar_stag_grammar = [
             "grammar": r"""root ::= "Hello!" number
             number ::= [0-9] | [0-9] number""",
         },
-        r"""root ::= (("Hello!" number))
+        r"""root_0 ::= (("Hello!" number))
 number ::= (([0-9]) | ([0-9] number))
-root_1 ::= ((root))
+root ::= ((root_0))
 """,
     )
 ]
@@ -264,9 +264,9 @@ def test_ebnf_grammar_format(
 regex_stag_grammar = [
     (
         {"type": "regex", "pattern": "Hello![0-9]+"},
-        r"""root ::= (("H" "e" "l" "l" "o" "!" root_1))
+        r"""root_0 ::= (("H" "e" "l" "l" "o" "!" root_1))
 root_1 ::= (([0-9] root_1) | ([0-9]))
-root_2 ::= ((root))
+root ::= ((root_0))
 """,
     )
 ]
@@ -310,7 +310,7 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root ::= ((basic_number))
+root_0 ::= ((basic_number))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -324,8 +324,8 @@ basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 root_1 ::= ("" | ([\-+*/]))
 root_2 ::= ((root_1_1))
 root_1_1 ::= ("" | ([simple]))
-sequence ::= ((const_string root root_1 root_2))
-root_3 ::= ((sequence))
+sequence ::= ((const_string root_0 root_1 root_2))
+root ::= ((sequence))
 """,
     )
 ]
@@ -375,7 +375,7 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root ::= ((basic_number))
+root_0 ::= ((basic_number))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -386,8 +386,8 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-or ::= ((const_string) | (root))
-root_1 ::= ((or))
+or ::= ((const_string) | (root_0))
+root ::= ((or))
 """,
     )
 ]
@@ -429,7 +429,7 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root ::= ((basic_number))
+root_0 ::= ((basic_number))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -440,8 +440,8 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-tag ::= (("BEG" root "END"))
-root_1 ::= ((tag))
+tag ::= (("BEG" root_0 "END"))
+root ::= ((tag))
 """,
     ),
     (
@@ -451,10 +451,10 @@ root_1 ::= ((tag))
             "content": {"type": "grammar", "grammar": "root ::= [+\\-]?[1-9][0-9]*"},
             "end": "END",
         },
-        r"""root ::= ((root_1 [1-9] [0-9]*))
+        r"""root_0 ::= ((root_1 [1-9] [0-9]*))
 root_1 ::= ("" | ([+\-]))
-tag ::= (("BEG" root "END"))
-root_2 ::= ((tag))
+tag ::= (("BEG" root_0 "END"))
+root ::= ((tag))
 """,
     ),
     (
@@ -464,10 +464,10 @@ root_2 ::= ((tag))
             "content": {"type": "regex", "pattern": "[+\\-]?[1-9][0-9]*"},
             "end": "END",
         },
-        r"""root ::= ((root_1 [1-9] [0-9]*))
+        r"""root_0 ::= ((root_1 [1-9] [0-9]*))
 root_1 ::= ("" | ([+\-]))
-tag ::= (("BEG" root "END"))
-root_2 ::= ((tag))
+tag ::= (("BEG" root_0 "END"))
+root ::= ((tag))
 """,
     ),
 ]
