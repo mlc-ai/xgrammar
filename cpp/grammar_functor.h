@@ -378,6 +378,14 @@ class GrammarOptimizer {
   static Grammar Apply(const Grammar& grammar);
 };
 
+/*!
+ * \brief Rename the root rule of the grammar to "root".
+ */
+class RootRuleRenamer {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_GRAMMAR_FUNCTOR_H_
