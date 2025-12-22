@@ -214,7 +214,6 @@ def test_structural_tag_compiler():
 
     compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
     compiled_grammar = compiler.compile_structural_tag(tags, triggers)
-    print(str(compiled_grammar.grammar))
     assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag_after_optimization
 
 
