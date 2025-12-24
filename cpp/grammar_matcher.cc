@@ -656,7 +656,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       latest_states_with_masks;
 
   auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
-    auto grammar_matcher = GrammarMatcherForTokenMaskCache(grammar_, state, false);
+    auto grammar_matcher = GrammarMatcherForTokenMaskCache(grammar_, state, {}, false);
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
         tokenizer_info_.GetVocabSize(),
         tokenizer_info_.GetSortedDecodedVocab(),
