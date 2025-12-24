@@ -667,6 +667,88 @@ rule3 ::= [a-n] [b-c] "x" | ""
     assert not _is_grammar_accept_string(grammar, "ad")
 
 
+@pytest.mark.parametrize(
+    "tokenizer_path,input_str,expected_rejected_sizes",
+    [
+        (
+            "meta-llama/Llama-2-7b-chat-hf",
+            # Input: "aбя中" - ASCII 'a', Cyrillic 'б' (2 bytes), 'я' (2 bytes), CJK '中' (3 bytes)
+            "aбя中",
+            # fmt: off
+            [22129, 22128, 31984, 22128, 31984, 22128, 31992, 31936, 22128],
+            # fmt: on
+        )
+    ],
+)
+@pytest.mark.hf_token_required
+def test_fill_next_token_bitmask_unicode_char_class(
+    tokenizer_path: str, input_str: str, expected_rejected_sizes: List[int]
+):
+    """Test token bitmask generation for Unicode character classes.
+
+    This test verifies that the grammar correctly handles mixed UTF-8 character
+    classes (ASCII, Cyrillic, CJK) and produces consistent rejected token counts.
+    """
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    # Grammar with mixed UTF-8 character class (ASCII + Cyrillic + CJK)
+    ebnf_grammar_str = "root ::= [a-zа-я一-龥]+"
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    time_start = time.monotonic_ns()
+    matcher = xgr.GrammarMatcher(compiler.compile_grammar(grammar))
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device=device)
+
+    input_bytes = input_str.encode("utf-8")
+
+    for i, c in enumerate(input_bytes):
+        # 1. fill_next_token_bitmask
+        time_start = time.monotonic_ns()
+        matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+        # 2. Correctness verification
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
+        assert len(rejected_token_ids) == expected_rejected_sizes[i], (
+            f"Byte {i} ({hex(c)}): expected {expected_rejected_sizes[i]} rejected, "
+            f"got {len(rejected_token_ids)}"
+        )
+
+        # 3. apply_token_bitmask_inplace
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_start = time.monotonic_ns()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_end = time.monotonic_ns()
+        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+
+        # 4. accept_string
+        print("Accepting char:", bytes([c]))
+        time_start = time.monotonic_ns()
+        assert matcher.accept_string(bytes([c]))
+        time_end = time.monotonic_ns()
+        print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
+
+    # 5. Final correctness verification
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    assert (
+        len(rejected_token_ids) == expected_rejected_sizes[-1]
+    ), f"Final: expected {expected_rejected_sizes[-1]} rejected, got {len(rejected_token_ids)}"
+
+
 def test_positive_utf8_character_class_with_quantifier():
     """Test positive character class with mixed UTF-8 ranges and quantifier.
 
