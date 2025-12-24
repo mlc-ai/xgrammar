@@ -68,7 +68,8 @@ class GrammarCompiler {
       const TokenizerInfo& tokenizer_info,
       int max_threads = 8,
       bool cache_enabled = true,
-      int64_t max_memory_bytes = -1  // unlimited
+      int64_t max_memory_bytes = -1,  // unlimited
+      bool is_jit = false
   );
 
   /*! \brief Get the compiled grammar for a JSON schema string. */
