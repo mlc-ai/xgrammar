@@ -640,7 +640,27 @@ void EarleyParser::AdvanceCharacterClass(
           }
         }
       } else {
-        tmp_states_to_be_added_.push_back(new_state);
+        // Check if partial codepoint could still potentially match any range
+        int32_t remaining_bytes = new_state.sub_element_id;
+        int32_t min_codepoint = new_state.partial_codepoint << (6 * remaining_bytes);
+        int32_t max_codepoint = min_codepoint | ((1 << (6 * remaining_bytes)) - 1);
+
+        bool could_match = false;
+        for (int i = 1; i < sub_sequence.size(); i += 2) {
+          int32_t lower = sub_sequence[i];
+          int32_t upper = sub_sequence[i + 1];
+          if (max_codepoint >= lower && min_codepoint <= upper) {
+            could_match = true;
+            break;
+          }
+        }
+
+        // For negative classes: always continue (will verify on final byte)
+        // For positive classes: only continue if some range could match
+        bool should_continue = is_negative ? true : could_match;
+        if (should_continue) {
+          tmp_states_to_be_added_.push_back(new_state);
+        }
       }
     }
     return;
@@ -753,7 +773,27 @@ void EarleyParser::AdvanceCharacterClassStar(
           }
         }
       } else {
-        tmp_states_to_be_added_.push_back(new_state);
+        // Check if partial codepoint could still potentially match any range
+        int32_t remaining_bytes = new_state.sub_element_id;
+        int32_t min_codepoint = new_state.partial_codepoint << (6 * remaining_bytes);
+        int32_t max_codepoint = min_codepoint | ((1 << (6 * remaining_bytes)) - 1);
+
+        bool could_match = false;
+        for (int i = 1; i < sub_sequence.size(); i += 2) {
+          int32_t lower = sub_sequence[i];
+          int32_t upper = sub_sequence[i + 1];
+          if (max_codepoint >= lower && min_codepoint <= upper) {
+            could_match = true;
+            break;
+          }
+        }
+
+        // For negative classes: always continue (will verify on final byte)
+        // For positive classes: only continue if some range could match
+        bool should_continue = is_negative ? true : could_match;
+        if (should_continue) {
+          tmp_states_to_be_added_.push_back(new_state);
+        }
       }
     }
     return;

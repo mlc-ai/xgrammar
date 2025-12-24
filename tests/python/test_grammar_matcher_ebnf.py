@@ -667,5 +667,37 @@ rule3 ::= [a-n] [b-c] "x" | ""
     assert not _is_grammar_accept_string(grammar, "ad")
 
 
+def test_positive_utf8_character_class_with_quantifier():
+    """Test positive character class with mixed UTF-8 ranges and quantifier.
+
+    Tests the combination of ASCII, Cyrillic (2-byte), and CJK (3-byte) characters
+    with a {0, 2048} quantifier to ensure proper handling of repeated UTF-8 matching.
+    """
+    ebnf_grammar_str = "root ::= [a-zа-я一-龥]{0,2048}"
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    # Empty string should be accepted (min is 0)
+    assert _is_grammar_accept_string(grammar, "")
+
+    # Individual character types
+    assert _is_grammar_accept_string(grammar, "hello")  # ASCII
+    assert _is_grammar_accept_string(grammar, "привет")  # Cyrillic
+    assert _is_grammar_accept_string(grammar, "你好世界")  # CJK
+
+    # Mixed content
+    assert _is_grammar_accept_string(grammar, "helloпривет你好")
+    assert _is_grammar_accept_string(grammar, "abc中文def")
+
+    # Long strings within quantifier range
+    assert _is_grammar_accept_string(grammar, "a" * 100)
+    assert _is_grammar_accept_string(grammar, "я" * 100)
+    assert _is_grammar_accept_string(grammar, "中" * 100)
+
+    # Should reject uppercase ASCII and other characters
+    assert not _is_grammar_accept_string(grammar, "HELLO")  # Uppercase ASCII
+    assert not _is_grammar_accept_string(grammar, "123")  # digits
+    assert not _is_grammar_accept_string(grammar, "hello!")  # with special char
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
