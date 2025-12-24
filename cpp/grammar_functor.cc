@@ -82,6 +82,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
     }
     new_tag_dispatch.stop_str = old_tag_dispatch.stop_str;
     new_tag_dispatch.loop_after_dispatch = old_tag_dispatch.loop_after_dispatch;
+    new_tag_dispatch.exclude_str = old_tag_dispatch.exclude_str;
     return builder_->AddTagDispatch(new_tag_dispatch);
   }
 
@@ -608,7 +609,9 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
   }
 
   void VisitTagDispatch(const GrammarExpr& grammar_expr) {
-    for (int i = 0; i < grammar_expr.size() - 3; i += 2) {
+    for (int i = 0;
+         i < grammar_expr.size() - Grammar::Impl::TagDispatch::kTagDispatchExtraParameter;
+         i += 2) {
       visit_queue_.push(grammar_expr[i + 1]);
     }
   }
@@ -709,7 +712,9 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       auto rule = base_grammar_->GetRule(i);
       auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
       if (grammar_expr.type == GrammarExprType::kTagDispatch) {
-        for (int j = 1; j < grammar_expr.size() - 3; j += 2) {
+        for (int j = 1;
+             j < grammar_expr.size() - Grammar::Impl::TagDispatch::kTagDispatchExtraParameter;
+             j += 2) {
           if (grammar_expr[j] == rule_id) {
             return false;
           }
@@ -750,7 +755,9 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       auto rule = base_grammar_->GetRule(i);
       auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
       if (grammar_expr.type == GrammarExprType::kTagDispatch) {
-        for (int j = 1; j < grammar_expr.size() - 3; j += 2) {
+        for (int j = 1;
+             j < grammar_expr.size() - Grammar::Impl::TagDispatch::kTagDispatchExtraParameter;
+             j += 2) {
           if (grammar_expr[j] == rule_id) {
             return -1;
           }
@@ -829,7 +836,9 @@ class RuleRefGraphFinder : public GrammarVisitor<std::vector<std::vector<int32_t
   }
 
   void VisitTagDispatch(const GrammarExpr& grammar_expr) {
-    for (int i = 1; i < grammar_expr.size() - 3; i += 2) {
+    for (int i = 1;
+         i < grammar_expr.size() - Grammar::Impl::TagDispatch::kTagDispatchExtraParameter;
+         i += 2) {
       rule_visit_graph_[grammar_expr[i]].push_back(cur_rule_id_);
     }
   }
@@ -1536,6 +1545,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithEOSSto
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(
     const Grammar::Impl::TagDispatch& tag_dispatch
 ) {
+  // TODO(Linzhang): Apply excluded strings here.
   if (tag_dispatch.stop_eos) {
     return BuildTagDispatchWithEOSStop(
         tag_dispatch.tag_rule_pairs, tag_dispatch.loop_after_dispatch

@@ -11,8 +11,10 @@
 
 #include <cstdint>
 #include <unordered_map>
+#include <vector>
 
 #include "grammar_impl.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -185,7 +187,10 @@ class GrammarBuilder {
    */
   int32_t AddTagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch) {
     std::vector<int32_t> data;
-    data.reserve(tag_dispatch.tag_rule_pairs.size() * 2 + 3);
+    data.reserve(
+        tag_dispatch.tag_rule_pairs.size() * 2 +
+        Grammar::Impl::TagDispatch::kTagDispatchExtraParameter
+    );
     for (const auto& [tag, rule_id] : tag_dispatch.tag_rule_pairs) {
       data.push_back(AddByteString(tag));
       data.push_back(rule_id);
@@ -197,6 +202,11 @@ class GrammarBuilder {
     }
     data.push_back(AddChoices(stop_str_expr_ids));
     data.push_back(static_cast<int32_t>(tag_dispatch.loop_after_dispatch));
+    std::vector<int32_t> exclude_str_expr_ids;
+    for (const auto& exclude_str : tag_dispatch.exclude_str) {
+      exclude_str_expr_ids.push_back(AddByteString(exclude_str));
+    }
+    data.push_back(AddChoices(exclude_str_expr_ids));
     return AddGrammarExpr(
         {GrammarExprType::kTagDispatch, data.data(), static_cast<int32_t>(data.size())}
     );

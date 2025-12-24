@@ -757,10 +757,11 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const RegexFormat&
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextFormat& format) {
   if (format.detected_end_str_.has_value()) {
+    // TODO(Linzhang): exclude strs.
     XGRAMMAR_DCHECK(!format.detected_end_str_.value().empty())
         << "The detected end string cannot be empty";
     auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, false, {format.detected_end_str_.value()}, false}
+        Grammar::Impl::TagDispatch{{}, false, {format.detected_end_str_.value()}, false, {}}
     );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
@@ -911,15 +912,16 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   }
 
   // Step 3.2 Add TagDispatch.
+  // TODO(Linzhang): exclude strs.
   int32_t rule_expr_id;
   bool loop_after_dispatch = !format.stop_after_first;
   if (format.detected_end_str_.has_value()) {
     rule_expr_id = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
-        tag_rule_pairs, false, {format.detected_end_str_.value()}, loop_after_dispatch
+        tag_rule_pairs, false, {format.detected_end_str_.value()}, loop_after_dispatch, {}
     });
   } else {
     rule_expr_id = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch}
+        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch, {}}
     );
   }
 

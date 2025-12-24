@@ -144,6 +144,14 @@ std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
   }
   result += "),\n";
   result += indent + "loop_after_dispatch=" + PrintBoolean(tag_dispatch.loop_after_dispatch) + "\n";
+  result += "),\n";
+  result += indent + "exclude_str=(";
+  for (int i = 0; i < static_cast<int>(tag_dispatch.exclude_str.size()); ++i) {
+    result += PrintString(tag_dispatch.exclude_str[i]);
+    if (i + 1 != static_cast<int>(tag_dispatch.exclude_str.size())) {
+      result += ", ";
+    }
+  }
   result += ")";
   return result;
 }
