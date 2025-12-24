@@ -111,6 +111,7 @@ class GrammarCompiler(XGRObject):
         max_threads: int = 8,
         cache_enabled: bool = True,
         cache_limit_bytes: int = -1,
+        is_jit: bool = False,
     ):
         """Construct the compiler.
 
@@ -137,7 +138,7 @@ class GrammarCompiler(XGRObject):
 
         self._init_handle(
             _core.GrammarCompiler(
-                tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
+                tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes, is_jit
             )
         )
 

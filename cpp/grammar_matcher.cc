@@ -20,6 +20,7 @@
 #include "compiled_grammar_impl.h"
 #include "earley_parser.h"
 #include "grammar_impl.h"
+#include "grammar_matcher_for_cache.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
 #include "support/int_set.h"
@@ -631,7 +632,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       CheckAndGetBitmaskPtr(*next_token_bitmask, tokenizer_info_.GetVocabSize(), index);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
-  const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
+  auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
   // We need to have a copy, because scanable_state_history_ will be modified during the
   // FillNextTokenBitmask process, which can lead to undefined behavior.
   auto latest_states = GetLatestScanableStates();
@@ -654,8 +655,31 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
       latest_states_with_masks;
 
+  auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
+    auto grammar_matcher = GrammarMatcherForTokenMaskCache(grammar_, state, false);
+    auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(
+        tokenizer_info_.GetVocabSize(),
+        tokenizer_info_.GetSortedDecodedVocab(),
+        tokenizer_info_.GetTrieSubtreeNodesRange(),
+        is_root_rule
+    );
+    return adaptive_token_mask_cache.emplace(state, std::move(cur_adaptive_token_mask_cache)).first;
+  };
+
   for (const auto& state : latest_states) {
     auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
+    if (adaptive_token_mask_it == adaptive_token_mask_cache.end()) {
+      // It means that the grammar is jit.
+      bool is_root_rule = state.rule_id == grammar_->GetRootRuleId();
+      ParserState state_to_check = ParserState{
+          state.rule_id,
+          state.sequence_id,
+          state.element_id,
+          ParserState::kNoPrevInputPos,
+          state.sub_element_id
+      };
+      adaptive_token_mask_it = add_adaptive_token_mask(state_to_check, is_root_rule);
+    }
     XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
     latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));

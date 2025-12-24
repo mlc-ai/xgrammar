@@ -126,6 +126,45 @@ def test_fill_next_token_bitmask(
         assert rejected_sizes[-1] == expected_rejected_sizes[-1]
 
 
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize(
+    "tokenizer_path, input_str, expected_rejected_sizes",
+    tokenizer_path__input_str__expected_rejected_sizes,
+)
+def test_fill_next_token_bitmask_with_jit(
+    tokenizer_path: str, input_str: str, expected_rejected_sizes: Optional[List[int]]
+):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, is_jit=True
+    )
+
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    input_bytes = input_str.encode("utf-8")
+    rejected_sizes = []
+
+    for i, c in enumerate(input_bytes):
+        matcher.fill_next_token_bitmask(token_bitmask)
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
+        rejected_sizes.append(len(rejected_token_ids))
+        if expected_rejected_sizes is not None:
+            assert rejected_sizes[-1] == expected_rejected_sizes[i], (
+                rejected_sizes[-1],
+                expected_rejected_sizes[i],
+            )
+        assert matcher.accept_string(bytes([c]))
+
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    rejected_sizes.append(len(rejected_token_ids))
+    if expected_rejected_sizes is not None:
+        assert rejected_sizes[-1] == expected_rejected_sizes[-1]
+
+
 def test_token_operations():
     """Test accepting token and finding the next token mask."""
     vocab = [

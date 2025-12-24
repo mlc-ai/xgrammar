@@ -111,7 +111,9 @@ def _ebnf_to_grammar_no_normalization(ebnf_string: str, root_rule_name: str = "r
     )
 
 
-def _get_matcher_from_grammar(grammar: Union[Grammar, str], **kwargs) -> GrammarMatcher:
+def _get_matcher_from_grammar(
+    grammar: Union[Grammar, str], is_jit: bool = False, **kwargs
+) -> GrammarMatcher:
     """Create a GrammarMatcher from a grammar. The tokenizer info will be set to an empty
     TokenizerInfo. The result matcher can only accept strings, and cannot accept tokens.
 
@@ -127,7 +129,7 @@ def _get_matcher_from_grammar(grammar: Union[Grammar, str], **kwargs) -> Grammar
         The created grammar matcher.
     """
     tokenizer_info = TokenizerInfo([])
-    grammar_compiler = GrammarCompiler(tokenizer_info, cache_enabled=False)
+    grammar_compiler = GrammarCompiler(tokenizer_info, cache_enabled=False, is_jit=is_jit)
     compiled_grammar = grammar_compiler.compile_grammar(grammar)
     return GrammarMatcher(compiled_grammar, terminate_without_stop_token=True, **kwargs)
 
@@ -299,7 +301,10 @@ def bitmask_to_bool_mask(bit_mask: torch.Tensor, vocab_size: Optional[int] = Non
 
 
 def _get_matcher_from_grammar_and_tokenizer_info(
-    grammar: Union[Grammar, str], tokenizer_info: Optional[TokenizerInfo] = None, **kwargs
+    grammar: Union[Grammar, str],
+    tokenizer_info: Optional[TokenizerInfo] = None,
+    is_jit: bool = False,
+    **kwargs,
 ) -> GrammarMatcher:
     """Create a GrammarMatcher from a grammar and tokenizer info.
 
@@ -321,7 +326,7 @@ def _get_matcher_from_grammar_and_tokenizer_info(
     """
     if tokenizer_info is None:
         tokenizer_info = TokenizerInfo([])
-    grammar_compiler = GrammarCompiler(tokenizer_info, cache_enabled=False)
+    grammar_compiler = GrammarCompiler(tokenizer_info, cache_enabled=False, is_jit=is_jit)
     compiled_grammar = grammar_compiler.compile_grammar(grammar)
     return GrammarMatcher(compiled_grammar, **kwargs)
 
