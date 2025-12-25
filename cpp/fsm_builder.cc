@@ -781,6 +781,7 @@ class TrieFSMBuilderImpl {
   TrieFSMBuilderImpl() = default;
   std::optional<FSMWithStartEnd> Build(
       const std::vector<std::string>& patterns,
+      const std::vector<std::string>& excluded_patterns,
       std::vector<int32_t>* end_states,
       bool allow_overlap,
       bool add_back_edges
@@ -790,10 +791,12 @@ class TrieFSMBuilderImpl {
 
 std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
     const std::vector<std::string>& patterns,
+    const std::vector<std::string>& excluded_patterns,
     std::vector<int32_t>* end_states,
     bool allow_overlap,
     bool add_back_edges
 ) {
+  // TODO(Linzhang Li): Handle excluded patterns.
   FSM fsm(1);
   int start = 0;
   std::unordered_set<int> ends;
@@ -907,11 +910,14 @@ void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_
 
 std::optional<FSMWithStartEnd> TrieFSMBuilder::Build(
     const std::vector<std::string>& patterns,
+    const std::vector<std::string>& exclude_patterns,
     std::vector<int32_t>* end_states,
     bool allow_overlap,
     bool add_back_edges
 ) {
-  return TrieFSMBuilderImpl().Build(patterns, end_states, allow_overlap, add_back_edges);
+  return TrieFSMBuilderImpl().Build(
+      patterns, exclude_patterns, end_states, allow_overlap, add_back_edges
+  );
 }
 
 }  // namespace xgrammar

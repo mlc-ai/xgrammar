@@ -35,6 +35,7 @@ class TrieFSMBuilder {
   /*!
    * \brief Build a trie-based FSM from a list of patterns.
    * \param patterns The patterns to be built.
+   * \param excluded_patterns The patterns to be excluded.
    * \param end_states The end states of the FSM. This is the terminal state of each pattern and
    * the order follows the order of patterns.
    * \param allow_overlap Whether to allow overlap between patterns (one being a prefix of the
@@ -46,6 +47,7 @@ class TrieFSMBuilder {
    */
   static std::optional<FSMWithStartEnd> Build(
       const std::vector<std::string>& patterns,
+      const std::vector<std::string>& excluded_patterns,
       std::vector<int32_t>* end_states = nullptr,
       bool allow_overlap = true,
       bool add_back_edges = false
