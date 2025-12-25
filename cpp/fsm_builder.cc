@@ -786,7 +786,12 @@ class TrieFSMBuilderImpl {
       bool allow_overlap,
       bool add_back_edges
   );
-  void AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends);
+  void AddBackEdges(
+      FSM* fsm,
+      int start,
+      const std::unordered_set<int>& ends,
+      const std::vector<std::string>& excluded_patterns
+  );
 };
 
 std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
@@ -796,7 +801,6 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
     bool allow_overlap,
     bool add_back_edges
 ) {
-  // TODO(Linzhang Li): Handle excluded patterns.
   FSM fsm(1);
   int start = 0;
   std::unordered_set<int> ends;
@@ -833,7 +837,9 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
     }
   }
   if (add_back_edges) {
-    AddBackEdges(&fsm, start, ends);
+    AddBackEdges(&fsm, start, ends, excluded_patterns);
+  } else if (excluded_patterns.size() > 0) {
+    XGRAMMAR_LOG(WARNING) << "Excluded patterns are ignored when back edges are not added.";
   }
 
   std::vector<bool> is_end_state(fsm.NumStates(), false);
@@ -844,7 +850,13 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
   return FSMWithStartEnd(fsm, start, is_end_state);
 }
 
-void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends) {
+void TrieFSMBuilderImpl::AddBackEdges(
+    FSM* fsm,
+    int start,
+    const std::unordered_set<int>& ends,
+    const std::vector<std::string>& excluded_patterns
+) {
+  // TODO(Linzhang Li): Handle excluded patterns.
   // Build an Aho-Corasick automaton by adding back edges.
   // When matching on the trie fails, we should go back to the start state and
   // find the next match. Back edges represent such state transitions.
