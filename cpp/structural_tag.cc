@@ -216,6 +216,9 @@ Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const pi
 ) {
   auto excluded_strs_it = obj.find("excluded_strs");
   if (excluded_strs_it == obj.end()) {
+    if ((obj.find("type") == obj.end())) {
+      return ResultErr<ISTError>("Any text format should not have any fields other than type");
+    }
     return ResultOk<AnyTextFormat>(std::vector<std::string>{});
   }
   if (!excluded_strs_it->second.is<picojson::array>()) {

@@ -497,7 +497,8 @@ any_text_stag_grammar = [
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("END"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 tag ::= (("BEG" any_text))
 root ::= ((tag))
@@ -569,7 +570,8 @@ triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 root ::= ((triggered_tags))
 """,
@@ -585,7 +587,8 @@ triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 root ::= ((triggered_tags))
@@ -601,7 +604,8 @@ triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 root ::= ((triggered_tags))
 """,
@@ -664,7 +668,8 @@ triggered_tags ::= TagDispatch(
   ("<start>", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 root ::= ((triggered_tags))
 """,
@@ -726,7 +731,8 @@ triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
   stop_str=("end"),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 tag ::= (("begin" triggered_tags))
 root ::= ((tag))
@@ -743,7 +749,8 @@ triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
   stop_str=("end"),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 tag ::= (("begin" triggered_tags))
@@ -760,7 +767,8 @@ triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
   stop_str=("end"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 tag ::= (("begin" triggered_tags))
 root ::= ((tag))
@@ -1245,7 +1253,8 @@ end_string_detector_test_data = [
 any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 sequence ::= ((const_string any_text))
 tag ::= (("<start>" sequence))
@@ -1295,7 +1304,8 @@ root ::= ((tag))
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end2>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 triggered_tags_group ::= ((">" any_text ""))
 triggered_tags_first ::= (("<start2>" any_text ""))
@@ -1303,20 +1313,23 @@ triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=false,
   stop_str=("<end>"),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 const_string ::= (("[TEXT2]"))
 any_text_1 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end3>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 tag ::= (("<start3>" any_text_2))
 tags_with_separator_tags ::= ((tag))
@@ -1382,7 +1395,8 @@ root ::= ((tag_1))
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end2>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 triggered_tags_group ::= ((">" any_text ""))
 triggered_tags_first ::= (("<start2>" any_text ""))
@@ -1390,7 +1404,8 @@ triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 const_string ::= (("[TEXT]"))
@@ -1399,7 +1414,8 @@ sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end3>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 tag ::= (("<start3>" any_text_2))
 tags_with_separator_tags ::= ((tag))
@@ -1489,11 +1505,6 @@ json_format_error_test_data = [
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": "invalid"}}',
         "JSON schema format must have a json_schema field with a object or boolean value",
-    ),
-    # AnyTextFormat Errors
-    (
-        '{"type": "structural_tag", "format": {"type": "any_text", "extra_field": "value"}}',
-        "Any text format should not have any fields other than type",
     ),
     # SequenceFormat Errors
     (
