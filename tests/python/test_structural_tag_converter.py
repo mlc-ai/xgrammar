@@ -1695,16 +1695,13 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
-        "Tags with separator format's separator field must be a non-empty string",
+        "Tags with separator format's separator field must be a string",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": 123}}',
-        "Tags with separator format's separator field must be a non-empty string",
+        "Tags with separator format's separator field must be a string",
     ),
-    (
-        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": ""}}',
-        "Tags with separator format's separator field must be a non-empty string",
-    ),
+    # Note: empty separator is now valid, so no error test for it
     (
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": "sep", "at_least_one": "not_boolean"}}',
         "at_least_one must be a boolean",
