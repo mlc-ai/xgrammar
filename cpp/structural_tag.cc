@@ -409,12 +409,11 @@ Result<TagsWithSeparatorFormat, ISTError> StructuralTagParser::ParseTagsWithSepa
   if (tags.size() == 0) {
     return ResultErr<ISTError>("Tags with separator format's tags must be non-empty");
   }
-  // separator is required.
+  // separator is required (can be empty string).
   auto separator_it = obj.find("separator");
-  if (separator_it == obj.end() || !separator_it->second.is<std::string>() ||
-      separator_it->second.get<std::string>().empty()) {
+  if (separator_it == obj.end() || !separator_it->second.is<std::string>()) {
     return ResultErr<ISTError>(
-        "Tags with separator format's separator field must be a non-empty string"
+        "Tags with separator format's separator field must be a string"
     );
   }
   // at_least_one is optional.
@@ -1034,13 +1033,17 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
   auto end_str_sequence_id = end_str_expr_id == -1
                                  ? grammar_builder_.AddEmptyStr()
                                  : grammar_builder_.AddSequence({end_str_expr_id});
+
+  // Build the sequence for the recursive case, handling empty separator
+  std::vector<int> sub_sequence_elements;
+  if (!format.separator.empty()) {
+    sub_sequence_elements.push_back(grammar_builder_.AddByteString(format.separator));
+  }
+  sub_sequence_elements.push_back(all_tags_rule_ref_id);
+  sub_sequence_elements.push_back(grammar_builder_.AddRuleRef(sub_rule_id));
+
   auto sub_rule_body_id = grammar_builder_.AddChoices(
-      {grammar_builder_.AddSequence(
-           {grammar_builder_.AddByteString(format.separator),
-            all_tags_rule_ref_id,
-            grammar_builder_.AddRuleRef(sub_rule_id)}
-       ),
-       end_str_sequence_id}
+      {grammar_builder_.AddSequence(sub_sequence_elements), end_str_sequence_id}
   );
   grammar_builder_.UpdateRuleBody(sub_rule_id, sub_rule_body_id);
 
