@@ -148,6 +148,7 @@ The format field requires a format object. We provide several basic format objec
     ```json
     {
         "type": "any_text",
+        "excluded_str": ["...", ]
     }
     ```
 
@@ -158,13 +159,13 @@ The format field requires a format object. We provide several basic format objec
         "begin": "...",
         "content": {
             "type": "any_text",
+            "excluded_str": ["...", ]
         },
         "end": "...",
     }
     ```
 
-    It first accepts the begin tag (can be empty), then any text **except the end tag**, then the
-    end tag.
+    It first accepts the begin tag (can be empty), then any text **except the end tag** and the **excluded_str**, then the end tag.
 
 9. `triggered_tags`
 
