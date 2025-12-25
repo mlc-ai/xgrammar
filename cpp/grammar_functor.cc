@@ -82,7 +82,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
     }
     new_tag_dispatch.stop_str = old_tag_dispatch.stop_str;
     new_tag_dispatch.loop_after_dispatch = old_tag_dispatch.loop_after_dispatch;
-    new_tag_dispatch.exclude_str = old_tag_dispatch.exclude_str;
+    new_tag_dispatch.excluded_str = old_tag_dispatch.excluded_str;
     return builder_->AddTagDispatch(new_tag_dispatch);
   }
 
@@ -1555,14 +1555,14 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(
 ) {
   if (tag_dispatch.stop_eos) {
     return BuildTagDispatchWithEOSStop(
-        tag_dispatch.tag_rule_pairs, tag_dispatch.loop_after_dispatch, tag_dispatch.exclude_str
+        tag_dispatch.tag_rule_pairs, tag_dispatch.loop_after_dispatch, tag_dispatch.excluded_str
     );
   } else {
     return BuildTagDispatchWithStopString(
         tag_dispatch.tag_rule_pairs,
         tag_dispatch.stop_str,
         tag_dispatch.loop_after_dispatch,
-        tag_dispatch.exclude_str
+        tag_dispatch.excluded_str
     );
   }
 }

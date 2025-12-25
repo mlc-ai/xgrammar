@@ -203,7 +203,7 @@ class GrammarBuilder {
     data.push_back(AddChoices(stop_str_expr_ids));
     data.push_back(static_cast<int32_t>(tag_dispatch.loop_after_dispatch));
     std::vector<int32_t> exclude_str_expr_ids;
-    for (const auto& exclude_str : tag_dispatch.exclude_str) {
+    for (const auto& exclude_str : tag_dispatch.excluded_str) {
       exclude_str_expr_ids.push_back(AddByteString(exclude_str));
     }
     data.push_back(AddChoices(exclude_str_expr_ids));

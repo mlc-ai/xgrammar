@@ -195,7 +195,7 @@ class Grammar::Impl {
     /*! \brief If true, the tag dispatch will loop after dispatching. */
     bool loop_after_dispatch;
     /*! \brief The strings that are excluded by the tap dispatch. */
-    std::vector<std::string> exclude_str;
+    std::vector<std::string> excluded_str;
     static const int kTagDispatchExtraParameter = 4;
   };
 
@@ -237,9 +237,9 @@ class Grammar::Impl {
         grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 3]
     );
     XGRAMMAR_DCHECK(exclude_str_expr.type == GrammarExprType::kChoices);
-    result.exclude_str.reserve(exclude_str_expr.size());
+    result.excluded_str.reserve(exclude_str_expr.size());
     for (int j = 0; j < exclude_str_expr.size(); j++) {
-      result.exclude_str.push_back(GetByteString(exclude_str_expr[j]));
+      result.excluded_str.push_back(GetByteString(exclude_str_expr[j]));
     }
     return result;
   }

@@ -1105,10 +1105,10 @@ int32_t EBNFParser::ParseTagDispatch() {
   }
 
   // exclude_str
-  if (auto it = args.named_arguments.find("exclude_str"); it != args.named_arguments.end()) {
+  if (auto it = args.named_arguments.find("excluded_str"); it != args.named_arguments.end()) {
     auto tuple_node = std::get_if<MacroIR::TupleNode>(it->second.get());
     if (tuple_node == nullptr) {
-      ReportParseError("Stop strings must be a tuple", delta_element);
+      ReportParseError("excluded strings must be a tuple", delta_element);
     }
 
     for (const auto& element : tuple_node->elements) {
@@ -1116,7 +1116,7 @@ int32_t EBNFParser::ParseTagDispatch() {
       if (exclude_str_node == nullptr || exclude_str_node->value.empty()) {
         ReportParseError("Stop string must be a non-empty string literal", delta_element);
       }
-      tag_dispatch.exclude_str.push_back(exclude_str_node->value);
+      tag_dispatch.excluded_str.push_back(exclude_str_node->value);
     }
   }
 
@@ -1126,7 +1126,7 @@ int32_t EBNFParser::ParseTagDispatch() {
         "The TagDispatch must have stop_eos=true or stop_str is not empty", delta_element
     );
   }
-  for (const auto& exclude_str : tag_dispatch.exclude_str) {
+  for (const auto& exclude_str : tag_dispatch.excluded_str) {
     for (const auto& stop_str : tag_dispatch.stop_str) {
       if (stop_str == exclude_str) {
         ReportParseError(

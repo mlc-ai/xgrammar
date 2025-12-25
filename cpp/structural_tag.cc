@@ -214,11 +214,23 @@ Result<QwenXmlParameterFormat, ISTError> StructuralTagParser::ParseQwenXmlParame
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
 ) {
-  // obj should not have any fields other than "type"
-  if (obj.size() > 1 || (obj.size() == 1 && obj.begin()->first != "type")) {
-    return ResultErr<ISTError>("Any text format should not have any fields other than type");
+  auto excluded_strs_it = obj.find("excluded_strs");
+  if (excluded_strs_it == obj.end()) {
+    return ResultOk<AnyTextFormat>(std::vector<std::string>{});
   }
-  return ResultOk<AnyTextFormat>();
+  if (!excluded_strs_it->second.is<picojson::array>()) {
+    return ResultErr<ISTError>("AnyText format's excluded_strs field must be an array");
+  }
+  const auto& excluded_strs_array = excluded_strs_it->second.get<picojson::array>();
+  std::vector<std::string> excluded_strs;
+  excluded_strs.reserve(excluded_strs_array.size());
+  for (const auto& excluded_str : excluded_strs_array) {
+    if (!excluded_str.is<std::string>()) {
+      return ResultErr<ISTError>("AnyText format's excluded_strs array must contain strings");
+    }
+    excluded_strs.push_back(excluded_str.get<std::string>());
+  }
+  return ResultOk<AnyTextFormat>(std::move(excluded_strs));
 }
 
 Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const picojson::object& obj

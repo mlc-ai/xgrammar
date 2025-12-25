@@ -83,7 +83,8 @@ struct RegexFormat {
 
 struct AnyTextFormat {
   static constexpr const char* type = "any_text";
-  AnyTextFormat() {}
+  std::vector<std::string> excluded_strs;
+  AnyTextFormat(std::vector<std::string> excluded_strs) : excluded_strs(excluded_strs) {}
 
  private:
   // Detected in StructuralTagAnalyzer
