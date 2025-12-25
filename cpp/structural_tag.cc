@@ -214,7 +214,7 @@ Result<QwenXmlParameterFormat, ISTError> StructuralTagParser::ParseQwenXmlParame
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
 ) {
-  auto excluded_strs_it = obj.find("excluded_strs");
+  auto excluded_strs_it = obj.find("excluded_str");
   if (excluded_strs_it == obj.end()) {
     if ((obj.find("type") == obj.end())) {
       return ResultErr<ISTError>("Any text format should not have any fields other than type");
@@ -772,12 +772,11 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const RegexFormat&
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextFormat& format) {
   if (format.detected_end_str_.has_value()) {
-    // TODO(Linzhang): exclude strs.
     XGRAMMAR_DCHECK(!format.detected_end_str_.value().empty())
         << "The detected end string cannot be empty";
-    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, false, {format.detected_end_str_.value()}, false, {}}
-    );
+    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
+        {}, false, {format.detected_end_str_.value()}, false, format.excluded_strs
+    });
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
     auto any_text_expr = grammar_builder_.AddCharacterClassStar({{0, 0x10FFFF}}, false);

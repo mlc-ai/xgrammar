@@ -1990,5 +1990,39 @@ def test_from_structural_tag_with_structural_tag_instance(
     check_stag_with_instance(stag, instance, is_accepted)
 
 
+test_strings_is_accepted = [
+    ("This is a test string.", True),
+    ("This string contains <end> which is excluded.", False),
+    ("Another string with </tag> inside.", False),
+    ("A clean string without excluded substrings.", True),
+    ("<end> at the beginning.", False),
+    ("At the end </tag>.", False),
+]
+
+
+@pytest.mark.parametrize("instance, is_accepted", test_strings_is_accepted)
+def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
+
+    stag_format = {
+        "type": "tag",
+        "content": {"type": "any_text", "excluded_str": ["<end>", "</tag>"]},
+        "begin": "",
+        "end": ".",
+    }
+
+    expected_grammar = r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("."),
+  loop_after_dispatch=false,
+  excluded_str=("<end>", "</tag>")
+)
+tag ::= (("" any_text))
+root ::= ((tag))
+"""
+
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

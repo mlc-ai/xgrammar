@@ -71,6 +71,9 @@ class AnyTextFormat(BaseModel):
     type: Literal["any_text"] = "any_text"
     """The type of the format."""
 
+    excluded_str: List[str] = []
+    """List of strings that should not appear in the matched text."""
+
 
 class GrammarFormat(BaseModel):
     """A format that matches an ebnf grammar."""
