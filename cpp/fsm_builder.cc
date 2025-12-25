@@ -863,6 +863,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
         return std::nullopt;
       }
 
+      ends.insert(current_state);
       dead_state_set.insert(current_state);
     }
 
