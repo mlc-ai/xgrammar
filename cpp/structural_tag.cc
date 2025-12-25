@@ -412,9 +412,7 @@ Result<TagsWithSeparatorFormat, ISTError> StructuralTagParser::ParseTagsWithSepa
   // separator is required (can be empty string).
   auto separator_it = obj.find("separator");
   if (separator_it == obj.end() || !separator_it->second.is<std::string>()) {
-    return ResultErr<ISTError>(
-        "Tags with separator format's separator field must be a string"
-    );
+    return ResultErr<ISTError>("Tags with separator format's separator field must be a string");
   }
   // at_least_one is optional.
   bool at_least_one = false;
