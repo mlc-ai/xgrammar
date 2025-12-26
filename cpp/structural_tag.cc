@@ -1159,7 +1159,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
   sub_sequence_elements.push_back(grammar_builder_.AddRuleRef(sub_rule_id));
 
   auto sub_rule_body_id = grammar_builder_.AddChoices(
-      {grammar_builder_.AddSequence(sub_sequence_elements), end_str_sequence_id}
+      {grammar_builder_.AddSequence(
+           {grammar_builder_.AddByteString(format.separator),
+            all_tags_rule_ref_id,
+            grammar_builder_.AddRuleRef(sub_rule_id)}
+       ),
+       end_str_sequence_id}
   );
   grammar_builder_.UpdateRuleBody(sub_rule_id, sub_rule_body_id);
 
