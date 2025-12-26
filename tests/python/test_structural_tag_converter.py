@@ -1633,11 +1633,11 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tag", "begin": "start", "content": {"type": "const_string", "value": "hello"}}}',
-        "Tag format's end field must be a string",
+        "Tag format must have an end field",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tag", "begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": 123}}',
-        "Tag format's end field must be a string",
+        "Tag format's end field must be a string or array of strings",
     ),
     # TriggeredTagsFormat Errors
     (

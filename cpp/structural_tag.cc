@@ -907,12 +907,20 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
       const auto& tag = format.tags[it_tag];
       auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
-      // Handle multiple end strings for each tag
-      for (const auto& end_str : tag.end) {
-        auto end_expr_id = grammar_builder_.AddByteString(end_str);
+      if (tag.end.empty()) {
+        // Unlimited content case - include empty string for consistency
+        auto end_expr_id = grammar_builder_.AddByteString("");
         choice_elements.push_back(
             grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
         );
+      } else {
+        // Handle multiple end strings for each tag
+        for (const auto& end_str : tag.end) {
+          auto end_expr_id = grammar_builder_.AddByteString(end_str);
+          choice_elements.push_back(
+              grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
+          );
+        }
       }
     }
     auto choice_expr_id = grammar_builder_.AddChoices(choice_elements);
@@ -950,12 +958,20 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
       const auto& tag = format.tags[tag_id];
       int begin_expr_id = grammar_builder_.AddByteString(tag.begin.substr(trigger.size()));
       int rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[tag_id]);
-      // Handle multiple end strings for each tag
-      for (const auto& end_str : tag.end) {
-        int end_expr_id = grammar_builder_.AddByteString(end_str);
+      if (tag.end.empty()) {
+        // Unlimited content case - include empty string for consistency
+        int end_expr_id = grammar_builder_.AddByteString("");
         choice_elements.push_back(
             grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
         );
+      } else {
+        // Handle multiple end strings for each tag
+        for (const auto& end_str : tag.end) {
+          int end_expr_id = grammar_builder_.AddByteString(end_str);
+          choice_elements.push_back(
+              grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
+          );
+        }
       }
     }
     auto choice_expr_id = grammar_builder_.AddChoices(choice_elements);
@@ -991,12 +1007,20 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
       const auto& tag = format.tags[it_tag];
       auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
-      // Handle multiple end strings for each tag
-      for (const auto& end_str : tag.end) {
-        auto end_expr_id = grammar_builder_.AddByteString(end_str);
+      if (tag.end.empty()) {
+        // Unlimited content case - include empty string for consistency
+        auto end_expr_id = grammar_builder_.AddByteString("");
         first_choice_elements.push_back(
             grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
         );
+      } else {
+        // Handle multiple end strings for each tag
+        for (const auto& end_str : tag.end) {
+          auto end_expr_id = grammar_builder_.AddByteString(end_str);
+          first_choice_elements.push_back(
+              grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
+          );
+        }
       }
     }
     auto first_choice_expr_id = grammar_builder_.AddChoices(first_choice_elements);
