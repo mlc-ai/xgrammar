@@ -2073,5 +2073,164 @@ def test_from_structural_tag_with_structural_tag_instance(
     check_stag_with_instance(stag, instance, is_accepted)
 
 
+# ---------- Multiple End Tokens Tests ----------
+
+
+multiple_end_tokens_tag_stag_grammar = [
+    # Test tag with multiple end tokens (limited content)
+    (
+        {
+            "type": "tag",
+            "begin": "BEG",
+            "content": {"type": "const_string", "value": "CONTENT"},
+            "end": ["END1", "END2"],
+        },
+        r"""const_string ::= (("CONTENT"))
+tag ::= (("BEG" const_string "END1") | ("BEG" const_string "END2"))
+root ::= ((tag))
+""",
+    ),
+    # Test tag with single end token in array (should work the same as string)
+    (
+        {
+            "type": "tag",
+            "begin": "<start>",
+            "content": {"type": "const_string", "value": "X"},
+            "end": ["</end>"],
+        },
+        r"""const_string ::= (("X"))
+tag ::= (("<start>" const_string "</end>"))
+root ::= ((tag))
+""",
+    ),
+]
+
+
+multiple_end_tokens_instance_is_accepted = [
+    ("BEGCONTENTEND1", True),
+    ("BEGCONTENTEND2", True),
+    ("BEGCONTENTEND3", False),
+    ("BEGCONTENTEND", False),
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", multiple_end_tokens_tag_stag_grammar)
+def test_multiple_end_tokens_tag_grammar(stag_format: Dict[str, Any], expected_grammar: str):
+    check_stag_with_grammar(stag_format, expected_grammar)
+
+
+@pytest.mark.parametrize("instance, is_accepted", multiple_end_tokens_instance_is_accepted)
+def test_multiple_end_tokens_tag_instance(instance: str, is_accepted: bool):
+    stag_format = {
+        "type": "tag",
+        "begin": "BEG",
+        "content": {"type": "const_string", "value": "CONTENT"},
+        "end": ["END1", "END2"],
+    }
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+# Test multiple end tokens with any_text (unlimited content)
+multiple_end_tokens_any_text_stag_grammar = [
+    (
+        {"type": "tag", "begin": "BEG", "content": {"type": "any_text"}, "end": ["END1", "END2"]},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("END1", "END2"),
+  loop_after_dispatch=false
+)
+tag ::= (("BEG" any_text))
+root ::= ((tag))
+""",
+    )
+]
+
+
+multiple_end_tokens_any_text_instance_is_accepted = [
+    ("BEGHello!END1", True),
+    ("BEGHello!END2", True),
+    ("BEGEND1", True),
+    ("BEGEND2", True),
+    ("BEGsome text hereEND1", True),
+    ("BEGsome text hereEND2", True),
+    ("BEGHello!END3", False),
+    ("BEGHello!END", False),
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", multiple_end_tokens_any_text_stag_grammar)
+def test_multiple_end_tokens_any_text_grammar(stag_format: Dict[str, Any], expected_grammar: str):
+    check_stag_with_grammar(stag_format, expected_grammar)
+
+
+@pytest.mark.parametrize("instance, is_accepted", multiple_end_tokens_any_text_instance_is_accepted)
+def test_multiple_end_tokens_any_text_instance(instance: str, is_accepted: bool):
+    stag_format = {
+        "type": "tag",
+        "begin": "BEG",
+        "content": {"type": "any_text"},
+        "end": ["END1", "END2"],
+    }
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+# Test multiple end tokens with Python API
+def test_multiple_end_tokens_python_api():
+    """Test that TagFormat accepts both str and List[str] for end field"""
+    # Test with single string (backward compatible)
+    tag1 = xgr.structural_tag.TagFormat(
+        begin="<start>", content=xgr.structural_tag.ConstStringFormat(value="content"), end="</end>"
+    )
+    assert tag1.end == "</end>"
+
+    # Test with list of strings
+    tag2 = xgr.structural_tag.TagFormat(
+        begin="<start>",
+        content=xgr.structural_tag.ConstStringFormat(value="content"),
+        end=["</end1>", "</end2>"],
+    )
+    assert tag2.end == ["</end1>", "</end2>"]
+
+    # Test that both work in StructuralTag
+    stag1 = xgr.StructuralTag(format=tag1)
+    stag2 = xgr.StructuralTag(format=tag2)
+
+    # Test that the grammars can be created
+    grammar1 = xgr.Grammar.from_structural_tag(stag1)
+    grammar2 = xgr.Grammar.from_structural_tag(stag2)
+
+    assert grammar1 is not None
+    assert grammar2 is not None
+
+
+# Test error case: empty end array
+def test_multiple_end_tokens_empty_array_error():
+    """Test that empty end array raises an error"""
+    stag_format = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": "BEG",
+            "content": {"type": "const_string", "value": "X"},
+            "end": [],
+        },
+    }
+    with pytest.raises(Exception) as exc_info:
+        xgr.Grammar.from_structural_tag(stag_format)
+    assert "empty" in str(exc_info.value).lower()
+
+
+# Test error case: unlimited content with all empty end strings
+def test_multiple_end_tokens_unlimited_empty_error():
+    """Test that unlimited content with all empty end strings raises an error"""
+    stag_format = {
+        "type": "structural_tag",
+        "format": {"type": "tag", "begin": "BEG", "content": {"type": "any_text"}, "end": ["", ""]},
+    }
+    with pytest.raises(Exception) as exc_info:
+        xgr.Grammar.from_structural_tag(stag_format)
+    assert "non-empty" in str(exc_info.value).lower() or "empty" in str(exc_info.value).lower()
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
