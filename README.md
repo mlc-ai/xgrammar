@@ -36,7 +36,7 @@ XGrammar uses careful optimizations to achieve extremely low overhead in structu
 XGrammar features **universal deployment**. It supports:
 * **Platforms**: Linux, macOS, Windows
 * **Hardware**: CPU, NVIDIA GPU, AMD GPU, Apple Silicon, TPU, etc.
-* **Languages**: Python, C++, and JavaScript APIs
+* **Languages**: Python, C++, Rust, and JavaScript APIs
 * **Models**: Qwen, Llama, DeepSeek, Phi, Gemma, etc.
 
 XGrammar is very easy to integrate with LLM inference engines. It is the default structured generation backend for most LLM inference engines, including  [**vLLM**](https://github.com/vllm-project/vllm), [**SGLang**](https://github.com/sgl-project/sglang), [**TensorRT-LLM**](https://github.com/NVIDIA/TensorRT-LLM), and [**MLC-LLM**](https://github.com/mlc-ai/mlc-llm), as well as many other companies. You can also try out their structured generation modes!

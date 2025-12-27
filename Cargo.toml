@@ -1,0 +1,120 @@
+[package]
+name = "xgrammar-rs"
+version = "0.1.29"
+edition = "2024"
+build = "rust/build.rs"
+links = "xgrammar"
+authors = ["Eugene Bokhan <eugenebokhan@icloud.com>"]
+description = "Efficient, Flexible and Portable Structured Generation for Rust - Rust bindings for XGrammar"
+license = "Apache-2.0"
+repository = "https://github.com/mlc-ai/xgrammar"
+homepage = "https://github.com/mlc-ai/xgrammar"
+documentation = "https://docs.rs/xgrammar-rs"
+readme = "rust/README.md"
+keywords = ["llm", "grammar", "structured-gen", "json-schema", "parser"]
+categories = ["parsing", "text-processing"]
+
+[lib]
+name = "xgrammar"
+path = "rust/src/lib.rs"
+
+[dependencies]
+autocxx = "0.30.0"
+# Keep `cxx` exactly in sync with the version used by `autocxx-build` to avoid
+# link-time symbol mismatches (cxxbridge symbol names include a version tag).
+cxx = "=1.0.192"
+serde_json = "1.0.148"
+
+[build-dependencies]
+walkdir = "2.5.0"
+cmake = "0.1.57"
+autocxx-build = "0.30.0"
+
+[dev-dependencies]
+schemars = "1.2.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+serial_test = "3.2.0"
+
+[features]
+default = []
+tokenizers = ["dep:tokenizers"]
+hf = ["tokenizers", "dep:hf-hub"]
+
+[dependencies.tokenizers]
+version = "0.22.1"
+optional = true
+
+[dependencies.hf-hub]
+version = "0.4.3"
+optional = true
+
+[[test]]
+name = "test_function_calling_converter"
+path = "rust/tests/test_function_calling_converter.rs"
+
+[[test]]
+name = "test_grammar_compiler"
+path = "rust/tests/test_grammar_compiler.rs"
+
+[[test]]
+name = "test_grammar_matcher_basic"
+path = "rust/tests/test_grammar_matcher_basic.rs"
+
+[[test]]
+name = "test_grammar_matcher_ebnf"
+path = "rust/tests/test_grammar_matcher_ebnf.rs"
+
+[[test]]
+name = "test_grammar_matcher_json_schema"
+path = "rust/tests/test_grammar_matcher_json_schema.rs"
+
+[[test]]
+name = "test_grammar_matcher_json"
+path = "rust/tests/test_grammar_matcher_json.rs"
+
+[[test]]
+name = "test_grammar_matcher_macro"
+path = "rust/tests/test_grammar_matcher_macro.rs"
+
+[[test]]
+name = "test_grammar_matcher_regex"
+path = "rust/tests/test_grammar_matcher_regex.rs"
+
+[[test]]
+name = "test_grammar_parser"
+path = "rust/tests/test_grammar_parser.rs"
+
+[[test]]
+name = "test_grammar_union_concat"
+path = "rust/tests/test_grammar_union_concat.rs"
+
+[[test]]
+name = "test_json_schema_converter"
+path = "rust/tests/test_json_schema_converter.rs"
+
+[[test]]
+name = "test_json_schema_error_handling"
+path = "rust/tests/test_json_schema_error_handling.rs"
+
+[[test]]
+name = "test_recursion_depth"
+path = "rust/tests/test_recursion_depth.rs"
+
+[[test]]
+name = "test_serialization"
+path = "rust/tests/test_serialization.rs"
+
+[[test]]
+name = "test_structural_tag_converter"
+path = "rust/tests/test_structural_tag_converter.rs"
+
+[[test]]
+name = "test_structural_tag"
+path = "rust/tests/test_structural_tag.rs"
+
+[[test]]
+name = "test_tokenizer_info"
+path = "rust/tests/test_tokenizer_info.rs"
+
+
