@@ -1001,6 +1001,103 @@ def test_tags_with_separator_format_with_outside_tag(
     check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
 
 
+# Test for empty separator in tags_with_separator
+def _get_tags_with_empty_separator_format(at_least_one: bool, stop_after_first: bool):
+    return {
+        "type": "tags_with_separator",
+        "tags": [
+            {"begin": "<a>", "content": {"type": "const_string", "value": "X"}, "end": "</a>"},
+            {"begin": "<b>", "content": {"type": "const_string", "value": "Y"}, "end": "</b>"},
+        ],
+        "separator": "",
+        "at_least_one": at_least_one,
+        "stop_after_first": stop_after_first,
+    }
+
+
+tags_with_empty_separator_stag_grammar = [
+    (
+        0,
+        _get_tags_with_empty_separator_format(at_least_one=False, stop_after_first=False),
+        r"""const_string ::= (("X"))
+tag ::= (("<a>" const_string "</a>"))
+const_string_1 ::= (("Y"))
+tag_1 ::= (("<b>" const_string_1 "</b>"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+root ::= ((tags_with_separator))
+""",
+    ),
+    (
+        1,
+        _get_tags_with_empty_separator_format(at_least_one=True, stop_after_first=False),
+        r"""const_string ::= (("X"))
+tag ::= (("<a>" const_string "</a>"))
+const_string_1 ::= (("Y"))
+tag_1 ::= (("<b>" const_string_1 "</b>"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+root ::= ((tags_with_separator))
+""",
+    ),
+    (
+        2,
+        _get_tags_with_empty_separator_format(at_least_one=False, stop_after_first=True),
+        r"""const_string ::= (("X"))
+tag ::= (("<a>" const_string "</a>"))
+const_string_1 ::= (("Y"))
+tag_1 ::= (("<b>" const_string_1 "</b>"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator ::= ("" | (tags_with_separator_tags))
+root ::= ((tags_with_separator))
+""",
+    ),
+    (
+        3,
+        _get_tags_with_empty_separator_format(at_least_one=True, stop_after_first=True),
+        r"""const_string ::= (("X"))
+tag ::= (("<a>" const_string "</a>"))
+const_string_1 ::= (("Y"))
+tag_1 ::= (("<b>" const_string_1 "</b>"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator ::= ((tags_with_separator_tags))
+root ::= ((tags_with_separator))
+""",
+    ),
+]
+
+
+tags_with_empty_separator_instance_accepted_results = [
+    ("", [True, False, True, False]),
+    ("<a>X</a>", [True, True, True, True]),
+    ("<a>X</a><b>Y</b>", [True, True, False, False]),
+    ("<b>Y</b><a>X</a><b>Y</b>", [True, True, False, False]),
+    ("<a>X</a><a>X</a><a>X</a>", [True, True, False, False]),
+    # Invalid cases
+    ("<a>X</a>,<b>Y</b>", [False, False, False, False]),  # Has separator when none expected
+    ("<c>Z</c>", [False, False, False, False]),  # Unknown tag
+]
+
+
+@pytest.mark.parametrize(
+    "stag_id, stag_format, expected_grammar", tags_with_empty_separator_stag_grammar
+)
+@pytest.mark.parametrize(
+    "instance, accepted_results", tags_with_empty_separator_instance_accepted_results
+)
+def test_tags_with_empty_separator_format(
+    stag_id: int,
+    stag_format: Dict[str, Any],
+    expected_grammar: str,
+    instance: str,
+    accepted_results: List[bool],
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
+
+
 compound_stag_instance_is_accepted = [
     # Llama JSON-based tool calling
     (
@@ -1598,16 +1695,13 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
-        "Tags with separator format's separator field must be a non-empty string",
+        "Tags with separator format's separator field must be a string",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": 123}}',
-        "Tags with separator format's separator field must be a non-empty string",
+        "Tags with separator format's separator field must be a string",
     ),
-    (
-        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": ""}}',
-        "Tags with separator format's separator field must be a non-empty string",
-    ),
+    # Note: empty separator is now valid, so no error test for it
     (
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": "sep", "at_least_one": "not_boolean"}}',
         "at_least_one must be a boolean",
