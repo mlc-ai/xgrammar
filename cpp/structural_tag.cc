@@ -1150,13 +1150,13 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
     end_str_sequence_id = grammar_builder_.AddChoices(end_str_choices);
   }
 
-  // Build the sequence for the recursive case
-  // Note: empty separator is handled by ByteStringFuser which removes empty bytestrings
-  std::vector<int> sub_sequence_elements = {
-      grammar_builder_.AddByteString(format.separator),
-      all_tags_rule_ref_id,
-      grammar_builder_.AddRuleRef(sub_rule_id)
-  };
+  // Build the sequence for the recursive case, handling empty separator
+  std::vector<int> sub_sequence_elements;
+  if (!format.separator.empty()) {
+    sub_sequence_elements.push_back(grammar_builder_.AddByteString(format.separator));
+  }
+  sub_sequence_elements.push_back(all_tags_rule_ref_id);
+  sub_sequence_elements.push_back(grammar_builder_.AddRuleRef(sub_rule_id));
 
   auto sub_rule_body_id = grammar_builder_.AddChoices(
       {grammar_builder_.AddSequence(
