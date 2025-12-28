@@ -214,11 +214,26 @@ Result<QwenXmlParameterFormat, ISTError> StructuralTagParser::ParseQwenXmlParame
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
 ) {
-  // obj should not have any fields other than "type"
-  if (obj.size() > 1 || (obj.size() == 1 && obj.begin()->first != "type")) {
-    return ResultErr<ISTError>("Any text format should not have any fields other than type");
+  auto excluded_strs_it = obj.find("excluded_str");
+  if (excluded_strs_it == obj.end()) {
+    if ((obj.find("type") == obj.end())) {
+      return ResultErr<ISTError>("Any text format should not have any fields other than type");
+    }
+    return ResultOk<AnyTextFormat>(std::vector<std::string>{});
   }
-  return ResultOk<AnyTextFormat>();
+  if (!excluded_strs_it->second.is<picojson::array>()) {
+    return ResultErr<ISTError>("AnyText format's excluded_strs field must be an array");
+  }
+  const auto& excluded_strs_array = excluded_strs_it->second.get<picojson::array>();
+  std::vector<std::string> excluded_strs;
+  excluded_strs.reserve(excluded_strs_array.size());
+  for (const auto& excluded_str : excluded_strs_array) {
+    if (!excluded_str.is<std::string>()) {
+      return ResultErr<ISTError>("AnyText format's excluded_strs array must contain strings");
+    }
+    excluded_strs.push_back(excluded_str.get<std::string>());
+  }
+  return ResultOk<AnyTextFormat>(std::move(excluded_strs));
 }
 
 Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const picojson::object& obj
@@ -756,9 +771,9 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextForma
   if (format.detected_end_str_.has_value()) {
     XGRAMMAR_DCHECK(!format.detected_end_str_.value().empty())
         << "The detected end string cannot be empty";
-    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, false, {format.detected_end_str_.value()}, false}
-    );
+    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
+        {}, false, {format.detected_end_str_.value()}, false, format.excluded_strs
+    });
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
     auto any_text_expr = grammar_builder_.AddCharacterClassStar({{0, 0x10FFFF}}, false);
@@ -908,15 +923,16 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   }
 
   // Step 3.2 Add TagDispatch.
+  // TODO(Linzhang): exclude strs.
   int32_t rule_expr_id;
   bool loop_after_dispatch = !format.stop_after_first;
   if (format.detected_end_str_.has_value()) {
     rule_expr_id = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
-        tag_rule_pairs, false, {format.detected_end_str_.value()}, loop_after_dispatch
+        tag_rule_pairs, false, {format.detected_end_str_.value()}, loop_after_dispatch, {}
     });
   } else {
     rule_expr_id = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch}
+        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch, {}}
     );
   }
 

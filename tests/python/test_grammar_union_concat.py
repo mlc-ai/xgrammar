@@ -111,7 +111,8 @@ triggered_tags ::= TagDispatch(
   ("start", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 root_1_1 ::= ((triggered_tags))
 root_2 ::= (([a-z] root_2) | ([a-z]))
@@ -144,7 +145,8 @@ triggered_tags ::= TagDispatch(
   ("start", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 root_1_1 ::= ((triggered_tags))
 root_2 ::= (([a-z] root_2) | ([a-z]))

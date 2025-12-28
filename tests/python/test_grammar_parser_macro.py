@@ -27,7 +27,8 @@ rule2 ::= "b"
   ("tag2", rule2),
   stop_eos=false,
   stop_str=("abc", "def"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )))
 rule1 ::= (("a"))
 rule2 ::= (("b"))
@@ -48,7 +49,8 @@ rule2 ::= "b"
   ("tag2", rule2),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )))
 rule1 ::= (("a"))
 rule2 ::= (("b"))
@@ -75,7 +77,8 @@ rule5 ::= "" | "g" rule5 "h"
   ("tag5", rule5),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 rule1 ::= (("b"))
 rule2 ::= (("c"))
@@ -104,7 +107,8 @@ rule3 ::= "c"
   ("tag3", rule3),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 rule1 ::= (("a"))
 rule2 ::= (("b"))
@@ -127,7 +131,8 @@ rule3 ::= "c"
   ("tag3", rule3),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 rule1 ::= (("a" rule1_1) | ("zzz"))
 rule2 ::= ((rule2_1) | (rule2_2))
@@ -137,21 +142,24 @@ rule1_1 ::= TagDispatch(
   ("tag2", rule3),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 rule2_1 ::= TagDispatch(
   ("tag1", rule2),
   ("tag2", rule3),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 rule2_2 ::= TagDispatch(
   ("tag3", rule2),
   ("tag4", rule3),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excluded_str=()
 )
 """
     grammar = xgr.Grammar.from_ebnf(before)
@@ -167,7 +175,8 @@ def test_e2e_tag_dispatch_roundtrip():
   ("tag3", rule3),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excluded_str=()
 )
 rule1 ::= (("a"))
 rule2 ::= (("b"))

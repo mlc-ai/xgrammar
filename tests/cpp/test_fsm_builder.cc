@@ -18,7 +18,7 @@ using namespace xgrammar;
 TEST(XGrammarFSMBuilderTest, TestTrieFSMBuilder) {
   TrieFSMBuilder trie_builder;
   std::vector<std::string> patterns = {"hello", "hi", "哈哈", "哈", "hili", "good"};
-  auto fsm_result = trie_builder.Build(patterns);
+  auto fsm_result = trie_builder.Build(patterns, {});
   EXPECT_TRUE(fsm_result.has_value());
   auto fsm = std::move(fsm_result).value();
 
@@ -61,6 +61,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder1) {
       /* stop_eos = */ true,
       /* stop_str = */ {},
       /* loop_after_dispatch = */ true,
+      /* excluded_str = */ {}
   };
   auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());
@@ -87,6 +88,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder2) {
       /* stop_eos = */ true,
       /* stop_str = */ {},
       /* loop_after_dispatch = */ false,
+      /* excluded_str = */ {}
   };
   auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());
@@ -117,6 +119,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder3) {
       /* stop_eos = */ false,
       /* stop_str = */ {"hos", "eos"},
       /* loop_after_dispatch = */ true,
+      /* excluded_str = */ {}
   };
   auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());
@@ -148,6 +151,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder4) {
       /* stop_eos = */ false,
       /* stop_str = */ {"hos", "eos"},
       /* loop_after_dispatch = */ false,
+      /* excluded_str = */ {}
   };
   auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());

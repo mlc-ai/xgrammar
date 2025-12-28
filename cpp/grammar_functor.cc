@@ -82,6 +82,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
     }
     new_tag_dispatch.stop_str = old_tag_dispatch.stop_str;
     new_tag_dispatch.loop_after_dispatch = old_tag_dispatch.loop_after_dispatch;
+    new_tag_dispatch.excluded_str = old_tag_dispatch.excluded_str;
     return builder_->AddTagDispatch(new_tag_dispatch);
   }
 
@@ -608,7 +609,9 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
   }
 
   void VisitTagDispatch(const GrammarExpr& grammar_expr) {
-    for (int i = 0; i < grammar_expr.size() - 3; i += 2) {
+    for (int i = 0;
+         i < grammar_expr.size() - Grammar::Impl::TagDispatch::kTagDispatchExtraParameter;
+         i += 2) {
       visit_queue_.push(grammar_expr[i + 1]);
     }
   }
@@ -709,7 +712,9 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       auto rule = base_grammar_->GetRule(i);
       auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
       if (grammar_expr.type == GrammarExprType::kTagDispatch) {
-        for (int j = 1; j < grammar_expr.size() - 3; j += 2) {
+        for (int j = 1;
+             j < grammar_expr.size() - Grammar::Impl::TagDispatch::kTagDispatchExtraParameter;
+             j += 2) {
           if (grammar_expr[j] == rule_id) {
             return false;
           }
@@ -750,7 +755,9 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       auto rule = base_grammar_->GetRule(i);
       auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
       if (grammar_expr.type == GrammarExprType::kTagDispatch) {
-        for (int j = 1; j < grammar_expr.size() - 3; j += 2) {
+        for (int j = 1;
+             j < grammar_expr.size() - Grammar::Impl::TagDispatch::kTagDispatchExtraParameter;
+             j += 2) {
           if (grammar_expr[j] == rule_id) {
             return -1;
           }
@@ -829,7 +836,9 @@ class RuleRefGraphFinder : public GrammarVisitor<std::vector<std::vector<int32_t
   }
 
   void VisitTagDispatch(const GrammarExpr& grammar_expr) {
-    for (int i = 1; i < grammar_expr.size() - 3; i += 2) {
+    for (int i = 1;
+         i < grammar_expr.size() - Grammar::Impl::TagDispatch::kTagDispatchExtraParameter;
+         i += 2) {
       rule_visit_graph_[grammar_expr[i]].push_back(cur_rule_id_);
     }
   }
@@ -1001,12 +1010,15 @@ class GrammarFSMBuilderImpl {
   static void AddCharacterRange(FSMWithStartEnd& fsm, int from, int to, uint32_t min, uint32_t max);
   /* Building tool funtions.*/
   static std::optional<FSMWithStartEnd> BuildTagDispatchWithEOSStop(
-      const std::vector<std::pair<std::string, int>>& tag_dispatch_rules, bool loop_after_dispatch
+      const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
+      bool loop_after_dispatch,
+      const std::vector<std::string>& excluded_strings
   );
   static std::optional<FSMWithStartEnd> BuildTagDispatchWithStopString(
       const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
       const std::vector<std::string>& stop_strings,
-      bool loop_after_dispatch
+      bool loop_after_dispatch,
+      const std::vector<std::string>& excluded_strings
   );
   static FSMWithStartEnd BuildNegativeCharacterClass(const GrammarExpr& expr);
 };
@@ -1417,7 +1429,8 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithStopString(
     const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
     const std::vector<std::string>& stop_strings,
-    bool loop_after_dispatch
+    bool loop_after_dispatch,
+    const std::vector<std::string>& excluded_strings
 ) {
   XGRAMMAR_DCHECK(stop_strings.size() > 0);
   std::vector<std::string> tag_names;
@@ -1429,7 +1442,8 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithStopSt
     tag_names.push_back(stop_string);
   }
   std::vector<int> trie_end_states;
-  auto trie_result = TrieFSMBuilder::Build(tag_names, &trie_end_states, false, true);
+  auto trie_result =
+      TrieFSMBuilder::Build(tag_names, excluded_strings, &trie_end_states, false, true);
   if (!trie_result.has_value()) {
     return std::nullopt;
   }
@@ -1461,7 +1475,8 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithStopSt
       tag_names.push_back(stop_string);
     }
     std::vector<int> stop_end_states;
-    auto stop_trie_result = TrieFSMBuilder::Build(tag_names, nullptr, false, false);
+    auto stop_trie_result =
+        TrieFSMBuilder::Build(tag_names, excluded_strings, nullptr, false, false);
     XGRAMMAR_DCHECK(stop_trie_result.has_value());
     auto stop_trie_fsm = stop_trie_result->GetFsm();
     auto stop_trie_start = stop_trie_result->GetStart();
@@ -1489,7 +1504,9 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithStopSt
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithEOSStop(
-    const std::vector<std::pair<std::string, int>>& tag_dispatch_rules, bool loop_after_dispatch
+    const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
+    bool loop_after_dispatch,
+    const std::vector<std::string>& excluded_strings
 ) {
   std::vector<std::string> tag_names;
   tag_names.reserve(tag_dispatch_rules.size());
@@ -1497,7 +1514,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithEOSSto
     tag_names.push_back(tag_name);
   }
   std::vector<int> end_states;
-  auto trie_result = TrieFSMBuilder::Build(tag_names, &end_states, false, true);
+  auto trie_result = TrieFSMBuilder::Build(tag_names, excluded_strings, &end_states, false, true);
   if (!trie_result.has_value()) {
     return std::nullopt;
   }
@@ -1538,11 +1555,14 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(
 ) {
   if (tag_dispatch.stop_eos) {
     return BuildTagDispatchWithEOSStop(
-        tag_dispatch.tag_rule_pairs, tag_dispatch.loop_after_dispatch
+        tag_dispatch.tag_rule_pairs, tag_dispatch.loop_after_dispatch, tag_dispatch.excluded_str
     );
   } else {
     return BuildTagDispatchWithStopString(
-        tag_dispatch.tag_rule_pairs, tag_dispatch.stop_str, tag_dispatch.loop_after_dispatch
+        tag_dispatch.tag_rule_pairs,
+        tag_dispatch.stop_str,
+        tag_dispatch.loop_after_dispatch,
+        tag_dispatch.excluded_str
     );
   }
 }

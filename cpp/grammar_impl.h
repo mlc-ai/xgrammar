@@ -194,6 +194,9 @@ class Grammar::Impl {
     std::vector<std::string> stop_str;
     /*! \brief If true, the tag dispatch will loop after dispatching. */
     bool loop_after_dispatch;
+    /*! \brief The strings that are excluded by the tap dispatch. */
+    std::vector<std::string> excluded_str;
+    static const int kTagDispatchExtraParameter = 4;
   };
 
   /*! \brief Get the tag dispatch from the grammar expr. */
@@ -202,26 +205,42 @@ class Grammar::Impl {
         << "GrammarExpr is not a tag dispatch";
 
     TagDispatch result;
-    XGRAMMAR_DCHECK(grammar_expr.size() >= 3);
-    result.tag_rule_pairs.reserve((grammar_expr.size() - 3) / 2);
+    XGRAMMAR_DCHECK(grammar_expr.size() >= TagDispatch::kTagDispatchExtraParameter);
+    result.tag_rule_pairs.reserve(
+        (grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter) / 2
+    );
 
-    for (int i = 0; i < grammar_expr.size() - 3; i += 2) {
+    for (int i = 0; i < grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter; i += 2) {
       auto tag_expr_id = grammar_expr[i];
       auto rule_id = grammar_expr[i + 1];
       result.tag_rule_pairs.push_back({GetByteString(tag_expr_id), rule_id});
     }
 
-    result.stop_eos = static_cast<bool>(grammar_expr[grammar_expr.size() - 3]);
+    result.stop_eos = static_cast<bool>(
+        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter]
+    );
 
-    auto stop_str_expr = GetGrammarExpr(grammar_expr[grammar_expr.size() - 2]);
+    auto stop_str_expr = GetGrammarExpr(
+        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 1]
+    );
     XGRAMMAR_DCHECK(stop_str_expr.type == GrammarExprType::kChoices);
     result.stop_str.reserve(stop_str_expr.size());
     for (int j = 0; j < stop_str_expr.size(); j++) {
       result.stop_str.push_back(GetByteString(stop_str_expr[j]));
     }
 
-    result.loop_after_dispatch = static_cast<bool>(grammar_expr[grammar_expr.size() - 1]);
+    result.loop_after_dispatch = static_cast<bool>(
+        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 2]
+    );
 
+    auto exclude_str_expr = GetGrammarExpr(
+        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 3]
+    );
+    XGRAMMAR_DCHECK(exclude_str_expr.type == GrammarExprType::kChoices);
+    result.excluded_str.reserve(exclude_str_expr.size());
+    for (int j = 0; j < exclude_str_expr.size(); j++) {
+      result.excluded_str.push_back(GetByteString(exclude_str_expr[j]));
+    }
     return result;
   }
 
