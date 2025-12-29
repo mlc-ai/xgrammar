@@ -16,6 +16,7 @@
 </div>
 
 ## News
+- [2025/12] XGrammar has been officially integrated into [Mirai](https://github.com/trymirai/uzu)
 - [2025/09] XGrammar has been officially integrated into [OpenVINO GenAI](https://github.com/openvinotoolkit/openvino.genai)
 - [2025/02] XGrammar has been officially integrated into [Modular's MAX](https://docs.modular.com/max/serve/structured-output)
 - [2025/01] XGrammar has been officially integrated into [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM).
@@ -86,7 +87,8 @@ XGrammar has been widely adopted in industry, open-source projects, and academia
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/mlc.jpeg" height=50/>](https://github.com/mlc-ai/mlc-llm)
 &emsp;
 [<span style="font-size:50px">WebLLM</span>](https://github.com/mlc-ai/web-llm)
-
+&emsp;
+[<img src="https://artifacts.trymirai.com/social/github/mirai.png" height=50/>](https://artifacts.trymirai.com/social/github/mirai.png)
 </div>
 
 ## Citation
