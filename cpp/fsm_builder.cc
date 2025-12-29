@@ -832,11 +832,6 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
     }
   }
 
-  // TODO(Linzhang Li): Handle excluded patterns.
-  // TODO 1: Also build trie with excluded patterns.
-  // TODO 2: Build back edges as usual.
-  // TODO 3: Remove the edges to excluded end states.
-
   std::unordered_set<int32_t> dead_state_set;
 
   if (add_back_edges) {
