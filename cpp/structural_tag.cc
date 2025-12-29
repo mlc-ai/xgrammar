@@ -920,9 +920,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
       if (tag.end.empty()) {
         // Unlimited content case - skip adding end string
-        choice_elements.push_back(
-            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id})
-        );
+        choice_elements.push_back(grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id}));
       } else if (tag.end.size() == 1) {
         // Single end token: use directly
         auto end_expr_id = grammar_builder_.AddByteString(tag.end[0]);
@@ -994,9 +992,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
       int rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[tag_id]);
       if (tag.end.empty()) {
         // Unlimited content case - skip adding end string
-        choice_elements.push_back(
-            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id})
-        );
+        choice_elements.push_back(grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id}));
       } else if (tag.end.size() == 1) {
         // Single end token: use directly
         int end_expr_id = grammar_builder_.AddByteString(tag.end[0]);

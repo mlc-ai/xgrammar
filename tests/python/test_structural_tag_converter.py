@@ -2219,13 +2219,13 @@ multiple_end_tokens_with_empty_instance_is_accepted = [
 @pytest.mark.parametrize(
     "stag_format, expected_grammar", multiple_end_tokens_with_empty_stag_grammar
 )
-def test_multiple_end_tokens_with_empty_grammar(
-    stag_format: Dict[str, Any], expected_grammar: str
-):
+def test_multiple_end_tokens_with_empty_grammar(stag_format: Dict[str, Any], expected_grammar: str):
     check_stag_with_grammar(stag_format, expected_grammar)
 
 
-@pytest.mark.parametrize("instance, is_accepted", multiple_end_tokens_with_empty_instance_is_accepted)
+@pytest.mark.parametrize(
+    "instance, is_accepted", multiple_end_tokens_with_empty_instance_is_accepted
+)
 def test_multiple_end_tokens_with_empty_instance(instance: str, is_accepted: bool):
     stag_format = {
         "type": "tag",
