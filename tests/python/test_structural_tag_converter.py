@@ -2073,5 +2073,132 @@ def test_from_structural_tag_with_structural_tag_instance(
     check_stag_with_instance(stag, instance, is_accepted)
 
 
+# ==================== lookahead_end Tests ====================
+# Tests for the lookahead_end feature which allows the end token to be matched
+# but NOT consumed, enabling token sharing in triggered_tags patterns.
+#
+# NOTE: lookahead_end is primarily useful within triggered_tags where the unconsumed
+# end token can be picked up by the TagDispatch as the next trigger.
+
+
+def _get_lookahead_tag_format():
+    """Basic tag with lookahead_end."""
+    return {
+        "type": "tag",
+        "begin": "<fn>",
+        "content": {"type": "const_string", "value": "hello"},
+        "end": "</fn>",
+        "lookahead_end": True,
+    }
+
+
+lookahead_tag_stag_grammar = [
+    (
+        _get_lookahead_tag_format(),
+        # With lookahead_end, the end is NOT in the sequence, but is a lookahead assertion
+        r"""const_string ::= (("hello"))
+tag ::= (("<fn>" const_string)) (=("</fn>"))
+root ::= ((tag))
+""",
+    ),
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", lookahead_tag_stag_grammar)
+def test_lookahead_tag_grammar(stag_format: Dict[str, Any], expected_grammar: str):
+    """Test that lookahead_end generates correct grammar with lookahead assertion."""
+    check_stag_with_grammar(stag_format, expected_grammar)
+
+
+def _get_triggered_tags_with_lookahead(at_least_one: bool, stop_after_first: bool):
+    """Triggered tags where end == trigger with lookahead_end for token sharing."""
+    return {
+        "type": "triggered_tags",
+        "triggers": ["<fn>"],
+        "tags": [
+            {
+                "begin": "<fn>",
+                "content": {"type": "const_string", "value": "X"},
+                "end": "<fn>",
+                "lookahead_end": True,
+            }
+        ],
+        "at_least_one": at_least_one,
+        "stop_after_first": stop_after_first,
+    }
+
+
+triggered_tags_lookahead_stag_grammar = [
+    (
+        0,
+        _get_triggered_tags_with_lookahead(at_least_one=False, stop_after_first=False),
+        # With lookahead_end, the triggered_tag_item has lookahead assertion
+        r"""const_string ::= (("X"))
+triggered_tag_item ::= (("" const_string)) (=("<fn>"))
+triggered_tags_group ::= ((triggered_tag_item))
+triggered_tags ::= TagDispatch(
+  ("<fn>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true
+)
+root ::= ((triggered_tags))
+""",
+    ),
+    (
+        1,
+        _get_triggered_tags_with_lookahead(at_least_one=True, stop_after_first=False),
+        r"""const_string ::= (("X"))
+triggered_tag_item ::= (("" const_string)) (=("<fn>"))
+triggered_tags_group ::= ((triggered_tag_item))
+triggered_tag_first_item ::= (("<fn>" const_string)) (=("<fn>"))
+triggered_tags_first ::= ((triggered_tag_first_item))
+triggered_tags_sub ::= TagDispatch(
+  ("<fn>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true
+)
+triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
+root ::= ((triggered_tags))
+""",
+    ),
+    (
+        2,
+        _get_triggered_tags_with_lookahead(at_least_one=False, stop_after_first=True),
+        r"""const_string ::= (("X"))
+triggered_tag_item ::= (("" const_string)) (=("<fn>"))
+triggered_tags_group ::= ((triggered_tag_item))
+triggered_tags ::= TagDispatch(
+  ("<fn>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false
+)
+root ::= ((triggered_tags))
+""",
+    ),
+    (
+        3,
+        _get_triggered_tags_with_lookahead(at_least_one=True, stop_after_first=True),
+        r"""const_string ::= (("X"))
+triggered_tag_item ::= (("<fn>" const_string)) (=("<fn>"))
+triggered_tags ::= ((triggered_tag_item))
+root ::= ((triggered_tags))
+""",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "stag_id, stag_format, expected_grammar", triggered_tags_lookahead_stag_grammar
+)
+def test_triggered_tags_lookahead_grammar(
+    stag_id: int, stag_format: Dict[str, Any], expected_grammar: str
+):
+    """Test that triggered_tags with lookahead_end generates correct grammar."""
+    check_stag_with_grammar(stag_format, expected_grammar)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

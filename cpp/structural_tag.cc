@@ -320,10 +320,20 @@ Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::
   if (end_it == obj.end() || !end_it->second.is<std::string>()) {
     return ResultErr<ISTError>("Tag format's end field must be a string");
   }
+  // lookahead_end is optional.
+  bool lookahead_end = false;
+  auto lookahead_end_it = obj.find("lookahead_end");
+  if (lookahead_end_it != obj.end()) {
+    if (!lookahead_end_it->second.is<bool>()) {
+      return ResultErr<ISTError>("lookahead_end must be a boolean");
+    }
+    lookahead_end = lookahead_end_it->second.get<bool>();
+  }
   return ResultOk<TagFormat>(
       begin_it->second.get<std::string>(),
       std::make_shared<Format>(std::move(content).Unwrap()),
-      end_it->second.get<std::string>()
+      end_it->second.get<std::string>(),
+      lookahead_end
   );
 }
 
@@ -808,14 +818,32 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
   auto begin_expr = grammar_builder_.AddByteString(format.begin);
   auto rule_ref_expr = grammar_builder_.AddRuleRef(sub_rule_id);
   int32_t sequence_expr_id;
-  if (!format.end.empty()) {
-    auto end_expr = grammar_builder_.AddByteString(format.end);
-    sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_expr});
-  } else {
+
+  if (format.lookahead_end) {
+    // When lookahead_end is true, the end token is matched via lookahead (not consumed).
+    // This allows the end token to be reused by the next tag's begin or trigger.
     sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr});
+    auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
+    auto tag_rule_id = grammar_builder_.AddRuleWithHint("tag", choices_expr);
+
+    // Add lookahead assertion for the end token
+    if (!format.end.empty()) {
+      auto end_expr = grammar_builder_.AddByteString(format.end);
+      auto lookahead_seq = grammar_builder_.AddSequence({end_expr});
+      grammar_builder_.UpdateLookaheadAssertion(tag_rule_id, lookahead_seq);
+    }
+    return ResultOk(tag_rule_id);
+  } else {
+    // Normal case: end token is consumed
+    if (!format.end.empty()) {
+      auto end_expr = grammar_builder_.AddByteString(format.end);
+      sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_expr});
+    } else {
+      sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr});
+    }
+    auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
+    return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
   }
-  auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
-  return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTagsFormat& format) {
@@ -861,11 +889,28 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
       const auto& tag = format.tags[it_tag];
       auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
-      auto end_expr_id = grammar_builder_.AddByteString(tag.end);
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
-      choice_elements.push_back(
-          grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
-      );
+
+      if (tag.lookahead_end) {
+        // When lookahead_end is true, create a separate sub-rule with lookahead assertion.
+        auto sequence_id = grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id});
+        auto choices_id = grammar_builder_.AddChoices({sequence_id});
+        auto item_rule_id = grammar_builder_.AddRuleWithHint("triggered_tag_item", choices_id);
+        if (!tag.end.empty()) {
+          auto end_expr_id = grammar_builder_.AddByteString(tag.end);
+          auto lookahead_seq = grammar_builder_.AddSequence({end_expr_id});
+          grammar_builder_.UpdateLookaheadAssertion(item_rule_id, lookahead_seq);
+        }
+        choice_elements.push_back(
+            grammar_builder_.AddSequence({grammar_builder_.AddRuleRef(item_rule_id)})
+        );
+      } else {
+        // Normal case: end token is consumed
+        auto end_expr_id = grammar_builder_.AddByteString(tag.end);
+        choice_elements.push_back(
+            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
+        );
+      }
     }
     auto choice_expr_id = grammar_builder_.AddChoices(choice_elements);
 
@@ -896,11 +941,30 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     for (const auto& tag_id : trigger_to_tag_ids[it_trigger]) {
       const auto& tag = format.tags[tag_id];
       int begin_expr_id = grammar_builder_.AddByteString(tag.begin.substr(trigger.size()));
-      int end_expr_id = grammar_builder_.AddByteString(tag.end);
       int rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[tag_id]);
-      choice_elements.push_back(
-          grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
-      );
+
+      if (tag.lookahead_end) {
+        // When lookahead_end is true, create a separate sub-rule with lookahead assertion.
+        // The end token is matched via lookahead (not consumed), allowing it to be reused
+        // as the trigger for the next tag.
+        auto sequence_id = grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id});
+        auto choices_id = grammar_builder_.AddChoices({sequence_id});
+        auto item_rule_id = grammar_builder_.AddRuleWithHint("triggered_tag_item", choices_id);
+        if (!tag.end.empty()) {
+          auto end_expr_id = grammar_builder_.AddByteString(tag.end);
+          auto lookahead_seq = grammar_builder_.AddSequence({end_expr_id});
+          grammar_builder_.UpdateLookaheadAssertion(item_rule_id, lookahead_seq);
+        }
+        choice_elements.push_back(
+            grammar_builder_.AddSequence({grammar_builder_.AddRuleRef(item_rule_id)})
+        );
+      } else {
+        // Normal case: end token is consumed
+        int end_expr_id = grammar_builder_.AddByteString(tag.end);
+        choice_elements.push_back(
+            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
+        );
+      }
     }
     auto choice_expr_id = grammar_builder_.AddChoices(choice_elements);
     auto sub_rule_id = grammar_builder_.AddRuleWithHint("triggered_tags_group", choice_expr_id);
@@ -927,11 +991,28 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
       const auto& tag = format.tags[it_tag];
       auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
-      auto end_expr_id = grammar_builder_.AddByteString(tag.end);
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
-      first_choice_elements.push_back(
-          grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
-      );
+
+      if (tag.lookahead_end) {
+        // When lookahead_end is true, create a separate sub-rule with lookahead assertion.
+        auto sequence_id = grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id});
+        auto choices_id = grammar_builder_.AddChoices({sequence_id});
+        auto item_rule_id = grammar_builder_.AddRuleWithHint("triggered_tag_first_item", choices_id);
+        if (!tag.end.empty()) {
+          auto end_expr_id = grammar_builder_.AddByteString(tag.end);
+          auto lookahead_seq = grammar_builder_.AddSequence({end_expr_id});
+          grammar_builder_.UpdateLookaheadAssertion(item_rule_id, lookahead_seq);
+        }
+        first_choice_elements.push_back(
+            grammar_builder_.AddSequence({grammar_builder_.AddRuleRef(item_rule_id)})
+        );
+      } else {
+        // Normal case: end token is consumed
+        auto end_expr_id = grammar_builder_.AddByteString(tag.end);
+        first_choice_elements.push_back(
+            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
+        );
+      }
     }
     auto first_choice_expr_id = grammar_builder_.AddChoices(first_choice_elements);
     auto first_rule_id =

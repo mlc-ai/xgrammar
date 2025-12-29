@@ -123,9 +123,20 @@ struct TagFormat {
   std::string begin;
   std::shared_ptr<Format> content;
   std::string end;
+  /*! \brief If true, the end token is matched via lookahead (not consumed).
+   * This allows the end token to be reused by the next tag's begin or trigger. */
+  bool lookahead_end = false;
 
-  TagFormat(std::string begin, std::shared_ptr<Format> content, std::string end)
-      : begin(std::move(begin)), content(std::move(content)), end(std::move(end)) {}
+  TagFormat(
+      std::string begin,
+      std::shared_ptr<Format> content,
+      std::string end,
+      bool lookahead_end = false
+  )
+      : begin(std::move(begin)),
+        content(std::move(content)),
+        end(std::move(end)),
+        lookahead_end(lookahead_end) {}
 };
 
 struct TriggeredTagsFormat {

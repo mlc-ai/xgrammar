@@ -114,7 +114,15 @@ class OrFormat(BaseModel):
 
 
 class TagFormat(BaseModel):
-    """A format that matches a tag: ``begin content end``."""
+    """A format that matches a tag: ``begin content end``.
+
+    When ``lookahead_end`` is True, the end token is matched but NOT consumed (lookahead).
+    This allows the end token to be reused as the begin token of a subsequent tag,
+    enabling token sharing in patterns like ``<fn>content1<fn>content2<fn>...``
+
+    This is particularly useful with ``triggered_tags`` where the end token equals the trigger,
+    allowing automatic chaining without duplicate tokens.
+    """
 
     type: Literal["tag"] = "tag"
     """The type of the format."""
@@ -124,6 +132,9 @@ class TagFormat(BaseModel):
     """The content of the tag. It can be any of the formats."""
     end: str
     """The end tag."""
+    lookahead_end: bool = False
+    """If True, the end token is matched via lookahead (not consumed).
+    This allows the end token to be reused by the next tag's begin or trigger."""
 
 
 class TriggeredTagsFormat(BaseModel):
