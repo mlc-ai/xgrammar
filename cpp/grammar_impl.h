@@ -249,6 +249,9 @@ class Grammar::Impl {
     return GetTagDispatch(GetGrammarExpr(grammar_expr_id));
   }
 
+  /*! \brief Hash a sequence. */
+  std::optional<uint64_t> HashSequence(int32_t sequence_id) const;
+
  private:
   /*! \brief The rules of the grammar. rule_id corresponds the index of this vector. */
   std::vector<Rule> rules_;
@@ -272,6 +275,16 @@ class Grammar::Impl {
    * the rule will be used in matching, and the rule's body must be a kChoices expr.
    */
   std::vector<std::optional<CompactFSMWithStartEnd>> per_rule_fsms;
+
+  /*!
+   * \brief The hash value for each rule's FSM.
+   */
+  std::vector<std::optional<uint64_t>> per_rule_fsm_hashes;
+
+  /*!
+   * \brief The new state ids of each FSM's states.
+   */
+  std::vector<std::optional<std::vector<std::pair<int32_t, int32_t>>>> per_rule_fsm_new_state_ids;
 
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
