@@ -498,7 +498,7 @@ any_text_stag_grammar = [
   stop_eos=false,
   stop_str=("END"),
   loop_after_dispatch=false,
-  excluded_str=()
+  excludes=()
 )
 tag ::= (("BEG" any_text))
 root ::= ((tag))
@@ -571,7 +571,7 @@ triggered_tags ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=true,
-  excluded_str=()
+  excludes=()
 )
 root ::= ((triggered_tags))
 """,
@@ -588,7 +588,7 @@ triggered_tags_sub ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=true,
-  excluded_str=()
+  excludes=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 root ::= ((triggered_tags))
@@ -605,7 +605,7 @@ triggered_tags ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
-  excluded_str=()
+  excludes=()
 )
 root ::= ((triggered_tags))
 """,
@@ -669,7 +669,7 @@ triggered_tags ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=true,
-  excluded_str=()
+  excludes=()
 )
 root ::= ((triggered_tags))
 """,
@@ -732,7 +732,7 @@ triggered_tags ::= TagDispatch(
   stop_eos=false,
   stop_str=("end"),
   loop_after_dispatch=true,
-  excluded_str=()
+  excludes=()
 )
 tag ::= (("begin" triggered_tags))
 root ::= ((tag))
@@ -750,7 +750,7 @@ triggered_tags_sub ::= TagDispatch(
   stop_eos=false,
   stop_str=("end"),
   loop_after_dispatch=true,
-  excluded_str=()
+  excludes=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 tag ::= (("begin" triggered_tags))
@@ -768,7 +768,7 @@ triggered_tags ::= TagDispatch(
   stop_eos=false,
   stop_str=("end"),
   loop_after_dispatch=false,
-  excluded_str=()
+  excludes=()
 )
 tag ::= (("begin" triggered_tags))
 root ::= ((tag))
@@ -1254,7 +1254,7 @@ any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end>"),
   loop_after_dispatch=false,
-  excluded_str=()
+  excludes=()
 )
 sequence ::= ((const_string any_text))
 tag ::= (("<start>" sequence))
@@ -1305,7 +1305,7 @@ root ::= ((tag))
   stop_eos=false,
   stop_str=("<end2>"),
   loop_after_dispatch=false,
-  excluded_str=()
+  excludes=()
 )
 triggered_tags_group ::= ((">" any_text ""))
 triggered_tags_first ::= (("<start2>" any_text ""))
@@ -1314,7 +1314,7 @@ triggered_tags_sub ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end>"),
   loop_after_dispatch=true,
-  excluded_str=()
+  excludes=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 const_string ::= (("[TEXT2]"))
@@ -1322,14 +1322,14 @@ any_text_1 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end>"),
   loop_after_dispatch=false,
-  excluded_str=()
+  excludes=()
 )
 sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end3>"),
   loop_after_dispatch=false,
-  excluded_str=()
+  excludes=()
 )
 tag ::= (("<start3>" any_text_2))
 tags_with_separator_tags ::= ((tag))
@@ -1396,7 +1396,7 @@ root ::= ((tag_1))
   stop_eos=false,
   stop_str=("<end2>"),
   loop_after_dispatch=false,
-  excluded_str=()
+  excludes=()
 )
 triggered_tags_group ::= ((">" any_text ""))
 triggered_tags_first ::= (("<start2>" any_text ""))
@@ -1405,7 +1405,7 @@ triggered_tags_sub ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=true,
-  excluded_str=()
+  excludes=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 const_string ::= (("[TEXT]"))
@@ -1415,7 +1415,7 @@ any_text_2 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end3>"),
   loop_after_dispatch=false,
-  excluded_str=()
+  excludes=()
 )
 tag ::= (("<start3>" any_text_2))
 tags_with_separator_tags ::= ((tag))
@@ -2005,7 +2005,7 @@ def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
 
     stag_format = {
         "type": "tag",
-        "content": {"type": "any_text", "excluded_str": ["<end>", "</tag>"]},
+        "content": {"type": "any_text", "excludes": ["<end>", "</tag>"]},
         "begin": "",
         "end": ".",
     }
@@ -2014,7 +2014,7 @@ def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
   stop_eos=false,
   stop_str=("."),
   loop_after_dispatch=false,
-  excluded_str=("<end>", "</tag>")
+  excludes=("<end>", "</tag>")
 )
 tag ::= (("" any_text))
 root ::= ((tag))

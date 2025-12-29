@@ -1105,7 +1105,7 @@ int32_t EBNFParser::ParseTagDispatch() {
   }
 
   // exclude_str
-  if (auto it = args.named_arguments.find("excluded_str"); it != args.named_arguments.end()) {
+  if (auto it = args.named_arguments.find("excludes"); it != args.named_arguments.end()) {
     auto tuple_node = std::get_if<MacroIR::TupleNode>(it->second.get());
     if (tuple_node == nullptr) {
       ReportParseError("excluded strings must be a tuple", delta_element);

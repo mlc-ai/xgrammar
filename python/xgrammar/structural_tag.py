@@ -71,7 +71,7 @@ class AnyTextFormat(BaseModel):
     type: Literal["any_text"] = "any_text"
     """The type of the format."""
 
-    excluded_str: List[str] = []
+    excludes: List[str] = []
     """List of strings that should not appear in the matched text."""
 
 

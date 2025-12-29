@@ -214,7 +214,7 @@ Result<QwenXmlParameterFormat, ISTError> StructuralTagParser::ParseQwenXmlParame
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
 ) {
-  auto excluded_strs_it = obj.find("excluded_str");
+  auto excluded_strs_it = obj.find("excludes");
   if (excluded_strs_it == obj.end()) {
     if ((obj.find("type") == obj.end())) {
       return ResultErr<ISTError>("Any text format should not have any fields other than type");

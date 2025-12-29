@@ -145,7 +145,7 @@ std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
   result += "),\n";
   result +=
       indent + "loop_after_dispatch=" + PrintBoolean(tag_dispatch.loop_after_dispatch) + ",\n";
-  result += indent + "excluded_str=(";
+  result += indent + "excludes=(";
   for (int i = 0; i < static_cast<int>(tag_dispatch.excluded_str.size()); ++i) {
     result += PrintString(tag_dispatch.excluded_str[i]);
     if (i + 1 != static_cast<int>(tag_dispatch.excluded_str.size())) {

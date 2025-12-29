@@ -178,7 +178,7 @@ def test_excluded_str():
     grammar_str = """root ::= TagDispatch(
   ("start", rule1),
   stop_str=("</think>"),
-  excluded_str=("</conclude>"),
+  excludes=("</conclude>"),
   loop_after_dispatch=true,
   stop_eos=false
 )
@@ -190,7 +190,7 @@ rule1 ::= "12345"
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=true,
-  excluded_str=("</conclude>")
+  excludes=("</conclude>")
 )
 rule1 ::= (("12345"))
 """
