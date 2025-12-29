@@ -2186,7 +2186,7 @@ multiple_end_tokens_with_empty_stag_grammar = [
             "end": ["END1", ""],
         },
         r"""const_string ::= (("CONTENT"))
-tag_end ::= (("END1") | (""))
+tag_end ::= ("" | ("END1"))
 tag ::= (("BEG" const_string tag_end))
 root ::= ((tag))
 """,
@@ -2200,7 +2200,7 @@ root ::= ((tag))
             "end": ["", "</end>"],
         },
         r"""const_string ::= (("X"))
-tag_end ::= (("") | ("</end>"))
+tag_end ::= ("" | ("</end>"))
 tag ::= (("<start>" const_string tag_end))
 root ::= ((tag))
 """,

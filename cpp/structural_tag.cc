@@ -849,7 +849,9 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
     // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
     std::vector<int> end_sequence_ids;
     for (const auto& end_str : format.end) {
-      auto end_expr = grammar_builder_.AddByteString(end_str);
+      // Use AddEmptyStr() for empty strings, AddByteString() for non-empty
+      auto end_expr = end_str.empty() ? grammar_builder_.AddEmptyStr()
+                                      : grammar_builder_.AddByteString(end_str);
       end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr}));
     }
     auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
@@ -861,8 +863,9 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
     auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
     return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
   } else if (format.end.size() == 1) {
-    // Single end token: use directly
-    auto end_expr = grammar_builder_.AddByteString(format.end[0]);
+    // Single end token: use directly (use AddEmptyStr() for empty strings)
+    auto end_expr = format.end[0].empty() ? grammar_builder_.AddEmptyStr()
+                                          : grammar_builder_.AddByteString(format.end[0]);
     auto sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_expr});
     auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
     return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
@@ -923,7 +926,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
         choice_elements.push_back(grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id}));
       } else if (tag.end.size() == 1) {
         // Single end token: use directly
-        auto end_expr_id = grammar_builder_.AddByteString(tag.end[0]);
+        auto end_expr_id = tag.end[0].empty() ? grammar_builder_.AddEmptyStr()
+                                              : grammar_builder_.AddByteString(tag.end[0]);
         choice_elements.push_back(
             grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
         );
@@ -931,7 +935,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
         // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
         std::vector<int> end_sequence_ids;
         for (const auto& end_str : tag.end) {
-          auto end_expr_id = grammar_builder_.AddByteString(end_str);
+          auto end_expr_id = end_str.empty() ? grammar_builder_.AddEmptyStr()
+                                             : grammar_builder_.AddByteString(end_str);
           end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr_id}));
         }
         auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
@@ -950,7 +955,9 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
       auto ref_sub_rule_expr_id = grammar_builder_.AddRuleRef(sub_rule_id);
       if (format.detected_end_strs_.size() == 1) {
         // Single detected end string: use directly
-        auto end_str_expr_id = grammar_builder_.AddByteString(format.detected_end_strs_[0]);
+        auto end_str_expr_id = format.detected_end_strs_[0].empty()
+                                   ? grammar_builder_.AddEmptyStr()
+                                   : grammar_builder_.AddByteString(format.detected_end_strs_[0]);
         auto sequence_expr_id =
             grammar_builder_.AddSequence({ref_sub_rule_expr_id, end_str_expr_id});
         choice_expr_id = grammar_builder_.AddChoices({sequence_expr_id});
@@ -958,7 +965,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
         // Multiple detected end strings: create end choices rule
         std::vector<int> end_sequence_ids;
         for (const auto& end_str : format.detected_end_strs_) {
-          auto end_str_expr_id = grammar_builder_.AddByteString(end_str);
+          auto end_str_expr_id = end_str.empty() ? grammar_builder_.AddEmptyStr()
+                                                 : grammar_builder_.AddByteString(end_str);
           end_sequence_ids.push_back(grammar_builder_.AddSequence({end_str_expr_id}));
         }
         auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
@@ -995,7 +1003,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
         choice_elements.push_back(grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id}));
       } else if (tag.end.size() == 1) {
         // Single end token: use directly
-        int end_expr_id = grammar_builder_.AddByteString(tag.end[0]);
+        int end_expr_id = tag.end[0].empty() ? grammar_builder_.AddEmptyStr()
+                                             : grammar_builder_.AddByteString(tag.end[0]);
         choice_elements.push_back(
             grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
         );
@@ -1003,7 +1012,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
         // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
         std::vector<int> end_sequence_ids;
         for (const auto& end_str : tag.end) {
-          int end_expr_id = grammar_builder_.AddByteString(end_str);
+          int end_expr_id = end_str.empty() ? grammar_builder_.AddEmptyStr()
+                                            : grammar_builder_.AddByteString(end_str);
           end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr_id}));
         }
         auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
@@ -1054,7 +1064,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
         );
       } else if (tag.end.size() == 1) {
         // Single end token: use directly
-        auto end_expr_id = grammar_builder_.AddByteString(tag.end[0]);
+        auto end_expr_id = tag.end[0].empty() ? grammar_builder_.AddEmptyStr()
+                                              : grammar_builder_.AddByteString(tag.end[0]);
         first_choice_elements.push_back(
             grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
         );
@@ -1062,7 +1073,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
         // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
         std::vector<int> end_sequence_ids;
         for (const auto& end_str : tag.end) {
-          auto end_expr_id = grammar_builder_.AddByteString(end_str);
+          auto end_expr_id = end_str.empty() ? grammar_builder_.AddEmptyStr()
+                                             : grammar_builder_.AddByteString(end_str);
           end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr_id}));
         }
         auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
