@@ -641,7 +641,10 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TagFormat* format) {
       return ISTError("When the content is unlimited, the end of the tag format cannot be empty");
     }
     // Clear the end string because it is moved to the detected_end_str_ field.
-    format->end.clear();
+    // BUT: If lookahead_end is true, keep the end string for the lookahead assertion.
+    if (!format->lookahead_end) {
+      format->end.clear();
+    }
   }
   return std::nullopt;
 }

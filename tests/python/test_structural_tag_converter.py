@@ -2200,5 +2200,59 @@ def test_triggered_tags_lookahead_grammar(
     check_stag_with_grammar(stag_format, expected_grammar)
 
 
+# ==================== lookahead_end with any_text Tests ====================
+# These tests verify lookahead_end behavior with any_text content.
+#
+# NOTE: Token sharing with any_text in triggered_tags has a fundamental conflict:
+# - The any_text TagDispatch stops at end token (doesn't consume)
+# - The lookahead checks for end token (doesn't consume)
+# - BUT the outer TagDispatch consumes the trigger to dispatch
+# This means token sharing doesn't work for multi-tag scenarios with any_text.
+# Single tag scenarios work correctly.
+
+
+def _get_triggered_tags_any_text_lookahead():
+    """Triggered tags with any_text content and lookahead_end."""
+    return {
+        "type": "triggered_tags",
+        "triggers": ["<fn>"],
+        "tags": [
+            {
+                "begin": "<fn>",
+                "content": {"type": "any_text"},
+                "end": "<fn>",
+                "lookahead_end": True,
+            }
+        ],
+        "at_least_one": True,
+    }
+
+
+def test_triggered_tags_any_text_lookahead_grammar():
+    """Test that triggered_tags with any_text and lookahead_end generates correct grammar."""
+    stag_format = _get_triggered_tags_any_text_lookahead()
+    grammar = xgr.Grammar.from_structural_tag(
+        {"type": "structural_tag", "format": stag_format}
+    )
+    grammar_str = str(grammar)
+    
+    # Verify key components are present
+    assert 'any_text ::= TagDispatch(' in grammar_str
+    assert 'stop_str=("<fn>")' in grammar_str
+    assert '(=("<fn>"))' in grammar_str  # Lookahead assertion
+
+
+def test_triggered_tags_any_text_lookahead_single_tag():
+    """Test that a single tag with any_text and lookahead_end works correctly."""
+    stag_format = _get_triggered_tags_any_text_lookahead()
+    
+    # Single tag: begin + any content + lookahead end
+    check_stag_with_instance(stag_format, "<fn>hello world<fn>", True)
+    check_stag_with_instance(stag_format, "<fn>A<fn>", True)
+    
+    # Without the final <fn>, it should fail (lookahead requires it)
+    check_stag_with_instance(stag_format, "<fn>hello world", False)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
