@@ -1990,7 +1990,7 @@ def test_from_structural_tag_with_structural_tag_instance(
     check_stag_with_instance(stag, instance, is_accepted)
 
 
-test_strings_is_accepted = [
+test_strings_is_accepted_any_text_excludes = [
     ("This is a test string.", True),
     ("This string contains <end> which is excluded.", False),
     ("Another string with </tag> inside.", False),
@@ -2000,7 +2000,7 @@ test_strings_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("instance, is_accepted", test_strings_is_accepted)
+@pytest.mark.parametrize("instance, is_accepted", test_strings_is_accepted_any_text_excludes)
 def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
 
     stag_format = {
@@ -2018,6 +2018,52 @@ def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
 )
 tag ::= (("" any_text))
 root ::= ((tag))
+"""
+
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+test_strings_is_accepted_triggered_excludes = [
+    ("A", False),
+    ("A1", False),
+    ("A1L1AB", True),
+    ("A1L2A", False),
+    ("L1A1L1A", False),
+    ("L2A2L2A", False),
+    ("A1L1AL1", False),
+    ("A1L1AA2L2A", True),
+]
+
+
+@pytest.mark.parametrize("instance, is_accepted", test_strings_is_accepted_triggered_excludes)
+def test_excluded_strings_in_triggered_format(instance: str, is_accepted: bool):
+
+    stag_format = {
+        "type": "triggered_tags",
+        "triggers": ["A"],
+        "tags": [
+            {"begin": "A1", "content": {"type": "const_string", "value": "L1"}, "end": "A"},
+            {"begin": "A2", "content": {"type": "const_string", "value": "L2"}, "end": "A"},
+        ],
+        "at_least_one": True,
+        "stop_after_first": False,
+        "excludes": ["L1", "L2"],
+    }
+
+    expected_grammar = r"""const_string ::= (("L1"))
+const_string_1 ::= (("L2"))
+triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
+triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
+triggered_tags_sub ::= TagDispatch(
+  ("A", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=("L1", "L2")
+)
+triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
+root ::= ((triggered_tags))
 """
 
     check_stag_with_grammar(stag_format, expected_grammar)
