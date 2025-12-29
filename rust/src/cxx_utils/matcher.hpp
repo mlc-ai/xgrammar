@@ -120,6 +120,48 @@ inline void batch_matcher_batch_fill_next_token_bitmask(
   }
 }
 
+inline bool apply_token_bitmask_inplace_cpu(
+    DLTensor* logits,
+    const DLTensor* bitmask,
+    int32_t vocab_size,
+    bool has_indices,
+    const int32_t* indices_ptr,
+    size_t indices_len,
+    std::string* error_out
+) {
+  try {
+    if (error_out) {
+      error_out->clear();
+    }
+    std::optional<std::vector<int>> indices_opt = std::nullopt;
+    if (has_indices) {
+      std::vector<int> tmp;
+      tmp.reserve(indices_len);
+      for (size_t i = 0; i < indices_len; ++i) {
+        tmp.push_back(static_cast<int>(indices_ptr[i]));
+      }
+      indices_opt = std::move(tmp);
+    }
+    xgrammar::ApplyTokenBitmaskInplaceCPU(
+        logits,
+        *bitmask,
+        static_cast<int>(vocab_size),
+        indices_opt
+    );
+    return true;
+  } catch (const std::exception& e) {
+    if (error_out) {
+      *error_out = e.what();
+    }
+    return false;
+  } catch (...) {
+    if (error_out) {
+      *error_out = "unknown C++ exception";
+    }
+    return false;
+  }
+}
+
 inline std::vector<uint8_t> batch_accept_token(
     std::vector<xgrammar::GrammarMatcher>* matchers,
     const int32_t* token_ids_ptr,

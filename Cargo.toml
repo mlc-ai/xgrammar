@@ -94,24 +94,36 @@ name = "test_json_schema_converter"
 path = "rust/tests/test_json_schema_converter.rs"
 
 [[test]]
-name = "test_json_schema_error_handling"
-path = "rust/tests/test_json_schema_error_handling.rs"
+name = "test_grammar_matcher_structural_tag"
+path = "rust/tests/test_grammar_matcher_structural_tag.rs"
 
 [[test]]
 name = "test_recursion_depth"
 path = "rust/tests/test_recursion_depth.rs"
 
 [[test]]
+name = "test_grammar_parser_macro"
+path = "rust/tests/test_grammar_parser_macro.rs"
+
+[[test]]
+name = "test_regex_converter"
+path = "rust/tests/test_regex_converter.rs"
+
+[[test]]
 name = "test_serialization"
 path = "rust/tests/test_serialization.rs"
+
+[[test]]
+name = "test_speculative_decoding"
+path = "rust/tests/test_speculative_decoding.rs"
 
 [[test]]
 name = "test_structural_tag_converter"
 path = "rust/tests/test_structural_tag_converter.rs"
 
 [[test]]
-name = "test_structural_tag"
-path = "rust/tests/test_structural_tag.rs"
+name = "test_token_bitmask_operations"
+path = "rust/tests/test_token_bitmask_operations.rs"
 
 [[test]]
 name = "test_tokenizer_info"

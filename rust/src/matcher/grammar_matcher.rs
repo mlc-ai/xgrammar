@@ -82,6 +82,12 @@ impl GrammarMatcher {
         })
     }
 
+    pub(crate) fn ffi_mut(&mut self) -> Pin<&mut FFIGrammarMatcher> {
+        self.inner
+            .as_mut()
+            .expect("GrammarMatcher inner is null")
+    }
+
     /// Accept one token and update the state of the matcher.
     ///
     /// In the following cases, the matcher will not accept the token and return false:

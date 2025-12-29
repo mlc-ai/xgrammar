@@ -8,19 +8,8 @@ use std::{
 use cmake::Config as CMakeConfig;
 use walkdir::WalkDir;
 
-// ============================================================================
-// Submodule pins (needed for crates.io builds where git submodules are not vendored)
-// ============================================================================
-//
-// IMPORTANT:
-// - Cargo packaging does NOT include git submodule contents by default.
-// - When users install from crates.io, `3rdparty/<submodule>` directories will be missing.
-// - Pins are stored in `rust/submodules.toml` (update via
-//   `bash scripts/update_rust_submodules.sh`).
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
+// Crates.io packages don't include git submodule contents; pins in `rust/submodules.toml`
+// are used to fetch missing submodules into a cache.
 
 fn abs_path<P: AsRef<Path>>(p: P) -> PathBuf {
     if p.as_ref().is_absolute() {
@@ -31,10 +20,6 @@ fn abs_path<P: AsRef<Path>>(p: P) -> PathBuf {
 }
 
 fn looks_like_xgrammar_repo_root(dir: &Path) -> bool {
-    // xgrammar repo root should have at least:
-    // - CMakeLists.txt (for cmake::Config::new())
-    // - include/ (public headers)
-    // - cpp/ (implementation sources)
     dir.join("CMakeLists.txt").exists()
         && dir.join("include").exists()
         && dir.join("cpp").exists()
@@ -55,17 +40,14 @@ fn cargo_offline() -> bool {
 }
 
 fn submodule_cache_dir(out_dir: &Path) -> PathBuf {
-    // User override
     if let Ok(p) = env::var("XGRAMMAR_RS_CACHE_DIR") {
         return abs_path(p);
     }
 
-    // Prefer Cargo home if available (global cache across projects)
     if let Ok(p) = env::var("CARGO_HOME") {
         return abs_path(p).join("xgrammar-rs-cache");
     }
 
-    // OS-specific user cache locations
     if let Ok(p) = env::var("HOME") {
         return PathBuf::from(p).join(".cache/xgrammar-rs");
     }
@@ -73,7 +55,6 @@ fn submodule_cache_dir(out_dir: &Path) -> PathBuf {
         return PathBuf::from(p).join("xgrammar-rs");
     }
 
-    // Fallback: per-build cache
     out_dir.join("xgrammar-rs-cache")
 }
 
@@ -101,6 +82,32 @@ fn submodules_toml_path(manifest_dir: &Path) -> PathBuf {
     manifest_dir.join("rust/submodules.toml")
 }
 
+fn maybe_clear_cmake_build_dir(build_dir: &Path, source_dir: &Path) {
+    let cache = build_dir.join("CMakeCache.txt");
+    let Ok(contents) = fs::read_to_string(&cache) else {
+        return;
+    };
+    let src = source_dir
+        .canonicalize()
+        .unwrap_or_else(|_| source_dir.to_path_buf());
+    for line in contents.lines() {
+        if !line.starts_with("CMAKE_HOME_DIRECTORY") {
+            continue;
+        }
+        let needs_cleanup = match line.split('=').next_back() {
+            Some(cmake_home) => fs::canonicalize(cmake_home)
+                .ok()
+                .map(|cmake_home| cmake_home != src)
+                .unwrap_or(true),
+            None => true,
+        };
+        if needs_cleanup {
+            let _ = fs::remove_dir_all(build_dir);
+        }
+        break;
+    }
+}
+
 fn read_pinned_submodule(submodules_toml: &Path, name: &str) -> (String, String) {
     let contents = fs::read_to_string(submodules_toml).unwrap_or_else(|e| {
         panic!(
@@ -121,7 +128,6 @@ fn read_pinned_submodule(submodules_toml: &Path, name: &str) -> (String, String)
             continue;
         }
         if line.starts_with('[') && line.ends_with(']') {
-            // Example: [submodules.dlpack]
             let header = &line[1..line.len() - 1];
             in_section = header.trim() == format!("submodules.{}", name);
             continue;
@@ -204,7 +210,6 @@ fn ensure_git_checkout_cached(
     }
 
     if checkout_dir.exists() {
-        // Best-effort cleanup of partial checkouts.
         let _ = fs::remove_dir_all(&checkout_dir);
     }
     create_dir_all(cache_dir).expect("Failed to create cache dir");
@@ -229,7 +234,6 @@ fn ensure_git_checkout_cached(
         &format!("git checkout {}@{}", name, rev),
     );
 
-    // Marker indicates the cache entry is ready to use.
     let _ = fs::write(&marker, rev);
     checkout_dir
 }
@@ -239,15 +243,14 @@ fn prepare_xgrammar_source_tree(
     out_dir: &Path,
     submodules_toml: &Path,
 ) -> PathBuf {
-    // If submodules are present, build directly from the repo dir.
     let dlpack_header = xgrammar_repo_dir
         .join("3rdparty/dlpack/include/dlpack/dlpack.h");
     if dlpack_header.exists() {
         return xgrammar_repo_dir.to_path_buf();
     }
 
-    // Missing submodule contents (common for crates.io installs) -> fetch into cache and
-    // materialize a buildable source tree under OUT_DIR.
+    // crates.io sources may be missing submodules; fetch pinned dlpack into a cache and
+    // materialize a buildable tree under OUT_DIR.
     if cargo_offline() {
         panic!(
             "Required git submodule `3rdparty/dlpack` is missing (expected {}). \
@@ -298,10 +301,8 @@ fn prepare_xgrammar_source_tree(
         }
     }
 
-    // Materialize dlpack into the expected submodule path.
     let dlpack_dst = work_dir.join("3rdparty/dlpack");
     copy_dir_recursive_filtered(&dlpack_checkout, &dlpack_dst, |rel| {
-        // Don't copy git metadata into the build tree.
         rel.components().any(|c| c.as_os_str() == ".git")
     });
 
@@ -319,8 +320,8 @@ fn prepare_xgrammar_source_tree(
 
 fn find_xgrammar_lib_dir(root: &Path) -> Option<PathBuf> {
     let static_candidates = [
-        "libxgrammar.a", // Unix/macOS static
-        "xgrammar.lib",  // Windows static
+        "libxgrammar.a",
+        "xgrammar.lib",
     ];
 
     for entry in
@@ -416,97 +417,32 @@ fn strip_autocxx_generated_doc_comments(out_dir: &Path) {
     }
 }
 
-#[cfg(target_os = "windows")]
-fn find_libclang_windows() -> Option<PathBuf> {
-    let vswhere = PathBuf::from(
-        r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe",
-    );
+#[derive(Debug, Clone)]
+struct BuildContext {
+    manifest_dir: PathBuf,
+    xgrammar_src_dir: PathBuf,
+    out_dir: PathBuf,
 
-    let mut candidates: Vec<PathBuf> = Vec::new();
+    src_include_dir: PathBuf,
+    xgrammar_include_dir: PathBuf,
+    dlpack_include_dir: PathBuf,
+    picojson_include_dir: PathBuf,
 
-    // 1) Try vswhere to locate VS with LLVM Clang component
-    if vswhere.exists() {
-        let args = [
-            "-latest",
-            "-products",
-            "*",
-            "-requires",
-            "Microsoft.VisualStudio.Component.VC.Llvm.Clang",
-            "-property",
-            "installationPath",
-        ];
-
-        if let Ok(out) = Command::new(&vswhere).args(args).output() {
-            if out.status.success() {
-                let stdout = String::from_utf8_lossy(&out.stdout);
-                for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
-                    let base = PathBuf::from(line.trim());
-                    candidates.push(base.join(r"VC\Tools\Llvm\x64\bin"));
-                    candidates.push(base.join(r"VC\Tools\Llvm\bin"));
-                }
-            }
-        }
-    }
-
-    // 2) Common fallback locations (VS 2022 editions)
-    for edition in ["Community", "Professional", "Enterprise"] {
-        candidates.push(PathBuf::from(format!(
-            r"C:\Program Files\Microsoft Visual Studio\2022\{}\VC\Tools\Llvm\x64\bin",
-            edition
-        )));
-        candidates.push(PathBuf::from(format!(
-            r"C:\Program Files\Microsoft Visual Studio\2022\{}\VC\Tools\Llvm\bin",
-            edition
-        )));
-    }
-
-    // 3) Standalone LLVM installation
-    candidates.push(PathBuf::from(r"C:\Program Files\LLVM\bin"));
-
-    // Return the first directory that contains libclang.dll
-    for dir in candidates {
-        if dir.join("libclang.dll").exists() {
-            return Some(dir);
-        }
-    }
-
-    None
+    target: String,
 }
 
-#[cfg(not(target_os = "windows"))]
-fn find_libclang_windows() -> Option<PathBuf> {
-    None
-}
-
-// ============================================================================
-// Main Build Script
-// ============================================================================
-
-fn main() {
-    // ========================================================================
-    // Step 1: Configure libclang (Windows-specific)
-    // ========================================================================
-    if env::var("LIBCLANG_PATH").is_err() {
-        if cfg!(target_os = "windows") {
-            if let Some(dir) = find_libclang_windows() {
-                // Make available to this build script and to downstream rustc invocations
-                unsafe {
-                    env::set_var("LIBCLANG_PATH", &dir);
-                }
-                println!("cargo:rustc-env=LIBCLANG_PATH={}", dir.display());
+fn configure_libclang_windows() {
+    if env::var("LIBCLANG_PATH").is_err() && cfg!(target_os = "windows") {
+        if let Some(dir) = find_libclang_windows() {
+            unsafe {
+                env::set_var("LIBCLANG_PATH", &dir);
             }
+            println!("cargo:rustc-env=LIBCLANG_PATH={}", dir.display());
         }
     }
+}
 
-    // ========================================================================
-    // Step 2: Locate XGrammar source and set up paths
-    // ========================================================================
-
-    let manifest_dir = abs_path(
-        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"),
-    );
-
-    // Re-run build script if these env vars change.
+fn collect_build_context() -> BuildContext {
     println!("cargo:rerun-if-env-changed=XGRAMMAR_SRC_DIR");
     println!("cargo:rerun-if-env-changed=XGRAMMAR_RS_CACHE_DIR");
     println!("cargo:rerun-if-env-changed=XGRAMMAR_RS_SUBMODULES_TOML");
@@ -514,8 +450,11 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
     println!("cargo:rerun-if-env-changed=CARGO_HOME");
 
-    // Use the official XGrammar sources from this repository by default.
-    // Allow overriding explicitly via XGRAMMAR_SRC_DIR for custom setups.
+    let manifest_dir = abs_path(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"),
+    );
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
+
     let xgrammar_repo_dir = if let Ok(p) = env::var("XGRAMMAR_SRC_DIR") {
         abs_path(p)
     } else {
@@ -530,24 +469,9 @@ fn main() {
         );
     }
 
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     let submodules_toml = submodules_toml_path(&manifest_dir);
     println!("cargo:rerun-if-changed={}", submodules_toml.display());
 
-    // If git submodules are missing (common for crates.io), materialize a buildable
-    // source tree under OUT_DIR with fetched/cached submodules.
-    let xgrammar_src_dir = prepare_xgrammar_source_tree(
-        &xgrammar_repo_dir,
-        &out_dir,
-        &submodules_toml,
-    );
-
-    let xgrammar_include_dir = xgrammar_src_dir.join("include");
-    let dlpack_include_dir = xgrammar_src_dir.join("3rdparty/dlpack/include");
-    let picojson_include_dir = xgrammar_src_dir.join("3rdparty/picojson");
-    let src_include_dir = manifest_dir.join("rust/src");
-
-    // Track changes in the official source tree (not the OUT_DIR materialization).
     println!(
         "cargo:rerun-if-changed={}",
         xgrammar_repo_dir.join("include").display()
@@ -566,11 +490,36 @@ fn main() {
         xgrammar_repo_dir.join(".gitmodules").display()
     );
 
-    // ========================================================================
-    // Step 3: Configure and build XGrammar C++ library with CMake
-    // ========================================================================
-    let cmake_build_dir = out_dir.join("build");
+    let xgrammar_src_dir = prepare_xgrammar_source_tree(
+        &xgrammar_repo_dir,
+        &out_dir,
+        &submodules_toml,
+    );
+
+    let xgrammar_include_dir = xgrammar_src_dir.join("include");
+    let dlpack_include_dir = xgrammar_src_dir.join("3rdparty/dlpack/include");
+    let picojson_include_dir = xgrammar_src_dir.join("3rdparty/picojson");
+    let src_include_dir = manifest_dir.join("rust/src");
+
+    let target = env::var("TARGET").unwrap_or_default();
+
+    BuildContext {
+        manifest_dir,
+        xgrammar_src_dir,
+        out_dir,
+        src_include_dir,
+        xgrammar_include_dir,
+        dlpack_include_dir,
+        picojson_include_dir,
+        target,
+    }
+}
+
+fn build_xgrammar_cmake(ctx: &BuildContext) -> PathBuf {
+    let cmake_build_dir = ctx.out_dir.join("build");
+    maybe_clear_cmake_build_dir(&cmake_build_dir, &ctx.xgrammar_src_dir);
     create_dir_all(&cmake_build_dir).ok();
+
     let config_cmake_path = cmake_build_dir.join("config.cmake");
     std::fs::write(
         &config_cmake_path,
@@ -581,8 +530,8 @@ fn main() {
     )
     .expect("Failed to write config.cmake");
 
-    let mut cmake_config = CMakeConfig::new(&xgrammar_src_dir);
-    cmake_config.out_dir(&out_dir);
+    let mut cmake_config = CMakeConfig::new(&ctx.xgrammar_src_dir);
+    cmake_config.out_dir(&ctx.out_dir);
     cmake_config.define("XGRAMMAR_BUILD_PYTHON_BINDINGS", "OFF");
     cmake_config.define("XGRAMMAR_BUILD_CXX_TESTS", "OFF");
     cmake_config.define("XGRAMMAR_ENABLE_CPPTRACE", "OFF");
@@ -593,9 +542,7 @@ fn main() {
     // Disable LTO to avoid linking issues with Rust on some platforms
     cmake_config.define("CMAKE_INTERPROCEDURAL_OPTIMIZATION", "OFF");
 
-    // Platform-specific compiler flags
-    let target = env::var("TARGET").unwrap_or_default();
-    let is_msvc = target.contains("msvc");
+    let is_msvc = ctx.target.contains("msvc");
     if !is_msvc {
         cmake_config.cflag("-fno-lto");
         cmake_config.cxxflag("-fno-lto");
@@ -619,21 +566,20 @@ fn main() {
         };
     cmake_config.profile(build_profile);
 
-    // Apple platform-specific configuration
-    if let Ok(target) = env::var("TARGET") {
-        if target.contains("apple-darwin") {
-            let arch = if target.contains("aarch64") {
+    if !ctx.target.is_empty() {
+        if ctx.target.contains("apple-darwin") {
+            let arch = if ctx.target.contains("aarch64") {
                 "arm64"
             } else {
                 "x86_64"
             };
             cmake_config.define("CMAKE_OSX_ARCHITECTURES", arch);
-        } else if target.contains("apple-ios")
-            || target.contains("apple-ios-sim")
+        } else if ctx.target.contains("apple-ios")
+            || ctx.target.contains("apple-ios-sim")
         {
-            let is_sim = target.contains("apple-ios-sim")
-                || target.contains("x86_64-apple-ios");
-            let arch = if target.contains("aarch64") {
+            let is_sim = ctx.target.contains("apple-ios-sim")
+                || ctx.target.contains("x86_64-apple-ios");
+            let arch = if ctx.target.contains("aarch64") {
                 "arm64"
             } else {
                 "x86_64"
@@ -651,51 +597,42 @@ fn main() {
         }
     }
 
-    let destination_path = cmake_config.build_target("xgrammar").build();
+    cmake_config.build_target("xgrammar").build()
+}
 
-    // ========================================================================
-    // Step 4: Link the built XGrammar library
-    // ========================================================================
-
-    let cmake_build_dir = out_dir.join("build");
+fn link_xgrammar_static(ctx: &BuildContext, destination_path: &Path) {
+    let cmake_build_dir = ctx.out_dir.join("build");
     let lib_search_dir = find_xgrammar_lib_dir(&cmake_build_dir)
-        .or_else(|| find_xgrammar_lib_dir(&destination_path))
+        .or_else(|| find_xgrammar_lib_dir(destination_path))
         .unwrap_or_else(|| destination_path.join("lib"));
     println!("cargo:rustc-link-search=native={}", lib_search_dir.display());
     println!("cargo:rustc-link-lib=static=xgrammar");
+}
 
-    // ========================================================================
-    // Step 5: Generate and compile Rust/C++ bindings with autocxx
-    // ========================================================================
-
+fn build_autocxx_bridge(ctx: &BuildContext) {
     println!("cargo:rerun-if-changed=rust/src/lib.rs");
 
-    // Prepare extra clang args for autocxx
     let mut extra_clang_args = vec!["-std=c++17".to_string()];
 
-    // Platform-specific clang args for autocxx
-    let target = env::var("TARGET").unwrap_or_default();
-
     // Windows: explicitly set the target to avoid ARM NEON header issues
-    if target.contains("windows") {
-        if target.contains("aarch64") {
-            extra_clang_args
-                .push("--target=aarch64-pc-windows-msvc".to_string());
-        } else if target.contains("x86_64") {
-            extra_clang_args
-                .push("--target=x86_64-pc-windows-msvc".to_string());
+    if ctx.target.contains("windows") {
+        if ctx.target.contains("aarch64") {
+            extra_clang_args.push("--target=aarch64-pc-windows-msvc".to_string());
+        } else if ctx.target.contains("x86_64") {
+            extra_clang_args.push("--target=x86_64-pc-windows-msvc".to_string());
         }
     }
 
     // iOS Simulator: set correct target triple and sysroot for C++ headers
-    if target.contains("apple-ios-sim") || target.contains("x86_64-apple-ios") {
-        let arch = if target.contains("aarch64") {
+    if ctx.target.contains("apple-ios-sim") || ctx.target.contains("x86_64-apple-ios")
+    {
+        let arch = if ctx.target.contains("aarch64") {
             "arm64"
         } else {
             "x86_64"
         };
-        let version = env::var("IPHONEOS_DEPLOYMENT_TARGET")
-            .unwrap_or_else(|_| "17.0".into());
+        let version =
+            env::var("IPHONEOS_DEPLOYMENT_TARGET").unwrap_or_else(|_| "17.0".into());
         extra_clang_args
             .push(format!("--target={}-apple-ios{}-simulator", arch, version));
         if let Ok(sdkroot) = env::var("SDKROOT") {
@@ -706,19 +643,18 @@ fn main() {
     let extra_clang_args_refs: Vec<&str> =
         extra_clang_args.iter().map(|s| s.as_str()).collect();
 
-    // Build the autocxx bridge
     let mut autocxx_builder = autocxx_build::Builder::new(
         "rust/src/lib.rs",
         &[
-            &src_include_dir,
-            &xgrammar_include_dir,
-            &dlpack_include_dir,
-            &picojson_include_dir,
+            &ctx.src_include_dir,
+            &ctx.xgrammar_include_dir,
+            &ctx.dlpack_include_dir,
+            &ctx.picojson_include_dir,
             // Allow `#include "cpp/..."` for internal XGrammar headers used in tests/utilities.
-            &xgrammar_src_dir,
+            &ctx.xgrammar_src_dir,
         ],
     )
-    .extra_clang_args(&extra_clang_args_refs) // for libclang parsing
+    .extra_clang_args(&extra_clang_args_refs)
     .build()
     .expect("autocxx build failed");
 
@@ -726,46 +662,42 @@ fn main() {
         .flag_if_supported("-std=c++17")
         .flag_if_supported("/std:c++17")
         .flag_if_supported("/EHsc")
-        .include(&src_include_dir)
-        .include(&xgrammar_include_dir)
-        .include(&dlpack_include_dir)
-        .include(&picojson_include_dir)
-        .include(&xgrammar_src_dir)
-        .include(&manifest_dir);
+        .include(&ctx.src_include_dir)
+        .include(&ctx.xgrammar_include_dir)
+        .include(&ctx.dlpack_include_dir)
+        .include(&ctx.picojson_include_dir)
+        .include(&ctx.xgrammar_src_dir)
+        .include(&ctx.manifest_dir);
 
     autocxx_builder.compile("xgrammar_rs_bridge");
+}
 
-    // ========================================================================
-    // Step 6: Copy headers for generated Rust code
-    // ========================================================================
+fn copy_headers_for_generated_rust_code(ctx: &BuildContext) {
+    let rs_dir = ctx.out_dir.join("autocxx-build-dir/rs");
 
-    let rs_dir = out_dir.join("autocxx-build-dir/rs");
-    // 1) autocxxgen_ffi.h
-    let gen_include_dir = out_dir.join("autocxx-build-dir/include");
+    let gen_include_dir = ctx.out_dir.join("autocxx-build-dir/include");
     let _ = copy(
         gen_include_dir.join("autocxxgen_ffi.h"),
         rs_dir.join("autocxxgen_ffi.h"),
     );
-    // 2) xgrammar/xgrammar.h
+
     let rs_xgrammar_dir = rs_dir.join("xgrammar");
     create_dir_all(&rs_xgrammar_dir).ok();
     let _ = copy(
-        xgrammar_include_dir.join("xgrammar/xgrammar.h"),
+        ctx.xgrammar_include_dir.join("xgrammar/xgrammar.h"),
         rs_xgrammar_dir.join("xgrammar.h"),
     );
-    // 3) dlpack/dlpack.h
+
     let rs_dlpack_dir = rs_dir.join("dlpack");
     create_dir_all(&rs_dlpack_dir).ok();
     let _ = copy(
-        dlpack_include_dir.join("dlpack/dlpack.h"),
+        ctx.dlpack_include_dir.join("dlpack/dlpack.h"),
         rs_dlpack_dir.join("dlpack.h"),
     );
+}
 
-    // ========================================================================
-    // Step 7: Format generated bindings (optional)
-    // ========================================================================
-    let gen_rs =
-        out_dir.join("autocxx-build-dir/rs/autocxx-ffi-default-gen.rs");
+fn format_generated_bindings_optional(out_dir: &Path) {
+    let gen_rs = out_dir.join("autocxx-build-dir/rs/autocxx-ffi-default-gen.rs");
     if gen_rs.exists() {
         match Command::new("rustfmt").arg(&gen_rs).status() {
             Ok(status) => {
@@ -781,8 +713,73 @@ fn main() {
             },
         }
     }
+}
 
-    // Clean up doc comments in generated Rust bindings so docs.rs doesn't show Doxygen markup.
-    // Run this at the end to ensure it applies after any generation/formatting steps.
-    strip_autocxx_generated_doc_comments(&out_dir);
+#[cfg(target_os = "windows")]
+fn find_libclang_windows() -> Option<PathBuf> {
+    let vswhere = PathBuf::from(
+        r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe",
+    );
+
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if vswhere.exists() {
+        let args = [
+            "-latest",
+            "-products",
+            "*",
+            "-requires",
+            "Microsoft.VisualStudio.Component.VC.Llvm.Clang",
+            "-property",
+            "installationPath",
+        ];
+
+        if let Ok(out) = Command::new(&vswhere).args(args).output() {
+            if out.status.success() {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+                    let base = PathBuf::from(line.trim());
+                    candidates.push(base.join(r"VC\Tools\Llvm\x64\bin"));
+                    candidates.push(base.join(r"VC\Tools\Llvm\bin"));
+                }
+            }
+        }
+    }
+
+    for edition in ["Community", "Professional", "Enterprise"] {
+        candidates.push(PathBuf::from(format!(
+            r"C:\Program Files\Microsoft Visual Studio\2022\{}\VC\Tools\Llvm\x64\bin",
+            edition
+        )));
+        candidates.push(PathBuf::from(format!(
+            r"C:\Program Files\Microsoft Visual Studio\2022\{}\VC\Tools\Llvm\bin",
+            edition
+        )));
+    }
+
+    candidates.push(PathBuf::from(r"C:\Program Files\LLVM\bin"));
+
+    for dir in candidates {
+        if dir.join("libclang.dll").exists() {
+            return Some(dir);
+        }
+    }
+
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn find_libclang_windows() -> Option<PathBuf> {
+    None
+}
+
+fn main() {
+    configure_libclang_windows();
+    let ctx = collect_build_context();
+    let destination_path = build_xgrammar_cmake(&ctx);
+    link_xgrammar_static(&ctx, &destination_path);
+    build_autocxx_bridge(&ctx);
+    copy_headers_for_generated_rust_code(&ctx);
+    format_generated_bindings_optional(&ctx.out_dir);
+    strip_autocxx_generated_doc_comments(&ctx.out_dir);
 }

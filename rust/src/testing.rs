@@ -1,6 +1,6 @@
 use autocxx::prelude::*;
 
-use crate::{DLTensor, cxx_int, cxx_utils, ffi, grammar::Grammar};
+use crate::{DLTensor, cxx_int, cxx_utils, ffi, grammar::Grammar, matcher::GrammarMatcher};
 
 /// Convert EBNF to Grammar without normalization.
 ///
@@ -88,6 +88,23 @@ pub fn qwen_xml_tool_calling_to_ebnf(schema_json: &str) -> String {
     cxx_utils::qwen_xml_tool_calling_to_ebnf(&schema_cxx).to_string()
 }
 
+pub fn regex_to_ebnf(regex: &str, with_rule_name: bool) -> Result<String, String> {
+    cxx::let_cxx_string!(regex_cxx = regex);
+    cxx::let_cxx_string!(error_out_cxx = "");
+    let out = unsafe {
+        cxx_utils::regex_to_ebnf(
+            &regex_cxx,
+            with_rule_name,
+            error_out_cxx.as_mut().get_unchecked_mut(),
+        )
+    };
+    let err = error_out_cxx.to_string();
+    if !err.is_empty() {
+        return Err(err);
+    }
+    Ok(out.to_string())
+}
+
 /// Get the ids of the rejected tokens from the bitmask. Mainly for debug purposes.
 ///
 /// # Parameters
@@ -140,4 +157,28 @@ pub fn is_single_token_bitmask(
         .within_unique_ptr();
         (result.get_is_single(), result.get_token_id())
     }
+}
+
+pub fn traverse_draft_tree(
+    retrieve_next_token: &DLTensor,
+    retrieve_next_sibling: &DLTensor,
+    draft_tokens: &DLTensor,
+    matcher: &mut GrammarMatcher,
+    bitmask: &mut DLTensor,
+) -> Result<(), String> {
+    cxx::let_cxx_string!(error_out_cxx = "");
+    let ok = unsafe {
+        cxx_utils::traverse_draft_tree(
+            retrieve_next_token as *const _,
+            retrieve_next_sibling as *const _,
+            draft_tokens as *const _,
+            matcher.ffi_mut(),
+            bitmask as *mut _,
+            error_out_cxx.as_mut().get_unchecked_mut(),
+        )
+    };
+    if !ok {
+        return Err(error_out_cxx.to_string());
+    }
+    Ok(())
 }

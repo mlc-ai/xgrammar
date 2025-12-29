@@ -5,6 +5,7 @@
 #include <exception>
 #include "cpp/testing.h"
 #include "cpp/json_schema_converter.h"
+#include "cpp/regex_converter.h"
 
 namespace cxx_utils {
 
@@ -72,6 +73,29 @@ inline std::string qwen_xml_tool_calling_to_ebnf(const std::string& schema) {
   }
 }
 
+inline std::string regex_to_ebnf(
+    const std::string& regex,
+    bool with_rule_name,
+    std::string* error_out
+) {
+  try {
+    if (error_out) {
+      error_out->clear();
+    }
+    return xgrammar::RegexToEBNF(regex, with_rule_name);
+  } catch (const std::exception& e) {
+    if (error_out) {
+      *error_out = e.what();
+    }
+    return std::string();
+  } catch (...) {
+    if (error_out) {
+      *error_out = "unknown C++ exception";
+    }
+    return std::string();
+  }
+}
+
 inline std::vector<int32_t> get_masked_tokens_from_bitmask(
     const DLTensor* bitmask,
     int32_t vocab_size,
@@ -111,6 +135,39 @@ inline SingleTokenResult is_single_token_bitmask(
     return SingleTokenResult{pair.first, pair.second};
   } catch (...) {
     return SingleTokenResult{false, -1};
+  }
+}
+
+inline bool traverse_draft_tree(
+    const DLTensor* retrieve_next_token,
+    const DLTensor* retrieve_next_sibling,
+    const DLTensor* draft_tokens,
+    xgrammar::GrammarMatcher& matcher,
+    DLTensor* bitmask,
+    std::string* error_out
+) {
+  try {
+    if (error_out) {
+      error_out->clear();
+    }
+    xgrammar::TraverseDraftTree(
+        retrieve_next_token,
+        retrieve_next_sibling,
+        draft_tokens,
+        matcher,
+        bitmask
+    );
+    return true;
+  } catch (const std::exception& e) {
+    if (error_out) {
+      *error_out = e.what();
+    }
+    return false;
+  } catch (...) {
+    if (error_out) {
+      *error_out = "unknown C++ exception";
+    }
+    return false;
   }
 }
 

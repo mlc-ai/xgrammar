@@ -6,6 +6,7 @@
 /cpp/*.h @Ubospica @Seven-Streams @DarkSharpness
 /python @Ubospica
 /web @CharlieFRuan
+/rust @eugenebokhan
 
 # tests
 tests/cpp @Ubospica @Seven-Streams @DarkSharpness
