@@ -9,6 +9,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "grammar_functor.h"
 #include "grammar_impl.h"
@@ -351,6 +352,7 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
     return ResultErr<ISTError>("Triggered tags format must have a triggers field with an array");
   }
   const auto& triggers_array = triggers_it->second.get<picojson::array>();
+  std::vector<std::string> excluded_strs;
   std::vector<std::string> triggers;
   triggers.reserve(triggers_array.size());
   for (const auto& trigger : triggers_array) {
@@ -380,6 +382,24 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
   if (tags.size() == 0) {
     return ResultErr<ISTError>("Triggered tags format's tags must be non-empty");
   }
+  // excludes is optional.
+  auto excludes_it = obj.find("excludes");
+  if (excludes_it != obj.end()) {
+    if (!excludes_it->second.is<picojson::array>()) {
+      return ResultErr<ISTError>("Triggered tags format should have a excludes field with an array"
+      );
+    }
+    const auto& excludes_array = excludes_it->second.get<picojson::array>();
+    excluded_strs.reserve(excludes_array.size());
+    for (const auto& excluded_str : excludes_array) {
+      if (!excluded_str.is<std::string>() || excluded_str.get<std::string>().empty()) {
+        return ResultErr<ISTError>("Triggered tags format's excluded_strs must be non-empty strings"
+        );
+      }
+      excluded_strs.push_back(excluded_str.get<std::string>());
+    }
+  }
+
   // at_least_one is optional.
   bool at_least_one = false;
   auto at_least_one_it = obj.find("at_least_one");
@@ -399,7 +419,7 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
     stop_after_first = stop_after_first_it->second.get<bool>();
   }
   return ResultOk<TriggeredTagsFormat>(
-      std::move(triggers), std::move(tags), at_least_one, stop_after_first
+      std::move(triggers), std::move(tags), std::move(excluded_strs), at_least_one, stop_after_first
   );
 }
 
@@ -926,16 +946,19 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   }
 
   // Step 3.2 Add TagDispatch.
-  // TODO(Linzhang): exclude strs.
   int32_t rule_expr_id;
   bool loop_after_dispatch = !format.stop_after_first;
   if (format.detected_end_str_.has_value()) {
     rule_expr_id = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
-        tag_rule_pairs, false, {format.detected_end_str_.value()}, loop_after_dispatch, {}
+        tag_rule_pairs,
+        false,
+        {format.detected_end_str_.value()},
+        loop_after_dispatch,
+        format.excludes
     });
   } else {
     rule_expr_id = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch, {}}
+        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch, format.excludes}
     );
   }
 

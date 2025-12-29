@@ -133,17 +133,20 @@ struct TriggeredTagsFormat {
   static constexpr const char* type = "triggered_tags";
   std::vector<std::string> triggers;
   std::vector<TagFormat> tags;
+  std::vector<std::string> excludes;
   bool at_least_one = false;
   bool stop_after_first = false;
 
   TriggeredTagsFormat(
       std::vector<std::string> triggers,
       std::vector<TagFormat> tags,
+      std::vector<std::string> excludes,
       bool at_least_one,
       bool stop_after_first
   )
       : triggers(std::move(triggers)),
         tags(std::move(tags)),
+        excludes(excludes),
         at_least_one(at_least_one),
         stop_after_first(stop_after_first) {}
 

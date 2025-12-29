@@ -148,7 +148,7 @@ The format field requires a format object. We provide several basic format objec
     ```json
     {
         "type": "any_text",
-        "excluded_str": ["...", ]
+        "excludes": ["...", ]
     }
     ```
 
@@ -159,13 +159,13 @@ The format field requires a format object. We provide several basic format objec
         "begin": "...",
         "content": {
             "type": "any_text",
-            "excluded_str": ["...", ]
+            "excludes": ["...", ]
         },
         "end": "...",
     }
     ```
 
-    It first accepts the begin tag (can be empty), then any text **except the end tag** and the **excluded_str**, then the end tag.
+    It first accepts the begin tag (can be empty), then any text **except the end tag** and the **excludes**, then the end tag.
 
 9. `triggered_tags`
 
@@ -174,7 +174,7 @@ The format field requires a format object. We provide several basic format objec
     grammar will allow any following output, until the next trigger is encountered.
 
     Each tag should be matched by exactly one trigger. "matching" means the trigger should be a
-    prefix of the begin tag.
+    prefix of the begin tag. All the strings in `excludes` will not be accepted before the tag is triggerred.
 
     ```json
     {
@@ -198,6 +198,7 @@ The format field requires a format object. We provide several basic format objec
         ],
         "at_least_one": bool,
         "stop_after_first": bool,
+        "excludes": ["...", ]
     }
     ```
 
