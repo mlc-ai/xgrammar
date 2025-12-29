@@ -1394,8 +1394,8 @@ root ::= ((tag))
   stop_str=("<end2>"),
   loop_after_dispatch=false
 )
-triggered_tags_group ::= ((">" any_text ""))
-triggered_tags_first ::= (("<start2>" any_text ""))
+triggered_tags_group ::= ((">" any_text))
+triggered_tags_first ::= (("<start2>" any_text))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=false,
@@ -1481,8 +1481,8 @@ root ::= ((tag_1))
   stop_str=("<end2>"),
   loop_after_dispatch=false
 )
-triggered_tags_group ::= ((">" any_text ""))
-triggered_tags_first ::= (("<start2>" any_text ""))
+triggered_tags_group ::= ((">" any_text))
+triggered_tags_first ::= (("<start2>" any_text))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=true,
@@ -2086,7 +2086,8 @@ multiple_end_tokens_tag_stag_grammar = [
             "end": ["END1", "END2"],
         },
         r"""const_string ::= (("CONTENT"))
-tag ::= (("BEG" const_string "END1") | ("BEG" const_string "END2"))
+tag_end ::= (("END1") | ("END2"))
+tag ::= (("BEG" const_string tag_end))
 root ::= ((tag))
 """,
     ),
@@ -2170,6 +2171,67 @@ def test_multiple_end_tokens_any_text_instance(instance: str, is_accepted: bool)
         "begin": "BEG",
         "content": {"type": "any_text"},
         "end": ["END1", "END2"],
+    }
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+# Test multiple end tokens with one empty string
+multiple_end_tokens_with_empty_stag_grammar = [
+    # Test tag with one actual end token and one empty string
+    (
+        {
+            "type": "tag",
+            "begin": "BEG",
+            "content": {"type": "const_string", "value": "CONTENT"},
+            "end": ["END1", ""],
+        },
+        r"""const_string ::= (("CONTENT"))
+tag_end ::= (("END1") | (""))
+tag ::= (("BEG" const_string tag_end))
+root ::= ((tag))
+""",
+    ),
+    # Test with empty string first
+    (
+        {
+            "type": "tag",
+            "begin": "<start>",
+            "content": {"type": "const_string", "value": "X"},
+            "end": ["", "</end>"],
+        },
+        r"""const_string ::= (("X"))
+tag_end ::= (("") | ("</end>"))
+tag ::= (("<start>" const_string tag_end))
+root ::= ((tag))
+""",
+    ),
+]
+
+
+multiple_end_tokens_with_empty_instance_is_accepted = [
+    ("BEGCONTENTEND1", True),  # Ends with END1
+    ("BEGCONTENT", True),  # Ends with empty string
+    ("BEGCONTENTEND2", False),  # Wrong end token
+    ("BEGCONTENTEND", False),  # Partial match of END1
+]
+
+
+@pytest.mark.parametrize(
+    "stag_format, expected_grammar", multiple_end_tokens_with_empty_stag_grammar
+)
+def test_multiple_end_tokens_with_empty_grammar(
+    stag_format: Dict[str, Any], expected_grammar: str
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+
+
+@pytest.mark.parametrize("instance, is_accepted", multiple_end_tokens_with_empty_instance_is_accepted)
+def test_multiple_end_tokens_with_empty_instance(instance: str, is_accepted: bool):
+    stag_format = {
+        "type": "tag",
+        "begin": "BEG",
+        "content": {"type": "const_string", "value": "CONTENT"},
+        "end": ["END1", ""],
     }
     check_stag_with_instance(stag_format, instance, is_accepted)
 

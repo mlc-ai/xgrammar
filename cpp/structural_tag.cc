@@ -845,18 +845,29 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
   auto begin_expr = grammar_builder_.AddByteString(format.begin);
   auto rule_ref_expr = grammar_builder_.AddRuleRef(sub_rule_id);
 
-  if (!format.end.empty()) {
-    // Multiple end tokens: create choices for each end string
-    std::vector<int> choice_ids;
+  if (format.end.size() > 1) {
+    // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
+    std::vector<int> end_sequence_ids;
     for (const auto& end_str : format.end) {
       auto end_expr = grammar_builder_.AddByteString(end_str);
-      auto sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_expr});
-      choice_ids.push_back(sequence_expr_id);
+      end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr}));
     }
-    auto choices_expr = grammar_builder_.AddChoices(choice_ids);
+    auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
+    auto end_choices_rule_id = grammar_builder_.AddRuleWithHint("tag_end", end_choices_expr);
+    auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
+
+    auto sequence_expr_id =
+        grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_rule_ref_expr});
+    auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
+    return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
+  } else if (format.end.size() == 1) {
+    // Single end token: use directly
+    auto end_expr = grammar_builder_.AddByteString(format.end[0]);
+    auto sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_expr});
+    auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
     return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
   } else {
-    // End was cleared (unlimited content case)
+    // End was cleared (unlimited content case) - no end string needed
     auto sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr});
     auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
     return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
@@ -908,19 +919,29 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
       auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
       if (tag.end.empty()) {
-        // Unlimited content case - include empty string for consistency
-        auto end_expr_id = grammar_builder_.AddByteString("");
+        // Unlimited content case - skip adding end string
+        choice_elements.push_back(
+            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id})
+        );
+      } else if (tag.end.size() == 1) {
+        // Single end token: use directly
+        auto end_expr_id = grammar_builder_.AddByteString(tag.end[0]);
         choice_elements.push_back(
             grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
         );
       } else {
-        // Handle multiple end strings for each tag
+        // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
+        std::vector<int> end_sequence_ids;
         for (const auto& end_str : tag.end) {
           auto end_expr_id = grammar_builder_.AddByteString(end_str);
-          choice_elements.push_back(
-              grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
-          );
+          end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr_id}));
         }
+        auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
+        auto end_choices_rule_id = grammar_builder_.AddRuleWithHint("tag_end", end_choices_expr);
+        auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
+        choice_elements.push_back(
+            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_rule_ref_expr})
+        );
       }
     }
     auto choice_expr_id = grammar_builder_.AddChoices(choice_elements);
@@ -929,14 +950,27 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     if (!format.detected_end_strs_.empty()) {
       auto sub_rule_id = grammar_builder_.AddRuleWithHint("triggered_tags_sub", choice_expr_id);
       auto ref_sub_rule_expr_id = grammar_builder_.AddRuleRef(sub_rule_id);
-      // Create choices for each detected end string
-      std::vector<int> end_choices;
-      for (const auto& end_str : format.detected_end_strs_) {
-        auto end_str_expr_id = grammar_builder_.AddByteString(end_str);
-        end_choices.push_back(grammar_builder_.AddSequence({ref_sub_rule_expr_id, end_str_expr_id})
-        );
+      if (format.detected_end_strs_.size() == 1) {
+        // Single detected end string: use directly
+        auto end_str_expr_id = grammar_builder_.AddByteString(format.detected_end_strs_[0]);
+        auto sequence_expr_id =
+            grammar_builder_.AddSequence({ref_sub_rule_expr_id, end_str_expr_id});
+        choice_expr_id = grammar_builder_.AddChoices({sequence_expr_id});
+      } else {
+        // Multiple detected end strings: create end choices rule
+        std::vector<int> end_sequence_ids;
+        for (const auto& end_str : format.detected_end_strs_) {
+          auto end_str_expr_id = grammar_builder_.AddByteString(end_str);
+          end_sequence_ids.push_back(grammar_builder_.AddSequence({end_str_expr_id}));
+        }
+        auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
+        auto end_choices_rule_id =
+            grammar_builder_.AddRuleWithHint("end_choices", end_choices_expr);
+        auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
+        auto sequence_expr_id =
+            grammar_builder_.AddSequence({ref_sub_rule_expr_id, end_rule_ref_expr});
+        choice_expr_id = grammar_builder_.AddChoices({sequence_expr_id});
       }
-      choice_expr_id = grammar_builder_.AddChoices(end_choices);
     }
 
     return ResultOk(grammar_builder_.AddRuleWithHint("triggered_tags", choice_expr_id));
@@ -959,19 +993,29 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
       int begin_expr_id = grammar_builder_.AddByteString(tag.begin.substr(trigger.size()));
       int rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[tag_id]);
       if (tag.end.empty()) {
-        // Unlimited content case - include empty string for consistency
-        int end_expr_id = grammar_builder_.AddByteString("");
+        // Unlimited content case - skip adding end string
+        choice_elements.push_back(
+            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id})
+        );
+      } else if (tag.end.size() == 1) {
+        // Single end token: use directly
+        int end_expr_id = grammar_builder_.AddByteString(tag.end[0]);
         choice_elements.push_back(
             grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
         );
       } else {
-        // Handle multiple end strings for each tag
+        // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
+        std::vector<int> end_sequence_ids;
         for (const auto& end_str : tag.end) {
           int end_expr_id = grammar_builder_.AddByteString(end_str);
-          choice_elements.push_back(
-              grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
-          );
+          end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr_id}));
         }
+        auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
+        auto end_choices_rule_id = grammar_builder_.AddRuleWithHint("tag_end", end_choices_expr);
+        auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
+        choice_elements.push_back(
+            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_rule_ref_expr})
+        );
       }
     }
     auto choice_expr_id = grammar_builder_.AddChoices(choice_elements);
@@ -1008,19 +1052,29 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
       auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
       if (tag.end.empty()) {
-        // Unlimited content case - include empty string for consistency
-        auto end_expr_id = grammar_builder_.AddByteString("");
+        // Unlimited content case - skip adding end string
+        first_choice_elements.push_back(
+            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id})
+        );
+      } else if (tag.end.size() == 1) {
+        // Single end token: use directly
+        auto end_expr_id = grammar_builder_.AddByteString(tag.end[0]);
         first_choice_elements.push_back(
             grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
         );
       } else {
-        // Handle multiple end strings for each tag
+        // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
+        std::vector<int> end_sequence_ids;
         for (const auto& end_str : tag.end) {
           auto end_expr_id = grammar_builder_.AddByteString(end_str);
-          first_choice_elements.push_back(
-              grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
-          );
+          end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr_id}));
         }
+        auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
+        auto end_choices_rule_id = grammar_builder_.AddRuleWithHint("tag_end", end_choices_expr);
+        auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
+        first_choice_elements.push_back(
+            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_rule_ref_expr})
+        );
       }
     }
     auto first_choice_expr_id = grammar_builder_.AddChoices(first_choice_elements);
