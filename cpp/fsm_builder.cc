@@ -781,6 +781,7 @@ class TrieFSMBuilderImpl {
   TrieFSMBuilderImpl() = default;
   std::optional<FSMWithStartEnd> Build(
       const std::vector<std::string>& patterns,
+      const std::vector<std::string>& excluded_patterns,
       std::vector<int32_t>* end_states,
       bool allow_overlap,
       bool add_back_edges
@@ -790,6 +791,7 @@ class TrieFSMBuilderImpl {
 
 std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
     const std::vector<std::string>& patterns,
+    const std::vector<std::string>& excluded_patterns,
     std::vector<int32_t>* end_states,
     bool allow_overlap,
     bool add_back_edges
@@ -829,8 +831,55 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
       end_states->push_back(current_state);
     }
   }
+
+  std::unordered_set<int32_t> dead_state_set;
+
   if (add_back_edges) {
+    // Build trie for excluded patterns.
+    for (const auto& excluded_pattern : excluded_patterns) {
+      if (!allow_overlap && excluded_pattern.empty()) {
+        return std::nullopt;
+      }
+
+      int current_state = 0;
+      for (const auto& ch : excluded_pattern) {
+        int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
+        int next_state = fsm.GetNextState(current_state, ch_int16);
+        if (next_state == FSM::kNoNextState) {
+          next_state = fsm.AddState();
+          fsm.AddEdge(current_state, next_state, ch_int16, ch_int16);
+        }
+        current_state = next_state;
+        if (!allow_overlap && ends.count(current_state) > 0) {
+          return std::nullopt;
+        }
+      }
+      if (!allow_overlap && fsm.GetEdges(current_state).size() > 0) {
+        return std::nullopt;
+      }
+
+      ends.insert(current_state);
+      dead_state_set.insert(current_state);
+    }
+
+    // Add back edges.
     AddBackEdges(&fsm, start, ends);
+
+    // Remove the edges to excluded end states.
+    if (dead_state_set.size() != 0) {
+      for (int state = 0; state < fsm.NumStates(); state++) {
+        std::vector<FSMEdge>& edges = fsm.GetEdges(state);
+        std::vector<FSMEdge> new_edges;
+        for (const auto& edge : edges) {
+          if (dead_state_set.count(edge.target) == 0) {
+            new_edges.push_back(edge);
+          }
+        }
+        edges = std::move(new_edges);
+      }
+    }
+  } else if (excluded_patterns.size() > 0) {
+    XGRAMMAR_LOG(WARNING) << "Excluded patterns are ignored when back edges are not added.";
   }
 
   std::vector<bool> is_end_state(fsm.NumStates(), false);
@@ -907,11 +956,14 @@ void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_
 
 std::optional<FSMWithStartEnd> TrieFSMBuilder::Build(
     const std::vector<std::string>& patterns,
+    const std::vector<std::string>& exclude_patterns,
     std::vector<int32_t>* end_states,
     bool allow_overlap,
     bool add_back_edges
 ) {
-  return TrieFSMBuilderImpl().Build(patterns, end_states, allow_overlap, add_back_edges);
+  return TrieFSMBuilderImpl().Build(
+      patterns, exclude_patterns, end_states, allow_overlap, add_back_edges
+  );
 }
 
 }  // namespace xgrammar
