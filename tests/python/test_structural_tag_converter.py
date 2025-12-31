@@ -1489,6 +1489,7 @@ root ::= ((tag_1))
                 },
             ],
         },
+        # Note: any_text_1 is reused for both unlimited any_text patterns due to deduplication
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end2>"),
@@ -1519,8 +1520,7 @@ tags_with_separator_tags ::= ((tag))
 tags_with_separator_sub ::= ("" | ("<sep>" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
 const_string_1 ::= (("[TEXT2]"))
-any_text_3 ::= (([\0-\U0010ffff]*))
-sequence_1 ::= ((const_string_1 any_text_3))
+sequence_1 ::= ((const_string_1 any_text_1))
 or ::= ((tags_with_separator) | (sequence_1))
 or_1 ::= ((triggered_tags) | (sequence) | (or))
 root ::= ((or_1))
