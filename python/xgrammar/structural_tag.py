@@ -71,6 +71,9 @@ class AnyTextFormat(BaseModel):
     type: Literal["any_text"] = "any_text"
     """The type of the format."""
 
+    excludes: List[str] = []
+    """List of strings that should not appear in the matched text."""
+
 
 class GrammarFormat(BaseModel):
     """A format that matches an ebnf grammar."""
@@ -175,6 +178,8 @@ class TriggeredTagsFormat(BaseModel):
     """Whether at least one of the tags must be generated."""
     stop_after_first: bool = False
     """Whether to stop after the first tag is generated."""
+    excludes: List[str] = []
+    """List of strings that should not appear in the matched text."""
 
 
 class TagsWithSeparatorFormat(BaseModel):

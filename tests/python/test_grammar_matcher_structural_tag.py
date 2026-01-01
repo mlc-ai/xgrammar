@@ -74,7 +74,8 @@ triggered_tags ::= TagDispatch(
   ("<function=g", triggered_tags_group_1),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root_3 ::= ((triggered_tags))
 """
@@ -154,7 +155,8 @@ triggered_tags ::= TagDispatch(
   ("<function=g", triggered_tags_group_1),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root_3 ::= ((triggered_tags))
 """
