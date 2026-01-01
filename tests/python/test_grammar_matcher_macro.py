@@ -174,5 +174,35 @@ rule3 ::= "abcd" [p]*
     assert not _is_grammar_accept_string(grammar_str, "tag1tag3tag2abcdll")
 
 
+def test_excluded_str():
+    grammar_str = """root ::= TagDispatch(
+  ("start", rule1),
+  stop_str=("</think>"),
+  excludes=("</conclude>"),
+  loop_after_dispatch=true,
+  stop_eos=false
+)
+rule1 ::= "12345"
+"""
+
+    expected = """root ::= TagDispatch(
+  ("start", rule1),
+  stop_eos=false,
+  stop_str=("</think>"),
+  loop_after_dispatch=true,
+  excludes=("</conclude>")
+)
+rule1 ::= (("12345"))
+"""
+
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    assert str(grammar) == expected
+
+    assert _is_grammar_accept_string(grammar, "start12345</think>")
+    assert not _is_grammar_accept_string(grammar, "start12345</conclude>")
+    assert _is_grammar_accept_string(grammar, "start12345abc</think>")
+    assert not _is_grammar_accept_string(grammar, "start12345</conclude>abc")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
