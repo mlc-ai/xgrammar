@@ -195,7 +195,8 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     );
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
-  return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false));
+  auto result = json_schema_it->second.serialize(false);
+  return ResultOk<JSONSchemaFormat>(std::move(result));
 }
 
 Result<QwenXmlParameterFormat, ISTError> StructuralTagParser::ParseQwenXmlParameterFormat(
@@ -210,7 +211,8 @@ Result<QwenXmlParameterFormat, ISTError> StructuralTagParser::ParseQwenXmlParame
     );
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
-  return ResultOk<QwenXmlParameterFormat>(json_schema_it->second.serialize(false));
+  auto result = json_schema_it->second.serialize(false);
+  return ResultOk<QwenXmlParameterFormat>(std::move(result));
 }
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
