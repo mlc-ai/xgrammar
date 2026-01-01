@@ -394,6 +394,7 @@ any format object. This is useful for LLM outputs such as <code class="docutils 
 <p>The any_text format allows any text.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_text&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;excludes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">]</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -403,20 +404,20 @@ any format object. This is useful for LLM outputs such as <code class="docutils 
 <span class="w">    </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_text&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;excludes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">]</span>
 <span class="w">    </span><span class="p">},</span>
 <span class="w">    </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>It first accepts the begin tag (can be empty), then any text <strong>except the end tag</strong>, then the
-end tag.</p>
+<p>It first accepts the begin tag (can be empty), then any text <strong>except the end tag</strong> and the <strong>excludes</strong>, then the end tag.</p>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code></p>
 <p>The output will match triggered tags. It can allow any output until a trigger is
 encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
 grammar will allow any following output, until the next trigger is encountered.</p>
 <p>Each tag should be matched by exactly one trigger. “matching” means the trigger should be a
-prefix of the begin tag.</p>
+prefix of the begin tag. All the strings in <code class="docutils literal notranslate"><span class="pre">excludes</span></code> will not be accepted before the tag is triggerred.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
     &quot;type&quot;: &quot;triggered_tags&quot;,
     &quot;triggers&quot;: [&quot;&lt;function=&quot;],
@@ -438,6 +439,7 @@ prefix of the begin tag.</p>
     ],
     &quot;at_least_one&quot;: bool,
     &quot;stop_after_first&quot;: bool,
+    &quot;excludes&quot;: [&quot;...&quot;, ]
 }
 </pre></div>
 </div>
