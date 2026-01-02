@@ -18,7 +18,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-#include <utility>
 
 #include "grammar_functor.h"
 #include "grammar_impl.h"
@@ -29,7 +28,6 @@
 #include "support/utils.h"
 #include "xgrammar/grammar.h"
 
-//TODO(Linzhang): Support excludes in triggered templates and any_text.
 namespace xgrammar {
 
 // Short alias for the error type.

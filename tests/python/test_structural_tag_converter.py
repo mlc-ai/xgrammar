@@ -2881,7 +2881,8 @@ triggered_tags ::= TagDispatch(
   ("I", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root ::= ((triggered_tags))
 """,
@@ -3079,7 +3080,8 @@ triggered_tags ::= TagDispatch(
   ("{\"name\": ", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root_2 ::= ((triggered_tags))
 """,
@@ -3189,7 +3191,8 @@ triggered_tags ::= TagDispatch(
   ("<|tool_call_begin|>", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root_2 ::= ((triggered_tags))
 """,
@@ -3299,7 +3302,8 @@ triggered_tags ::= TagDispatch(
   ("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root_2 ::= ((triggered_tags))
 """,
@@ -3437,7 +3441,8 @@ triggered_tags ::= TagDispatch(
   ("<function=", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root_2 ::= ((triggered_tags))
 """,
@@ -3543,7 +3548,8 @@ triggered_tags ::= TagDispatch(
   ("<tool_call>", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root_2 ::= ((triggered_tags))
 """,
@@ -3619,17 +3625,20 @@ root_2 ::= ((triggered_tags))
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<|end|>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 any_text_1 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<|return|>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 any_text_2 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<|call|>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
@@ -3702,7 +3711,8 @@ triggered_tags ::= TagDispatch(
   ("<|start|>", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root_3 ::= ((triggered_tags))
 """,
