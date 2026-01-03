@@ -1104,11 +1104,37 @@ int32_t EBNFParser::ParseTagDispatch() {
     tag_dispatch.loop_after_dispatch = bool_node->value;
   }
 
+  // exclude_str
+  if (auto it = args.named_arguments.find("excludes"); it != args.named_arguments.end()) {
+    auto tuple_node = std::get_if<MacroIR::TupleNode>(it->second.get());
+    if (tuple_node == nullptr) {
+      ReportParseError("excluded strings must be a tuple", delta_element);
+    }
+
+    for (const auto& element : tuple_node->elements) {
+      auto exclude_str_node = std::get_if<MacroIR::StringNode>(element.get());
+      if (exclude_str_node == nullptr || exclude_str_node->value.empty()) {
+        ReportParseError("Stop string must be a non-empty string literal", delta_element);
+      }
+      tag_dispatch.excluded_str.push_back(exclude_str_node->value);
+    }
+  }
+
   // Well formed check
   if (!tag_dispatch.stop_eos && tag_dispatch.stop_str.empty()) {
     ReportParseError(
         "The TagDispatch must have stop_eos=true or stop_str is not empty", delta_element
     );
+  }
+  for (const auto& exclude_str : tag_dispatch.excluded_str) {
+    for (const auto& stop_str : tag_dispatch.stop_str) {
+      if (stop_str == exclude_str) {
+        ReportParseError(
+            "The TagDispatch should not have a common stop_str and exclude_str: " + stop_str,
+            delta_element
+        );
+      }
+    }
   }
 
   return builder_.AddTagDispatch(tag_dispatch);
