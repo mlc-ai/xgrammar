@@ -721,7 +721,28 @@ window.addEventListener("load", load);
 
 
 <div class="viewcode-block" id="TagFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TagFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tag: ``begin content end``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tag: ``begin content end``.</span>
+
+<span class="sd">    The ``end`` field can be a single string or a list of possible end strings.</span>
+<span class="sd">    When multiple end strings are provided, any of them will be accepted as a valid</span>
+<span class="sd">    ending for the tag.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+
+<span class="sd">    Single end string:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        TagFormat(begin=&quot;&lt;response&gt;&quot;, content=..., end=&quot;&lt;/response&gt;&quot;)</span>
+
+<span class="sd">    Multiple end strings:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        TagFormat(begin=&quot;&lt;response&gt;&quot;, content=..., end=[&quot;&lt;/response&gt;&quot;, &quot;&lt;/answer&gt;&quot;])</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;tag&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tag&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
@@ -729,8 +750,8 @@ window.addEventListener("load", load);
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag.&quot;&quot;&quot;</span>
     <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The content of the tag. It can be any of the formats.&quot;&quot;&quot;</span>
-    <span class="n">end</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag.&quot;&quot;&quot;</span></div>
+    <span class="n">end</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag(s). Can be a single string or a list of possible end strings.&quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="TriggeredTagsFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TriggeredTagsFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
