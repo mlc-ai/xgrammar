@@ -87,8 +87,8 @@ struct AnyTextFormat {
   AnyTextFormat(std::vector<std::string> excluded_strs) : excluded_strs(excluded_strs) {}
 
  private:
-  // Detected in StructuralTagAnalyzer
-  std::optional<std::string> detected_end_str_ = std::nullopt;
+  // Detected in StructuralTagAnalyzer - supports multiple end strings
+  std::vector<std::string> detected_end_strs_;
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;
 };
@@ -123,9 +123,9 @@ struct TagFormat {
   static constexpr const char* type = "tag";
   std::string begin;
   std::shared_ptr<Format> content;
-  std::string end;
+  std::vector<std::string> end;  // Supports multiple end tokens
 
-  TagFormat(std::string begin, std::shared_ptr<Format> content, std::string end)
+  TagFormat(std::string begin, std::shared_ptr<Format> content, std::vector<std::string> end)
       : begin(std::move(begin)), content(std::move(content)), end(std::move(end)) {}
 };
 
@@ -151,8 +151,8 @@ struct TriggeredTagsFormat {
         stop_after_first(stop_after_first) {}
 
  private:
-  // Detected in StructuralTagAnalyzer
-  std::optional<std::string> detected_end_str_ = std::nullopt;
+  // Detected in StructuralTagAnalyzer - supports multiple end strings
+  std::vector<std::string> detected_end_strs_;
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;
 };
@@ -173,8 +173,8 @@ struct TagsWithSeparatorFormat {
         stop_after_first(stop_after_first) {}
 
  private:
-  // Detected in StructuralTagAnalyzer
-  std::optional<std::string> detected_end_str_ = std::nullopt;
+  // Detected in StructuralTagAnalyzer - supports multiple end strings
+  std::vector<std::string> detected_end_strs_;
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;
 };
