@@ -953,6 +953,35 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
   }
 };
 
+// Convert a Unicode codepoint to the packed UTF-8 format used by AddCharacterRange.
+// The packed format stores UTF-8 bytes as: (byte0 << 24) | (byte1 << 16) | (byte2 << 8) | byte3
+// where byte0 is the first UTF-8 byte (leading byte) and subsequent bytes are continuation bytes.
+inline uint32_t CodepointToPackedUTF8(uint32_t codepoint) {
+  if (codepoint <= 0x7F) {
+    // 1-byte sequence (ASCII)
+    return codepoint;
+  } else if (codepoint <= 0x7FF) {
+    // 2-byte sequence: byte0 = 110xxxxx, byte1 = 10xxxxxx
+    uint8_t byte0 = 0xC0 | ((codepoint >> 6) & 0x1F);
+    uint8_t byte1 = 0x80 | (codepoint & 0x3F);
+    return (static_cast<uint32_t>(byte0) << 8) | byte1;
+  } else if (codepoint <= 0xFFFF) {
+    // 3-byte sequence: byte0 = 1110xxxx, byte1 = 10xxxxxx, byte2 = 10xxxxxx
+    uint8_t byte0 = 0xE0 | ((codepoint >> 12) & 0x0F);
+    uint8_t byte1 = 0x80 | ((codepoint >> 6) & 0x3F);
+    uint8_t byte2 = 0x80 | (codepoint & 0x3F);
+    return (static_cast<uint32_t>(byte0) << 16) | (static_cast<uint32_t>(byte1) << 8) | byte2;
+  } else {
+    // 4-byte sequence: byte0 = 11110xxx, byte1-3 = 10xxxxxx
+    uint8_t byte0 = 0xF0 | ((codepoint >> 18) & 0x07);
+    uint8_t byte1 = 0x80 | ((codepoint >> 12) & 0x3F);
+    uint8_t byte2 = 0x80 | ((codepoint >> 6) & 0x3F);
+    uint8_t byte3 = 0x80 | (codepoint & 0x3F);
+    return (static_cast<uint32_t>(byte0) << 24) | (static_cast<uint32_t>(byte1) << 16) |
+           (static_cast<uint32_t>(byte2) << 8) | byte3;
+  }
+}
+
 class GrammarFSMBuilderImpl {
  public:
   const static uint32_t kMax1ByteUnicode = 0x7F;
@@ -1306,9 +1335,12 @@ FSMWithStartEnd GrammarFSMBuilderImpl::CharacterClass(const GrammarExpr& expr) {
   }
   result_fsm.AddEndState(end_state);
   for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
-    uint8_t byte_min = static_cast<uint8_t>(expr[i]);
-    uint8_t byte_max = static_cast<uint8_t>(expr[i + 1]);
-    result_fsm.GetFsm().AddEdge(start_state, end_state, byte_min, byte_max);
+    uint32_t codepoint_min = static_cast<uint32_t>(expr[i]);
+    uint32_t codepoint_max = static_cast<uint32_t>(expr[i + 1]);
+    // Convert Unicode codepoints to packed UTF-8 format for AddCharacterRange
+    uint32_t packed_min = CodepointToPackedUTF8(codepoint_min);
+    uint32_t packed_max = CodepointToPackedUTF8(codepoint_max);
+    AddCharacterRange(result_fsm, start_state, end_state, packed_min, packed_max);
   }
   return result_fsm;
 }
