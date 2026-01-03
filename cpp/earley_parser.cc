@@ -596,44 +596,115 @@ void EarleyParser::AdvanceCharacterClass(
   XGRAMMAR_DCHECK(sub_sequence.type == GrammarExprType::kCharacterClass)
       << "The element type is not supported!";
 
-  // The state is matching a UTF8 character.
+  bool is_negative = static_cast<bool>(sub_sequence[0]);
+
+  // The state is matching a UTF8 character (continuation bytes).
   if (state.sub_element_id > 0) {
     if ((ch & 0xC0) == 0x80) {
       auto new_state = state;
       new_state.sub_element_id--;
+      // Accumulate the codepoint from continuation byte
+      new_state.partial_codepoint = (new_state.partial_codepoint << 6) | (ch & 0x3F);
+
       // Check if the UTF8 character is completed.
       if (new_state.sub_element_id == 0) {
-        new_state.element_id++;
-        Enqueue(new_state);
-        // Assert: In a sequence, the CharacterClass can't be skipped. So the state can't be
-        // repeated. the fllowing tmp_process_state_queue_.push(new_state) is for the same reason.
+        if (is_negative) {
+          // For negative classes, accept if codepoint is NOT in any range
+          bool matches_range = false;
+          for (int i = 1; i < sub_sequence.size(); i += 2) {
+            if (new_state.partial_codepoint >= sub_sequence[i] &&
+                new_state.partial_codepoint <= sub_sequence[i + 1]) {
+              matches_range = true;
+              break;
+            }
+          }
+          if (!matches_range) {
+            new_state.element_id++;
+            new_state.partial_codepoint = 0;
+            Enqueue(new_state);
+          }
+        } else {
+          // For positive classes, accept if codepoint IS in a range
+          bool matches_range = false;
+          for (int i = 1; i < sub_sequence.size(); i += 2) {
+            if (new_state.partial_codepoint >= sub_sequence[i] &&
+                new_state.partial_codepoint <= sub_sequence[i + 1]) {
+              matches_range = true;
+              break;
+            }
+          }
+          if (matches_range) {
+            new_state.element_id++;
+            new_state.partial_codepoint = 0;
+            Enqueue(new_state);
+          }
+        }
       } else {
-        tmp_states_to_be_added_.push_back(new_state);
+        // Check if partial codepoint could still potentially match any range
+        int32_t remaining_bytes = new_state.sub_element_id;
+        int32_t min_codepoint = new_state.partial_codepoint << (6 * remaining_bytes);
+        int32_t max_codepoint = min_codepoint | ((1 << (6 * remaining_bytes)) - 1);
+
+        bool could_match = false;
+        for (int i = 1; i < sub_sequence.size(); i += 2) {
+          int32_t lower = sub_sequence[i];
+          int32_t upper = sub_sequence[i + 1];
+          if (max_codepoint >= lower && min_codepoint <= upper) {
+            could_match = true;
+            break;
+          }
+        }
+
+        // For negative classes: always continue (will verify on final byte)
+        // For positive classes: only continue if some range could match
+        bool should_continue = is_negative ? true : could_match;
+        if (should_continue) {
+          tmp_states_to_be_added_.push_back(new_state);
+        }
       }
     }
     return;
   }
-  bool is_negative = static_cast<bool>(sub_sequence[0]);
 
-  // This trick is based on the current structure that character class
-  // can't accept a UTF8 character, unless it has a negation.
+  // Handle non-ASCII first bytes
   if (!isascii(ch)) {
-    if (!is_negative) {
-      return;
-    }
-    auto [accepted, num_bytes, codepoint] = HandleUTF8FirstByte(ch);
+    auto [accepted, num_bytes, partial] = HandleUTF8FirstByte(ch);
     if (!accepted) {
       return;
     }
 
-    // A new UTF8 character is accepted.
     XGRAMMAR_DCHECK(num_bytes > 1);
-    auto new_state = state;
-    new_state.sub_element_id = num_bytes - 1;
-    tmp_states_to_be_added_.push_back(new_state);
+
+    // Compute possible codepoint range for this first byte
+    int32_t min_codepoint = partial << (6 * (num_bytes - 1));
+    int32_t max_codepoint = min_codepoint | ((1 << (6 * (num_bytes - 1))) - 1);
+
+    // Check if any stored range could potentially match
+    bool could_match = false;
+    for (int i = 1; i < sub_sequence.size(); i += 2) {
+      int32_t lower = sub_sequence[i];
+      int32_t upper = sub_sequence[i + 1];
+      // Check for overlap between [min_codepoint, max_codepoint] and [lower, upper]
+      if (max_codepoint >= lower && min_codepoint <= upper) {
+        could_match = true;
+        break;
+      }
+    }
+
+    // For negative classes: accept if no range could match (will verify on final byte)
+    // For positive classes: accept if some range could match (will verify on final byte)
+    bool should_continue = is_negative ? true : could_match;
+
+    if (should_continue) {
+      auto new_state = state;
+      new_state.sub_element_id = num_bytes - 1;
+      new_state.partial_codepoint = partial;
+      tmp_states_to_be_added_.push_back(new_state);
+    }
     return;
   }
 
+  // ASCII handling (unchanged)
   for (int i = 1; i < sub_sequence.size(); i += 2) {
     if (static_cast<uint8_t>(sub_sequence[i]) <= ch &&
         ch <= static_cast<uint8_t>(sub_sequence[i + 1])) {
@@ -660,40 +731,113 @@ void EarleyParser::AdvanceCharacterClassStar(
   XGRAMMAR_DCHECK(sub_sequence.type == GrammarExprType::kCharacterClassStar)
       << "The element type is not supported!";
 
-  // The state is matching a UTF8 character.
+  bool is_negative = static_cast<bool>(sub_sequence[0]);
+
+  // The state is matching a UTF8 character (continuation bytes).
   if (state.sub_element_id > 0) {
     if ((ch & 0xC0) == 0x80) {
       auto new_state = state;
       new_state.sub_element_id--;
+      // Accumulate the codepoint from continuation byte
+      new_state.partial_codepoint = (new_state.partial_codepoint << 6) | (ch & 0x3F);
+
       // Check if the UTF8 character is completed.
       if (new_state.sub_element_id == 0) {
-        Enqueue(new_state);
+        if (is_negative) {
+          // For negative classes, accept if codepoint is NOT in any range
+          bool matches_range = false;
+          for (int i = 1; i < sub_sequence.size(); i += 2) {
+            if (new_state.partial_codepoint >= sub_sequence[i] &&
+                new_state.partial_codepoint <= sub_sequence[i + 1]) {
+              matches_range = true;
+              break;
+            }
+          }
+          if (!matches_range) {
+            new_state.partial_codepoint = 0;
+            Enqueue(new_state);
+          }
+        } else {
+          // For positive classes, accept if codepoint IS in a range
+          bool matches_range = false;
+          for (int i = 1; i < sub_sequence.size(); i += 2) {
+            if (new_state.partial_codepoint >= sub_sequence[i] &&
+                new_state.partial_codepoint <= sub_sequence[i + 1]) {
+              matches_range = true;
+              break;
+            }
+          }
+          if (matches_range) {
+            new_state.partial_codepoint = 0;
+            Enqueue(new_state);
+          }
+        }
       } else {
-        tmp_states_to_be_added_.push_back(new_state);
+        // Check if partial codepoint could still potentially match any range
+        int32_t remaining_bytes = new_state.sub_element_id;
+        int32_t min_codepoint = new_state.partial_codepoint << (6 * remaining_bytes);
+        int32_t max_codepoint = min_codepoint | ((1 << (6 * remaining_bytes)) - 1);
+
+        bool could_match = false;
+        for (int i = 1; i < sub_sequence.size(); i += 2) {
+          int32_t lower = sub_sequence[i];
+          int32_t upper = sub_sequence[i + 1];
+          if (max_codepoint >= lower && min_codepoint <= upper) {
+            could_match = true;
+            break;
+          }
+        }
+
+        // For negative classes: always continue (will verify on final byte)
+        // For positive classes: only continue if some range could match
+        bool should_continue = is_negative ? true : could_match;
+        if (should_continue) {
+          tmp_states_to_be_added_.push_back(new_state);
+        }
       }
     }
     return;
   }
-  bool is_negative = static_cast<bool>(sub_sequence[0]);
 
-  // This trick is based on the current structure that character class
-  // can't accept a UTF8 character, unless it has a negation.
+  // Handle non-ASCII first bytes
   if (!isascii(ch)) {
-    if (!is_negative) {
-      return;
-    }
-    auto [accepted, num_bytes, codepoint] = HandleUTF8FirstByte(ch);
+    auto [accepted, num_bytes, partial] = HandleUTF8FirstByte(ch);
     if (!accepted) {
       return;
     }
-    // A new UTF8 character is accepted.
+
     XGRAMMAR_DCHECK(num_bytes > 1);
-    auto new_state = state;
-    new_state.sub_element_id = num_bytes - 1;
-    tmp_states_to_be_added_.push_back(new_state);
+
+    // Compute possible codepoint range for this first byte
+    int32_t min_codepoint = partial << (6 * (num_bytes - 1));
+    int32_t max_codepoint = min_codepoint | ((1 << (6 * (num_bytes - 1))) - 1);
+
+    // Check if any stored range could potentially match
+    bool could_match = false;
+    for (int i = 1; i < sub_sequence.size(); i += 2) {
+      int32_t lower = sub_sequence[i];
+      int32_t upper = sub_sequence[i + 1];
+      // Check for overlap between [min_codepoint, max_codepoint] and [lower, upper]
+      if (max_codepoint >= lower && min_codepoint <= upper) {
+        could_match = true;
+        break;
+      }
+    }
+
+    // For negative classes: accept if no range could match (will verify on final byte)
+    // For positive classes: accept if some range could match (will verify on final byte)
+    bool should_continue = is_negative ? true : could_match;
+
+    if (should_continue) {
+      auto new_state = state;
+      new_state.sub_element_id = num_bytes - 1;
+      new_state.partial_codepoint = partial;
+      tmp_states_to_be_added_.push_back(new_state);
+    }
     return;
   }
 
+  // ASCII handling (unchanged)
   for (int i = 1; i < sub_sequence.size(); i += 2) {
     if (static_cast<uint8_t>(sub_sequence[i]) <= ch &&
         ch <= static_cast<uint8_t>(sub_sequence[i + 1])) {
