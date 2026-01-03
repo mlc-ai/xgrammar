@@ -500,6 +500,144 @@ def test_character_class_star_utf8():
     assert _is_grammar_accept_string(ebnf_grammar_str, test_string)
 
 
+def test_positive_utf8_character_class_cyrillic():
+    """Test positive character class with Cyrillic UTF-8 range (2-byte sequences).
+
+    Tests fix for issue #138: positive character classes with UTF-8 ranges
+    like [а-я] should work correctly.
+    """
+    # Cyrillic lowercase range а-я (U+0430 to U+044F)
+    ebnf_grammar_str = "root ::= [а-я]+"
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    # Single Cyrillic character should be accepted
+    assert _is_grammar_accept_string(grammar, "а")  # U+0430 - first in range
+    assert _is_grammar_accept_string(grammar, "я")  # U+044F - last in range
+    assert _is_grammar_accept_string(grammar, "п")  # U+043F - middle of range
+
+    # Multiple Cyrillic characters
+    assert _is_grammar_accept_string(grammar, "привет")
+    assert _is_grammar_accept_string(grammar, "абвгд")
+
+    # Should reject non-matching characters
+    assert not _is_grammar_accept_string(grammar, "hello")  # ASCII
+    assert not _is_grammar_accept_string(grammar, "123")  # digits
+    assert not _is_grammar_accept_string(grammar, "")  # empty
+
+    # Test uppercase Cyrillic range
+    ebnf_grammar_upper = "root ::= [А-Я]+"
+    grammar_upper = xgr.Grammar.from_ebnf(ebnf_grammar_upper)
+    assert _is_grammar_accept_string(grammar_upper, "А")  # U+0410
+    assert _is_grammar_accept_string(grammar_upper, "Я")  # U+042F
+    assert _is_grammar_accept_string(grammar_upper, "ПРИВЕТ")
+    assert not _is_grammar_accept_string(grammar_upper, "привет")  # lowercase
+
+    # Test mixed Cyrillic range
+    ebnf_grammar_mixed = "root ::= [а-яА-ЯёЁ]+"
+    grammar_mixed = xgr.Grammar.from_ebnf(ebnf_grammar_mixed)
+    assert _is_grammar_accept_string(grammar_mixed, "Привет")
+    assert _is_grammar_accept_string(grammar_mixed, "ёлка")
+    assert _is_grammar_accept_string(grammar_mixed, "ЁЖИК")
+
+
+def test_positive_utf8_character_class_cjk():
+    """Test positive character class with CJK UTF-8 range (3-byte sequences).
+
+    Tests Chinese/Japanese/Korean characters which use 3-byte UTF-8 encoding.
+    """
+    # CJK Unified Ideographs range (subset): 一-龥 (U+4E00 to U+9FA5)
+    ebnf_grammar_str = "root ::= [一-龥]+"
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    # Single CJK character
+    assert _is_grammar_accept_string(grammar, "一")  # U+4E00 - first in range
+    assert _is_grammar_accept_string(grammar, "中")  # U+4E2D - middle
+    assert _is_grammar_accept_string(grammar, "龥")  # U+9FA5 - last in range
+
+    # Multiple CJK characters
+    assert _is_grammar_accept_string(grammar, "你好")
+    assert _is_grammar_accept_string(grammar, "世界")
+    assert _is_grammar_accept_string(grammar, "中文测试")
+
+    # Should reject non-matching characters
+    assert not _is_grammar_accept_string(grammar, "hello")  # ASCII
+    assert not _is_grammar_accept_string(grammar, "привет")  # Cyrillic
+    assert not _is_grammar_accept_string(grammar, "")  # empty
+
+    # Test Japanese Hiragana range: あ-ん (U+3041 to U+3093)
+    ebnf_hiragana = "root ::= [あ-ん]+"
+    grammar_hiragana = xgr.Grammar.from_ebnf(ebnf_hiragana)
+    assert _is_grammar_accept_string(grammar_hiragana, "あ")  # U+3041
+    assert _is_grammar_accept_string(grammar_hiragana, "ん")  # U+3093
+    assert _is_grammar_accept_string(grammar_hiragana, "こんにちは")
+    assert not _is_grammar_accept_string(grammar_hiragana, "漢字")  # Kanji, not Hiragana
+
+
+def test_positive_utf8_character_class_emoji():
+    """Test positive character class with emoji UTF-8 range (4-byte sequences).
+
+    Tests emoji characters which use 4-byte UTF-8 encoding (U+1F300 and above).
+    """
+    # Emoji range: Miscellaneous Symbols and Pictographs (U+1F300 to U+1F5FF)
+    # Note: Using a smaller range for reliable testing
+    ebnf_grammar_str = "root ::= [😀-😿]+"  # U+1F600 to U+1F63F (Emoticons)
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    # Single emoji
+    assert _is_grammar_accept_string(grammar, "😀")  # U+1F600 - first in range
+    assert _is_grammar_accept_string(grammar, "😃")  # U+1F603 - middle
+    assert _is_grammar_accept_string(grammar, "😿")  # U+1F63F - last in range
+
+    # Multiple emojis
+    assert _is_grammar_accept_string(grammar, "😀😃😄")
+
+    # Should reject non-matching characters
+    assert not _is_grammar_accept_string(grammar, "hello")  # ASCII
+    assert not _is_grammar_accept_string(grammar, "🌍")  # Different emoji range
+    assert not _is_grammar_accept_string(grammar, "")  # empty
+
+
+def test_positive_utf8_character_class_mixed_ranges():
+    """Test positive character class with mixed UTF-8 byte-length ranges.
+
+    Tests combining ASCII, 2-byte, 3-byte, and 4-byte UTF-8 characters.
+    """
+    # Mix of ASCII, Cyrillic, and CJK
+    ebnf_grammar_str = "root ::= [a-zа-я一-龥]+"
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    # Individual ranges
+    assert _is_grammar_accept_string(grammar, "hello")  # ASCII
+    assert _is_grammar_accept_string(grammar, "привет")  # Cyrillic
+    assert _is_grammar_accept_string(grammar, "你好")  # CJK
+
+    # Mixed content
+    assert _is_grammar_accept_string(grammar, "helloпривет你好")
+
+    # Should reject uppercase ASCII and other characters
+    assert not _is_grammar_accept_string(grammar, "HELLO")  # Uppercase ASCII
+    assert not _is_grammar_accept_string(grammar, "123")  # digits
+
+
+def test_positive_utf8_single_char_class():
+    """Test positive character class with single UTF-8 character (not a range)."""
+    # Single Cyrillic character (not a range)
+    ebnf_grammar_str = "root ::= [а]+"
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    assert _is_grammar_accept_string(grammar, "а")
+    assert _is_grammar_accept_string(grammar, "ааа")
+    assert not _is_grammar_accept_string(grammar, "б")
+    assert not _is_grammar_accept_string(grammar, "a")  # ASCII 'a' is different from Cyrillic 'а'
+
+    # Single CJK character
+    ebnf_grammar_cjk = "root ::= [中]+"
+    grammar_cjk = xgr.Grammar.from_ebnf(ebnf_grammar_cjk)
+    assert _is_grammar_accept_string(grammar_cjk, "中")
+    assert _is_grammar_accept_string(grammar_cjk, "中中中")
+    assert not _is_grammar_accept_string(grammar_cjk, "国")
+
+
 @pytest.mark.hf_token_required
 def test_not_neighbour_character_class():
     raw_grammar = "root ::= [a-cx-z]*"
@@ -527,6 +665,120 @@ rule3 ::= [a-n] [b-c] "x" | ""
     assert _is_grammar_accept_string(grammar, "ccx")
     assert not _is_grammar_accept_string(grammar, "abb")
     assert not _is_grammar_accept_string(grammar, "ad")
+
+
+@pytest.mark.parametrize(
+    "tokenizer_path,input_str,expected_rejected_sizes",
+    [
+        (
+            "meta-llama/Llama-2-7b-chat-hf",
+            # Input: "aбя中" - ASCII 'a', Cyrillic 'б' (2 bytes), 'я' (2 bytes), CJK '中' (3 bytes)
+            "aбя中",
+            # fmt: off
+            [22129, 22128, 31984, 22128, 31984, 22128, 31992, 31936, 22128],
+            # fmt: on
+        )
+    ],
+)
+@pytest.mark.hf_token_required
+def test_fill_next_token_bitmask_unicode_char_class(
+    tokenizer_path: str, input_str: str, expected_rejected_sizes: List[int]
+):
+    """Test token bitmask generation for Unicode character classes.
+
+    This test verifies that the grammar correctly handles mixed UTF-8 character
+    classes (ASCII, Cyrillic, CJK) and produces consistent rejected token counts.
+    """
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+
+    # Grammar with mixed UTF-8 character class (ASCII + Cyrillic + CJK)
+    ebnf_grammar_str = "root ::= [a-zа-я一-龥]+"
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    time_start = time.monotonic_ns()
+    matcher = xgr.GrammarMatcher(compiler.compile_grammar(grammar))
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device=device)
+
+    input_bytes = input_str.encode("utf-8")
+
+    for i, c in enumerate(input_bytes):
+        # 1. fill_next_token_bitmask
+        time_start = time.monotonic_ns()
+        matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+        # 2. Correctness verification
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
+        assert len(rejected_token_ids) == expected_rejected_sizes[i], (
+            f"Byte {i} ({hex(c)}): expected {expected_rejected_sizes[i]} rejected, "
+            f"got {len(rejected_token_ids)}"
+        )
+
+        # 3. apply_token_bitmask_inplace
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_start = time.monotonic_ns()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_end = time.monotonic_ns()
+        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+
+        # 4. accept_string
+        print("Accepting char:", bytes([c]))
+        time_start = time.monotonic_ns()
+        assert matcher.accept_string(bytes([c]))
+        time_end = time.monotonic_ns()
+        print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
+
+    # 5. Final correctness verification
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    assert (
+        len(rejected_token_ids) == expected_rejected_sizes[-1]
+    ), f"Final: expected {expected_rejected_sizes[-1]} rejected, got {len(rejected_token_ids)}"
+
+
+def test_positive_utf8_character_class_with_quantifier():
+    """Test positive character class with mixed UTF-8 ranges and quantifier.
+
+    Tests the combination of ASCII, Cyrillic (2-byte), and CJK (3-byte) characters
+    with a {0, 2048} quantifier to ensure proper handling of repeated UTF-8 matching.
+    """
+    ebnf_grammar_str = "root ::= [a-zа-я一-龥]{0,2048}"
+    grammar = xgr.Grammar.from_ebnf(ebnf_grammar_str)
+
+    # Empty string should be accepted (min is 0)
+    assert _is_grammar_accept_string(grammar, "")
+
+    # Individual character types
+    assert _is_grammar_accept_string(grammar, "hello")  # ASCII
+    assert _is_grammar_accept_string(grammar, "привет")  # Cyrillic
+    assert _is_grammar_accept_string(grammar, "你好世界")  # CJK
+
+    # Mixed content
+    assert _is_grammar_accept_string(grammar, "helloпривет你好")
+    assert _is_grammar_accept_string(grammar, "abc中文def")
+
+    # Long strings within quantifier range
+    assert _is_grammar_accept_string(grammar, "a" * 100)
+    assert _is_grammar_accept_string(grammar, "я" * 100)
+    assert _is_grammar_accept_string(grammar, "中" * 100)
+
+    # Should reject uppercase ASCII and other characters
+    assert not _is_grammar_accept_string(grammar, "HELLO")  # Uppercase ASCII
+    assert not _is_grammar_accept_string(grammar, "123")  # digits
+    assert not _is_grammar_accept_string(grammar, "hello!")  # with special char
 
 
 if __name__ == "__main__":

@@ -47,14 +47,16 @@ struct ParserState {
       const int32_t& element_id,
       const int32_t& rule_start_pos,
       const int32_t& sub_element_id,
-      const int32_t& repeat_count = 0
+      const int32_t& repeat_count = 0,
+      const int32_t& partial_codepoint = 0
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
         element_id(element_id),
         rule_start_pos(rule_start_pos),
         sub_element_id(sub_element_id),
-        repeat_count(repeat_count) {}
+        repeat_count(repeat_count),
+        partial_codepoint(partial_codepoint) {}
 
   /*!
    * \brief A sequence_id value of kUnexpandedRuleStartSequenceId means a rule hasn't been
@@ -90,6 +92,9 @@ struct ParserState {
 
   /*! \brief The number of times the element is repeated. It will be used in kRepeat.*/
   int32_t repeat_count = 0;
+
+  /*! \brief Partial codepoint accumulated during UTF-8 decoding for positive character classes. */
+  int32_t partial_codepoint = 0;
 
   /*! \brief The element is invalid when sequence_id is -1. */
   bool IsInvalid() const { return sequence_id == -1; }
@@ -131,7 +136,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::element_id,
     &ParserState::rule_start_pos,
     &ParserState::sub_element_id,
-    &ParserState::repeat_count
+    &ParserState::repeat_count,
+    &ParserState::partial_codepoint
 );
 
 /*!
@@ -153,7 +159,8 @@ class StateEqualForParsing {
   bool operator()(const ParserState& lhs, const ParserState& rhs) const {
     return lhs.rule_id == rhs.rule_id && lhs.sequence_id == rhs.sequence_id &&
            lhs.element_id == rhs.element_id && lhs.rule_start_pos == rhs.rule_start_pos &&
-           lhs.sub_element_id == rhs.sub_element_id && lhs.repeat_count == rhs.repeat_count;
+           lhs.sub_element_id == rhs.sub_element_id && lhs.repeat_count == rhs.repeat_count &&
+           lhs.partial_codepoint == rhs.partial_codepoint;
   }
 };
 
@@ -170,7 +177,8 @@ class StateHashForParsing {
         state.element_id,
         state.rule_start_pos,
         state.sub_element_id,
-        state.repeat_count
+        state.repeat_count,
+        state.partial_codepoint
     );
   }
 };
