@@ -142,9 +142,7 @@ skip = [
   "cp36-*",
   "cp37-*",
   "cp38-*",
-  "pp*",
   "*musllinux*",
-  "cp313-manylinux_aarch64",
   "cp313-macosx_x86_64",
 ] # pypy doesn't play nice with pybind11
 build-frontend = "build[uv]"
