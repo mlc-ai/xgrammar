@@ -481,7 +481,7 @@ class GrammarNormalizerImpl {
   GrammarNormalizerImpl() = default;
 
   Grammar Apply(const Grammar& grammar) {
-    auto renamed_grammar = RootRuleRenamer().Apply(grammar);
+    auto renamed_grammar = RootRuleRenamer::Apply(grammar);
     return StructureNormalizerImpl().Apply(renamed_grammar);
   }
 };
@@ -1703,8 +1703,8 @@ class RootRuleRenamerImpl {
           grammar_copy->GetRule(root_name_rule_id).name = new_rule_name;
           break;
         }
-        XGRAMMAR_DCHECK(i != grammar_copy->NumRules())
-            << "The rule must be renamed successfully after (n + 1) times of iterations.";
+        XGRAMMAR_DCHECK(false
+        ) << "The rule must be renamed successfully after (n + 1) times of iterations.";
       }
     }
     return grammar_copy;
