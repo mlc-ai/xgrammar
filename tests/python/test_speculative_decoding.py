@@ -28,9 +28,9 @@ def test_traverse_draft_tree_linear():
 
     # Create test tree structure (simple linear tree: 0 -> 1 -> 2)
     num_nodes = 3
-    retrieve_next_token = torch.tensor([1, 2, -1], dtype=torch.int32)
-    retrieve_next_sibling = torch.tensor([-1, -1, -1], dtype=torch.int32)
-    draft_tokens = torch.tensor([3, 6, 4], dtype=torch.int32)  # {, :, }
+    retrieve_next_token = torch.tensor([1, 2, -1], dtype=torch.int64)
+    retrieve_next_sibling = torch.tensor([-1, -1, -1], dtype=torch.int64)
+    draft_tokens = torch.tensor([3, 6, 4], dtype=torch.int64)  # {, :, }
 
     # Allocate bitmask
     bitmask = allocate_token_bitmask(num_nodes, len(vocab))
@@ -59,9 +59,9 @@ def test_traverse_draft_tree_with_siblings():
     #      / \
     #     1   2
     num_nodes = 3
-    retrieve_next_token = torch.tensor([1, -1, -1], dtype=torch.int32)
-    retrieve_next_sibling = torch.tensor([-1, 2, -1], dtype=torch.int32)
-    draft_tokens = torch.tensor([3, 5, 4], dtype=torch.int32)  # {, ", }
+    retrieve_next_token = torch.tensor([1, -1, -1], dtype=torch.int64)
+    retrieve_next_sibling = torch.tensor([-1, 2, -1], dtype=torch.int64)
+    draft_tokens = torch.tensor([3, 5, 4], dtype=torch.int64)  # {, ", }
 
     bitmask = allocate_token_bitmask(num_nodes, len(vocab))
 
@@ -84,15 +84,21 @@ def test_traverse_draft_tree_shape_assertion():
     matcher = xgr.GrammarMatcher(compiled_grammar)
 
     # Mismatched shapes
-    retrieve_next_token = torch.tensor([1, 2, -1], dtype=torch.int32)
-    retrieve_next_sibling = torch.tensor([-1, -1], dtype=torch.int32)  # Wrong size
+    retrieve_next_token = torch.tensor([1, 2, -1], dtype=torch.int64)
+    retrieve_next_sibling_wrong_shape = torch.tensor([-1, -1], dtype=torch.int64)  # Wrong shape
+    retrieve_next_sibling_wrong_dtype = torch.tensor([-1, -1, -1], dtype=torch.int32)  # Wrong dtype
     draft_tokens = torch.tensor([3, 6, 4], dtype=torch.int32)
 
     bitmask = allocate_token_bitmask(3, len(vocab))
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(RuntimeError):
         _traverse_draft_tree(
-            retrieve_next_token, retrieve_next_sibling, draft_tokens, matcher, bitmask
+            retrieve_next_token, retrieve_next_sibling_wrong_shape, draft_tokens, matcher, bitmask
+        )
+
+    with pytest.raises(RuntimeError):
+        _traverse_draft_tree(
+            retrieve_next_token, retrieve_next_sibling_wrong_dtype, draft_tokens, matcher, bitmask
         )
 
 

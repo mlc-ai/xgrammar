@@ -849,6 +849,12 @@ void GrammarCompilerNoCache::TagDispatchOptimization(
           break;
         }
       }
+      for (const auto& exclude_str : tag_dispatch.excluded_str) {
+        if (token.find(exclude_str, 1) != std::string::npos) {
+          definite_accept_since_second_char = false;
+          break;
+        }
+      }
 
       // If the token can be definitely accepted since the second character, set the bit.
       if (definite_accept_since_second_char) {

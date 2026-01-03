@@ -9,6 +9,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "grammar_functor.h"
 #include "grammar_impl.h"
@@ -214,11 +215,26 @@ Result<QwenXmlParameterFormat, ISTError> StructuralTagParser::ParseQwenXmlParame
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
 ) {
-  // obj should not have any fields other than "type"
-  if (obj.size() > 1 || (obj.size() == 1 && obj.begin()->first != "type")) {
-    return ResultErr<ISTError>("Any text format should not have any fields other than type");
+  auto excluded_strs_it = obj.find("excludes");
+  if (excluded_strs_it == obj.end()) {
+    if ((obj.find("type") == obj.end())) {
+      return ResultErr<ISTError>("Any text format should not have any fields other than type");
+    }
+    return ResultOk<AnyTextFormat>(std::vector<std::string>{});
   }
-  return ResultOk<AnyTextFormat>();
+  if (!excluded_strs_it->second.is<picojson::array>()) {
+    return ResultErr<ISTError>("AnyText format's excluded_strs field must be an array");
+  }
+  const auto& excluded_strs_array = excluded_strs_it->second.get<picojson::array>();
+  std::vector<std::string> excluded_strs;
+  excluded_strs.reserve(excluded_strs_array.size());
+  for (const auto& excluded_str : excluded_strs_array) {
+    if (!excluded_str.is<std::string>()) {
+      return ResultErr<ISTError>("AnyText format's excluded_strs array must contain strings");
+    }
+    excluded_strs.push_back(excluded_str.get<std::string>());
+  }
+  return ResultOk<AnyTextFormat>(std::move(excluded_strs));
 }
 
 Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const picojson::object& obj
@@ -336,6 +352,7 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
     return ResultErr<ISTError>("Triggered tags format must have a triggers field with an array");
   }
   const auto& triggers_array = triggers_it->second.get<picojson::array>();
+  std::vector<std::string> excluded_strs;
   std::vector<std::string> triggers;
   triggers.reserve(triggers_array.size());
   for (const auto& trigger : triggers_array) {
@@ -365,6 +382,24 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
   if (tags.size() == 0) {
     return ResultErr<ISTError>("Triggered tags format's tags must be non-empty");
   }
+  // excludes is optional.
+  auto excludes_it = obj.find("excludes");
+  if (excludes_it != obj.end()) {
+    if (!excludes_it->second.is<picojson::array>()) {
+      return ResultErr<ISTError>("Triggered tags format should have a excludes field with an array"
+      );
+    }
+    const auto& excludes_array = excludes_it->second.get<picojson::array>();
+    excluded_strs.reserve(excludes_array.size());
+    for (const auto& excluded_str : excludes_array) {
+      if (!excluded_str.is<std::string>() || excluded_str.get<std::string>().empty()) {
+        return ResultErr<ISTError>("Triggered tags format's excluded_strs must be non-empty strings"
+        );
+      }
+      excluded_strs.push_back(excluded_str.get<std::string>());
+    }
+  }
+
   // at_least_one is optional.
   bool at_least_one = false;
   auto at_least_one_it = obj.find("at_least_one");
@@ -384,7 +419,7 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
     stop_after_first = stop_after_first_it->second.get<bool>();
   }
   return ResultOk<TriggeredTagsFormat>(
-      std::move(triggers), std::move(tags), at_least_one, stop_after_first
+      std::move(triggers), std::move(tags), std::move(excluded_strs), at_least_one, stop_after_first
   );
 }
 
@@ -409,13 +444,10 @@ Result<TagsWithSeparatorFormat, ISTError> StructuralTagParser::ParseTagsWithSepa
   if (tags.size() == 0) {
     return ResultErr<ISTError>("Tags with separator format's tags must be non-empty");
   }
-  // separator is required.
+  // separator is required (can be empty string).
   auto separator_it = obj.find("separator");
-  if (separator_it == obj.end() || !separator_it->second.is<std::string>() ||
-      separator_it->second.get<std::string>().empty()) {
-    return ResultErr<ISTError>(
-        "Tags with separator format's separator field must be a non-empty string"
-    );
+  if (separator_it == obj.end() || !separator_it->second.is<std::string>()) {
+    return ResultErr<ISTError>("Tags with separator format's separator field must be a string");
   }
   // at_least_one is optional.
   bool at_least_one = false;
@@ -759,9 +791,9 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextForma
   if (format.detected_end_str_.has_value()) {
     XGRAMMAR_DCHECK(!format.detected_end_str_.value().empty())
         << "The detected end string cannot be empty";
-    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, false, {format.detected_end_str_.value()}, false}
-    );
+    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
+        {}, false, {format.detected_end_str_.value()}, false, format.excluded_strs
+    });
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
     auto any_text_expr = grammar_builder_.AddCharacterClassStar({{0, 0x10FFFF}}, false);
@@ -915,11 +947,15 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   bool loop_after_dispatch = !format.stop_after_first;
   if (format.detected_end_str_.has_value()) {
     rule_expr_id = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
-        tag_rule_pairs, false, {format.detected_end_str_.value()}, loop_after_dispatch
+        tag_rule_pairs,
+        false,
+        {format.detected_end_str_.value()},
+        loop_after_dispatch,
+        format.excludes
     });
   } else {
     rule_expr_id = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch}
+        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch, format.excludes}
     );
   }
 
@@ -1034,13 +1070,17 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
   auto end_str_sequence_id = end_str_expr_id == -1
                                  ? grammar_builder_.AddEmptyStr()
                                  : grammar_builder_.AddSequence({end_str_expr_id});
+
+  // Build the sequence for the recursive case, handling empty separator
+  std::vector<int> sub_sequence_elements;
+  if (!format.separator.empty()) {
+    sub_sequence_elements.push_back(grammar_builder_.AddByteString(format.separator));
+  }
+  sub_sequence_elements.push_back(all_tags_rule_ref_id);
+  sub_sequence_elements.push_back(grammar_builder_.AddRuleRef(sub_rule_id));
+
   auto sub_rule_body_id = grammar_builder_.AddChoices(
-      {grammar_builder_.AddSequence(
-           {grammar_builder_.AddByteString(format.separator),
-            all_tags_rule_ref_id,
-            grammar_builder_.AddRuleRef(sub_rule_id)}
-       ),
-       end_str_sequence_id}
+      {grammar_builder_.AddSequence(sub_sequence_elements), end_str_sequence_id}
   );
   grammar_builder_.UpdateRuleBody(sub_rule_id, sub_rule_body_id);
 

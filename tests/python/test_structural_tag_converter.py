@@ -497,7 +497,8 @@ any_text_stag_grammar = [
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("END"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 tag ::= (("BEG" any_text))
 root ::= ((tag))
@@ -569,7 +570,8 @@ triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root ::= ((triggered_tags))
 """,
@@ -585,7 +587,8 @@ triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 root ::= ((triggered_tags))
@@ -601,7 +604,8 @@ triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 root ::= ((triggered_tags))
 """,
@@ -664,7 +668,8 @@ triggered_tags ::= TagDispatch(
   ("<start>", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 root ::= ((triggered_tags))
 """,
@@ -726,7 +731,8 @@ triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
   stop_str=("end"),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 tag ::= (("begin" triggered_tags))
 root ::= ((tag))
@@ -743,7 +749,8 @@ triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
   stop_str=("end"),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 tag ::= (("begin" triggered_tags))
@@ -760,7 +767,8 @@ triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
   stop_str=("end"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 tag ::= (("begin" triggered_tags))
 root ::= ((tag))
@@ -991,6 +999,103 @@ tags_with_separator_with_outside_tag_instance_accepted_results = [
     "instance, accepted_results", tags_with_separator_with_outside_tag_instance_accepted_results
 )
 def test_tags_with_separator_format_with_outside_tag(
+    stag_id: int,
+    stag_format: Dict[str, Any],
+    expected_grammar: str,
+    instance: str,
+    accepted_results: List[bool],
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
+
+
+# Test for empty separator in tags_with_separator
+def _get_tags_with_empty_separator_format(at_least_one: bool, stop_after_first: bool):
+    return {
+        "type": "tags_with_separator",
+        "tags": [
+            {"begin": "<a>", "content": {"type": "const_string", "value": "X"}, "end": "</a>"},
+            {"begin": "<b>", "content": {"type": "const_string", "value": "Y"}, "end": "</b>"},
+        ],
+        "separator": "",
+        "at_least_one": at_least_one,
+        "stop_after_first": stop_after_first,
+    }
+
+
+tags_with_empty_separator_stag_grammar = [
+    (
+        0,
+        _get_tags_with_empty_separator_format(at_least_one=False, stop_after_first=False),
+        r"""const_string ::= (("X"))
+tag ::= (("<a>" const_string "</a>"))
+const_string_1 ::= (("Y"))
+tag_1 ::= (("<b>" const_string_1 "</b>"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+root ::= ((tags_with_separator))
+""",
+    ),
+    (
+        1,
+        _get_tags_with_empty_separator_format(at_least_one=True, stop_after_first=False),
+        r"""const_string ::= (("X"))
+tag ::= (("<a>" const_string "</a>"))
+const_string_1 ::= (("Y"))
+tag_1 ::= (("<b>" const_string_1 "</b>"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+root ::= ((tags_with_separator))
+""",
+    ),
+    (
+        2,
+        _get_tags_with_empty_separator_format(at_least_one=False, stop_after_first=True),
+        r"""const_string ::= (("X"))
+tag ::= (("<a>" const_string "</a>"))
+const_string_1 ::= (("Y"))
+tag_1 ::= (("<b>" const_string_1 "</b>"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator ::= ("" | (tags_with_separator_tags))
+root ::= ((tags_with_separator))
+""",
+    ),
+    (
+        3,
+        _get_tags_with_empty_separator_format(at_least_one=True, stop_after_first=True),
+        r"""const_string ::= (("X"))
+tag ::= (("<a>" const_string "</a>"))
+const_string_1 ::= (("Y"))
+tag_1 ::= (("<b>" const_string_1 "</b>"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator ::= ((tags_with_separator_tags))
+root ::= ((tags_with_separator))
+""",
+    ),
+]
+
+
+tags_with_empty_separator_instance_accepted_results = [
+    ("", [True, False, True, False]),
+    ("<a>X</a>", [True, True, True, True]),
+    ("<a>X</a><b>Y</b>", [True, True, False, False]),
+    ("<b>Y</b><a>X</a><b>Y</b>", [True, True, False, False]),
+    ("<a>X</a><a>X</a><a>X</a>", [True, True, False, False]),
+    # Invalid cases
+    ("<a>X</a>,<b>Y</b>", [False, False, False, False]),  # Has separator when none expected
+    ("<c>Z</c>", [False, False, False, False]),  # Unknown tag
+]
+
+
+@pytest.mark.parametrize(
+    "stag_id, stag_format, expected_grammar", tags_with_empty_separator_stag_grammar
+)
+@pytest.mark.parametrize(
+    "instance, accepted_results", tags_with_empty_separator_instance_accepted_results
+)
+def test_tags_with_empty_separator_format(
     stag_id: int,
     stag_format: Dict[str, Any],
     expected_grammar: str,
@@ -1245,7 +1350,8 @@ end_string_detector_test_data = [
 any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 sequence ::= ((const_string any_text))
 tag ::= (("<start>" sequence))
@@ -1295,7 +1401,8 @@ root ::= ((tag))
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end2>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 triggered_tags_group ::= ((">" any_text ""))
 triggered_tags_first ::= (("<start2>" any_text ""))
@@ -1303,20 +1410,23 @@ triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=false,
   stop_str=("<end>"),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 const_string ::= (("[TEXT2]"))
 any_text_1 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end3>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 tag ::= (("<start3>" any_text_2))
 tags_with_separator_tags ::= ((tag))
@@ -1382,7 +1492,8 @@ root ::= ((tag_1))
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end2>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 triggered_tags_group ::= ((">" any_text ""))
 triggered_tags_first ::= (("<start2>" any_text ""))
@@ -1390,7 +1501,8 @@ triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=true,
   stop_str=(),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=()
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 const_string ::= (("[TEXT]"))
@@ -1399,7 +1511,8 @@ sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
   stop_str=("<end3>"),
-  loop_after_dispatch=false
+  loop_after_dispatch=false,
+  excludes=()
 )
 tag ::= (("<start3>" any_text_2))
 tags_with_separator_tags ::= ((tag))
@@ -1489,11 +1602,6 @@ json_format_error_test_data = [
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": "invalid"}}',
         "JSON schema format must have a json_schema field with a object or boolean value",
-    ),
-    # AnyTextFormat Errors
-    (
-        '{"type": "structural_tag", "format": {"type": "any_text", "extra_field": "value"}}',
-        "Any text format should not have any fields other than type",
     ),
     # SequenceFormat Errors
     (
@@ -1598,16 +1706,13 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
-        "Tags with separator format's separator field must be a non-empty string",
+        "Tags with separator format's separator field must be a string",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": 123}}',
-        "Tags with separator format's separator field must be a non-empty string",
+        "Tags with separator format's separator field must be a string",
     ),
-    (
-        '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": ""}}',
-        "Tags with separator format's separator field must be a non-empty string",
-    ),
+    # Note: empty separator is now valid, so no error test for it
     (
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": "sep", "at_least_one": "not_boolean"}}',
         "at_least_one must be a boolean",
@@ -1977,6 +2082,86 @@ def test_from_structural_tag_with_structural_tag_instance(
 ):
     stag = xgr.StructuralTag(format=stag_format)
     check_stag_with_instance(stag, instance, is_accepted)
+
+
+test_strings_is_accepted_any_text_excludes = [
+    ("This is a test string.", True),
+    ("This string contains <end> which is excluded.", False),
+    ("Another string with </tag> inside.", False),
+    ("A clean string without excluded substrings.", True),
+    ("<end> at the beginning.", False),
+    ("At the end </tag>.", False),
+]
+
+
+@pytest.mark.parametrize("instance, is_accepted", test_strings_is_accepted_any_text_excludes)
+def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
+
+    stag_format = {
+        "type": "tag",
+        "content": {"type": "any_text", "excludes": ["<end>", "</tag>"]},
+        "begin": "",
+        "end": ".",
+    }
+
+    expected_grammar = r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("."),
+  loop_after_dispatch=false,
+  excludes=("<end>", "</tag>")
+)
+tag ::= (("" any_text))
+root ::= ((tag))
+"""
+
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+test_strings_is_accepted_triggered_excludes = [
+    ("A", False),
+    ("A1", False),
+    ("A1L1AB", True),
+    ("A1L2A", False),
+    ("L1A1L1A", False),
+    ("L2A2L2A", False),
+    ("A1L1AL1", False),
+    ("A1L1AA2L2A", True),
+]
+
+
+@pytest.mark.parametrize("instance, is_accepted", test_strings_is_accepted_triggered_excludes)
+def test_excluded_strings_in_triggered_format(instance: str, is_accepted: bool):
+
+    stag_format = {
+        "type": "triggered_tags",
+        "triggers": ["A"],
+        "tags": [
+            {"begin": "A1", "content": {"type": "const_string", "value": "L1"}, "end": "A"},
+            {"begin": "A2", "content": {"type": "const_string", "value": "L2"}, "end": "A"},
+        ],
+        "at_least_one": True,
+        "stop_after_first": False,
+        "excludes": ["L1", "L2"],
+    }
+
+    expected_grammar = r"""const_string ::= (("L1"))
+const_string_1 ::= (("L2"))
+triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
+triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
+triggered_tags_sub ::= TagDispatch(
+  ("A", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=("L1", "L2")
+)
+triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
+root ::= ((triggered_tags))
+"""
+
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,12 @@ def apply_token_bitmask_inplace_cpu(
 
     vocab_size = min(logits.shape[-1], bitmask.shape[-1] * 32) if vocab_size is None else vocab_size
 
+    indices_list = None
+    if indices is not None:
+        if isinstance(indices, torch.Tensor):
+            indices_list = indices.tolist()
+        elif isinstance(indices, list):
+            indices_list = indices
     if logits.dtype == torch.float32:
         _core.kernels.apply_token_bitmask_inplace_cpu(
             logits.data_ptr(),
@@ -50,7 +56,7 @@ def apply_token_bitmask_inplace_cpu(
             bitmask_shape,
             bitmask_stride,
             vocab_size,
-            indices,
+            indices_list,
             "float32",
         )
     elif logits.dtype == torch.bfloat16:
@@ -62,7 +68,7 @@ def apply_token_bitmask_inplace_cpu(
             bitmask_shape,
             bitmask_stride,
             vocab_size,
-            indices,
+            indices_list,
             "bfloat16",
         )
     elif logits.dtype == torch.float16:
@@ -74,7 +80,7 @@ def apply_token_bitmask_inplace_cpu(
             bitmask_shape,
             bitmask_stride,
             vocab_size,
-            indices,
+            indices_list,
             "float16",
         )
     else:
