@@ -43,7 +43,7 @@ basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" bas
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
 basic_string ::= (("\"" basic_string_sub)) (=(root_part_0 [ \n\t]* "}"))
 root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer)) (=([ \n\t]* "}"))
-root ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0 [ \n\t]* "}")) (=("</function>"))
+root_0 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0 [ \n\t]* "}")) (=("</function>"))
 basic_integer_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_1))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
@@ -67,7 +67,7 @@ basic_number_5_2 ::= (([0-9] basic_number_5_2) | ([0-9]))
 basic_number_6_2 ::= ("" | ([eE] basic_number_4_2 basic_number_5_2))
 root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1)) (=([ \n\t]* "]"))
 basic_number_7_2 ::= (("0") | ([1-9] [0-9]*)) (=(basic_number_3_2 basic_number_6_2))
-triggered_tags_group ::= (("1>" root "</function>") | ("2>" root_1 "</function>"))
+triggered_tags_group ::= (("1>" root_0 "</function>") | ("2>" root_1 "</function>"))
 triggered_tags_group_1 ::= ((">" root_2 "</function>"))
 triggered_tags ::= TagDispatch(
   ("<function=f", triggered_tags_group),
@@ -77,7 +77,7 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=()
 )
-root_3 ::= ((triggered_tags))
+root ::= ((triggered_tags))
 """
 
 expected_grammar_test_structural_tag_before_optimization = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
@@ -91,7 +91,7 @@ basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer))
-root ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0 [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0 [ \n\t]* "}"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -148,7 +148,7 @@ basic_array_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_2 basic_array_1_2))
 basic_object_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 [ \n\t]* ":" [ \n\t]* basic_any_2 basic_object_1_2))
 root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 root_prop_1_1))
 basic_number_7_2 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("1>" root "</function>") | ("2>" root_1 "</function>"))
+triggered_tags_group ::= (("1>" root_0 "</function>") | ("2>" root_1 "</function>"))
 triggered_tags_group_1 ::= ((">" root_2 "</function>"))
 triggered_tags ::= TagDispatch(
   ("<function=f", triggered_tags_group),
@@ -158,7 +158,7 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=()
 )
-root_3 ::= ((triggered_tags))
+root ::= ((triggered_tags))
 """
 
 
