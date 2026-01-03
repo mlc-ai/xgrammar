@@ -133,6 +133,12 @@ def apply_token_bitmask_inplace(
     backend : Literal["auto", "cpu", "cuda", "triton", "torch_compile", "torch_native"], default: "auto"
         The backend where the token bitmask should be applied inplace. If the value is "auto", then it will
         choose the backend according to the type of the logits.
+        
+        * CPU: CPU implementation
+        * Triton: Default CUDA implementation
+        * Torch Compile: If the hardware is not the above, use this. This supports multiple backends, including CPU/CUDA/TPU/ROCm
+        * CUDA: CUDA native implementation, helpful for C++-based inference engines
+        * Torch Native: Support more backends such as Kunlun. Its performance may be worse than torch compile.
     """
     if bitmask.device != logits.device:
         raise ValueError(
