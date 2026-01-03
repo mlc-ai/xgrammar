@@ -12,8 +12,10 @@
 #include <optional>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
+#include "../structural_tag.h"
 #include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
@@ -52,12 +54,20 @@ std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_gramma
 
 Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json);
 
+Grammar Grammar_FromStructuralTagTemplate(
+    const std::string& template_json_str, const std::string& kwargs_json_str
+);
+
 Grammar Grammar_DeserializeJSON(const std::string& json_string);
 
 TokenizerInfo TokenizerInfo_DeserializeJSON(const std::string& json_string);
 
 CompiledGrammar CompiledGrammar_DeserializeJSON(
     const std::string& json_string, const TokenizerInfo& tokenizer
+);
+
+std::string StructuralTag_FromTemplate(
+    const std::string& structural_tag_template_json, const std::string& values_json_str
 );
 
 }  // namespace xgrammar

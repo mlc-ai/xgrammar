@@ -136,6 +136,10 @@ class Grammar {
       const std::string& structural_tag_json
   );
 
+  static std::variant<Grammar, StructuralTagError> FromStructuralTagTemplate(
+      const std::string& structural_tag_template_json, const std::string& values_json_str
+  );
+
   /*!
    * \brief Get the grammar of standard JSON format. We have built-in support for JSON.
    * \return The grammar of standard JSON format.
