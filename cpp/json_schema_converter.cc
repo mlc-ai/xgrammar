@@ -262,8 +262,6 @@ class JSONSchemaConverter {
   // The name of the helper rules to construct basic rules
   inline static const std::string kBasicEscape = "basic_escape";
   inline static const std::string kBasicStringSub = "basic_string_sub";
-  inline static const std::string kXMLEntity = "xml_entity";
-  inline static const std::string kXMLEscape = "xml_escape";
   inline static const std::string kXMLString = "xml_string";
   inline static const std::string kXMLVariableName = "xml_variable_name";
 
@@ -727,15 +725,13 @@ void JSONSchemaConverter::AddXMLHelperRules() {
     }
   }
   ebnf_script_creator_.AddRule(
-      kXMLEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
-  );
-  ebnf_script_creator_.AddRule(
-      kXMLEntity, " \"&lt;\" | \"&gt;\" | \"&amp;\" | \"&quot;\" | \"&apos;\""
-  );
-  ebnf_script_creator_.AddRule(
       kXMLString,
-      "(\"\" | [^<>&\\0-\\x1f\\\\\\r\\n] " + kXMLString + " | \"\\\\\" " + kXMLEscape + " " +
-          kXMLString + " | " + kXMLEntity + " " + kXMLString + ") (= " + whitespace_part + ")"
+      "TagDispatch("
+      "stop_eos=true,"
+      "stop_str=(),"
+      "loop_after_dispatch=false,"
+      "excludes=(\"</parameter>\")"
+      ")"
   );
   ebnf_script_creator_.AddRule(kXMLVariableName, "[a-zA-Z_] [a-zA-Z0-9_]*");
 }
@@ -3207,6 +3203,8 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
     }
     return ResultOk(string_spec);
   }
+
+  // No specific requirements.
   StringSpec string_spec;
   switch (json_format) {
     case JSONFormat::kJSON: {

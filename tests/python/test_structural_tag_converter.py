@@ -178,9 +178,12 @@ qwen_parameter_xml_stag_grammar = [
         },
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-xml_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-xml_entity ::= (("&lt;") | ("&gt;") | ("&amp;") | ("&quot;") | ("&apos;"))
-xml_string ::= ("" | ([^<>&\0-\x1f\\\r\n] xml_string) | ("\\" xml_escape xml_string) | (xml_entity xml_string)) (=([ \n\t]*))
+xml_string ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 xml_string_0 ::= ((xml_string))
 xml_any ::= ((basic_number) | (xml_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -216,8 +219,13 @@ qwen_parameter_xml_instance_is_accepted = [
     ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
     ("\n\t<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
     ('<parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>', True),
-    ("<parameter=name><>Bob</parameter><parameter=age>100</parameter>", False),
-    ("<parameter=name>Bob</parameter><parameter=age>100</parameter>\t\t", False),
+    (
+        """<parameter=name><!DOCTYPE html>
+<html lang="en">
+  <body><h1>Hello</h1></body>
+</html></parameter><parameter=age>100</parameter>""",
+        True,
+    ),
 ]
 
 

@@ -9,9 +9,13 @@ test_string_schema_input_str_accepted = (
     ("<parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
     ("\n\t<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
-    ('<parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>', True),
-    ("<parameter=name><>Bob</parameter><parameter=age>100</parameter>", False),
-    ("<parameter=name>Bob</parameter><parameter=age>100</parameter>\t\t", False),
+    (
+        """<parameter=name><!DOCTYPE html>
+<html lang="en">
+  <body><h1>Hello</h1></body>
+</html></parameter><parameter=age>100</parameter>""",
+        True,
+    ),
 )
 
 
@@ -19,9 +23,7 @@ test_string_schema_input_str_accepted = (
 def test_string_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
-xml_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-xml_entity ::=  "&lt;" | "&gt;" | "&amp;" | "&quot;" | "&apos;"
-xml_string ::= ("" | [^<>&\0-\x1f\\\r\n] xml_string | "\\" xml_escape xml_string | xml_entity xml_string) (= [ \n\t]*)
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string_0 ::= xml_string
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
@@ -64,9 +66,7 @@ test_additional_properties_schema_input_str_accepted = (
 def test_additional_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
-xml_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-xml_entity ::=  "&lt;" | "&gt;" | "&amp;" | "&quot;" | "&apos;"
-xml_string ::= ("" | [^<>&\0-\x1f\\\r\n] xml_string | "\\" xml_escape xml_string | xml_entity xml_string) (= [ \n\t]*)
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string_0 ::= xml_string
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
@@ -108,9 +108,7 @@ test_not_required_properties_schema_input_str_accepted = (
 def test_not_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
-xml_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-xml_entity ::=  "&lt;" | "&gt;" | "&amp;" | "&quot;" | "&apos;"
-xml_string ::= ("" | [^<>&\0-\x1f\\\r\n] xml_string | "\\" xml_escape xml_string | xml_entity xml_string) (= [ \n\t]*)
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string_0 ::= xml_string
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
@@ -193,9 +191,7 @@ test_inner_object_schema_input_str_accepted = (
 def test_inner_object_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
-xml_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-xml_entity ::=  "&lt;" | "&gt;" | "&amp;" | "&quot;" | "&apos;"
-xml_string ::= ("" | [^<>&\0-\x1f\\\r\n] xml_string | "\\" xml_escape xml_string | xml_entity xml_string) (= [ \n\t]*)
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string_0 ::= xml_string
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
@@ -245,9 +241,7 @@ test_numbers_schema_input_str_accepted = (
 def test_numbers_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
-xml_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-xml_entity ::=  "&lt;" | "&gt;" | "&amp;" | "&quot;" | "&apos;"
-xml_string ::= ("" | [^<>&\0-\x1f\\\r\n] xml_string | "\\" xml_escape xml_string | xml_entity xml_string) (= [ \n\t]*)
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string_0 ::= xml_string
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
@@ -324,9 +318,7 @@ test_string_format_length_schema_input_str_accepted = {
 def test_string_format_length_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
-xml_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-xml_entity ::=  "&lt;" | "&gt;" | "&amp;" | "&quot;" | "&apos;"
-xml_string ::= ("" | [^<>&\0-\x1f\\\r\n] xml_string | "\\" xml_escape xml_string | xml_entity xml_string) (= [ \n\t]*)
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string_0 ::= xml_string
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
