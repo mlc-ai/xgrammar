@@ -1542,4 +1542,16 @@ FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
 }
 
+size_t CompactFSMWithStartEnd::GetNumEdges() {
+  if (edge_num.has_value()) {
+    return edge_num.value();
+  }
+  size_t num_edges = 0;
+  for (int i = 0; i < fsm_.NumStates(); i++) {
+    num_edges += fsm_.GetEdges(i).size();
+  }
+  edge_num = num_edges;
+  return num_edges;
+}
+
 }  // namespace xgrammar
