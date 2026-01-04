@@ -249,9 +249,6 @@ class Grammar::Impl {
     return GetTagDispatch(GetGrammarExpr(grammar_expr_id));
   }
 
-  /*! \brief Hash a sequence. */
-  std::optional<uint64_t> HashSequence(int32_t sequence_id) const;
-
  private:
   /*! \brief The rules of the grammar. rule_id corresponds the index of this vector. */
   std::vector<Rule> rules_;

@@ -1721,6 +1721,7 @@ class RootRuleRenamerImpl {
 class GrammarFSMHasherImpl {
  public:
   void Apply(Grammar* grammar);
+  static std::optional<uint64_t> HashSequence(const Grammar& grammar, int32_t sequence_id);
 
   static const int16_t kNotEndStateFlag = -0x100;
   static const int16_t kEndStateFlag = -0x200;
@@ -2144,6 +2145,60 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
   return hash_result;
 }
 
+std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
+    const Grammar& grammar, int32_t sequence_id
+) {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  if (sequence_id == -1) {
+    return std::nullopt;
+  }
+  uint64_t hash_result = 0;
+  const auto& sequence_expr = grammar->GetGrammarExpr(sequence_id);
+  XGRAMMAR_DCHECK(sequence_expr.type == GrammarExprType::kSequence)
+      << "GrammarExpr is not a sequence";
+  for (const auto& expr_id : sequence_expr) {
+    const auto& expr = grammar->GetGrammarExpr(expr_id);
+    hash_result = HashCombine(hash_result, static_cast<int32_t>(expr.type));
+    switch (expr.type) {
+      case (GrammarExprType::kByteString):
+      case (GrammarExprType::kCharacterClass):
+      case (GrammarExprType::kCharacterClassStar):
+      case (GrammarExprType::kEmptyStr): {
+        for (const auto& element : expr) {
+          hash_result = HashCombine(hash_result, element);
+        }
+        break;
+      }
+      case (GrammarExprType::kRuleRef): {
+        if (grammar->per_rule_fsm_hashes[expr[0]].has_value()) {
+          hash_result = HashCombine(hash_result, grammar->per_rule_fsm_hashes[expr[0]].value());
+        } else {
+          return std::nullopt;
+        }
+        break;
+      }
+      case (GrammarExprType::kRepeat): {
+        if (grammar->per_rule_fsm_hashes[expr[0]].has_value()) {
+          hash_result = HashCombine(hash_result, grammar->per_rule_fsm_hashes[expr[0]].value());
+        } else {
+          return std::nullopt;
+        }
+        hash_result = HashCombine(hash_result, expr[1]);
+        hash_result = HashCombine(hash_result, expr[2]);
+        break;
+      }
+      case (GrammarExprType::kSequence):
+      case (GrammarExprType::kChoices): {
+        return std::nullopt;
+      }
+      case (GrammarExprType::kTagDispatch): {
+        return std::nullopt;
+      }
+    }
+  }
+  return hash_result;
+}
+
 class RuleLevelCache::Impl {
  public:
   using NodeKey = std::tuple<
@@ -2333,6 +2388,12 @@ void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl().Apply(
 void RepetitionNormalizer::Apply(Grammar* grammar) { RepetitionNormalizerImpl().Apply(grammar); }
 
 void GrammarFSMHasher::Apply(Grammar* grammar) { GrammarFSMHasherImpl().Apply(grammar); }
+
+std::optional<uint64_t> GrammarFSMHasher::HashSequence(
+    const Grammar& grammar, int32_t sequence_id
+) {
+  return GrammarFSMHasherImpl().HashSequence(grammar, sequence_id);
+}
 
 FSMWithStartEnd GrammarFSMBuilder::RuleRef(const GrammarExpr& expr) {
   return GrammarFSMBuilderImpl::RuleRef(expr);
