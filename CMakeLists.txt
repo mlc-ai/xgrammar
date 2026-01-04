@@ -56,9 +56,16 @@ else()
     set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter \
 -Woverloaded-virtual ${CMAKE_CXX_FLAGS}"
     )
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "ppc64le")
+    message(
+      STATUS "PowerPC 64-bit LE target detected, downgrading -Wfree-nonheap-object to warning."
+    )
+    set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter \
+-Woverloaded-virtual -Wno-error=free-nonheap-object -flto=auto ${CMAKE_CXX_FLAGS}"
+    )
   else()
     set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-pedantic -Wno-unused-parameter \
--Woverloaded-virtual -flto=auto ${CMAKE_CXX_FLAGS}"
+-Woverloaded-virtual -Wno-error=free-nonheap-object -flto=auto ${CMAKE_CXX_FLAGS}"
     )
   endif()
 endif()

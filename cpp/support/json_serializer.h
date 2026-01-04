@@ -62,7 +62,7 @@ class SerializeVersion {
    * \brief The current serialization version. When the serialization result of any object in
    * XGrammar is changed, this version should be bumped.
    */
-  static constexpr const char kXGrammarSerializeVersion[] = "v7";
+  static constexpr const char kXGrammarSerializeVersion[] = "v8";
 };
 
 /*!
