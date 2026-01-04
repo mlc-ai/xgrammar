@@ -21,6 +21,7 @@
 #include "fsm.h"
 #include "grammar_functor.h"
 #include "grammar_impl.h"
+#include "grammar_matcher_for_cache.h"
 #include "support/dynamic_bitset.h"
 #include "support/logging.h"
 #include "support/thread_pool.h"
@@ -31,90 +32,6 @@
 namespace xgrammar {
 
 /************** AdaptiveTokenMaskCache Generator **************/
-
-/*! \brief The concrete implementation of GrammarMatcherNode. */
-class GrammarMatcherForTokenMaskCache : public EarleyParser {
- public:
-  GrammarMatcherForTokenMaskCache(
-      const Grammar& grammar,
-      const ParserState& init_state,
-      const std::unordered_map<int32_t, DynamicBitset>&
-          tag_dispatch_rule_id_to_second_slicing_bitset,
-      const bool& need_expand = true
-  )
-      : EarleyParser(grammar, init_state),
-        init_rule_id(init_state.rule_id),
-        initial_state(init_state),
-        tag_dispatch_rule_id_to_second_slicing_bitset(tag_dispatch_rule_id_to_second_slicing_bitset
-        ) {}
-  /*!
-   * \brief Get the adaptive token mask for the given ParserState.
-   * \param is_root_rule Whether to consider the parent rule. If false, there will be
-   * no uncertain tokens. Useful for the root rule.
-   */
-  AdaptiveTokenMask GetAdaptiveTokenMask(
-      size_t vocab_size,
-      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
-      const std::vector<int32_t>& subtree_nodes_range,
-      bool is_root_rule
-  );
-
-  /*!
-   * \brief Get the token mask for the given ParserState.
-   * \param sorted_decoded_vocab The sorted decoded vocabulary.
-   * \param first_char_mask The first character mask.
-   * \param is_root_rule Whether to consider the parent rule. If false, there will be
-   * no uncertain tokens. Useful for the root rule.
-   * \returns True if the rejected indices are filled as usual, False otherwise.
-   * It's used to determine which construction function will be used.
-   */
-  bool GetTokenMaskWithFirstCharacterCheck(
-      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
-      const std::bitset<256>& first_char_mask,
-      const std::vector<int>& subtree_nodes_range,
-      bool is_root_rule
-  );
-
- private:
-  /*! \brief Check if a token can pass the lookahead assertion. */
-  std::pair</*acceptable*/ bool, /*can reach end*/ bool> IsTokenPassLookaheadAssertion(
-      const std::string& token, const std::vector<bool>& can_reach_end_stack
-  );
-
-  /*!
-   * \brief Check if speculative calculation will be applied.
-   * \return first: whether speculative calculation is applicable.
-   * \return second: part of the first character mask,
-   * which can be used in speculative calculation.
-   */
-  std::pair<bool, std::bitset<256>> GetSpeculativeCalculation(
-      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab
-  );
-
-  // The id of the initial rule.
-  int32_t init_rule_id;
-
-  // The initial state of the parser.
-  ParserState initial_state;
-
-  /*!
-   \brief This is a mapping from TagDispatch rule id to the bitset used for second slicing.
-   \note If a rule is a TagDispatch rule, then there will be an AC automaton for its triggers.
-    Which means that it can accept a lot of tokens. However, it will be slow to check a lot of
-    tokens. The DynamicBitset here is used to do a second slicing: if a token's substr(1, n - 1)
-    can be accepted by the start state of the AC automaton, then it will be True in the bitset.
-    When we check a token, we first check if its first character can transit to the start state.
-    If yes, then we check if it is in the bitset. If yes, then we accept it directly.
-  */
-  const std::unordered_map<int32_t, DynamicBitset>& tag_dispatch_rule_id_to_second_slicing_bitset;
-
-  // Temporary data for GetAdaptiveTokenMask.
-  std::vector<int32_t> tmp_accepted_indices_;
-  std::vector<int32_t> tmp_rejected_indices_;
-  std::vector<int32_t> tmp_uncertain_indices_;
-  std::vector<bool> tmp_can_reach_end_stack_;
-  std::vector<bool> tmp_can_reach_end_prefix_or_stack_;
-};
 
 std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAssertion(
     const std::string& token, const std::vector<bool>& can_reach_end_stack
@@ -611,8 +528,8 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(
  */
 class GrammarCompilerNoCache {
  public:
-  GrammarCompilerNoCache(const TokenizerInfo& tokenizer_info, int max_threads)
-      : tokenizer_info_(tokenizer_info), max_threads_(max_threads) {}
+  GrammarCompilerNoCache(const TokenizerInfo& tokenizer_info, int max_threads, bool is_jit)
+      : tokenizer_info_(tokenizer_info), max_threads_(max_threads), is_jit_(is_jit) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -650,6 +567,8 @@ class GrammarCompilerNoCache {
   const TokenizerInfo tokenizer_info_;
   /*! \brief The maximum number of threads to use. */
   const int max_threads_;
+  /*! \brief Whether the jit mode is enabled.*/
+  const bool is_jit_;
 };
 
 CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
@@ -664,6 +583,9 @@ CompiledGrammar GrammarCompilerNoCache::MultiThreadCompileGrammar(Grammar gramma
   }
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
   TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_rule_id_to_second_slicing_bitset);
+  if (is_jit_) {
+    return CompiledGrammar(compiled_grammar_impl);
+  }
   // Step 3. Compute the adaptive token mask cache
   // The token mask cache is computed for these positions in the grammar:
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)
@@ -962,9 +884,10 @@ class GrammarCompiler::Impl {
       const TokenizerInfo& tokenizer_info,
       int max_threads,
       bool cache_enabled,
-      int64_t max_memory_bytes
+      int64_t max_memory_bytes,
+      bool is_jit
   )
-      : no_cache_compiler_(tokenizer_info, max_threads),
+      : no_cache_compiler_(tokenizer_info, max_threads, is_jit),
         cache_enabled_(cache_enabled),
         compile_cache_(static_cast<std::size_t>(max_memory_bytes), Computer(*this)) {
     if (max_memory_bytes < -1) {
@@ -1132,9 +1055,16 @@ GrammarCompiler::GrammarCompiler(
     const TokenizerInfo& tokenizer_info,
     int max_threads,
     bool cache_enabled,
-    int64_t max_memory_bytes
+    int64_t max_memory_bytes,
+    bool is_jit
 )
-    : pimpl_(std::make_shared<Impl>(tokenizer_info, max_threads, cache_enabled, max_memory_bytes)) {
+    : pimpl_(std::make_shared<Impl>(
+          tokenizer_info, max_threads, cache_enabled, max_memory_bytes, is_jit
+      )) {
+  if (max_memory_bytes < -1) {
+    XGRAMMAR_LOG(FATAL) << "Invalid max_memory_bytes: " << max_memory_bytes << ". "
+                        << "It should be -1 (unlimited) or a non-negative integer.";
+  }
 }
 
 CompiledGrammar GrammarCompiler::CompileJSONSchema(
