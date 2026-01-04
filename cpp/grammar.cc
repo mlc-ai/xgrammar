@@ -32,57 +32,6 @@ std::size_t MemorySize(const Grammar::Impl& impl) {
 
 /******************* Grammar *******************/
 
-std::optional<uint64_t> Grammar::Impl::HashSequence(int32_t sequence_id) const {
-  if (sequence_id == -1) {
-    return std::nullopt;
-  }
-  uint64_t hash_result = 0;
-  const auto& sequence_expr = GetGrammarExpr(sequence_id);
-  XGRAMMAR_DCHECK(sequence_expr.type == GrammarExprType::kSequence)
-      << "GrammarExpr is not a sequence";
-  for (const auto& expr_id : sequence_expr) {
-    const auto& expr = GetGrammarExpr(expr_id);
-    hash_result = HashCombine(hash_result, static_cast<int32_t>(expr.type));
-    switch (expr.type) {
-      case (GrammarExprType::kByteString):
-      case (GrammarExprType::kCharacterClass):
-      case (GrammarExprType::kCharacterClassStar):
-      case (GrammarExprType::kEmptyStr): {
-        for (const auto& element : expr) {
-          hash_result = HashCombine(hash_result, element);
-        }
-        break;
-      }
-      case (GrammarExprType::kRuleRef): {
-        if (per_rule_fsm_hashes[expr[0]].has_value()) {
-          hash_result = HashCombine(hash_result, per_rule_fsm_hashes[expr[0]].value());
-        } else {
-          return std::nullopt;
-        }
-        break;
-      }
-      case (GrammarExprType::kRepeat): {
-        if (per_rule_fsm_hashes[expr[0]].has_value()) {
-          hash_result = HashCombine(hash_result, per_rule_fsm_hashes[expr[0]].value());
-        } else {
-          return std::nullopt;
-        }
-        hash_result = HashCombine(hash_result, expr[1]);
-        hash_result = HashCombine(hash_result, expr[2]);
-        break;
-      }
-      case (GrammarExprType::kSequence):
-      case (GrammarExprType::kChoices): {
-        return std::nullopt;
-      }
-      case (GrammarExprType::kTagDispatch): {
-        return std::nullopt;
-      }
-    }
-  }
-  return hash_result;
-}
-
 std::string Grammar::ToString() const { return GrammarPrinter(*this).ToString(); }
 
 Grammar Grammar::FromEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {

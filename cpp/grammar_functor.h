@@ -10,6 +10,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 #include "compiled_grammar_impl.h"
@@ -395,6 +396,7 @@ class RootRuleRenamer {
 class GrammarFSMHasher {
  public:
   static void Apply(Grammar* grammar);
+  static std::optional<uint64_t> HashSequence(const Grammar& grammar, int32_t sequence_id);
 };
 
 /*!
