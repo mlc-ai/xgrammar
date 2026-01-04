@@ -262,10 +262,7 @@ class JSONSchemaConverter {
   // The name of the helper rules to construct basic rules
   inline static const std::string kBasicEscape = "basic_escape";
   inline static const std::string kBasicStringSub = "basic_string_sub";
-  inline static const std::string kXMLEntity = "xml_entity";
-  inline static const std::string kXMLEscape = "xml_escape";
   inline static const std::string kXMLString = "xml_string";
-  inline static const std::string kXMLAnyText = "xml_any_text";
   inline static const std::string kXMLVariableName = "xml_variable_name";
 
   /*! \brief Add the basic rules to the rules list and the basic_rules_cache. */
@@ -728,20 +725,8 @@ void JSONSchemaConverter::AddXMLHelperRules() {
     }
   }
   ebnf_script_creator_.AddRule(
-      kXMLEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
-  );
-  ebnf_script_creator_.AddRule(
-      kXMLEntity, " \"&lt;\" | \"&gt;\" | \"&amp;\" | \"&quot;\" | \"&apos;\""
-  );
-  ebnf_script_creator_.AddRule(
       kXMLString,
-      "(\"\" | [^<>&\\0-\\x1f\\\\\\r\\n] " + kXMLString + " | \"\\\\\" " + kXMLEscape + " " +
-          kXMLString + " | " + kXMLEntity + " " + kXMLString + ") (= " + whitespace_part + ")"
-  );
-  ebnf_script_creator_.AddRule(
-      kXMLAnyText,
       "TagDispatch("
-      "(),"
       "stop_eos=true,"
       "stop_str=(),"
       "loop_after_dispatch=false,"
@@ -2003,11 +1988,11 @@ std::string JSONSchemaConverter::VisitString(
     return string_spec.pattern;
   }
 
-  if (string_spec.pattern == kXMLAnyText && string_spec.min_length == 0 &&
+  if (string_spec.pattern == kXMLString && string_spec.min_length == 0 &&
       string_spec.max_length == -1 && string_spec.wrapper.first.empty() &&
       string_spec.wrapper.second.empty()) {
-    string_spec_to_rule_name_and_context_[string_spec] = kXMLAnyText;
-    return kXMLAnyText;
+    string_spec_to_rule_name_and_context_[string_spec] = kXMLString;
+    return kXMLString;
   }
 
   // Generate a new rule name for this string spec.
@@ -3227,7 +3212,7 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
       return ResultOk(string_spec);
     }
     case JSONFormat::kXML: {
-      string_spec.pattern = kXMLAnyText;
+      string_spec.pattern = kXMLString;
       return ResultOk(string_spec);
     }
     default: {
