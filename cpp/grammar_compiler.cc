@@ -65,7 +65,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    * \param first_char_mask The first character mask.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
    * no uncertain tokens. Useful for the root rule.
-   * \param rule_level_cache_is_available Whether the corssing-grammar caching is available.
+   * \param rule_level_cache_is_available Whether the crossing-grammar caching is available.
    * \returns True if the rejected indices are filled as usual, False otherwise.
    * It's used to determine which construction function will be used.
    */
@@ -75,7 +75,6 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
 
   /*!
    * \brief Adapt the cache with lookahead assertion.
-   * \param
    * \param cache The adaptive token mask to be adapted.
    * \param is_root_rule Whether to consider the parent rule.
    */
@@ -207,11 +206,8 @@ void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
 
       bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
 
-      // All the tokens are at least uncertain!
-      XGRAMMAR_CHECK(!accepted);
-      if (accepted) {
-        tmp_accepted_indices_.push_back(uncertain_index);
-      } else if (can_reach_end && prev_matched_size > 0) {
+      XGRAMMAR_DCHECK(!accepted) << "All the tokens are at least uncertain!";
+      if (can_reach_end && prev_matched_size > 0) {
         auto [lookahead_accepted, lookahead_completed] =
             IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_);
         if ((!is_root_rule) && lookahead_accepted) {
@@ -241,7 +237,7 @@ void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
   // 2. The original cache is rejected_indices, and accepted_indices is also small.
   // After adapting with lookahead, |accepted_indices| + |accepted_by_lookahead_indices| <
   // |rejected_indices| + |rejected_by_lookahead_indices|, and |accepted_indices| +
-  // |accepted_by_lookahead_indices| < AdaptiveiveTokenMask::USE_BITSET_THRESHOLD. In this case, it
+  // |accepted_by_lookahead_indices| < AdaptiveTokenMask::USE_BITSET_THRESHOLD. In this case, it
   // should be kAccepted, but ignored. These two cases are very rare in practice, and the impact is
   // very limited, so we ignore them for simplicity.
   cache.uncertain_indices = tmp_uncertain_indices_;
@@ -557,6 +553,12 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       if (i < last_rejected_range) {
         if (fill_reject_indices) {
           tmp_rejected_indices_.push_back(i);
+          fill_reject_indices =
+              tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                  ? false
+                  : fill_reject_indices;
+        } else {
+          i = last_rejected_range - 1;
         }
         continue;
       }
@@ -663,6 +665,10 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       } else {
         tmp_rejected_indices_.push_back(i);
         last_rejected_range = subtree_nodes_range[i];
+        fill_reject_indices =
+            tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                ? false
+                : fill_reject_indices;
       }
     }
     if (interval_idx != possible_intervals.size() - 1 && fill_reject_indices) {
@@ -670,6 +676,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       for (int i = interval.second; i < next_interval.first; ++i) {
         tmp_rejected_indices_.push_back(i);
       }
+      fill_reject_indices = tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                                ? false
+                                : fill_reject_indices;
     }
   }
 
@@ -1311,14 +1320,14 @@ class GrammarCompiler::Impl {
                 ? std::optional<RuleLevelCache>(
                       max_memory_bytes == -1
                           ? static_cast<std::size_t>(-1)
-                          : static_cast<std::size_t>(max_memory_bytes - max_memory_bytes / 3 * 2)
+                          : static_cast<std::size_t>(max_memory_bytes - max_memory_bytes * 2 / 3)
                   )
                 : std::nullopt
         ),
         no_cache_compiler_(tokenizer_info, max_threads, rule_level_cache_),
         grammar_level_cache_(
             max_memory_bytes == -1 ? static_cast<std::size_t>(-1)
-                                   : static_cast<std::size_t>(max_memory_bytes / 3 * 2),
+                                   : static_cast<std::size_t>(max_memory_bytes * 2 / 3),
             Computer(*this)
         ) {
     if (max_memory_bytes < -1) {
