@@ -7,6 +7,13 @@ from typing import Callable, List, Optional, Tuple
 import pytest
 import torch
 
+try:
+    import mlx_lm  # noqa: F401
+
+    MLX_AVAILABLE = True
+except ModuleNotFoundError:
+    MLX_AVAILABLE = False
+
 import xgrammar as xgr
 from xgrammar.testing import (
     _get_masked_tokens_from_bitmask,
@@ -16,7 +23,7 @@ from xgrammar.testing import (
 )
 
 _is_cuda_available = torch.cuda.is_available()
-_is_mps_available = torch.backends.mps.is_available()
+_is_mps_available = torch.backends.mps.is_available() and MLX_AVAILABLE
 
 
 def test_allocate_reset_token_bitmask():
