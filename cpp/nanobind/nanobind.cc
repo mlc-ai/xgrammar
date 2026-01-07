@@ -25,6 +25,7 @@
 #include "../testing.h"
 #include "python_methods.h"
 #include "xgrammar/exception.h"
+#include "xgrammar/grammar.h"
 #include "xgrammar/matcher.h"
 
 namespace nb = nanobind;
@@ -201,6 +202,11 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_static(
           "from_structural_tag",
           &Grammar_FromStructuralTag,
+          nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "from_structural_tag_template",
+          &Grammar_FromStructuralTagTemplate,
           nb::call_guard<nb::gil_scoped_release>()
       )
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)
@@ -441,6 +447,8 @@ NB_MODULE(xgrammar_bindings, m) {
           &GetSerializationVersion,
           nb::call_guard<nb::gil_scoped_release>()
       );
+
+  m.def("from_template", &StructuralTag_FromTemplate, nb::call_guard<nb::gil_scoped_release>());
 
   auto pyExceptionModule = m.def_submodule("exception");
   nb::exception<DeserializeFormatError>{

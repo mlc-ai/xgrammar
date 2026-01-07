@@ -337,7 +337,9 @@ class JSONSchemaConverter {
   std::string VisitConst(const picojson::object& schema, const std::string& rule_name);
 
   /*! \brief Visit an enum schema. */
-  std::string VisitEnum(const picojson::object& schema, const std::string& rule_name);
+  std::string VisitEnum(
+      const picojson::object& schema, const std::string& rule_name, const JSONFormat json_format
+  );
 
   /*! \brief Convert the JSON string to a printable string that can be shown in BNF. */
   std::string JSONStrToPrintableStr(const std::string& json_str);
@@ -869,7 +871,7 @@ std::string JSONSchemaConverter::VisitSchema(
   } else if (schema_obj.count("const")) {
     return VisitConst(schema_obj, rule_name);
   } else if (schema_obj.count("enum")) {
-    return VisitEnum(schema_obj, rule_name);
+    return VisitEnum(schema_obj, rule_name, json_format);
   } else if (schema_obj.count("anyOf") || schema_obj.count("oneOf")) {
     return VisitAnyOf(schema_obj, rule_name);
   } else if (schema_obj.count("allOf")) {
@@ -975,7 +977,7 @@ std::string JSONSchemaConverter::VisitConst(
 }
 
 std::string JSONSchemaConverter::VisitEnum(
-    const picojson::object& schema, const std::string& rule_name
+    const picojson::object& schema, const std::string& rule_name, const JSONFormat json_format
 ) {
   XGRAMMAR_CHECK(schema.count("enum"));
   std::string result = "";
@@ -985,7 +987,17 @@ std::string JSONSchemaConverter::VisitEnum(
       result += " | ";
     }
     ++idx;
-    result += "(\"" + JSONStrToPrintableStr(value.serialize()) + "\")";
+    if (json_format == JSONFormat::kJSON) {
+      result += "(\"" + JSONStrToPrintableStr(value.serialize()) + "\")";
+    } else if (json_format == JSONFormat::kXML) {
+      auto inner = JSONStrToPrintableStr(value.serialize());
+      // If the inner is a json style string, remove the quotation marks.
+      if (inner.size() >= 4 && inner.substr(0, 2) == "\\\"" &&
+          inner.substr(inner.size() - 2, 2) == "\\\"") {
+        inner = inner.substr(2, inner.size() - 4);
+      }
+      result += "(\"" + inner + "\")";
+    }
   }
   return result;
 }
