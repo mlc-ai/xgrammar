@@ -3898,7 +3898,7 @@ basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any bas
 root_prop_0 ::= (("\"add\"") | ("\"subtract\"") | ("\"multiply\"") | ("\"divide\""))
 root_part_1 ::= (([ \n\t]* "," [ \n\t]* "\"b\"" [ \n\t]* ":" [ \n\t]* basic_number))
 root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"a\"" [ \n\t]* ":" [ \n\t]* basic_number root_part_1))
-root ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -3951,7 +3951,7 @@ basic_number_6_2 ::= ("" | ([eE] basic_number_4_2 basic_number_5_2))
 basic_array_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_2 basic_array_1_2))
 basic_object_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 [ \n\t]* ":" [ \n\t]* basic_any_2 basic_object_1_2))
 basic_number_7_2 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text "") | ("assistant<|channel|>final<|message|>" any_text_1 "") | ("assistant<|channel|>final<|message|>" any_text_2 "") | ("assistant<|channel|>commentary to=Calculator<|constrain|>json<|message|>" root "<|end|>") | ("assistant<|channel|>commentary to=Weather<|constrain|>json<|message|>" root_1 "<|end|>") | ("assistant<|channel|>analysis to=Python<|message|>" root_2 "<|end|>"))
+triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text) | ("assistant<|channel|>final<|message|>" any_text_1) | ("assistant<|channel|>final<|message|>" any_text_2) | ("assistant<|channel|>commentary to=Calculator<|constrain|>json<|message|>" root_0 "<|end|>") | ("assistant<|channel|>commentary to=Weather<|constrain|>json<|message|>" root_1 "<|end|>") | ("assistant<|channel|>analysis to=Python<|message|>" root_2 "<|end|>"))
 triggered_tags ::= TagDispatch(
   ("<|start|>", triggered_tags_group),
   stop_eos=true,
@@ -3959,7 +3959,7 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=()
 )
-root_3 ::= ((triggered_tags))
+root ::= ((triggered_tags))
 """,
         [
             (

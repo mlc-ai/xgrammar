@@ -235,7 +235,7 @@ class JSONSchemaConverter {
   );
 
   /*! \brief The root method. Convert the JSON schema to EBNF grammar string. */
-  std::string Convert(const JSONFormat json_format = JSONFormat::kJSON);
+  std::string Convert(JSONFormat json_format = JSONFormat::kJSON);
 
   /*! \brief Generate the regex for integer range. Public for testing. */
   static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
@@ -278,7 +278,7 @@ class JSONSchemaConverter {
   void CreateBasicRule(
       const picojson::value& schema,
       const std::string& name,
-      const JSONFormat json_format = JSONFormat::kJSON
+      JSONFormat json_format = JSONFormat::kJSON
   );
 
   /*! \brief Get the index for the schema in the cache. Keys that do not effect the validation
@@ -302,7 +302,7 @@ class JSONSchemaConverter {
   std::string CreateRuleFromSchema(
       const picojson::value& schema,
       const std::string& rule_name_hint,
-      const JSONFormat json_format = JSONFormat::kJSON
+      JSONFormat json_format = JSONFormat::kJSON
   );
 
   /*! \brief Get the next separator in the current level from the indent manager. */
@@ -324,7 +324,7 @@ class JSONSchemaConverter {
   std::string VisitSchema(
       const picojson::value& schema,
       const std::string& rule_name,
-      const JSONFormat json_format = JSONFormat::kJSON
+      JSONFormat json_format = JSONFormat::kJSON
   );
 
   /*! \brief Visit a reference schema. */
@@ -338,7 +338,7 @@ class JSONSchemaConverter {
 
   /*! \brief Visit an enum schema. */
   std::string VisitEnum(
-      const picojson::object& schema, const std::string& rule_name, const JSONFormat json_format
+      const picojson::object& schema, const std::string& rule_name, JSONFormat json_format
   );
 
   /*! \brief Convert the JSON string to a printable string that can be shown in BNF. */
@@ -354,7 +354,7 @@ class JSONSchemaConverter {
 
   /*! \brief Visit a true schema that can match anything. */
   std::string VisitAny(
-      const picojson::value& schema, const std::string& rule_name, const JSONFormat json_format
+      const picojson::value& schema, const std::string& rule_name, JSONFormat json_format
   );
 
   /*! \brief Visit an integer schema. */
@@ -365,7 +365,7 @@ class JSONSchemaConverter {
 
   /*! \brief Visit a string schema. */
   std::string VisitString(
-      const picojson::object& schema, const std::string& rule_name, const JSONFormat json_format
+      const picojson::object& schema, const std::string& rule_name, JSONFormat json_format
   );
 
   /*! \brief Visit a boolean schema. */
@@ -499,7 +499,7 @@ class JSONSchemaConverter {
   std::string VisitObject(
       const picojson::object& schema,
       const std::string& rule_name,
-      const JSONFormat json_format = JSONFormat::kJSON
+      JSONFormat json_format = JSONFormat::kJSON
   );
 
   /*!
@@ -524,7 +524,7 @@ class JSONSchemaConverter {
       const picojson::value& prop_schema,
       const std::string& rule_name,
       int64_t idx,
-      const JSONFormat json_format = JSONFormat::kJSON
+      JSONFormat json_format = JSONFormat::kJSON
   );
 
   /*! \brief Get the pattern for the additional/unevaluated properties in the object schema. */
@@ -533,7 +533,7 @@ class JSONSchemaConverter {
       const picojson::value& prop_schema,
       const std::string& rule_name,
       const std::string& rule_name_suffix,
-      const JSONFormat json_format = JSONFormat::kJSON
+      JSONFormat json_format = JSONFormat::kJSON
   );
 
   /*! \brief Get the pattern for the properties with repetition number limit. */
@@ -554,7 +554,7 @@ class JSONSchemaConverter {
       const std::string& additional_suffix,
       const int min_properties,
       const int max_properties,
-      const JSONFormat json_format = JSONFormat::kJSON
+      JSONFormat json_format = JSONFormat::kJSON
   );
 
   // The EBNF script creator
@@ -624,7 +624,7 @@ JSONSchemaConverter::JSONSchemaConverter(
   AddBasicRules(json_format);
 }
 
-std::string JSONSchemaConverter::Convert(const JSONFormat json_format) {
+std::string JSONSchemaConverter::Convert(JSONFormat json_format) {
   switch (json_format) {
     // If the type is JSON, we handle it trivially.
     case (JSONFormat::kJSON): {
@@ -739,7 +739,7 @@ void JSONSchemaConverter::AddXMLHelperRules() {
 }
 
 void JSONSchemaConverter::CreateBasicRule(
-    const picojson::value& schema, const std::string& name, const JSONFormat json_format
+    const picojson::value& schema, const std::string& name, JSONFormat json_format
 ) {
   std::string rule_name = CreateRuleFromSchema(schema, name, json_format);
   basic_rules_cache_[{GetSchemaCacheIndex(schema), json_format}] = rule_name;
@@ -774,7 +774,7 @@ void JSONSchemaConverter::WarnUnsupportedKeywords(
 }
 
 std::string JSONSchemaConverter::CreateRuleFromSchema(
-    const picojson::value& schema, const std::string& rule_name_hint, const JSONFormat json_format
+    const picojson::value& schema, const std::string& rule_name_hint, JSONFormat json_format
 ) {
   std::string idx = GetSchemaCacheIndex(schema);
   if (basic_rules_cache_.count({idx, json_format})) {
@@ -843,7 +843,7 @@ std::string JSONSchemaConverter::GetSchemaCacheIndex(const picojson::value& sche
 }
 
 std::string JSONSchemaConverter::VisitSchema(
-    const picojson::value& schema, const std::string& rule_name, const JSONFormat json_format
+    const picojson::value& schema, const std::string& rule_name, JSONFormat json_format
 ) {
   if (schema.is<bool>()) {
     XGRAMMAR_CHECK(schema.get<bool>()) << "Schema should not be false: it cannot accept any value";
@@ -977,7 +977,7 @@ std::string JSONSchemaConverter::VisitConst(
 }
 
 std::string JSONSchemaConverter::VisitEnum(
-    const picojson::object& schema, const std::string& rule_name, const JSONFormat json_format
+    const picojson::object& schema, const std::string& rule_name, JSONFormat json_format
 ) {
   XGRAMMAR_CHECK(schema.count("enum"));
   std::string result = "";
@@ -2320,7 +2320,7 @@ std::string JSONSchemaConverter::GetPropertyPattern(
     const picojson::value& prop_schema,
     const std::string& rule_name,
     int64_t idx,  // Changed to int64_t
-    const JSONFormat json_format
+    JSONFormat json_format
 ) {
   // the outer quote is for the string in EBNF grammar, and the inner quote is for
   // the string in JSON
@@ -2357,7 +2357,7 @@ std::string JSONSchemaConverter::GetOtherPropertyPattern(
     const picojson::value& prop_schema,
     const std::string& rule_name,
     const std::string& rule_name_suffix,
-    const JSONFormat json_format
+    JSONFormat json_format
 ) {
   std::string value =
       CreateRuleFromSchema(prop_schema, rule_name + "_" + rule_name_suffix, json_format);
@@ -2405,7 +2405,7 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     const std::string& additional_suffix,
     const int min_properties,
     const int max_properties,
-    const JSONFormat json_format
+    JSONFormat json_format
 ) {
   // return empty when maxProperties=0
   if (max_properties == 0) {
@@ -3235,7 +3235,7 @@ Result<JSONSchemaConverter::StringSpec, SchemaError> JSONSchemaConverter::ParseS
 }
 
 std::string JSONSchemaConverter::VisitObject(
-    const picojson::object& schema, const std::string& rule_name, const JSONFormat json_format
+    const picojson::object& schema, const std::string& rule_name, JSONFormat json_format
 ) {
   // Parse the object schema
   auto object_spec_result = ParseObjectSchema(schema);

@@ -1,6 +1,9 @@
 # Structural Tag Templates
 
-Based on the [structural tags](./structural_tag.md), structural tag templates provides a more convineient method for users to generate grammars to describe the grammar to constrain the LLMs' output.
+Structural Tags provide a way to describe complex output formats for LLMs. However, for agent applications, LLM's output format depends on dynamic runtime values, such as tool calling specifications, that can be diverse for every request.
+
+The Structural Tag Template provides an **unified and static** way to represent such dynamic formats: Users only need to provide one structural tag template, and simply use runtime arguments to specialize it to get dynamic formats.
+
 In general, structural tag templates support placeholders in the structural tags, which are in the form of `\{\{(var_name([])?)(\.var_name([])?)\}\}`, such as `{{A.name}}`, `{{A[].name}}`, `{{A.name[].other}}`. `var_name[]` means that the value is an array, and it will be automatically expanded with the users' input. `var_name` means that the values is a terminal value, and it will be automatically replaced with the input. Users can use `xgrammar.Grammar.from_structural_tag_template()` to generate a `xgrammar.Grammar`. Here, `template_json_str` is the structural tag templates, and kwargs are a series of values. For example, the structural tag template `stag` contains `{{A[].name}}` and `{{A[].age}}`, then the users can use `xgrammar.Grammar.from_structural_tag_template(stag, A=A)` to generate the grammar, where `A=[{"name":..., "age":...},.{"name":...,"age":...}, ...]`. This function will replace the placeholders automatically.
 
 ## Template Placeholders in Formats

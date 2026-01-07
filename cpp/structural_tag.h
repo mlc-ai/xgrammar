@@ -72,7 +72,12 @@ struct JSONSchemaFormat {
     obj["type"] = picojson::value(type);
     picojson::value schema;
     auto err = picojson::parse(schema, json_schema);
-    obj["json_schema"] = picojson::value(schema);
+    if (err.empty()) {
+      obj["json_schema"] = picojson::value(schema);
+    } else {
+      // unfilled templates.
+      obj["json_schema"] = picojson::value(json_schema);
+    }
     return picojson::value(obj);
   }
 };
@@ -86,7 +91,12 @@ struct QwenXmlParameterFormat {
     obj["type"] = picojson::value(type);
     picojson::value schema;
     auto err = picojson::parse(schema, json_schema);
-    obj["json_schema"] = picojson::value(schema);
+    if (err.empty()) {
+      obj["json_schema"] = picojson::value(schema);
+    } else {
+      // unfilled templates.
+      obj["json_schema"] = picojson::value(json_schema);
+    }
     return picojson::value(obj);
   }
 };
