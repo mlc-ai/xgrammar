@@ -70,19 +70,23 @@ struct JSONSchemaFormat {
   picojson::value ToJSON() const {
     picojson::object obj;
     obj["type"] = picojson::value(type);
-    obj["json_schema"] = picojson::value(json_schema);
+    picojson::value schema;
+    auto err = picojson::parse(schema, json_schema);
+    obj["json_schema"] = picojson::value(schema);
     return picojson::value(obj);
   }
 };
 
 struct QwenXmlParameterFormat {
   static constexpr const char* type = "qwen_xml_parameter";
-  std::string xml_schema;
-  QwenXmlParameterFormat(std::string xml_schema) : xml_schema(std::move(xml_schema)) {}
+  std::string json_schema;
+  QwenXmlParameterFormat(std::string json_schema) : json_schema(std::move(json_schema)) {}
   picojson::value ToJSON() const {
     picojson::object obj;
     obj["type"] = picojson::value(type);
-    obj["xml_schema"] = picojson::value(xml_schema);
+    picojson::value schema;
+    auto err = picojson::parse(schema, json_schema);
+    obj["json_schema"] = picojson::value(schema);
     return picojson::value(obj);
   }
 };

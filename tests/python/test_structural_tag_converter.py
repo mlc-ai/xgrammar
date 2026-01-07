@@ -2565,7 +2565,7 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root ::= (("{" [ \n\t]* "\"arg\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"arg\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -2597,8 +2597,8 @@ basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-or ::= ((root) | (root_1))
-root_2 ::= ((or))
+or ::= ((root_0) | (root_1))
+root ::= ((or))
 """,
         [
             ('{"arg": "value"}', True),
@@ -2659,9 +2659,12 @@ qwen_template_values_stag_grammar_instance_accepted = [
         ],
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-xml_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-xml_entity ::= (("&lt;") | ("&gt;") | ("&amp;") | ("&quot;") | ("&apos;"))
-xml_string ::= ("" | ([^<>&\0-\x1f\\\r\n] xml_string) | ("\\" xml_escape xml_string) | (xml_entity xml_string)) (=([ \n\t]*))
+xml_string ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 xml_string_0 ::= ((xml_string))
 xml_any ::= ((basic_number) | (xml_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -2673,7 +2676,7 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root ::= (([ \n\t]* "<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>"))
+root_0 ::= (([ \n\t]* "<parameter=name>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -2686,9 +2689,12 @@ basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
-xml_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-xml_entity_1 ::= (("&lt;") | ("&gt;") | ("&amp;") | ("&quot;") | ("&apos;"))
-xml_string_1 ::= ("" | ([^<>&\0-\x1f\\\r\n] xml_string_1) | ("\\" xml_escape_1 xml_string_1) | (xml_entity_1 xml_string_1)) (=([ \n\t]*))
+xml_string_1 ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
 xml_variable_name_1 ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 xml_string_0_1 ::= ((xml_string_1))
 xml_any_1 ::= ((basic_number_8) | (xml_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
@@ -2713,8 +2719,8 @@ basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 root_prop_0_1 ::= ("" | ("-"))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-or ::= ((root) | (root_1))
-root_2 ::= ((or))
+or ::= ((root_0) | (root_1))
+root ::= ((or))
 """,
         [
             ("<parameter=name>value</parameter>", True),
@@ -2772,11 +2778,11 @@ regex_template_values_stag_grammar_instance_accepted = [
     (
         {"type": "regex", "pattern": r"{{patterns[].value}}"},
         [{"value": r"123"}, {"value": r"[a-zA-Z]+"}],
-        r"""root ::= (("1" "2" "3"))
+        r"""root_0 ::= (("1" "2" "3"))
 root_1 ::= ((root_1_1))
 root_1_1 ::= (([a-zA-Z] root_1_1) | ([a-zA-Z]))
-or ::= ((root) | (root_1))
-root_2 ::= ((or))
+or ::= ((root_0) | (root_1))
+root ::= ((or))
 """,
         [("123", True), ("abc", True), ("123abc", False), ("123abc456", False), ("", False)],
     )
@@ -2817,12 +2823,12 @@ grammar_template_values_stag_grammar_instance_accepted = [
     (
         {"type": "grammar", "grammar": "{{grammars[].value}}"},
         [{"value": 'root::= "a" | "b"'}, {"value": 'root ::= a+\na::= "c" | "d"'}],
-        r"""root ::= (("a") | ("b"))
+        r"""root_0 ::= (("a") | ("b"))
 root_1 ::= ((root_1_1))
 a ::= (("c") | ("d"))
 root_1_1 ::= ((a root_1_1) | (a))
-or ::= ((root) | (root_1))
-root_2 ::= ((or))
+or ::= ((root_0) | (root_1))
+root ::= ((or))
 """,
         [
             ("a", True),
@@ -3276,7 +3282,7 @@ basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any bas
 root_prop_0 ::= (("\"add\"") | ("\"subtract\"") | ("\"multiply\"") | ("\"divide\""))
 root_part_1 ::= (([ \n\t]* "," [ \n\t]* "\"b\"" [ \n\t]* ":" [ \n\t]* basic_number))
 root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"a\"" [ \n\t]* ":" [ \n\t]* basic_number root_part_1))
-root ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -3308,7 +3314,7 @@ basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("\"Calculator\", \"parameters\": " root "}") | ("\"Weather\", \"parameters\": " root_1 "}"))
+triggered_tags_group ::= (("\"Calculator\", \"parameters\": " root_0 "}") | ("\"Weather\", \"parameters\": " root_1 "}"))
 triggered_tags ::= TagDispatch(
   ("{\"name\": ", triggered_tags_group),
   stop_eos=true,
@@ -3316,7 +3322,7 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=()
 )
-root_2 ::= ((triggered_tags))
+root ::= ((triggered_tags))
 """,
         [
             (
@@ -3387,7 +3393,7 @@ basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any bas
 root_prop_0 ::= (("\"add\"") | ("\"subtract\"") | ("\"multiply\"") | ("\"divide\""))
 root_part_1 ::= (([ \n\t]* "," [ \n\t]* "\"b\"" [ \n\t]* ":" [ \n\t]* basic_number))
 root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"a\"" [ \n\t]* ":" [ \n\t]* basic_number root_part_1))
-root ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -3419,7 +3425,7 @@ basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("Calculator<|tool_call_argument_begin|>" root "<|tool_call_end|>") | ("Weather<|tool_call_argument_begin|>" root_1 "<|tool_call_end|>"))
+triggered_tags_group ::= (("Calculator<|tool_call_argument_begin|>" root_0 "<|tool_call_end|>") | ("Weather<|tool_call_argument_begin|>" root_1 "<|tool_call_end|>"))
 triggered_tags ::= TagDispatch(
   ("<|tool_call_begin|>", triggered_tags_group),
   stop_eos=true,
@@ -3427,7 +3433,7 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=()
 )
-root_2 ::= ((triggered_tags))
+root ::= ((triggered_tags))
 """,
         [
             (
@@ -3498,7 +3504,7 @@ basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any bas
 root_prop_0 ::= (("\"add\"") | ("\"subtract\"") | ("\"multiply\"") | ("\"divide\""))
 root_part_1 ::= (([ \n\t]* "," [ \n\t]* "\"b\"" [ \n\t]* ":" [ \n\t]* basic_number))
 root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"a\"" [ \n\t]* ":" [ \n\t]* basic_number root_part_1))
-root ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -3530,7 +3536,7 @@ basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("Calculator<\uff5ctool\u2581sep\uff5c>" root "<\uff5ctool\u2581call\u2581end\uff5c>") | ("Weather<\uff5ctool\u2581sep\uff5c>" root_1 "<\uff5ctool\u2581call\u2581end\uff5c>"))
+triggered_tags_group ::= (("Calculator<\uff5ctool\u2581sep\uff5c>" root_0 "<\uff5ctool\u2581call\u2581end\uff5c>") | ("Weather<\uff5ctool\u2581sep\uff5c>" root_1 "<\uff5ctool\u2581call\u2581end\uff5c>"))
 triggered_tags ::= TagDispatch(
   ("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>", triggered_tags_group),
   stop_eos=true,
@@ -3538,7 +3544,7 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=()
 )
-root_2 ::= ((triggered_tags))
+root ::= ((triggered_tags))
 """,
         [
             (
@@ -3598,9 +3604,12 @@ root_2 ::= ((triggered_tags))
         },
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-xml_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-xml_entity ::= (("&lt;") | ("&gt;") | ("&amp;") | ("&quot;") | ("&apos;"))
-xml_string ::= ("" | ([^<>&\0-\x1f\\\r\n] xml_string) | ("\\" xml_escape xml_string) | (xml_entity xml_string)) (=([ \n\t]*))
+xml_string ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 xml_string_0 ::= ((xml_string))
 xml_any ::= ((basic_number) | (xml_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -3617,7 +3626,7 @@ root_prop_1 ::= ((root_prop_1_1 root_prop_1_7 root_prop_1_3 root_prop_1_6))
 root_prop_2 ::= ((root_prop_2_1 root_prop_2_7 root_prop_2_3 root_prop_2_6))
 root_part_1 ::= (([ \n\t]* "<parameter=b>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>"))
 root_part_0 ::= (([ \n\t]* "<parameter=a>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1))
-root ::= (([ \n\t]* "<parameter=operation>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0))
+root_0 ::= (([ \n\t]* "<parameter=operation>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -3644,9 +3653,12 @@ root_prop_1_7 ::= (("0") | ([1-9] [0-9]*))
 root_prop_2_7 ::= (("0") | ([1-9] [0-9]*))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
-xml_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-xml_entity_1 ::= (("&lt;") | ("&gt;") | ("&amp;") | ("&quot;") | ("&apos;"))
-xml_string_1 ::= ("" | ([^<>&\0-\x1f\\\r\n] xml_string_1) | ("\\" xml_escape_1 xml_string_1) | (xml_entity_1 xml_string_1)) (=([ \n\t]*))
+xml_string_1 ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
 xml_variable_name_1 ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 xml_string_0_1 ::= ((xml_string_1))
 xml_any_1 ::= ((basic_number_8) | (xml_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
@@ -3669,7 +3681,7 @@ basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("Calculator>" root "</function>") | ("Weather>" root_1 "</function>"))
+triggered_tags_group ::= (("Calculator>" root_0 "</function>") | ("Weather>" root_1 "</function>"))
 triggered_tags ::= TagDispatch(
   ("<function=", triggered_tags_group),
   stop_eos=true,
@@ -3677,7 +3689,7 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=()
 )
-root_2 ::= ((triggered_tags))
+root ::= ((triggered_tags))
 """,
         [
             (
@@ -3744,7 +3756,7 @@ basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any bas
 root_prop_0 ::= (("\"add\"") | ("\"subtract\"") | ("\"multiply\"") | ("\"divide\""))
 root_part_1 ::= (([ \n\t]* "," [ \n\t]* "\"b\"" [ \n\t]* ":" [ \n\t]* basic_number))
 root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"a\"" [ \n\t]* ":" [ \n\t]* basic_number root_part_1))
-root ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"operation\"" [ \n\t]* ":" [ \n\t]* root_prop_0 root_part_0 [ \n\t]* "}"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -3776,7 +3788,7 @@ basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("{\"name\": \"Calculator\", \"arguments\": " root "}</tool_call>") | ("{\"name\": \"Weather\", \"arguments\": " root_1 "}</tool_call>"))
+triggered_tags_group ::= (("{\"name\": \"Calculator\", \"arguments\": " root_0 "}</tool_call>") | ("{\"name\": \"Weather\", \"arguments\": " root_1 "}</tool_call>"))
 triggered_tags ::= TagDispatch(
   ("<tool_call>", triggered_tags_group),
   stop_eos=true,
@@ -3784,7 +3796,7 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=()
 )
-root_2 ::= ((triggered_tags))
+root ::= ((triggered_tags))
 """,
         [
             (
@@ -4058,7 +4070,7 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root ::= ((basic_string))
+root_0 ::= ((basic_string))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -4111,9 +4123,9 @@ basic_number_6_2 ::= ("" | ([eE] basic_number_4_2 basic_number_5_2))
 basic_array_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_2 basic_array_1_2))
 basic_object_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 [ \n\t]* ":" [ \n\t]* basic_any_2 basic_object_1_2))
 basic_number_7_2 ::= (("0") | ([1-9] [0-9]*))
-or ::= ((root) | (root_1) | (root_2))
+or ::= ((root_0) | (root_1) | (root_2))
 tag ::= (("<calling>" or "</calling>"))
-root_3 ::= ((tag))
+root ::= ((tag))
 """,
         [
             ('<calling>"Hello, World!"</calling>', True),

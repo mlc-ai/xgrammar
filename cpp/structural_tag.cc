@@ -837,7 +837,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const QwenXmlParameterFormat& format
 ) {
-  auto sub_grammar = Grammar::FromEBNF(QwenXMLToolCallingToEBNF(format.xml_schema));
+  auto sub_grammar = Grammar::FromEBNF(QwenXMLToolCallingToEBNF(format.json_schema));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }
@@ -1824,8 +1824,8 @@ Result<std::vector<Layers>, StructuralTagError> StructuralTagTemplateFiller::Vis
 Result<std::vector<Layers>, StructuralTagError> StructuralTagTemplateFiller::VisitSub(
     const QwenXmlParameterFormat& format
 ) {
-  if (FullyMatchesPlaceholder(format.xml_schema)) {
-    return DetectTemplatePlaceholderNames(format.xml_schema);
+  if (FullyMatchesPlaceholder(format.json_schema)) {
+    return DetectTemplatePlaceholderNames(format.json_schema);
   } else {
     return ResultOk(std::vector<Layers>{});
   }
@@ -2164,7 +2164,7 @@ Result<std::vector<Format>, StructuralTagError> StructuralTagTemplateFiller::Vis
     return ResultOk<std::vector<Format>>({format_template_to_expand});
   }
 
-  auto result = VisitExpandBasicFormat(json_str, format_template_to_expand.xml_schema);
+  auto result = VisitExpandBasicFormat(json_str, format_template_to_expand.json_schema);
 
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
