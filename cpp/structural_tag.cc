@@ -538,6 +538,7 @@ class StructuralTagAnalyzer {
 
   std::vector<std::string> DetectEndStrings();
   bool IsUnlimited(const Format& format);
+  bool IsExcluded(const Format& format);
 
   int visit_format_recursion_depth_ = 0;
   std::vector<FormatPtrVariant> stack_;
@@ -573,6 +574,25 @@ bool StructuralTagAnalyzer::IsUnlimited(const Format& format) {
           return arg.is_unlimited_;
         } else if constexpr (std::is_same_v<T, OrFormat>) {
           return arg.is_unlimited_;
+        } else {
+          return false;
+        }
+      },
+      format
+  );
+}
+
+bool StructuralTagAnalyzer::IsExcluded(const Format& format) {
+  return std::visit(
+      [&](auto&& arg) -> bool {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, AnyTextFormat>) {
+          const auto& any_text_format = std::get<AnyTextFormat>(format);
+          return !any_text_format.excludes.empty();
+        } else if constexpr (std::is_same_v<T, TriggeredTagsFormat>) {
+          const auto& triggered_tags_format = std::get<TriggeredTagsFormat>(format);
+          return !triggered_tags_format.excludes.empty();
+          return true;
         } else {
           return false;
         }
@@ -829,7 +849,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextForma
         << "At least one detected end string must be non-empty";
     // TagDispatch supports multiple stop strings
     auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, false, non_empty_ends, false, format.excluded_strs}
+        Grammar::Impl::TagDispatch{{}, false, non_empty_ends, false, format.excludes}
+    );
+    return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
+  } else if (format.excludes.size() > 0) {
+    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
+        Grammar::Impl::TagDispatch{{}, true, {}, false, format.excludes}
     );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {

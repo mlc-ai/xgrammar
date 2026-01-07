@@ -2397,5 +2397,33 @@ root ::= ((triggered_tags))
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+test_strings_is_accepted_single_excludes = [
+    ("XYZ", True),
+    ("Hello World", True),
+    ("ABC", False),
+    ("123ABC456", False),
+    ("A quick brown fox", True),
+    ("", True),
+]
+
+
+@pytest.mark.parametrize("instance, is_accepted", test_strings_is_accepted_single_excludes)
+def test_excluded_strings_in_single_any_text(instance: str, is_accepted: bool):
+
+    format = {"type": "any_text", "excludes": ["ABC"]}
+
+    expected_grammar = r"""any_text ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("ABC")
+)
+root ::= ((any_text))
+"""
+
+    check_stag_with_grammar(format, expected_grammar)
+    check_stag_with_instance(format, instance, is_accepted)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
