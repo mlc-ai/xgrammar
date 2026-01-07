@@ -2425,5 +2425,94 @@ root ::= ((any_text))
     check_stag_with_instance(format, instance, is_accepted)
 
 
+test_strings_is_accepted_excluded_any_text_within_sequence = [
+    ("HelloABC", True),
+    ("WorldABC", True),
+    ("NoExclusionHere", False),
+    ("JustSomeText", False),
+    ("ABC", True),
+    ("SomeTextBeforeABC", True),
+]
+
+
+@pytest.mark.parametrize(
+    "instance, is_accepted", test_strings_is_accepted_excluded_any_text_within_sequence
+)
+def test_excluded_any_text_within_sequence(instance: str, is_accepted: bool):
+
+    format = {
+        "type": "sequence",
+        "elements": [
+            {"type": "any_text", "excludes": ["ABC"]},
+            {"type": "const_string", "value": "ABC"},
+        ],
+    }
+
+    expected_grammar = r"""any_text ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("ABC")
+)
+const_string ::= (("ABC"))
+sequence ::= ((any_text const_string))
+root ::= ((sequence))
+"""
+
+    check_stag_with_grammar(format, expected_grammar)
+    check_stag_with_instance(format, instance, is_accepted)
+
+
+test_strings_is_accepted_excluded_triggered_tags_without_end = [
+    ("1ABC", False),
+    ("11ABC", True),
+    ("1HelloWorld", False),
+    ("1ABC123", False),
+    ("11ABC", True),
+    ("2ABC", True),
+]
+
+
+@pytest.mark.parametrize(
+    "instance, is_accepted", test_strings_is_accepted_excluded_triggered_tags_without_end
+)
+def test_excludes_triggered_tags_without_end(instance: str, is_accepted: bool):
+
+    stag = {
+        "type": "sequence",
+        "elements": [
+            {
+                "type": "triggered_tags",
+                "triggers": ["1"],
+                "tags": [{"begin": "1", "content": {"type": "any_text"}, "end": ["1"]}],
+                "excludes": ["ABC"],
+            },
+            {"type": "const_string", "value": "ABC"},
+        ],
+    }
+
+    expected_grammar = r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("1"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+triggered_tags_group ::= (("" any_text))
+triggered_tags ::= TagDispatch(
+  ("1", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=("ABC")
+)
+const_string ::= (("ABC"))
+sequence ::= ((triggered_tags const_string))
+root ::= ((sequence))
+"""
+
+    check_stag_with_grammar(stag, expected_grammar)
+    check_stag_with_instance(stag, instance, is_accepted)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

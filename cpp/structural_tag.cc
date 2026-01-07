@@ -656,10 +656,12 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(SequenceFormat* format) 
       return err;
     }
     if (IsUnlimited(element)) {
-      return ISTError(
-          "Only the last element in a sequence can be unlimited, but the " + std::to_string(i) +
-          "th element of sequence format is unlimited"
-      );
+      if (!IsExcluded(element)) {
+        return ISTError(
+            "Only the last element in a sequence can be unlimited, but the " + std::to_string(i) +
+            "th element of sequence format is unlimited"
+        );
+      }
     }
   }
 
@@ -668,7 +670,7 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(SequenceFormat* format) 
   if (err.has_value()) {
     return err;
   }
-  format->is_unlimited_ = IsUnlimited(element);
+  format->is_unlimited_ = IsUnlimited(element) && !IsExcluded(element);
   return std::nullopt;
 }
 
@@ -680,7 +682,7 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(OrFormat* format) {
     if (err.has_value()) {
       return err;
     }
-    auto is_unlimited = IsUnlimited(element);
+    auto is_unlimited = IsUnlimited(element) && !IsExcluded(element);
     is_any_unlimited |= is_unlimited;
     is_all_unlimited &= is_unlimited;
   }
@@ -712,7 +714,11 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TagFormat* format) {
       }
     }
     if (!has_non_empty) {
-      return ISTError("When the content is unlimited, at least one end string must be non-empty");
+      if (IsExcluded(*format->content)) {
+        return std::nullopt;
+      } else {
+        return ISTError("When the content is unlimited, at least one end string must be non-empty");
+      }
     }
     // Clear the end strings because they are moved to the detected_end_strs_ field.
     format->end.clear();
