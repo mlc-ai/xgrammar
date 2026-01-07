@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_set>

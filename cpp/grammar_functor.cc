@@ -9,6 +9,7 @@
 
 #include <bitset>
 #include <cstdint>
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -22,7 +23,6 @@
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
-#include "support/container.h"
 #include "support/encoding.h"
 #include "support/logging.h"
 #include "xgrammar/grammar.h"
@@ -2244,8 +2244,8 @@ class RuleLevelCache::Impl {
   std::mutex mutex_;
   const size_t max_cache_memory_size_;
   int64_t current_cache_memory_size_ = 0;
-  List<NodeType> cache_list_;
-  std::unordered_map<NodeKey, int> cache_;
+  std::list<NodeType> cache_list_;
+  std::unordered_map<NodeKey, decltype(cache_list_.begin())> cache_;
 };
 
 std::optional<AdaptiveTokenMask> RuleLevelCache::GetCache(
@@ -2296,8 +2296,8 @@ std::optional<AdaptiveTokenMask> RuleLevelCache::Impl::GetCache(
   }
 
   // Move the node to the back of the list.
-  cache_list_.MoveBack(it->second);
-  return List<NodeType>::iterator(it->second, cache_list_)->second;
+  cache_list_.splice(cache_list_.end(), cache_list_, it->second);
+  return it->second->second;
 }
 
 bool RuleLevelCache::Impl::AddCache(
@@ -2334,13 +2334,14 @@ bool RuleLevelCache::Impl::AddCache(
     auto oldest_it = cache_list_.begin();
     current_cache_memory_size_ -= MemorySize(oldest_it->second);
     cache_.erase(oldest_it->first);
-    cache_list_.Erase(oldest_it);
+    cache_list_.erase(oldest_it);
   }
 
   // Add to the cache.
-  auto new_it = cache_list_.PushBack(NodeType(key, std::move(token_mask)));
+  cache_list_.push_back(NodeType(key, std::move(token_mask)));
+  auto new_it = std::prev(cache_list_.end());
   current_cache_memory_size_ += MemorySize(new_it->second);
-  cache_[key] = new_it.Index();
+  cache_[key] = new_it;
   return true;
 }
 
@@ -2349,7 +2350,7 @@ RuleLevelCache::RuleLevelCache(size_t max_cache_memory_size)
 
 void RuleLevelCache::Impl::ClearCache() {
   std::lock_guard<std::mutex> lock(mutex_);
-  cache_list_.Clear();
+  cache_list_.clear();
   cache_.clear();
   current_cache_memory_size_ = 0;
 }
