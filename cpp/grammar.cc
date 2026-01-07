@@ -79,7 +79,7 @@ std::variant<Grammar, StructuralTagError> Grammar::FromStructuralTagTemplate(
     return std::move(result).UnwrapErr();
   }
   auto structural_tag = std::move(result).Unwrap();
-  return StructuralTagToGrammar(structural_tag.ToJSON()).ToVariant();
+  return StructuralTagToGrammar(structural_tag.ToJSON().serialize()).ToVariant();
 }
 
 // Optimized json grammar for the speed of the grammar matcher

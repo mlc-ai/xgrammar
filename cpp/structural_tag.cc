@@ -2600,6 +2600,73 @@ Result<StructuralTag, StructuralTagError> StructuralTagTemplateFiller::Apply(
 
 /************** StructuralTag To JSON format **************/
 
+picojson::value SequenceFormat::ToJSON() const {
+  picojson::array elements_json;
+  for (const auto& element : elements) {
+    elements_json.push_back(FormatToJSON(element));
+  }
+  picojson::object obj;
+  obj["type"] = picojson::value("sequence");
+  obj["elements"] = picojson::value(elements_json);
+  return picojson::value(obj);
+}
+
+picojson::value OrFormat::ToJSON() const {
+  picojson::array elements_json;
+  for (const auto& element : elements) {
+    elements_json.push_back(FormatToJSON(element));
+  }
+  picojson::object obj;
+  obj["type"] = picojson::value("or");
+  obj["elements"] = picojson::value(elements_json);
+  return picojson::value(obj);
+}
+
+picojson::value TagFormat::ToJSON() const {
+  picojson::object obj;
+  obj["type"] = picojson::value("tag");
+  obj["begin"] = picojson::value(begin);
+  picojson::array end_array;
+  for (const auto& end_part : end) {
+    end_array.push_back(picojson::value(end_part));
+  }
+  obj["end"] = picojson::value(end_array);
+  obj["content"] = FormatToJSON(*content);
+  return picojson::value(obj);
+}
+
+picojson::value TriggeredTagsFormat::ToJSON() const {
+  picojson::object obj;
+  obj["type"] = picojson::value("triggered_tags");
+  picojson::array triggers_array;
+  for (const auto& trigger : triggers) {
+    triggers_array.push_back(picojson::value(trigger));
+  }
+  obj["triggers"] = picojson::value(triggers_array);
+  picojson::array tags_array;
+  for (const auto& tag : tags) {
+    tags_array.push_back(FormatToJSON(tag));
+  }
+  obj["tags"] = picojson::value(tags_array);
+  obj["at_least_one"] = picojson::value(at_least_one);
+  obj["stop_after_first"] = picojson::value(stop_after_first);
+  return picojson::value(obj);
+}
+
+picojson::value TagsWithSeparatorFormat::ToJSON() const {
+  picojson::object obj;
+  obj["type"] = picojson::value("tags_with_separator");
+  picojson::array tags_array;
+  for (const auto& tag : tags) {
+    tags_array.push_back(FormatToJSON(tag));
+  }
+  obj["tags"] = picojson::value(tags_array);
+  obj["separator"] = picojson::value(separator);
+  obj["at_least_one"] = picojson::value(at_least_one);
+  obj["stop_after_first"] = picojson::value(stop_after_first);
+  return picojson::value(obj);
+}
+
 /************** StructuralTag Conversion Public API **************/
 
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(const std::string& structural_tag_json) {

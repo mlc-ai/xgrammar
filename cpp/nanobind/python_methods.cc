@@ -161,7 +161,7 @@ std::string StructuralTag_FromTemplate(
   if (result.IsErr()) {
     ThrowVariantError(std::move(result).UnwrapErr());
   }
-  return std::move(result).Unwrap().ToJSON();
+  return std::move(result).Unwrap().ToJSON().serialize();
 }
 
 Grammar Grammar_DeserializeJSON(const std::string& json_string) {
