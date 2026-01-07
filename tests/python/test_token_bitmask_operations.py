@@ -23,7 +23,7 @@ from xgrammar.testing import (
 )
 
 _is_cuda_available = torch.cuda.is_available()
-_is_mps_available = torch.backends.mps.is_available() and MLX_AVAILABLE
+_is_mlx_metal_available = torch.backends.mps.is_available() and MLX_AVAILABLE
 
 
 def test_allocate_reset_token_bitmask():
@@ -159,7 +159,7 @@ def get_apply_token_bitmask_kernel(impl: str) -> Callable:
 def test_apply_token_bitmask_inplace_kernel(impl: str):
     if impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
-    elif impl == "metal" and not _is_mps_available:
+    elif impl == "metal" and not _is_mlx_metal_available:
         pytest.skip(reason="MLX is not installed")
 
     kernel = get_apply_token_bitmask_kernel(impl)
