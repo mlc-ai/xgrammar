@@ -2468,7 +2468,6 @@ test_strings_is_accepted_excluded_triggered_tags_without_end = [
     ("11ABC", True),
     ("1HelloWorld", False),
     ("1ABC123", False),
-    ("11ABC", True),
     ("2ABC", True),
 ]
 

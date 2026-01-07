@@ -592,7 +592,6 @@ bool StructuralTagAnalyzer::IsExcluded(const Format& format) {
         } else if constexpr (std::is_same_v<T, TriggeredTagsFormat>) {
           const auto& triggered_tags_format = std::get<TriggeredTagsFormat>(format);
           return !triggered_tags_format.excludes.empty();
-          return true;
         } else {
           return false;
         }
