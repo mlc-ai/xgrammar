@@ -1060,12 +1060,7 @@ GrammarCompiler::GrammarCompiler(
 )
     : pimpl_(std::make_shared<Impl>(
           tokenizer_info, max_threads, cache_enabled, max_memory_bytes, is_jit
-      )) {
-  if (max_memory_bytes < -1) {
-    XGRAMMAR_LOG(FATAL) << "Invalid max_memory_bytes: " << max_memory_bytes << ". "
-                        << "It should be -1 (unlimited) or a non-negative integer.";
-  }
-}
+      )) {}
 
 CompiledGrammar GrammarCompiler::CompileJSONSchema(
     const std::string& schema,
