@@ -67,6 +67,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -v ".[test]"
 
+      # Test with MLX (which is optional) under macOS arm64
+      - name: Install MLX
+        if: matrix.os == 'macos-14'
+        run: |
+          pip install mlx-lm
+
       - name: Run C++ tests
         run: |
           ctest --test-dir build -V --timeout 30 --stop-on-failure
