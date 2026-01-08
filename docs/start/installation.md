@@ -15,6 +15,12 @@ We provide Python wheels for XGrammar via pip.
 python -m pip install xgrammar
 ```
 
+For use with MPS on Apple Silicon, install with:
+
+```bash
+python -m pip install "xgrammar[metal]"
+```
+
 We also provide conda packages for XGrammar:
 
 ```bash
