@@ -48,6 +48,11 @@ Install XGrammar:
 pip install xgrammar
 ```
 
+For use with MPS on Apple Silicon, install with:
+```bash
+pip install "xgrammar[metal]"
+```
+
 Import XGrammar:
 ```python
 import xgrammar as xgr
