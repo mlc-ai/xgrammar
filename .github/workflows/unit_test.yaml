@@ -69,7 +69,7 @@ jobs:
 
       # Test with MLX (which is optional) under macOS arm64
       - name: Install MLX
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-14' && !endsWith(matrix.python, 't')
         run: |
           pip install mlx-lm
 
