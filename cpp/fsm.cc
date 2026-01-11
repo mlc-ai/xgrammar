@@ -1542,7 +1542,7 @@ FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
 }
 
-size_t CompactFSMWithStartEnd::GetNumEdges() {
+size_t CompactFSMWithStartEnd::GetNumEdges() const {
   if (edge_num.has_value()) {
     return edge_num.value();
   }

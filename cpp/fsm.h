@@ -764,10 +764,10 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    * \brief Get the number of edges in the CompactFSMWithStartEnd.
    * \return The number of edges in the CompactFSMWithStartEnd.
    */
-  size_t GetNumEdges();
+  size_t GetNumEdges() const;
 
  private:
-  std::optional<size_t> edge_num = std::nullopt;
+  mutable std::optional<size_t> edge_num = std::nullopt;
 
   /*!
    * \brief Print the CompactFSMWithStartEnd.
