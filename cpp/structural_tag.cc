@@ -2302,7 +2302,7 @@ Result<std::vector<Format>, StructuralTagError> StructuralTagTemplateFiller::Vis
     XGRAMMAR_DCHECK(current_value.get().contains(ph.name))
         << "Placeholder name '" << ph.name
         << "' not found in values, which is required for the template: '"
-        << FormatToJSON(format_template_to_expand) << "'" << "\n"
+        << FormatToJSON(format_template_to_expand).serialize() << "'" << "\n"
         << "Current value: " << current_value.get().serialize();
     current_value = current_value.get().get(ph.name);
     if (!ph.is_array) {
@@ -2466,7 +2466,7 @@ Result<std::vector<Format>, StructuralTagError> StructuralTagTemplateFiller::Vis
     XGRAMMAR_DCHECK(current_value.get().contains(ph.name))
         << "Placeholder name '" << ph.name
         << "' not found in values, which is required for the template: '"
-        << FormatToJSON(format_template_to_expand) << "'";
+        << FormatToJSON(format_template_to_expand).serialize() << "'";
     current_value = current_value.get().get(ph.name);
     XGRAMMAR_DCHECK(current_value.get().is<picojson::array>())
         << "Placeholder name '" << ph.name
