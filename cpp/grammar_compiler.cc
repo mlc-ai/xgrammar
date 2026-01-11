@@ -65,12 +65,11 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    * \param first_char_mask The first character mask.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
    * no uncertain tokens. Useful for the root rule.
-   * \param rule_level_cache_is_available Whether the crossing-grammar caching is available.
    * \returns True if the rejected indices are filled as usual, False otherwise.
    * It's used to determine which construction function will be used.
    */
   bool GetTokenMaskWithFirstCharacterCheck(
-      const std::bitset<256>& first_char_mask, bool is_root_rule, bool rule_level_cache_is_available
+      const std::bitset<256>& first_char_mask, bool is_root_rule
   );
 
   /*!
@@ -497,7 +496,7 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
 }
 
 bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
-    const std::bitset<256>& first_char_mask, bool is_root_rule, bool rule_level_cache_is_available
+    const std::bitset<256>& first_char_mask, bool is_root_rule
 ) {
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_nodes_range = tokenizer_info_.GetTrieSubtreeNodesRange();
@@ -809,9 +808,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   std::bitset<256> first_character_mask;
   GetFirstCharacterMask(first_character_mask);
 
-  bool rejected_filled = GetTokenMaskWithFirstCharacterCheck(
-      first_character_mask, is_root_rule, rule_level_cache_is_available
-  );
+  bool rejected_filled = GetTokenMaskWithFirstCharacterCheck(first_character_mask, is_root_rule);
   if (rejected_filled) {
     auto return_value = AdaptiveTokenMask(
         tokenizer_info_.GetVocabSize(),
