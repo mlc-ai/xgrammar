@@ -14,7 +14,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -761,6 +761,15 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   FSMWithStartEnd ToFSM() const;
 
   /*!
+   * \brief Get the number of edges in the CompactFSMWithStartEnd.
+   * \return The number of edges in the CompactFSMWithStartEnd.
+   */
+  size_t GetNumEdges() const;
+
+ private:
+  mutable std::optional<size_t> edge_num = std::nullopt;
+
+  /*!
    * \brief Print the CompactFSMWithStartEnd.
    * \param os The output stream.
    * \param fsm The CompactFSMWithStartEnd.
@@ -790,7 +799,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &CompactFSMWithStartEnd::fsm_,
     &CompactFSMWithStartEnd::start_,
     &CompactFSMWithStartEnd::ends_,
-    &CompactFSMWithStartEnd::is_dfa_
+    &CompactFSMWithStartEnd::is_dfa_,
+    &CompactFSMWithStartEnd::edge_num
 );
 
 /****************** FSMWithStartEndBase Template Implementation ******************/
