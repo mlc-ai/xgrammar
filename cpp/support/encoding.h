@@ -373,8 +373,56 @@ inline std::string EscapeString(
   return std::string("\\") + prefix + hex;
 }
 
+inline std::string EscapeJSONString(
+    TCodepoint codepoint,
+    const std::unordered_map<TCodepoint, std::string>& additional_escape_map = {}
+) {
+  static const std::unordered_map<TCodepoint, std::string> kCodepointToEscape = {
+      {'\"', "\\\""},
+      {'\\', "\\\\"},
+      {'\b', "\\b"},
+      {'\f', "\\f"},
+      {'\n', "\\n"},
+      {'\r', "\\r"},
+      {'\t', "\\t"},
+  };
+
+  if (auto it = additional_escape_map.find(codepoint); it != additional_escape_map.end()) {
+    return it->second;
+  }
+
+  if (auto it = kCodepointToEscape.find(codepoint); it != kCodepointToEscape.end()) {
+    return it->second;
+  }
+
+  if (codepoint >= 0x20 && codepoint <= 0x7E) {
+    return std::string({static_cast<char>(codepoint)});
+  }
+
+  // convert codepoint to hex
+  char prefix = codepoint <= 0xFF ? 'x' : codepoint <= 0xFFFF ? 'u' : 'U';
+  int width = codepoint <= 0xFF ? 2 : codepoint <= 0xFFFF ? 4 : 8;
+  std::stringstream ss;
+  ss << std::setfill('0') << std::setw(width) << std::hex << codepoint;
+  auto hex = ss.str();
+  return std::string("\\") + prefix + hex;
+}
+
 inline std::string EscapeString(uint8_t raw_char) {
   return EscapeString(static_cast<TCodepoint>(raw_char));
+}
+
+inline std::string EscapeJSONString(uint8_t raw_char) {
+  return EscapeJSONString(static_cast<TCodepoint>(raw_char));
+}
+
+inline std::string EscapeJSONString(std::string raw_str) {
+  std::string res;
+  auto codepoints = ParseUTF8(raw_str.c_str(), true);
+  for (auto c : codepoints) {
+    res += EscapeJSONString(c);
+  }
+  return res;
 }
 
 inline std::string EscapeString(std::string raw_str) {

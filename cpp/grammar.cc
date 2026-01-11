@@ -71,6 +71,17 @@ std::variant<Grammar, StructuralTagError> Grammar::FromStructuralTag(
   return StructuralTagToGrammar(structural_tag_json).ToVariant();
 }
 
+std::variant<Grammar, StructuralTagError> Grammar::FromStructuralTagTemplate(
+    const std::string& structural_tag_template_json, const std::string& values_json_str
+) {
+  auto result = FromTemplate(structural_tag_template_json, values_json_str);
+  if (result.IsErr()) {
+    return std::move(result).UnwrapErr();
+  }
+  auto structural_tag = std::move(result).Unwrap();
+  return StructuralTagToGrammar(structural_tag.ToJSON().serialize()).ToVariant();
+}
+
 // Optimized json grammar for the speed of the grammar matcher
 const std::string kJSONGrammarString = R"(
 root ::= (

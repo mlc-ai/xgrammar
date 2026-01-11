@@ -20,6 +20,7 @@ The mission of this project is to bring flexible zero-overhead structure generat
    tutorials/advanced_topics
    tutorials/structural_tag
    tutorials/advanced_structural_tag
+   tutorials/structural_tag_template
    tutorials/engine_integration
    tutorials/json_generation
    tutorials/ebnf_guided_generation

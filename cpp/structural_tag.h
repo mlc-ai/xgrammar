@@ -7,11 +7,11 @@
 #ifndef XGRAMMAR_STRUCTURAL_TAG_H_
 #define XGRAMMAR_STRUCTURAL_TAG_H_
 
+#include <picojson.h>
 #include <xgrammar/exception.h>
 #include <xgrammar/grammar.h>
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -55,36 +55,90 @@ struct ConstStringFormat {
   static constexpr const char* type = "const_string";
   std::string value;
   ConstStringFormat(std::string value) : value(std::move(value)) {}
+  picojson::value ToJSON() const {
+    picojson::object obj;
+    obj["type"] = picojson::value(type);
+    obj["value"] = picojson::value(value);
+    return picojson::value(obj);
+  }
 };
 
 struct JSONSchemaFormat {
   static constexpr const char* type = "json_schema";
   std::string json_schema;
   JSONSchemaFormat(std::string json_schema) : json_schema(std::move(json_schema)) {}
+  picojson::value ToJSON() const {
+    picojson::object obj;
+    obj["type"] = picojson::value(type);
+    picojson::value schema;
+    auto err = picojson::parse(schema, json_schema);
+    if (err.empty()) {
+      obj["json_schema"] = picojson::value(schema);
+    } else {
+      // unfilled templates.
+      obj["json_schema"] = picojson::value(json_schema);
+    }
+    return picojson::value(obj);
+  }
 };
 
 struct QwenXmlParameterFormat {
-  static constexpr const char* type = "qwen_xml";
-  std::string xml_schema;
-  QwenXmlParameterFormat(std::string xml_schema) : xml_schema(std::move(xml_schema)) {}
+  static constexpr const char* type = "qwen_xml_parameter";
+  std::string json_schema;
+  QwenXmlParameterFormat(std::string json_schema) : json_schema(std::move(json_schema)) {}
+  picojson::value ToJSON() const {
+    picojson::object obj;
+    obj["type"] = picojson::value(type);
+    picojson::value schema;
+    auto err = picojson::parse(schema, json_schema);
+    if (err.empty()) {
+      obj["json_schema"] = picojson::value(schema);
+    } else {
+      // unfilled templates.
+      obj["json_schema"] = picojson::value(json_schema);
+    }
+    return picojson::value(obj);
+  }
 };
 
 struct GrammarFormat {
   static constexpr const char* type = "grammar";
   std::string grammar;
   GrammarFormat(std::string grammar) : grammar(std::move(grammar)) {}
+  picojson::value ToJSON() const {
+    picojson::object obj;
+    obj["type"] = picojson::value(type);
+    obj["grammar"] = picojson::value(grammar);
+    return picojson::value(obj);
+  }
 };
 
 struct RegexFormat {
   static constexpr const char* type = "regex";
   std::string pattern;
   RegexFormat(std::string pattern) : pattern(std::move(pattern)) {}
+  picojson::value ToJSON() const {
+    picojson::object obj;
+    obj["type"] = picojson::value(type);
+    obj["pattern"] = picojson::value(pattern);
+    return picojson::value(obj);
+  }
 };
 
 struct AnyTextFormat {
   static constexpr const char* type = "any_text";
-  std::vector<std::string> excluded_strs;
-  AnyTextFormat(std::vector<std::string> excluded_strs) : excluded_strs(excluded_strs) {}
+  std::vector<std::string> excludes;
+  AnyTextFormat(std::vector<std::string> excluded_strs) : excludes(excluded_strs) {}
+  picojson::value ToJSON() const {
+    picojson::object obj;
+    obj["type"] = picojson::value(type);
+    picojson::array excludes_array;
+    for (const auto& exclude : excludes) {
+      excludes_array.push_back(picojson::value(exclude));
+    }
+    obj["excludes"] = picojson::value(excludes_array);
+    return picojson::value(obj);
+  }
 
  private:
   // Detected in StructuralTagAnalyzer - supports multiple end strings
@@ -99,6 +153,7 @@ struct SequenceFormat {
   static constexpr const char* type = "sequence";
   std::vector<Format> elements;
   SequenceFormat(std::vector<Format> elements) : elements(std::move(elements)) {}
+  picojson::value ToJSON() const;
 
  private:
   // Detected in StructuralTagAnalyzer
@@ -111,6 +166,7 @@ struct OrFormat {
   static constexpr const char* type = "or";
   std::vector<Format> elements;
   OrFormat(std::vector<Format> elements) : elements(std::move(elements)) {}
+  picojson::value ToJSON() const;
 
  private:
   // Detected in StructuralTagAnalyzer
@@ -127,6 +183,7 @@ struct TagFormat {
 
   TagFormat(std::string begin, std::shared_ptr<Format> content, std::vector<std::string> end)
       : begin(std::move(begin)), content(std::move(content)), end(std::move(end)) {}
+  picojson::value ToJSON() const;
 };
 
 struct TriggeredTagsFormat {
@@ -149,6 +206,7 @@ struct TriggeredTagsFormat {
         excludes(excludes),
         at_least_one(at_least_one),
         stop_after_first(stop_after_first) {}
+  picojson::value ToJSON() const;
 
  private:
   // Detected in StructuralTagAnalyzer - supports multiple end strings
@@ -171,6 +229,7 @@ struct TagsWithSeparatorFormat {
         separator(std::move(separator)),
         at_least_one(at_least_one),
         stop_after_first(stop_after_first) {}
+  picojson::value ToJSON() const;
 
  private:
   // Detected in StructuralTagAnalyzer - supports multiple end strings
@@ -186,6 +245,12 @@ struct StructuralTag {
   Format format;
 
   StructuralTag(Format format) : format(std::move(format)) {}
+  picojson::value ToJSON() const {
+    picojson::object obj;
+    obj["type"] = picojson::value(type);
+    obj["format"] = std::visit([](const auto& fmt) { return fmt.ToJSON(); }, format);
+    return picojson::value(obj);
+  }
 };
 
 /******************** Conversion API ********************/
@@ -196,6 +261,18 @@ struct StructuralTag {
  * \return A grammar if the JSON is valid, otherwise an error message in std::string.
  */
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(const std::string& structural_tag_json);
+
+/*!
+ * \brief Apply a structural tag template with given values to generate a structural tag, and
+ * convert it to a structural tag.
+ * \param structural_tag_template_json The JSON string of the structural tag template.
+ * \param values_json_str The json string of the values to fill in the template.
+ * \return A structural tag if the application is successful, otherwise an error message in
+ * StructuralTagError.
+ */
+Result<StructuralTag, StructuralTagError> FromTemplate(
+    const std::string& structural_tag_template_json, const std::string& values_json_str
+);
 
 }  // namespace xgrammar
 

@@ -1,3 +1,4 @@
+import json
 import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -67,10 +68,10 @@ def disable_profiler(request):
         profiler = Profiler(tokenizer_id)
 
 
-def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_grammar_ebnf: str):
+def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_stag_ebnf: str):
     structural_tag = {"type": "structural_tag", "format": structural_tag_format}
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
-    assert str(stag_ebnf) == expected_grammar_ebnf
+    assert str(stag_ebnf) == expected_stag_ebnf
 
 
 def check_stag_with_instance(
@@ -90,6 +91,22 @@ def check_stag_with_instance(
         profiler.profile_stag(structural_tag_format, instance)
 
 
+def check_template_stag_with_stag(
+    structural_tag_format: Union[Dict[str, Any], StructuralTag],
+    expected_stag: Dict,
+    **kwargs: List[Dict[str, str]],
+):
+    if isinstance(structural_tag_format, StructuralTag) or (
+        "type" in structural_tag_format and structural_tag_format["type"] == "structural_tag"
+    ):
+        stag = xgr.StructuralTag.from_template(structural_tag_format, **kwargs)
+    else:
+        structural_tag = {"type": "structural_tag", "format": structural_tag_format}
+        stag = xgr.StructuralTag.from_template(structural_tag, **kwargs)
+    print(stag.model_dump())
+    assert json.dumps(expected_stag) == json.dumps(stag.model_dump())
+
+
 const_string_stag_grammar = [
     (
         {"type": "const_string", "value": "Hello!"},
@@ -107,12 +124,12 @@ const_string_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", const_string_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", const_string_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", const_string_instance_is_accepted)
 def test_const_string_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted, debug_print=True)
 
 
@@ -157,12 +174,12 @@ json_schema_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", json_schema_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", json_schema_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", json_schema_instance_is_accepted)
 def test_json_schema_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -229,12 +246,12 @@ qwen_parameter_xml_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", qwen_parameter_xml_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", qwen_parameter_xml_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", qwen_parameter_xml_instance_is_accepted)
 def test_qwen_parameter_xml_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -260,12 +277,12 @@ ebnf_grammar_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", ebnf_grammar_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", ebnf_grammar_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", ebnf_grammar_instance_is_accepted)
 def test_ebnf_grammar_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -287,12 +304,12 @@ regex_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", regex_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", regex_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", regex_instance_is_accepted)
 def test_regex_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -354,12 +371,12 @@ sequence_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", sequence_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", sequence_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", sequence_instance_is_accepted)
 def test_sequence_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -410,12 +427,12 @@ or_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", or_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", or_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", or_instance_is_accepted)
 def test_or_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -490,12 +507,12 @@ tag_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", tag_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", tag_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", tag_instance_is_accepted)
 def test_tag_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -523,12 +540,12 @@ any_text_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", any_text_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", any_text_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", any_text_instance_is_accepted)
 def test_any_text_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -545,12 +562,12 @@ root ::= ((any_text))
 any_text_only_instance_is_accepted = [("ABCDEF", True), ("123456", True), ("", True)]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", any_text_only_stag_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", any_text_only_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", any_text_only_instance_is_accepted)
 def test_any_text_only_format(
-    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+    stag_format: Dict[str, Any], expected_stag: Dict, instance: str, is_accepted: bool
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -644,16 +661,16 @@ triggered_tag_instance_accepted_results = [
 ]
 
 
-@pytest.mark.parametrize("stag_id, stag_format, expected_grammar", triggered_tag_stag_grammar)
+@pytest.mark.parametrize("stag_id, stag_format, expected_stag", triggered_tag_stag_grammar)
 @pytest.mark.parametrize("instance, accepted_results", triggered_tag_instance_accepted_results)
 def test_triggered_tag_format(
     stag_id: int,
     stag_format: Dict[str, Any],
-    expected_grammar: str,
+    expected_stag: Dict,
     instance: str,
     accepted_results: List[bool],
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
 
 
@@ -687,15 +704,14 @@ root ::= ((triggered_tags))
 
 
 @pytest.mark.parametrize(
-    "stag_format, expected_grammar, instance_is_accepted_tuples",
-    test_triggered_tags_corner_case_data,
+    "stag_format, expected_stag, instance_is_accepted_tuples", test_triggered_tags_corner_case_data
 )
 def test_triggered_tags_corner_case(
     stag_format: Dict[str, Any],
-    expected_grammar: str,
+    expected_stag: Dict,
     instance_is_accepted_tuples: List[Tuple[str, bool]],
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     for instance, is_accepted in instance_is_accepted_tuples:
         check_stag_with_instance(stag_format, instance, is_accepted)
 
@@ -807,7 +823,7 @@ triggered_tag_with_outside_tag_instance_accepted_results = [
 
 
 @pytest.mark.parametrize(
-    "stag_id, stag_format, expected_grammar", triggered_tag_with_outside_tag_stag_grammar
+    "stag_id, stag_format, expected_stag", triggered_tag_with_outside_tag_stag_grammar
 )
 @pytest.mark.parametrize(
     "instance, accepted_results", triggered_tag_with_outside_tag_instance_accepted_results
@@ -815,11 +831,11 @@ triggered_tag_with_outside_tag_instance_accepted_results = [
 def test_triggered_tag_with_outside_tag(
     stag_id: int,
     stag_format: Dict[str, Any],
-    expected_grammar: str,
+    expected_stag: Dict,
     instance: str,
     accepted_results: List[bool],
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
 
 
@@ -898,18 +914,18 @@ tags_with_separator_instance_accepted_results = [
 ]
 
 
-@pytest.mark.parametrize("stag_id, stag_format, expected_grammar", tags_with_separator_stag_grammar)
+@pytest.mark.parametrize("stag_id, stag_format, expected_stag", tags_with_separator_stag_grammar)
 @pytest.mark.parametrize(
     "instance, accepted_results", tags_with_separator_instance_accepted_results
 )
 def test_tags_with_separator_format(
     stag_id: int,
     stag_format: Dict[str, Any],
-    expected_grammar: str,
+    expected_stag: Dict,
     instance: str,
     accepted_results: List[bool],
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
 
 
@@ -1001,7 +1017,7 @@ tags_with_separator_with_outside_tag_instance_accepted_results = [
 
 
 @pytest.mark.parametrize(
-    "stag_id, stag_format, expected_grammar", tags_with_separator_with_outside_tag_stag_grammar
+    "stag_id, stag_format, expected_stag", tags_with_separator_with_outside_tag_stag_grammar
 )
 @pytest.mark.parametrize(
     "instance, accepted_results", tags_with_separator_with_outside_tag_instance_accepted_results
@@ -1009,11 +1025,11 @@ tags_with_separator_with_outside_tag_instance_accepted_results = [
 def test_tags_with_separator_format_with_outside_tag(
     stag_id: int,
     stag_format: Dict[str, Any],
-    expected_grammar: str,
+    expected_stag: Dict,
     instance: str,
     accepted_results: List[bool],
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
 
 
@@ -1098,7 +1114,7 @@ tags_with_empty_separator_instance_accepted_results = [
 
 
 @pytest.mark.parametrize(
-    "stag_id, stag_format, expected_grammar", tags_with_empty_separator_stag_grammar
+    "stag_id, stag_format, expected_stag", tags_with_empty_separator_stag_grammar
 )
 @pytest.mark.parametrize(
     "instance, accepted_results", tags_with_empty_separator_instance_accepted_results
@@ -1106,11 +1122,11 @@ tags_with_empty_separator_instance_accepted_results = [
 def test_tags_with_empty_separator_format(
     stag_id: int,
     stag_format: Dict[str, Any],
-    expected_grammar: str,
+    expected_stag: Dict,
     instance: str,
     accepted_results: List[bool],
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
 
 
@@ -1553,14 +1569,14 @@ root ::= ((or_1))
 
 
 @pytest.mark.parametrize(
-    "stag_format, expected_grammar, instance_is_accepted_tuples", end_string_detector_test_data
+    "stag_format, expected_stag, instance_is_accepted_tuples", end_string_detector_test_data
 )
 def test_end_string_detector(
     stag_format: Dict[str, Any],
-    expected_grammar: str,
+    expected_stag: Dict,
     instance_is_accepted_tuples: List[Tuple[str, bool]],
 ):
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     for instance, is_accepted in instance_is_accepted_tuples:
         check_stag_with_instance(stag_format, instance, is_accepted)
 
@@ -2134,9 +2150,9 @@ multiple_end_tokens_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", multiple_end_tokens_tag_stag_grammar)
-def test_multiple_end_tokens_tag_grammar(stag_format: Dict[str, Any], expected_grammar: str):
-    check_stag_with_grammar(stag_format, expected_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", multiple_end_tokens_tag_stag_grammar)
+def test_multiple_end_tokens_tag_grammar(stag_format: Dict[str, Any], expected_stag: Dict):
+    check_stag_with_grammar(stag_format, expected_stag)
 
 
 @pytest.mark.parametrize("instance, is_accepted", multiple_end_tokens_instance_is_accepted)
@@ -2179,9 +2195,9 @@ multiple_end_tokens_any_text_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize("stag_format, expected_grammar", multiple_end_tokens_any_text_stag_grammar)
-def test_multiple_end_tokens_any_text_grammar(stag_format: Dict[str, Any], expected_grammar: str):
-    check_stag_with_grammar(stag_format, expected_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", multiple_end_tokens_any_text_stag_grammar)
+def test_multiple_end_tokens_any_text_grammar(stag_format: Dict[str, Any], expected_stag: Dict):
+    check_stag_with_grammar(stag_format, expected_stag)
 
 
 @pytest.mark.parametrize("instance, is_accepted", multiple_end_tokens_any_text_instance_is_accepted)
@@ -2236,11 +2252,9 @@ multiple_end_tokens_with_empty_instance_is_accepted = [
 ]
 
 
-@pytest.mark.parametrize(
-    "stag_format, expected_grammar", multiple_end_tokens_with_empty_stag_grammar
-)
-def test_multiple_end_tokens_with_empty_grammar(stag_format: Dict[str, Any], expected_grammar: str):
-    check_stag_with_grammar(stag_format, expected_grammar)
+@pytest.mark.parametrize("stag_format, expected_stag", multiple_end_tokens_with_empty_stag_grammar)
+def test_multiple_end_tokens_with_empty_grammar(stag_format: Dict[str, Any], expected_stag: Dict):
+    check_stag_with_grammar(stag_format, expected_stag)
 
 
 @pytest.mark.parametrize(
@@ -2337,7 +2351,7 @@ def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
         "end": ".",
     }
 
-    expected_grammar = r"""any_text ::= TagDispatch(
+    expected_stag = r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("."),
   loop_after_dispatch=false,
@@ -2347,7 +2361,7 @@ tag ::= (("" any_text))
 root ::= ((tag))
 """
 
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
@@ -2378,7 +2392,7 @@ def test_excluded_strings_in_triggered_format(instance: str, is_accepted: bool):
         "excludes": ["L1", "L2"],
     }
 
-    expected_grammar = r"""const_string ::= (("L1"))
+    expected_stag = r"""const_string ::= (("L1"))
 const_string_1 ::= (("L2"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
@@ -2393,8 +2407,730 @@ triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 root ::= ((triggered_tags))
 """
 
-    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_grammar(stag_format, expected_stag)
     check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+const_string_template_values_stag_grammar_instance_accepted = [
+    (
+        {"type": "const_string", "value": "The value is: {{strings[].value}}."},
+        [{"value": "a"}, {"value": "b"}, {"value": "c"}],
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {"type": "const_string", "value": "The value is: a."},
+                    {"type": "const_string", "value": "The value is: b."},
+                    {"type": "const_string", "value": "The value is: c."},
+                ],
+            },
+        },
+    ),
+    (
+        {"type": "const_string", "value": "{{strings[].value}}"},
+        [{"value": "a"}, {"value": "b"}, {"value": "c"}],
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {"type": "const_string", "value": "a"},
+                    {"type": "const_string", "value": "b"},
+                    {"type": "const_string", "value": "c"},
+                ],
+            },
+        },
+    ),
+    (
+        {"type": "const_string", "value": "The value is: {{strings[].value}}"},
+        [{"value": "a"}, {"value": "b"}, {"value": "c"}],
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {"type": "const_string", "value": "The value is: a"},
+                    {"type": "const_string", "value": "The value is: b"},
+                    {"type": "const_string", "value": "The value is: c"},
+                ],
+            },
+        },
+    ),
+    (
+        {"type": "const_string", "value": "{{strings[].value}}是"},
+        [{"value": "a"}, {"value": "b"}, {"value": "c"}],
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {"type": "const_string", "value": "a是"},
+                    {"type": "const_string", "value": "b是"},
+                    {"type": "const_string", "value": "c是"},
+                ],
+            },
+        },
+    ),
+    (
+        {"type": "const_string", "value": "{{strings[].begin}} a dog{{strings[].end}}"},
+        [{"begin": "It is", "end": "."}, {"begin": "Is it", "end": "?"}],
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {"type": "const_string", "value": "It is a dog."},
+                    {"type": "const_string", "value": "Is it a dog?"},
+                ],
+            },
+        },
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    const_string_template_values_stag_grammar_instance_accepted,
+)
+def test_const_string_template_values(
+    template_stag_format: Dict[str, Any], template_values: List[Dict[str, Any]], expected_stag: Dict
+):
+    """Test const_string format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, strings=template_values)
+
+
+def test_const_string_template_values_with_mingled_templates():
+    mingled_format = {
+        "type": "const_string",
+        "value": "{{string_a[].value}} and {{string_b[].value}} are mingled!",
+    }
+    structural_tag = {"type": "structural_tag", "format": mingled_format}
+    with pytest.raises(Exception) as exc_info:
+        xgr.Grammar.from_structural_tag_template(
+            structural_tag, string_a=[{"value": "1"}], string_b=[{"value": "2"}]
+        )
+    expected_info = (
+        "Invalid structural tag error: Multiple different placeholder names "
+        "found in the same string: '{{string_a[].value}} and {{string_b[].value}} "
+        "are mingled!'"
+    )
+    assert str(exc_info.value) == expected_info
+
+
+json_schema_template_values_stag_grammar_instance_accepted = [
+    (
+        {"type": "json_schema", "json_schema": "{{schemas[].value}}"},
+        [
+            {
+                "value": r"""{"type":"object", "properties": {"arg": {"type": "string"}}, "required": ["arg"]}"""
+            },
+            {"value": r"""{"type":"string"}"""},
+        ],
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "type": "object",
+                            "properties": {"arg": {"type": "string"}},
+                            "required": ["arg"],
+                        },
+                    },
+                    {"type": "json_schema", "json_schema": {"type": "string"}},
+                ],
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    json_schema_template_values_stag_grammar_instance_accepted,
+)
+def test_json_schema_template_values(
+    template_stag_format: Dict[str, Any], template_values: List[Dict[str, Any]], expected_stag: Dict
+):
+    """Test json_schema format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, schemas=template_values)
+
+
+def test_part_json_schema_template_failure():
+    template_format = {"type": "json_schema", "json_schema": r"""{"type": {{types[].value}}}"""}
+    structural_tag = {"type": "structural_tag", "format": template_format}
+    types = [{"value": "object"}, {"value": "string"}, {"value": "integer"}]
+    with pytest.raises(Exception) as exc_info:
+        xgr.Grammar.from_structural_tag_template(structural_tag, types=types)
+    expected_info = (
+        "Invalid structural tag error: JSON schema format must have a json_schema field with "
+        "a object or boolean value"
+    )
+    assert str(exc_info.value) == expected_info
+
+
+qwen_template_values_stag_grammar_instance_accepted = [
+    (
+        {"type": "qwen_xml_parameter", "json_schema": "{{schemas[].value}}"},
+        [
+            {
+                "value": r"""{"type":"object", "properties": {"name": {"type": "string"}}, "required": ["name"]}"""
+            },
+            {
+                "value": r"""{"type":"object", "properties": {"age": {"type": "integer"}}, "required": ["age"]}"""
+            },
+        ],
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {
+                        "type": "qwen_xml_parameter",
+                        "json_schema": {
+                            "type": "object",
+                            "properties": {"name": {"type": "string"}},
+                            "required": ["name"],
+                        },
+                    },
+                    {
+                        "type": "qwen_xml_parameter",
+                        "json_schema": {
+                            "type": "object",
+                            "properties": {"age": {"type": "integer"}},
+                            "required": ["age"],
+                        },
+                    },
+                ],
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    qwen_template_values_stag_grammar_instance_accepted,
+)
+def test_qwen_template_values(
+    template_stag_format: Dict[str, Any], template_values: List[Dict[str, Any]], expected_stag: Dict
+):
+    """Test qwen_xml_parameter format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, schemas=template_values)
+
+
+def test_part_qwen_template_failure():
+    mingled_format = {
+        "type": "qwen_xml_parameter",
+        "json_schema": r"""{"type": {{types[].value}}}""",
+    }
+    structural_tag = {"type": "structural_tag", "format": mingled_format}
+    types = [{"value": "object"}, {"value": "string"}]
+    with pytest.raises(Exception) as exc_info:
+        xgr.Grammar.from_structural_tag_template(structural_tag, types=types)
+    expected_info = (
+        "Invalid structural tag error: Qwen XML Parameter format must have a json_schema field "
+        "with a object or boolean value"
+    )
+
+    assert str(exc_info.value) == expected_info
+
+
+regex_template_values_stag_grammar_instance_accepted = [
+    (
+        {"type": "regex", "pattern": r"{{patterns[].value}}"},
+        [{"value": r"123"}, {"value": r"[a-zA-Z]+"}],
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {"type": "regex", "pattern": "123"},
+                    {"type": "regex", "pattern": "[a-zA-Z]+"},
+                ],
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    regex_template_values_stag_grammar_instance_accepted,
+)
+def test_regex_template_values(
+    template_stag_format: Dict[str, Any], template_values: List[Dict[str, Any]], expected_stag: Dict
+):
+    """Test regex format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, patterns=template_values)
+
+
+def test_part_regex_template_failure():
+    mingled_format = {"type": "grammar", "pattern": r"{{patterns[].value}}!!!"}
+    structural_tag = {"type": "structural_tag", "format": mingled_format}
+    patterns = [{"value": r"123"}, {"value2": r"[a-zA-Z]+"}]
+    with pytest.raises(RuntimeError) as exc_info:
+        xgr.Grammar.from_structural_tag_template(structural_tag, patterns=patterns)
+    assert exc_info is not None
+
+
+grammar_template_values_stag_grammar_instance_accepted = [
+    (
+        {"type": "grammar", "grammar": "{{grammars[].value}}"},
+        [{"value": 'root::= "a" | "b"'}, {"value": 'root ::= a+\na::= "c" | "d"'}],
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {"type": "grammar", "grammar": 'root::= "a" | "b"'},
+                    {"type": "grammar", "grammar": 'root ::= a+\na::= "c" | "d"'},
+                ],
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    grammar_template_values_stag_grammar_instance_accepted,
+)
+def test_grammar_template_values(
+    template_stag_format: Dict[str, Any], template_values: List[Dict[str, Any]], expected_stag: Dict
+):
+    """Test grammar format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, grammars=template_values)
+
+
+def test_part_grammar_template_failure():
+    format = {"type": "grammar", "grammar": "root ::= {{grammars[].value}}!!!"}
+    structural_tag = {"type": "structural_tag", "format": format}
+    grammars = [{"value": 'root ::= "a" | "b"'}, {"value": 'root ::= "c" | "d"'}]
+    with pytest.raises(RuntimeError) as exc_info:
+        xgr.Grammar.from_structural_tag_template(structural_tag, grammars=grammars)
+    assert exc_info is not None
+
+
+any_text_instance_is_accepted_template = [("abc", True), ("好", True)]
+
+
+def test_no_parameter_error():
+    format = {"type": "regex", "pattern": "{{patterns[].value}}"}
+    structural_tag = {"type": "structural_tag", "format": format}
+    grammars = [{"value": 'root ::= "a" | "b"'}, {"value": 'root ::= "c" | "d"'}]
+    expected_error_info = "Invalid structural tag error: Placeholder name 'patterns' not found in values, which is required for the template: '{{patterns[].value}}'"
+
+    with pytest.raises(RuntimeError) as exc_info:
+        xgr.Grammar.from_structural_tag_template(structural_tag, grammars=grammars)
+    assert str(exc_info.value) == expected_error_info
+
+
+or_template_values_stag_grammar_instance_accepted = [
+    (
+        {
+            "type": "or",
+            "elements": [
+                {"type": "const_string", "value": "{{strings[].value}}"},
+                {"type": "const_string", "value": "{{numbers[].value}}"},
+            ],
+        },
+        {
+            "strings": [{"value": "hello"}, {"value": "world"}],
+            "numbers": [{"value": "1"}, {"value": "2"}],
+        },
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {"type": "const_string", "value": "hello"},
+                    {"type": "const_string", "value": "world"},
+                    {"type": "const_string", "value": "1"},
+                    {"type": "const_string", "value": "2"},
+                ],
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    or_template_values_stag_grammar_instance_accepted,
+)
+def test_or_template_values(
+    template_stag_format: Dict[str, Any],
+    template_values: Dict[str, List[Dict[str, Any]]],
+    expected_stag: Dict,
+):
+    """Test grammar format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, **template_values)
+
+
+sequence_template_values_stag_grammar_instance_accepted = [
+    (
+        {
+            "type": "sequence",
+            "elements": [
+                {"type": "const_string", "value": "{{first[].value}}"},
+                {"type": "const_string", "value": "{{second[].value}}"},
+            ],
+        },
+        {
+            "first": [{"value": "I'm "}, {"value": "You're "}],
+            "second": [{"value": "Alice"}, {"value": "Bob"}],
+        },
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "sequence",
+                "elements": [
+                    {
+                        "type": "or",
+                        "elements": [
+                            {"type": "const_string", "value": "I'm "},
+                            {"type": "const_string", "value": "You're "},
+                        ],
+                    },
+                    {
+                        "type": "or",
+                        "elements": [
+                            {"type": "const_string", "value": "Alice"},
+                            {"type": "const_string", "value": "Bob"},
+                        ],
+                    },
+                ],
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    sequence_template_values_stag_grammar_instance_accepted,
+)
+def test_sequence_template_values(
+    template_stag_format: Dict[str, Any],
+    template_values: Dict[str, List[Dict[str, Any]]],
+    expected_stag: Dict,
+):
+    """Test sequence format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, **template_values)
+
+
+tag_template_values_stag_grammar_instance_accepted = [
+    (
+        {
+            "type": "tag",
+            "begin": "{{outter[].first}}",
+            "content": {
+                "type": "or",
+                "elements": [
+                    {"type": "const_string", "value": "dog"},
+                    {"type": "const_string", "value": "cat"},
+                ],
+            },
+            "end": "{{outter[].symbol}}",
+        },
+        {"outter": [{"first": "It is a ", "symbol": "!"}, {"first": "Is it a ", "symbol": "?"}]},
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "or",
+                "elements": [
+                    {
+                        "type": "tag",
+                        "begin": "It is a ",
+                        "content": {
+                            "type": "or",
+                            "elements": [
+                                {"type": "const_string", "value": "dog"},
+                                {"type": "const_string", "value": "cat"},
+                            ],
+                        },
+                        "end": ["!"],
+                    },
+                    {
+                        "type": "tag",
+                        "begin": "Is it a ",
+                        "content": {
+                            "type": "or",
+                            "elements": [
+                                {"type": "const_string", "value": "dog"},
+                                {"type": "const_string", "value": "cat"},
+                            ],
+                        },
+                        "end": ["?"],
+                    },
+                ],
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    tag_template_values_stag_grammar_instance_accepted,
+)
+def test_tag_template_values(
+    template_stag_format: Dict[str, Any],
+    template_values: Dict[str, List[Dict[str, Any]]],
+    expected_stag: Dict,
+):
+    """Test tag format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, **template_values)
+
+
+def test_mingled_tag_template():
+    format = {
+        "type": "tag",
+        "begin": "{{outter[].first}}",
+        "content": {
+            "type": "or",
+            "elements": [{"type": "const_string", "value": "{{inner[].animal}}"}],
+        },
+        "end": "{{inner[].animal}}",
+    }
+    structural_tag = {"type": "structural_tag", "format": format}
+    outter = [{"first": "It is a "}, {"first": "Is it a "}]
+    inner = [{"animal": "dog"}, {"animal": "cat"}]
+    with pytest.raises(Exception) as exc_info:
+        xgr.Grammar.from_structural_tag_template(structural_tag, outter=outter, inner=inner)
+    expected_error_info = "Invalid structural tag error: Mingled placeholder names found, which indicates that there is a product of placeholders, which is ambiguous to expand."
+    assert str(exc_info.value) == expected_error_info
+
+
+triggered_tag_template_values_stag_grammar_instance_accepted = [
+    (
+        {
+            "type": "triggered_tags",
+            "triggers": ["I"],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": "{{outter[].first}}",
+                    "content": {
+                        "type": "or",
+                        "elements": [
+                            {"type": "const_string", "value": "dog"},
+                            {"type": "const_string", "value": "cat"},
+                        ],
+                    },
+                    "end": "{{outter[].symbol}}",
+                }
+            ],
+            "at_least_one": False,
+            "stop_after_first": False,
+        },
+        {"outter": [{"first": "It is a ", "symbol": "!"}, {"first": "Is it a ", "symbol": "?"}]},
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "triggered_tags",
+                "triggers": ["I"],
+                "tags": [
+                    {
+                        "type": "tag",
+                        "begin": "It is a ",
+                        "content": {
+                            "type": "or",
+                            "elements": [
+                                {"type": "const_string", "value": "dog"},
+                                {"type": "const_string", "value": "cat"},
+                            ],
+                        },
+                        "end": ["!"],
+                    },
+                    {
+                        "type": "tag",
+                        "begin": "Is it a ",
+                        "content": {
+                            "type": "or",
+                            "elements": [
+                                {"type": "const_string", "value": "dog"},
+                                {"type": "const_string", "value": "cat"},
+                            ],
+                        },
+                        "end": ["?"],
+                    },
+                ],
+                "at_least_one": False,
+                "stop_after_first": False,
+                "excludes": [],
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    triggered_tag_template_values_stag_grammar_instance_accepted,
+)
+def test_triggered_tag_template_values(
+    template_stag_format: Dict[str, Any],
+    template_values: Dict[str, List[Dict[str, Any]]],
+    expected_stag: Dict,
+):
+    """Test triggered_tags format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, **template_values)
+
+
+tag_with_separator_template_values_stag_grammar_instance_accepted = [
+    (
+        {
+            "type": "tags_with_separator",
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": "{{outter[].first}}",
+                    "content": {
+                        "type": "or",
+                        "elements": [
+                            {"type": "const_string", "value": "dog"},
+                            {"type": "const_string", "value": "cat"},
+                        ],
+                    },
+                    "end": "{{outter[].symbol}}",
+                }
+            ],
+            "separator": "\n",
+            "at_least_one": False,
+            "stop_after_first": False,
+        },
+        {"outter": [{"first": "It is a ", "symbol": "!"}, {"first": "Is it a ", "symbol": "?"}]},
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "tags_with_separator",
+                "tags": [
+                    {
+                        "type": "tag",
+                        "begin": "It is a ",
+                        "content": {
+                            "type": "or",
+                            "elements": [
+                                {"type": "const_string", "value": "dog"},
+                                {"type": "const_string", "value": "cat"},
+                            ],
+                        },
+                        "end": ["!"],
+                    },
+                    {
+                        "type": "tag",
+                        "begin": "Is it a ",
+                        "content": {
+                            "type": "or",
+                            "elements": [
+                                {"type": "const_string", "value": "dog"},
+                                {"type": "const_string", "value": "cat"},
+                            ],
+                        },
+                        "end": ["?"],
+                    },
+                ],
+                "separator": "\n",
+                "at_least_one": False,
+                "stop_after_first": False,
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    tag_with_separator_template_values_stag_grammar_instance_accepted,
+)
+def test_tag_with_separator_template_values(
+    template_stag_format: Dict[str, Any],
+    template_values: Dict[str, List[Dict[str, Any]]],
+    expected_stag: Dict,
+):
+    """Test tags_with_separator format with template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, **template_values)
+
+
+array_and_none_array_elements_template_value_grammar_instance_accepted = [
+    (
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "tag",
+                "begin": "{{calling.begin}}",
+                "end": "{{calling.end}}",
+                "content": {"type": "json_schema", "json_schema": "{{calling.functions[]}}"},
+            },
+        },
+        {
+            "calling": {
+                "begin": "<calling>",
+                "end": "</calling>",
+                "functions": [{"type": "string"}, {"type": "number"}, {"type": "boolean"}],
+            }
+        },
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "tag",
+                "begin": "<calling>",
+                "content": {
+                    "type": "or",
+                    "elements": [
+                        {"type": "json_schema", "json_schema": {"type": "string"}},
+                        {"type": "json_schema", "json_schema": {"type": "number"}},
+                        {"type": "json_schema", "json_schema": {"type": "boolean"}},
+                    ],
+                },
+                "end": ["</calling>"],
+            },
+        },
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "template_stag_format, template_values, expected_stag",
+    array_and_none_array_elements_template_value_grammar_instance_accepted,
+)
+def test_array_and_none_array_elements(
+    template_stag_format: Dict[str, Any], template_values: Dict[str, Any], expected_stag: Dict
+):
+    """Test array and none-array elements in template values"""
+    check_template_stag_with_stag(template_stag_format, expected_stag, **template_values)
+
+
+def test_invalid_multiple_array():
+    structural_tag_format = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": "{{calling.begin[]}}",
+            "end": "{{calling.end}}",
+            "content": {"type": "json_schema", "json_schema": "{{calling.functions[]}}"},
+        },
+    }
+
+    template_values = {
+        "calling": {
+            "begin": ["<calling>", "<calling1>"],
+            "end": "</calling>",
+            "functions": [{"type": "string"}, {"type": "number"}],
+        }
+    }
+
+    with pytest.raises(Exception) as exc_info:
+        check_template_stag_with_stag(structural_tag_format, "", **template_values)
+    expected_error_info = (
+        "Invalid structural tag error: Invalid placeholder structure found in tag format"
+    )
+    assert str(exc_info.value) == expected_error_info
 
 
 if __name__ == "__main__":

@@ -12,6 +12,8 @@ except ImportError:
 
 from pydantic import BaseModel, Field
 
+from .base import _core
+
 # ---------- Basic Formats ----------
 
 
@@ -29,7 +31,7 @@ class JSONSchemaFormat(BaseModel):
 
     type: Literal["json_schema"] = "json_schema"
     """The type of the format."""
-    json_schema: Union[bool, Dict[str, Any]]
+    json_schema: Union[bool, Dict[str, Any], str]
     """The JSON schema."""
 
 
@@ -61,7 +63,7 @@ class QwenXMLParameterFormat(BaseModel):
     type: Literal["qwen_xml_parameter"] = "qwen_xml_parameter"
     """The type of the format."""
 
-    json_schema: Union[bool, Dict[str, Any]]
+    json_schema: Union[bool, Dict[str, Any], str]
     """The JSON schema for the parameters of the function calling."""
 
 
@@ -348,6 +350,33 @@ class StructuralTag(BaseModel):
             return StructuralTag.model_validate(json_str)
         else:
             raise ValueError("Invalid JSON string or dictionary")
+
+    @staticmethod
+    def from_template(
+        template: Union[str, Dict[str, Any], "StructuralTag"], **kwargs
+    ) -> "StructuralTag":
+        """Create a StructuralTag from a template name and additional parameters.
+
+        Parameters
+        ----------
+        template : Union[str, Dict[str, Any], StructuralTag]
+            The template string, dictionary, or StructuralTag instance.
+
+        **kwargs
+            Additional parameters to customize the StructuralTag.
+
+        Returns
+        -------
+        StructuralTag
+            The generated StructuralTag.
+        """
+
+        from .grammar import _convert_instance_to_str
+
+        template_json_str = _convert_instance_to_str(template)
+        kwargs_json_str = json.dumps(obj=kwargs)
+
+        return StructuralTag.from_json(_core.from_template(template_json_str, kwargs_json_str))
 
 
 __all__ = [
