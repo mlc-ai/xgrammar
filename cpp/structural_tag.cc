@@ -538,6 +538,7 @@ class StructuralTagAnalyzer {
 
   std::vector<std::string> DetectEndStrings();
   bool IsUnlimited(const Format& format);
+  bool IsExcluded(const Format& format);
 
   int visit_format_recursion_depth_ = 0;
   std::vector<FormatPtrVariant> stack_;
@@ -573,6 +574,24 @@ bool StructuralTagAnalyzer::IsUnlimited(const Format& format) {
           return arg.is_unlimited_;
         } else if constexpr (std::is_same_v<T, OrFormat>) {
           return arg.is_unlimited_;
+        } else {
+          return false;
+        }
+      },
+      format
+  );
+}
+
+bool StructuralTagAnalyzer::IsExcluded(const Format& format) {
+  return std::visit(
+      [&](auto&& arg) -> bool {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, AnyTextFormat>) {
+          const auto& any_text_format = std::get<AnyTextFormat>(format);
+          return !any_text_format.excludes.empty();
+        } else if constexpr (std::is_same_v<T, TriggeredTagsFormat>) {
+          const auto& triggered_tags_format = std::get<TriggeredTagsFormat>(format);
+          return !triggered_tags_format.excludes.empty();
         } else {
           return false;
         }
@@ -636,10 +655,12 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(SequenceFormat* format) 
       return err;
     }
     if (IsUnlimited(element)) {
-      return ISTError(
-          "Only the last element in a sequence can be unlimited, but the " + std::to_string(i) +
-          "th element of sequence format is unlimited"
-      );
+      if (!IsExcluded(element)) {
+        return ISTError(
+            "Only the last element in a sequence can be unlimited, but the " + std::to_string(i) +
+            "th element of sequence format is unlimited"
+        );
+      }
     }
   }
 
@@ -648,7 +669,7 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(SequenceFormat* format) 
   if (err.has_value()) {
     return err;
   }
-  format->is_unlimited_ = IsUnlimited(element);
+  format->is_unlimited_ = IsUnlimited(element) && !IsExcluded(element);
   return std::nullopt;
 }
 
@@ -660,7 +681,7 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(OrFormat* format) {
     if (err.has_value()) {
       return err;
     }
-    auto is_unlimited = IsUnlimited(element);
+    auto is_unlimited = IsUnlimited(element) && !IsExcluded(element);
     is_any_unlimited |= is_unlimited;
     is_all_unlimited &= is_unlimited;
   }
@@ -692,7 +713,11 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TagFormat* format) {
       }
     }
     if (!has_non_empty) {
-      return ISTError("When the content is unlimited, at least one end string must be non-empty");
+      if (IsExcluded(*format->content)) {
+        return std::nullopt;
+      } else {
+        return ISTError("When the content is unlimited, at least one end string must be non-empty");
+      }
     }
     // Clear the end strings because they are moved to the detected_end_strs_ field.
     format->end.clear();
@@ -829,7 +854,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextForma
         << "At least one detected end string must be non-empty";
     // TagDispatch supports multiple stop strings
     auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, false, non_empty_ends, false, format.excluded_strs}
+        Grammar::Impl::TagDispatch{{}, false, non_empty_ends, false, format.excludes}
+    );
+    return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
+  } else if (format.excludes.size() > 0) {
+    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
+        Grammar::Impl::TagDispatch{{}, true, {}, false, format.excludes}
     );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
