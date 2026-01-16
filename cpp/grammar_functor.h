@@ -9,8 +9,11 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
+#include "compiled_grammar_impl.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
 #include "xgrammar/grammar.h"
@@ -384,6 +387,56 @@ class GrammarOptimizer {
 class RootRuleRenamer {
  public:
   static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
+ * \brief Hash the fsms in the grammar,
+ * and get the new state ids of each fsm's states.
+ */
+class GrammarFSMHasher {
+ public:
+  static void Apply(Grammar* grammar);
+  static std::optional<uint64_t> HashSequence(const Grammar& grammar, int32_t sequence_id);
+};
+
+/*!
+ * \brief Store the crossing cache for different grammars.
+ * \param max_cache_size The maximum size of the cache numbers.
+ * \details LRU algorithm is implemented.
+ */
+class RuleLevelCache {
+ public:
+  static const size_t kUnlimitedSize = static_cast<size_t>(-1);
+
+  std::optional<AdaptiveTokenMask> GetCache(
+      const uint64_t& fsm_hash,
+      int32_t fsm_new_node_id,
+      const int32_t& state_cnt,
+      const int32_t edge_cnt
+  );
+  bool AddCache(
+      const uint64_t& fsm_hash,
+      int32_t fsm_new_node_id,
+      const int32_t& state_cnt,
+      const int32_t edge_cnt,
+      const AdaptiveTokenMask& token_mask
+  );
+  bool AddCache(
+      const uint64_t& fsm_hash,
+      int32_t fsm_new_node_id,
+      const int32_t& state_cnt,
+      const int32_t edge_cnt,
+      AdaptiveTokenMask&& token_mask
+  );
+  RuleLevelCache(size_t max_cache_memory_size = kUnlimitedSize);
+
+  void ClearCache();
+
+  size_t GetMaxSize() const;
+
+  friend size_t MemorySize(const RuleLevelCache& manager);
+
+  XGRAMMAR_DEFINE_PIMPL_METHODS(RuleLevelCache);
 };
 
 }  // namespace xgrammar
