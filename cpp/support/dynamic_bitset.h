@@ -97,7 +97,7 @@ class DynamicBitset {
     size_ = other.size_;
     buffer_size_ = other.buffer_size_;
     if (is_internal_) {
-      internal_buffer_.reserve(buffer_size_);
+      internal_buffer_.resize(buffer_size_);
       data_ = internal_buffer_.data();
     }
     if (data_ != other.data_) {
