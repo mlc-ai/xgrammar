@@ -156,11 +156,13 @@ def get_apply_token_bitmask_kernel(impl: str) -> Callable:
 
 
 @pytest.mark.parametrize("impl", ("cpu", "cuda", "triton", "metal", "torch_compile"))
-def test_apply_token_bitmask_inplace_kernel(impl: str):
+def test_apply_token_bitmask_inplace_kernel(impl: str, num_parallel_threads: int):
     if impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
     elif impl == "metal" and not _is_mlx_metal_available:
         pytest.skip(reason="MLX is not installed")
+    elif impl == "metal" and num_parallel_threads > 1:
+        pytest.skip(reason="MLX crashes under multithreading")
 
     kernel = get_apply_token_bitmask_kernel(impl)
 
