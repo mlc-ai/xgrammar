@@ -150,9 +150,9 @@ def apply_token_bitmask_inplace(
         if logits.device.type == "cpu":
             backend = "cpu"
         elif logits.device.type == "cuda":
-            backend == "triton"
+            backend = "triton"
         else:
-            backend == "torch_compile"
+            backend = "torch_compile"
 
     # dispatch to different implementations based on the device
     if backend == "cpu":
