@@ -177,25 +177,22 @@ impl TokenizerInfo {
 
     /// The size of the vocabulary.
     pub fn vocab_size(&self) -> usize {
-        let sz = usize::try_from(
+        usize::try_from(
             self.inner
                 .as_ref()
                 .expect("FFITokenizerInfo UniquePtr was null")
                 .GetVocabSize()
                 .0,
         )
-        .expect("GetVocabSize returned a negative value");
-        sz
+        .expect("GetVocabSize returned a negative value")
     }
 
     /// Whether the tokenizer will prepend a space before the text in the tokenization process.
     pub fn add_prefix_space(&self) -> bool {
-        let val = self
-            .inner
+        self.inner
             .as_ref()
             .expect("FFITokenizerInfo UniquePtr was null")
-            .GetAddPrefixSpace();
-        val
+            .GetAddPrefixSpace()
     }
 
     /// The decoded vocabulary of the tokenizer. This converts the tokens in the LLM's
@@ -205,13 +202,7 @@ impl TokenizerInfo {
         let cxx_vec = self.inner.GetDecodedVocab();
         let mut result: Vec<Box<[u8]>> = Vec::with_capacity(cxx_vec.len());
         for cxx_string in cxx_vec.iter() {
-            result.push(
-                cxx_string
-                    .to_string_lossy()
-                    .into_owned()
-                    .into_bytes()
-                    .into_boxed_slice(),
-            );
+            result.push(cxx_string.as_bytes().to_vec().into_boxed_slice());
         }
         result.into_boxed_slice()
     }
@@ -326,11 +317,9 @@ impl TokenizerInfo {
 
     /// Heuristically detect whether a tokenizer resembles a tiktoken-style tokenizer.
     ///
-    /// In Python this checks `isinstance(tokenizer.tokenizer, tiktoken.Encoding)` or whether
-    /// the vocab filename contains "tiktoken". In Rust we do not have those runtime types,
-    /// so we approximate: if the vocabulary does NOT contain typical markers of
-    /// SentencePiece (`▁`), Byte-level GPT-2 (`Ġ`), or ByteFallback (tokens like `<0x1B>`),
-    /// we consider it RAW (tiktoken-like).
+    /// If the vocabulary does NOT contain typical markers of SentencePiece (`▁`),
+    /// Byte-level GPT-2 (`Ġ`), or ByteFallback (tokens like `<0x1B>`), we consider
+    /// it RAW (tiktoken-like).
     pub fn _is_tiktoken_tokenizer(tokenizer: &tokenizers::Tokenizer) -> bool {
         let vocab = tokenizer.get_vocab(true);
         let mut has_sentencepiece_marker = false;
@@ -363,9 +352,8 @@ impl TokenizerInfo {
 
     /// Heuristically detect whether a tokenizer is SentencePiece-based.
     ///
-    /// In Python this checks for a `sentencepiece.SentencePieceProcessor`. Here we look for
-    /// typical SentencePiece marker `▁` in the vocabulary. This is a best-effort heuristic
-    /// and may not be perfect for all models.
+    /// Looks for the typical SentencePiece marker `▁` in the vocabulary. This is a
+    /// best-effort heuristic and may not be perfect for all models.
     pub fn _is_sentencepiece_tokenizer(
         tokenizer: &tokenizers::Tokenizer
     ) -> bool {
@@ -376,9 +364,8 @@ impl TokenizerInfo {
     /// Construct from a `tokenizers::Tokenizer` with explicit options, preserving tokenizer
     /// indexing.
     ///
-    /// This matches Python's constructor path where `encoded_vocab` is built by id order and
-    /// `vocab_size` may be larger than the tokenizer's vocab (model padding), with special ids
-    /// reserved in the tail range.
+    /// The `encoded_vocab` is built by id order and `vocab_size` may be larger than the
+    /// tokenizer's vocab (model padding), with special ids reserved in the tail range.
     ///
     /// # Parameters
     ///

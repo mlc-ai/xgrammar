@@ -58,20 +58,25 @@ fn test_regex_accept() {
     ];
     for p in patterns {
         let grammar = Grammar::from_regex(p, false).unwrap();
-        assert!(grammar.to_string_ebnf().len() > 0, "Pattern: {}", p);
+        assert!(!grammar.to_string_ebnf().is_empty(), "Pattern: {}", p);
     }
 }
 
-// Note: The invalid regex tests from Python cannot be properly ported because
-// the C++ implementation uses XGRAMMAR_LOG(FATAL) which aborts the process.
-// In Python, this is caught as a RuntimeError, but in Rust/C++, it terminates.
-// Test cases for invalid patterns:
-// - r"a{,3}" - Invalid range
-// - r"a{3,2}" - Invalid range (max < min)
-// - r"[z-a]" - Invalid range (max < min)
-// - r"a++" - Invalid repetition
-// - r"(?=a)" - Lookahead not supported
-// - r"(?!a)" - Negative lookahead not supported
+#[test]
+#[serial]
+fn test_regex_refuse() {
+    let patterns = [
+        r"a{,3}", // Invalid range
+        r"a{3,2}", // Invalid range (max < min)
+        r"[z-a]", // Invalid range (max < min)
+        r"a++", // Invalid repetition
+        r"(?=a)", // Lookahead not supported
+        r"(?!a)", // Negative lookahead not supported
+    ];
+    for p in patterns {
+        assert!(Grammar::from_regex(p, false).is_err());
+    }
+}
 
 #[test]
 #[serial]
@@ -124,9 +129,9 @@ fn test_advanced() {
         ),
     ];
     for (regex, instance, expected) in cases {
-        let g = Grammar::from_regex(regex, false).unwrap();
+        let grammar = Grammar::from_regex(regex, false).unwrap();
         assert_eq!(
-            is_grammar_accept_string(&g, instance),
+            is_grammar_accept_string(&grammar, instance),
             expected,
             "regex: {}, instance: {}",
             regex,
@@ -216,9 +221,9 @@ fn test_regex_with_large_range_compilation() {
 #[serial]
 #[cfg(feature = "hf")]
 fn test_regression_lookahead_already_completed() {
-    let tk = make_hf_tokenizer_info("Qwen/Qwen2.5-0.5B");
+    let tokenizer_info = make_hf_tokenizer_info("Qwen/Qwen2.5-0.5B");
     let regex = r"[0-9]+";
-    let mut compiler = GrammarCompiler::new(&tk, 1, false, -1).unwrap();
+    let mut compiler = GrammarCompiler::new(&tokenizer_info, 1, false, -1).unwrap();
     let grammar = Grammar::from_regex(regex, false).unwrap();
     let compiled = compiler.compile_grammar(&grammar).unwrap();
     let mut matcher = GrammarMatcher::new(&compiled, None, true, -1).unwrap();

@@ -75,9 +75,11 @@ impl CompiledGrammar {
             }
         }
 
-        let inner_ref = self.inner.as_ref().expect("CompiledGrammar inner is null");
-        let sz = inner_ref.MemorySizeBytes().to_usize();
-        sz
+        self.inner
+            .as_ref()
+            .expect("CompiledGrammar inner is null")
+            .MemorySizeBytes()
+            .to_usize()
     }
 
     /// Serialize the compiled grammar to a JSON string. It will serialize the compiled grammar

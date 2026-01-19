@@ -34,8 +34,8 @@ fn test_traverse_draft_tree_linear() {
     let vocab = ["a", "b", "c", "{", "}", "\"", ":", ",", " ", "true", "false", "null"];
     let tok = TokenizerInfo::new(&vocab, VocabType::RAW, &None, false).unwrap();
     let mut compiler = GrammarCompiler::new(&tok, 1, false, -1).unwrap();
-    let cg = compiler.compile_grammar(&grammar).unwrap();
-    let mut matcher = GrammarMatcher::new(&cg, None, true, -1).unwrap();
+    let compiled_grammar = compiler.compile_grammar(&grammar).unwrap();
+    let mut matcher = GrammarMatcher::new(&compiled_grammar, None, true, -1).unwrap();
 
     let num_nodes = 3usize;
     let mut retrieve_next_token: Vec<i64> = vec![1, 2, -1];
@@ -65,8 +65,8 @@ fn test_traverse_draft_tree_with_siblings() {
     let vocab = ["a", "b", "c", "{", "}", "\"", ":", ",", " ", "true", "false", "null"];
     let tok = TokenizerInfo::new(&vocab, VocabType::RAW, &None, false).unwrap();
     let mut compiler = GrammarCompiler::new(&tok, 1, false, -1).unwrap();
-    let cg = compiler.compile_grammar(&grammar).unwrap();
-    let mut matcher = GrammarMatcher::new(&cg, None, true, -1).unwrap();
+    let compiled_grammar = compiler.compile_grammar(&grammar).unwrap();
+    let mut matcher = GrammarMatcher::new(&compiled_grammar, None, true, -1).unwrap();
 
     // Tree:
     //   0
@@ -99,8 +99,8 @@ fn test_traverse_draft_tree_shape_assertion() {
     let vocab = ["a", "b", "c", "{", "}", "\"", ":", ",", " ", "true", "false", "null"];
     let tok = TokenizerInfo::new(&vocab, VocabType::RAW, &None, false).unwrap();
     let mut compiler = GrammarCompiler::new(&tok, 1, false, -1).unwrap();
-    let cg = compiler.compile_grammar(&grammar).unwrap();
-    let mut matcher = GrammarMatcher::new(&cg, None, true, -1).unwrap();
+    let compiled_grammar = compiler.compile_grammar(&grammar).unwrap();
+    let mut matcher = GrammarMatcher::new(&compiled_grammar, None, true, -1).unwrap();
 
     let mut retrieve_next_token: Vec<i64> = vec![1, 2, -1];
     let mut retrieve_next_sibling_wrong_shape: Vec<i64> = vec![-1, -1];

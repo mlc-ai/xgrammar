@@ -89,6 +89,10 @@ include_cpp! {
     generate!("cxx_utils::SingleTokenResult")
     generate!("cxx_utils::is_single_token_bitmask")
     generate!("cxx_utils::traverse_draft_tree")
+    generate!("cxx_utils::generate_range_regex")
+    generate!("cxx_utils::generate_float_range_regex")
+    generate!("cxx_utils::print_grammar_fsms")
+    // Grammar functor functions removed - they require templates that autocxx can't handle
 
     // DLPack core types
     generate_pod!("DLTensor")

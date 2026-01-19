@@ -10,6 +10,22 @@ use xgrammar::{
     Grammar, GrammarCompiler, GrammarMatcher, TokenizerInfo, VocabType,
 };
 
+#[cfg(feature = "hf")]
+fn get_masked_tokens_from_bitmask(
+    bitmask: &[i32],
+    vocab_size: usize,
+) -> Vec<usize> {
+    let mut masked = Vec::new();
+    for i in 0..vocab_size {
+        let word_idx = i / 32;
+        let bit_idx = i % 32;
+        if (bitmask[word_idx] & (1 << bit_idx)) == 0 {
+            masked.push(i);
+        }
+    }
+    masked
+}
+
 fn matcher_from_grammar(grammar: &Grammar) -> GrammarMatcher {
     // Minimal tokenizer info is sufficient for string acceptance tests
     let empty_vocab: Vec<&str> = vec![];
@@ -409,6 +425,149 @@ fn test_character_class_star_utf8() {
 }
 
 #[test]
+fn test_positive_utf8_character_class_cyrillic() {
+    // Test positive character class with Cyrillic UTF-8 range (2-byte sequences).
+    //
+    // Tests fix for issue #138: positive character classes with UTF-8 ranges
+    // like [а-я] should work correctly.
+    //
+    // Cyrillic lowercase range а-я (U+0430 to U+044F)
+    let ebnf_grammar_str = "root ::= [а-я]+";
+    let grammar = Grammar::from_ebnf(ebnf_grammar_str, "root").unwrap();
+
+    // Single Cyrillic character should be accepted
+    assert!(is_grammar_accept_string(&grammar, "а")); // U+0430 - first in range
+    assert!(is_grammar_accept_string(&grammar, "я")); // U+044F - last in range
+    assert!(is_grammar_accept_string(&grammar, "п")); // U+043F - middle of range
+
+    // Multiple Cyrillic characters
+    assert!(is_grammar_accept_string(&grammar, "привет"));
+    assert!(is_grammar_accept_string(&grammar, "абвгд"));
+
+    // Should reject non-matching characters
+    assert!(!is_grammar_accept_string(&grammar, "hello")); // ASCII
+    assert!(!is_grammar_accept_string(&grammar, "123")); // digits
+    assert!(!is_grammar_accept_string(&grammar, "")); // empty
+
+    // Test uppercase Cyrillic range
+    let ebnf_grammar_upper = "root ::= [А-Я]+";
+    let grammar_upper = Grammar::from_ebnf(ebnf_grammar_upper, "root").unwrap();
+    assert!(is_grammar_accept_string(&grammar_upper, "А")); // U+0410
+    assert!(is_grammar_accept_string(&grammar_upper, "Я")); // U+042F
+    assert!(is_grammar_accept_string(&grammar_upper, "ПРИВЕТ"));
+    assert!(!is_grammar_accept_string(&grammar_upper, "привет")); // lowercase
+
+    // Test mixed Cyrillic range
+    let ebnf_grammar_mixed = "root ::= [а-яА-ЯёЁ]+";
+    let grammar_mixed = Grammar::from_ebnf(ebnf_grammar_mixed, "root").unwrap();
+    assert!(is_grammar_accept_string(&grammar_mixed, "Привет"));
+    assert!(is_grammar_accept_string(&grammar_mixed, "ёлка"));
+    assert!(is_grammar_accept_string(&grammar_mixed, "ЁЖИК"));
+}
+
+#[test]
+fn test_positive_utf8_character_class_cjk() {
+    // Test positive character class with CJK UTF-8 range (3-byte sequences).
+    //
+    // Tests Chinese/Japanese/Korean characters which use 3-byte UTF-8 encoding.
+    //
+    // CJK Unified Ideographs range (subset): 一-龥 (U+4E00 to U+9FA5)
+    let ebnf_grammar_str = "root ::= [一-龥]+";
+    let grammar = Grammar::from_ebnf(ebnf_grammar_str, "root").unwrap();
+
+    // Single CJK character
+    assert!(is_grammar_accept_string(&grammar, "一")); // U+4E00 - first in range
+    assert!(is_grammar_accept_string(&grammar, "中")); // U+4E2D - middle
+    assert!(is_grammar_accept_string(&grammar, "龥")); // U+9FA5 - last in range
+
+    // Multiple CJK characters
+    assert!(is_grammar_accept_string(&grammar, "你好"));
+    assert!(is_grammar_accept_string(&grammar, "世界"));
+    assert!(is_grammar_accept_string(&grammar, "中文测试"));
+
+    // Should reject non-matching characters
+    assert!(!is_grammar_accept_string(&grammar, "hello")); // ASCII
+    assert!(!is_grammar_accept_string(&grammar, "привет")); // Cyrillic
+    assert!(!is_grammar_accept_string(&grammar, "")); // empty
+
+    // Test Japanese Hiragana range: あ-ん (U+3041 to U+3093)
+    let ebnf_hiragana = "root ::= [あ-ん]+";
+    let grammar_hiragana = Grammar::from_ebnf(ebnf_hiragana, "root").unwrap();
+    assert!(is_grammar_accept_string(&grammar_hiragana, "あ")); // U+3041
+    assert!(is_grammar_accept_string(&grammar_hiragana, "ん")); // U+3093
+    assert!(is_grammar_accept_string(&grammar_hiragana, "こんにちは"));
+    assert!(!is_grammar_accept_string(&grammar_hiragana, "漢字")); // Kanji, not Hiragana
+}
+
+#[test]
+fn test_positive_utf8_character_class_emoji() {
+    // Test positive character class with emoji UTF-8 range (4-byte sequences).
+    //
+    // Tests emoji characters which use 4-byte UTF-8 encoding (U+1F300 and above).
+    //
+    // Emoji range: Miscellaneous Symbols and Pictographs (U+1F300 to U+1F5FF)
+    // Note: Using a smaller range for reliable testing
+    let ebnf_grammar_str = "root ::= [😀-😿]+"; // U+1F600 to U+1F63F (Emoticons)
+    let grammar = Grammar::from_ebnf(ebnf_grammar_str, "root").unwrap();
+
+    // Single emoji
+    assert!(is_grammar_accept_string(&grammar, "😀")); // U+1F600 - first in range
+    assert!(is_grammar_accept_string(&grammar, "😃")); // U+1F603 - middle
+    assert!(is_grammar_accept_string(&grammar, "😿")); // U+1F63F - last in range
+
+    // Multiple emojis
+    assert!(is_grammar_accept_string(&grammar, "😀😃😄"));
+
+    // Should reject non-matching characters
+    assert!(!is_grammar_accept_string(&grammar, "hello")); // ASCII
+    assert!(!is_grammar_accept_string(&grammar, "🌍")); // Different emoji range
+    assert!(!is_grammar_accept_string(&grammar, "")); // empty
+}
+
+#[test]
+fn test_positive_utf8_character_class_mixed_ranges() {
+    // Test positive character class with mixed UTF-8 byte-length ranges.
+    //
+    // Tests combining ASCII, 2-byte, 3-byte, and 4-byte UTF-8 characters.
+    //
+    // Mix of ASCII, Cyrillic, and CJK
+    let ebnf_grammar_str = "root ::= [a-zа-я一-龥]+";
+    let grammar = Grammar::from_ebnf(ebnf_grammar_str, "root").unwrap();
+
+    // Individual ranges
+    assert!(is_grammar_accept_string(&grammar, "hello")); // ASCII
+    assert!(is_grammar_accept_string(&grammar, "привет")); // Cyrillic
+    assert!(is_grammar_accept_string(&grammar, "你好")); // CJK
+
+    // Mixed content
+    assert!(is_grammar_accept_string(&grammar, "helloпривет你好"));
+
+    // Should reject uppercase ASCII and other characters
+    assert!(!is_grammar_accept_string(&grammar, "HELLO")); // Uppercase ASCII
+    assert!(!is_grammar_accept_string(&grammar, "123")); // digits
+}
+
+#[test]
+fn test_positive_utf8_single_char_class() {
+    // Test positive character class with single UTF-8 character (not a range).
+    // Single Cyrillic character (not a range)
+    let ebnf_grammar_str = "root ::= [а]+";
+    let grammar = Grammar::from_ebnf(ebnf_grammar_str, "root").unwrap();
+
+    assert!(is_grammar_accept_string(&grammar, "а"));
+    assert!(is_grammar_accept_string(&grammar, "ааа"));
+    assert!(!is_grammar_accept_string(&grammar, "б"));
+    assert!(!is_grammar_accept_string(&grammar, "a")); // ASCII 'a' is different from Cyrillic 'а'
+
+    // Single CJK character
+    let ebnf_grammar_cjk = "root ::= [中]+";
+    let grammar_cjk = Grammar::from_ebnf(ebnf_grammar_cjk, "root").unwrap();
+    assert!(is_grammar_accept_string(&grammar_cjk, "中"));
+    assert!(is_grammar_accept_string(&grammar_cjk, "中中中"));
+    assert!(!is_grammar_accept_string(&grammar_cjk, "国"));
+}
+
+#[test]
 fn test_nfa() {
     let grammar_str = r#"
 root ::= rule1 | rule2 | rule3
@@ -424,34 +583,108 @@ rule3 ::= [a-n] [b-c] "x" | ""
     assert!(!is_grammar_accept_string(&grammar, "ad"));
 }
 
+/// Test token bitmask generation for Unicode character classes.
+///
+/// This test verifies that the grammar correctly handles mixed UTF-8 character
+/// classes (ASCII, Cyrillic, CJK) and produces consistent rejected token counts.
 #[test]
 #[serial]
 #[cfg(feature = "hf")]
-fn test_fill_next_token_bitmask() {
-    let tk = make_hf_tokenizer_info("meta-llama/Llama-2-7b-chat-hf");
-    let json_grammar_ebnf = r#"root ::= object
-value ::= object | array | string | number | "true" | "false" | "null"
-object ::= "{" "" (string ":" value ("," string ":" value)*)? "}"
-array ::= "[" "" (value ("," value)*)? "]"
-string ::= "\"" character* "\""
-character ::= [^"\\\r\n] | "\\" escape
-escape ::= ["\\/bfnrt] | "u" [0-9A-Fa-f]{4}
-number ::= "-"? [0-9]+ ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-"#;
-    let grammar = Grammar::from_ebnf(json_grammar_ebnf, "root").unwrap();
-    let mut compiler = GrammarCompiler::new(&tk, 1, false, -1).unwrap();
+fn test_fill_next_token_bitmask_unicode_char_class() {
+    let tokenizer_path = "meta-llama/Llama-2-7b-chat-hf";
+    // Input: "aбя中" - ASCII 'a', Cyrillic 'б' (2 bytes), 'я' (2 bytes), CJK '中' (3 bytes)
+    let input_str = "aбя中";
+    let expected_rejected_sizes = [
+        22129, 22128, 31984, 22128, 31984, 22128, 31992, 31936, 22128,
+    ];
+
+    let tokenizer_info = make_hf_tokenizer_info(tokenizer_path);
+    let mut compiler = GrammarCompiler::new(&tokenizer_info, 1, false, -1).unwrap();
+
+    // Grammar with mixed UTF-8 character class (ASCII + Cyrillic + CJK)
+    let ebnf_grammar_str = "root ::= [a-zа-я一-龥]+";
+    let grammar = Grammar::from_ebnf(ebnf_grammar_str, "root").unwrap();
+
     let compiled = compiler.compile_grammar(&grammar).unwrap();
     let mut matcher = GrammarMatcher::new(&compiled, None, true, -1).unwrap();
 
-    let input_str = r#"{"id": 1,"name": "Example"}"#;
-    let mut bitmask_data = allocate_token_bitmask(1, tk.vocab_size());
-    let (mut tensor, _shape, _strides) =
-        create_bitmask_dltensor(&mut bitmask_data, 1, tk.vocab_size());
+    let mut token_bitmask =
+        allocate_token_bitmask(1, tokenizer_info.vocab_size());
+    let (mut tensor, _shape, _strides) = create_bitmask_dltensor(
+        &mut token_bitmask,
+        1,
+        tokenizer_info.vocab_size(),
+    );
 
-    for c in input_str.bytes() {
+    let input_bytes = input_str.as_bytes();
+    for (i, c) in input_bytes.iter().enumerate() {
+        // 1. fill_next_token_bitmask
         matcher.fill_next_token_bitmask(&mut tensor, 0, false);
-        matcher.accept_string(&String::from_utf8(vec![c]).unwrap(), false);
+
+        // 2. Correctness verification
+        let rejected_token_ids =
+            get_masked_tokens_from_bitmask(&token_bitmask, tokenizer_info.vocab_size());
+        assert_eq!(
+            rejected_token_ids.len(),
+            expected_rejected_sizes[i],
+            "Byte {} ({:#x}): expected {} rejected, got {}",
+            i,
+            c,
+            expected_rejected_sizes[i],
+            rejected_token_ids.len()
+        );
+
+        // 3. accept_string
+        let s = unsafe {
+            std::str::from_utf8_unchecked(std::slice::from_ref(c))
+        };
+        assert!(matcher.accept_string(s, false));
     }
+
+    // 5. Final correctness verification
+    matcher.fill_next_token_bitmask(&mut tensor, 0, false);
+    let rejected_token_ids =
+        get_masked_tokens_from_bitmask(&token_bitmask, tokenizer_info.vocab_size());
+    assert_eq!(
+        rejected_token_ids.len(),
+        expected_rejected_sizes[expected_rejected_sizes.len() - 1],
+        "Final: expected {} rejected, got {}",
+        expected_rejected_sizes[expected_rejected_sizes.len() - 1],
+        rejected_token_ids.len()
+    );
+}
+
+#[test]
+fn test_positive_utf8_character_class_with_quantifier() {
+    // Test positive character class with mixed UTF-8 ranges and quantifier.
+    //
+    // Tests the combination of ASCII, Cyrillic (2-byte), and CJK (3-byte) characters
+    // with a {0, 2048} quantifier to ensure proper handling of repeated UTF-8 matching.
+    //
+    let ebnf_grammar_str = "root ::= [a-zа-я一-龥]{0,2048}";
+    let grammar = Grammar::from_ebnf(ebnf_grammar_str, "root").unwrap();
+
+    // Empty string should be accepted (min is 0)
+    assert!(is_grammar_accept_string(&grammar, ""));
+
+    // Individual character types
+    assert!(is_grammar_accept_string(&grammar, "hello")); // ASCII
+    assert!(is_grammar_accept_string(&grammar, "привет")); // Cyrillic
+    assert!(is_grammar_accept_string(&grammar, "你好世界")); // CJK
+
+    // Mixed content
+    assert!(is_grammar_accept_string(&grammar, "helloпривет你好"));
+    assert!(is_grammar_accept_string(&grammar, "abc中文def"));
+
+    // Long strings within quantifier range
+    assert!(is_grammar_accept_string(&grammar, &"a".repeat(100)));
+    assert!(is_grammar_accept_string(&grammar, &"я".repeat(100)));
+    assert!(is_grammar_accept_string(&grammar, &"中".repeat(100)));
+
+    // Should reject uppercase ASCII and other characters
+    assert!(!is_grammar_accept_string(&grammar, "HELLO")); // Uppercase ASCII
+    assert!(!is_grammar_accept_string(&grammar, "123")); // digits
+    assert!(!is_grammar_accept_string(&grammar, "hello!")); // with special char
 }
 
 #[test]
@@ -459,14 +692,14 @@ number ::= "-"? [0-9]+ ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 #[cfg(feature = "hf")]
 fn test_not_neighbour_character_class() {
     let raw_grammar = r#"root ::= [a-cx-z]*"#;
-    let tk = make_hf_tokenizer_info("meta-llama/Llama-2-7b-chat-hf");
+    let tokenizer_info = make_hf_tokenizer_info("meta-llama/Llama-2-7b-chat-hf");
     let grammar = Grammar::from_ebnf(raw_grammar, "root").unwrap();
-    let mut compiler = GrammarCompiler::new(&tk, 1, false, -1).unwrap();
+    let mut compiler = GrammarCompiler::new(&tokenizer_info, 1, false, -1).unwrap();
     let compiled = compiler.compile_grammar(&grammar).unwrap();
     let mut matcher = GrammarMatcher::new(&compiled, None, true, -1).unwrap();
 
-    let mut bitmask_data = allocate_token_bitmask(1, tk.vocab_size());
+    let mut bitmask_data = allocate_token_bitmask(1, tokenizer_info.vocab_size());
     let (mut tensor, _shape, _strides) =
-        create_bitmask_dltensor(&mut bitmask_data, 1, tk.vocab_size());
+        create_bitmask_dltensor(&mut bitmask_data, 1, tokenizer_info.vocab_size());
     matcher.fill_next_token_bitmask(&mut tensor, 0, false);
 }

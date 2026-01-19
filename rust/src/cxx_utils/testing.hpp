@@ -3,11 +3,95 @@
 #include <string>
 #include <vector>
 #include <exception>
+#include <optional>
+#include <algorithm>
 #include "cpp/testing.h"
 #include "cpp/json_schema_converter.h"
 #include "cpp/regex_converter.h"
 
 namespace cxx_utils {
+
+inline std::string generate_range_regex(
+    bool has_start,
+    int64_t start,
+    bool has_end,
+    int64_t end,
+    std::string* error_out
+) {
+  try {
+    if (error_out) {
+      error_out->clear();
+    }
+    std::optional<int64_t> start_opt = has_start ? std::optional<int64_t>(start) : std::nullopt;
+    std::optional<int64_t> end_opt = has_end ? std::optional<int64_t>(end) : std::nullopt;
+    std::string result = xgrammar::GenerateRangeRegex(start_opt, end_opt);
+    result.erase(std::remove(result.begin(), result.end(), '\0'), result.end());
+    return result;
+  } catch (const std::exception& e) {
+    if (error_out) {
+      *error_out = e.what();
+    }
+    return std::string();
+  } catch (...) {
+    if (error_out) {
+      *error_out = "unknown C++ exception";
+    }
+    return std::string();
+  }
+}
+
+inline std::string generate_float_range_regex(
+    bool has_start,
+    double start,
+    bool has_end,
+    double end,
+    std::string* error_out
+) {
+  try {
+    if (error_out) {
+      error_out->clear();
+    }
+    std::optional<double> start_opt = has_start ? std::optional<double>(start) : std::nullopt;
+    std::optional<double> end_opt = has_end ? std::optional<double>(end) : std::nullopt;
+    std::string result = xgrammar::GenerateFloatRangeRegex(start_opt, end_opt);
+    result.erase(std::remove(result.begin(), result.end(), '\0'), result.end());
+    return result;
+  } catch (const std::exception& e) {
+    if (error_out) {
+      *error_out = e.what();
+    }
+    return std::string();
+  } catch (...) {
+    if (error_out) {
+      *error_out = "unknown C++ exception";
+    }
+    return std::string();
+  }
+}
+
+inline std::string print_grammar_fsms(
+    const xgrammar::Grammar& grammar,
+    std::string* error_out
+) {
+  try {
+    if (error_out) {
+      error_out->clear();
+    }
+    return xgrammar::_PrintGrammarFSMs(grammar);
+  } catch (const std::exception& e) {
+    if (error_out) {
+      *error_out = e.what();
+    }
+    return std::string();
+  } catch (...) {
+    if (error_out) {
+      *error_out = "unknown C++ exception";
+    }
+    return std::string();
+  }
+}
+
+// get_allow_empty_rule_ids removed - requires grammar_impl.h which contains templates
 
 inline std::string json_schema_to_ebnf(
     const std::string& schema,
@@ -170,5 +254,8 @@ inline bool traverse_draft_tree(
     return false;
   }
 }
+
+// Grammar functor functions (structure_normalizer, rule_inliner, etc.) removed
+// They require grammar_functor.h which contains templates that autocxx can't handle
 
 } // namespace cxx_utils

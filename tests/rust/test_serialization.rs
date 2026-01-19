@@ -3,7 +3,9 @@ mod test_utils;
 use serial_test::serial;
 use test_utils::is_grammar_accept_string;
 #[cfg(feature = "hf")]
-use test_utils::make_hf_tokenizer_info;
+use test_utils::{create_bitmask_dltensor, make_hf_tokenizer_info};
+#[cfg(feature = "hf")]
+use xgrammar::{allocate_token_bitmask, testing, GrammarMatcher};
 use xgrammar::{
     CompiledGrammar, Grammar, GrammarCompiler, TokenizerInfo, VocabType,
 };
@@ -49,7 +51,7 @@ fn test_serialize_grammar_roundtrip() {
 #[test]
 #[serial]
 fn test_get_serialization_version() {
-    assert_eq!(xgrammar::get_serialization_version(), "v7");
+    assert_eq!(xgrammar::get_serialization_version(), "v8");
 }
 
 #[test]
@@ -124,9 +126,9 @@ fn test_grammar_deserialize_errors() {
     assert!(Grammar::deserialize_json("not json").is_err());
 
     // Version mismatch or format mismatch: modify payload
-    let g = construct_grammar();
+    let grammar = construct_grammar();
     let mut v: serde_json::Value =
-        serde_json::from_str(&g.serialize_json()).unwrap();
+        serde_json::from_str(&grammar.serialize_json()).unwrap();
     if let Some(obj) = v.as_object_mut() {
         obj.insert("__VERSION__".to_string(), serde_json::json!("v1"));
     }
@@ -219,6 +221,70 @@ fn test_serialize_compiled_grammar() {
 
     assert!(parsed["__VERSION__"].is_string());
     assert!(parsed["grammar"].is_object());
+}
+
+#[test]
+#[serial]
+#[cfg(feature = "hf")]
+fn test_serialize_compiled_grammar_with_hf_tokenizer() {
+    // Test CompiledGrammar serialization with a real HuggingFace tokenizer.
+    let tokenizer_path = test_utils::download_tokenizer_json(
+        "meta-llama/Llama-3.1-8B-Instruct",
+    )
+    .expect("download tokenizer.json");
+    let tokenizer =
+        tokenizers::Tokenizer::from_file(&tokenizer_path).unwrap();
+    let tokenizer_info = TokenizerInfo::from_huggingface(&tokenizer, None, None)
+        .unwrap();
+    let mut grammar_compiler =
+        GrammarCompiler::new(&tokenizer_info, 1, false, -1).unwrap();
+
+    let schema = r#"{"type":"object","properties":{"name":{"type":"string"},"age":{"type":"integer"}},"required":["name","age"]}"#;
+    let compiled = grammar_compiler
+        .compile_json_schema(schema, true, None, None::<(&str, &str)>, true, None)
+        .unwrap();
+
+    let tokenizer_info_json = tokenizer_info.serialize_json();
+    let tokenizer_info_recovered =
+        TokenizerInfo::deserialize_json(&tokenizer_info_json).unwrap();
+    let serialized = compiled.serialize_json();
+    let recovered_compiled =
+        CompiledGrammar::deserialize_json(&serialized, &tokenizer_info_recovered)
+            .unwrap();
+
+    let test_json = r#"{"name": "John", "age": 30}"#;
+    let ids = tokenizer
+        .encode(test_json, true)
+        .expect("encode")
+        .get_ids()
+        .to_vec();
+    let token_ids = if ids.len() > 1 { &ids[1..] } else { &ids[..] };
+    let mut matcher =
+        GrammarMatcher::new(&recovered_compiled, None, true, -1).unwrap();
+    let mut bitmask =
+        allocate_token_bitmask(1, tokenizer_info.vocab_size());
+    let (mut tensor, _shape, _strides) = create_bitmask_dltensor(
+        &mut bitmask,
+        1,
+        tokenizer_info.vocab_size(),
+    );
+
+    for &token_id in token_ids {
+        matcher.fill_next_token_bitmask(&mut tensor, 0, false);
+        let masked_token_ids = testing::get_masked_tokens_from_bitmask(
+            &tensor,
+            tokenizer_info.vocab_size() as i32,
+            0,
+        );
+        assert!(!masked_token_ids.contains(&(token_id as i32)));
+        assert!(matcher.accept_token(token_id as i32));
+    }
+
+    if let Some(&eos_id) = tokenizer_info.stop_token_ids().first()
+        && matcher.accept_token(eos_id)
+    {
+        assert!(matcher.is_terminated());
+    }
 }
 
 #[test]

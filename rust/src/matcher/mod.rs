@@ -14,7 +14,7 @@ pub fn get_bitmask_shape(
     batch_size: usize,
     vocab_size: usize,
 ) -> (usize, usize) {
-    (batch_size, (vocab_size + 31) / 32)
+    (batch_size, vocab_size.div_ceil(32))
 }
 
 /// Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on

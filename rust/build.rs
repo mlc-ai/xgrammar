@@ -432,13 +432,14 @@ struct BuildContext {
 }
 
 fn configure_libclang_windows() {
-    if env::var("LIBCLANG_PATH").is_err() && cfg!(target_os = "windows") {
-        if let Some(dir) = find_libclang_windows() {
-            unsafe {
-                env::set_var("LIBCLANG_PATH", &dir);
-            }
-            println!("cargo:rustc-env=LIBCLANG_PATH={}", dir.display());
+    if env::var("LIBCLANG_PATH").is_err()
+        && cfg!(target_os = "windows")
+        && let Some(dir) = find_libclang_windows()
+    {
+        unsafe {
+            env::set_var("LIBCLANG_PATH", &dir);
         }
+        println!("cargo:rustc-env=LIBCLANG_PATH={}", dir.display());
     }
 }
 
@@ -645,12 +646,11 @@ fn build_autocxx_bridge(ctx: &BuildContext) {
 
     let mut autocxx_builder = autocxx_build::Builder::new(
         "rust/src/lib.rs",
-        &[
+        [
             &ctx.src_include_dir,
             &ctx.xgrammar_include_dir,
             &ctx.dlpack_include_dir,
             &ctx.picojson_include_dir,
-            // Allow `#include "cpp/..."` for internal XGrammar headers used in tests/utilities.
             &ctx.xgrammar_src_dir,
         ],
     )

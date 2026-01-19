@@ -23,7 +23,7 @@ impl core::fmt::Display for Grammar {
         &self,
         f: &mut core::fmt::Formatter<'_>,
     ) -> core::fmt::Result {
-        write!(f, "{}", self.inner.ToString().to_string())
+        write!(f, "{}", self.inner.ToString().to_str().unwrap_or(""))
     }
 }
 
@@ -121,7 +121,7 @@ impl Grammar {
     ) -> Result<Self, String> {
         cxx::let_cxx_string!(schema_cxx = schema);
         let has_indent = indent.is_some();
-        let indent_i32: i32 = indent.unwrap_or(0) as i32;
+        let indent_i32: i32 = indent.unwrap_or(0);
         let has_separators = separators.is_some();
         let (separator_comma, separator_colon) = if let Some((
             separator_comma_ref,

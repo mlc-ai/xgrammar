@@ -164,6 +164,31 @@ impl GrammarMatcher {
             .AcceptString(&input_cxx, debug_print)
     }
 
+    /// Accept a byte sequence and update the matcher state.
+    ///
+    /// This is similar to `accept_string` but accepts raw bytes instead of a string.
+    /// Useful for testing with invalid UTF-8 sequences.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: The input byte sequence.
+    /// - `debug_print`: Whether to print accepted characters.
+    ///
+    /// # Returns
+    ///
+    /// Whether the bytes are accepted.
+    pub fn accept_bytes(
+        &mut self,
+        input: &[u8],
+        debug_print: bool,
+    ) -> bool {
+        cxx::let_cxx_string!(input_cxx = input);
+        self.inner
+            .as_mut()
+            .expect("GrammarMatcher inner is null")
+            .AcceptString(&input_cxx, debug_print)
+    }
+
     /// Fill the bitmask for the next token prediction. The input bitmask must be on CPU.
     /// `bitmask[index]` will be filled with the next token bitmask.
     ///

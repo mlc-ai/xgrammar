@@ -1,3 +1,5 @@
+#![allow(clippy::approx_constant)]
+
 mod test_utils;
 use serial_test::serial;
 #[cfg(feature = "hf")]
@@ -92,7 +94,6 @@ fn test_grammar_compiler_json_schema() {
     let mut grammar_compiler =
         GrammarCompiler::new(&tokenizer_info, 8, true, -1).unwrap();
 
-    // Schema matching Python's MainModel
     let schema = r#"{
         "type":"object",
         "properties":{
@@ -121,7 +122,7 @@ fn test_grammar_compiler_json_schema() {
     });
 
     // Helper to check one configuration (avoid capturing mutable borrow of grammar_compiler)
-    #[allow(dead_code)]
+    #[allow(dead_code, clippy::too_many_arguments)]
     fn check(
         gc: &mut GrammarCompiler,
         schema: &str,
@@ -201,8 +202,8 @@ rule1 ::= [abc]* [def]*
     let mut compiler = GrammarCompiler::new(&tokenizer_info, 1, false, -1).unwrap();
 
     for (ebnf, expected) in cases.iter() {
-        let cg = compiler.compile_grammar_from_ebnf(ebnf, "root").unwrap();
-        let ids = get_allow_empty_rule_ids_via_json(&cg);
+        let compiled_grammar = compiler.compile_grammar_from_ebnf(ebnf, "root").unwrap();
+        let ids = get_allow_empty_rule_ids_via_json(&compiled_grammar);
         assert_eq!(&*ids, *expected);
     }
 }

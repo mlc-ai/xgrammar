@@ -280,3 +280,30 @@ rule3 ::= "abcd" [p]*
         "tag1tag3tag2abcdll"
     ));
 }
+
+#[test]
+#[serial]
+fn test_excluded_str() {
+    let grammar_str = r#"root ::= TagDispatch(
+  ("start", rule1),
+  stop_str=("</think>"),
+  excludes=("</conclude>"),
+  loop_after_dispatch=true,
+  stop_eos=false
+)
+rule1 ::= "12345"
+"#;
+
+    let expected = r#"root ::= TagDispatch(
+  ("start", rule1),
+  stop_eos=false,
+  stop_str=("</think>"),
+  loop_after_dispatch=true,
+  excludes=("</conclude>")
+)
+rule1 ::= (("12345"))
+"#;
+
+    let grammar = Grammar::from_ebnf(grammar_str, "root").unwrap();
+    assert_eq!(grammar.to_string_ebnf(), expected);
+}

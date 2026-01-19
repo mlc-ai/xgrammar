@@ -1,3 +1,5 @@
+#![allow(clippy::needless_range_loop)]
+
 mod test_utils;
 
 use serial_test::serial;
@@ -104,7 +106,7 @@ fn test_apply_token_bitmask_inplace_cpu_basic() {
     // Keep logits at odd positions.
     let vocab_size = 10usize;
     let bool_mask: Vec<bool> = (0..vocab_size).map(|i| i % 2 == 1).collect();
-    let mut bitmask_data = pack_bool_masks_to_bitmask_data(&[bool_mask.clone()], vocab_size);
+    let mut bitmask_data = pack_bool_masks_to_bitmask_data(std::slice::from_ref(&bool_mask), vocab_size);
     let (bitmask_tensor, _bshape, _bstrides) = create_bitmask_dltensor(&mut bitmask_data, 1, vocab_size);
 
     let mut logits: Vec<f32> = (1..=vocab_size).map(|x| x as f32).collect();
@@ -197,14 +199,108 @@ fn test_apply_token_bitmask_inplace_cpu_indices() {
     for row in 0..batch {
         for i in 0..vocab_size {
             let idx = row * vocab_size + i;
-            let expected = if row == 1 {
-                original[idx]
-            } else if bool_masks[row][i] {
+            let expected = if row == 1 || bool_masks[row][i] {
                 original[idx]
             } else {
                 f32::NEG_INFINITY
             };
             assert_eq!(logits[idx], expected, "row={row}, i={i}");
+        }
+    }
+}
+
+#[test]
+#[serial]
+fn test_apply_token_bitmask_inplace_cpu_vocab_size() {
+    let cases = [
+        ((2usize, 130usize), (2usize, 4usize), None),
+        ((2usize, 120usize), (2usize, 4usize), None),
+        ((2usize, 130usize), (2usize, 4usize), Some(120i32)),
+    ];
+
+    for (logits_shape, bitmask_shape, vocab_size_override) in cases {
+        let (batch, logits_vocab) = logits_shape;
+        let (bitmask_batch, bitmask_size) = bitmask_shape;
+        let bitmask_vocab_size = bitmask_size * 32;
+
+        let mut bitmask_data = vec![0i32; bitmask_batch * bitmask_size];
+        let (bitmask_tensor, _bshape, _bstrides) =
+            create_bitmask_dltensor(&mut bitmask_data, bitmask_batch, bitmask_vocab_size);
+
+        let mut logits = vec![1.0f32; batch * logits_vocab];
+        let (mut logits_tensor, _lshape, _lstrides) =
+            create_f32_2d_dltensor(&mut logits, batch, logits_vocab, logits_vocab as i64, 1);
+
+        let vocab_size = vocab_size_override.unwrap_or_else(|| {
+            std::cmp::min(logits_vocab, bitmask_vocab_size) as i32
+        });
+        apply_token_bitmask_inplace_cpu(
+            &mut logits_tensor,
+            &bitmask_tensor,
+            Some(vocab_size),
+            None,
+        )
+        .unwrap();
+
+        for row in 0..batch {
+            for col in 0..logits_vocab {
+                let idx = row * logits_vocab + col;
+                let expected = if (col as i32) < vocab_size {
+                    f32::NEG_INFINITY
+                } else {
+                    1.0
+                };
+                assert_eq!(
+                    logits[idx], expected,
+                    "row={row}, col={col}, vocab_size={vocab_size}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[serial]
+fn test_apply_token_bitmask_inplace_cpu_indices_mismatch() {
+    let cases = [
+        (3usize, 3usize, 128usize, vec![0i32, 1i32]),
+        (2usize, 3usize, 128usize, vec![0i32]),
+        (3usize, 2usize, 130usize, vec![0i32]),
+    ];
+
+    for (logits_batch, bitmask_batch, vocab_size, indices) in cases {
+        let bitmask_vocab_size = vocab_size.div_ceil(32) * 32;
+        let (_, bitmask_size) = get_bitmask_shape(bitmask_batch, bitmask_vocab_size);
+        let mut bitmask_data = vec![0i32; bitmask_batch * bitmask_size];
+        let (bitmask_tensor, _bshape, _bstrides) =
+            create_bitmask_dltensor(&mut bitmask_data, bitmask_batch, bitmask_vocab_size);
+
+        let mut logits = vec![1.0f32; logits_batch * vocab_size];
+        let (mut logits_tensor, _lshape, _lstrides) =
+            create_f32_2d_dltensor(&mut logits, logits_batch, vocab_size, vocab_size as i64, 1);
+
+        let original = logits.clone();
+        apply_token_bitmask_inplace_cpu(
+            &mut logits_tensor,
+            &bitmask_tensor,
+            Some(vocab_size as i32),
+            Some(&indices),
+        )
+        .unwrap();
+
+        for row in 0..logits_batch {
+            for col in 0..vocab_size {
+                let idx = row * vocab_size + col;
+                let expected = if indices.contains(&(row as i32)) {
+                    f32::NEG_INFINITY
+                } else {
+                    original[idx]
+                };
+                assert_eq!(
+                    logits[idx], expected,
+                    "row={row}, col={col}, vocab_size={vocab_size}"
+                );
+            }
         }
     }
 }

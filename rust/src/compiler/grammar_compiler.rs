@@ -319,7 +319,6 @@ impl GrammarCompiler {
             .as_ref()
             .expect("GrammarCompiler inner is null")
             .GetCacheSizeBytes()
-            .into()
     }
 
     /// The maximum memory usage for the cache in bytes.
@@ -332,7 +331,6 @@ impl GrammarCompiler {
             .as_ref()
             .expect("GrammarCompiler inner is null")
             .CacheLimitBytes()
-            .into()
     }
 }
 

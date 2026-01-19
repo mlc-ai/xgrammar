@@ -1,6 +1,11 @@
 use autocxx::prelude::*;
 
-use crate::{DLTensor, cxx_int, cxx_utils, ffi, grammar::Grammar, matcher::GrammarMatcher};
+use crate::{
+    DLTensor, cxx_utils, ffi,
+    compiler::CompiledGrammar,
+    grammar::Grammar,
+    matcher::GrammarMatcher,
+};
 
 /// Convert EBNF to Grammar without normalization.
 ///
@@ -182,3 +187,108 @@ pub fn traverse_draft_tree(
     }
     Ok(())
 }
+
+/// Generate a regex pattern for an integer range.
+///
+/// # Parameters
+///
+/// - `start`: The start of the range (inclusive). If `None`, assumes negative infinity.
+/// - `end`: The end of the range (inclusive). If `None`, assumes positive infinity.
+///
+/// # Returns
+///
+/// The regex pattern that matches integers in the given range.
+///
+/// # Errors
+///
+/// Returns an error if the range is invalid.
+pub fn generate_range_regex(start: Option<i64>, end: Option<i64>) -> Result<String, String> {
+    let has_start = start.is_some();
+    let start_val = start.unwrap_or(0);
+    let has_end = end.is_some();
+    let end_val = end.unwrap_or(0);
+    cxx::let_cxx_string!(error_out_cxx = "");
+    let result = unsafe {
+        cxx_utils::generate_range_regex(
+            has_start,
+            start_val,
+            has_end,
+            end_val,
+            error_out_cxx.as_mut().get_unchecked_mut(),
+        )
+    };
+    let err = error_out_cxx.to_string();
+    if !err.is_empty() {
+        return Err(err);
+    }
+    Ok(result.to_string())
+}
+
+/// Generate a regex pattern for a float range.
+///
+/// # Parameters
+///
+/// - `start`: The start of the range (inclusive). If `None`, assumes negative infinity.
+/// - `end`: The end of the range (inclusive). If `None`, assumes positive infinity.
+///
+/// # Returns
+///
+/// The regex pattern that matches floats in the given range.
+///
+/// # Errors
+///
+/// Returns an error if the range is invalid.
+pub fn generate_float_range_regex(start: Option<f64>, end: Option<f64>) -> Result<String, String> {
+    let has_start = start.is_some();
+    let start_val = start.unwrap_or(0.0);
+    let has_end = end.is_some();
+    let end_val = end.unwrap_or(0.0);
+    cxx::let_cxx_string!(error_out_cxx = "");
+    let result = unsafe {
+        cxx_utils::generate_float_range_regex(
+            has_start,
+            start_val,
+            has_end,
+            end_val,
+            error_out_cxx.as_mut().get_unchecked_mut(),
+        )
+    };
+    let err = error_out_cxx.to_string();
+    if !err.is_empty() {
+        return Err(err);
+    }
+    Ok(result.to_string())
+}
+
+/// Print the FSMs (Finite State Machines) of a grammar.
+///
+/// This is a debugging utility to inspect the internal FSM representation of a grammar.
+///
+/// # Parameters
+///
+/// - `grammar`: The grammar to print FSMs for.
+///
+/// # Returns
+///
+/// A string representation of the grammar's FSMs.
+///
+/// # Errors
+///
+/// Returns an error if printing fails.
+pub fn print_grammar_fsms(grammar: &Grammar) -> Result<String, String> {
+    cxx::let_cxx_string!(error_out_cxx = "");
+    let result = unsafe {
+        cxx_utils::print_grammar_fsms(
+            grammar.ffi_ref(),
+            error_out_cxx.as_mut().get_unchecked_mut(),
+        )
+    };
+    let err = error_out_cxx.to_string();
+    if !err.is_empty() {
+        return Err(err);
+    }
+    Ok(result.to_string())
+}
+
+// Note: get_allow_empty_rule_ids and grammar_functor module removed
+// They require grammar_impl.h/grammar_functor.h which contain templates that autocxx can't handle
