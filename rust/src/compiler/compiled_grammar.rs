@@ -62,8 +62,7 @@ impl CompiledGrammar {
         #[cfg(target_os = "windows")]
         impl ToUsize for cxx_ulonglong {
             fn to_usize(self) -> usize {
-                let val: u64 = self.0.into();
-                val as usize
+                self.0 as usize
             }
         }
 

@@ -1,0 +1,13 @@
+# Cargo configuration for xgrammar-rs
+# 
+# This configures the Rust toolchain to use static CRT on Windows,
+# which is required because dependencies like esaxx-rs use static CRT.
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

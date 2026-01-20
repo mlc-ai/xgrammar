@@ -1,6 +1,8 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 // Suppress warnings from auto-generated FFI code
 #![allow(unused_imports)]
+#![allow(clippy::needless_lifetimes)]
+#![allow(clippy::too_many_arguments)]
 
 use autocxx::prelude::*;
 
