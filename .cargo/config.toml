@@ -1,43 +1,11 @@
-# Cargo configuration for xgrammar-rs
-# Auto-generated paths for Visual Studio toolchain
-
 [build]
-# Avoid Windows filesystem issues with temp files in user directories
 target-dir = "C:/tmp/xgrammar-target"
 
-# =============================================================================
-# Windows ARM64 (aarch64)
-# =============================================================================
 [target.aarch64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
-# Explicit linker path for VS 2026/2022
-linker = "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostarm64/arm64/link.exe"
 
-# =============================================================================
-# Windows x64 (x86_64)
-# =============================================================================
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
 
-# =============================================================================
-# Windows x86 (i686)
-# =============================================================================
 [target.i686-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
-
-# =============================================================================
-# Environment variables for native compilation
-# =============================================================================
-[env]
-# Use MSVC cl.exe as the C/C++ compiler (not clang-cl which has exception issues)
-CC = "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostarm64/arm64/cl.exe"
-CXX = "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostarm64/arm64/cl.exe"
-AR = "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostarm64/arm64/lib.exe"
-
-# Required library paths for MSVC
-LIB = "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/lib/arm64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/arm64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/arm64"
-INCLUDE = "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared"
-
-
-#   - Add C:\Program Files\LLVM\bin to PATH
-# =============================================================================
