@@ -146,6 +146,7 @@ mod config;
 mod grammar;
 mod matcher;
 mod tokenizer_info;
+mod utils;
 
 pub mod testing;
 

@@ -3,6 +3,7 @@ use std::pin::Pin;
 use autocxx::prelude::*;
 
 use super::GrammarMatcher;
+use crate::utils::bytes_as_c_char_ptr;
 use crate::{CxxUniquePtr, DLTensor, cxx_utils};
 
 /// A batch version of `GrammarMatcher` that can fill the next token bitmask for multiple
@@ -214,7 +215,7 @@ impl BatchGrammarMatcher {
                 unsafe {
                     cxx_utils::string_vec_push_bytes(
                         cxx_vec_pin.as_mut(),
-                        bytes.as_ptr() as *const i8,
+                        bytes_as_c_char_ptr(bytes),
                         bytes.len(),
                     );
                 }
