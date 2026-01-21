@@ -158,12 +158,3 @@ environment = { MACOSX_DEPLOYMENT_TARGET = "10.14" }
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
-
-[tool.uv]
-link-mode = "copy"
-
-[dependency-groups]
-dev = [
-  "nanobind>=2.10.2",
-  "scikit-build-core>=0.11.6",
-]
