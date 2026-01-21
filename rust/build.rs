@@ -2,6 +2,8 @@
 mod build;
 
 fn main() {
+    build::diagnostics::check_requirements();
+
     #[cfg(target_os = "windows")]
     {
         build::windows::configure_libclang_early();

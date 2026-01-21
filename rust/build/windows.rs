@@ -72,11 +72,12 @@ pub fn find_vs_installations() -> Vec<VsInstallation> {
     };
 
     let args = [
-        "-all",
+        "-latest",
         "-products",
         "*",
+        "-prerelease",
         "-requires",
-        "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
+        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
         "-format",
         "text",
     ];
@@ -84,13 +85,15 @@ pub fn find_vs_installations() -> Vec<VsInstallation> {
     let output = match Command::new(vswhere).args(args).output() {
         Ok(out) if out.status.success() => out,
         _ => {
-            let args_fallback = ["-all", "-products", "*", "-format", "text"];
+            // Fallback to broader search if specific component not found
+            let args_fallback = ["-latest", "-products", "*", "-prerelease", "-format", "text"];
             match Command::new(vswhere).args(args_fallback).output() {
                 Ok(out) if out.status.success() => out,
                 _ => return Vec::new(),
             }
         }
     };
+
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     parse_vswhere_output(&stdout)
@@ -140,6 +143,24 @@ fn parse_vswhere_output(output: &str) -> Vec<VsInstallation> {
     }
 
     installations
+}
+
+pub fn find_ninja_in_vs() -> Option<PathBuf> {
+    for vs in find_vs_installations() {
+        // Common locations for Ninja in VS
+        let candidates = [
+            r"Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe",
+            r"Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\v1.10\ninja.exe",
+        ];
+        
+        for candidate in candidates {
+            let path = vs.path.join(candidate);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+    None
 }
 
 pub fn find_libclang_for_arch(arch: WindowsArch) -> Option<PathBuf> {
@@ -344,7 +365,24 @@ fn find_windows_sdk() -> Option<(PathBuf, String)> {
 }
 
 pub fn configure_msvc_environment(arch: WindowsArch) {
-    if env::var("CC").is_ok() {
+    // If INCLUDE is set, we assume the MSVC environment is already set up (e.g. via vcvars)
+    // We also check for Ninja in PATH, if not found, we try to add it from VS.
+    let has_include = env::var("INCLUDE").is_ok();
+    
+    // Attempt to add Ninja to PATH if not present
+    if std::process::Command::new("ninja").arg("--version").output().is_err() {
+        if let Some(ninja_path) = find_ninja_in_vs() {
+             if let Some(parent) = ninja_path.parent() {
+                 let current_path = env::var("PATH").unwrap_or_default();
+                 let new_path = format!("{};{}", parent.display(), current_path);
+                 unsafe {
+                     env::set_var("PATH", &new_path);
+                 }
+             }
+        }
+    }
+
+    if has_include {
         return;
     }
 
@@ -359,8 +397,8 @@ pub fn configure_msvc_environment(arch: WindowsArch) {
         .join("bin")
         .join(host_arch_dir)
         .join(arch_dir);
+    
     let cl_path = bin_dir.join("cl.exe");
-
     if cl_path.exists() {
         unsafe {
             env::set_var("CC", &cl_path);
@@ -368,17 +406,28 @@ pub fn configure_msvc_environment(arch: WindowsArch) {
         }
     }
 
+    let mut path_additions = Vec::new();
+    path_additions.push(bin_dir);
+
     let mut include_paths = Vec::new();
     include_paths.push(msvc_version_dir.join("include"));
     include_paths.push(msvc_version_dir.join("ATLMFC").join("include"));
 
-    if let Some((sdk_root, sdk_version)) = find_windows_sdk() {
-        let sdk_include = sdk_root.join("Include").join(&sdk_version);
+    let windows_sdk = find_windows_sdk();
+
+    if let Some((sdk_root, sdk_version)) = &windows_sdk {
+        let sdk_include = sdk_root.join("Include").join(sdk_version);
         include_paths.push(sdk_include.join("ucrt"));
         include_paths.push(sdk_include.join("shared"));
         include_paths.push(sdk_include.join("um"));
         include_paths.push(sdk_include.join("winrt"));
         include_paths.push(sdk_include.join("cppwinrt"));
+
+        // Add SDK bin to PATH (rc.exe, mt.exe)
+        let sdk_bin = sdk_root.join("bin").join(sdk_version).join(arch.vcvars_arg());
+        if sdk_bin.exists() {
+            path_additions.push(sdk_bin);
+        }
     }
 
     let include_str: String = include_paths
@@ -398,8 +447,8 @@ pub fn configure_msvc_environment(arch: WindowsArch) {
     lib_paths.push(msvc_version_dir.join("lib").join(arch_dir));
     lib_paths.push(msvc_version_dir.join("ATLMFC").join("lib").join(arch_dir));
 
-    if let Some((sdk_root, sdk_version)) = find_windows_sdk() {
-        let sdk_lib = sdk_root.join("Lib").join(&sdk_version);
+    if let Some((sdk_root, sdk_version)) = &windows_sdk {
+        let sdk_lib = sdk_root.join("Lib").join(sdk_version);
         lib_paths.push(sdk_lib.join("ucrt").join(arch_dir));
         lib_paths.push(sdk_lib.join("um").join(arch_dir));
     }
@@ -418,7 +467,18 @@ pub fn configure_msvc_environment(arch: WindowsArch) {
     }
 
     let current_path = env::var("PATH").unwrap_or_default();
-    let new_path = format!("{};{}", bin_dir.display(), current_path);
+    let added_path = path_additions
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join(";");
+    
+    let new_path = if added_path.is_empty() {
+        current_path
+    } else {
+        format!("{};{}", added_path, current_path)
+    };
+    
     unsafe {
         env::set_var("PATH", &new_path);
     }

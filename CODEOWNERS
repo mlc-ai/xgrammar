@@ -11,6 +11,7 @@
 # tests
 tests/cpp @Ubospica @Seven-Streams @DarkSharpness
 tests/python @Ubospica @Seven-Streams
+tests/rust @eugenebokhan
 
 # Miscellaneous
 /.github @Ubospica @Seven-Streams

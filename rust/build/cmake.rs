@@ -46,8 +46,8 @@ fn get_msvc_runtime_library(ctx: &BuildContext) -> &'static str {
         .unwrap_or(true); // Static CRT required to match esaxx-rs and other dependencies
 
     match (ctx.is_debug(), use_static) {
-        (true, true) => "MultiThreadedDebug",      // /MTd
-        (true, false) => "MultiThreadedDebugDLL",  // /MDd
+        (true, true) => "MultiThreaded",           // /MT
+        (true, false) => "MultiThreadedDLL",       // /MD
         (false, true) => "MultiThreaded",          // /MT
         (false, false) => "MultiThreadedDLL",      // /MD
     }
@@ -60,7 +60,8 @@ pub fn build_xgrammar_cmake(ctx: &BuildContext) -> PathBuf {
     create_dir_all(&cmake_build_dir).ok();
 
     // Determine build profile - sync with Cargo's profile
-    let build_profile = if ctx.is_debug() { "Debug" } else { "Release" };
+    // Use RelWithDebInfo for debug to avoid linking issues with Rust (which uses Release CRT)
+    let build_profile = if ctx.is_debug() { "RelWithDebInfo" } else { "Release" };
 
     let config_cmake_path = cmake_build_dir.join("config.cmake");
     std::fs::write(
@@ -77,9 +78,24 @@ pub fn build_xgrammar_cmake(ctx: &BuildContext) -> PathBuf {
 
     let mut cmake_config = CMakeConfig::new(&ctx.xgrammar_src_dir);
     cmake_config.out_dir(&ctx.out_dir);
+
+    // Auto-detect Ninja on Windows if no generator is specified
+    if cfg!(target_os = "windows") && env::var("CMAKE_GENERATOR").is_err() {
+        if std::process::Command::new("ninja").arg("--version").output().is_ok() {
+            cmake_config.generator("Ninja");
+        }
+    }
+
     cmake_config.define("XGRAMMAR_BUILD_PYTHON_BINDINGS", "OFF");
     cmake_config.define("XGRAMMAR_BUILD_CXX_TESTS", "OFF");
     cmake_config.define("XGRAMMAR_ENABLE_CPPTRACE", "OFF");
+
+    if env::var("CARGO_FEATURE_CUDA").is_ok() {
+        cmake_config.define("XGRAMMAR_USE_CUDA", "ON");
+    } else {
+        cmake_config.define("XGRAMMAR_USE_CUDA", "OFF");
+    }
+
     cmake_config.define("CMAKE_CXX_STANDARD", "17");
     cmake_config.define("CMAKE_CXX_STANDARD_REQUIRED", "ON");
     cmake_config.define("CMAKE_CXX_EXTENSIONS", "OFF");
@@ -91,6 +107,11 @@ pub fn build_xgrammar_cmake(ctx: &BuildContext) -> PathBuf {
         let runtime_lib = get_msvc_runtime_library(ctx);
         cmake_config.define("CMAKE_MSVC_RUNTIME_LIBRARY", runtime_lib);
         cmake_config.cxxflag("/EHsc");
+
+        // Ensure CUDA uses the correct host compiler
+        if let Ok(cc) = env::var("CC") {
+            cmake_config.define("CMAKE_CUDA_HOST_COMPILER", cc);
+        }
     } else {
         cmake_config.cflag("-fno-lto");
         cmake_config.cxxflag("-fno-lto");

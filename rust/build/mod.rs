@@ -8,6 +8,7 @@
 pub mod autocxx;
 pub mod cmake;
 pub mod common;
+pub mod diagnostics;
 pub mod submodules;
 
 #[cfg(target_os = "windows")]

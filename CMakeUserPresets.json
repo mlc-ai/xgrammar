@@ -1,0 +1,49 @@
+{
+  "version": 3,
+  "vendor": {
+    "user": {}
+  },
+  "configurePresets": [
+    {
+      "name": "default-windows",
+      "hidden": true,
+      "cacheVariables": {
+        "Python_EXECUTABLE": "${sourceDir}\\.venv\\Scripts\\python.exe"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "default-linux",
+      "hidden": true,
+      "cacheVariables": {
+        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "default-macos",
+      "hidden": true,
+      "cacheVariables": {
+        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "default",
+      "hidden": false,
+      "inherits": ["default-windows", "default-linux", "default-macos"]
+    }
+  ]
+}

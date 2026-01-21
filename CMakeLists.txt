@@ -21,6 +21,7 @@ option(XGRAMMAR_ENABLE_CPPTRACE
 )
 option(XGRAMMAR_ENABLE_COVERAGE "Enable code coverage with gcov" OFF)
 option(XGRAMMAR_ENABLE_INTERNAL_CHECK "Enable internal checks" OFF)
+option(XGRAMMAR_USE_CUDA "Enable CUDA support" OFF)
 
 set(XGRAMMAR_CUDA_ARCHITECTURES
     native
@@ -141,4 +142,11 @@ if(XGRAMMAR_ENABLE_INTERNAL_CHECK)
   target_compile_definitions(xgrammar PUBLIC XGRAMMAR_ENABLE_INTERNAL_CHECK=1)
 else()
   target_compile_definitions(xgrammar PUBLIC XGRAMMAR_ENABLE_INTERNAL_CHECK=0)
+endif()
+
+if(XGRAMMAR_USE_CUDA)
+  enable_language(CUDA)
+  if(DEFINED XGRAMMAR_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES ${XGRAMMAR_CUDA_ARCHITECTURES})
+  endif()
 endif()
