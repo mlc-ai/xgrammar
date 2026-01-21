@@ -1,0 +1,14 @@
+-std=c++17
+
+# Allow includes from crate headers (e.g. cxx_utils.hpp)
+-I..
+
+# Allow includes from the repository root (e.g. cpp/testing.h)
+-I../../..
+
+# XGrammar + 3rdparty headers (relative to rust/src/cxx_utils/)
+-I../../../include
+-I../../../3rdparty/dlpack/include
+-I../../../3rdparty/picojson
+
+
