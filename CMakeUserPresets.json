@@ -5,8 +5,26 @@
   },
   "configurePresets": [
     {
+      "name": "default",
+      "displayName": "Default Config",
+      "description": "Default build using native build tools",
+      "hidden": false,
+      "binaryDir": "${sourceDir}/out/build/default",
+      "cacheVariables": {
+        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
+      },
+      "condition": {
+        "type": "notEquals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
       "name": "default-windows",
-      "hidden": true,
+      "displayName": "Default Config (Windows)",
+      "hidden": false,
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/out/build/default",
       "cacheVariables": {
         "Python_EXECUTABLE": "${sourceDir}\\.venv\\Scripts\\python.exe"
       },
@@ -17,33 +35,19 @@
       }
     },
     {
-      "name": "default-linux",
-      "hidden": true,
+      "name": "windows-x64",
+      "displayName": "Windows x64 (VS2026)",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/out/build/x64",
       "cacheVariables": {
-        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
+        "CMAKE_GENERATOR_PLATFORM": "x64",
+        "Python_EXECUTABLE": "${sourceDir}\\.venv\\Scripts\\python.exe"
       },
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
-        "rhs": "Linux"
+        "rhs": "Windows"
       }
-    },
-    {
-      "name": "default-macos",
-      "hidden": true,
-      "cacheVariables": {
-        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      }
-    },
-    {
-      "name": "default",
-      "hidden": false,
-      "inherits": ["default-windows", "default-linux", "default-macos"]
     }
   ]
 }
