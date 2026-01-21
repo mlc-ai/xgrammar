@@ -21,12 +21,6 @@ option(XGRAMMAR_ENABLE_CPPTRACE
 )
 option(XGRAMMAR_ENABLE_COVERAGE "Enable code coverage with gcov" OFF)
 option(XGRAMMAR_ENABLE_INTERNAL_CHECK "Enable internal checks" OFF)
-option(XGRAMMAR_USE_CUDA "Enable CUDA support" OFF)
-
-set(XGRAMMAR_CUDA_ARCHITECTURES
-    native
-    CACHE STRING "CUDA architectures"
-)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,7 +37,6 @@ endif()
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Build Python bindings: ${XGRAMMAR_BUILD_PYTHON_BINDINGS}")
 message(STATUS "Build C++ tests: ${XGRAMMAR_BUILD_CXX_TESTS}")
-message(STATUS "CUDA architectures: ${XGRAMMAR_CUDA_ARCHITECTURES}")
 message(STATUS "Enable C++ trace: ${XGRAMMAR_ENABLE_CPPTRACE}")
 
 if(MSVC)
@@ -144,9 +137,3 @@ else()
   target_compile_definitions(xgrammar PUBLIC XGRAMMAR_ENABLE_INTERNAL_CHECK=0)
 endif()
 
-if(XGRAMMAR_USE_CUDA)
-  enable_language(CUDA)
-  if(DEFINED XGRAMMAR_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES ${XGRAMMAR_CUDA_ARCHITECTURES})
-  endif()
-endif()

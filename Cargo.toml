@@ -40,7 +40,6 @@ serial_test = "3.3.1"
 default = []
 tokenizers = ["dep:tokenizers"]
 hf = ["tokenizers", "dep:hf-hub"]
-cuda = []
 
 [dependencies.tokenizers]
 version = "0.22.2"

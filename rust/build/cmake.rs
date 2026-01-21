@@ -90,12 +90,6 @@ pub fn build_xgrammar_cmake(ctx: &BuildContext) -> PathBuf {
     cmake_config.define("XGRAMMAR_BUILD_CXX_TESTS", "OFF");
     cmake_config.define("XGRAMMAR_ENABLE_CPPTRACE", "OFF");
 
-    if env::var("CARGO_FEATURE_CUDA").is_ok() {
-        cmake_config.define("XGRAMMAR_USE_CUDA", "ON");
-    } else {
-        cmake_config.define("XGRAMMAR_USE_CUDA", "OFF");
-    }
-
     cmake_config.define("CMAKE_CXX_STANDARD", "17");
     cmake_config.define("CMAKE_CXX_STANDARD_REQUIRED", "ON");
     cmake_config.define("CMAKE_CXX_EXTENSIONS", "OFF");
@@ -107,11 +101,6 @@ pub fn build_xgrammar_cmake(ctx: &BuildContext) -> PathBuf {
         let runtime_lib = get_msvc_runtime_library(ctx);
         cmake_config.define("CMAKE_MSVC_RUNTIME_LIBRARY", runtime_lib);
         cmake_config.cxxflag("/EHsc");
-
-        // Ensure CUDA uses the correct host compiler
-        if let Ok(cc) = env::var("CC") {
-            cmake_config.define("CMAKE_CUDA_HOST_COMPILER", cc);
-        }
     } else {
         cmake_config.cflag("-fno-lto");
         cmake_config.cxxflag("-fno-lto");

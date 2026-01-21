@@ -71,25 +71,52 @@ pub fn find_vs_installations() -> Vec<VsInstallation> {
         return Vec::new();
     };
 
+    // Determine which VC tools component to require based on target architecture
+    let arch = WindowsArch::detect_from_env();
+    let vc_component = match arch {
+        WindowsArch::Arm64 => "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
+        WindowsArch::X64 | WindowsArch::X86 => "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+    };
+
     let args = [
         "-latest",
         "-products",
         "*",
         "-prerelease",
         "-requires",
-        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        vc_component,
         "-format",
         "text",
     ];
 
-    let output = match Command::new(vswhere).args(args).output() {
+    let output = match Command::new(vswhere).args(&args).output() {
         Ok(out) if out.status.success() => out,
         _ => {
-            // Fallback to broader search if specific component not found
-            let args_fallback = ["-latest", "-products", "*", "-prerelease", "-format", "text"];
-            match Command::new(vswhere).args(args_fallback).output() {
+            // Fallback: try the other architecture's component
+            let fallback_component = match arch {
+                WindowsArch::Arm64 => "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                WindowsArch::X64 | WindowsArch::X86 => "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
+            };
+            let args_fallback_arch = [
+                "-latest",
+                "-products",
+                "*",
+                "-prerelease",
+                "-requires",
+                fallback_component,
+                "-format",
+                "text",
+            ];
+            match Command::new(vswhere).args(&args_fallback_arch).output() {
                 Ok(out) if out.status.success() => out,
-                _ => return Vec::new(),
+                _ => {
+                    // Final fallback: broader search without specific component
+                    let args_fallback = ["-latest", "-products", "*", "-prerelease", "-format", "text"];
+                    match Command::new(vswhere).args(args_fallback).output() {
+                        Ok(out) if out.status.success() => out,
+                        _ => return Vec::new(),
+                    }
+                }
             }
         }
     };
