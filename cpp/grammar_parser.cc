@@ -427,7 +427,11 @@ std::vector<EBNFLexer::Token> EBNFLexer::Tokenize(const std::string& input) {
 class EBNFParser {
  public:
   /*! \brief The logic of parsing the grammar string. */
-  Grammar Parse(const std::vector<EBNFLexer::Token>& tokens, const std::string& root_rule_name);
+  Grammar Parse(
+      const std::vector<EBNFLexer::Token>& tokens,
+      const std::string& root_rule_name,
+      const int& max_nest_layer = 1000
+  );
 
  private:
   using Rule = Grammar::Impl::Rule;
@@ -525,6 +529,10 @@ class EBNFParser {
 
   // The name of the root rule
   std::string root_rule_name_;
+
+  int nest_layer_guard_ = 0;
+
+  int max_nest_layer_ = 1000;  // Max nest layer of the grammar
 
   static const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>> kMacroFunctions;
 };
@@ -642,14 +650,20 @@ int32_t EBNFParser::ParseRuleRef() {
 
 int32_t EBNFParser::ParseElement() {
   if (Peek().type == TokenType::LParen) {
+    nest_layer_guard_++;
+    if (nest_layer_guard_ > max_nest_layer_) {
+      ReportParseError("Nest layer exceeded the maximum limit", -1);
+    }
     Consume();
     if (Peek().type == TokenType::RParen) {
       // Special case: ( )
       Consume();
+      nest_layer_guard_--;
       return builder_.AddEmptyStr();
     }
     auto grammar_expr_id = ParseChoices();
     PeekAndConsume(TokenType::RParen, "Expect )");
+    nest_layer_guard_--;
     return grammar_expr_id;
   } else if (Peek().type == TokenType::LBracket) {
     return ParseCharClass();
@@ -1184,8 +1198,12 @@ void EBNFParser::InitRuleNames() {
 }
 
 Grammar EBNFParser::Parse(
-    const std::vector<EBNFLexer::Token>& tokens, const std::string& root_rule_name
+    const std::vector<EBNFLexer::Token>& tokens,
+    const std::string& root_rule_name,
+    const int& max_nest_layer
 ) {
+  max_nest_layer_ = max_nest_layer;
+  nest_layer_guard_ = 0;
   tokens_ = tokens;
   current_token_ = tokens_.data();
   root_rule_name_ = root_rule_name;
