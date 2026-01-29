@@ -97,3 +97,26 @@ jobs:
           verbose: true
           # repository-url: https://test.pypi.org/legacy/
           # To test: repository-url: https://test.pypi.org/legacy/
+
+  publish_crates_io:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install CMake
+        run: sudo apt-get update && sudo apt-get install -y cmake
+
+      - name: Verify package
+        run: cargo publish --dry-run --allow-dirty
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --allow-dirty

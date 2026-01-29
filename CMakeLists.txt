@@ -142,3 +142,4 @@ if(XGRAMMAR_ENABLE_INTERNAL_CHECK)
 else()
   target_compile_definitions(xgrammar PUBLIC XGRAMMAR_ENABLE_INTERNAL_CHECK=0)
 endif()
+

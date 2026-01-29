@@ -1,0 +1,9 @@
+edition = "2024"
+group_imports = "StdExternalCrate"
+imports_granularity = "Crate"
+
+# Format configuration
+fn_params_layout = "Vertical"
+match_block_trailing_comma = true
+use_small_heuristics = "Off"
+max_width = 80
