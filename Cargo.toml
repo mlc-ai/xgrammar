@@ -20,9 +20,8 @@ path = "rust/src/lib.rs"
 
 [dependencies]
 autocxx = "0.30.0"
-# Keep `cxx` exactly in sync with the version used by `autocxx-build` to avoid
-# link-time symbol mismatches (cxxbridge symbol names include a version tag).
-cxx = "1.0.192"
+# Must match autocxx's cxx version - autocxx generates code with `cxx::` references
+cxx = "1.0"
 serde_json = "1.0.149"
 
 [build-dependencies]
