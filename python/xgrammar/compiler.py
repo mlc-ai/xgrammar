@@ -111,6 +111,7 @@ class GrammarCompiler(XGRObject):
         max_threads: int = 8,
         cache_enabled: bool = True,
         cache_limit_bytes: int = -1,
+        is_jit: bool = False,
     ):
         """Construct the compiler.
 
@@ -128,6 +129,16 @@ class GrammarCompiler(XGRObject):
         cache_limit_bytes : int, default: -1
             The maximum memory usage for the cache in the specified unit.
             Note that the actual memory usage may slightly exceed this value.
+
+        is_jit : bool, default: False
+            Whether to enable Just-In-Time (JIT) compilation.
+
+            When enabled, token masks are computed on-demand during matching
+            rather than being fully precomputed at compile time. This usually
+            makes the initial compilation step faster, at the cost of some
+            additional work the first time a particular token mask is needed
+            during matching. It can also reduce overall memory usage, since
+            token masks that are never used do not need to be stored.
         """
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(
@@ -137,7 +148,7 @@ class GrammarCompiler(XGRObject):
 
         self._init_handle(
             _core.GrammarCompiler(
-                tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
+                tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes, is_jit
             )
         )
 

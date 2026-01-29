@@ -425,6 +425,65 @@ def test_fill_next_token_bitmask(
     assert len(rejected_token_ids) == expected_rejected_sizes[-1]
 
 
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize(
+    "tokenizer_path, input_str, expected_rejected_sizes",
+    tokenizer_path__input_str__expected_rejected_sizes,
+)
+def test_fill_next_token_bitmask_with_jit(
+    tokenizer_path: str, input_str: str, expected_rejected_sizes: List[int]
+):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    compiler = xgr.GrammarCompiler(tokenizer_info, is_jit=True)
+
+    time_start = time.monotonic_ns()
+    matcher = xgr.GrammarMatcher(compiler.compile_grammar(json_grammar_ebnf))
+    time_end = time.monotonic_ns()
+    print(f"Time to init GrammarMatcher: {(time_end - time_start) / 1e3} us")
+
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logits_gpu = torch.zeros(tokenizer_info.vocab_size, dtype=torch.float32, device=device)
+
+    input_bytes = input_str.encode("utf-8")
+
+    for i, c in enumerate(input_bytes):
+        # 1. fill_next_token_bitmask
+        time_start = time.monotonic_ns()
+        matcher.fill_next_token_bitmask(token_bitmask)
+        time_end = time.monotonic_ns()
+        print(f"Time to fill_next_token_bitmask: {(time_end - time_start) / 1e3} us")
+
+        # 2. Correctness verification
+        rejected_token_ids = _get_masked_tokens_from_bitmask(
+            token_bitmask, tokenizer_info.vocab_size
+        )
+        assert len(rejected_token_ids) == expected_rejected_sizes[i]
+
+        # 3. apply_token_bitmask_inplace
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_start = time.monotonic_ns()
+        xgr.apply_token_bitmask_inplace(logits_gpu, token_bitmask.to(device))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        time_end = time.monotonic_ns()
+        print(f"Time to apply_token_bitmask_inplace: {(time_end - time_start) / 1e3} us")
+
+        # 4. accept_string
+        print("Accepting char:", bytes([c]))
+        time_start = time.monotonic_ns()
+        assert matcher.accept_string(bytes([c]))
+        time_end = time.monotonic_ns()
+        print(f"Time to accept_token: {(time_end - time_start) / 1e3} us")
+
+    # 5. Final correctness verification
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    assert len(rejected_token_ids) == expected_rejected_sizes[-1]
+
+
 def test_nullable_grammar():
     grammar_with_nullable_rules = """
     root ::= rule1 | (rule1 rule1 rule1 rule3)+
