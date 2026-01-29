@@ -100,7 +100,7 @@ jobs:
 
   publish_crates_io:
     name: Publish to crates.io
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
       - uses: actions/checkout@v4
@@ -111,7 +111,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install CMake
-        run: brew install cmake
+        run: sudo apt-get update && sudo apt-get install -y cmake
 
       - name: Verify package
         run: cargo publish --dry-run --allow-dirty
