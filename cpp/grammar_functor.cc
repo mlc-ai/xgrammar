@@ -1865,8 +1865,7 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
   grammar_ = grammar;
   grammar->ImplPtr()->per_rule_fsm_hashes =
       std::vector<std::optional<uint64_t>>((*grammar)->NumRules());
-  grammar->ImplPtr()->per_rule_fsm_new_state_ids =
-      std::vector<std::optional<std::vector<std::pair<int32_t, int32_t>>>>((*grammar)->NumRules());
+  grammar->ImplPtr()->per_rule_fsm_new_state_ids.resize((*grammar)->NumRules());
   ref_graph_from_referee_to_referrer_.clear();
   ref_graph_from_referrer_to_referee_.clear();
   sorted_edges_.clear();
@@ -2254,7 +2253,7 @@ std::optional<AdaptiveTokenMask> RuleLevelCache::GetCache(
     const int32_t& state_cnt,
     const int32_t edge_cnt
 ) {
-  return pimpl_->GetCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt);
+  return std::nullopt;  // (Linzhang): Testing
 }
 
 bool RuleLevelCache::AddCache(
