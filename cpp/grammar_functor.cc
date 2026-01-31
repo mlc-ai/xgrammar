@@ -2047,10 +2047,12 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
       );
     }
   }
-  auto& id_mapping = grammar_->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index];
-  id_mapping = std::vector<std::pair<int32_t, int32_t>>(
-      original_state_id_to_new_id.begin(), original_state_id_to_new_id.end()
-  );
+  std::vector<std::pair<int32_t, int32_t>> new_id_mapping;
+  new_id_mapping.reserve(original_state_id_to_new_id.size());
+  for (const auto& [original_state_id, new_state_id] : original_state_id_to_new_id) {
+    new_id_mapping.emplace_back(original_state_id, new_state_id);
+  }
+  grammar_->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index] = new_id_mapping;
   return {true, hash_result};
 }
 
@@ -2137,10 +2139,12 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
       );
     }
   }
-  auto& id_mapping = grammar_->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index];
-  id_mapping = std::vector<std::pair<int32_t, int32_t>>(
-      original_state_id_to_new_id.begin(), original_state_id_to_new_id.end()
-  );
+  std::vector<std::pair<int32_t, int32_t>> new_id_mapping;
+  new_id_mapping.reserve(original_state_id_to_new_id.size());
+  for (const auto& [original_state_id, new_state_id] : original_state_id_to_new_id) {
+    new_id_mapping.emplace_back(original_state_id, new_state_id);
+  }
+  grammar_->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index] = new_id_mapping;
   return hash_result;
 }
 
