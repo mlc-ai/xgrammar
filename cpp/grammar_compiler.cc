@@ -203,6 +203,7 @@ void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
         }
       }
 
+      XGRAMMAR_DCHECK(!tmp_can_reach_end_prefix_or_stack_.empty());
       bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
 
       XGRAMMAR_DCHECK(!accepted) << "All the tokens are at least uncertain!";
@@ -227,7 +228,7 @@ void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
   }
 
   // This strategy ensures the consistency of the cache storage type in most cases.
-  // However, in this case, the storage type is unconsistent:
+  // However, in this case, the storage type is inconsistent:
   // 1. The original cache is accepted_indices, and rejected_indices is also small.
   // After adapting with lookahead, |accepted_indices| + |accepted_by_lookahead_indices| >
   // |rejected_indices| + |rejected_by_lookahead_indices|, and |rejected_indices| +
@@ -1316,14 +1317,14 @@ class GrammarCompiler::Impl {
                 ? std::optional<RuleLevelCache>(
                       max_memory_bytes == -1
                           ? static_cast<std::size_t>(-1)
-                          : static_cast<std::size_t>(max_memory_bytes - max_memory_bytes * 2 / 3)
+                          : static_cast<std::size_t>(max_memory_bytes - max_memory_bytes / 3 * 2)
                   )
                 : std::nullopt
         ),
         no_cache_compiler_(tokenizer_info, max_threads, rule_level_cache_),
         grammar_level_cache_(
             max_memory_bytes == -1 ? static_cast<std::size_t>(-1)
-                                   : static_cast<std::size_t>(max_memory_bytes * 2 / 3),
+                                   : static_cast<std::size_t>(max_memory_bytes / 3 * 2),
             Computer(*this)
         ) {
     if (max_memory_bytes < -1) {

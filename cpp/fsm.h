@@ -767,7 +767,9 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   size_t GetNumEdges() const;
 
  private:
-  mutable std::optional<size_t> edge_num = std::nullopt;
+  mutable std::optional<size_t> edge_num_ = std::nullopt;
+
+  mutable std::mutex edge_num_mutex_;
 
   /*!
    * \brief Print the CompactFSMWithStartEnd.

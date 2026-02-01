@@ -15,6 +15,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <queue>
 #include <set>
 #include <string>
@@ -1543,14 +1544,15 @@ FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
 }
 
 size_t CompactFSMWithStartEnd::GetNumEdges() const {
-  if (edge_num.has_value()) {
-    return edge_num.value();
+  std::lock_guard<std::mutex> lock(edge_num_mutex_);
+  if (edge_num_.has_value()) {
+    return edge_num_.value();
   }
   size_t num_edges = 0;
   for (int i = 0; i < fsm_.NumStates(); i++) {
     num_edges += fsm_.GetEdges(i).size();
   }
-  edge_num = num_edges;
+  edge_num_ = num_edges;
   return num_edges;
 }
 

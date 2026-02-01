@@ -2333,16 +2333,19 @@ bool RuleLevelCache::Impl::AddCache(
   }
 
   // Evict old entries if needed.
-  while (current_cache_memory_size_ + MemorySize(token_mask) > max_cache_memory_size_) {
-    auto oldest_it = cache_list_.begin();
-    if (oldest_it == cache_list_.end()) {
-      // This should not happen if the size of the new item is smaller than max_cache_memory_size_,
-      // but this is a safeguard.
-      break;
+  if (max_cache_memory_size_ != kUnlimitedSize) {
+    size_t new_item_size = MemorySize(token_mask);
+    while (current_cache_memory_size_ > max_cache_memory_size_ - new_item_size) {
+      auto oldest_it = cache_list_.begin();
+      if (oldest_it == cache_list_.end()) {
+        // This should not happen if the size of the new item is smaller than
+        // max_cache_memory_size_, but this is a safeguard.
+        break;
+      }
+      current_cache_memory_size_ -= MemorySize(oldest_it->second);
+      cache_.erase(oldest_it->first);
+      cache_list_.Erase(oldest_it);
     }
-    current_cache_memory_size_ -= MemorySize(oldest_it->second);
-    cache_.erase(oldest_it->first);
-    cache_list_.Erase(oldest_it);
   }
 
   // Add to the cache.
