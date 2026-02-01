@@ -14,7 +14,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -745,6 +745,14 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   // For serialization only
   CompactFSMWithStartEnd() = default;
 
+  explicit CompactFSMWithStartEnd(const CompactFSM& fsm, int start, const std::vector<bool>& ends)
+      : FSMWithStartEndBase<CompactFSM>(fsm, start, ends) {
+    edge_num_ = 0;
+    for (int i = 0; i < fsm.NumStates(); i++) {
+      edge_num_ += fsm.GetEdges(i).size();
+    }
+  }
+
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
   /*!
@@ -759,6 +767,15 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    * \return The FSMWithStartEnd.
    */
   FSMWithStartEnd ToFSM() const;
+
+  /*!
+   * \brief Get the number of edges in the CompactFSMWithStartEnd.
+   * \return The number of edges in the CompactFSMWithStartEnd.
+   */
+  size_t GetNumEdges() const;
+
+ private:
+  size_t edge_num_ = 0;
 
   /*!
    * \brief Print the CompactFSMWithStartEnd.
@@ -784,14 +801,6 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
       CompactFSMWithStartEnd* result, const picojson::value& value, const std::string& type_name
   );
 };
-
-XGRAMMAR_MEMBER_ARRAY(
-    CompactFSMWithStartEnd,
-    &CompactFSMWithStartEnd::fsm_,
-    &CompactFSMWithStartEnd::start_,
-    &CompactFSMWithStartEnd::ends_,
-    &CompactFSMWithStartEnd::is_dfa_
-);
 
 /****************** FSMWithStartEndBase Template Implementation ******************/
 
