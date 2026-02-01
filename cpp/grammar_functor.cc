@@ -2335,7 +2335,8 @@ bool RuleLevelCache::Impl::AddCache(
   // Evict old entries if needed.
   if (max_cache_memory_size_ != kUnlimitedSize) {
     size_t new_item_size = MemorySize(token_mask);
-    while (current_cache_memory_size_ > max_cache_memory_size_ - new_item_size) {
+    while ((current_cache_memory_size_) >
+           static_cast<int64_t>(max_cache_memory_size_ - new_item_size)) {
       auto oldest_it = cache_list_.begin();
       if (oldest_it == cache_list_.end()) {
         // This should not happen if the size of the new item is smaller than

@@ -802,15 +802,6 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   );
 };
 
-XGRAMMAR_MEMBER_ARRAY(
-    CompactFSMWithStartEnd,
-    &CompactFSMWithStartEnd::fsm_,
-    &CompactFSMWithStartEnd::start_,
-    &CompactFSMWithStartEnd::ends_,
-    &CompactFSMWithStartEnd::is_dfa_,
-    &CompactFSMWithStartEnd::edge_num_
-);
-
 /****************** FSMWithStartEndBase Template Implementation ******************/
 
 template <typename FSMType>
