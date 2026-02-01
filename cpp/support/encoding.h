@@ -456,6 +456,106 @@ inline std::pair<TCodepoint, int32_t> ParseNextUTF8OrEscaped(
   return ParseNextEscaped(utf8, additional_escape_map);
 }
 
+inline std::optional<std::string> JSONFormatToRegexPattern(const std::string& format) {
+  std::optional<std::string> regex_pattern = std::nullopt;
+  if (format == "email") {
+    std::string atext = "[\\w!#$%&'*+/=?^`{|}~-]";
+    std::string dot_string = "(" + atext + "+(\\." + atext + "+)*)";
+    std::string quoted_string =
+        "\\\\\"(\\\\[\\x20-\\x7E]|[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E])*\\\\\"";
+    std::string domain =
+        "([A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)((\\.[A-Za-z0-9][\\-A-Za-z0-9]*[A-Za-z0-9])*"
+        ")";
+    regex_pattern = "^(" + dot_string + "|" + quoted_string + ")@" + domain + "$";
+  } else if (format == "date") {
+    regex_pattern = "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))$";
+  } else if (format == "time") {
+    regex_pattern =
+        "^([01]\\d|2[0-3]):[0-5]\\d:([0-5]\\d|60)(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
+  } else if (format == "date-time") {
+    regex_pattern =
+        "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))T([01]\\d|2[0-3]):([0-5]\\d|60):["
+        "0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
+  } else if (format == "duration") {
+    regex_pattern =
+        "^P((\\d+D|\\d+M(\\d+D)?|\\d+Y(\\d+M(\\d+D)?)?)(T(\\d+S|\\d+M(\\d+S)?|\\d+H(\\d+M(\\d+"
+        "S)?"
+        ")?))?|T(\\d+S|\\d+M(\\d+S)?|\\d+H(\\d+M(\\d+S)?)?)|\\d+W)$";
+  } else if (format == "ipv4") {
+    std::string decbyte = "(25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)";
+    regex_pattern = "^(" + decbyte + "\\.){3}" + decbyte + "$";
+  } else if (format == "ipv6") {
+    regex_pattern =
+        "("
+        "([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|"
+        "([0-9a-fA-F]{1,4}:){1,7}:|"
+        "([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|"
+        "([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|"
+        "([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|"
+        "([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|"
+        "([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|"
+        "[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|"
+        ":((:[0-9a-fA-F]{1,4}){1,7}|:)|"
+        "::(ffff(:0{1,4}){0,1}:){0,1}"
+        "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}"
+        "(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|"
+        "([0-9a-fA-F]{1,4}:){1,4}:"
+        "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}"
+        "(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])"
+        ")";
+  } else if (format == "hostname") {
+    regex_pattern = "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$";
+  } else if (format == "uuid") {
+    regex_pattern = "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$";
+  } else if (format == "uri") {
+    std::string schema_pat = "[a-zA-Z][a-zA-Z+\\.-]*";
+    std::string pchar = "([\\w\\.~!$&'()*+,;=:@-]|%[0-9A-Fa-f][0-9A-Fa-f])";
+    std::string query_fragment_char = "([\\w\\.~!$&'()*+,;=:@/\\?-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+    std::string query = "(\\?" + query_fragment_char + ")?";
+    std::string fragment = "(#" + query_fragment_char + ")?";
+    std::string path_abempty = "(/" + pchar + "*)*";
+    std::string path_absolute_rootless_empty = "/?(" + pchar + "+(/" + pchar + "*)*)?";
+    std::string userinfo = "([\\w\\.~!$&'()*+,;=:-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+    std::string host = "([\\w\\.~!$&'()*+,;=-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+    std::string authority = "(" + userinfo + "@)?" + host + "(:\\d*)?";
+    std::string hier_part =
+        "(//" + authority + path_abempty + "|" + path_absolute_rootless_empty + ")";
+    regex_pattern = "^" + schema_pat + ":" + hier_part + query + fragment + "$";
+  } else if (format == "uri-reference") {
+    std::string pchar = "([\\w\\.~!$&'()*+,;=:@-]|%[0-9A-Fa-f][0-9A-Fa-f])";
+    std::string query_fragment_char = "([\\w\\.~!$&'()*+,;=:@/\\?-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+    std::string query = "(\\?" + query_fragment_char + ")?";
+    std::string fragment = "(#" + query_fragment_char + ")?";
+    std::string path_abempty = "(/" + pchar + "*)*";
+    std::string path_absolute = "/(" + pchar + "+(/" + pchar + "*)*)?";
+    std::string segment_nz_nc = "([\\w\\.~!$&'()*+,;=@-]|%[0-9A-Fa-f][0-9A-Fa-f])+";
+    std::string path_noscheme = segment_nz_nc + "(/" + pchar + "*)*";
+    std::string userinfo = "([\\w\\.~!$&'()*+,;=:-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+    std::string host = "([\\w\\.~!$&'()*+,;=-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+    std::string authority = "(" + userinfo + "@)?" + host + "(:\\d*)?";
+    std::string relative_part =
+        "(//" + authority + path_abempty + "|" + path_absolute + "|" + path_noscheme + ")?";
+    regex_pattern = "^" + relative_part + query + fragment + "$";
+  } else if (format == "uri-template") {
+    std::string literals =
+        "([\\x21\\x23-\\x24\\x26\\x28-\\x3B\\x3D\\x3F-\\x5B\\x5D\\x5F\\x61-\\x7A\\x7E]"
+        "|%[0-9A-Fa-f][0-9A-Fa-f])";
+    std::string op = "[+#\\./;\\?&=,!@|]";
+    std::string varchar = "(\\w|%[0-9A-Fa-f][0-9A-Fa-f])";
+    std::string varname = varchar + "(\\.?" + varchar + ")*";
+    std::string varspec = varname + "(:[1-9]\\d?\\d?\\d?|\\*)?";
+    std::string variable_list = varspec + "(," + varspec + ")*";
+    std::string expression = "\\{(" + op + ")?" + variable_list + "\\}";
+    regex_pattern = "^(" + literals + "|" + expression + ")*$";
+  } else if (format == "json-pointer") {
+    regex_pattern = "^(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*$";
+  } else if (format == "relative-json-pointer") {
+    regex_pattern =
+        "^(0|[1-9][0-9]*)(#|(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*)$";
+  }
+  return regex_pattern;
+}
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_SUPPORT_ENCODING_H_

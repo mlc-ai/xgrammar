@@ -24,7 +24,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
       bool any_whitespace,
-      std::optional<int> max_whitespace_cnt
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr
   );
 
   /*! \brief Convert SchemaSpec to EBNF with XML format for root object. */
@@ -33,7 +34,9 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
  protected:
   // Override methods for XML format
   std::string GenerateString(const StringSpec& spec, const std::string& rule_name) override;
-  std::string GenerateObject(const ObjectSpec& spec, const std::string& rule_name) override;
+  std::string GenerateObject(
+      const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
+  ) override;
   std::string GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
 
   // Override format hooks
@@ -54,7 +57,15 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::string GetBasicStringRuleName() const override;
   std::string GetBasicAnyRuleName() const override;
 
+  std::string NextSeparator(bool is_end = false) override;
+
   void AddBasicRules() override;
+
+  /*!
+   * \brief EBNF pattern for optional whitespace between </parameter> and the next
+   * <parameter=...>. Override to allow or restrict newlines/spaces between parameters.
+   */
+  virtual std::string GetBetweenParametersSeparator() const;
 
  private:
   void AddXMLHelperRules();
@@ -65,7 +76,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   static const std::string kXMLVariableName;
 
   // Track if we're at the root object level
-  bool is_root_object_ = true;
+  int nested_object_level_ = 0;
 };
 
 }  // namespace xgrammar

@@ -9,6 +9,7 @@
 
 #include <picojson.h>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -34,6 +35,8 @@ struct IntegerSpec {
   std::optional<int64_t> maximum;
   std::optional<int64_t> exclusive_minimum;
   std::optional<int64_t> exclusive_maximum;
+
+  std::string ToString() const;
 };
 
 struct NumberSpec {
@@ -41,6 +44,8 @@ struct NumberSpec {
   std::optional<double> maximum;
   std::optional<double> exclusive_minimum;
   std::optional<double> exclusive_maximum;
+
+  std::string ToString() const;
 };
 
 struct StringSpec {
@@ -48,13 +53,21 @@ struct StringSpec {
   std::optional<std::string> format;
   int min_length = 0;
   int max_length = -1;  // -1 means no limit
+
+  std::string ToString() const;
 };
 
-struct BooleanSpec {};
+struct BooleanSpec {
+  std::string ToString() const;
+};
 
-struct NullSpec {};
+struct NullSpec {
+  std::string ToString() const;
+};
 
-struct AnySpec {};
+struct AnySpec {
+  std::string ToString() const;
+};
 
 // Complex Type Specs
 struct ArraySpec {
@@ -63,6 +76,8 @@ struct ArraySpec {
   SchemaSpecPtr additional_items;  // nullptr means not allowed
   int64_t min_items = 0;
   int64_t max_items = -1;  // -1 means no limit
+
+  std::string ToString() const;
 };
 
 struct ObjectSpec {
@@ -88,33 +103,46 @@ struct ObjectSpec {
 
   int min_properties = 0;
   int max_properties = -1;  // -1 means no limit
+
+  std::string ToString() const;
 };
 
 // Composite Type Specs
 struct ConstSpec {
   std::string json_value;  // JSON serialized value
+
+  std::string ToString() const;
 };
 
 struct EnumSpec {
   std::vector<std::string> json_values;  // JSON serialized values
+
+  std::string ToString() const;
 };
 
 struct RefSpec {
   std::string uri;
-  SchemaSpecPtr resolved;  // resolved reference
+
+  std::string ToString() const;
 };
 
 struct AnyOfSpec {
   std::vector<SchemaSpecPtr> options;
+
+  std::string ToString() const;
 };
 
 struct AllOfSpec {
   std::vector<SchemaSpecPtr> schemas;
+
+  std::string ToString() const;
 };
 
 struct TypeArraySpec {
   // Handle "type": ["string", "integer"] cases
   std::vector<SchemaSpecPtr> type_schemas;
+
+  std::string ToString() const;
 };
 
 // Unified SchemaSpec
@@ -138,6 +166,8 @@ struct SchemaSpec {
   SchemaSpecVariant spec;
   std::string cache_key;       // for deduplication
   std::string rule_name_hint;  // suggested rule name
+
+  std::string ToString() const;
 
   // Helper method to create SchemaSpec
   template <typename T>
@@ -197,11 +227,15 @@ class IndentManager {
  */
 class JSONSchemaConverter {
  public:
+  using RefResolver =
+      std::function<SchemaSpecPtr(const std::string& uri, const std::string& rule_name_hint)>;
+
   JSONSchemaConverter(
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
       bool any_whitespace,
-      std::optional<int> max_whitespace_cnt
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr
   );
 
   virtual ~JSONSchemaConverter() = default;
@@ -223,7 +257,9 @@ class JSONSchemaConverter {
   virtual std::string GenerateBoolean(const BooleanSpec& spec, const std::string& rule_name);
   virtual std::string GenerateNull(const NullSpec& spec, const std::string& rule_name);
   virtual std::string GenerateArray(const ArraySpec& spec, const std::string& rule_name);
-  virtual std::string GenerateObject(const ObjectSpec& spec, const std::string& rule_name);
+  virtual std::string GenerateObject(
+      const ObjectSpec& spec, const std::string& rule_name, bool need_brace = true
+  );
   virtual std::string GenerateAny(const AnySpec& spec, const std::string& rule_name);
   virtual std::string GenerateConst(const ConstSpec& spec, const std::string& rule_name);
   virtual std::string GenerateEnum(const EnumSpec& spec, const std::string& rule_name);
@@ -271,7 +307,7 @@ class JSONSchemaConverter {
   std::string CreateRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
 
   /*! \brief Get next separator from indent manager. */
-  std::string NextSeparator(bool is_end = false);
+  virtual std::string NextSeparator(bool is_end = false);
 
   /*! \brief Get whitespace pattern. */
   std::string GetWhitespacePattern() const;
@@ -319,7 +355,9 @@ class JSONSchemaConverter {
   void AddHelperRules();
 
   std::unordered_map<std::string, std::string> rule_cache_;
-  std::unordered_map<std::string, std::string> uri_to_rule_name_;  // For circular reference handling
+  std::unordered_map<std::string, std::string>
+      uri_to_rule_name_;      // For circular reference handling
+  RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time
 
   // For string spec deduplication
   struct StringSpecKey {
