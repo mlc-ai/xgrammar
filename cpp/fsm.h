@@ -799,8 +799,7 @@ XGRAMMAR_MEMBER_ARRAY(
     &CompactFSMWithStartEnd::fsm_,
     &CompactFSMWithStartEnd::start_,
     &CompactFSMWithStartEnd::ends_,
-    &CompactFSMWithStartEnd::is_dfa_,
-    &CompactFSMWithStartEnd::edge_num
+    &CompactFSMWithStartEnd::is_dfa_
 );
 
 /****************** FSMWithStartEndBase Template Implementation ******************/
