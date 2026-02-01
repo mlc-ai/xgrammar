@@ -745,6 +745,14 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   // For serialization only
   CompactFSMWithStartEnd() = default;
 
+  explicit CompactFSMWithStartEnd(const CompactFSM& fsm, int start, const std::vector<bool>& ends)
+      : FSMWithStartEndBase<CompactFSM>(fsm, start, ends) {
+    edge_num_ = 0;
+    for (int i = 0; i < fsm.NumStates(); i++) {
+      edge_num_ += fsm.GetEdges(i).size();
+    }
+  }
+
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
   /*!
@@ -767,9 +775,7 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   size_t GetNumEdges() const;
 
  private:
-  mutable std::optional<size_t> edge_num_ = std::nullopt;
-
-  mutable std::mutex edge_num_mutex_;
+  size_t edge_num_ = 0;
 
   /*!
    * \brief Print the CompactFSMWithStartEnd.
@@ -801,7 +807,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &CompactFSMWithStartEnd::fsm_,
     &CompactFSMWithStartEnd::start_,
     &CompactFSMWithStartEnd::ends_,
-    &CompactFSMWithStartEnd::is_dfa_
+    &CompactFSMWithStartEnd::is_dfa_,
+    &CompactFSMWithStartEnd::edge_num_
 );
 
 /****************** FSMWithStartEndBase Template Implementation ******************/

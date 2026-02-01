@@ -15,7 +15,6 @@
 #include <iostream>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <queue>
 #include <set>
 #include <string>
@@ -650,6 +649,7 @@ struct CompactFSMWithStartEndSerializeHelper {
   int start;
   bool is_dfa;
   std::vector<int32_t> end_index;
+  size_t edge_num;
 
   CompactFSMWithStartEndSerializeHelper(const CompactFSMWithStartEnd& compact_fsm_with_se)
       : fsm(compact_fsm_with_se.fsm_),
@@ -693,6 +693,11 @@ std::optional<SerializationError> DeserializeJSONValue(
   for (const auto& idx : end_index) {
     result->ends_[idx] = true;
   }
+  size_t edge_num = 0;
+  for (int i = 0; i < result->fsm_.NumStates(); i++) {
+    edge_num += result->fsm_.GetEdges(i).size();
+  }
+  result->edge_num_ = edge_num;
   return std::nullopt;
 }
 
@@ -1543,17 +1548,6 @@ FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
 }
 
-size_t CompactFSMWithStartEnd::GetNumEdges() const {
-  std::lock_guard<std::mutex> lock(edge_num_mutex_);
-  if (edge_num_.has_value()) {
-    return edge_num_.value();
-  }
-  size_t num_edges = 0;
-  for (int i = 0; i < fsm_.NumStates(); i++) {
-    num_edges += fsm_.GetEdges(i).size();
-  }
-  edge_num_ = num_edges;
-  return num_edges;
-}
+size_t CompactFSMWithStartEnd::GetNumEdges() const { return edge_num_; }
 
 }  // namespace xgrammar
