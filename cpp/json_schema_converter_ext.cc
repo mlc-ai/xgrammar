@@ -7,6 +7,7 @@
 
 #include "json_schema_converter.h"
 #include "regex_converter.h"
+#include "support/encoding.h"
 
 namespace xgrammar {
 

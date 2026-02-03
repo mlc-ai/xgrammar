@@ -69,12 +69,9 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   virtual std::string GetBetweenParametersSeparator() const;
 
  private:
-  void AddXMLHelperRules();
-
   // XML-specific rule names
   static const std::string kXMLString;
   static const std::string kXMLAny;
-  static const std::string kXMLVariableName;
 
   // Track if we're at the root object level
   int nested_object_level_ = 0;
