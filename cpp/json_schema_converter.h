@@ -493,7 +493,7 @@ std::string QwenXMLToolCallingToEBNF(const std::string& schema);
  * \return The ebnf-grammar to match the requirements of the schema, and
  * in MiniMax xml style.
  */
-std::string MiniMaxXMLTToolCallingToEBNF(const std::string& schema);
+std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema);
 
 }  // namespace xgrammar
 

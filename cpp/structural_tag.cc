@@ -201,8 +201,9 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     auto it = obj.find("parsing_type");
     if (it != obj.end() && it->second.is<std::string>()) {
       parsing_type = it->second.get<std::string>();
-      if (parsing_type != "json" && parsing_type != "qwen_xml") {
-        return ResultErr<ISTError>("parsing_type must be \"json\" or \"qwen_xml\"");
+      if (parsing_type != "json" && parsing_type != "qwen_xml" && parsing_type != "minimax_xml") {
+        return ResultErr<ISTError>("parsing_type must be \"json\", \"qwen_xml\", or \"minimax_xml\""
+        );
       }
     }
   }
@@ -807,9 +808,26 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
-  Grammar sub_grammar = (format.parsing_type == "qwen_xml")
-                            ? Grammar::FromEBNF(QwenXMLToolCallingToEBNF(format.json_schema))
-                            : Grammar::FromJSONSchema(format.json_schema);
+  const static std::unordered_map<std::string, std::function<std::string(const std::string&)>>
+      parsing_type_to_grammar_converter = {
+          {"json",
+           [&](const std::string& json_schema) -> std::string {
+             return JSONSchemaToEBNF(json_schema);
+           }},
+          {"qwen_xml",
+           [&](const std::string& json_schema) -> std::string {
+             return QwenXMLToolCallingToEBNF(json_schema);
+           }},
+          {"minimax_xml",
+           [&](const std::string& json_schema) -> std::string {
+             return MiniMaxXMLToolCallingToEBNF(json_schema);
+           }},
+      };
+  auto converter = parsing_type_to_grammar_converter.find(format.parsing_type);
+  if (converter == parsing_type_to_grammar_converter.end()) {
+    return ResultErr<ISTError>("Unsupported parsing type: " + format.parsing_type);
+  }
+  auto sub_grammar = Grammar::FromEBNF(converter->second(format.json_schema));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }

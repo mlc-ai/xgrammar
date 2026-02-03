@@ -3003,7 +3003,7 @@ std::string QwenXMLToolCallingToEBNF(const std::string& schema) {
   );
 }
 
-std::string MiniMaxXMLTToolCallingToEBNF(const std::string& schema) {
+std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
