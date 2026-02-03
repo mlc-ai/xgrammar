@@ -31,8 +31,9 @@ class JSONSchemaFormat(BaseModel):
     """The type of the format."""
     json_schema: Union[bool, Dict[str, Any]]
     """The JSON schema."""
-    parsing_type: Literal["json", "qwen_xml"] = "json"
-    """How to parse the content: \"json\" for standard JSON, \"qwen_xml\" for Qwen XML style."""
+    parsing_type: Literal["json", "qwen_xml", "minimax_xml"] = "json"
+    """How to parse the content. Valid values: \"json\" (standard JSON), \"qwen_xml\" (Qwen XML:
+    <parameter=key>value</parameter>), \"minimax_xml\" (MiniMax XML: <parameter name=\"key\">value</parameter>)."""
 
 
 class QwenXMLParameterFormat(BaseModel):
