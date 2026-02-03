@@ -359,6 +359,7 @@ NB_MODULE(xgrammar_bindings, m) {
           nb::arg("end").none()
       )
       .def("_qwen_xml_tool_calling_to_ebnf", &QwenXMLToolCallingToEBNF, nb::arg("schema"))
+      .def("_mini_max_xml_tool_calling_to_ebnf", &MiniMaxXMLTToolCallingToEBNF, nb::arg("schema"))
       .def(
           "_generate_float_regex",
           [](std::optional<double> start, std::optional<double> end) {

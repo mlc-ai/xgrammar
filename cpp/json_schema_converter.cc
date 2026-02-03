@@ -278,7 +278,8 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
         schema_cache_[cache_key] = spec;
         return ResultOk(spec);
       }
-      case JSONFormat::kXML: {
+      case JSONFormat::kXML:
+      case JSONFormat::kMiniMaxXML: {
         return ResultOk(SchemaSpec::Make(AnySpec{}, "", rule_name_hint));
       }
       default:
@@ -388,6 +389,7 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
         result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
         break;
       case JSONFormat::kXML:
+      case JSONFormat::kMiniMaxXML:
         result = SchemaSpec::Make(AnySpec{}, "", rule_name_hint);
         break;
       default:
@@ -2958,6 +2960,12 @@ std::string JSONSchemaToEBNF(
       );
       return converter.Convert(spec);
     }
+    case JSONFormat::kMiniMaxXML: {
+      MiniMaxXMLTToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
+      );
+      return converter.Convert(spec);
+    }
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
   }
@@ -2992,6 +3000,26 @@ std::string QwenXMLToolCallingToEBNF(const std::string& schema) {
   }
   return JSONSchemaToEBNF(
       json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kXML
+  );
+}
+
+std::string MiniMaxXMLTToolCallingToEBNF(const std::string& schema) {
+  picojson::value json_value;
+  std::string err = picojson::parse(json_value, schema);
+  if (!err.empty()) {
+    XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
+  }
+  const auto& schema_obj = json_value.get<picojson::object>();
+  if (!schema_obj.count("type")) {
+    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
+                        << json_value.to_str();
+  }
+  if (schema_obj.at("type").get<std::string>() != "object") {
+    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
+                        << json_value.to_str();
+  }
+  return JSONSchemaToEBNF(
+      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kMiniMaxXML
   );
 }
 
