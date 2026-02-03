@@ -11,7 +11,6 @@
 #include <xgrammar/grammar.h>
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -26,7 +25,6 @@ namespace xgrammar {
 
 struct ConstStringFormat;
 struct JSONSchemaFormat;
-struct QwenXmlParameterFormat;
 struct AnyTextFormat;
 struct GrammarFormat;
 struct RegexFormat;
@@ -39,7 +37,6 @@ struct TagsWithSeparatorFormat;
 using Format = std::variant<
     ConstStringFormat,
     JSONSchemaFormat,
-    QwenXmlParameterFormat,
     AnyTextFormat,
     GrammarFormat,
     RegexFormat,
@@ -60,13 +57,9 @@ struct ConstStringFormat {
 struct JSONSchemaFormat {
   static constexpr const char* type = "json_schema";
   std::string json_schema;
-  JSONSchemaFormat(std::string json_schema) : json_schema(std::move(json_schema)) {}
-};
-
-struct QwenXmlParameterFormat {
-  static constexpr const char* type = "qwen_xml";
-  std::string xml_schema;
-  QwenXmlParameterFormat(std::string xml_schema) : xml_schema(std::move(xml_schema)) {}
+  std::string parsing_type = "json";  // "json" or "qwen_xml"
+  JSONSchemaFormat(std::string json_schema, std::string parsing_type = "json")
+      : json_schema(std::move(json_schema)), parsing_type(std::move(parsing_type)) {}
 };
 
 struct GrammarFormat {
