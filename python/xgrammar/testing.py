@@ -350,10 +350,10 @@ def _qwen_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str,
     return _core.testing._qwen_xml_tool_calling_to_ebnf(schema_str)
 
 
-def _mini_max_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
+def _minimax_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
     """Convert MiniMax XML tool calling schema to EBNF."""
     schema_str = _convert_schema_to_str(schema)
-    return _core.testing._mini_max_xml_tool_calling_to_ebnf(schema_str)
+    return _core.testing._minimax_xml_tool_calling_to_ebnf(schema_str)
 
 
 def _traverse_draft_tree(
