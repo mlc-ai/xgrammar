@@ -69,13 +69,40 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
    */
   virtual std::string GetBetweenParametersSeparator() const;
 
+ protected:
+  // Track if we're at the root object level (used by subclasses e.g. MiniMax)
+  int nested_object_level_ = 0;
+
  private:
   // XML-specific rule names
   static const std::string kXMLString;
   static const std::string kXMLAny;
+};
 
-  // Track if we're at the root object level
-  int nested_object_level_ = 0;
+/*!
+ * \brief Converter for MiniMax-style XML Tool Calling format.
+ *
+ * Same as XMLToolCallingConverter except the outermost object uses
+ * <parameter name="key">value</parameter> instead of <parameter=key>value</parameter>.
+ */
+class MiniMaxXMLTToolCallingConverter : public XMLToolCallingConverter {
+ public:
+  using XMLToolCallingConverter::XMLToolCallingConverter;
+
+ protected:
+  std::string FormatPropertyKey(const std::string& key) override;
+  std::string FormatProperty(
+      const std::string& key,
+      const std::string& value_rule,
+      const std::string& rule_name,
+      int64_t idx
+  ) override;
+  std::string FormatOtherProperty(
+      const std::string& key_pattern,
+      const std::string& value_rule,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix
+  ) override;
 };
 
 }  // namespace xgrammar

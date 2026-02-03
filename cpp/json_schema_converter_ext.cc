@@ -186,4 +186,41 @@ std::string XMLToolCallingConverter::GenerateObject(
   return result;
 }
 
+// -------- MiniMaxXMLTToolCallingConverter --------
+// Outermost properties: <parameter name="key">value</parameter>
+
+std::string MiniMaxXMLTToolCallingConverter::FormatPropertyKey(const std::string& key) {
+  if (nested_object_level_ <= 1) {
+    return "\"<parameter name=\\\"" + key + "\\\">\"";
+  }
+  return JSONSchemaConverter::FormatPropertyKey(key);
+}
+
+std::string MiniMaxXMLTToolCallingConverter::FormatProperty(
+    const std::string& key, const std::string& value_rule, const std::string& rule_name, int64_t idx
+) {
+  if (nested_object_level_ <= 1) {
+    std::string whitespace = GetWhitespacePattern();
+    return "\"<parameter name=\\\"" + key + "\\\">\" " + whitespace + " " + value_rule + " " +
+           whitespace + " \"</parameter>\"";
+  }
+  return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
+}
+
+std::string MiniMaxXMLTToolCallingConverter::FormatOtherProperty(
+    const std::string& key_pattern,
+    const std::string& value_rule,
+    const std::string& rule_name,
+    const std::string& rule_name_suffix
+) {
+  if (nested_object_level_ <= 1) {
+    std::string whitespace = GetWhitespacePattern();
+    return "\"<parameter name=\\\"\" " + key_pattern + " \"\\\">\" " + whitespace + " " +
+           value_rule + " " + whitespace + " \"</parameter>\"";
+  }
+  return JSONSchemaConverter::FormatOtherProperty(
+      key_pattern, value_rule, rule_name, rule_name_suffix
+  );
+}
+
 }  // namespace xgrammar
