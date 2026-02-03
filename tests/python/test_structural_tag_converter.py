@@ -288,7 +288,7 @@ json_schema_parsing_type_minimax_xml_stag_grammar = [
             },
             "parsing_type": "minimax_xml",
         },
-        "",  # expected_grammar: leave empty for maintainer to fill
+        "",
     )
 ]
 
