@@ -186,7 +186,6 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>" basic_object_1 [ \n\t]*) | ([ \n\t]*))
-xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 xml_string ::= TagDispatch(
   stop_eos=true,
   stop_str=(),

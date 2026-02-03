@@ -13,7 +13,6 @@ namespace xgrammar {
 // Static constants
 const std::string XMLToolCallingConverter::kXMLString = "xml_string";
 const std::string XMLToolCallingConverter::kXMLAny = "xml_any";
-const std::string XMLToolCallingConverter::kXMLVariableName = "xml_variable_name";
 
 XMLToolCallingConverter::XMLToolCallingConverter(
     std::optional<int> indent,
@@ -40,9 +39,6 @@ void XMLToolCallingConverter::AddBasicRules() {
   // First add JSON basic rules
   JSONSchemaConverter::AddBasicRules();
 
-  // Then add XML-specific rules
-  AddXMLHelperRules();
-
   // Add XML string rule
   ebnf_script_creator_.AddRule(
       kXMLString,
@@ -58,10 +54,6 @@ void XMLToolCallingConverter::AddBasicRules() {
   auto any_body = kBasicNumber + " | " + kXMLString + " | " + kBasicBoolean + " | " + kBasicNull +
                   " | " + kBasicArray + " | " + kBasicObject;
   ebnf_script_creator_.AddRule(kXMLAny, any_body);
-}
-
-void XMLToolCallingConverter::AddXMLHelperRules() {
-  ebnf_script_creator_.AddRule(kXMLVariableName, "[a-zA-Z_] [a-zA-Z0-9_]*");
 }
 
 std::string XMLToolCallingConverter::GetBasicStringRuleName() const {

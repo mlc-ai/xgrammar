@@ -30,7 +30,6 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ( [ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
-xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
 root_prop_0 ::= xml_string
@@ -74,7 +73,6 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ( [ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
-xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
 root_prop_0 ::= xml_string
@@ -117,7 +115,6 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ( [ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
-xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
 root_prop_0 ::= xml_string
@@ -209,7 +206,6 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ( [ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
-xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
 root_prop_0_prop_0 ::= ["] basic_string_sub
@@ -267,7 +263,6 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ( [ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
-xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
 root_prop_0 ::= xml_string
@@ -342,7 +337,6 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ( [ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
-xml_variable_name ::= [a-zA-Z_] [a-zA-Z0-9_]*
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
 root_prop_0 ::= [^]{1,}
