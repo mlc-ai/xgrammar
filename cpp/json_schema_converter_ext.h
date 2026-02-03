@@ -28,7 +28,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       RefResolver ref_resolver = nullptr
   );
 
-  /*! \brief Convert SchemaSpec to EBNF with XML format for root object. */
+  /*! \brief Convert SchemaSpec to EBNF with XML format for root object. Note that this function is
+   * not thread-safe.*/
   std::string Convert(const SchemaSpecPtr& spec);
 
  protected:
