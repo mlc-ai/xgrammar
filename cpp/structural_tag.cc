@@ -196,15 +196,16 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
   }
   std::string parsing_type = "json";
   if (parsing_type_override.has_value()) {
-    parsing_type = parsing_type_override.value();
+    parsing_type = *parsing_type_override;
   } else {
     auto it = obj.find("parsing_type");
     if (it != obj.end() && it->second.is<std::string>()) {
       parsing_type = it->second.get<std::string>();
-      if (parsing_type != "json" && parsing_type != "qwen_xml") {
-        return ResultErr<ISTError>("parsing_type must be \"json\" or \"qwen_xml\"");
-      }
     }
+  }
+
+  if (parsing_type != "json" && parsing_type != "qwen_xml") {
+    return ResultErr<ISTError>("parsing_type must be \"json\" or \"qwen_xml\"");
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
   return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false), parsing_type);
