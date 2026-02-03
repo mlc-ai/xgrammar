@@ -2,6 +2,7 @@ import sys
 
 import pytest
 
+from xgrammar import Grammar
 from xgrammar.testing import _is_grammar_accept_string, _qwen_xml_tool_calling_to_ebnf
 
 test_string_schema_input_str_accepted = (
@@ -16,6 +17,14 @@ test_string_schema_input_str_accepted = (
         True,
     ),
 )
+
+
+def check_grammar_with_expected_grammar(grammar: Grammar, expected_grammar: str):
+    assert str(grammar) == expected_grammar
+
+
+def check_grammar_with_instance(grammar: Grammar, instance: str, accepted: bool):
+    assert _is_grammar_accept_string(grammar, instance) == accepted
 
 
 @pytest.mark.parametrize("input_str, accepted", test_string_schema_input_str_accepted)
@@ -43,8 +52,8 @@ root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</paramet
         "required": ["name", "age"],
     }
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
-    assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
+    check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
+    check_grammar_with_instance(ebnf_grammar, input_str, accepted)
 
 
 test_additional_properties_schema_input_str_accepted = (
@@ -88,8 +97,8 @@ root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</paramet
         "additionalProperties": True,
     }
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
-    assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
+    check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
+    check_grammar_with_instance(ebnf_grammar, input_str, accepted)
 
 
 test_not_required_properties_schema_input_str_accepted = (
@@ -130,8 +139,8 @@ root ::= ( [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</parame
         "additionalProperties": True,
     }
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
-    assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
+    check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
+    check_grammar_with_instance(ebnf_grammar, input_str, accepted)
 
 
 test_part_required_properties_schema_input_str_accepted = (
@@ -151,6 +160,25 @@ test_part_required_properties_schema_input_str_accepted = (
     "input_str, accepted", test_part_required_properties_schema_input_str_accepted
 )
 def test_part_required_properties_schema(input_str: str, accepted: bool):
+    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= ( [ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
+xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
+root_prop_0 ::= xml_string
+root_addl ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
+root_part_1 ::= ([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\t]* "<parameter=age>" [ \n\t]* basic_integer [ \n\t]* "</parameter>" root_part_1
+root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
+"""
+
     schema = {
         "type": "object",
         "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
@@ -158,7 +186,8 @@ def test_part_required_properties_schema(input_str: str, accepted: bool):
         "additionalProperties": True,
     }
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
+    check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
+    check_grammar_with_instance(ebnf_grammar, input_str, accepted)
 
 
 def test_invalid_function_calling_schema():
@@ -233,8 +262,8 @@ root ::=  [ \n\t]* (("<parameter=address>" [ \n\t]* root_prop_0 [ \n\t]* "</para
         "required": ["address"],
     }
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
-    assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
+    check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
+    check_grammar_with_instance(ebnf_grammar, input_str, accepted)
 
 
 test_numbers_schema_input_str_accepted = (
@@ -287,8 +316,8 @@ root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</paramet
     }
 
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
-    assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
+    check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
+    check_grammar_with_instance(ebnf_grammar, input_str, accepted)
 
 
 test_string_format_length_schema_input_str_accepted = {
