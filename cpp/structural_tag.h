@@ -57,7 +57,7 @@ struct ConstStringFormat {
 struct JSONSchemaFormat {
   static constexpr const char* type = "json_schema";
   std::string json_schema;
-  std::string parsing_type = "json";  // "json" or "qwen_xml"
+  std::string parsing_type = "json";  // "json","qwen_xml","minimax_xml"
   JSONSchemaFormat(std::string json_schema, std::string parsing_type = "json")
       : json_schema(std::move(json_schema)), parsing_type(std::move(parsing_type)) {}
 };

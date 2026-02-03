@@ -186,17 +186,17 @@ std::string XMLToolCallingConverter::GenerateObject(
   return result;
 }
 
-// -------- MiniMaxXMLTToolCallingConverter --------
+// -------- MiniMaxXMLToolCallingConverter --------
 // Outermost properties: <parameter name="key">value</parameter>
 
-std::string MiniMaxXMLTToolCallingConverter::FormatPropertyKey(const std::string& key) {
+std::string MiniMaxXMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
   if (nested_object_level_ <= 1) {
     return "\"<parameter name=\\\"" + key + "\\\">\"";
   }
   return JSONSchemaConverter::FormatPropertyKey(key);
 }
 
-std::string MiniMaxXMLTToolCallingConverter::FormatProperty(
+std::string MiniMaxXMLToolCallingConverter::FormatProperty(
     const std::string& key, const std::string& value_rule, const std::string& rule_name, int64_t idx
 ) {
   if (nested_object_level_ <= 1) {
@@ -207,7 +207,7 @@ std::string MiniMaxXMLTToolCallingConverter::FormatProperty(
   return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
 }
 
-std::string MiniMaxXMLTToolCallingConverter::FormatOtherProperty(
+std::string MiniMaxXMLToolCallingConverter::FormatOtherProperty(
     const std::string& key_pattern,
     const std::string& value_rule,
     const std::string& rule_name,

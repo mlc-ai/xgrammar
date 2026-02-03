@@ -410,9 +410,7 @@ root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</paramet
 def _check_minimax_grammar(
     ebnf_grammar: Grammar, expected_grammar: str, instance: str, accepted: bool
 ):
-    check_grammar_with_expected_grammar(
-        ebnf_grammar, expected_grammar
-    ), f"Expected grammar: {expected_grammar}\nActual grammar: {str(ebnf_grammar)}"
+    check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 

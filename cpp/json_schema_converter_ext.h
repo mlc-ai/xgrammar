@@ -85,7 +85,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
  * Same as XMLToolCallingConverter except the outermost object uses
  * <parameter name="key">value</parameter> instead of <parameter=key>value</parameter>.
  */
-class MiniMaxXMLTToolCallingConverter : public XMLToolCallingConverter {
+class MiniMaxXMLToolCallingConverter : public XMLToolCallingConverter {
  public:
   using XMLToolCallingConverter::XMLToolCallingConverter;
 

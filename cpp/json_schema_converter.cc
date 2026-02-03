@@ -2961,7 +2961,7 @@ std::string JSONSchemaToEBNF(
       return converter.Convert(spec);
     }
     case JSONFormat::kMiniMaxXML: {
-      MiniMaxXMLTToolCallingConverter converter(
+      MiniMaxXMLToolCallingConverter converter(
           indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
       );
       return converter.Convert(spec);
