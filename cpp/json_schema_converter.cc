@@ -2824,7 +2824,7 @@ std::string JSONSchemaToEBNF(
     JSONFormat json_format
 ) {
   // Parse JSON Schema to SchemaSpec
-  SchemaParser parser(schema, {.strict_mode = strict_mode, .json_format = json_format});
+  SchemaParser parser(schema, {strict_mode, json_format});
   auto spec_result = parser.Parse(schema, "root");
   if (spec_result.IsErr()) {
     XGRAMMAR_LOG(FATAL) << std::move(spec_result).UnwrapErr().what();
