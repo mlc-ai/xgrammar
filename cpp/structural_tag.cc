@@ -195,8 +195,8 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     );
   }
   std::string parsing_type = "json";
-  if (parsing_type_override) {
-    parsing_type = *parsing_type_override;
+  if (parsing_type_override.has_value()) {
+    parsing_type = parsing_type_override.value();
   } else {
     auto it = obj.find("parsing_type");
     if (it != obj.end() && it->second.is<std::string>()) {
