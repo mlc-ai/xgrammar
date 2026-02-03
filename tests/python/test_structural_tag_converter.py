@@ -1758,6 +1758,10 @@ json_format_error_test_data = [
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": "sep", "stop_after_first": "not_boolean"}}',
         "stop_after_first must be a boolean",
     ),
+    (
+        '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "parsing_type": "not_string"}}',
+        'parsing_type must be "json" or "qwen_xml"',
+    ),
 ]
 
 
