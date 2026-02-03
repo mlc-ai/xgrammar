@@ -1638,6 +1638,34 @@ def test_time_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
+instance__accepted__test_date_time_format = [
+    (r"2024-05-19T14:23:45Z", True),
+    (r"2019-11-30T08:15:27+05:30", True),
+    (r"2030-02-01T22:59:59-07:00", True),
+    (r"2021-07-04T00:00:00.123456Z", True),
+    (r"2022-12-31T23:45:12-03:00", True),
+    (r"2024-12-31T23:45:60.123456Z", True),
+    (r"2024-12-31T23:60:12.123456+05:30", False),
+    (r"2024-13-15T14:30:00Z", False),
+    (r"2023-02-2010:59:59Z", False),
+    (r"2021-11-05T24:00:00+05:30", False),
+    (r"2022-08-20T12:61:10-03:00", False),
+    (r"2021-11-05T24:00:00+05:30", False),
+    (r"2022-08-20T12:61:10-03:00", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_date_time_format)
+def test_date_time_format(instance: str, accepted: bool):
+    schema = {"type": "string", "format": "date-time"}
+    expected_grammar = basic_json_rules_ebnf + (
+        r"""root ::= "\"" ( [0-9]{4} "-" ( "0" [1-9] | "1" [0-2] ) "-" ( "0" [1-9] | [1-2] [0-9] | "3" [01] ) ) "T" ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] ":" ( [0-5] [0-9] | "6" "0" ) ( "." [0-9]+ )? ( "Z" | [+-] ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] ) "\""
+"""
+    )
+    check_schema_with_grammar(schema, expected_grammar)
+    check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
+
+
 instance__accepted__test_duration_format = [
     (r"P0Y", True),
     (r"P12M", True),
