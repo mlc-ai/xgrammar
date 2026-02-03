@@ -7,6 +7,7 @@
 #include <picojson.h>
 #include <xgrammar/exception.h>
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
