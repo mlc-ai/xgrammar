@@ -418,19 +418,21 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
     }
     static const double PROBLEMATIC_MIN = -9223372036854776000.0;
     static const double PROBLEMATIC_MAX = 9223372036854776000.0;
-    if (val == PROBLEMATIC_MIN || val == PROBLEMATIC_MAX) {
-      return ResultErr<SchemaError>(
-          SchemaErrorType::kInvalidSchema,
-          "Integer exceeds limit due to precision loss at 64-bit boundary"
-      );
+    if (val == PROBLEMATIC_MIN) {
+      XGRAMMAR_CHECK(false
+      ) << "Integer exceeds minimum limit due to precision loss at 64-bit boundary";
+    }
+
+    if (val == PROBLEMATIC_MAX) {
+      XGRAMMAR_CHECK(false
+      ) << "Integer exceeds maximum limit due to precision loss at 64-bit boundary";
     }
     static const double MAX_INT64_AS_DOUBLE =
         static_cast<double>(std::numeric_limits<int64_t>::max());
     static const double MIN_INT64_AS_DOUBLE =
         static_cast<double>(std::numeric_limits<int64_t>::min());
-    if (val > MAX_INT64_AS_DOUBLE || val < MIN_INT64_AS_DOUBLE) {
-      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Integer out of range");
-    }
+    XGRAMMAR_CHECK(val <= MAX_INT64_AS_DOUBLE) << "Integer exceeds maximum limit";
+    XGRAMMAR_CHECK(val >= MIN_INT64_AS_DOUBLE) << "Integer exceeds minimum limit";
     return ResultOk<int64_t>(static_cast<int64_t>(val));
   };
 
