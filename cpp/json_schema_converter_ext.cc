@@ -7,7 +7,6 @@
 
 #include "json_schema_converter.h"
 #include "regex_converter.h"
-#include "support/logging.h"
 
 namespace xgrammar {
 
@@ -142,7 +141,6 @@ std::string XMLToolCallingConverter::GenerateAny(
 }
 
 std::string XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
-  XGRAMMAR_LOG(INFO) << "Formatting property key: " << key;
   if (nested_object_level_ <= 1) {
     return "\"<parameter=" + key + ">\"";
   }
