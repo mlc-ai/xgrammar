@@ -273,9 +273,18 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
           SchemaErrorType::kUnsatisfiableSchema, "Schema 'false' cannot accept any value"
       );
     }
-    auto spec = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
-    schema_cache_[cache_key] = spec;
-    return ResultOk(spec);
+    switch (config_.json_format) {
+      case JSONFormat::kJSON: {
+        auto spec = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
+        schema_cache_[cache_key] = spec;
+        return ResultOk(spec);
+      }
+      case JSONFormat::kXML: {
+        return ResultOk(SchemaSpec::Make(AnySpec{}, "", rule_name_hint));
+      }
+      default:
+        return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Invalid JSON format");
+    }
   }
 
   if (!schema.is<picojson::object>()) {
@@ -289,9 +298,6 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
   WarnUnsupportedKeywords(
       schema_obj, {"not", "if", "then", "else", "dependentRequired", "dependentSchemas"}
   );
-
-  auto placeholder = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
-  schema_cache_[cache_key] = placeholder;
 
   SchemaSpecPtr result;
 
@@ -378,7 +384,16 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     if (array_result.IsErr()) return ResultErr(std::move(array_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(array_result).Unwrap(), cache_key, rule_name_hint);
   } else {
-    result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
+    switch (config_.json_format) {
+      case JSONFormat::kJSON:
+        result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
+        break;
+      case JSONFormat::kXML:
+        result = SchemaSpec::Make(AnySpec{}, "", rule_name_hint);
+        break;
+      default:
+        return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Invalid JSON format");
+    }
   }
 
   schema_cache_[cache_key] = result;
@@ -887,8 +902,6 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
     current = current.get().get(p);
   }
 
-  auto placeholder = SchemaSpec::Make(AnySpec{}, "", new_rule_name_prefix);
-  ref_cache_[uri] = placeholder;
   auto result = Parse(current, new_rule_name_prefix);
   if (result.IsErr()) return ResultErr(std::move(result).UnwrapErr());
   auto resolved = std::move(result).Unwrap();
@@ -2827,17 +2840,22 @@ std::string JSONSchemaToEBNF(
   };
 
   // Create converter based on format
-  if (json_format == JSONFormat::kXML) {
-    XMLToolCallingConverter converter(
-        indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
-    );
-    return converter.Convert(spec);
+  switch (json_format) {
+    case JSONFormat::kJSON: {
+      JSONSchemaConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kXML: {
+      XMLToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
+      );
+      return converter.Convert(spec);
+    }
+    default:
+      XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
   }
-
-  JSONSchemaConverter converter(
-      indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
-  );
-  return converter.Convert(spec);
 }
 
 // Wrapper functions for testing
