@@ -457,8 +457,9 @@ inline std::pair<TCodepoint, int32_t> ParseNextUTF8OrEscaped(
 }
 
 inline std::optional<std::string> JSONFormatToRegexPattern(const std::string& format) {
-  std::optional<std::string> regex_pattern = std::nullopt;
-  if (format == "email") {
+  static const auto regex_map = []() -> std::unordered_map<std::string, std::string> {
+    std::unordered_map<std::string, std::string> m;
+
     std::string atext = "[\\w!#$%&'*+/=?^`{|}~-]";
     std::string dot_string = "(" + atext + "+(\\." + atext + "+)*)";
     std::string quoted_string =
@@ -466,26 +467,23 @@ inline std::optional<std::string> JSONFormatToRegexPattern(const std::string& fo
     std::string domain =
         "([A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)((\\.[A-Za-z0-9][\\-A-Za-z0-9]*[A-Za-z0-9])*"
         ")";
-    regex_pattern = "^(" + dot_string + "|" + quoted_string + ")@" + domain + "$";
-  } else if (format == "date") {
-    regex_pattern = "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))$";
-  } else if (format == "time") {
-    regex_pattern =
+    m["email"] = "^(" + dot_string + "|" + quoted_string + ")@" + domain + "$";
+
+    m["date"] = "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))$";
+    m["time"] =
         "^([01]\\d|2[0-3]):[0-5]\\d:([0-5]\\d|60)(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
-  } else if (format == "date-time") {
-    regex_pattern =
+    m["date-time"] =
         "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))T([01]\\d|2[0-3]):([0-5]\\d|60):["
         "0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
-  } else if (format == "duration") {
-    regex_pattern =
+    m["duration"] =
         "^P((\\d+D|\\d+M(\\d+D)?|\\d+Y(\\d+M(\\d+D)?)?)(T(\\d+S|\\d+M(\\d+S)?|\\d+H(\\d+M(\\d+"
         "S)?"
         ")?))?|T(\\d+S|\\d+M(\\d+S)?|\\d+H(\\d+M(\\d+S)?)?)|\\d+W)$";
-  } else if (format == "ipv4") {
+
     std::string decbyte = "(25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)";
-    regex_pattern = "^(" + decbyte + "\\.){3}" + decbyte + "$";
-  } else if (format == "ipv6") {
-    regex_pattern =
+    m["ipv4"] = "^(" + decbyte + "\\.){3}" + decbyte + "$";
+
+    m["ipv6"] =
         "("
         "([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|"
         "([0-9a-fA-F]{1,4}:){1,7}:|"
@@ -503,11 +501,10 @@ inline std::optional<std::string> JSONFormatToRegexPattern(const std::string& fo
         "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}"
         "(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])"
         ")";
-  } else if (format == "hostname") {
-    regex_pattern = "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$";
-  } else if (format == "uuid") {
-    regex_pattern = "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$";
-  } else if (format == "uri") {
+
+    m["hostname"] = "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$";
+    m["uuid"] = "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$";
+
     std::string schema_pat = "[a-zA-Z][a-zA-Z+\\.-]*";
     std::string pchar = "([\\w\\.~!$&'()*+,;=:@-]|%[0-9A-Fa-f][0-9A-Fa-f])";
     std::string query_fragment_char = "([\\w\\.~!$&'()*+,;=:@/\\?-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
@@ -520,23 +517,23 @@ inline std::optional<std::string> JSONFormatToRegexPattern(const std::string& fo
     std::string authority = "(" + userinfo + "@)?" + host + "(:\\d*)?";
     std::string hier_part =
         "(//" + authority + path_abempty + "|" + path_absolute_rootless_empty + ")";
-    regex_pattern = "^" + schema_pat + ":" + hier_part + query + fragment + "$";
-  } else if (format == "uri-reference") {
-    std::string pchar = "([\\w\\.~!$&'()*+,;=:@-]|%[0-9A-Fa-f][0-9A-Fa-f])";
-    std::string query_fragment_char = "([\\w\\.~!$&'()*+,;=:@/\\?-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
-    std::string query = "(\\?" + query_fragment_char + ")?";
-    std::string fragment = "(#" + query_fragment_char + ")?";
-    std::string path_abempty = "(/" + pchar + "*)*";
+    m["uri"] = "^" + schema_pat + ":" + hier_part + query + fragment + "$";
+
+    pchar = "([\\w\\.~!$&'()*+,;=:@-]|%[0-9A-Fa-f][0-9A-Fa-f])";
+    query_fragment_char = "([\\w\\.~!$&'()*+,;=:@/\\?-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+    query = "(\\?" + query_fragment_char + ")?";
+    fragment = "(#" + query_fragment_char + ")?";
+    path_abempty = "(/" + pchar + "*)*";
     std::string path_absolute = "/(" + pchar + "+(/" + pchar + "*)*)?";
     std::string segment_nz_nc = "([\\w\\.~!$&'()*+,;=@-]|%[0-9A-Fa-f][0-9A-Fa-f])+";
     std::string path_noscheme = segment_nz_nc + "(/" + pchar + "*)*";
-    std::string userinfo = "([\\w\\.~!$&'()*+,;=:-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
-    std::string host = "([\\w\\.~!$&'()*+,;=-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
-    std::string authority = "(" + userinfo + "@)?" + host + "(:\\d*)?";
+    userinfo = "([\\w\\.~!$&'()*+,;=:-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+    host = "([\\w\\.~!$&'()*+,;=-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
+    authority = "(" + userinfo + "@)?" + host + "(:\\d*)?";
     std::string relative_part =
         "(//" + authority + path_abempty + "|" + path_absolute + "|" + path_noscheme + ")?";
-    regex_pattern = "^" + relative_part + query + fragment + "$";
-  } else if (format == "uri-template") {
+    m["uri-reference"] = "^" + relative_part + query + fragment + "$";
+
     std::string literals =
         "([\\x21\\x23-\\x24\\x26\\x28-\\x3B\\x3D\\x3F-\\x5B\\x5D\\x5F\\x61-\\x7A\\x7E]"
         "|%[0-9A-Fa-f][0-9A-Fa-f])";
@@ -546,14 +543,20 @@ inline std::optional<std::string> JSONFormatToRegexPattern(const std::string& fo
     std::string varspec = varname + "(:[1-9]\\d?\\d?\\d?|\\*)?";
     std::string variable_list = varspec + "(," + varspec + ")*";
     std::string expression = "\\{(" + op + ")?" + variable_list + "\\}";
-    regex_pattern = "^(" + literals + "|" + expression + ")*$";
-  } else if (format == "json-pointer") {
-    regex_pattern = "^(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*$";
-  } else if (format == "relative-json-pointer") {
-    regex_pattern =
+    m["uri-template"] = "^(" + literals + "|" + expression + ")*$";
+
+    m["json-pointer"] = "^(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*$";
+    m["relative-json-pointer"] =
         "^(0|[1-9][0-9]*)(#|(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*)$";
+
+    return m;
+  }();
+
+  auto it = regex_map.find(format);
+  if (it == regex_map.end()) {
+    return std::nullopt;
   }
-  return regex_pattern;
+  return it->second;
 }
 
 }  // namespace xgrammar
