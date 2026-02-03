@@ -1202,7 +1202,7 @@ void JSONSchemaConverter::AddBasicRules() {
   // basic_string - cache_key matches SchemaParser::ComputeCacheKey for {"type": "string"}
   constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
   auto str_spec = SchemaSpec::Make(StringSpec{}, kStringCacheKey, kBasicString);
-  std::string str_body = GenerateString(std::get<StringSpec>(str_spec->spec), kBasicString);
+  std::string str_body = "[\"] " + kBasicStringSub;
   ebnf_script_creator_.AddRule(kBasicString, str_body);
   rule_cache_[kStringCacheKey] = kBasicString;
 
@@ -1997,7 +1997,7 @@ std::string JSONSchemaConverter::GenerateObject(
     std::string whitespace_part = GetWhitespacePattern();
     auto rest = need_braces
                     ? "\"{\" " + std::string(any_whitespace_ ? whitespace_part + " " : "") + "\"}\""
-                    : std::string(any_whitespace_ ? whitespace_part + " " : "");
+                    : std::string(any_whitespace_ ? whitespace_part : "");
     if (result == "\"{\"  \"}\"" || result == "") {
       result = rest;
     } else {
