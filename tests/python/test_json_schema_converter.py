@@ -1464,7 +1464,7 @@ def test_object_error_handle():
 
     with pytest.raises(Exception) as e:
         compile_from_schema({"type": "object", "minProperties": 5, "maxProperties": 3})
-    assert "minxPropertiesmax is greater than maxProperties" in str(e.value)
+    assert "minProperties is greater than maxProperties" in str(e.value)
 
     with pytest.raises(Exception) as e:
         compile_from_schema({"type": "object", "maxProperties": 1, "required": ["key1", "key2"]})

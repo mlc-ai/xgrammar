@@ -569,6 +569,10 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
         return ResultErr<SchemaError>(
             SchemaErrorType::kUnsatisfiableSchema, "prefixItems contains false"
         );
+      } else if (!item.is<picojson::object>()) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "prefixItems must be an array of objects or booleans"
+        );
       }
       auto item_result = Parse(item, "prefix_item");
       if (item_result.IsErr()) return ResultErr(std::move(item_result).UnwrapErr());
@@ -578,6 +582,11 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
 
   if (schema.count("items")) {
     auto items_value = schema.at("items");
+    if (!items_value.is<bool>() && !items_value.is<picojson::object>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "items must be a boolean or an object"
+      );
+    }
     if (items_value.is<bool>() && !items_value.get<bool>()) {
       spec.allow_additional_items = false;
     } else {
@@ -588,6 +597,11 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
     }
   } else if (schema.count("unevaluatedItems")) {
     auto unevaluated_items_value = schema.at("unevaluatedItems");
+    if (!unevaluated_items_value.is<bool>() && !unevaluated_items_value.is<picojson::object>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "unevaluatedItems must be a boolean or an object"
+      );
+    }
     if (unevaluated_items_value.is<bool>() && !unevaluated_items_value.get<bool>()) {
       spec.allow_additional_items = false;
     } else {
@@ -635,7 +649,9 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
   }
   if (spec.max_items != -1 && spec.max_items < static_cast<int64_t>(spec.prefix_items.size())) {
     return ResultErr<SchemaError>(
-        SchemaErrorType::kUnsatisfiableSchema, "maxItems is less than the number of prefixItems"
+        SchemaErrorType::kUnsatisfiableSchema,
+        "maxItems is less than the number of prefixItems: " + std::to_string(spec.max_items) +
+            " < " + std::to_string(spec.prefix_items.size())
     );
   }
   if (!spec.allow_additional_items) {
@@ -643,7 +659,17 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
     if (prefix_size < spec.min_items) {
       return ResultErr<SchemaError>(
           SchemaErrorType::kUnsatisfiableSchema,
-          "minItems > prefixItems count, but additional items are not allowed"
+          "minItems is greater than the number of prefixItems, but additional items are not "
+          "allowed: " +
+              std::to_string(spec.min_items) + " > " + std::to_string(prefix_size)
+      );
+    }
+    if (spec.max_items != -1 && prefix_size > spec.max_items) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
+          "maxItems is less than the number of prefixItems, but additional items are not "
+          "allowed: " +
+              std::to_string(spec.max_items) + " < " + std::to_string(prefix_size)
       );
     }
   }
@@ -696,6 +722,14 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
           SchemaErrorType::kInvalidSchema, "propertyNames must be an object"
       );
     }
+    auto property_names_obj = schema.at("propertyNames").get<picojson::object>();
+    if (property_names_obj.count("type") && property_names_obj.at("type").is<std::string>() &&
+        property_names_obj.at("type").get<std::string>() != "string") {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
+          "propertyNames must be an object that validates string"
+      );
+    }
     auto prop_names_result = Parse(schema.at("propertyNames"), "property_name", "string");
     if (prop_names_result.IsErr()) return ResultErr(std::move(prop_names_result).UnwrapErr());
     spec.property_names = std::move(prop_names_result).Unwrap();
@@ -740,7 +774,7 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
     spec.min_properties = static_cast<int>(schema.at("minProperties").get<int64_t>());
     if (spec.min_properties < 0) {
       return ResultErr<SchemaError>(
-          SchemaErrorType::kUnsatisfiableSchema, "minProperties must be non-negative"
+          SchemaErrorType::kUnsatisfiableSchema, "minProperties must be a non-negative integer"
       );
     }
   }
@@ -753,19 +787,23 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
     spec.max_properties = static_cast<int>(schema.at("maxProperties").get<int64_t>());
     if (spec.max_properties < 0) {
       return ResultErr<SchemaError>(
-          SchemaErrorType::kUnsatisfiableSchema, "maxProperties must be non-negative"
+          SchemaErrorType::kUnsatisfiableSchema, "maxProperties must be a non-negative integer"
       );
     }
   }
 
   if (spec.max_properties != -1 && spec.min_properties > spec.max_properties) {
     return ResultErr<SchemaError>(
-        SchemaErrorType::kUnsatisfiableSchema, "minProperties > maxProperties"
+        SchemaErrorType::kUnsatisfiableSchema,
+        "minProperties is greater than maxProperties: " + std::to_string(spec.min_properties) +
+            " > " + std::to_string(spec.max_properties)
     );
   }
   if (spec.max_properties != -1 && static_cast<int>(spec.required.size()) > spec.max_properties) {
     return ResultErr<SchemaError>(
-        SchemaErrorType::kUnsatisfiableSchema, "maxProperties < required count"
+        SchemaErrorType::kUnsatisfiableSchema,
+        "maxProperties is less than the number of required properties: " +
+            std::to_string(spec.max_properties) + " < " + std::to_string(spec.required.size())
     );
   }
   if (spec.pattern_properties.empty() && !spec.property_names &&
@@ -773,7 +811,9 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
       spec.min_properties > static_cast<int>(spec.properties.size())) {
     return ResultErr<SchemaError>(
         SchemaErrorType::kUnsatisfiableSchema,
-        "minProperties > properties count, but additional properties aren't allowed"
+        "minProperties is greater than the number of properties, but additional properties aren't "
+        "allowed: " +
+            std::to_string(spec.min_properties) + " > " + std::to_string(spec.properties.size())
     );
   }
   return ResultOk(std::move(spec));
