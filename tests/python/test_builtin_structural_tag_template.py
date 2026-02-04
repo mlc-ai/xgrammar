@@ -1,14 +1,4 @@
 """Tests for get_builtin_structural_tag_template_function and generated structural tags.
-
-Tests cover:
-- All supported format types (llama, qwen, qwen_coder, kimi, deepseek, harmony).
-- Different input_dict combinations (empty tools, one tool, multiple tools;
-  qwen: reasoning True/False; harmony: with/without builtin_tools).
-- Positive and negative instance tests and edge cases.
-- Input validation: unknown format type, missing/invalid tool fields, etc.
-
-Expected grammar EBNF is left empty for you to fill in; tests skip grammar
-assertion when expected_grammar_ebnf is empty.
 """
 
 import re
@@ -285,38 +275,24 @@ instance_cases += [
     (
         "deepseek",
         {"tools": _tools_deepseek},
-        "<think></think>"
-        + "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"
-        + "search"
-        + "<｜tool▁sep｜>"
-        + '{"q": "v"}'
-        + "<｜tool▁call▁end｜>",
+        '<think></think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
         True,
     ),
     (
         "deepseek",
         {"tools": _tools_deepseek},
-        "<think></think>"
-        + "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"
-        + "search"
-        + "<｜tool▁sep｜>"
-        + "{}"
-        + "<｜tool▁call▁end｜>",
+        "<think></think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{}<｜tool▁call▁end｜>",
         True,
     ),
     (
         "deepseek",
         {"tools": _tools_deepseek},
-        "<think></think>"
-        + "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"
-        + "wrong"
-        + "<｜tool▁sep｜>"
-        + '{"q":"v"}'
-        + "<｜tool▁call▁end｜>",
+        '<think></think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>wrong<｜tool▁sep｜>{"q":"v"}<｜tool▁call▁end｜>',
         False,
     ),
 ]
-instance_cases += [("deepseek", {"tools": []}, "<think>123</think>123", True)]
+instance_cases += [("deepseek", {"tools": [], "thinking": True}, "<think>123</think>123", True)]
+instance_cases += [("deepseek", {"tools": [], "thinking": False}, "<think></think>123", True)]
 
 # ----- qwen_coder
 _tools_qwen_coder = make_tools(["run_sql"])
@@ -337,7 +313,7 @@ instance_cases += [
 ]
 instance_cases += [("qwen_coder", {"tools": []}, "", True)]
 
-# ----- qwen (with <think> prefix when reasoning=True)
+# ----- qwen (with <think> prefix when thinking=True)
 _tools_qwen = make_tools(["t1"])
 instance_cases += [
     (
