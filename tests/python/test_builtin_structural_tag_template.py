@@ -67,9 +67,7 @@ def disable_profiler(request):
 def check_stag_with_grammar(structural_tag: StructuralTag, expected_grammar_ebnf: str):
     """Assert structural tag compiles to expected EBNF."""
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
-    assert (
-        str(stag_ebnf) == expected_grammar_ebnf
-    ), f"Expected:\n{expected_grammar_ebnf}\nGot:\n{str(stag_ebnf)}"
+    assert str(stag_ebnf) == expected_grammar_ebnf
 
 
 def check_stag_with_instance(
