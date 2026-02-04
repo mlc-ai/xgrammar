@@ -89,7 +89,7 @@ SIMPLE_SCHEMA = {"type": "object", "properties": {"q": {"type": "string"}}}
 
 
 def make_tools(names: List[str], schema: Dict[str, Any] = SIMPLE_SCHEMA) -> List[Dict[str, Any]]:
-    return [{"name": n, "parameters": schema} for n in names]
+    return [{"function": {"name": n, "parameters": schema}} for n in names]
 
 
 # ---------- Test: unknown format type ----------
@@ -111,34 +111,46 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
     ("llama", {"tools": "not_a_list"}, "must be a list"),
     ("llama", {"tools": 123}, "must be a list"),
     ("harmony", {"tools": None}, "must be a list"),
-    # tool must have "name" and "parameters"
-    ("llama", {"tools": [{}]}, "must be a dictionary with 'name' and 'parameters'"),
-    ("llama", {"tools": [{"name": "t1"}]}, "must be a dictionary with 'name' and 'parameters'"),
-    ("llama", {"tools": [{"parameters": {}}]}, "must be a dictionary with 'name' and 'parameters'"),
+    # tool[function] must have "name" and "parameters"
+    ("llama", {"tools": [{"function": {}}]}, "must be a dictionary with 'name' and 'parameters'"),
+    (
+        "llama",
+        {"tools": [{"function": {"name": "t1"}}]},
+        "must be a dictionary with 'name' and 'parameters'",
+    ),
+    (
+        "llama",
+        {"tools": [{"function": {"parameters": {}}}]},
+        "must be a dictionary with 'name' and 'parameters'",
+    ),
     # name must be string
     (
         "llama",
-        {"tools": [{"name": 123, "parameters": {}}]},
+        {"tools": [{"function": {"name": 123, "parameters": {}}}]},
         "'name' key in each tool must be a string",
     ),
     # parameters must be dict
     (
         "llama",
-        {"tools": [{"name": "t1", "parameters": "not_a_dict"}]},
+        {"tools": [{"function": {"name": "t1", "parameters": "not_a_dict"}}]},
         "'parameters' key in each tool must be a dict",
     ),
     (
         "llama",
-        {"tools": [{"name": "t1", "parameters": []}]},
+        {"tools": [{"function": {"name": "t1", "parameters": []}}]},
         "'parameters' key in each tool must be a dict",
     ),
     # harmony: builtin_tools must be list
     ("harmony", {"tools": [], "builtin_tools": "not_list"}, "builtin_tools.*must be a list"),
-    # harmony: builtin_tool must have name and parameters
-    ("harmony", {"tools": [], "builtin_tools": [{}]}, "builtin tool.*'name' and 'parameters'"),
+    # harmony: builtin_tool[function] must have name and parameters
     (
         "harmony",
-        {"tools": [], "builtin_tools": [{"name": "b1", "parameters": 1}]},
+        {"tools": [], "builtin_tools": [{"function": {}}]},
+        "builtin_tools.*'name' and 'parameters'",
+    ),
+    (
+        "harmony",
+        {"tools": [], "builtin_tools": [{"function": {"name": "b1", "parameters": 1}}]},
         "builtin tool.*must be a dict",
     ),
 ]
