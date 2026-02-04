@@ -24,6 +24,7 @@ from .matcher import (
     reset_token_bitmask,
 )
 from .structural_tag import StructuralTag
+from .structural_tag_template_function import get_builtin_structural_tag_template_function
 from .tokenizer_info import TokenizerInfo, VocabType
 
 __all__ = [
@@ -53,4 +54,5 @@ __all__ = [
     "StructuralTag",
     "TokenizerInfo",
     "VocabType",
+    "get_builtin_structural_tag_template_function",
 ]
