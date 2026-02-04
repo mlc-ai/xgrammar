@@ -114,7 +114,7 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     tags = []
 
     for tool in tools:
-        if not "function" in tool:
+        if "function" not in tool:
             continue
 
         function = tool["function"]
@@ -166,7 +166,7 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     tags = []
     for tool in tools:
-        if not "function" in tool:
+        if "function" not in tool:
             continue
 
         function = tool["function"]
@@ -226,7 +226,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
 
     tags = []
     for tool in tools:
-        if not "function" in tool:
+        if "function" not in tool:
             continue
 
         function = tool["function"]
@@ -285,7 +285,7 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
 
     tags = []
     for tool in tools:
-        if not "function" in tool:
+        if "function" not in tool:
             continue
 
         function = tool["function"]
@@ -338,7 +338,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     tags = []
     for tool in tools:
-        if not "function" in tool:
+        if "function" not in tool:
             continue
 
         function = tool["function"]
@@ -418,7 +418,7 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
     ]
 
     for tool in tools:
-        if not "function" in tool:
+        if "function" not in tool:
             continue
 
         function = tool["function"]
@@ -442,7 +442,7 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
         )
 
     for tool in builtin_tools:
-        if not "function" in tool:
+        if "function" not in tool:
             continue
 
         function = tool["function"]
