@@ -1,6 +1,5 @@
 from typing import Any, Callable, Dict, Literal
 
-from .grammar import _convert_schema_to_str
 from .structural_tag import (
     AnyTextFormat,
     ConstStringFormat,
@@ -121,14 +120,15 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
         if not isinstance(tool["name"], str):
             raise ValueError("The 'name' key in each tool must be a string.")
+        parameters = tool["parameters"]
+        if not isinstance(parameters, dict):
+            raise ValueError("The 'parameters' key in each tool must be a dict.")
 
         name = tool["name"]
-        parameter_str = _convert_schema_to_str(tool["parameters"])
-
         tags.append(
             TagFormat(
                 begin=('{"name": "' + name + '", "parameters": '),
-                content=JSONSchemaFormat(json_schema=parameter_str),
+                content=JSONSchemaFormat(json_schema=parameters),
                 end="}",
             )
         )
@@ -163,14 +163,15 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
         if not isinstance(tool["name"], str):
             raise ValueError("The 'name' key in each tool must be a string.")
+        parameters = tool["parameters"]
+        if not isinstance(parameters, dict):
+            raise ValueError("The 'parameters' key in each tool must be a dict.")
 
         name = tool["name"]
-        parameter_str = _convert_schema_to_str(tool["parameters"])
-
         tags.append(
             TagFormat(
                 begin=f"<|tool_call_begin|>{name}<|tool_call_argument_begin|>",
-                content=JSONSchemaFormat(json_schema=parameter_str),
+                content=JSONSchemaFormat(json_schema=parameters),
                 end="<|tool_call_end|>",
             )
         )
@@ -205,14 +206,15 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
 
         if not isinstance(tool["name"], str):
             raise ValueError("The 'name' key in each tool must be a string.")
+        parameters = tool["parameters"]
+        if not isinstance(parameters, dict):
+            raise ValueError("The 'parameters' key in each tool must be a dict.")
 
         name = tool["name"]
-        parameter_str = _convert_schema_to_str(tool["parameters"])
-
         tags.append(
             TagFormat(
                 begin=f"<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>{name}<｜tool▁sep｜>",
-                content=JSONSchemaFormat(json_schema=parameter_str),
+                content=JSONSchemaFormat(json_schema=parameters),
                 end="<｜tool▁call▁end｜>",
             )
         )
@@ -250,14 +252,15 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
 
         if not isinstance(tool["name"], str):
             raise ValueError("The 'name' key in each tool must be a string.")
+        parameters = tool["parameters"]
+        if not isinstance(parameters, dict):
+            raise ValueError("The 'parameters' key in each tool must be a dict.")
 
         name = tool["name"]
-        parameter_str = _convert_schema_to_str(tool["parameters"])
-
         tags.append(
             TagFormat(
                 begin=f"<function={name}>",
-                content=QwenXMLParameterFormat(json_schema=parameter_str),
+                content=QwenXMLParameterFormat(json_schema=parameters),
                 end="</function>",
             )
         )
@@ -294,14 +297,15 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
         if not isinstance(tool["name"], str):
             raise ValueError("The 'name' key in each tool must be a string.")
+        parameters = tool["parameters"]
+        if not isinstance(parameters, dict):
+            raise ValueError("The 'parameters' key in each tool must be a dict.")
 
         name = tool["name"]
-        parameter_str = _convert_schema_to_str(tool["parameters"])
-
         tags.append(
             TagFormat(
                 begin=('<tool_call>{"name": "' + name + '", "arguments": '),
-                content=JSONSchemaFormat(json_schema=parameter_str),
+                content=JSONSchemaFormat(json_schema=parameters),
                 end="}</tool_call>",
             )
         )
@@ -365,12 +369,14 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
             )
         if not isinstance(tool["name"], str):
             raise ValueError("The 'name' key in each tool must be a string.")
+        parameters = tool["parameters"]
+        if not isinstance(parameters, dict):
+            raise ValueError("The 'parameters' key in each tool must be a dict.")
         name = tool["name"]
-        parameter_str = _convert_schema_to_str(tool["parameters"])
         tags.append(
             TagFormat(
                 begin=f"<|start|>assistant<|channel|>commentary to={name}<|constrain|>json<|message|>",
-                content=JSONSchemaFormat(json_schema=parameter_str),
+                content=JSONSchemaFormat(json_schema=parameters),
                 end="<|end|>",
             )
         )
@@ -382,12 +388,14 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
             )
         if not isinstance(tool["name"], str):
             raise ValueError("The 'name' key in each builtin tool must be a string.")
+        parameters = tool["parameters"]
+        if not isinstance(parameters, dict):
+            raise ValueError("The 'parameters' key in each builtin tool must be a dict.")
         name = tool["name"]
-        parameter_str = _convert_schema_to_str(tool["parameters"])
         tags.append(
             TagFormat(
                 begin=f"<|start|>assistant<|channel|>analysis to={name}<|message|>",
-                content=JSONSchemaFormat(json_schema=parameter_str),
+                content=JSONSchemaFormat(json_schema=parameters),
                 end="<|end|>",
             )
         )
