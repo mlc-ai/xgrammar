@@ -77,7 +77,7 @@ def get_builtin_structural_tag_template_function(
     Returns
     -------
     Callable[[Dict[str, Any]], StructuralTag]
-    The corresponding structural tag template function for the given format type.
+        The corresponding structural tag template function for the given format type.
 
     Raises
     ------
