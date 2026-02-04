@@ -3,7 +3,7 @@
 
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
 from transformers import AutoTokenizer
@@ -65,11 +65,11 @@ def disable_profiler(request):
 
 
 def check_stag_with_grammar(structural_tag: StructuralTag, expected_grammar_ebnf: str):
-    """Assert structural tag compiles to expected EBNF. Skip assertion if expected is empty."""
-    if not expected_grammar_ebnf:
-        return
+    """Assert structural tag compiles to expected EBNF."""
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
-    assert str(stag_ebnf) == expected_grammar_ebnf
+    assert (
+        str(stag_ebnf) == expected_grammar_ebnf
+    ), f"Expected:\n{expected_grammar_ebnf}\nGot:\n{str(stag_ebnf)}"
 
 
 def check_stag_with_instance(
@@ -163,36 +163,897 @@ def test_generate_structural_tag_input_validation_errors(
         assert error_substring in msg, f"Expected {error_substring!r} in {msg!r}"
 
 
-# ---------- Test: grammar (expected left empty for you to fill) ----------
+# ---------- Test: grammar ----------
 
-# (format_type, input_dict, expected_grammar_ebnf). Use "" to skip grammar check.
+# (format_type, input_dict, expected_grammar_ebnf)
 grammar_cases: List[Tuple[str, Dict[str, Any], str]] = [
     # llama
-    ("llama", {"tools": []}, ""),
-    ("llama", {"tools": make_tools(["t1"])}, ""),
-    ("llama", {"tools": make_tools(["t1", "t2"])}, ""),
-    # kimi
-    ("kimi", {"tools": []}, ""),
-    ("kimi", {"tools": make_tools(["tool_a"])}, ""),
-    ("kimi", {"tools": make_tools(["a", "b"])}, ""),
-    # deepseek
-    ("deepseek", {"tools": []}, ""),
-    ("deepseek", {"tools": make_tools(["get_weather"])}, ""),
-    ("deepseek", {"tools": make_tools(["f1", "f2", "f3"])}, ""),
+    (
+        "llama",
+        {"tools": []},
+        r"""any_text ::= (([\0-\U0010ffff]*))
+root ::= ((any_text))
+""",
+    ),
+    (
+        "llama",
+        {"tools": make_tools(["t1", "t2"])},
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("\"t1\", \"parameters\": " root_0 "}") | ("\"t2\", \"parameters\": " root_1 "}"))
+triggered_tags ::= TagDispatch(
+  ("{\"name\": ", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+root ::= ((triggered_tags))
+""",
+    ),
+    # kimi, thinking True / False
+    (
+        "kimi",
+        {"tools": [], "thinking": True},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("</think>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+tag ::= (("<think>" any_text))
+any_text_1 ::= (([\0-\U0010ffff]*))
+sequence ::= ((tag any_text_1))
+root ::= ((sequence))
+""",
+    ),
+    (
+        "kimi",
+        {"tools": [], "thinking": False},
+        r"""const_string ::= (("<think></think>"))
+any_text ::= (([\0-\U0010ffff]*))
+sequence ::= ((const_string any_text))
+root ::= ((sequence))
+""",
+    ),
+    (
+        "kimi",
+        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": True},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("</think>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+tag ::= (("<think>" any_text))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("tool_a<|tool_call_argument_begin|>" root_0 "<|tool_call_end|>") | ("tool_b<|tool_call_argument_begin|>" root_1 "<|tool_call_end|>"))
+triggered_tags ::= TagDispatch(
+  ("<|tool_call_begin|>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+sequence ::= ((tag triggered_tags))
+root ::= ((sequence))
+""",
+    ),
+    (
+        "kimi",
+        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": False},
+        r"""const_string ::= (("<think></think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("tool_a<|tool_call_argument_begin|>" root_0 "<|tool_call_end|>") | ("tool_b<|tool_call_argument_begin|>" root_1 "<|tool_call_end|>"))
+triggered_tags ::= TagDispatch(
+  ("<|tool_call_begin|>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+sequence ::= ((const_string triggered_tags))
+root ::= ((sequence))
+""",
+    ),
+    # deepseek, thinking True / False
+    (
+        "deepseek",
+        {"tools": [], "thinking": True},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("</think>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+tag ::= (("<think>" any_text))
+any_text_1 ::= (([\0-\U0010ffff]*))
+sequence ::= ((tag any_text_1))
+root ::= ((sequence))
+""",
+    ),
+    (
+        "deepseek",
+        {"tools": [], "thinking": False},
+        r"""const_string ::= (("<think></think>"))
+any_text ::= (([\0-\U0010ffff]*))
+sequence ::= ((const_string any_text))
+root ::= ((sequence))
+""",
+    ),
+    (
+        "deepseek",
+        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": True},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("</think>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+tag ::= (("<think>" any_text))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("tool_a<\uff5ctool\u2581sep\uff5c>" root_0 "<\uff5ctool\u2581call\u2581end\uff5c>") | ("tool_b<\uff5ctool\u2581sep\uff5c>" root_1 "<\uff5ctool\u2581call\u2581end\uff5c>"))
+triggered_tags ::= TagDispatch(
+  ("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+sequence ::= ((tag triggered_tags))
+root ::= ((sequence))
+""",
+    ),
+    (
+        "deepseek",
+        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": False},
+        r"""const_string ::= (("<think></think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("tool_a<\uff5ctool\u2581sep\uff5c>" root_0 "<\uff5ctool\u2581call\u2581end\uff5c>") | ("tool_b<\uff5ctool\u2581sep\uff5c>" root_1 "<\uff5ctool\u2581call\u2581end\uff5c>"))
+triggered_tags ::= TagDispatch(
+  ("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+sequence ::= ((const_string triggered_tags))
+root ::= ((sequence))
+""",
+    ),
     # qwen_coder
-    ("qwen_coder", {"tools": []}, ""),
-    ("qwen_coder", {"tools": make_tools(["run_sql"])}, ""),
-    ("qwen_coder", {"tools": make_tools(["a", "b"])}, ""),
+    (
+        "qwen_coder",
+        {"tools": []},
+        r"""any_text ::= (([\0-\U0010ffff]*))
+root ::= ((any_text))
+""",
+    ),
+    (
+        "qwen_coder",
+        {"tools": make_tools(["tool_a", "tool_b"])},
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+xml_string ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+xml_string_0 ::= ((xml_string))
+xml_any ::= ((basic_number) | (xml_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= ("" | ([ \n\t]* "<parameter=q>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+xml_string_1 ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
+xml_variable_name_1 ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+xml_string_0_1 ::= ((xml_string_1))
+xml_any_1 ::= ((basic_number_8) | (xml_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= ("" | ([ \n\t]* "<parameter=q>" [ \n\t]* xml_string_0_1 [ \n\t]* "</parameter>"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("tool_a>" root_0 "</function>") | ("tool_b>" root_1 "</function>"))
+triggered_tags ::= TagDispatch(
+  ("<function=", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+root ::= ((triggered_tags))
+""",
+    ),
     # qwen (with reasoning True / False)
-    ("qwen", {"tools": [], "thinking": True}, ""),
-    ("qwen", {"tools": [], "thinking": False}, ""),
-    ("qwen", {"tools": make_tools(["t1"]), "thinking": True}, ""),
-    ("qwen", {"tools": make_tools(["t1"]), "thinking": False}, ""),
+    (
+        "qwen",
+        {"tools": [], "thinking": True},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("</think>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+tag ::= (("<think>" any_text))
+any_text_1 ::= (([\0-\U0010ffff]*))
+sequence ::= ((tag any_text_1))
+root ::= ((sequence))
+""",
+    ),
+    (
+        "qwen",
+        {"tools": [], "thinking": False},
+        r"""const_string ::= (("<think></think>"))
+any_text ::= (([\0-\U0010ffff]*))
+sequence ::= ((const_string any_text))
+root ::= ((sequence))
+""",
+    ),
+    (
+        "qwen",
+        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": True},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("</think>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+tag ::= (("<think>" any_text))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("{\"name\": \"tool_a\", \"arguments\": " root_0 "}</tool_call>") | ("{\"name\": \"tool_b\", \"arguments\": " root_1 "}</tool_call>"))
+triggered_tags ::= TagDispatch(
+  ("<tool_call>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+sequence ::= ((tag triggered_tags))
+root ::= ((sequence))
+""",
+    ),
+    (
+        "qwen",
+        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": False},
+        r"""const_string ::= (("<think></think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("{\"name\": \"tool_a\", \"arguments\": " root_0 "}</tool_call>") | ("{\"name\": \"tool_b\", \"arguments\": " root_1 "}</tool_call>"))
+triggered_tags ::= TagDispatch(
+  ("<tool_call>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+sequence ::= ((const_string triggered_tags))
+root ::= ((sequence))
+""",
+    ),
     # harmony (tools only, builtin_tools only, both)
-    ("harmony", {"tools": [], "builtin_tools": []}, ""),
-    ("harmony", {"tools": make_tools(["t1"]), "builtin_tools": []}, ""),
-    ("harmony", {"tools": [], "builtin_tools": make_tools(["b1"])}, ""),
-    ("harmony", {"tools": make_tools(["t1", "t2"]), "builtin_tools": make_tools(["b1"])}, ""),
+    (
+        "harmony",
+        {"tools": [], "builtin_tools": []},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|end|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+any_text_1 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|return|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+any_text_2 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|call|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text) | ("assistant<|channel|>final<|message|>" any_text_1) | ("assistant<|channel|>final<|message|>" any_text_2))
+triggered_tags ::= TagDispatch(
+  ("<|start|>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+root ::= ((triggered_tags))
+""",
+    ),
+    (
+        "harmony",
+        {"tools": make_tools(["tool_a", "tool_b"]), "builtin_tools": []},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|end|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+any_text_1 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|return|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+any_text_2 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|call|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text) | ("assistant<|channel|>final<|message|>" any_text_1) | ("assistant<|channel|>final<|message|>" any_text_2) | ("assistant<|channel|>commentary to=tool_a<|constrain|>json<|message|>" root_0 "<|end|>") | ("assistant<|channel|>commentary to=tool_b<|constrain|>json<|message|>" root_1 "<|end|>"))
+triggered_tags ::= TagDispatch(
+  ("<|start|>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+root ::= ((triggered_tags))
+""",
+    ),
+    (
+        "harmony",
+        {"tools": [], "builtin_tools": make_tools(["builtin_tool_a", "builtin_tool_b"])},
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|end|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+any_text_1 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|return|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+any_text_2 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|call|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text) | ("assistant<|channel|>final<|message|>" any_text_1) | ("assistant<|channel|>final<|message|>" any_text_2) | ("assistant<|channel|>analysis to=builtin_tool_a<|message|>" root_0 "<|end|>") | ("assistant<|channel|>analysis to=builtin_tool_b<|message|>" root_1 "<|end|>"))
+triggered_tags ::= TagDispatch(
+  ("<|start|>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+root ::= ((triggered_tags))
+""",
+    ),
+    (
+        "harmony",
+        {
+            "tools": make_tools(["tool_a", "tool_b"]),
+            "builtin_tools": make_tools(["tool_a", "tool_b"]),
+        },
+        r"""any_text ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|end|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+any_text_1 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|return|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+any_text_2 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|call|>"),
+  loop_after_dispatch=false,
+  excludes=()
+)
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
+basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_string_1 ::= (("\"" basic_string_sub_1))
+basic_boolean_1 ::= (("true") | ("false"))
+basic_null_1 ::= (("null"))
+basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_1 ::= ("" | ("-"))
+basic_number_1_1 ::= ("" | ("-"))
+basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
+basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_4_1 ::= ("" | ([+\-]))
+basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
+basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
+basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
+basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
+basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_2 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_2 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_2) | ("\\" basic_escape_2 basic_string_sub_2)) (=([ \n\t]* [,}\]:]))
+basic_any_2 ::= ((basic_number_9) | (basic_string_2) | (basic_boolean_2) | (basic_null_2) | (basic_array_3) | (basic_object_3))
+basic_integer_3 ::= (("0") | (basic_integer_1_2 [1-9] [0-9]*))
+basic_number_9 ::= ((basic_number_1_2 basic_number_7_2 basic_number_3_2 basic_number_6_2))
+basic_string_2 ::= (("\"" basic_string_sub_2))
+basic_boolean_2 ::= (("true") | ("false"))
+basic_null_2 ::= (("null"))
+basic_array_3 ::= (("[" [ \n\t]* basic_any_2 basic_array_1_2 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_3 ::= (("{" [ \n\t]* basic_string_2 [ \n\t]* ":" [ \n\t]* basic_any_2 basic_object_1_2 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_2 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_2 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_2 ::= ("" | ("-"))
+basic_number_1_2 ::= ("" | ("-"))
+basic_number_2_2 ::= (([0-9] basic_number_2_2) | ([0-9]))
+basic_number_3_2 ::= ("" | ("." basic_number_2_2))
+basic_number_4_2 ::= ("" | ([+\-]))
+basic_number_5_2 ::= (([0-9] basic_number_5_2) | ([0-9]))
+basic_number_6_2 ::= ("" | ([eE] basic_number_4_2 basic_number_5_2))
+basic_array_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_2 basic_array_1_2))
+basic_object_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 [ \n\t]* ":" [ \n\t]* basic_any_2 basic_object_1_2))
+basic_number_7_2 ::= (("0") | ([1-9] [0-9]*))
+basic_escape_3 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub_3 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_3) | ("\\" basic_escape_3 basic_string_sub_3)) (=([ \n\t]* [,}\]:]))
+basic_any_3 ::= ((basic_number_10) | (basic_string_3) | (basic_boolean_3) | (basic_null_3) | (basic_array_4) | (basic_object_4))
+basic_integer_4 ::= (("0") | (basic_integer_1_3 [1-9] [0-9]*))
+basic_number_10 ::= ((basic_number_1_3 basic_number_7_3 basic_number_3_3 basic_number_6_3))
+basic_string_3 ::= (("\"" basic_string_sub_3))
+basic_boolean_3 ::= (("true") | ("false"))
+basic_null_3 ::= (("null"))
+basic_array_4 ::= (("[" [ \n\t]* basic_any_3 basic_array_1_3 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_4 ::= (("{" [ \n\t]* basic_string_3 [ \n\t]* ":" [ \n\t]* basic_any_3 basic_object_1_3 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_3 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_3 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1_3 ::= ("" | ("-"))
+basic_number_1_3 ::= ("" | ("-"))
+basic_number_2_3 ::= (([0-9] basic_number_2_3) | ([0-9]))
+basic_number_3_3 ::= ("" | ("." basic_number_2_3))
+basic_number_4_3 ::= ("" | ([+\-]))
+basic_number_5_3 ::= (([0-9] basic_number_5_3) | ([0-9]))
+basic_number_6_3 ::= ("" | ([eE] basic_number_4_3 basic_number_5_3))
+basic_array_1_3 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_3 basic_array_1_3))
+basic_object_1_3 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_3 [ \n\t]* ":" [ \n\t]* basic_any_3 basic_object_1_3))
+basic_number_7_3 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text) | ("assistant<|channel|>final<|message|>" any_text_1) | ("assistant<|channel|>final<|message|>" any_text_2) | ("assistant<|channel|>commentary to=tool_a<|constrain|>json<|message|>" root_0 "<|end|>") | ("assistant<|channel|>commentary to=tool_b<|constrain|>json<|message|>" root_1 "<|end|>") | ("assistant<|channel|>analysis to=tool_a<|message|>" root_2 "<|end|>") | ("assistant<|channel|>analysis to=tool_b<|message|>" root_3 "<|end|>"))
+triggered_tags ::= TagDispatch(
+  ("<|start|>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+root ::= ((triggered_tags))
+""",
+    ),
 ]
 
 
