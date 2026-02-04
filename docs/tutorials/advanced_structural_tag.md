@@ -89,16 +89,16 @@ To use this grammar in grammar-guided generation, the GrammarMatcher constructed
 
 The benefit of this method is the token boundary between tags and triggers is automatically handled. The user does not need to worry about the token boundary.
 
-### Parameters
+### Parameters(deprecated)
 
 - **tags** (`List[StructuralTagItem]`): The structural tags.
 - **triggers** (`List[str]`): The triggers.
 
-### Returns
+### Returns(deprecated)
 
 - **grammar** (`Grammar`): The constructed grammar.
 
-### Example
+### Example(deprecated)
 
 ```python
 from pydantic import BaseModel

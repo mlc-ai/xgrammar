@@ -13,7 +13,7 @@ XGrammar Python API
    grammar_matcher
    testing
    structural_tag
-   structural_tag_template
+   structural_tag_template_function
    bitmask_ops
    config
    exception
