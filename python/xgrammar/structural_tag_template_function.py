@@ -85,7 +85,7 @@ def get_builtin_structural_tag_template_function(
     ----------
     format_type : SupportedTemplateNames
         The format type of the structural tag template.
-        Currrently supported format types are:
+        Currently supported format types are:
         - "llama": Llama style structural tag format.
         - "qwen": Qwen style structural tag format.
         - "qwen_coder": Qwen Coder style structural tag format.
@@ -167,6 +167,8 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """
     tools = input_dict.get("tools", [])
     thinking = input_dict.get("thinking", True)
+    if not isinstance(thinking, bool):
+        raise ValueError("The 'thinking' key in the input_dict must be a boolean.")
     _validate_tool_function(tools)
 
     tags = []
@@ -214,7 +216,8 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     """
     tools = input_dict.get("tools", [])
     thinking = input_dict.get("thinking", True)
-
+    if not isinstance(thinking, bool):
+        raise ValueError("The 'thinking' key in the input_dict must be a boolean.")
     _validate_tool_function(tools)
 
     tags = []
@@ -301,6 +304,8 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """
     tools = input_dict.get("tools", [])
     thinking = input_dict.get("thinking", True)
+    if not isinstance(thinking, bool):
+        raise ValueError("The 'thinking' key in the input_dict must be a boolean.")
     _validate_tool_function(tools)
 
     tags = []
