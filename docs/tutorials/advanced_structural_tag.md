@@ -20,9 +20,9 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 A callable: `Callable[[Dict[str, Any]], StructuralTag]`. The dict you pass typically contains:
 
-- **tools** (all formats): List of tools; each item is a dict with `"name"` and `"parameters"` (`parameters` is a JSON Schema dict).
+- **tools** (all formats): List of tools; each item is a dict with a `"function"` key, which is a dict with `"name"` and `"parameters"` (`parameters` is a JSON Schema dict).
 - **thinking** (optional; for qwen / kimi / deepseek): Whether to enable the thinking block; default `True`.
-- **builtin_tools** (harmony only): List of built-in tools; same structure as `tools`.
+- **builtin_tools** (harmony only): List of built-in tools; same structure as `tools` (each item has a `"function"` key with `"name"` and `"parameters"`).
 
 Passing an unsupported `format_type` raises `ValueError`.
 
@@ -32,8 +32,8 @@ Passing an unsupported `format_type` raises `ValueError`.
 from xgrammar import Grammar, get_builtin_structural_tag_template_function
 
 tools = [
-    {"name": "get_weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}},
-    {"name": "get_time", "parameters": {"type": "object", "properties": {}}},
+    {"function": {"name": "get_weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}}},
+    {"function": {"name": "get_time", "parameters": {"type": "object", "properties": {}}}},
 ]
 
 # Get the Llama-style template function and build a structural tag
@@ -50,10 +50,10 @@ For the Harmony format you must provide both `tools` and `builtin_tools`:
 fn = get_builtin_structural_tag_template_function("harmony")
 structural_tag = fn({
     "tools": [
-        {"name": "user_tool", "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}},
+        {"function": {"name": "user_tool", "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}},
     ],
     "builtin_tools": [
-        {"name": "builtin_tool", "parameters": {"type": "object", "properties": {}}},
+        {"function": {"name": "builtin_tool", "parameters": {"type": "object", "properties": {}}}},
     ],
 })
 grammar = Grammar.from_structural_tag(structural_tag)
