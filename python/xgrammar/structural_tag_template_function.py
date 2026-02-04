@@ -44,7 +44,7 @@ def get_builtin_structural_tag_template_function(
 
     .. code-block:: python
 
-        from xgrammar import structural_tag, Grammar
+        from xgrammar import get_builtin_structural_tag_template_function, Grammar
         tools = [
             {"name": "tool1", "parameters": {"param1": {"type": "string"}}},
             {"name": "tool2", "parameters": {"param2": {"type": "integer"}}},
@@ -53,8 +53,9 @@ def get_builtin_structural_tag_template_function(
             {"name": "builtin_tool1", "parameters": {"param1": {"type": "string"}}},
             {"name": "builtin_tool2", "parameters": {"param2": {"type": "integer"}}},
         ]
-        template_structural_tag = structural_tag.get_builtin_template_structural_tag("Harmony")
-        grammar = Grammar.apply_template_structural_tag(template_structural_tag, tools=tools, builtin_tools=builtin_tools)
+        template_structural_tag = get_builtin_structural_tag_template_function("harmony")
+        structural_tag = template_structural_tag({"tools": tools, "builtin_tools": builtin_tools})
+        grammar = Grammar.from_structural_tag(structural_tag)
 
     The above grammar can be used to construct a grammar that matches the function calling
     format of the specified model.
@@ -75,8 +76,8 @@ def get_builtin_structural_tag_template_function(
 
     Returns
     -------
-    StructuralTag
-        A structural tag template.
+    Callable[[Dict[str, Any]], StructuralTag]
+    The corresponding structural tag template function for the given format type.
 
     Raises
     ------
