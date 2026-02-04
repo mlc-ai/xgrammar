@@ -141,6 +141,7 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Kimi style structural tag format.
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "name" and "parameters" field.
+    - "thinking": a boolean indicating whether to enable thinking mode.
 
     Returns
     -------
@@ -150,7 +151,7 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     """
     tools = input_dict.get("tools", [])
-
+    thinking = input_dict.get("thinking", True)
     if not isinstance(tools, list):
         raise ValueError("The 'tools' key in the input_dict must be a list.")
 
@@ -176,7 +177,14 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         )
 
-    return StructuralTag(format=TriggeredTagsFormat(triggers=["<|tool_call_begin|>"], tags=tags))
+        if thinking:
+            prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        else:
+            prefix_tag = ConstStringFormat(value="<think></think>")
+
+    triggered_tags = TriggeredTagsFormat(triggers=["<|tool_call_begin|>"], tags=tags)
+    sequence_format = SequenceFormat(elements=[prefix_tag, triggered_tags])
+    return StructuralTag(format=sequence_format)
 
 
 @_register_structural_tag_template("deepseek")
@@ -184,6 +192,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     """Get Deepseek style structural tag format.
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "name" and "parameters" field.
+    - "thinking": a boolean indicating whether to enable thinking mode.
 
     Returns
     -------
@@ -193,6 +202,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
 
     """
     tools = input_dict.get("tools", [])
+    thinking = input_dict.get("thinking", True)
 
     if not isinstance(tools, list):
         raise ValueError("The 'tools' key in the input_dict must be a list.")
@@ -219,11 +229,16 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
             )
         )
 
-    return StructuralTag(
-        format=TriggeredTagsFormat(
-            triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"], tags=tags
-        )
+    if thinking:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+    else:
+        prefix_tag = ConstStringFormat(value="<think></think>")
+
+    triggered_tags = TriggeredTagsFormat(
+        triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"], tags=tags
     )
+    sequence_format = SequenceFormat(elements=[prefix_tag, triggered_tags])
+    return StructuralTag(format=sequence_format)
 
 
 @_register_structural_tag_template("qwen_coder")
@@ -273,7 +288,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Qwen style structural tag format.
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "name" and "parameters" field.
-    - "reasoning": a boolean indicating whether to enable reasoning mode.
+    - "thinking": a boolean indicating whether to enable thinking mode.
 
     Returns
     -------
@@ -283,7 +298,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     """
     tools = input_dict.get("tools", [])
-    reasoning = input_dict.get("reasoning", True)
+    thinking = input_dict.get("thinking", True)
 
     if not isinstance(tools, list):
         raise ValueError("The 'tools' key in the input_dict must be a list.")
@@ -310,14 +325,14 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         )
 
-    if reasoning:
+    if thinking:
         prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
     else:
         prefix_tag = ConstStringFormat(value="<think></think>")
 
     triggered_tags = TriggeredTagsFormat(triggers=["<tool_call>"], tags=tags)
-
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, triggered_tags]))
+    sequence_format = SequenceFormat(elements=[prefix_tag, triggered_tags])
+    return StructuralTag(format=sequence_format)
 
 
 @_register_structural_tag_template("harmony")
