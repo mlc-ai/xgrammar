@@ -133,7 +133,10 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         )
 
-    return StructuralTag(format=TriggeredTagsFormat(triggers=['{"name": '], tags=tags))
+    if len(tags) > 0:
+        return StructuralTag(format=TriggeredTagsFormat(triggers=['{"name": '], tags=tags))
+    else:
+        return StructuralTag(format=AnyTextFormat())
 
 
 @_register_structural_tag_template("kimi")
@@ -177,13 +180,16 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         )
 
-        if thinking:
-            prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
-        else:
-            prefix_tag = ConstStringFormat(value="<think></think>")
+    if thinking:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+    else:
+        prefix_tag = ConstStringFormat(value="<think></think>")
 
-    triggered_tags = TriggeredTagsFormat(triggers=["<|tool_call_begin|>"], tags=tags)
-    sequence_format = SequenceFormat(elements=[prefix_tag, triggered_tags])
+    if len(tags) > 0:
+        suffix_tag = TriggeredTagsFormat(triggers=["<|tool_call_begin|>"], tags=tags)
+    else:
+        suffix_tag = AnyTextFormat()
+    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
 
 
@@ -234,10 +240,13 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     else:
         prefix_tag = ConstStringFormat(value="<think></think>")
 
-    triggered_tags = TriggeredTagsFormat(
-        triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"], tags=tags
-    )
-    sequence_format = SequenceFormat(elements=[prefix_tag, triggered_tags])
+    if len(tags) > 0:
+        suffix_tag = TriggeredTagsFormat(
+            triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"], tags=tags
+        )
+    else:
+        suffix_tag = AnyTextFormat()
+    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
 
 
@@ -280,7 +289,10 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
             )
         )
 
-    return StructuralTag(format=TriggeredTagsFormat(triggers=["<function="], tags=tags))
+    if len(tags) > 0:
+        return StructuralTag(format=TriggeredTagsFormat(triggers=["<function="], tags=tags))
+    else:
+        return StructuralTag(format=AnyTextFormat())
 
 
 @_register_structural_tag_template("qwen")
@@ -330,8 +342,11 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     else:
         prefix_tag = ConstStringFormat(value="<think></think>")
 
-    triggered_tags = TriggeredTagsFormat(triggers=["<tool_call>"], tags=tags)
-    sequence_format = SequenceFormat(elements=[prefix_tag, triggered_tags])
+    if len(tags) > 0:
+        suffix_tag = TriggeredTagsFormat(triggers=["<tool_call>"], tags=tags)
+    else:
+        suffix_tag = AnyTextFormat()
+    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
 
 
