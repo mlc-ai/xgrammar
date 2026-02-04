@@ -9,8 +9,8 @@ import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar import get_builtin_structural_tag_template_function
 from xgrammar.structural_tag import StructuralTag
+from xgrammar.structural_tag_template_function import get_builtin_structural_tag_template_function
 from xgrammar.testing import _is_grammar_accept_string
 
 # ---------- Fixtures / Helpers ----------
@@ -141,17 +141,13 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
         "'parameters' key in each tool must be a dict",
     ),
     # harmony: builtin_tools must be list
-    ("harmony", {"tools": [], "builtin_tools": "not_list"}, "builtin_tools.*must be a list"),
+    ("harmony", {"tools": [], "builtin_tools": "not_list"}, "must be a list"),
     # harmony: builtin_tool[function] must have name and parameters
-    (
-        "harmony",
-        {"tools": [], "builtin_tools": [{"function": {}}]},
-        "builtin_tools.*'name' and 'parameters'",
-    ),
+    ("harmony", {"tools": [], "builtin_tools": [{"function": {}}]}, "'name' and 'parameters'"),
     (
         "harmony",
         {"tools": [], "builtin_tools": [{"function": {"name": "b1", "parameters": 1}}]},
-        "builtin tool.*must be a dict",
+        "must be a dict",
     ),
 ]
 

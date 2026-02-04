@@ -13,6 +13,25 @@ from .structural_tag import (
 
 # ---------- Structural Tag Template ----------
 
+
+def _validate_tool_function(tools: Any) -> None:
+    if not isinstance(tools, list):
+        raise ValueError("The 'tools' key in the input_dict must be a list.")
+    for tool in tools:
+        if "function" not in tool:
+            continue
+        function = tool["function"]
+        if not isinstance(function, dict) or "name" not in function or "parameters" not in function:
+            raise ValueError(
+                "Each function in the 'tools' list must be a dictionary with 'name' and 'parameters' keys."
+            )
+        if not isinstance(function["name"], str):
+            raise ValueError("The 'name' key in each tool must be a string.")
+        parameters = function["parameters"]
+        if not isinstance(parameters, dict):
+            raise ValueError("The 'parameters' key in each tool must be a dict.")
+
+
 _structural_tag_registry = {}
 
 
@@ -107,9 +126,7 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """
 
     tools = input_dict.get("tools", [])
-
-    if not isinstance(tools, list):
-        raise ValueError("The 'tools' key in the input_dict must be a list.")
+    _validate_tool_function(tools)
 
     tags = []
 
@@ -118,18 +135,7 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-
-        if not isinstance(function, dict) or "name" not in function or "parameters" not in function:
-            raise ValueError(
-                "Each function in the 'tools' list must be a dictionary with 'name' and 'parameters' keys."
-            )
-
-        if not isinstance(function["name"], str):
-            raise ValueError("The 'name' key in each tool must be a string.")
         parameters = function["parameters"]
-        if not isinstance(parameters, dict):
-            raise ValueError("The 'parameters' key in each tool must be a dict.")
-
         name = function["name"]
         tags.append(
             TagFormat(
@@ -161,8 +167,7 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """
     tools = input_dict.get("tools", [])
     thinking = input_dict.get("thinking", True)
-    if not isinstance(tools, list):
-        raise ValueError("The 'tools' key in the input_dict must be a list.")
+    _validate_tool_function(tools)
 
     tags = []
     for tool in tools:
@@ -170,18 +175,7 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-
-        if not isinstance(function, dict) or "name" not in function or "parameters" not in function:
-            raise ValueError(
-                "Each function in the 'tools' list must be a dictionary with 'name' and 'parameters' keys."
-            )
-
-        if not isinstance(function["name"], str):
-            raise ValueError("The 'name' key in each tool must be a string.")
         parameters = function["parameters"]
-        if not isinstance(parameters, dict):
-            raise ValueError("The 'parameters' key in each tool must be a dict.")
-
         name = function["name"]
         tags.append(
             TagFormat(
@@ -221,8 +215,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     tools = input_dict.get("tools", [])
     thinking = input_dict.get("thinking", True)
 
-    if not isinstance(tools, list):
-        raise ValueError("The 'tools' key in the input_dict must be a list.")
+    _validate_tool_function(tools)
 
     tags = []
     for tool in tools:
@@ -230,18 +223,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
             continue
 
         function = tool["function"]
-
-        if not isinstance(function, dict) or "name" not in function or "parameters" not in function:
-            raise ValueError(
-                "Each function in the 'tools' list must be a dictionary with 'name' and 'parameters' keys."
-            )
-
-        if not isinstance(function["name"], str):
-            raise ValueError("The 'name' key in each tool must be a string.")
         parameters = function["parameters"]
-        if not isinstance(parameters, dict):
-            raise ValueError("The 'parameters' key in each tool must be a dict.")
-
         name = function["name"]
         tags.append(
             TagFormat(
@@ -279,9 +261,7 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
         This format is used by Qwen3 Coder and other models that follow the same style.
     """
     tools = input_dict.get("tools", [])
-
-    if not isinstance(tools, list):
-        raise ValueError("The 'tools' key in the input_dict must be a list.")
+    _validate_tool_function(tools)
 
     tags = []
     for tool in tools:
@@ -289,18 +269,7 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
             continue
 
         function = tool["function"]
-
-        if not isinstance(function, dict) or "name" not in function or "parameters" not in function:
-            raise ValueError(
-                "Each function in the 'tools' list must be a dictionary with 'name' and 'parameters' keys."
-            )
-
-        if not isinstance(function["name"], str):
-            raise ValueError("The 'name' key in each tool must be a string.")
         parameters = function["parameters"]
-        if not isinstance(parameters, dict):
-            raise ValueError("The 'parameters' key in each tool must be a dict.")
-
         name = function["name"]
         tags.append(
             TagFormat(
@@ -332,9 +301,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """
     tools = input_dict.get("tools", [])
     thinking = input_dict.get("thinking", True)
-
-    if not isinstance(tools, list):
-        raise ValueError("The 'tools' key in the input_dict must be a list.")
+    _validate_tool_function(tools)
 
     tags = []
     for tool in tools:
@@ -342,18 +309,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-
-        if not isinstance(function, dict) or "name" not in function or "parameters" not in function:
-            raise ValueError(
-                "Each function in the 'tools' list must be a dictionary with 'name' and 'parameters' keys."
-            )
-
-        if not isinstance(function["name"], str):
-            raise ValueError("The 'name' key in each tool must be a string.")
         parameters = function["parameters"]
-        if not isinstance(parameters, dict):
-            raise ValueError("The 'parameters' key in each tool must be a dict.")
-
         name = function["name"]
         tags.append(
             TagFormat(
@@ -393,11 +349,8 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
     """
     tools = input_dict.get("tools", [])
     builtin_tools = input_dict.get("builtin_tools", [])
-
-    if not isinstance(tools, list):
-        raise ValueError("The 'tools' key in the input_dict must be a list.")
-    if not isinstance(builtin_tools, list):
-        raise ValueError("The 'builtin_tools' key in the input_dict must be a list.")
+    _validate_tool_function(tools)
+    _validate_tool_function(builtin_tools)
 
     tags = [
         TagFormat(
@@ -422,16 +375,7 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
             continue
 
         function = tool["function"]
-
-        if not isinstance(function, dict) or "name" not in function or "parameters" not in function:
-            raise ValueError(
-                "Each function in the 'tools' list must be a dictionary with 'name' and 'parameters' keys."
-            )
-        if not isinstance(function["name"], str):
-            raise ValueError("The 'name' key in each tool must be a string.")
         parameters = function["parameters"]
-        if not isinstance(parameters, dict):
-            raise ValueError("The 'parameters' key in each tool must be a dict.")
         name = function["name"]
         tags.append(
             TagFormat(
@@ -446,16 +390,7 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
             continue
 
         function = tool["function"]
-
-        if not isinstance(function, dict) or "name" not in function or "parameters" not in function:
-            raise ValueError(
-                "Each function in the 'builtin_tools' list must be a dictionary with 'name' and 'parameters' keys."
-            )
-        if not isinstance(function["name"], str):
-            raise ValueError("The 'name' key in each builtin tool must be a string.")
         parameters = function["parameters"]
-        if not isinstance(parameters, dict):
-            raise ValueError("The 'parameters' key in each builtin tool must be a dict.")
         name = function["name"]
         tags.append(
             TagFormat(
