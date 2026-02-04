@@ -3,8 +3,10 @@ from typing import Any, Callable, Dict, Literal
 from .grammar import _convert_schema_to_str
 from .structural_tag import (
     AnyTextFormat,
+    ConstStringFormat,
     JSONSchemaFormat,
     QwenXMLParameterFormat,
+    SequenceFormat,
     StructuralTag,
     TagFormat,
     TriggeredTagsFormat,
@@ -268,6 +270,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Qwen style structural tag format.
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "name" and "parameters" field.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
 
     Returns
     -------
@@ -277,6 +280,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     """
     tools = input_dict.get("tools", [])
+    reasoning = input_dict.get("reasoning", True)
 
     if not isinstance(tools, list):
         raise ValueError("The 'tools' key in the input_dict must be a list.")
@@ -296,14 +300,20 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
         tags.append(
             TagFormat(
-                # begin=f'<tool_call>{{"name": "{name}", "arguments": ',
                 begin=('<tool_call>{"name": "' + name + '", "arguments": '),
                 content=JSONSchemaFormat(json_schema=parameter_str),
                 end="}</tool_call>",
             )
         )
 
-    return StructuralTag(format=TriggeredTagsFormat(triggers=["<tool_call>"], tags=tags))
+    if reasoning:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+    else:
+        prefix_tag = ConstStringFormat(value="<think></think>")
+
+    triggered_tags = TriggeredTagsFormat(triggers=["<tool_call>"], tags=tags)
+
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, triggered_tags]))
 
 
 @_register_structural_tag_template("harmony")
