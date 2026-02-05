@@ -67,9 +67,7 @@ def disable_profiler(request):
 def check_stag_with_grammar(structural_tag: StructuralTag, expected_grammar_ebnf: str):
     """Assert structural tag compiles to expected EBNF."""
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
-    assert (
-        str(stag_ebnf) == expected_grammar_ebnf
-    ), f"Expected:\n{expected_grammar_ebnf}\nGot:\n{str(stag_ebnf)}"
+    assert str(stag_ebnf) == expected_grammar_ebnf
 
 
 def check_stag_with_instance(
@@ -801,27 +799,18 @@ root ::= ((triggered_tags))
   loop_after_dispatch=false,
   excludes=()
 )
+tag ::= (("<|start|>assistant<|channel|>analysis<|message|>" any_text))
 any_text_1 ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<|return|>"),
+  stop_str=("<|end|>"),
   loop_after_dispatch=false,
   excludes=()
 )
-any_text_2 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<|call|>"),
-  loop_after_dispatch=false,
-  excludes=()
-)
-triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text) | ("assistant<|channel|>final<|message|>" any_text_1) | ("assistant<|channel|>final<|message|>" any_text_2))
-triggered_tags ::= TagDispatch(
-  ("<|start|>", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=true,
-  excludes=()
-)
-root ::= ((triggered_tags))
+tag_1 ::= (("<|start|>assistant<|channel|>final<|message|>" any_text_1))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+root ::= ((tags_with_separator))
 """,
     ),
     (
@@ -833,18 +822,7 @@ root ::= ((triggered_tags))
   loop_after_dispatch=false,
   excludes=()
 )
-any_text_1 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<|return|>"),
-  loop_after_dispatch=false,
-  excludes=()
-)
-any_text_2 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<|call|>"),
-  loop_after_dispatch=false,
-  excludes=()
-)
+tag ::= (("<|start|>assistant<|channel|>analysis<|message|>" any_text))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -866,6 +844,7 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+tag_1 ::= (("<|start|>assistant<|channel|>commentary to=tool_a<|constrain|>json<|message|>" root_0 "<|call|>"))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
 basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
@@ -887,15 +866,18 @@ basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text) | ("assistant<|channel|>final<|message|>" any_text_1) | ("assistant<|channel|>final<|message|>" any_text_2) | ("assistant<|channel|>commentary to=tool_a<|constrain|>json<|message|>" root_0 "<|end|>") | ("assistant<|channel|>commentary to=tool_b<|constrain|>json<|message|>" root_1 "<|end|>"))
-triggered_tags ::= TagDispatch(
-  ("<|start|>", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=true,
+tag_2 ::= (("<|start|>assistant<|channel|>commentary to=tool_b<|constrain|>json<|message|>" root_1 "<|call|>"))
+any_text_1 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|end|>"),
+  loop_after_dispatch=false,
   excludes=()
 )
-root ::= ((triggered_tags))
+tag_3 ::= (("<|start|>assistant<|channel|>final<|message|>" any_text_1))
+tags_with_separator_tags ::= ((tag) | (tag_1) | (tag_2) | (tag_3))
+tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+root ::= ((tags_with_separator))
 """,
     ),
     (
@@ -907,18 +889,7 @@ root ::= ((triggered_tags))
   loop_after_dispatch=false,
   excludes=()
 )
-any_text_1 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<|return|>"),
-  loop_after_dispatch=false,
-  excludes=()
-)
-any_text_2 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<|call|>"),
-  loop_after_dispatch=false,
-  excludes=()
-)
+tag ::= (("<|start|>assistant<|channel|>analysis<|message|>" any_text))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -940,6 +911,7 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+tag_1 ::= (("<|start|>assistant<|channel|>analysis to=builtin_tool_a<|message|>" root_0 "<|call|>"))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
 basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
@@ -961,15 +933,18 @@ basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text) | ("assistant<|channel|>final<|message|>" any_text_1) | ("assistant<|channel|>final<|message|>" any_text_2) | ("assistant<|channel|>analysis to=builtin_tool_a<|message|>" root_0 "<|end|>") | ("assistant<|channel|>analysis to=builtin_tool_b<|message|>" root_1 "<|end|>"))
-triggered_tags ::= TagDispatch(
-  ("<|start|>", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=true,
+tag_2 ::= (("<|start|>assistant<|channel|>analysis to=builtin_tool_b<|message|>" root_1 "<|call|>"))
+any_text_1 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|end|>"),
+  loop_after_dispatch=false,
   excludes=()
 )
-root ::= ((triggered_tags))
+tag_3 ::= (("<|start|>assistant<|channel|>final<|message|>" any_text_1))
+tags_with_separator_tags ::= ((tag) | (tag_1) | (tag_2) | (tag_3))
+tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+root ::= ((tags_with_separator))
 """,
     ),
     (
@@ -984,18 +959,7 @@ root ::= ((triggered_tags))
   loop_after_dispatch=false,
   excludes=()
 )
-any_text_1 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<|return|>"),
-  loop_after_dispatch=false,
-  excludes=()
-)
-any_text_2 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<|call|>"),
-  loop_after_dispatch=false,
-  excludes=()
-)
+tag ::= (("<|start|>assistant<|channel|>analysis<|message|>" any_text))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -1017,6 +981,7 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+tag_1 ::= (("<|start|>assistant<|channel|>commentary to=tool_a<|constrain|>json<|message|>" root_0 "<|call|>"))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
 basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
@@ -1038,6 +1003,7 @@ basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
 basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
 basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
 basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+tag_2 ::= (("<|start|>assistant<|channel|>commentary to=tool_b<|constrain|>json<|message|>" root_1 "<|call|>"))
 basic_escape_2 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_2 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_2) | ("\\" basic_escape_2 basic_string_sub_2)) (=([ \n\t]* [,}\]:]))
 basic_any_2 ::= ((basic_number_9) | (basic_string_2) | (basic_boolean_2) | (basic_null_2) | (basic_array_3) | (basic_object_3))
@@ -1059,6 +1025,7 @@ basic_number_6_2 ::= ("" | ([eE] basic_number_4_2 basic_number_5_2))
 basic_array_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_2 basic_array_1_2))
 basic_object_1_2 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_2 [ \n\t]* ":" [ \n\t]* basic_any_2 basic_object_1_2))
 basic_number_7_2 ::= (("0") | ([1-9] [0-9]*))
+tag_3 ::= (("<|start|>assistant<|channel|>analysis to=tool_a<|message|>" root_2 "<|call|>"))
 basic_escape_3 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_3 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_3) | ("\\" basic_escape_3 basic_string_sub_3)) (=([ \n\t]* [,}\]:]))
 basic_any_3 ::= ((basic_number_10) | (basic_string_3) | (basic_boolean_3) | (basic_null_3) | (basic_array_4) | (basic_object_4))
@@ -1080,15 +1047,18 @@ basic_number_6_3 ::= ("" | ([eE] basic_number_4_3 basic_number_5_3))
 basic_array_1_3 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_3 basic_array_1_3))
 basic_object_1_3 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_3 [ \n\t]* ":" [ \n\t]* basic_any_3 basic_object_1_3))
 basic_number_7_3 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("assistant<|channel|>analysis<|message|>" any_text) | ("assistant<|channel|>final<|message|>" any_text_1) | ("assistant<|channel|>final<|message|>" any_text_2) | ("assistant<|channel|>commentary to=tool_a<|constrain|>json<|message|>" root_0 "<|end|>") | ("assistant<|channel|>commentary to=tool_b<|constrain|>json<|message|>" root_1 "<|end|>") | ("assistant<|channel|>analysis to=tool_a<|message|>" root_2 "<|end|>") | ("assistant<|channel|>analysis to=tool_b<|message|>" root_3 "<|end|>"))
-triggered_tags ::= TagDispatch(
-  ("<|start|>", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=true,
+tag_4 ::= (("<|start|>assistant<|channel|>analysis to=tool_b<|message|>" root_3 "<|call|>"))
+any_text_1 ::= TagDispatch(
+  stop_eos=false,
+  stop_str=("<|end|>"),
+  loop_after_dispatch=false,
   excludes=()
 )
-root ::= ((triggered_tags))
+tag_5 ::= (("<|start|>assistant<|channel|>final<|message|>" any_text_1))
+tags_with_separator_tags ::= ((tag) | (tag_1) | (tag_2) | (tag_3) | (tag_4) | (tag_5))
+tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+root ::= ((tags_with_separator))
 """,
     ),
 ]
@@ -1244,29 +1214,71 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     # ----- harmony
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
         "<|start|>assistant<|channel|>analysis<|message|>some text<|end|>",
         True,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
-        '<|start|>assistant<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|end|>',
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        '<|start|>assistant<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
         True,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
-        '<|start|>assistant<|channel|>analysis to=analysis_tool<|message|>{"q": "v"}<|end|>',
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        '<|start|>assistant<|channel|>analysis to=analysis_tool<|message|>{"q": "v"}<|call|>',
         True,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
-        "<|start|>assistant<|channel|>commentary to=wrong_tool<|constrain|>json<|message|>{}<|end|>",
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        "<|start|>assistant<|channel|>commentary to=wrong_tool<|constrain|>json<|message|>{}<|call|>",
+        False,
+    ),
+    ("harmony", {"tools": [], "builtin_tools": [], "thinking": True}, "", True),
+    ("harmony", {"tools": [], "builtin_tools": [], "thinking": False}, "", True),
+    (
+        "harmony",
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        "<|start|>assistant<|channel|>analysis<|message|>think<|end|>"
+        '<|start|>assistant<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
+        True,
+    ),
+    (
+        "harmony",
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": False},
+        "<|start|>assistant<|channel|>analysis<|message|>think<|end|>",
+        False,
+    ),
+    (
+        "harmony",
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        "<|start|>assistant<|channel|>analysis<|message|>think<|end|>"
+        '<|start|>assistant<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>'
+        "<|start|>assistant<|channel|>final<|message|>done<|end|>",
+        True,
+    ),
+    (
+        "harmony",
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": False},
+        '<|start|>assistant<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>'
+        "<|start|>assistant<|channel|>final<|message|>done<|end|>",
+        True,
+    ),
+    (
+        "harmony",
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": False},
+        "<|start|>assistant<|channel|>analysis<|message|>think<|end|>",
         False,
     ),
     ("harmony", {"tools": [], "builtin_tools": []}, "", True),
+    (
+        "harmony",
+        {"tools": [], "builtin_tools": []},
+        "<|start|>assistant<|channel|>analysis<|message|>think<|end|><|start|>assistant<|channel|>final<|message|>done<|end|>",
+        True,
+    ),
 ]
 
 
