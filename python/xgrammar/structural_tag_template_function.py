@@ -2,9 +2,7 @@ from typing import Any, Callable, Dict, Literal
 
 from .structural_tag import (
     AnyTextFormat,
-    ConstStringFormat,
     JSONSchemaFormat,
-    OrFormat,
     QwenXMLParameterFormat,
     SequenceFormat,
     StructuralTag,
