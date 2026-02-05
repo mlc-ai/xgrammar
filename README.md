@@ -65,8 +65,7 @@ Please visit our [documentation](https://xgrammar.mlc.ai/docs/) to get started w
 
 ## Third-Party Bindings
 
-- **Rust**: [xgrammar-rs](https://github.com/trymirai/xgrammar-rs) — Official Rust bindings for XGrammar
-
+- **Rust**: [xgrammar-rs](https://github.com/trymirai/xgrammar-rs) — Official Rust bindings for XGrammar.
 
 ## Collaborators
 
@@ -92,7 +91,7 @@ XGrammar has been widely adopted in industry, open-source projects, and academia
 &emsp;
 [<span style="font-size:50px">WebLLM</span>](https://github.com/mlc-ai/web-llm)
 &emsp;
-[<img src="https://artifacts.trymirai.com/social/github/mirai.png" height=50/>](https://artifacts.trymirai.com/social/github/mirai.png)
+[<img src="https://artifacts.trymirai.com/social/github/mirai.png" height=50/>](https://github.com/trymirai/uzu)
 
 </div>
 
