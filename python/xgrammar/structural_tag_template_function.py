@@ -2,11 +2,14 @@ from typing import Any, Callable, Dict, Literal
 
 from .structural_tag import (
     AnyTextFormat,
+    ConstStringFormat,
     JSONSchemaFormat,
+    OrFormat,
     QwenXMLParameterFormat,
     SequenceFormat,
     StructuralTag,
     TagFormat,
+    TagsWithSeparatorFormat,
     TriggeredTagsFormat,
 )
 
@@ -391,27 +394,20 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
 
     """
     tools = input_dict.get("tools", [])
+    thinking = input_dict.get("thinking", True)
     builtin_tools = input_dict.get("builtin_tools", [])
     _validate_tool_function(tools)
     _validate_tool_function(builtin_tools)
 
-    tags = [
-        TagFormat(
+    tags = []
+
+    if thinking:
+        analysis_tag = TagFormat(
             begin="<|start|>assistant<|channel|>analysis<|message|>",
             content=AnyTextFormat(),
             end="<|end|>",
-        ),
-        TagFormat(
-            begin="<|start|>assistant<|channel|>final<|message|>",
-            content=AnyTextFormat(),
-            end="<|return|>",
-        ),
-        TagFormat(
-            begin="<|start|>assistant<|channel|>final<|message|>",
-            content=AnyTextFormat(),
-            end="<|call|>",
-        ),
-    ]
+        )
+        tags.append(analysis_tag)
 
     for tool in tools:
         if "function" not in tool:
@@ -424,7 +420,7 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
             TagFormat(
                 begin=f"<|start|>assistant<|channel|>commentary to={name}<|constrain|>json<|message|>",
                 content=JSONSchemaFormat(json_schema=parameters),
-                end="<|end|>",
+                end="<|call|>",
             )
         )
 
@@ -439,8 +435,16 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
             TagFormat(
                 begin=f"<|start|>assistant<|channel|>analysis to={name}<|message|>",
                 content=JSONSchemaFormat(json_schema=parameters),
-                end="<|end|>",
+                end="<|call|>",
             )
         )
 
-    return StructuralTag(format=TriggeredTagsFormat(triggers=["<|start|>"], tags=tags))
+    final_tag = TagFormat(
+        begin="<|start|>assistant<|channel|>final<|message|>",
+        content=AnyTextFormat(),
+        end="<|end|>",
+    )
+
+    tags.append(final_tag)
+
+    return StructuralTag(format=TagsWithSeparatorFormat(tags=tags, separator=""))
