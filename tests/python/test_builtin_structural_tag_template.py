@@ -92,6 +92,16 @@ def make_tools(names: List[str], schema: Dict[str, Any] = SIMPLE_SCHEMA) -> List
     return [{"function": {"name": n, "parameters": schema}} for n in names]
 
 
+# Tool lists used by instance tests (all in one place)
+_tools_llama = make_tools(["t1"])
+_tools_kimi = make_tools(["get_weather"])
+_tools_deepseek = make_tools(["search"])
+_tools_qwen_coder = make_tools(["run_sql"])
+_tools_qwen = make_tools(["t1"])
+_tools_harmony = make_tools(["comment_tool"])
+_builtin_harmony = make_tools(["analysis_tool"])
+
+
 # ---------- Test: unknown format type ----------
 
 
@@ -1078,23 +1088,16 @@ def test_generate_structural_tag_grammar(
 # ---------- Test: instance positive / negative ----------
 
 # (format_type, input_dict, instance, is_accepted)
-instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = []
-
-# ----- llama
-_tools_llama = make_tools(["t1"])
-instance_cases += [
+instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
+    # ----- llama
     ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": {"q": "v"}}', True),
     ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": {}}', True),
     ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": {"q": ""}}', True),
     ("llama", {"tools": _tools_llama}, '{"name": "wrong", "parameters": {"q": "v"}}', False),
     ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": {"q": 1}}', False),
     ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": invalid}', False),
-]
-instance_cases += [("llama", {"tools": []}, "", True)]
-
-# ----- kimi
-_tools_kimi = make_tools(["get_weather"])
-instance_cases += [
+    ("llama", {"tools": []}, "", True),
+    # ----- kimi
     (
         "kimi",
         {"tools": _tools_kimi, "thinking": True},
@@ -1131,16 +1134,10 @@ instance_cases += [
         "<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{}<|tool_call_end|>",
         True,
     ),
-]
-instance_cases += [
     ("kimi", {"tools": [], "thinking": True}, "<think>123123</think>123", True),
     ("kimi", {"tools": [], "thinking": True}, "<think>123</think>2213</think>", False),
     ("kimi", {"tools": [], "thinking": False}, "<think>123</think>123", False),
-]
-
-# ----- deepseek (format: <tool_call>name</tool_call> + JSON + </tool_call>)
-_tools_deepseek = make_tools(["search"])
-instance_cases += [
+    # ----- deepseek
     (
         "deepseek",
         {"tools": _tools_deepseek},
@@ -1159,19 +1156,11 @@ instance_cases += [
         '<think></think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>wrong<｜tool▁sep｜>{"q":"v"}<｜tool▁call▁end｜>',
         False,
     ),
-]
-instance_cases += [("deepseek", {"tools": [], "thinking": True}, "<think>123123</think>", True)]
-instance_cases += [
-    ("deepseek", {"tools": [], "thinking": True}, "<think></think>123123</think>", False)
-]
-instance_cases += [
-    ("deepseek", {"tools": [], "thinking": False}, "<think></think>123</think>", False)
-]
-instance_cases += [("deepseek", {"tools": [], "thinking": False}, "123", True)]
-
-# ----- qwen_coder
-_tools_qwen_coder = make_tools(["run_sql"])
-instance_cases += [
+    ("deepseek", {"tools": [], "thinking": True}, "<think>123123</think>", True),
+    ("deepseek", {"tools": [], "thinking": True}, "<think></think>123123</think>", False),
+    ("deepseek", {"tools": [], "thinking": False}, "<think></think>123</think>", False),
+    ("deepseek", {"tools": [], "thinking": False}, "123", True),
+    # ----- qwen_coder
     (
         "qwen_coder",
         {"tools": _tools_qwen_coder},
@@ -1190,12 +1179,8 @@ instance_cases += [
         "<tool_call>\n<function=other>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
         False,
     ),
-]
-instance_cases += [("qwen_coder", {"tools": []}, "", True)]
-
-# ----- qwen (with <think> prefix when thinking=True)
-_tools_qwen = make_tools(["t1"])
-instance_cases += [
+    ("qwen_coder", {"tools": []}, "", True),
+    # ----- qwen
     (
         "qwen",
         {"tools": _tools_qwen, "thinking": True},
@@ -1232,18 +1217,11 @@ instance_cases += [
         '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         False,
     ),
-]
-instance_cases += [
     ("qwen", {"tools": [], "thinking": True}, "<think>123</think>", True),
     ("qwen", {"tools": [], "thinking": False}, "123", True),
     ("qwen", {"tools": [], "thinking": True}, "<think>123</think>", True),
     ("qwen", {"tools": [], "thinking": False}, "<think></think>", False),
-]
-
-# ----- harmony (fixed tags + tool / builtin_tool tags)
-_tools_harmony = make_tools(["comment_tool"])
-_builtin_harmony = make_tools(["analysis_tool"])
-instance_cases += [
+    # ----- harmony
     (
         "harmony",
         {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
@@ -1268,8 +1246,8 @@ instance_cases += [
         "<|start|>assistant<|channel|>commentary to=wrong_tool<|constrain|>json<|message|>{}<|end|>",
         False,
     ),
+    ("harmony", {"tools": [], "builtin_tools": []}, "", True),
 ]
-instance_cases += [("harmony", {"tools": [], "builtin_tools": []}, "", True)]
 
 
 @pytest.mark.parametrize("format_type, input_dict, instance, is_accepted", instance_cases)
