@@ -17,6 +17,8 @@ def _validate_tool_function(tools: Any) -> None:
     if not isinstance(tools, list):
         raise ValueError("The 'tools' key in the input_dict must be a list.")
     for tool in tools:
+        if not isinstance(tool, dict):
+            raise ValueError("Each item in the 'tools' list must be a dictionary.")
         if "function" not in tool:
             continue
         function = tool["function"]
