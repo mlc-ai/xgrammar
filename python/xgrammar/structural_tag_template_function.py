@@ -318,9 +318,9 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         name = function["name"]
         tags.append(
             TagFormat(
-                begin=('<tool_call>{"name": "' + name + '", "arguments": '),
+                begin=('<tool_call>\n{"name": "' + name + '", "arguments": '),
                 content=JSONSchemaFormat(json_schema=parameters),
-                end="}</tool_call>",
+                end="}\n</tool_call>",
             )
         )
 
