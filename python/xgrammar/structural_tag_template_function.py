@@ -401,9 +401,7 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
 
     if thinking:
         analysis_tag = TagFormat(
-            begin="<|start|>assistant<|channel|>analysis<|message|>",
-            content=AnyTextFormat(),
-            end="<|end|>",
+            begin="<|channel|>analysis<|message|>", content=AnyTextFormat(), end="<|end|>"
         )
         tags.append(analysis_tag)
 
@@ -416,7 +414,7 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
         name = function["name"]
         tags.append(
             TagFormat(
-                begin=f"<|start|>assistant<|channel|>commentary to={name}<|constrain|>json<|message|>",
+                begin=f"<|channel|>commentary to={name}<|constrain|>json<|message|>",
                 content=JSONSchemaFormat(json_schema=parameters),
                 end="<|call|>",
             )
@@ -431,18 +429,16 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
         name = function["name"]
         tags.append(
             TagFormat(
-                begin=f"<|start|>assistant<|channel|>analysis to={name}<|message|>",
+                begin=f"<|channel|>analysis to={name}<|message|>",
                 content=JSONSchemaFormat(json_schema=parameters),
                 end="<|call|>",
             )
         )
 
     final_tag = TagFormat(
-        begin="<|start|>assistant<|channel|>final<|message|>",
-        content=AnyTextFormat(),
-        end="<|end|>",
+        begin="<|channel|>final<|message|>", content=AnyTextFormat(), end="<|end|>"
     )
 
     tags.append(final_tag)
-
-    return StructuralTag(format=TagsWithSeparatorFormat(tags=tags, separator=""))
+    tags_with_separator = TagsWithSeparatorFormat(tags=tags, separator="<|start|>assistant")
+    return StructuralTag(format=tags_with_separator)
