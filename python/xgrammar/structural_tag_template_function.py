@@ -377,8 +377,9 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
 @_register_structural_tag_template("harmony")
 def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
-    """Get harmony style structural tag format.
+    """Get harmony(gpt-oss) style structural tag format.
     Reference: https://developers.openai.com/cookbook/articles/openai-harmony
+    Reference: https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
     - "builtin_tools": a list of builtin tools, each builtin tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
