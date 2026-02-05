@@ -1123,17 +1123,18 @@ instance_cases += [
         "kimi",
         {"tools": _tools_kimi, "thinking": False},
         '<think></think><|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
-        True,
+        False,
     ),
     (
         "kimi",
         {"tools": _tools_kimi, "thinking": False},
-        "<think>123</think><|tool_call_begin|>get_weather<|tool_call_argument_begin|>{}<|tool_call_end|>",
-        False,
+        "<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{}<|tool_call_end|>",
+        True,
     ),
 ]
 instance_cases += [
-    ("kimi", {"tools": [], "thinking": True}, "<think>123</think>123", True),
+    ("kimi", {"tools": [], "thinking": True}, "<think>123123</think>123", True),
+    ("kimi", {"tools": [], "thinking": True}, "<think>123</think>2213</think>", False),
     ("kimi", {"tools": [], "thinking": False}, "<think>123</think>123", False),
 ]
 
@@ -1159,8 +1160,14 @@ instance_cases += [
         False,
     ),
 ]
-instance_cases += [("deepseek", {"tools": [], "thinking": True}, "<think>123</think>123", True)]
-instance_cases += [("deepseek", {"tools": [], "thinking": False}, "<think></think>123", True)]
+instance_cases += [("deepseek", {"tools": [], "thinking": True}, "<think>123123</think>", True)]
+instance_cases += [
+    ("deepseek", {"tools": [], "thinking": True}, "<think></think>123123</think>", False)
+]
+instance_cases += [
+    ("deepseek", {"tools": [], "thinking": False}, "<think></think>123</think>", False)
+]
+instance_cases += [("deepseek", {"tools": [], "thinking": False}, "123", True)]
 
 # ----- qwen_coder
 _tools_qwen_coder = make_tools(["run_sql"])
@@ -1168,14 +1175,19 @@ instance_cases += [
     (
         "qwen_coder",
         {"tools": _tools_qwen_coder},
-        "<function=run_sql><parameter=q>v</parameter></function>",
+        "<tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
         True,
     ),
-    ("qwen_coder", {"tools": _tools_qwen_coder}, "<function=run_sql></function>", True),
     (
         "qwen_coder",
         {"tools": _tools_qwen_coder},
-        "<function=other><parameter=q>v</parameter></function>",
+        "<tool_call>\n<function=run_sql>\n\n</function>\n</tool_call>",
+        True,
+    ),
+    (
+        "qwen_coder",
+        {"tools": _tools_qwen_coder},
+        "<tool_call>\n<function=other>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
         False,
     ),
 ]
@@ -1187,31 +1199,45 @@ instance_cases += [
     (
         "qwen",
         {"tools": _tools_qwen, "thinking": True},
-        '<think>123</think><tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>',
+        '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         True,
     ),
     (
         "qwen",
         {"tools": _tools_qwen, "thinking": False},
-        '<think></think><tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>',
+        '<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+        True,
+    ),
+    (
+        "qwen",
+        {"tools": _tools_qwen, "thinking": False},
+        '<think></think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+        False,
+    ),
+    (
+        "qwen",
+        {"tools": _tools_qwen, "thinking": True},
+        '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         True,
     ),
     (
         "qwen",
         {"tools": _tools_qwen, "thinking": True},
-        '<think>123</think><tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>',
-        True,
+        '<think>123</think></think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+        False,
     ),
     (
         "qwen",
         {"tools": _tools_qwen, "thinking": False},
-        '<think>123</think><tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>',
+        '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         False,
     ),
 ]
 instance_cases += [
     ("qwen", {"tools": [], "thinking": True}, "<think>123</think>", True),
-    ("qwen", {"tools": [], "thinking": False}, "<think></think>", True),
+    ("qwen", {"tools": [], "thinking": False}, "123", True),
+    ("qwen", {"tools": [], "thinking": True}, "<think>123</think>", True),
+    ("qwen", {"tools": [], "thinking": False}, "<think></think>", False),
 ]
 
 # ----- harmony (fixed tags + tool / builtin_tool tags)
