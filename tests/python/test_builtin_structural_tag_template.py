@@ -67,7 +67,9 @@ def disable_profiler(request):
 def check_stag_with_grammar(structural_tag: StructuralTag, expected_grammar_ebnf: str):
     """Assert structural tag compiles to expected EBNF."""
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
-    assert str(stag_ebnf) == expected_grammar_ebnf
+    assert (
+        str(stag_ebnf) == expected_grammar_ebnf
+    ), f"Expected:\n{expected_grammar_ebnf}\ngot:\n{str(stag_ebnf)}"
 
 
 def check_stag_with_instance(
@@ -251,103 +253,14 @@ root ::= ((triggered_tags))
     # kimi, thinking True / False
     (
         "kimi",
-        {"tools": [], "thinking": True},
-        r"""any_text ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("</think>"),
-  loop_after_dispatch=false,
-  excludes=()
-)
-tag ::= (("<think>" any_text))
-any_text_1 ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=false,
-  excludes=("<think>", "</think>")
-)
-sequence ::= ((tag any_text_1))
-root ::= ((sequence))
-""",
-    ),
-    (
-        "kimi",
-        {"tools": [], "thinking": False},
-        r"""any_text ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=false,
-  excludes=("<think>", "</think>")
-)
+        {"tools": []},
+        r"""any_text ::= (([\0-\U0010ffff]*))
 root ::= ((any_text))
 """,
     ),
     (
         "kimi",
-        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": True},
-        r"""any_text ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("</think>"),
-  loop_after_dispatch=false,
-  excludes=()
-)
-tag ::= (("<think>" any_text))
-basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
-basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
-basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
-basic_string ::= (("\"" basic_string_sub))
-basic_boolean ::= (("true") | ("false"))
-basic_null ::= (("null"))
-basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-basic_integer_1 ::= ("" | ("-"))
-basic_number_1 ::= ("" | ("-"))
-basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
-basic_number_3 ::= ("" | ("." basic_number_2))
-basic_number_4 ::= ("" | ([+\-]))
-basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
-basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
-basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
-basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
-basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
-basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
-basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
-basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
-basic_string_1 ::= (("\"" basic_string_sub_1))
-basic_boolean_1 ::= (("true") | ("false"))
-basic_null_1 ::= (("null"))
-basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root_1 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-basic_integer_1_1 ::= ("" | ("-"))
-basic_number_1_1 ::= ("" | ("-"))
-basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
-basic_number_3_1 ::= ("" | ("." basic_number_2_1))
-basic_number_4_1 ::= ("" | ([+\-]))
-basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
-basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
-basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
-basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
-basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("tool_a<|tool_call_argument_begin|>" root_0 "<|tool_call_end|>") | ("tool_b<|tool_call_argument_begin|>" root_1 "<|tool_call_end|>"))
-triggered_tags ::= TagDispatch(
-  ("<|tool_call_begin|>", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=true,
-  excludes=("<think>", "</think>")
-)
-sequence ::= ((tag triggered_tags))
-root ::= ((sequence))
-""",
-    ),
-    (
-        "kimi",
-        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": False},
+        {"tools": make_tools(["tool_a", "tool_b"])},
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -396,7 +309,7 @@ triggered_tags ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=true,
-  excludes=("<think>", "</think>")
+  excludes=()
 )
 root ::= ((triggered_tags))
 """,
@@ -411,7 +324,7 @@ root ::= ((triggered_tags))
   loop_after_dispatch=false,
   excludes=()
 )
-tag ::= (("<think>" any_text))
+tag ::= (("" any_text))
 any_text_1 ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
@@ -425,13 +338,15 @@ root ::= ((sequence))
     (
         "deepseek",
         {"tools": [], "thinking": False},
-        r"""any_text ::= TagDispatch(
+        r"""const_string ::= (("</think>"))
+any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
   excludes=("<think>", "</think>")
 )
-root ::= ((any_text))
+sequence ::= ((const_string any_text))
+root ::= ((sequence))
 """,
     ),
     (
@@ -443,7 +358,7 @@ root ::= ((any_text))
   loop_after_dispatch=false,
   excludes=()
 )
-tag ::= (("<think>" any_text))
+tag ::= (("" any_text))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -501,7 +416,8 @@ root ::= ((sequence))
     (
         "deepseek",
         {"tools": make_tools(["tool_a", "tool_b"]), "thinking": False},
-        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        r"""const_string ::= (("</think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -551,7 +467,8 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=("<think>", "</think>")
 )
-root ::= ((triggered_tags))
+sequence ::= ((const_string triggered_tags))
+root ::= ((sequence))
 """,
     ),
     # qwen_coder
@@ -660,13 +577,15 @@ root ::= ((sequence))
     (
         "qwen",
         {"tools": [], "thinking": False},
-        r"""any_text ::= TagDispatch(
+        r"""const_string ::= (("<think>\n\n</think>"))
+any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
   excludes=("<think>", "</think>")
 )
-root ::= ((any_text))
+sequence ::= ((const_string any_text))
+root ::= ((sequence))
 """,
     ),
     (
@@ -736,7 +655,8 @@ root ::= ((sequence))
     (
         "qwen",
         {"tools": make_tools(["tool_a", "tool_b"]), "thinking": False},
-        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        r"""const_string ::= (("<think>\n\n</think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -786,7 +706,8 @@ triggered_tags ::= TagDispatch(
   loop_after_dispatch=true,
   excludes=("<think>", "</think>")
 )
-root ::= ((triggered_tags))
+sequence ::= ((const_string triggered_tags))
+root ::= ((sequence))
 """,
     ),
     # harmony (tools only, builtin_tools only, both)
@@ -1090,66 +1011,40 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     # ----- kimi
     (
         "kimi",
-        {"tools": _tools_kimi, "thinking": True},
-        '<think>12opj</think><|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+        {"tools": _tools_kimi},
+        '123<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
         True,
     ),
     (
         "kimi",
-        {"tools": _tools_kimi, "thinking": True},
-        "<think>213</think><|tool_call_begin|>get_weather<|tool_call_argument_begin|>{}<|tool_call_end|>",
-        True,
-    ),
-    (
-        "kimi",
-        {"tools": _tools_kimi, "thinking": True},
-        '<think>123</think><|tool_call_begin|>other<|tool_call_argument_begin|>{"q":"v"}<|tool_call_end|>',
+        {"tools": _tools_kimi},
+        "123<|tool_call_begin|>123<|tool_call_argument_begin|>{}<|tool_call_end|>",
         False,
     ),
-    (
-        "kimi",
-        {"tools": _tools_kimi, "thinking": True},
-        '<think>123</think><|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q":1}<|tool_call_end|>',
-        False,
-    ),
-    (
-        "kimi",
-        {"tools": _tools_kimi, "thinking": False},
-        '<think></think><|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
-        False,
-    ),
-    (
-        "kimi",
-        {"tools": _tools_kimi, "thinking": False},
-        "<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{}<|tool_call_end|>",
-        True,
-    ),
-    ("kimi", {"tools": [], "thinking": True}, "<think>123123</think>123", True),
-    ("kimi", {"tools": [], "thinking": True}, "<think>123</think>2213</think>", False),
-    ("kimi", {"tools": [], "thinking": False}, "<think>123</think>123", False),
+    ("kimi", {"tools": []}, "123123", True),
     # ----- deepseek
     (
         "deepseek",
-        {"tools": _tools_deepseek},
-        '<think></think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+        {"tools": _tools_deepseek, "thinking": True},
+        '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
         True,
     ),
     (
         "deepseek",
-        {"tools": _tools_deepseek},
-        "<think></think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{}<｜tool▁call▁end｜>",
+        {"tools": _tools_deepseek, "thinking": True},
+        "123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{}<｜tool▁call▁end｜>",
         True,
     ),
     (
         "deepseek",
-        {"tools": _tools_deepseek},
-        '<think></think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>wrong<｜tool▁sep｜>{"q":"v"}<｜tool▁call▁end｜>',
+        {"tools": _tools_deepseek, "thinking": True},
+        '132</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>wrong<｜tool▁sep｜>{"q":"v"}<｜tool▁call▁end｜>',
         False,
     ),
-    ("deepseek", {"tools": [], "thinking": True}, "<think>123123</think>", True),
-    ("deepseek", {"tools": [], "thinking": True}, "<think></think>123123</think>", False),
-    ("deepseek", {"tools": [], "thinking": False}, "<think></think>123</think>", False),
-    ("deepseek", {"tools": [], "thinking": False}, "123", True),
+    ("deepseek", {"tools": [], "thinking": True}, "123123</think>", True),
+    ("deepseek", {"tools": [], "thinking": True}, "</think>123123</think>", False),
+    ("deepseek", {"tools": [], "thinking": False}, "</think>123</think>", False),
+    ("deepseek", {"tools": [], "thinking": False}, "</think>123", True),
     # ----- qwen_coder
     (
         "qwen_coder",
@@ -1180,13 +1075,19 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     (
         "qwen",
         {"tools": _tools_qwen, "thinking": False},
-        '<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+        '<think>\n\n</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         True,
     ),
     (
         "qwen",
         {"tools": _tools_qwen, "thinking": False},
-        '<think></think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+        '<think>\n\n</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+        True,
+    ),
+    (
+        "qwen",
+        {"tools": _tools_qwen, "thinking": False},
+        '<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         False,
     ),
     (
@@ -1208,9 +1109,9 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
         False,
     ),
     ("qwen", {"tools": [], "thinking": True}, "<think>123</think>", True),
-    ("qwen", {"tools": [], "thinking": False}, "123", True),
+    ("qwen", {"tools": [], "thinking": False}, "<think>\n\n</think>123", True),
     ("qwen", {"tools": [], "thinking": True}, "<think>123</think>", True),
-    ("qwen", {"tools": [], "thinking": False}, "<think></think>", False),
+    ("qwen", {"tools": [], "thinking": False}, "", False),
     # ----- harmony
     (
         "harmony",
