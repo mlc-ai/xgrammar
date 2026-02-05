@@ -2,7 +2,6 @@ from typing import Any, Callable, Dict, Literal
 
 from .structural_tag import (
     AnyTextFormat,
-    ConstStringFormat,
     JSONSchemaFormat,
     QwenXMLParameterFormat,
     SequenceFormat,
@@ -190,15 +189,22 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     if thinking:
         prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(triggers=["<|tool_call_begin|>"], tags=tags)
+        else:
+            suffix_tag = AnyTextFormat()
+        sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
+        return StructuralTag(format=sequence_format)
     else:
-        prefix_tag = ConstStringFormat(value="<think></think>")
-
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(triggers=["<|tool_call_begin|>"], tags=tags)
-    else:
-        suffix_tag = AnyTextFormat()
-    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
-    return StructuralTag(format=sequence_format)
+        think_excludes = ["<think>", "</think>"]
+        if len(tags) > 0:
+            return StructuralTag(
+                format=TriggeredTagsFormat(
+                    triggers=["<|tool_call_begin|>"], tags=tags, excludes=think_excludes
+                )
+            )
+        else:
+            return StructuralTag(format=AnyTextFormat(excludes=think_excludes))
 
 
 @_register_structural_tag_template("deepseek")
@@ -240,17 +246,26 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
 
     if thinking:
         prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"], tags=tags
+            )
+        else:
+            suffix_tag = AnyTextFormat()
+        sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
+        return StructuralTag(format=sequence_format)
     else:
-        prefix_tag = ConstStringFormat(value="<think></think>")
-
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(
-            triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"], tags=tags
-        )
-    else:
-        suffix_tag = AnyTextFormat()
-    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
-    return StructuralTag(format=sequence_format)
+        think_excludes = ["<think>", "</think>"]
+        if len(tags) > 0:
+            return StructuralTag(
+                format=TriggeredTagsFormat(
+                    triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"],
+                    tags=tags,
+                    excludes=think_excludes,
+                )
+            )
+        else:
+            return StructuralTag(format=AnyTextFormat(excludes=think_excludes))
 
 
 @_register_structural_tag_template("qwen_coder")
@@ -332,15 +347,22 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     if thinking:
         prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(triggers=["<tool_call>"], tags=tags)
+        else:
+            suffix_tag = AnyTextFormat()
+        sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
+        return StructuralTag(format=sequence_format)
     else:
-        prefix_tag = ConstStringFormat(value="<think></think>")
-
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(triggers=["<tool_call>"], tags=tags)
-    else:
-        suffix_tag = AnyTextFormat()
-    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
-    return StructuralTag(format=sequence_format)
+        think_excludes = ["<think>", "</think>"]
+        if len(tags) > 0:
+            return StructuralTag(
+                format=TriggeredTagsFormat(
+                    triggers=["<tool_call>"], tags=tags, excludes=think_excludes
+                )
+            )
+        else:
+            return StructuralTag(format=AnyTextFormat(excludes=think_excludes))
 
 
 @_register_structural_tag_template("harmony")
