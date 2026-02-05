@@ -1255,6 +1255,6 @@ def test_generate_structural_tag_instance(
     format_type: str, input_dict: Dict[str, Any], instance: str, is_accepted: bool
 ):
     """Generated structural tag accepts/rejects instance as expected."""
-    fn = get_builtin_structural_tag_template_function(format_type)
-    stag = fn(input_dict)
+    stag_function = get_builtin_structural_tag_template_function(format_type)
+    stag = stag_function(input_dict)
     check_stag_with_instance(stag, instance, is_accepted)
