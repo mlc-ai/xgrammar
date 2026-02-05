@@ -113,7 +113,8 @@ def get_builtin_structural_tag_template_function(
 
 @_register_structural_tag_template("llama")
 def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
-    """Get Llama style structural tag format.
+    """Get Llama 3.1 style structural tag format.
+    Reference: https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
 
@@ -153,7 +154,8 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
 @_register_structural_tag_template("kimi")
 def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
-    """Get Kimi style structural tag format.
+    """Get Kimi-k2 style structural tag format.
+    Reference: https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/docs/tool_call_guidance.md
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
     - "thinking": a boolean indicating whether to enable thinking mode.
@@ -162,8 +164,7 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     -------
     StructuralTag
         A structural tag template.
-        This format is used by Kimi-v2 and other models that follow the same style.
-
+        This format is used by Kimi-k2 and other models that follow the same style.
     """
     tools = input_dict.get("tools", [])
     thinking = input_dict.get("thinking", True)
@@ -202,7 +203,8 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
 @_register_structural_tag_template("deepseek")
 def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
-    """Get Deepseek style structural tag format.
+    """Get Deepseek v3.1 style structural tag format.
+    Reference: https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
     - "thinking": a boolean indicating whether to enable thinking mode.
@@ -253,7 +255,8 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
 
 @_register_structural_tag_template("qwen_coder")
 def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
-    """Get Qwen Coder style structural tag format.
+    """Get Qwen3-Coder style structural tag format.
+    Reference: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
 
@@ -261,7 +264,7 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
     -------
     StructuralTag
         A structural tag for function calling format.
-        This format is used by Qwen3 Coder and other models that follow the same style.
+        This format is used by Qwen3-Coder and other models that follow the same style.
     """
     tools = input_dict.get("tools", [])
     _validate_tool_function(tools)
@@ -276,21 +279,24 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
         name = function["name"]
         tags.append(
             TagFormat(
-                begin=f"<function={name}>",
+                begin=f"<tool_call>\n<function={name}>\n",
                 content=QwenXMLParameterFormat(json_schema=parameters),
-                end="</function>",
+                end="</function>\n</tool_call>",
             )
         )
 
     if len(tags) > 0:
-        return StructuralTag(format=TriggeredTagsFormat(triggers=["<function="], tags=tags))
+        return StructuralTag(
+            format=TriggeredTagsFormat(triggers=["<tool_call>\n<function="], tags=tags)
+        )
     else:
         return StructuralTag(format=AnyTextFormat())
 
 
 @_register_structural_tag_template("qwen")
 def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
-    """Get Qwen style structural tag format.
+    """Get Qwen3 style structural tag format.
+    Reference: https://qwen.readthedocs.io/en/latest/framework/function_call.html
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
     - "thinking": a boolean indicating whether to enable thinking mode.
@@ -340,6 +346,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 @_register_structural_tag_template("harmony")
 def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get harmony style structural tag format.
+    Reference: https://developers.openai.com/cookbook/articles/openai-harmony
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
     - "builtin_tools": a list of builtin tools, each builtin tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
