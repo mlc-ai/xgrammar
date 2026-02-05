@@ -58,7 +58,9 @@ def get_builtin_structural_tag_template_function(
     a list of tools, each tool should have a "function" key, which is a dictionary
     containing "name" and "parameters" fields. Besides, for the OpenAI Harmony Response Format,
     users should also provide a list of builtin tools, each builtin tool should have a "function"
-    key, which is a dictionary containing "name" and "parameters" fields.
+    key, which is a dictionary containing "name" and "parameters" fields. In addition, for the "qwen",
+    "kimi", "deepseek" and "harmony" formats, "thinking" key can be provided to enable/disable thinking mode.
+    By default, thinking mode is enabled.
 
     Examples
     --------
@@ -88,12 +90,12 @@ def get_builtin_structural_tag_template_function(
     format_type : SupportedTemplateNames
         The format type of the structural tag template.
         Currently supported format types are:
-        - "llama": Llama style structural tag format.
-        - "qwen": Qwen style structural tag format.
-        - "qwen_coder": Qwen Coder style structural tag format.
-        - "kimi": Kimi style structural tag format.
-        - "deepseek": Deepseek style structural tag format.
-        - "harmony": OpenAI Harmony Response Format.
+        - "llama": Llama3.1 style structural tag format.
+        - "qwen": Qwen3 style structural tag format.
+        - "qwen_coder": Qwen-Coder style structural tag format.
+        - "kimi": Kimi-k2 style structural tag format.
+        - "deepseek": Deepseek-v3.1 style structural tag format.
+        - "harmony": OpenAI Harmony Response Format (gpt-oss).
 
     Returns
     -------
