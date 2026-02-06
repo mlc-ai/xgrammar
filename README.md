@@ -65,7 +65,7 @@ Please visit our [documentation](https://xgrammar.mlc.ai/docs/) to get started w
 
 ## Third-Party Bindings
 
-- **Rust**: [xgrammar-rs](https://github.com/trymirai/xgrammar-rs) — Official Rust bindings for XGrammar.
+- **Rust**: [xgrammar-rs](https://github.com/trymirai/xgrammar-rs) — Community Rust bindings for XGrammar.
 
 ## Collaborators
 
