@@ -7,6 +7,9 @@
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 #define XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 
+#include <unordered_map>
+#include <utility>
+
 #include "json_schema_converter.h"
 
 namespace xgrammar {
@@ -25,7 +28,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       std::optional<std::pair<std::string, std::string>> separators,
       bool any_whitespace,
       std::optional<int> max_whitespace_cnt,
-      RefResolver ref_resolver = nullptr
+      RefResolver ref_resolver = nullptr,
+      JSONFormat json_format = JSONFormat::kQwenXML
   );
 
   /*! \brief Convert SchemaSpec to EBNF with XML format for root object. Note that this function is
@@ -69,40 +73,16 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
    */
   virtual std::string GetBetweenParametersSeparator() const;
 
- protected:
-  // Track if we're at the root object level (used by subclasses e.g. MiniMax)
-  int nested_object_level_ = 0;
-
  private:
   // XML-specific rule names
+  static const std::unordered_map<JSONFormat, std::unordered_map<std::string, std::string>>
+      kKeyWrapperMap;
   static const std::string kXMLString;
   static const std::string kXMLAny;
-};
-
-/*!
- * \brief Converter for MiniMax-style XML Tool Calling format.
- *
- * Same as XMLToolCallingConverter except the outermost object uses
- * <parameter name="key">value</parameter> instead of <parameter=key>value</parameter>.
- */
-class MiniMaxXMLToolCallingConverter : public XMLToolCallingConverter {
- public:
-  using XMLToolCallingConverter::XMLToolCallingConverter;
-
- protected:
-  std::string FormatPropertyKey(const std::string& key) override;
-  std::string FormatProperty(
-      const std::string& key,
-      const std::string& value_rule,
-      const std::string& rule_name,
-      int64_t idx
-  ) override;
-  std::string FormatOtherProperty(
-      const std::string& key_pattern,
-      const std::string& value_rule,
-      const std::string& rule_name,
-      const std::string& rule_name_suffix
-  ) override;
+  int nested_object_level_ = 0;
+  const std::string key_wrapper_prefix_;
+  const std::string key_wrapper_suffix_;
+  const std::string parameter_suffix_;
 };
 
 }  // namespace xgrammar

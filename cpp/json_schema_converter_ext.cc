@@ -5,6 +5,8 @@
  */
 #include "json_schema_converter_ext.h"
 
+#include <unordered_map>
+
 #include "json_schema_converter.h"
 #include "regex_converter.h"
 #include "support/encoding.h"
@@ -14,16 +16,42 @@ namespace xgrammar {
 // Static constants
 const std::string XMLToolCallingConverter::kXMLString = "xml_string";
 const std::string XMLToolCallingConverter::kXMLAny = "xml_any";
+const std::unordered_map<JSONFormat, std::unordered_map<std::string, std::string>>
+    XMLToolCallingConverter::kKeyWrapperMap = {
+        {JSONFormat::kQwenXML,
+         {
+             {"key_wrapper_prefix", "<parameter="},
+             {"key_wrapper_suffix", ">"},
+             {"parameter_suffix", "</parameter>"},
+         }},
+        {JSONFormat::kMiniMaxXML,
+         {
+             {"key_wrapper_prefix", "<parameter name=\\\""},
+             {"key_wrapper_suffix", "\\\">"},
+             {"parameter_suffix", "</parameter>"},
+         }},
+        // {JSONFormat::kDeepSeekXML,
+        //  {
+        //      {"key_wrapper_prefix", "<parameter name=\""},
+        //      {"key_wrapper_suffix", "\">\""},
+        //      {"parameter_suffix", "</parameter>"},
+        //  }},
+
+};
 
 XMLToolCallingConverter::XMLToolCallingConverter(
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool any_whitespace,
     std::optional<int> max_whitespace_cnt,
-    RefResolver ref_resolver
+    RefResolver ref_resolver,
+    JSONFormat json_format
 )
     : JSONSchemaConverter(indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver),
-      nested_object_level_(0) {}
+      nested_object_level_(0),
+      key_wrapper_prefix_(kKeyWrapperMap.at(json_format).at("key_wrapper_prefix")),
+      key_wrapper_suffix_(kKeyWrapperMap.at(json_format).at("key_wrapper_suffix")),
+      parameter_suffix_(kKeyWrapperMap.at(json_format).at("parameter_suffix")) {}
 
 std::string XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
   AddBasicRules();
@@ -47,8 +75,10 @@ void XMLToolCallingConverter::AddBasicRules() {
       "stop_eos=true,"
       "stop_str=(),"
       "loop_after_dispatch=false,"
-      "excludes=(\"</parameter>\")"
-      ")"
+      "excludes=(\"" +
+          parameter_suffix_ +
+          "\")"
+          ")"
   );
 
   // Add XML any rule
@@ -144,7 +174,7 @@ std::string XMLToolCallingConverter::GenerateArray(
 
 std::string XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
   if (nested_object_level_ <= 1) {
-    return "\"<parameter=" + key + ">\"";
+    return "\"" + key_wrapper_prefix_ + key + key_wrapper_suffix_ + "\"";
   }
   return JSONSchemaConverter::FormatPropertyKey(key);
 }
@@ -154,8 +184,8 @@ std::string XMLToolCallingConverter::FormatProperty(
 ) {
   if (nested_object_level_ <= 1) {
     std::string whitespace = GetWhitespacePattern();
-    return "\"<parameter=" + key + ">\" " + whitespace + " " + value_rule + " " + whitespace +
-           " \"</parameter>\"";
+    return "\"" + key_wrapper_prefix_ + key + key_wrapper_suffix_ + "\" " + whitespace + " " +
+           value_rule + " " + whitespace + " \"" + parameter_suffix_ + "\"";
   }
   return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
 }
@@ -168,8 +198,8 @@ std::string XMLToolCallingConverter::FormatOtherProperty(
 ) {
   if (nested_object_level_ <= 1) {
     std::string whitespace = GetWhitespacePattern();
-    return "\"<parameter=\" " + key_pattern + " \">\" " + whitespace + " " + value_rule + " " +
-           whitespace + " \"</parameter>\"";
+    return "\"" + key_wrapper_prefix_ + "\" " + key_pattern + " \"" + key_wrapper_suffix_ + "\" " +
+           whitespace + " " + value_rule + " " + whitespace + " \"" + parameter_suffix_ + "\"";
   }
   return JSONSchemaConverter::FormatOtherProperty(
       key_pattern, value_rule, rule_name, rule_name_suffix
@@ -184,43 +214,6 @@ std::string XMLToolCallingConverter::GenerateObject(
   auto result = JSONSchemaConverter::GenerateObject(spec, rule_name, need_brace);
   nested_object_level_--;
   return result;
-}
-
-// -------- MiniMaxXMLToolCallingConverter --------
-// Outermost properties: <parameter name="key">value</parameter>
-
-std::string MiniMaxXMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
-  if (nested_object_level_ <= 1) {
-    return "\"<parameter name=\\\"" + key + "\\\">\"";
-  }
-  return JSONSchemaConverter::FormatPropertyKey(key);
-}
-
-std::string MiniMaxXMLToolCallingConverter::FormatProperty(
-    const std::string& key, const std::string& value_rule, const std::string& rule_name, int64_t idx
-) {
-  if (nested_object_level_ <= 1) {
-    std::string whitespace = GetWhitespacePattern();
-    return "\"<parameter name=\\\"" + key + "\\\">\" " + whitespace + " " + value_rule + " " +
-           whitespace + " \"</parameter>\"";
-  }
-  return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
-}
-
-std::string MiniMaxXMLToolCallingConverter::FormatOtherProperty(
-    const std::string& key_pattern,
-    const std::string& value_rule,
-    const std::string& rule_name,
-    const std::string& rule_name_suffix
-) {
-  if (nested_object_level_ <= 1) {
-    std::string whitespace = GetWhitespacePattern();
-    return "\"<parameter name=\\\"\" " + key_pattern + " \"\\\">\" " + whitespace + " " +
-           value_rule + " " + whitespace + " \"</parameter>\"";
-  }
-  return JSONSchemaConverter::FormatOtherProperty(
-      key_pattern, value_rule, rule_name, rule_name_suffix
-  );
 }
 
 }  // namespace xgrammar

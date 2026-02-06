@@ -184,8 +184,9 @@ struct SchemaSpec {
 
 enum class JSONFormat : int {
   kJSON = 0,
-  kXML = 1,
+  kQwenXML = 1,
   kMiniMaxXML = 2,
+  kDeepSeekXML = 3,
 };
 
 /*!

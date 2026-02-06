@@ -278,8 +278,7 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
         schema_cache_[cache_key] = spec;
         return ResultOk(spec);
       }
-      case JSONFormat::kXML:
-      case JSONFormat::kMiniMaxXML: {
+      case JSONFormat::kQwenXML: {
         return ResultOk(SchemaSpec::Make(AnySpec{}, "", rule_name_hint));
       }
       default:
@@ -388,8 +387,7 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
       case JSONFormat::kJSON:
         result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
         break;
-      case JSONFormat::kXML:
-      case JSONFormat::kMiniMaxXML:
+      case JSONFormat::kQwenXML:
         result = SchemaSpec::Make(AnySpec{}, "", rule_name_hint);
         break;
       default:
@@ -2954,15 +2952,10 @@ std::string JSONSchemaToEBNF(
       );
       return converter.Convert(spec);
     }
-    case JSONFormat::kXML: {
-      XMLToolCallingConverter converter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
-      );
-      return converter.Convert(spec);
-    }
+    case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML: {
-      MiniMaxXMLToolCallingConverter converter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
+      XMLToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, json_format
       );
       return converter.Convert(spec);
     }
@@ -2999,7 +2992,7 @@ std::string QwenXMLToolCallingToEBNF(const std::string& schema) {
                         << json_value.to_str();
   }
   return JSONSchemaToEBNF(
-      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kXML
+      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kQwenXML
   );
 }
 
@@ -3008,6 +3001,9 @@ std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema) {
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
     XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
+  }
+  if (json_value.is<bool>()) {
+    XGRAMMAR_LOG(FATAL) << "Expected JSON schema object, got boolean: " << json_value.to_str();
   }
   const auto& schema_obj = json_value.get<picojson::object>();
   if (!schema_obj.count("type")) {
