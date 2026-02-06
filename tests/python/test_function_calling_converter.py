@@ -368,5 +368,41 @@ root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</paramet
     assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
 
 
+test_array_schema_input_str_accepted = (
+    ('<parameter=array>["foo", "bar"]</parameter>', True),
+    ('<parameter=array>["foo", "bar", "baz"]</parameter>', True),
+    ("<parameter=array>[]</parameter>", True),
+    ("<parameter=array>[foo, bar, baz, qux, quux, corge]</parameter>", False),
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", test_array_schema_input_str_accepted)
+def test_array_schema(input_str: str, accepted: bool):
+    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= ( [ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_string ">" [ \n\t]* basic_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
+xml_any ::= basic_number | xml_string | basic_boolean | basic_null | basic_array | basic_object
+root_prop_0_additional ::= ["] basic_string_sub
+root_prop_0 ::= (("[" [ \n\t]* root_prop_0_additional ([ \n\t]* "," [ \n\t]* root_prop_0_additional)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+root ::=  [ \n\t]* (("<parameter=array>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" "")) [ \n\t]*
+"""
+    schema = {
+        "type": "object",
+        "properties": {"array": {"type": "array", "items": {"type": "string"}}},
+        "required": ["array"],
+    }
+    ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
+    assert str(ebnf_grammar) == expected_grammar
+    assert _is_grammar_accept_string(ebnf_grammar, input_str) == accepted
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

@@ -133,6 +133,15 @@ std::string XMLToolCallingConverter::GenerateAny(
   return JSONSchemaConverter::GenerateAny(spec, rule_name);
 }
 
+std::string XMLToolCallingConverter::GenerateArray(
+    const ArraySpec& spec, const std::string& rule_name
+) {
+  nested_object_level_++;
+  auto result = JSONSchemaConverter::GenerateArray(spec, rule_name);
+  nested_object_level_--;
+  return result;
+}
+
 std::string XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
   if (nested_object_level_ <= 1) {
     return "\"<parameter=" + key + ">\"";
