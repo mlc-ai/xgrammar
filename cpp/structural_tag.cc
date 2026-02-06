@@ -202,8 +202,10 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     auto it = obj.find("parsing_type");
     if (it != obj.end() && it->second.is<std::string>()) {
       parsing_type = it->second.get<std::string>();
-      if (parsing_type != "json" && parsing_type != "qwen_xml" && parsing_type != "minimax_xml") {
-        return ResultErr<ISTError>("parsing_type must be \"json\", \"qwen_xml\", or \"minimax_xml\""
+      if (parsing_type != "json" && parsing_type != "qwen_xml" && parsing_type != "minimax_xml" &&
+          parsing_type != "deepseek_xml") {
+        return ResultErr<ISTError>(
+            "parsing_type must be \"json\", \"qwen_xml\", \"minimax_xml\", or \"deepseek_xml\""
         );
       }
     }
@@ -822,6 +824,10 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
           {"minimax_xml",
            [&](const std::string& json_schema) -> std::string {
              return MiniMaxXMLToolCallingToEBNF(json_schema);
+           }},
+          {"deepseek_xml",
+           [&](const std::string& json_schema) -> std::string {
+             return DeepSeekXMLToolCallingToEBNF(json_schema);
            }},
       };
   auto converter = parsing_type_to_grammar_converter.find(format.parsing_type);

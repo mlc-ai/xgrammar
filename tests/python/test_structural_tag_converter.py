@@ -336,6 +336,91 @@ def test_json_schema_parsing_type_minimax_xml_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+# JSONSchemaFormat with parsing_type="deepseek_xml" (<{dsml_token}parameter name="key" string="true|false">value</{dsml_token}parameter>)
+deepseek_xml_instance_is_accepted = [
+    (
+        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">\t100\n</{dsml_token}parameter>',
+        True,
+    ),
+    (
+        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter>\t\n<{dsml_token}parameter name="age" string="true">\t100\n</{dsml_token}parameter>',
+        True,
+    ),
+    (
+        '<{dsml_token}parameter name="name" string="false">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="true">100</{dsml_token}parameter>',
+        True,
+    ),
+    (
+        """<{dsml_token}parameter name="name" string="true"><!DOCTYPE html>
+<html lang="en">
+  <body><h1>Hello</h1></body>
+</html></{dsml_token}parameter><{dsml_token}parameter name="age" string="false">100</{dsml_token}parameter>""",
+        True,
+    ),
+]
+json_schema_parsing_type_deepseek_xml_stag_grammar = [
+    (
+        {
+            "type": "json_schema",
+            "json_schema": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                "required": ["name", "age"],
+            },
+            "parsing_type": "deepseek_xml",
+        },
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (xml_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (([ \n\t]* "<{dsml_token}parameter name=\"" xml_string "\" string=\"" basic_object_2 "\">" [ \n\t]* basic_any [ \n\t]* "</{dsml_token}parameter>" basic_object_1 [ \n\t]*) | ([ \n\t]*))
+xml_string ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</{dsml_token}parameter>")
+)
+xml_any ::= ((basic_number) | (xml_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+root_prop_0 ::= ((xml_string))
+root_part_0 ::= (([ \n\t]* "<{dsml_token}parameter name=\"age\" string=\"" root_part_0_1 "\">" [ \n\t]* basic_integer [ \n\t]* "</{dsml_token}parameter>"))
+root_0 ::= (([ \n\t]* "<{dsml_token}parameter name=\"name\" string=\"" root_1 "\">" [ \n\t]* root_prop_0 [ \n\t]* "</{dsml_token}parameter>" root_part_0 [ \n\t]*))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "<{dsml_token}parameter name=\"" xml_string "\" string=\"" basic_object_1_1 "\">" [ \n\t]* basic_any [ \n\t]* "</{dsml_token}parameter>" basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_object_2 ::= (("true") | ("false"))
+root_part_0_1 ::= (("true") | ("false"))
+root_1 ::= (("true") | ("false"))
+basic_object_1_1 ::= (("true") | ("false"))
+root ::= ((root_0))
+""",
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "stag_format, expected_grammar", json_schema_parsing_type_deepseek_xml_stag_grammar
+)
+@pytest.mark.parametrize("instance, is_accepted", deepseek_xml_instance_is_accepted)
+def test_json_schema_parsing_type_deepseek_xml_format(
+    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+):
+    """Test JSONSchemaFormat with parsing_type='deepseek_xml' (<{{dsml_token}}parameter name=\"key\" string=\"true|false\">value</{{dsml_token}}parameter>)."""
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 ebnf_grammar_stag_grammar = [
     (
         {
@@ -1829,7 +1914,7 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "parsing_type": "not_string"}}',
-        'parsing_type must be "json", "qwen_xml", or "minimax_xml"',
+        'parsing_type must be "json", "qwen_xml", "minimax_xml", or "deepseek_xml"',
     ),
 ]
 
@@ -2103,6 +2188,23 @@ basic_structural_tags_instance_is_accepted = [
             parsing_type="minimax_xml",
         ),
         '<parameter name="name">value</param>',
+        False,
+    ),
+    # JSONSchemaFormat with parsing_type="deepseek_xml"
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+            parsing_type="deepseek_xml",
+        ),
+        '<{dsml_token}parameter name="name" string="true">value</{dsml_token}parameter>',
+        True,
+    ),
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+            parsing_type="deepseek_xml",
+        ),
+        '<{dsml_token}parameter name="name" string="true">value</param>',
         False,
     ),
     # AnyTextFormat

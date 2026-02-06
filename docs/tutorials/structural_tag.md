@@ -55,9 +55,10 @@ The format field requires a format object. We provide several basic format objec
 
     **`parsing_type`** (optional, default: `"json"`): Controls how the content is parsed. Supported values:
 
-    -`"json"`: Standard JSON parsing. The output must be valid JSON that conforms to the schema.
-    -`"qwen_xml"`: Qwen XML style parsing. The output uses XML-style tags such as `<parameter=name>value</parameter>` to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy `qwen_xml_parameter` format.
-    -`"minimax_xml"`: MiniMax XML style parsing. The output uses XML-style tags such as `<parameter name="key">value</parameter>` (attribute form) to represent schema properties, as used in MiniMax tool-calling formats. Same semantics as `qwen_xml` except the tag format is `<parameter name="key">` instead of `<parameter=key>`.
+    * `"json"`: Standard JSON format. The output must be valid JSON that conforms to the schema.
+    * `"qwen_xml"`: Qwen-coder XML style format. The output uses XML-style tags such as `<parameter=name>value</parameter>` to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy `qwen_xml_parameter` format.
+    * `"minimax_xml"`: MiniMax XML style format. The output uses XML-style tags such as `<parameter name="key">value</parameter>` (attribute form) to represent schema properties, as used in MiniMax tool-calling formats. Same semantics as `qwen_xml` except the tag format is `<parameter name="key">` instead of `<parameter=key>`.
+    * `"deepseek_xml"`: DeepSeek-v3.2 XML style format. The output should be in the format of `<{dsml_token}parameter name=\"key\" string=\"true|false\">value</{dsml_token}parameter>`.
 
     When `parsing_type` is omitted, it defaults to `"json"`.
 
@@ -71,7 +72,7 @@ The format field requires a format object. We provide several basic format objec
     }
     ```
 
-    For Qwen XML style output, set `parsing_type` to `"qwen_xml"`:
+    For Qwen / MiniMax / Deepseek XML style output, set `parsing_type` to `qwen_xml` / `minimax_xml` / `deepseek_xml`:
 
     ```json
     {
@@ -79,19 +80,7 @@ The format field requires a format object. We provide several basic format objec
         "json_schema": {
             ...
         },
-        "parsing_type": "qwen_xml"
-    }
-    ```
-
-    For MiniMax XML style output (attribute form), set `parsing_type` to `"minimax_xml"`:
-
-    ```json
-    {
-        "type": "json_schema",
-        "json_schema": {
-            ...
-        },
-        "parsing_type": "minimax_xml"
+        "parsing_type": "qwen_xml" / "minimax_xml" / "deepseek_xml"
     }
     ```
 
