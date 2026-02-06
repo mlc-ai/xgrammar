@@ -278,7 +278,9 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
         schema_cache_[cache_key] = spec;
         return ResultOk(spec);
       }
-      case JSONFormat::kQwenXML: {
+      case JSONFormat::kQwenXML:
+      case JSONFormat::kMiniMaxXML:
+      case JSONFormat::kDeepSeekXML: {
         return ResultOk(SchemaSpec::Make(AnySpec{}, "", rule_name_hint));
       }
       default:
@@ -383,15 +385,10 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     if (array_result.IsErr()) return ResultErr(std::move(array_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(array_result).Unwrap(), cache_key, rule_name_hint);
   } else {
-    switch (config_.json_format) {
-      case JSONFormat::kJSON:
-        result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
-        break;
-      case JSONFormat::kQwenXML:
-        result = SchemaSpec::Make(AnySpec{}, "", rule_name_hint);
-        break;
-      default:
-        return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Invalid JSON format");
+    if (config_.json_format == JSONFormat::kJSON) {
+      result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
+    } else {
+      result = SchemaSpec::Make(AnySpec{}, "", rule_name_hint);
     }
   }
 
@@ -2953,7 +2950,8 @@ std::string JSONSchemaToEBNF(
       return converter.Convert(spec);
     }
     case JSONFormat::kQwenXML:
-    case JSONFormat::kMiniMaxXML: {
+    case JSONFormat::kMiniMaxXML:
+    case JSONFormat::kDeepSeekXML: {
       XMLToolCallingConverter converter(
           indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, json_format
       );
@@ -3016,6 +3014,29 @@ std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema) {
   }
   return JSONSchemaToEBNF(
       json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kMiniMaxXML
+  );
+}
+
+std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema) {
+  picojson::value json_value;
+  std::string err = picojson::parse(json_value, schema);
+  if (!err.empty()) {
+    XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
+  }
+  if (json_value.is<bool>()) {
+    XGRAMMAR_LOG(FATAL) << "Expected JSON schema object, got boolean: " << json_value.to_str();
+  }
+  const auto& schema_obj = json_value.get<picojson::object>();
+  if (!schema_obj.count("type")) {
+    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
+                        << json_value.to_str();
+  }
+  if (schema_obj.at("type").get<std::string>() != "object") {
+    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
+                        << json_value.to_str();
+  }
+  return JSONSchemaToEBNF(
+      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kDeepSeekXML
   );
 }
 

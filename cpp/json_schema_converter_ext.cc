@@ -30,12 +30,13 @@ const std::unordered_map<JSONFormat, std::unordered_map<std::string, std::string
              {"key_wrapper_suffix", "\\\">"},
              {"parameter_suffix", "</parameter>"},
          }},
-        // {JSONFormat::kDeepSeekXML,
-        //  {
-        //      {"key_wrapper_prefix", "<parameter name=\""},
-        //      {"key_wrapper_suffix", "\">\""},
-        //      {"parameter_suffix", "</parameter>"},
-        //  }},
+        {JSONFormat::kDeepSeekXML,
+         {
+             {"key_wrapper_prefix", "<{dsml_token}parameter name=\\\""},
+             {"key_wrapper_suffix", "\\\" string=\\\"\" (\"true\" | \"false\") \"\\\">"
+             },  // TODO(Linzhang): we do not validate the string's value, and we accept both.
+             {"parameter_suffix", "</{dsml_token}parameter>"},
+         }},
 
 };
 

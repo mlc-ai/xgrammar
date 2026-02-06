@@ -496,6 +496,14 @@ std::string QwenXMLToolCallingToEBNF(const std::string& schema);
  */
 std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema);
 
+/*!
+ * \brief Convert a function call to a Grammar.
+ * \param schema The schema of the parameters of the function call.
+ * \return The ebnf-grammar to match the requirements of the schema, and
+ * in DeepSeek xml style.
+ */
+std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema);
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_JSON_SCHEMA_CONVERTER_H_
