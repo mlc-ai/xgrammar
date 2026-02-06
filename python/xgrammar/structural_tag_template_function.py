@@ -100,7 +100,7 @@ def get_builtin_structural_tag_template_function(
         - "kimi": Kimi-k2 style structural tag format.
           Supported Models: Kimi-k2, Kimi-k2.5 and other models that follow the same style.
         - "deepseek": Deepseek-v3.1 style structural tag format.
-          Supported Models: Deepseek-v3.1, Deepseek-R1 and other models that follow the same style.
+          Supported Models: Deepseek-v3.1, Deepseek-R1, Deepseek-v3.2-exp and other models that follow the same style.
         - "harmony": OpenAI Harmony Response Format (gpt-oss).
           Supported Models: GPT-oss and other models that follow the same style.
 
