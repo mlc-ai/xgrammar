@@ -13,7 +13,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `"qwen"`: Qwen-style (e.g. Qwen3; optional thinking)
   - `"qwen_coder"`: Qwen Coder-style (e.g. Qwen3-Coder)
   - `"kimi"`: Kimi-style (e.g. Kimi-k2, Kimi-k2.5)
-  - `"deepseek"`: DeepSeek-style (e.g. DeepSeek-v3.1, DeepSeek-R1; optional thinking)
+  - `"deepseek"`: DeepSeek-style (e.g. DeepSeek-v3.1, DeepSeek-R1, DeepSeek-v3.2-exp; optional thinking)
   - `"harmony"`: OpenAI Harmony Response Format (e.g. gpt-oss)
 
 ### Returns
