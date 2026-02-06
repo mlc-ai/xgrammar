@@ -9,12 +9,12 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 ### Parameters
 
 - **format_type** (`SupportedTemplateNames`): The template type. Supported values:
-  - `"llama"`: Llama-style (e.g. Llama 3)
+  - `"llama"`: Llama-style (e.g. Llama 3, Llama 4)
   - `"qwen"`: Qwen-style (e.g. Qwen3; optional thinking)
   - `"qwen_coder"`: Qwen Coder-style (e.g. Qwen3-Coder)
-  - `"kimi"`: Kimi-style (e.g. Kimi-k2)
-  - `"deepseek"`: DeepSeek-style (e.g. DeepSeek-v3.1; optional thinking)
-  - `"harmony"`: OpenAI Harmony Response Format
+  - `"kimi"`: Kimi-style (e.g. Kimi-k2, Kimi-k2.5)
+  - `"deepseek"`: DeepSeek-style (e.g. DeepSeek-v3.1, DeepSeek-R1; optional thinking)
+  - `"harmony"`: OpenAI Harmony Response Format (e.g. gpt-oss)
 
 ### Returns
 
