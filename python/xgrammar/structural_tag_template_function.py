@@ -92,11 +92,17 @@ def get_builtin_structural_tag_template_function(
         The format type of the structural tag template.
         Currently supported format types are:
         - "llama": Llama3.1 style structural tag format.
+          Supported Models: Llama 3, Llama 4 and other models that follow the same style.
         - "qwen": Qwen3 style structural tag format.
+          Supported Models: Qwen3 and other models that follow the same style.
         - "qwen_coder": Qwen-Coder style structural tag format.
+          Supported Models: Qwen3-Coder and other models that follow the same style.
         - "kimi": Kimi-k2 style structural tag format.
+          Supported Models: Kimi-k2, Kimi-k2.5 and other models that follow the same style.
         - "deepseek": Deepseek-v3.1 style structural tag format.
+          Supported Models: Deepseek-v3.1, Deepseek-R1 and other models that follow the same style.
         - "harmony": OpenAI Harmony Response Format (gpt-oss).
+          Supported Models: GPT-oss and other models that follow the same style.
 
     Returns
     -------
