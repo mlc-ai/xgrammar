@@ -53,12 +53,12 @@ The format field requires a format object. We provide several basic format objec
 
     The output should be a valid JSON object that matches the JSON schema.
 
-    **`parsing_type`** (optional, default: `"json"`): Controls how the content is parsed. Supported values:
+    **`style`** (optional, default: `"json"`): Controls how the content is parsed. Supported values:
 
     -`"json"`: Standard JSON parsing. The output must be valid JSON that conforms to the schema.
     -`"qwen_xml"`: Qwen XML style parsing. The output uses XML-style tags such as `<parameter=name>value</parameter>` to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy `qwen_xml_parameter` format.
 
-    When `parsing_type` is omitted, it defaults to `"json"`.
+    When `style` is omitted, it defaults to `"json"`.
 
     ```json
     {
@@ -66,11 +66,11 @@ The format field requires a format object. We provide several basic format objec
         "json_schema": {
             ...
         },
-        "parsing_type": "json"
+        "style": "json"
     }
     ```
 
-    For Qwen XML style output, set `parsing_type` to `"qwen_xml"`:
+    For Qwen XML style output, set `style` to `"qwen_xml"`:
 
     ```json
     {
@@ -78,7 +78,7 @@ The format field requires a format object. We provide several basic format objec
         "json_schema": {
             ...
         },
-        "parsing_type": "qwen_xml"
+        "style": "qwen_xml"
     }
     ```
 
@@ -329,7 +329,7 @@ The format field requires a format object. We provide several basic format objec
 
 11. `QwenXMLParameterFormat` *(not recommended)*
 
-    **Deprecated.** This format is kept for backward compatibility only. Prefer using `json_schema` with `parsing_type: "qwen_xml"` instead (see the `json_schema` format above).
+    **Deprecated.** This format is kept for backward compatibility only. Prefer using `json_schema` with `style: "qwen_xml"` instead (see the `json_schema` format above).
 
     This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.
 
