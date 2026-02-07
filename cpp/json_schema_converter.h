@@ -385,6 +385,9 @@ class JSONSchemaConverter {
   // JSON string helpers
   static std::string JSONStrToPrintableStr(const std::string& json_str);
 
+ protected:
+  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
+
   // Expose for testing
   friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
   friend std::string GenerateFloatRangeRegex(
