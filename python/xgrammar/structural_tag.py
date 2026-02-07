@@ -31,7 +31,7 @@ class JSONSchemaFormat(BaseModel):
     """The type of the format."""
     json_schema: Union[bool, Dict[str, Any]]
     """The JSON schema."""
-    parsing_type: Literal["json", "qwen_xml"] = "json"
+    style: Literal["json", "qwen_xml"] = "json"
     """How to parse the content: \"json\" for standard JSON, \"qwen_xml\" for Qwen XML style."""
 
 
