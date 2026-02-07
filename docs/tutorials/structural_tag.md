@@ -55,8 +55,8 @@ The format field requires a format object. We provide several basic format objec
 
     **`style`** (optional, default: `"json"`): Controls how the content is parsed. Supported values:
 
-    -`"json"`: Standard JSON parsing. The output must be valid JSON that conforms to the schema.
-    -`"qwen_xml"`: Qwen XML style parsing. The output uses XML-style tags such as `<parameter=name>value</parameter>` to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy `qwen_xml_parameter` format.
+    * `"json"`: Standard JSON parsing. The output must be valid JSON that conforms to the schema.
+    * `"qwen_xml"`: Qwen XML style parsing. The output uses XML-style tags such as `<parameter=name>value</parameter>` to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy `qwen_xml_parameter` format.
 
     When `style` is omitted, it defaults to `"json"`.
 
