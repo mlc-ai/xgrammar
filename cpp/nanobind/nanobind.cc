@@ -217,7 +217,7 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_static("deserialize_json", &CompiledGrammar_DeserializeJSON);
 
   auto pyGrammarCompiler = nb::class_<GrammarCompiler>(m, "GrammarCompiler");
-  pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, int64_t>())
+  pyGrammarCompiler.def(nb::init<const TokenizerInfo&, int, bool, int64_t, bool>())
       .def(
           "compile_json_schema",
           &GrammarCompiler::CompileJSONSchema,
