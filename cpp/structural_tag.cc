@@ -44,7 +44,7 @@ class StructuralTagParser {
   Result<Format, ISTError> ParseFormat(const picojson::value& value);
   Result<ConstStringFormat, ISTError> ParseConstStringFormat(const picojson::object& value);
   Result<JSONSchemaFormat, ISTError> ParseJSONSchemaFormat(
-      const picojson::object& value, std::optional<std::string> parsing_type_override = std::nullopt
+      const picojson::object& value, std::optional<std::string> style_override = std::nullopt
   );
   Result<AnyTextFormat, ISTError> ParseAnyTextFormat(const picojson::object& value);
   Result<GrammarFormat, ISTError> ParseGrammarFormat(const picojson::object& value);
@@ -185,7 +185,7 @@ Result<ConstStringFormat, ISTError> StructuralTagParser::ParseConstStringFormat(
 }
 
 Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
-    const picojson::object& obj, std::optional<std::string> parsing_type_override
+    const picojson::object& obj, std::optional<std::string> style_override
 ) {
   // json_schema is required.
   auto json_schema_it = obj.find("json_schema");
@@ -195,23 +195,23 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
         "JSON schema format must have a json_schema field with a object or boolean value"
     );
   }
-  std::string parsing_type = "json";
-  if (parsing_type_override.has_value()) {
-    parsing_type = *parsing_type_override;
+  std::string style = "json";
+  if (style_override.has_value()) {
+    style = *style_override;
   } else {
-    auto it = obj.find("parsing_type");
+    auto it = obj.find("style");
     if (it != obj.end() && it->second.is<std::string>()) {
-      parsing_type = it->second.get<std::string>();
-      if (parsing_type != "json" && parsing_type != "qwen_xml" && parsing_type != "minimax_xml" &&
-          parsing_type != "deepseek_xml") {
+      style = it->second.get<std::string>();
+      if (style != "json" && style != "qwen_xml" && style != "minimax_xml" &&
+          style != "deepseek_xml") {
         return ResultErr<ISTError>(
-            "parsing_type must be \"json\", \"qwen_xml\", \"minimax_xml\", or \"deepseek_xml\""
+            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", or \"deepseek_xml\""
         );
       }
     }
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
-  return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false), parsing_type);
+  return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false), style);
 }
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
@@ -812,7 +812,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
   const static std::unordered_map<std::string, std::function<std::string(const std::string&)>>
-      parsing_type_to_grammar_converter = {
+      style_to_grammar_converter = {
           {"json",
            [&](const std::string& json_schema) -> std::string {
              return JSONSchemaToEBNF(json_schema);
@@ -830,9 +830,9 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
              return DeepSeekXMLToolCallingToEBNF(json_schema);
            }},
       };
-  auto converter = parsing_type_to_grammar_converter.find(format.parsing_type);
-  if (converter == parsing_type_to_grammar_converter.end()) {
-    return ResultErr<ISTError>("Unsupported parsing type: " + format.parsing_type);
+  auto converter = style_to_grammar_converter.find(format.style);
+  if (converter == style_to_grammar_converter.end()) {
+    return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
   auto sub_grammar = Grammar::FromEBNF(converter->second(format.json_schema));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);

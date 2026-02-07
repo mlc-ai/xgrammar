@@ -235,8 +235,8 @@ def test_qwen_parameter_xml_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
-# JSONSchemaFormat with parsing_type="qwen_xml" (same behavior as qwen_xml_parameter)
-json_schema_parsing_type_qwen_xml_stag_grammar = [
+# JSONSchemaFormat with style="qwen_xml" (same behavior as qwen_xml_parameter)
+json_schema_style_qwen_xml_stag_grammar = [
     (
         {
             "type": "json_schema",
@@ -245,26 +245,24 @@ json_schema_parsing_type_qwen_xml_stag_grammar = [
                 "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
                 "required": ["name", "age"],
             },
-            "parsing_type": "qwen_xml",
+            "style": "qwen_xml",
         },
         qwen_parameter_xml_stag_grammar[0][1],  # same expected grammar as qwen_xml_parameter
     )
 ]
 
 
-@pytest.mark.parametrize(
-    "stag_format, expected_grammar", json_schema_parsing_type_qwen_xml_stag_grammar
-)
+@pytest.mark.parametrize("stag_format, expected_grammar", json_schema_style_qwen_xml_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", qwen_parameter_xml_instance_is_accepted)
-def test_json_schema_parsing_type_qwen_xml_format(
+def test_json_schema_style_qwen_xml_format(
     stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
 ):
-    """Test JSONSchemaFormat with parsing_type='qwen_xml' produces same grammar and acceptance."""
+    """Test JSONSchemaFormat with style='qwen_xml' produces same grammar and acceptance."""
     check_stag_with_grammar(stag_format, expected_grammar)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
-# JSONSchemaFormat with parsing_type="minimax_xml" (<parameter name="key">value</parameter>)
+# JSONSchemaFormat with style="minimax_xml" (<parameter name="key">value</parameter>)
 minimax_xml_instance_is_accepted = [
     ('<parameter name="name">Bob</parameter><parameter name="age">\t100\n</parameter>', True),
     ('<parameter name="name">Bob</parameter>\t\n<parameter name="age">\t100\n</parameter>', True),
@@ -277,7 +275,7 @@ minimax_xml_instance_is_accepted = [
         True,
     ),
 ]
-json_schema_parsing_type_minimax_xml_stag_grammar = [
+json_schema_style_minimax_xml_stag_grammar = [
     (
         {
             "type": "json_schema",
@@ -286,7 +284,7 @@ json_schema_parsing_type_minimax_xml_stag_grammar = [
                 "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
                 "required": ["name", "age"],
             },
-            "parsing_type": "minimax_xml",
+            "style": "minimax_xml",
         },
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
@@ -325,18 +323,18 @@ root ::= ((root_0))
 
 
 @pytest.mark.parametrize(
-    "stag_format, expected_grammar", json_schema_parsing_type_minimax_xml_stag_grammar
+    "stag_format, expected_grammar", json_schema_style_minimax_xml_stag_grammar
 )
 @pytest.mark.parametrize("instance, is_accepted", minimax_xml_instance_is_accepted)
-def test_json_schema_parsing_type_minimax_xml_format(
+def test_json_schema_style_minimax_xml_format(
     stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
 ):
-    """Test JSONSchemaFormat with parsing_type='minimax_xml' (<parameter name=\"key\">value</parameter>)."""
+    """Test JSONSchemaFormat with style='minimax_xml' (<parameter name=\"key\">value</parameter>)."""
     check_stag_with_grammar(stag_format, expected_grammar)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
-# JSONSchemaFormat with parsing_type="deepseek_xml" (<{dsml_token}parameter name="key" string="true|false">value</{dsml_token}parameter>)
+# JSONSchemaFormat with style="deepseek_xml" (<{dsml_token}parameter name="key" string="true|false">value</{dsml_token}parameter>)
 deepseek_xml_instance_is_accepted = [
     (
         '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">\t100\n</{dsml_token}parameter>',
@@ -358,7 +356,7 @@ deepseek_xml_instance_is_accepted = [
         True,
     ),
 ]
-json_schema_parsing_type_deepseek_xml_stag_grammar = [
+json_schema_style_deepseek_xml_stag_grammar = [
     (
         {
             "type": "json_schema",
@@ -367,7 +365,7 @@ json_schema_parsing_type_deepseek_xml_stag_grammar = [
                 "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
                 "required": ["name", "age"],
             },
-            "parsing_type": "deepseek_xml",
+            "style": "deepseek_xml",
         },
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
@@ -410,13 +408,13 @@ root ::= ((root_0))
 
 
 @pytest.mark.parametrize(
-    "stag_format, expected_grammar", json_schema_parsing_type_deepseek_xml_stag_grammar
+    "stag_format, expected_grammar", json_schema_style_deepseek_xml_stag_grammar
 )
 @pytest.mark.parametrize("instance, is_accepted", deepseek_xml_instance_is_accepted)
-def test_json_schema_parsing_type_deepseek_xml_format(
+def test_json_schema_style_deepseek_xml_format(
     stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
 ):
-    """Test JSONSchemaFormat with parsing_type='deepseek_xml' (<{{dsml_token}}parameter name=\"key\" string=\"true|false\">value</{{dsml_token}}parameter>)."""
+    """Test JSONSchemaFormat with style='deepseek_xml' (<{{dsml_token}}parameter name=\"key\" string=\"true|false\">value</{{dsml_token}}parameter>)."""
     check_stag_with_grammar(stag_format, expected_grammar)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
@@ -1913,8 +1911,8 @@ json_format_error_test_data = [
         "stop_after_first must be a boolean",
     ),
     (
-        '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "parsing_type": "not_string"}}',
-        'parsing_type must be "json", "qwen_xml", "minimax_xml", or "deepseek_xml"',
+        '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
+        'style must be "json", "qwen_xml", "minimax_xml", or "deepseek_xml"',
     ),
 ]
 
@@ -2156,11 +2154,11 @@ basic_structural_tags_instance_is_accepted = [
     (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "string"}), '"abc"', True),
     (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "integer"}), "123", True),
     (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "integer"}), "abc", False),
-    # JSONSchemaFormat with parsing_type="qwen_xml"
+    # JSONSchemaFormat with style="qwen_xml"
     (
         xgr.structural_tag.JSONSchemaFormat(
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
-            parsing_type="qwen_xml",
+            style="qwen_xml",
         ),
         "<parameter=name>value</parameter>",
         True,
@@ -2168,16 +2166,16 @@ basic_structural_tags_instance_is_accepted = [
     (
         xgr.structural_tag.JSONSchemaFormat(
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
-            parsing_type="qwen_xml",
+            style="qwen_xml",
         ),
         "<parameter=name>value</param>",
         False,
     ),
-    # JSONSchemaFormat with parsing_type="minimax_xml"
+    # JSONSchemaFormat with style="minimax_xml"
     (
         xgr.structural_tag.JSONSchemaFormat(
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
-            parsing_type="minimax_xml",
+            style="minimax_xml",
         ),
         '<parameter name="name">value</parameter>',
         True,
@@ -2185,16 +2183,16 @@ basic_structural_tags_instance_is_accepted = [
     (
         xgr.structural_tag.JSONSchemaFormat(
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
-            parsing_type="minimax_xml",
+            style="minimax_xml",
         ),
         '<parameter name="name">value</param>',
         False,
     ),
-    # JSONSchemaFormat with parsing_type="deepseek_xml"
+    # JSONSchemaFormat with style="deepseek_xml"
     (
         xgr.structural_tag.JSONSchemaFormat(
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
-            parsing_type="deepseek_xml",
+            style="deepseek_xml",
         ),
         '<{dsml_token}parameter name="name" string="true">value</{dsml_token}parameter>',
         True,
@@ -2202,7 +2200,7 @@ basic_structural_tags_instance_is_accepted = [
     (
         xgr.structural_tag.JSONSchemaFormat(
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
-            parsing_type="deepseek_xml",
+            style="deepseek_xml",
         ),
         '<{dsml_token}parameter name="name" string="true">value</param>',
         False,
