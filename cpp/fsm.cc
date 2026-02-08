@@ -649,11 +649,13 @@ struct CompactFSMWithStartEndSerializeHelper {
   int start;
   bool is_dfa;
   std::vector<int32_t> end_index;
+  size_t edge_num;
 
   CompactFSMWithStartEndSerializeHelper(const CompactFSMWithStartEnd& compact_fsm_with_se)
       : fsm(compact_fsm_with_se.fsm_),
         start(compact_fsm_with_se.start_),
-        is_dfa(compact_fsm_with_se.is_dfa_) {
+        is_dfa(compact_fsm_with_se.is_dfa_),
+        edge_num(compact_fsm_with_se.edge_num_) {
     end_index.reserve(compact_fsm_with_se.NumStates());
     for (int i = 0; i < static_cast<int>(compact_fsm_with_se.ends_.size()); ++i) {
       if (compact_fsm_with_se.ends_[i]) {
@@ -670,7 +672,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &CompactFSMWithStartEndSerializeHelper::fsm,
     &CompactFSMWithStartEndSerializeHelper::start,
     &CompactFSMWithStartEndSerializeHelper::end_index,
-    &CompactFSMWithStartEndSerializeHelper::is_dfa
+    &CompactFSMWithStartEndSerializeHelper::is_dfa,
+    &CompactFSMWithStartEndSerializeHelper::edge_num
 );
 
 picojson::value SerializeJSONValue(const CompactFSMWithStartEnd& value) {
@@ -687,6 +690,7 @@ std::optional<SerializationError> DeserializeJSONValue(
   result->fsm_ = std::move(tmp.fsm);
   result->start_ = tmp.start;
   result->is_dfa_ = tmp.is_dfa;
+  result->edge_num_ = tmp.edge_num;
   const auto& end_index = tmp.end_index;
   result->ends_.resize(result->fsm_.NumStates(), false);
   for (const auto& idx : end_index) {
@@ -1541,5 +1545,7 @@ std::size_t MemorySize(const CompactFSMWithStartEnd& self) {
 FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
 }
+
+size_t CompactFSMWithStartEnd::GetNumEdges() const { return edge_num_; }
 
 }  // namespace xgrammar
