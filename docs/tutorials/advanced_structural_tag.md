@@ -1,5 +1,76 @@
 # Advanced Topics of the Structural Tag
 
+## Built-in structural tag template: `get_builtin_structural_tag_template_function`
+
+`get_builtin_structural_tag_template_function` returns a template function for the given model/format type. That template function takes tool definitions (and any format-specific options), returns a `StructuralTag`, and can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain a grammar that matches each vendor’s function-calling convention without hand-writing begin/schema/end structures.
+
+Use it when you need to constrain the model to output in a fixed pattern such as “tool name + parameter JSON”, e.g. for Llama, Qwen, Kimi, DeepSeek, or OpenAI Harmony.
+
+### Parameters
+
+- **format_type** (`SupportedTemplateNames`): The template type. Supported values:
+  - `"llama"`: Llama-style (e.g. Llama 3, Llama 4)
+  - `"qwen"`: Qwen-style (e.g. Qwen3; optional thinking)
+  - `"qwen_coder"`: Qwen Coder-style (e.g. Qwen3-Coder)
+  - `"kimi"`: Kimi-style (e.g. Kimi-k2, Kimi-k2.5)
+  - `"deepseek"`: DeepSeek-style (e.g. DeepSeek-v3.1, DeepSeek-R1, DeepSeek-v3.2-exp; optional thinking)
+  - `"harmony"`: OpenAI Harmony Response Format (e.g. gpt-oss)
+
+### Returns
+
+A callable: `Callable[[Dict[str, Any]], StructuralTag]`. The dict you pass typically contains:
+
+- **tools** (all formats): List of tools; each item is a dict with a `"function"` key, which is a dict with `"name"` and `"parameters"` (`parameters` is a JSON Schema dict).
+- **thinking** (optional; for qwen / deepseek / harmony): Whether to enable the thinking block; default `True`.
+- **builtin_tools** (harmony only): List of built-in tools; same structure as `tools` (each item has a `"function"` key with `"name"` and `"parameters"`).
+
+Passing an unsupported `format_type` raises `ValueError`.
+
+### Example
+
+```python
+from xgrammar import Grammar, get_builtin_structural_tag_template_function
+
+tools = [
+    {"function": {"name": "get_weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}}},
+    {"function": {"name": "get_time", "parameters": {"type": "object", "properties": {}}}},
+]
+
+# Get the Llama-style template function and build a structural tag
+fn = get_builtin_structural_tag_template_function("llama")
+structural_tag = fn({"tools": tools})
+
+# Build a grammar from the structural tag for constrained generation
+grammar = Grammar.from_structural_tag(structural_tag)
+```
+
+For the Harmony format you must provide both `tools` and `builtin_tools`:
+
+```python
+fn = get_builtin_structural_tag_template_function("harmony")
+structural_tag = fn({
+    "tools": [
+        {"function": {"name": "user_tool", "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}},
+    ],
+    "builtin_tools": [
+        {"function": {"name": "builtin_tool", "parameters": {"type": "object", "properties": {}}}},
+    ],
+})
+grammar = Grammar.from_structural_tag(structural_tag)
+```
+
+For formats that support thinking (qwen, kimi, deepseek), pass `thinking` in the dict:
+
+```python
+fn = get_builtin_structural_tag_template_function("qwen")
+structural_tag = fn({"tools": tools, "thinking": True})
+grammar = Grammar.from_structural_tag(structural_tag)
+```
+
+If `thinking` is not passed, then the thinking mode will be enabled by default.
+
+---
+
 ## Deprecated API: `Grammar.from_structural_tag(tags, triggers)`
 
 **The deprecated API is still available for backward compatibility. However, it is recommended to use the new API instead.**
@@ -18,16 +89,16 @@ To use this grammar in grammar-guided generation, the GrammarMatcher constructed
 
 The benefit of this method is the token boundary between tags and triggers is automatically handled. The user does not need to worry about the token boundary.
 
-### Parameters
+### Parameters(deprecated)
 
 - **tags** (`List[StructuralTagItem]`): The structural tags.
 - **triggers** (`List[str]`): The triggers.
 
-### Returns
+### Returns(deprecated)
 
 - **grammar** (`Grammar`): The constructed grammar.
 
-### Example
+### Example(deprecated)
 
 ```python
 from pydantic import BaseModel
