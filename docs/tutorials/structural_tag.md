@@ -7,6 +7,7 @@ The structural tag API aims to provide a JSON-config-based way to precisely desc
 
 It can also be used in the LLM engine to implement the OpenAI Tool Calling API with strict
 format constraints, with these benefits:
+
 * Support the advanced tool calling features, such as forced tool calling, parallel tool calling, etc.
 * Support the tool calling format of most of the LLMs available in the market with minimal effort.
 
@@ -52,18 +53,41 @@ The format field requires a format object. We provide several basic format objec
 
     The output should be a valid JSON object that matches the JSON schema.
 
+    **`style`** (optional, default: `"json"`): Controls how the content is parsed. Supported values:
+
+    * `"json"`: Standard JSON format. The output must be valid JSON that conforms to the schema.
+    * `"qwen_xml"`: Qwen-coder XML style format. The output uses XML-style tags such as `<parameter=name>value</parameter>` to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy `qwen_xml_parameter` format.
+    * `"minimax_xml"`: MiniMax XML style format. The output uses XML-style tags such as `<parameter name="key">value</parameter>` (attribute form) to represent schema properties, as used in MiniMax tool-calling formats. Same semantics as `qwen_xml` except the tag format is `<parameter name="key">` instead of `<parameter=key>`.
+    * `"deepseek_xml"`: DeepSeek-v3.2 XML style format. The output should be in the format of `<{dsml_token}parameter name=\"key\" string=\"true|false\">value</{dsml_token}parameter>`.
+
+    When `style` is omitted, it defaults to `"json"`.
+
     ```json
     {
         "type": "json_schema",
         "json_schema": {
             ...
-        }
+        },
+        "style": "json"
+    }
+    ```
+
+    For Qwen / MiniMax / Deepseek XML style output, set `style` to `qwen_xml` / `minimax_xml` / `deepseek_xml`:
+
+    ```json
+    {
+        "type": "json_schema",
+        "json_schema": {
+            ...
+        },
+        "style": "qwen_xml" / "minimax_xml" / "deepseek_xml"
     }
     ```
 
 3. `grammar`
 
     This format can be used to match a given ebnf grammar.
+
     ```json
     {
         "type": "grammar",
@@ -76,6 +100,7 @@ The format field requires a format object. We provide several basic format objec
 4. `regex`
 
     This format can be used to match a given ebnf grammar.
+
     ```json
     {
         "type": "regex",
@@ -85,12 +110,11 @@ The format field requires a format object. We provide several basic format objec
 
     We can use it as the context of other structural tags as well. As GrammarFormat, if the regex pattern is too general, it will cause the subsequent constraints to become inefficient as well.
 
-
 5. `sequence`
 
     The output should match a sequence of elements.
 
-    ```
+    ```json
     {
         "type": "sequence",
         "elements": [
@@ -153,6 +177,7 @@ The format field requires a format object. We provide several basic format objec
     ```
 
     We will handle it as a special case when wrapped in a tag:
+
     ```json
     {
         "type": "tag",
@@ -232,7 +257,8 @@ The format field requires a format object. We provide several basic format objec
     ```
 
     The above structural tag can accept the following outputs:
-    ```
+
+    ```text
     <function=func1>{"name": "John", "age": 30}</function>
     <function=func2>{"name": "Jane", "age": 25}</function>
     any_text<function=func1>{"name": "John", "age": 30}</function>any_text1<function=func2>{"name": "Jane", "age": 25}</function>any_text2
@@ -243,7 +269,6 @@ The format field requires a format object. We provide several basic format objec
 
     `stop_after_first` will reach the end of the `triggered_tags` structure after the first tag is generated. If there are following tags, they will still be generated; otherwise, the generation
     will stop.
-
 
 10. `tags_with_separator`
 
@@ -269,6 +294,7 @@ The format field requires a format object. We provide several basic format objec
     ```
 
     For example,
+
     ```json
     {
         "type": "tags_with_separator",
@@ -290,7 +316,8 @@ The format field requires a format object. We provide several basic format objec
     ```
 
     The above structural tag can accept an empty string, or the following outputs:
-    ```
+
+    ```text
     <function=func1>{"name": "John", "age": 30}</function>
     <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>
     <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>,<function=func1>{"name": "John", "age": 30}</function>
@@ -302,8 +329,9 @@ The format field requires a format object. We provide several basic format objec
     tag is generated. If there are following tags, they will still be generated; otherwise, the
     generation will stop.
 
+11. `QwenXMLParameterFormat` *(not recommended)*
 
-11. `QwenXMLParameterFormat`
+    **Deprecated.** This format is kept for backward compatibility only. Prefer using `json_schema` with `style: "qwen_xml"` instead (see the `json_schema` format above).
 
     This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.
 
@@ -317,6 +345,7 @@ The format field requires a format object. We provide several basic format objec
     ```
 
     For example,
+
     ```json
     {
         "type": "qwen_xml_parameter",
@@ -329,6 +358,7 @@ The format field requires a format object. We provide several basic format objec
     ```
 
     This can accept outputs such like:
+
     ```xml
     <parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>
     <parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>
@@ -356,12 +386,14 @@ The format field requires a format object. We provide several basic format objec
     ```
 
     These are valid outputs:
+
     ```xml
     <parameter=address>{"street": "Main St", "city": "New York"}</parameter>
     <parameter=address>{"street": "Main St", "city": "No more xml escape&<>"}</parameter>
     ```
 
     And this is an invalid output:
+
     ```xml
     <parameter=address><parameter=street>Main St</parameter><parameter=city>New York</parameter></parameter>
     ```
@@ -374,7 +406,7 @@ The structural tag can support most common tool calling formats.
 
 Llama JSON-based tool calling, Gemma:
 
-```
+```json
 {"name": "function_name", "parameters": params}
 ```
 
@@ -404,7 +436,7 @@ Corresponding structural tag:
 
 Llama user-defined custom tool calling:
 
-```
+```xml
 <function=function_name>params</function>
 ```
 
@@ -434,7 +466,7 @@ Corresponding structural tag:
 
 Qwen 2.5/3, Hermes:
 
-```
+```text
 <tool_call>
 {"name": "get_current_temperature", "arguments": {"location": "San Francisco, CA, USA"}}
 </tool_call>
@@ -468,7 +500,7 @@ DeepSeek:
 
 There is a special tag `<｜tool▁calls▁begin｜> ... <｜tool▁calls▁end｜>` quotes the whole tool calling part.
 
-````
+````text
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>function_name_1
 ```jsonc
 {params}
@@ -519,7 +551,7 @@ Phi-4-mini:
 
 Similar to DeepSeek-V3, but the tool calling part is wrapped in `<|tool_call|>...<|/tool_call|>` and organized in a list.
 
-```
+```text
 <|tool_call|>[{"name": "function_name_1", "arguments": params}, {"name": "function_name_2", "arguments": params}]<|/tool_call|>
 ```
 
@@ -564,7 +596,7 @@ The output should start with a reasoning part (`<think>...</think>`), then can g
 
 Format:
 
-```
+```text
 <think> any_text </think> any_text <function=func1> params </function> any_text
 ```
 
@@ -609,7 +641,7 @@ The output should start with a reasoning part (`<think>...</think>`), then need 
 
 Format:
 
-```
+```text
 <think> any_text </think> <function=func1> params </function>
 ```
 
