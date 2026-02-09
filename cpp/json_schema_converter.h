@@ -193,10 +193,10 @@ enum class JSONFormat : int {
 class GenerateCacheManager {
  public:
   /*! \brief Add a key-value pair to the cache. */
-  void add_cache(const std::string& key, const std::string& value) { cache_[key] = value; }
+  void AddCache(const std::string& key, const std::string& value) { cache_[key] = value; }
 
   /*! \brief Get cached value by key. Returns std::nullopt if not found. */
-  std::optional<std::string> get_cache(const std::string& key) const {
+  std::optional<std::string> GetCache(const std::string& key) const {
     auto it = cache_.find(key);
     if (it != cache_.end()) {
       return it->second;
@@ -311,7 +311,7 @@ class JSONSchemaConverter {
   );
 
   /*! \brief Get the basic string rule name. Override for different formats. */
-  virtual std::string GetBasicStringRuleName() const;
+  virtual std::string GetKeyPattern() const;
 
   /*! \brief Get the basic any rule name. Override for different formats. */
   virtual std::string GetBasicAnyRuleName() const;

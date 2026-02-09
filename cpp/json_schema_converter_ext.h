@@ -12,6 +12,29 @@
 namespace xgrammar {
 
 /*!
+ * \brief Manage the rule generation cache. Wraps key-value cache for schema deduplication.
+ */
+class XMLGenerateCacheManager {
+ public:
+  /*! \brief Add a key-value pair to the cache. */
+  void AddCache(const std::string& key, bool is_inner_layer, const std::string& value) {
+    cache_[{key, is_inner_layer}] = value;
+  }
+
+  /*! \brief Get cached value by key. Returns std::nullopt if not found. */
+  std::optional<std::string> GetCache(const std::string& key, bool is_inner_layer) const {
+    auto it = cache_.find({key, is_inner_layer});
+    if (it != cache_.end()) {
+      return it->second;
+    }
+    return std::nullopt;
+  }
+
+ private:
+  std::unordered_map<std::pair<std::string, bool>, std::string> cache_;
+};
+
+/*!
  * \brief Converter for XML Tool Calling format (e.g., Qwen style).
  *
  * This converter generates EBNF where:
@@ -56,12 +79,15 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       const std::string& rule_name_suffix
   ) override;
 
-  std::string GetBasicStringRuleName() const override;
+  std::string GetKeyPattern() const override;
   std::string GetBasicAnyRuleName() const override;
 
   std::string NextSeparator(bool is_end = false) override;
 
   void AddBasicRules() override;
+
+  void AddCache(const std::string& key, const std::string& value) override;
+  std::optional<std::string> GetCache(const std::string& key) const override;
 
   /*!
    * \brief EBNF pattern for optional whitespace between </parameter> and the next
@@ -73,9 +99,12 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   // XML-specific rule names
   static const std::string kXMLString;
   static const std::string kXMLAny;
+  static const std::string kXMLObject;
+  static const std::string kXMLVariableName;
 
   // Track if we're at the root object level
   int nested_object_level_ = 0;
+  XMLGenerateCacheManager xml_rule_cache_manager_;
 };
 
 }  // namespace xgrammar

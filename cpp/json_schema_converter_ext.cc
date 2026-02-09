@@ -7,13 +7,15 @@
 
 #include "json_schema_converter.h"
 #include "regex_converter.h"
-#include "support/encoding.h"
+#include "support/logging.h"
 
 namespace xgrammar {
 
 // Static constants
 const std::string XMLToolCallingConverter::kXMLString = "xml_string";
 const std::string XMLToolCallingConverter::kXMLAny = "xml_any";
+const std::string XMLToolCallingConverter::kXMLObject = "xml_object";
+const std::string XMLToolCallingConverter::kXMLVariableName = "xml_variable_name";
 
 XMLToolCallingConverter::XMLToolCallingConverter(
     std::optional<int> indent,
@@ -26,9 +28,8 @@ XMLToolCallingConverter::XMLToolCallingConverter(
       nested_object_level_(0) {}
 
 std::string XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
-  AddBasicRules();
-
   nested_object_level_ = 0;
+  AddBasicRules();
   std::string root_rule_name = ebnf_script_creator_.AllocateRuleName("root");
   std::string root_body = GenerateFromSpec(spec, root_rule_name);
   ebnf_script_creator_.AddRuleWithAllocatedName(root_rule_name, root_body);
@@ -37,9 +38,11 @@ std::string XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
 }
 
 void XMLToolCallingConverter::AddBasicRules() {
-  // First add JSON basic rules
+  // First add JSON basic rules. These should be in the inner layer of the XML format.
+  XGRAMMAR_DCHECK(nested_object_level_ == 0);
+  nested_object_level_ = 2;
   JSONSchemaConverter::AddBasicRules();
-
+  nested_object_level_ = 0;
   // Add XML string rule
   ebnf_script_creator_.AddRule(
       kXMLString,
@@ -50,16 +53,33 @@ void XMLToolCallingConverter::AddBasicRules() {
       "excludes=(\"</parameter>\")"
       ")"
   );
+  constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
+  AddCache(kStringCacheKey, kXMLString);
 
   // Add XML any rule
-  auto any_body = kBasicNumber + " | " + kXMLString + " | " + kBasicBoolean + " | " + kBasicNull +
-                  " | " + kBasicArray + " | " + kBasicObject;
+  auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", kXMLAny);
+  std::string any_body = GenerateAny(std::get<AnySpec>(any_spec->spec), kXMLAny);
   ebnf_script_creator_.AddRule(kXMLAny, any_body);
+  AddCache("{}", kXMLAny);
+
+  // Add XML object rule
+  constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
+  ObjectSpec obj_spec_val;
+  obj_spec_val.allow_additional_properties = true;
+  obj_spec_val.additional_properties_schema = any_spec;
+  auto obj_spec = SchemaSpec::Make(std::move(obj_spec_val), kObjectCacheKey, kXMLObject);
+  std::string obj_body = GenerateObject(std::get<ObjectSpec>(obj_spec->spec), kXMLObject);
+  ebnf_script_creator_.AddRule(kXMLObject, obj_body);
+  AddCache(kObjectCacheKey, kXMLObject);
+
+  // Add XML variable name rule
+  std::string var_body = "[a-zA-Z_][a-zA-Z0-9_]*";
+  ebnf_script_creator_.AddRule(kXMLVariableName, var_body);
 }
 
-std::string XMLToolCallingConverter::GetBasicStringRuleName() const {
+std::string XMLToolCallingConverter::GetKeyPattern() const {
   if (nested_object_level_ <= 1) {
-    return kXMLString;
+    return kXMLVariableName;
   }
   return kBasicString;
 }
@@ -127,8 +147,7 @@ std::string XMLToolCallingConverter::GenerateAny(
     const AnySpec& spec, const std::string& rule_name
 ) {
   if (nested_object_level_ <= 1) {
-    return kBasicNumber + " | " + kXMLString + " | " + kBasicBoolean + " | " + kBasicNull + " | " +
-           kBasicArray + " | " + kBasicObject;
+    return kXMLString + " | " + kBasicArray + " | " + kBasicObject;
   }
   return JSONSchemaConverter::GenerateAny(spec, rule_name);
 }
@@ -184,6 +203,20 @@ std::string XMLToolCallingConverter::GenerateObject(
   auto result = JSONSchemaConverter::GenerateObject(spec, rule_name, need_brace);
   nested_object_level_--;
   return result;
+}
+
+void XMLToolCallingConverter::AddCache(const std::string& key, const std::string& value) {
+  if (key.empty()) {
+    return;
+  }
+  xml_rule_cache_manager_.AddCache(key, nested_object_level_ > 1, value);
+}
+
+std::optional<std::string> XMLToolCallingConverter::GetCache(const std::string& key) const {
+  if (key.empty()) {
+    return std::nullopt;
+  }
+  return xml_rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
 }
 
 }  // namespace xgrammar

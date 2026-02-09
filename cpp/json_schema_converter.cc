@@ -272,18 +272,9 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
           SchemaErrorType::kUnsatisfiableSchema, "Schema 'false' cannot accept any value"
       );
     }
-    switch (config_.json_format) {
-      case JSONFormat::kJSON: {
-        auto spec = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
-        schema_cache_[cache_key] = spec;
-        return ResultOk(spec);
-      }
-      case JSONFormat::kXML: {
-        return ResultOk(SchemaSpec::Make(AnySpec{}, "", rule_name_hint));
-      }
-      default:
-        return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Invalid JSON format");
-    }
+    auto spec = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
+    schema_cache_[cache_key] = spec;
+    return ResultOk(spec);
   }
 
   if (!schema.is<picojson::object>()) {
@@ -343,13 +334,7 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
       } else if (type == "string") {
         auto str_result = ParseString(schema_obj);
         if (str_result.IsErr()) return ResultErr(std::move(str_result).UnwrapErr());
-        // It is because that in Qwen-Coder's xml format, the string type in the inner object and
-        // the string type in the outer object are different. Thus, we do not cache them.
-        if (config_.json_format == JSONFormat::kJSON) {
-          result = SchemaSpec::Make(std::move(str_result).Unwrap(), cache_key, rule_name_hint);
-        } else {
-          result = SchemaSpec::Make(std::move(str_result).Unwrap(), "", rule_name_hint);
-        }
+        result = SchemaSpec::Make(std::move(str_result).Unwrap(), cache_key, rule_name_hint);
       } else if (type == "boolean") {
         auto bool_result = ParseBoolean(schema_obj);
         if (bool_result.IsErr()) return ResultErr(std::move(bool_result).UnwrapErr());
@@ -383,16 +368,7 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     if (array_result.IsErr()) return ResultErr(std::move(array_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(array_result).Unwrap(), cache_key, rule_name_hint);
   } else {
-    switch (config_.json_format) {
-      case JSONFormat::kJSON:
-        result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
-        break;
-      case JSONFormat::kXML:
-        result = SchemaSpec::Make(AnySpec{}, "", rule_name_hint);
-        break;
-      default:
-        return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Invalid JSON format");
-    }
+    result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
   }
 
   schema_cache_[cache_key] = result;
@@ -1268,7 +1244,7 @@ std::string JSONSchemaConverter::NextSeparator(bool is_end) {
   return indent_manager_.NextSeparator(is_end);
 }
 
-std::string JSONSchemaConverter::GetBasicStringRuleName() const { return kBasicString; }
+std::string JSONSchemaConverter::GetKeyPattern() const { return kBasicString; }
 
 std::string JSONSchemaConverter::GetBasicAnyRuleName() const { return kBasicAny; }
 
@@ -1276,14 +1252,14 @@ void JSONSchemaConverter::AddCache(const std::string& key, const std::string& va
   if (key.empty()) {
     return;
   }
-  rule_cache_manager_.add_cache(key, value);
+  rule_cache_manager_.AddCache(key, value);
 }
 
 std::optional<std::string> JSONSchemaConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
   }
-  return rule_cache_manager_.get_cache(key);
+  return rule_cache_manager_.GetCache(key);
 }
 
 std::string JSONSchemaConverter::CreateRule(
@@ -1623,9 +1599,8 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     std::string additional_prop_pattern;
     if (allow_additional) {
       std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-      additional_prop_pattern = FormatOtherProperty(
-          GetBasicStringRuleName(), add_value_rule, rule_name, additional_suffix
-      );
+      additional_prop_pattern =
+          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
       std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
       std::string last_rule_name =
           rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1);
@@ -1680,9 +1655,8 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     std::string additional_prop_pattern;
     if (allow_additional) {
       std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-      additional_prop_pattern = FormatOtherProperty(
-          GetBasicStringRuleName(), add_value_rule, rule_name, additional_suffix
-      );
+      additional_prop_pattern =
+          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
     }
 
     // Get the range of matched properties for each rule
@@ -1792,9 +1766,8 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     std::string additional_prop_pattern;
     if (allow_additional) {
       std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-      additional_prop_pattern = FormatOtherProperty(
-          GetBasicStringRuleName(), add_value_rule, rule_name, additional_suffix
-      );
+      additional_prop_pattern =
+          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
     }
 
     // Get the range of matched properties for each rule
@@ -1989,9 +1962,8 @@ std::string JSONSchemaConverter::GenerateObject(
     if (spec.max_properties != 0) {
       std::string add_value_rule =
           CreateRule(additional_property, rule_name + "_" + additional_suffix);
-      std::string other_property_pattern = FormatOtherProperty(
-          GetBasicStringRuleName(), add_value_rule, rule_name, additional_suffix
-      );
+      std::string other_property_pattern =
+          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
       result += " " + NextSeparator() + " " + other_property_pattern + " ";
       result += GetPropertyWithNumberConstraints(
                     NextSeparator() + " " + other_property_pattern,
