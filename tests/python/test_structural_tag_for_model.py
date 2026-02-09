@@ -256,6 +256,22 @@ instance_cases: List[Tuple[str, Dict[str, Any], List[str], List[Tuple[str, List[
             ("", [False, False, False, False, True]),
         ],
     ),
+    (
+        "llama",
+        {},
+        [
+            "",
+            "text",
+            "<think>123</think>text",
+            "<think>\n\n</think></think>",
+            "<think>\n\n</think>text",
+        ],
+        [
+            ("", [True, True, False, False, False]),
+            ("", [False, False, True, False, True]),
+            ("", [False, False, False, False, True]),
+        ],
+    ),
     # ----- kimi
     (
         "kimi",
@@ -269,6 +285,22 @@ instance_cases: List[Tuple[str, Dict[str, Any], List[str], List[Tuple[str, List[
         ],
         [
             ("", [True, False, False, False, False]),
+            ("", [False, False, True, False, True]),
+            ("", [False, False, False, False, True]),
+        ],
+    ),
+    (
+        "kimi",
+        {},
+        [
+            "",
+            "text",
+            "<think>123</think>",
+            "<think>\n\n</think></think>",
+            "<think>\n\n</think>text",
+        ],
+        [
+            ("", [True, True, False, False, False]),
             ("", [False, False, True, False, True]),
             ("", [False, False, False, False, True]),
         ],
@@ -290,6 +322,16 @@ instance_cases: List[Tuple[str, Dict[str, Any], List[str], List[Tuple[str, List[
             ("", [False, False, False, False, True]),
         ],
     ),
+    (
+        "deepseek_r1",
+        {},
+        ["", "text", "123</think>123", "</think></think>", "</think>text"],
+        [
+            ("", [True, True, False, False, False]),
+            ("", [False, False, True, False, True]),
+            ("", [False, False, False, False, True]),
+        ],
+    ),
     # ----- qwen_coder
     (
         "qwen_coder",
@@ -303,6 +345,22 @@ instance_cases: List[Tuple[str, Dict[str, Any], List[str], List[Tuple[str, List[
         ],
         [
             ("", [True, False, False, False, False]),
+            ("", [False, False, True, False, True]),
+            ("", [False, False, False, False, True]),
+        ],
+    ),
+    (
+        "qwen_coder",
+        {},
+        [
+            "",
+            "text",
+            "<think>123</think>123",
+            "<think>\n\n</think></think>",
+            "<think>\n\n</think>text",
+        ],
+        [
+            ("", [True, True, False, False, False]),
             ("", [False, False, True, False, True]),
             ("", [False, False, False, False, True]),
         ],
@@ -323,6 +381,22 @@ instance_cases: List[Tuple[str, Dict[str, Any], List[str], List[Tuple[str, List[
             ("", [False, False, False, True]),
         ],
     ),
+    (
+        "qwen",
+        {},
+        [
+            "",
+            "text",
+            "<think>123</think>123",
+            "<think>\n\n</think></think>",
+            "<think>\n\n</think>text",
+        ],
+        [
+            ("", [True, True, False, False, False]),
+            ("", [False, False, True, False, True]),
+            ("", [False, False, False, False, True]),
+        ],
+    ),
     # ----- harmony
     (
         "harmony",
@@ -332,13 +406,29 @@ instance_cases: List[Tuple[str, Dict[str, Any], List[str], List[Tuple[str, List[
             '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
             '<|channel|>analysis to=analysis_tool<|message|>{"q": "v"}<|call|>',
             "<|channel|>commentary to=wrong_tool<|constrain|>json<|message|>{}<|call|>",
-            "<|channel|>analysis<|message|>think<|end|>",
+            "<|channel|>analysis<|message|>think<|end|><|start|>assistant<|channel|>final<|message|>123<|end|>",
             '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
         ],
         [
             ("", [False, True, True, False, False, True]),
             ("", [True, True, True, False, True, True]),
             ("", [True, True, True, False, False, True]),
+        ],
+    ),
+    (
+        "harmony",
+        {},
+        [
+            "",
+            "<|channel|>final<|message|>123<|end|>",
+            "<|channel|>analysis<|message|>123<|end|><|start|>assistant<|channel|>final<|message|>123<|end|>",
+            "<|channel|>analysis<|message|><|end|>",
+            "<think>\n\n</think>text",
+        ],
+        [
+            ("", [True, True, False, False, False]),
+            ("", [True, True, True, True, False]),
+            ("", [True, True, False, True, False]),
         ],
     ),
 ]
