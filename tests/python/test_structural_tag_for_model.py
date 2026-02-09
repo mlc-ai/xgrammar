@@ -21,8 +21,8 @@ def _input_dict_to_get_stag_kwargs(format_type: str, input_dict: Dict[str, Any])
     """Convert input_dict (used by old template function API) to kwargs for get_structural_tag_for_model."""
     return {
         "model": format_type,
-        "tools": input_dict.get("tools"),
-        "builtin_tools": input_dict.get("builtin_tools"),
+        "tools": input_dict.get("tools", []),
+        "builtin_tools": input_dict.get("builtin_tools", []),
         "reasoning": input_dict.get("reasoning", input_dict.get("reasoning", True)),
         "force_empty_reasoning": input_dict.get("force_empty_reasoning", False),
     }
@@ -240,14 +240,19 @@ grammar_cases: List[Tuple[str, Dict[str, Any], str]] = [
     # llama
     (
         "llama",
-        {"tools": []},
-        r"""any_text ::= (([\0-\U0010ffff]*))
+        {"tools": [], "reasoning": False},
+        r"""any_text ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
 root ::= ((any_text))
 """,
     ),
     (
         "llama",
-        {"tools": make_tools(["t1", "t2"])},
+        {"tools": make_tools(["t1", "t2"]), "reasoning": False},
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -304,14 +309,19 @@ root ::= ((triggered_tags))
     # kimi, thinking True / False
     (
         "kimi",
-        {"tools": []},
-        r"""any_text ::= (([\0-\U0010ffff]*))
+        {"tools": [], "reasoning": False},
+        r"""any_text ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
 root ::= ((any_text))
 """,
     ),
     (
         "kimi",
-        {"tools": make_tools(["tool_a", "tool_b"])},
+        {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": False},
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -388,7 +398,7 @@ root ::= ((sequence))
     ),
     (
         "deepseek_r1",
-        {"tools": [], "reasoning": False},
+        {"tools": [], "reasoning": True, "force_empty_reasoning": True},
         r"""const_string ::= (("</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
@@ -466,7 +476,11 @@ root ::= ((sequence))
     ),
     (
         "deepseek_r1",
-        {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": False},
+        {
+            "tools": make_tools(["tool_a", "tool_b"]),
+            "reasoning": True,
+            "force_empty_reasoning": True,
+        },
         r"""const_string ::= (("</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
@@ -525,14 +539,19 @@ root ::= ((sequence))
     # qwen_coder
     (
         "qwen_coder",
-        {"tools": []},
-        r"""any_text ::= (([\0-\U0010ffff]*))
+        {"tools": [], "reasoning": False},
+        r"""any_text ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
 root ::= ((any_text))
 """,
     ),
     (
         "qwen_coder",
-        {"tools": make_tools(["tool_a", "tool_b"])},
+        {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": False},
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 xml_string ::= TagDispatch(
@@ -627,7 +646,7 @@ root ::= ((sequence))
     ),
     (
         "qwen",
-        {"tools": [], "reasoning": False},
+        {"tools": [], "reasoning": True, "force_empty_reasoning": True},
         r"""const_string ::= (("<think>\n\n</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
@@ -705,7 +724,11 @@ root ::= ((sequence))
     ),
     (
         "qwen",
-        {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": False},
+        {
+            "tools": make_tools(["tool_a", "tool_b"]),
+            "reasoning": True,
+            "force_empty_reasoning": True,
+        },
         r"""const_string ::= (("<think>\n\n</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
@@ -1051,27 +1074,57 @@ def test_generate_structural_tag_grammar(
 # (format_type, input_dict, instance, is_accepted)
 instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     # ----- llama
-    ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": {"q": "v"}}', True),
-    ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": {}}', True),
-    ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": {"q": ""}}', True),
-    ("llama", {"tools": _tools_llama}, '{"name": "wrong", "parameters": {"q": "v"}}', False),
-    ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": {"q": 1}}', False),
-    ("llama", {"tools": _tools_llama}, '{"name": "t1", "parameters": invalid}', False),
-    ("llama", {"tools": []}, "", True),
+    (
+        "llama",
+        {"tools": _tools_llama, "reasoning": False},
+        '{"name": "t1", "parameters": {"q": "v"}}',
+        True,
+    ),
+    (
+        "llama",
+        {"tools": _tools_llama, "reasoning": False},
+        '{"name": "t1", "parameters": {}}',
+        True,
+    ),
+    (
+        "llama",
+        {"tools": _tools_llama, "reasoning": False},
+        '{"name": "t1", "parameters": {"q": ""}}',
+        True,
+    ),
+    (
+        "llama",
+        {"tools": _tools_llama, "reasoning": False},
+        '{"name": "wrong", "parameters": {"q": "v"}}',
+        False,
+    ),
+    (
+        "llama",
+        {"tools": _tools_llama, "reasoning": False},
+        '{"name": "t1", "parameters": {"q": 1}}',
+        False,
+    ),
+    (
+        "llama",
+        {"tools": _tools_llama, "reasoning": False},
+        '{"name": "t1", "parameters": invalid}',
+        False,
+    ),
+    ("llama", {"tools": [], "reasoning": False}, "", True),
     # ----- kimi
     (
         "kimi",
-        {"tools": _tools_kimi},
+        {"tools": _tools_kimi, "reasoning": False},
         '123<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
         True,
     ),
     (
         "kimi",
-        {"tools": _tools_kimi},
+        {"tools": _tools_kimi, "reasoning": False},
         "123<|tool_call_begin|>123<|tool_call_argument_begin|>{}<|tool_call_end|>",
         False,
     ),
-    ("kimi", {"tools": []}, "123123", True),
+    ("kimi", {"tools": [], "reasoning": False}, "123123", True),
     # ----- deepseek
     (
         "deepseek_r1",
@@ -1093,28 +1146,38 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     ),
     ("deepseek_r1", {"tools": [], "reasoning": True}, "123123</think>", True),
     ("deepseek_r1", {"tools": [], "reasoning": True}, "</think>123123</think>", False),
-    ("deepseek_r1", {"tools": [], "reasoning": False}, "</think>123</think>", False),
-    ("deepseek_r1", {"tools": [], "reasoning": False}, "</think>123", True),
+    (
+        "deepseek_r1",
+        {"tools": [], "reasoning": True, "force_empty_reasoning": True},
+        "</think>123</think>",
+        False,
+    ),
+    (
+        "deepseek_r1",
+        {"tools": [], "reasoning": True, "force_empty_reasoning": True},
+        "</think>123",
+        True,
+    ),
     # ----- qwen_coder
     (
         "qwen_coder",
-        {"tools": _tools_qwen_coder},
+        {"tools": _tools_qwen_coder, "reasoning": False},
         "<tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
         True,
     ),
     (
         "qwen_coder",
-        {"tools": _tools_qwen_coder},
+        {"tools": _tools_qwen_coder, "reasoning": False},
         "<tool_call>\n<function=run_sql>\n\n</function>\n</tool_call>",
         True,
     ),
     (
         "qwen_coder",
-        {"tools": _tools_qwen_coder},
+        {"tools": _tools_qwen_coder, "reasoning": False},
         "<tool_call>\n<function=other>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
         False,
     ),
-    ("qwen_coder", {"tools": []}, "", True),
+    ("qwen_coder", {"tools": [], "reasoning": False}, "", True),
     # ----- qwen
     (
         "qwen",
@@ -1124,19 +1187,19 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "reasoning": False},
+        {"tools": _tools_qwen, "reasoning": True, "force_empty_reasoning": True},
         '<think>\n\n</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         True,
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "reasoning": False},
+        {"tools": _tools_qwen, "reasoning": True, "force_empty_reasoning": True},
         '<think>\n\n</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         True,
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "reasoning": False},
+        {"tools": _tools_qwen, "reasoning": True, "force_empty_reasoning": True},
         '<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         False,
     ),
@@ -1154,14 +1217,19 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "reasoning": False},
+        {"tools": _tools_qwen, "reasoning": True, "force_empty_reasoning": True},
         '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         False,
     ),
     ("qwen", {"tools": [], "reasoning": True}, "<think>123</think>", True),
-    ("qwen", {"tools": [], "reasoning": False}, "<think>\n\n</think>123", True),
+    (
+        "qwen",
+        {"tools": [], "reasoning": True, "force_empty_reasoning": True},
+        "<think>\n\n</think>123",
+        True,
+    ),
     ("qwen", {"tools": [], "reasoning": True}, "<think>123</think>", True),
-    ("qwen", {"tools": [], "reasoning": False}, "", False),
+    ("qwen", {"tools": [], "reasoning": True, "force_empty_reasoning": True}, "", False),
     # ----- harmony
     (
         "harmony",
@@ -1188,7 +1256,12 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
         False,
     ),
     ("harmony", {"tools": [], "builtin_tools": [], "reasoning": True}, "", True),
-    ("harmony", {"tools": [], "builtin_tools": [], "reasoning": False}, "", True),
+    (
+        "harmony",
+        {"tools": [], "builtin_tools": [], "reasoning": True, "force_empty_reasoning": True},
+        "",
+        True,
+    ),
     (
         "harmony",
         {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": True},
@@ -1198,7 +1271,12 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": False},
+        {
+            "tools": _tools_harmony,
+            "builtin_tools": _builtin_harmony,
+            "reasoning": True,
+            "force_empty_reasoning": True,
+        },
         "<|channel|>analysis<|message|>think<|end|>",
         False,
     ),
@@ -1212,14 +1290,24 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": False},
+        {
+            "tools": _tools_harmony,
+            "builtin_tools": _builtin_harmony,
+            "reasoning": True,
+            "force_empty_reasoning": True,
+        },
         '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>'
         "<|start|>assistant<|channel|>final<|message|>done<|end|>",
         True,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": False},
+        {
+            "tools": _tools_harmony,
+            "builtin_tools": _builtin_harmony,
+            "reasoning": True,
+            "force_empty_reasoning": True,
+        },
         "<|channel|>analysis<|message|>think<|end|>",
         False,
     ),
