@@ -89,12 +89,6 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   void AddCache(const std::string& key, const std::string& value) override;
   std::optional<std::string> GetCache(const std::string& key) const override;
 
-  /*!
-   * \brief EBNF pattern for optional whitespace between </parameter> and the next
-   * <parameter=...>. Override to allow or restrict newlines/spaces between parameters.
-   */
-  virtual std::string GetBetweenParametersSeparator() const;
-
  private:
   // XML-specific rule names
   static const std::string kXMLString;
