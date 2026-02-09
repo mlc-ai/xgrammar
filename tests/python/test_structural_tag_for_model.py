@@ -1,4 +1,4 @@
-"""Tests for get_builtin_structural_tag_template_function and generated structural tags.
+"""Tests for get_structural_tag_for_model and generated structural tags.
 """
 
 import re
@@ -10,8 +10,20 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.structural_tag import StructuralTag
-from xgrammar.structural_tag_template_function import get_builtin_structural_tag_template_function
+from xgrammar.structural_tag_for_model import get_structural_tag_for_model
 from xgrammar.testing import _is_grammar_accept_string
+
+
+def _input_dict_to_get_stag_kwargs(format_type: str, input_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert input_dict (used by old template function API) to kwargs for get_structural_tag_for_model."""
+    return {
+        "model": format_type,
+        "tools": input_dict.get("tools"),
+        "builtin_tools": input_dict.get("builtin_tools"),
+        "reasoning": input_dict.get("reasoning", input_dict.get("reasoning", True)),
+        "force_empty_reasoning": input_dict.get("force_empty_reasoning", False),
+    }
+
 
 # ---------- Fixtures / Helpers ----------
 
@@ -107,10 +119,10 @@ _builtin_harmony = make_tools(["analysis_tool"])
 # ---------- Test: unknown format type ----------
 
 
-def test_get_builtin_structural_tag_template_function_unknown_format():
-    """get_builtin_structural_tag_template_function raises ValueError for unknown format type."""
+def test_get_structural_tag_for_model_unknown_format():
+    """get_structural_tag_for_model raises ValueError for unknown format type."""
     with pytest.raises(ValueError) as exc_info:
-        get_builtin_structural_tag_template_function("unknown_format")
+        get_structural_tag_for_model("unknown_format")
     assert "Unknown format type" in str(exc_info.value)
     assert "unknown_format" in str(exc_info.value)
 
@@ -161,7 +173,7 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
         {"tools": [], "builtin_tools": [{"function": {"name": "b1", "parameters": 1}}]},
         "must be a dict",
     ),
-    ("qwen", {"tools": [], "thinking": "not_bool"}, "must be a boolean"),
+    ("qwen", {"tools": [], "reasoning": "not_bool"}, "must be a boolean"),
 ]
 
 
@@ -169,10 +181,9 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
 def test_generate_structural_tag_input_validation_errors(
     format_type: str, input_dict: Dict[str, Any], error_substring: str
 ):
-    """Generated template function raises ValueError for invalid input_dict."""
-    fn = get_builtin_structural_tag_template_function(format_type)
+    """get_structural_tag_for_model raises ValueError for invalid input."""
     with pytest.raises(ValueError) as exc_info:
-        fn(input_dict)
+        get_structural_tag_for_model(**_input_dict_to_get_stag_kwargs(format_type, input_dict))
     msg = str(exc_info.value)
     if ".*" in error_substring:
         assert re.search(
@@ -317,7 +328,7 @@ root ::= ((triggered_tags))
     # deepseek, thinking True / False
     (
         "deepseek",
-        {"tools": [], "thinking": True},
+        {"tools": [], "reasoning": True},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
@@ -337,7 +348,7 @@ root ::= ((sequence))
     ),
     (
         "deepseek",
-        {"tools": [], "thinking": False},
+        {"tools": [], "reasoning": False},
         r"""const_string ::= (("</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
@@ -351,7 +362,7 @@ root ::= ((sequence))
     ),
     (
         "deepseek",
-        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": True},
+        {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": True},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
@@ -415,7 +426,7 @@ root ::= ((sequence))
     ),
     (
         "deepseek",
-        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": False},
+        {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": False},
         r"""const_string ::= (("</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
@@ -556,7 +567,7 @@ root ::= ((triggered_tags))
     # qwen (with reasoning True / False)
     (
         "qwen",
-        {"tools": [], "thinking": True},
+        {"tools": [], "reasoning": True},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
@@ -576,7 +587,7 @@ root ::= ((sequence))
     ),
     (
         "qwen",
-        {"tools": [], "thinking": False},
+        {"tools": [], "reasoning": False},
         r"""const_string ::= (("<think>\n\n</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
@@ -590,7 +601,7 @@ root ::= ((sequence))
     ),
     (
         "qwen",
-        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": True},
+        {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": True},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
@@ -654,7 +665,7 @@ root ::= ((sequence))
     ),
     (
         "qwen",
-        {"tools": make_tools(["tool_a", "tool_b"]), "thinking": False},
+        {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": False},
         r"""const_string ::= (("<think>\n\n</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
@@ -990,8 +1001,7 @@ def test_generate_structural_tag_grammar(
     format_type: str, input_dict: Dict[str, Any], expected_grammar_ebnf: str
 ):
     """Generated structural tag compiles; EBNF left empty for you to fill."""
-    fn = get_builtin_structural_tag_template_function(format_type)
-    stag = fn(input_dict)
+    stag = get_structural_tag_for_model(**_input_dict_to_get_stag_kwargs(format_type, input_dict))
     assert isinstance(stag, StructuralTag)
     check_stag_with_grammar(stag, expected_grammar_ebnf)
 
@@ -1025,26 +1035,26 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     # ----- deepseek
     (
         "deepseek",
-        {"tools": _tools_deepseek, "thinking": True},
+        {"tools": _tools_deepseek, "reasoning": True},
         '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
         True,
     ),
     (
         "deepseek",
-        {"tools": _tools_deepseek, "thinking": True},
+        {"tools": _tools_deepseek, "reasoning": True},
         "123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{}<｜tool▁call▁end｜>",
         True,
     ),
     (
         "deepseek",
-        {"tools": _tools_deepseek, "thinking": True},
+        {"tools": _tools_deepseek, "reasoning": True},
         '132</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>wrong<｜tool▁sep｜>{"q":"v"}<｜tool▁call▁end｜>',
         False,
     ),
-    ("deepseek", {"tools": [], "thinking": True}, "123123</think>", True),
-    ("deepseek", {"tools": [], "thinking": True}, "</think>123123</think>", False),
-    ("deepseek", {"tools": [], "thinking": False}, "</think>123</think>", False),
-    ("deepseek", {"tools": [], "thinking": False}, "</think>123", True),
+    ("deepseek", {"tools": [], "reasoning": True}, "123123</think>", True),
+    ("deepseek", {"tools": [], "reasoning": True}, "</think>123123</think>", False),
+    ("deepseek", {"tools": [], "reasoning": False}, "</think>123</think>", False),
+    ("deepseek", {"tools": [], "reasoning": False}, "</think>123", True),
     # ----- qwen_coder
     (
         "qwen_coder",
@@ -1068,93 +1078,93 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     # ----- qwen
     (
         "qwen",
-        {"tools": _tools_qwen, "thinking": True},
+        {"tools": _tools_qwen, "reasoning": True},
         '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         True,
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "thinking": False},
+        {"tools": _tools_qwen, "reasoning": False},
         '<think>\n\n</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         True,
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "thinking": False},
+        {"tools": _tools_qwen, "reasoning": False},
         '<think>\n\n</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         True,
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "thinking": False},
+        {"tools": _tools_qwen, "reasoning": False},
         '<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         False,
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "thinking": True},
+        {"tools": _tools_qwen, "reasoning": True},
         '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         True,
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "thinking": True},
+        {"tools": _tools_qwen, "reasoning": True},
         '<think>123</think></think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         False,
     ),
     (
         "qwen",
-        {"tools": _tools_qwen, "thinking": False},
+        {"tools": _tools_qwen, "reasoning": False},
         '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
         False,
     ),
-    ("qwen", {"tools": [], "thinking": True}, "<think>123</think>", True),
-    ("qwen", {"tools": [], "thinking": False}, "<think>\n\n</think>123", True),
-    ("qwen", {"tools": [], "thinking": True}, "<think>123</think>", True),
-    ("qwen", {"tools": [], "thinking": False}, "", False),
+    ("qwen", {"tools": [], "reasoning": True}, "<think>123</think>", True),
+    ("qwen", {"tools": [], "reasoning": False}, "<think>\n\n</think>123", True),
+    ("qwen", {"tools": [], "reasoning": True}, "<think>123</think>", True),
+    ("qwen", {"tools": [], "reasoning": False}, "", False),
     # ----- harmony
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": True},
         "<|channel|>analysis<|message|>some text<|end|>",
         True,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": True},
         '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
         True,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": True},
         '<|channel|>analysis to=analysis_tool<|message|>{"q": "v"}<|call|>',
         True,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": True},
         "<|channel|>commentary to=wrong_tool<|constrain|>json<|message|>{}<|call|>",
         False,
     ),
-    ("harmony", {"tools": [], "builtin_tools": [], "thinking": True}, "", True),
-    ("harmony", {"tools": [], "builtin_tools": [], "thinking": False}, "", True),
+    ("harmony", {"tools": [], "builtin_tools": [], "reasoning": True}, "", True),
+    ("harmony", {"tools": [], "builtin_tools": [], "reasoning": False}, "", True),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": True},
         "<|channel|>analysis<|message|>think<|end|>"
         '<|start|>assistant<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
         True,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": False},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": False},
         "<|channel|>analysis<|message|>think<|end|>",
         False,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": True},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": True},
         "<|channel|>analysis<|message|>think<|end|>"
         '<|start|>assistant<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>'
         "<|start|>assistant<|channel|>final<|message|>done<|end|>",
@@ -1162,14 +1172,14 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": False},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": False},
         '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>'
         "<|start|>assistant<|channel|>final<|message|>done<|end|>",
         True,
     ),
     (
         "harmony",
-        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "thinking": False},
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony, "reasoning": False},
         "<|channel|>analysis<|message|>think<|end|>",
         False,
     ),
@@ -1188,6 +1198,5 @@ def test_generate_structural_tag_instance(
     format_type: str, input_dict: Dict[str, Any], instance: str, is_accepted: bool
 ):
     """Generated structural tag accepts/rejects instance as expected."""
-    stag_function = get_builtin_structural_tag_template_function(format_type)
-    stag = stag_function(input_dict)
+    stag = get_structural_tag_for_model(**_input_dict_to_get_stag_kwargs(format_type, input_dict))
     check_stag_with_instance(stag, instance, is_accepted)
