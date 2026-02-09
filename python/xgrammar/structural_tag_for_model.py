@@ -14,11 +14,9 @@ from .structural_tag import (
 
 # ---------- Structural Tag Template ----------
 
-SupportedTemplateNames = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony"]
-_structural_tag_registry: Dict[
-    SupportedTemplateNames, Callable[[Dict[str, Any]], StructuralTag]
-] = {}
-_structural_tag_supported_models: Dict[SupportedTemplateNames, List[str]] = {}
+SupportedModelStyles = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony"]
+_structural_tag_registry: Dict[SupportedModelStyles, Callable[[Dict[str, Any]], StructuralTag]] = {}
+_structural_tag_supported_models: Dict[SupportedModelStyles, List[str]] = {}
 
 
 def _validate_tool_function(tools: Any) -> None:
@@ -53,7 +51,7 @@ def _register_structural_tag_template(name: str, supported_models: List[str]):
 
 
 def _get_builtin_structural_tag_template_function(
-    format_type: SupportedTemplateNames,
+    format_type: SupportedModelStyles,
 ) -> Callable[[Dict[str, Any]], StructuralTag]:
     """Get builtin structural tag template function by format type.
     In all the structural tag template formats, users should provide
@@ -89,7 +87,7 @@ def _get_builtin_structural_tag_template_function(
 
     Parameters
     ----------
-    format_type : SupportedTemplateNames
+    format_type : SupportedModelStyles
         The format type of the structural tag template.
         Currently supported format types are:
         - "llama": Llama3.1 style structural tag format.
@@ -124,17 +122,19 @@ def _get_builtin_structural_tag_template_function(
 
 
 def get_structural_tag_for_model(
-    model: SupportedTemplateNames,
+    model: SupportedModelStyles,
     reasoning: bool = True,
     tools: List[Dict[str, Any]] = None,
     builtin_tools: List[Dict[str, Any]] = None,
     force_empty_reasoning: bool = False,
 ) -> StructuralTag:
-    """Get structural tag for model.
+    """Get structural tag for model. This function can generate structural tag for the given model
+    with the given tools, builtin tools and reasoning mode.
+
     Parameters
     ----------
-    model : SupportedTemplateNames
-        The model type of the structural tag template. You can use
+    model : SupportedModelStyles
+        The model type of the structural tag template.
     reasoning : bool
         Whether to enable reasoning mode.
     tools : List[Dict[str, Any]]
@@ -160,12 +160,14 @@ def get_structural_tag_for_model(
 
 
 def get_structural_tag_supported_models(
-    strucutural_tag_style: Optional[SupportedTemplateNames] = None,
+    strucutural_tag_style: Optional[SupportedModelStyles] = None,
 ) -> Union[Dict[str, List[str]], List[str]]:
-    """Get supported models for a given structural tag style. If strucutural_tag_style is not provided, return all supported models.
+    """Get supported models for a given structural tag style.
+    If strucutural_tag_style is not provided, return all supported models.
+
     Parameters
     ----------
-    strucutural_tag_style : Optional[SupportedTemplateNames]
+    strucutural_tag_style : Optional[SupportedModelStyles]
         The structural tag style.
     Returns
     -------
