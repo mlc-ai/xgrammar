@@ -193,11 +193,13 @@ enum class JSONFormat : int {
 class GenerateCacheManager {
  public:
   /*! \brief Add a key-value pair to the cache. */
-  void AddCache(const std::string& key, const std::string& value) { cache_[key] = value; }
+  void AddCache(const std::string& key, bool is_inner_layer, const std::string& value) {
+    cache_[{key, is_inner_layer}] = value;
+  }
 
   /*! \brief Get cached value by key. Returns std::nullopt if not found. */
-  std::optional<std::string> GetCache(const std::string& key) const {
-    auto it = cache_.find(key);
+  std::optional<std::string> GetCache(const std::string& key, bool is_inner_layer) const {
+    auto it = cache_.find({key, is_inner_layer});
     if (it != cache_.end()) {
       return it->second;
     }
@@ -205,7 +207,7 @@ class GenerateCacheManager {
   }
 
  private:
-  std::unordered_map<std::string, std::string> cache_;
+  std::unordered_map<std::pair<std::string, bool>, std::string> cache_;
 };
 
 /*!
@@ -378,10 +380,12 @@ class JSONSchemaConverter {
   static const std::string kBasicEscape;
   static const std::string kBasicStringSub;
 
+ protected:
+  GenerateCacheManager rule_cache_manager_;
+
  private:
   void AddHelperRules();
 
-  GenerateCacheManager rule_cache_manager_;
   std::unordered_map<std::string, std::string>
       uri_to_rule_name_;      // For circular reference handling
   RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time

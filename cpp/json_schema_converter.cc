@@ -1252,14 +1252,14 @@ void JSONSchemaConverter::AddCache(const std::string& key, const std::string& va
   if (key.empty()) {
     return;
   }
-  rule_cache_manager_.AddCache(key, value);
+  rule_cache_manager_.AddCache(key, true, value);
 }
 
 std::optional<std::string> JSONSchemaConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
   }
-  return rule_cache_manager_.GetCache(key);
+  return rule_cache_manager_.GetCache(key, true);
 }
 
 std::string JSONSchemaConverter::CreateRule(

@@ -205,14 +205,14 @@ void XMLToolCallingConverter::AddCache(const std::string& key, const std::string
   if (key.empty()) {
     return;
   }
-  xml_rule_cache_manager_.AddCache(key, nested_object_level_ > 1, value);
+  rule_cache_manager_.AddCache(key, nested_object_level_ > 1, value);
 }
 
 std::optional<std::string> XMLToolCallingConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
   }
-  return xml_rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
+  return rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
 }
 
 }  // namespace xgrammar
