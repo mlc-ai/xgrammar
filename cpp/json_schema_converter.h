@@ -188,6 +188,27 @@ enum class JSONFormat : int {
 };
 
 /*!
+ * \brief Manage the rule generation cache. Wraps key-value cache for schema deduplication.
+ */
+class GenerateCacheManager {
+ public:
+  /*! \brief Add a key-value pair to the cache. */
+  void add_cache(const std::string& key, const std::string& value) { cache_[key] = value; }
+
+  /*! \brief Get cached value by key. Returns std::nullopt if not found. */
+  std::optional<std::string> get_cache(const std::string& key) const {
+    auto it = cache_.find(key);
+    if (it != cache_.end()) {
+      return it->second;
+    }
+    return std::nullopt;
+  }
+
+ private:
+  std::unordered_map<std::string, std::string> cache_;
+};
+
+/*!
  * \brief Manage the indent and separator for the generation of EBNF grammar.
  */
 class IndentManager {
@@ -298,6 +319,12 @@ class JSONSchemaConverter {
   /*! \brief Add basic rules for the format. Override for different formats. */
   virtual void AddBasicRules();
 
+  /*! \brief Add a key-value pair to the generation cache. Override for custom cache behavior. */
+  virtual void AddCache(const std::string& key, const std::string& value);
+
+  /*! \brief Get cached value by key. Returns std::nullopt if not found. */
+  virtual std::optional<std::string> GetCache(const std::string& key) const;
+
   // ==================== Helper methods (for subclasses to use) ====================
 
   /*! \brief Dispatch to the appropriate Generate method based on spec type. */
@@ -354,7 +381,7 @@ class JSONSchemaConverter {
  private:
   void AddHelperRules();
 
-  std::unordered_map<std::string, std::string> rule_cache_;
+  GenerateCacheManager rule_cache_manager_;
   std::unordered_map<std::string, std::string>
       uri_to_rule_name_;      // For circular reference handling
   RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time

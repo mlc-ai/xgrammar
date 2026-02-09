@@ -1153,14 +1153,14 @@ std::string JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
   uri_to_rule_name_["#"] = root_rule_name;
 
   // Check if the spec can be directly mapped to an existing rule
-  if (!spec->cache_key.empty() && rule_cache_.count(spec->cache_key)) {
+  auto cached_rule = GetCache(spec->cache_key);
+  if (cached_rule.has_value()) {
     // Root schema matches a basic type, just reference it
-    std::string existing_rule = rule_cache_[spec->cache_key];
-    ebnf_script_creator_.AddRuleWithAllocatedName(root_rule_name, existing_rule);
+    ebnf_script_creator_.AddRuleWithAllocatedName(root_rule_name, cached_rule.value());
   } else {
     // Generate the rule body
     if (!spec->cache_key.empty()) {
-      rule_cache_[spec->cache_key] = root_rule_name;
+      AddCache(spec->cache_key, root_rule_name);
     }
     std::string root_body = GenerateFromSpec(spec, root_rule_name);
     ebnf_script_creator_.AddRuleWithAllocatedName(root_rule_name, root_body);
@@ -1184,42 +1184,42 @@ void JSONSchemaConverter::AddBasicRules() {
   auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", kBasicAny);
   std::string any_body = GenerateAny(std::get<AnySpec>(any_spec->spec), kBasicAny);
   ebnf_script_creator_.AddRule(kBasicAny, any_body);
-  rule_cache_["{}"] = kBasicAny;
+  AddCache("{}", kBasicAny);
 
   // basic_integer - cache_key matches SchemaParser::ComputeCacheKey for {"type": "integer"}
   constexpr const char* kIntegerCacheKey = "{\"type\":\"integer\"}";
   auto int_spec = SchemaSpec::Make(IntegerSpec{}, kIntegerCacheKey, kBasicInteger);
   std::string int_body = GenerateInteger(std::get<IntegerSpec>(int_spec->spec), kBasicInteger);
   ebnf_script_creator_.AddRule(kBasicInteger, int_body);
-  rule_cache_[kIntegerCacheKey] = kBasicInteger;
+  AddCache(kIntegerCacheKey, kBasicInteger);
 
   // basic_number - cache_key matches SchemaParser::ComputeCacheKey for {"type": "number"}
   constexpr const char* kNumberCacheKey = "{\"type\":\"number\"}";
   auto num_spec = SchemaSpec::Make(NumberSpec{}, kNumberCacheKey, kBasicNumber);
   std::string num_body = GenerateNumber(std::get<NumberSpec>(num_spec->spec), kBasicNumber);
   ebnf_script_creator_.AddRule(kBasicNumber, num_body);
-  rule_cache_[kNumberCacheKey] = kBasicNumber;
+  AddCache(kNumberCacheKey, kBasicNumber);
 
   // basic_string - cache_key matches SchemaParser::ComputeCacheKey for {"type": "string"}
   constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
   auto str_spec = SchemaSpec::Make(StringSpec{}, kStringCacheKey, kBasicString);
   std::string str_body = "[\"] " + kBasicStringSub;
   ebnf_script_creator_.AddRule(kBasicString, str_body);
-  rule_cache_[kStringCacheKey] = kBasicString;
+  AddCache(kStringCacheKey, kBasicString);
 
   // basic_boolean - cache_key matches SchemaParser::ComputeCacheKey for {"type": "boolean"}
   constexpr const char* kBooleanCacheKey = "{\"type\":\"boolean\"}";
   auto bool_spec = SchemaSpec::Make(BooleanSpec{}, kBooleanCacheKey, kBasicBoolean);
   std::string bool_body = GenerateBoolean(std::get<BooleanSpec>(bool_spec->spec), kBasicBoolean);
   ebnf_script_creator_.AddRule(kBasicBoolean, bool_body);
-  rule_cache_[kBooleanCacheKey] = kBasicBoolean;
+  AddCache(kBooleanCacheKey, kBasicBoolean);
 
   // basic_null - cache_key matches SchemaParser::ComputeCacheKey for {"type": "null"}
   constexpr const char* kNullCacheKey = "{\"type\":\"null\"}";
   auto null_spec = SchemaSpec::Make(NullSpec{}, kNullCacheKey, kBasicNull);
   std::string null_body = GenerateNull(std::get<NullSpec>(null_spec->spec), kBasicNull);
   ebnf_script_creator_.AddRule(kBasicNull, null_body);
-  rule_cache_[kNullCacheKey] = kBasicNull;
+  AddCache(kNullCacheKey, kBasicNull);
 
   // basic_array - cache_key matches SchemaParser::ComputeCacheKey for {"type": "array"}
   constexpr const char* kArrayCacheKey = "{\"type\":\"array\"}";
@@ -1229,7 +1229,7 @@ void JSONSchemaConverter::AddBasicRules() {
   auto array_spec = SchemaSpec::Make(std::move(array_spec_val), kArrayCacheKey, kBasicArray);
   std::string array_body = GenerateArray(std::get<ArraySpec>(array_spec->spec), kBasicArray);
   ebnf_script_creator_.AddRule(kBasicArray, array_body);
-  rule_cache_[kArrayCacheKey] = kBasicArray;
+  AddCache(kArrayCacheKey, kBasicArray);
 
   // basic_object - cache_key matches SchemaParser::ComputeCacheKey for {"type": "object"}
   constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
@@ -1239,7 +1239,7 @@ void JSONSchemaConverter::AddBasicRules() {
   auto obj_spec = SchemaSpec::Make(std::move(obj_spec_val), kObjectCacheKey, kBasicObject);
   std::string obj_body = GenerateObject(std::get<ObjectSpec>(obj_spec->spec), kBasicObject);
   ebnf_script_creator_.AddRule(kBasicObject, obj_body);
-  rule_cache_[kObjectCacheKey] = kBasicObject;
+  AddCache(kObjectCacheKey, kBasicObject);
 
   indent_manager_ = saved_indent_manager;
 }
@@ -1272,13 +1272,28 @@ std::string JSONSchemaConverter::GetBasicStringRuleName() const { return kBasicS
 
 std::string JSONSchemaConverter::GetBasicAnyRuleName() const { return kBasicAny; }
 
+void JSONSchemaConverter::AddCache(const std::string& key, const std::string& value) {
+  if (key.empty()) {
+    return;
+  }
+  rule_cache_manager_.add_cache(key, value);
+}
+
+std::optional<std::string> JSONSchemaConverter::GetCache(const std::string& key) const {
+  if (key.empty()) {
+    return std::nullopt;
+  }
+  return rule_cache_manager_.get_cache(key);
+}
+
 std::string JSONSchemaConverter::CreateRule(
     const SchemaSpecPtr& spec, const std::string& rule_name_hint
 ) {
   // Only check cache for basic rules (pre-populated in AddBasicRules)
   // Don't cache other rules to match original behavior
-  if (!spec->cache_key.empty() && rule_cache_.count(spec->cache_key)) {
-    return rule_cache_[spec->cache_key];
+  auto cached = GetCache(spec->cache_key);
+  if (cached.has_value()) {
+    return cached.value();
   }
 
   std::string rule_name = ebnf_script_creator_.AllocateRuleName(rule_name_hint);
@@ -2074,7 +2089,7 @@ std::string JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::str
   ebnf_script_creator_.AddRuleWithAllocatedName(allocated_rule_name, rule_body);
 
   if (!resolved->cache_key.empty()) {
-    rule_cache_[resolved->cache_key] = allocated_rule_name;
+    AddCache(resolved->cache_key, allocated_rule_name);
   }
 
   return allocated_rule_name;
