@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Literal
+from typing import Any, Callable, Dict, List, Literal
 
 from .structural_tag import (
     AnyTextFormat,
@@ -51,7 +51,7 @@ def _register_structural_tag_template(name: str):
 SupportedTemplateNames = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek", "harmony"]
 
 
-def get_builtin_structural_tag_template_function(
+def _get_builtin_structural_tag_template_function(
     format_type: SupportedTemplateNames,
 ) -> Callable[[Dict[str, Any]], StructuralTag]:
     """Get builtin structural tag template function by format type.
@@ -60,8 +60,8 @@ def get_builtin_structural_tag_template_function(
     containing "name" and "parameters" fields. Besides, for the OpenAI Harmony Response Format,
     users should also provide a list of builtin tools, each builtin tool should have a "function"
     key, which is a dictionary containing "name" and "parameters" fields. In addition, for the "qwen",
-    "deepseek" and "harmony" formats, "thinking" key can be provided to enable/disable thinking mode.
-    By default, thinking mode is enabled.
+    "deepseek" and "harmony" formats, "reasoning" key can be provided to enable/disable reasoning mode.
+    By default, reasoning mode is enabled.
 
     Examples
     --------
@@ -122,6 +122,23 @@ def get_builtin_structural_tag_template_function(
     return func
 
 
+def get_structural_tag_for_model(
+    model: SupportedTemplateNames,
+    reasoning: bool = True,
+    tools: List[Dict[str, Any]] = None,
+    builtin_tools: List[Dict[str, Any]] = None,
+    force_empty_reasoning: bool = False,
+) -> StructuralTag:
+    func = _get_builtin_structural_tag_template_function(model)
+    input_dict = {
+        "tools": tools,
+        "builtin_tools": builtin_tools,
+        "reasoning": reasoning,
+        "force_empty_reasoning": force_empty_reasoning,
+    }
+    return func(input_dict)
+
+
 @_register_structural_tag_template("llama")
 def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Llama 3.1 style structural tag format.
@@ -169,7 +186,7 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     Reference: https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/docs/tool_call_guidance.md
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "thinking": a boolean indicating whether to enable thinking mode.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
 
     Returns
     -------
@@ -210,7 +227,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     Reference: https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "thinking": a boolean indicating whether to enable thinking mode.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
 
     Returns
     -------
@@ -220,9 +237,9 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
 
     """
     tools = input_dict.get("tools", [])
-    thinking = input_dict.get("thinking", True)
-    if not isinstance(thinking, bool):
-        raise ValueError("The 'thinking' key in the input_dict must be a boolean.")
+    reasoning = input_dict.get("reasoning", True)
+    if not isinstance(reasoning, bool):
+        raise ValueError("The 'reasoning' key in the input_dict must be a boolean.")
     _validate_tool_function(tools)
 
     tags = []
@@ -242,7 +259,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
         )
     think_excludes = ["<think>", "</think>"]
 
-    if thinking:
+    if reasoning:
         prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end="</think>")
     else:
         prefix_tag = ConstStringFormat(value="</think>")
@@ -304,7 +321,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     Reference: https://qwen.readthedocs.io/en/latest/framework/function_call.html
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "thinking": a boolean indicating whether to enable thinking mode.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
 
     Returns
     -------
@@ -314,9 +331,9 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     """
     tools = input_dict.get("tools", [])
-    thinking = input_dict.get("thinking", True)
-    if not isinstance(thinking, bool):
-        raise ValueError("The 'thinking' key in the input_dict must be a boolean.")
+    reasoning = input_dict.get("reasoning", True)
+    if not isinstance(reasoning, bool):
+        raise ValueError("The 'reasoning' key in the input_dict must be a boolean.")
     _validate_tool_function(tools)
 
     tags = []
@@ -336,7 +353,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         )
     think_excludes = ["<think>", "</think>"]
 
-    if thinking:
+    if reasoning:
         prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
     else:
         prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
@@ -368,14 +385,14 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
 
     """
     tools = input_dict.get("tools", [])
-    thinking = input_dict.get("thinking", True)
+    reasoning = input_dict.get("reasoning", True)
     builtin_tools = input_dict.get("builtin_tools", [])
     _validate_tool_function(tools)
     _validate_tool_function(builtin_tools)
 
     tags = []
 
-    if thinking:
+    if reasoning:
         analysis_tag = TagFormat(
             begin="<|channel|>analysis<|message|>", content=AnyTextFormat(), end="<|end|>"
         )
