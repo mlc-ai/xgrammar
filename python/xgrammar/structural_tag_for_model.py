@@ -125,11 +125,11 @@ def _get_builtin_structural_tag_template_function(
 def get_structural_tag_for_model(
     model: SupportedModelStyles,
     reasoning: bool = True,
-    tools: List[Dict[str, Any]] = None,
-    builtin_tools: List[Dict[str, Any]] = None,
+    tools: List[Dict[str, Any]] = [],
+    builtin_tools: List[Dict[str, Any]] = [],
     force_empty_reasoning: bool = False,
 ) -> StructuralTag:
-    """Get structural tag for model. This function can generate structural tag for the given model
+    r"""Get structural tag for model. This function can generate structural tag for the given model
     with the given tools, builtin tools and reasoning mode.
 
     Parameters
@@ -137,19 +137,31 @@ def get_structural_tag_for_model(
     model : SupportedModelStyles
         The model type of the structural tag template.
     reasoning : bool
-        Whether to enable reasoning mode.
+        Whether to enable reasoning mode. i.e. whether to enable the <think>
+        and </think> tags.
     tools : List[Dict[str, Any]]
-        A list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
+        A list of tools, each tool should have a "function" key, which is a
+        dictionary containing "name" and "parameters" fields.
     builtin_tools : List[Dict[str, Any]]
-        A list of builtin tools, each builtin tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
+        A list of builtin tools, each builtin tool should have a "function" key,
+        which is a dictionary containing "name" and "parameters" fields. This
+        is only used for Harmony style.
     force_empty_reasoning : bool
-        Whether to force empty reasoning mode.
+        Whether to force empty reasoning mode. i.e. The model will output
+        the '<think>\n\n</think>' at the beginning of the response.
 
     Returns
     -------
     StructuralTag
         A structural tag for function calling format.
     """
+    if not isinstance(reasoning, bool):
+        raise ValueError("The 'reasoning' key in the input_dict must be a boolean.")
+    if not isinstance(force_empty_reasoning, bool):
+        raise ValueError("The 'force_empty_reasoning' key in the input_dict must be a boolean.")
+    _validate_tool_function(tools)
+    _validate_tool_function(builtin_tools)
+
     func = _get_builtin_structural_tag_template_function(model)
     input_dict = {
         "tools": tools,
@@ -197,7 +209,6 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """
 
     tools = input_dict.get("tools", [])
-    _validate_tool_function(tools)
 
     tags = []
 
@@ -239,7 +250,6 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         This format is used by Kimi-k2 and other models that follow the same style.
     """
     tools = input_dict.get("tools", [])
-    _validate_tool_function(tools)
 
     tags = []
     for tool in tools:
@@ -286,9 +296,6 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     """
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
-    if not isinstance(reasoning, bool):
-        raise ValueError("The 'reasoning' key in the input_dict must be a boolean.")
-    _validate_tool_function(tools)
 
     tags = []
     for tool in tools:
@@ -336,7 +343,6 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
         This format is used by Qwen3-Coder and other models that follow the same style.
     """
     tools = input_dict.get("tools", [])
-    _validate_tool_function(tools)
 
     tags = []
     for tool in tools:
@@ -381,9 +387,7 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
-    if not isinstance(reasoning, bool):
-        raise ValueError("The 'reasoning' key in the input_dict must be a boolean.")
-    _validate_tool_function(tools)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
 
     tags = []
     for tool in tools:
@@ -400,17 +404,21 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
                 end="}\n</tool_call>",
             )
         )
-
-    if reasoning:
-        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
-    else:
-        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
     if len(tags) > 0:
         suffix_tag = TriggeredTagsFormat(
             triggers=["<tool_call>"], tags=tags, excludes=_KTHINKEXCLUDES
         )
     else:
         suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+    else:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
 
@@ -435,8 +443,6 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     builtin_tools = input_dict.get("builtin_tools", [])
-    _validate_tool_function(tools)
-    _validate_tool_function(builtin_tools)
 
     tags = []
 
