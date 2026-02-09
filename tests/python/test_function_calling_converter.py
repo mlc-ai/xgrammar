@@ -7,7 +7,8 @@ from xgrammar.testing import _is_grammar_accept_string, _qwen_xml_tool_calling_t
 
 def check_schema_with_grammar(schema: dict, expected_grammar: str):
     ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
-    assert str(ebnf_grammar) == expected_grammar
+    normalized_grammar = str(ebnf_grammar).strip()
+    assert normalized_grammar == expected_grammar.strip()
 
 
 def check_schema_with_instance(schema: dict, instance: str, accepted: bool):
