@@ -1,73 +1,69 @@
 # Advanced Topics of the Structural Tag
 
-## Built-in structural tag template: `get_builtin_structural_tag_template_function`
+## Structural tag for model: `get_structural_tag_for_model`
 
-`get_builtin_structural_tag_template_function` returns a template function for the given model/format type. That template function takes tool definitions (and any format-specific options), returns a `StructuralTag`, and can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain a grammar that matches each vendor’s function-calling convention without hand-writing begin/schema/end structures.
+`get_structural_tag_for_model` generates a `StructuralTag` for the given model type with the specified tools and options. The returned structural tag can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain a grammar that matches the function-calling format in the corresponding model's style within any-form text.
 
-Use it when you need to constrain the model to output in a fixed pattern such as “tool name + parameter JSON”, e.g. for Llama, Qwen, Kimi, DeepSeek, or OpenAI Harmony.
+Use it when you need to constrain the model to output in a fixed pattern such as "tool name + parameter JSON", e.g. for Llama, Qwen, Kimi, DeepSeek, or OpenAI Harmony.
 
 ### Parameters
 
-- **format_type** (`SupportedTemplateNames`): The template type. Supported values:
+- **model** (`SupportedModelStyles`): The model type. Supported values:
   - `"llama"`: Llama-style (e.g. Llama 3, Llama 4)
-  - `"qwen"`: Qwen-style (e.g. Qwen3; optional thinking)
-  - `"qwen_coder"`: Qwen Coder-style (e.g. Qwen3-Coder)
+  - `"qwen"`: Qwen-style (e.g. Qwen3)
+  - `"qwen_coder"`: Qwen Coder-style (e.g. Qwen3-Coder, Qwen3-Coder-Next)
   - `"kimi"`: Kimi-style (e.g. Kimi-k2, Kimi-k2.5)
-  - `"deepseek"`: DeepSeek-style (e.g. DeepSeek-v3.1, DeepSeek-R1, DeepSeek-v3.2-exp; optional thinking)
+  - `"deepseek_r1"`: DeepSeek-style (e.g. DeepSeek-v3.1, DeepSeek-R1, DeepSeek-v3.2-exp)
   - `"harmony"`: OpenAI Harmony Response Format (e.g. gpt-oss)
+- **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags). Default `True`.
+- **tools** (`List[Dict[str, Any]]`, optional): List of tools; each item is a dict with a `"function"` key, which is a dict with `"name"` and `"parameters"` (`parameters` is a JSON Schema dict). Default `[]`.
+- **builtin_tools** (`List[Dict[str, Any]]`, optional): List of built-in tools (harmony only); same structure as `tools`. Default `[]`.
+- **force_empty_reasoning** (`bool`, optional): When reasoning is on, whether to force empty thinking content at the beginning. Default `False`.
+
+Passing an unsupported `model` raises `ValueError`.
 
 ### Returns
 
-A callable: `Callable[[Dict[str, Any]], StructuralTag]`. The dict you pass typically contains:
-
-- **tools** (all formats): List of tools; each item is a dict with a `"function"` key, which is a dict with `"name"` and `"parameters"` (`parameters` is a JSON Schema dict).
-- **thinking** (optional; for qwen / deepseek / harmony): Whether to enable the thinking block; default `True`.
-- **builtin_tools** (harmony only): List of built-in tools; same structure as `tools` (each item has a `"function"` key with `"name"` and `"parameters"`).
-
-Passing an unsupported `format_type` raises `ValueError`.
+`StructuralTag`: The structural tag for the given model's function-calling format.
 
 ### Example
 
 ```python
-from xgrammar import Grammar, get_builtin_structural_tag_template_function
+from xgrammar import Grammar, get_structural_tag_for_model
 
 tools = [
     {"function": {"name": "get_weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}}},
     {"function": {"name": "get_time", "parameters": {"type": "object", "properties": {}}}},
 ]
 
-# Get the Llama-style template function and build a structural tag
-fn = get_builtin_structural_tag_template_function("llama")
-structural_tag = fn({"tools": tools})
-
-# Build a grammar from the structural tag for constrained generation
+# Get the Llama-style structural tag and build a grammar
+structural_tag = get_structural_tag_for_model("llama", tools=tools)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
 For the Harmony format you must provide both `tools` and `builtin_tools`:
 
 ```python
-fn = get_builtin_structural_tag_template_function("harmony")
-structural_tag = fn({
-    "tools": [
+structural_tag = get_structural_tag_for_model(
+    "harmony",
+    tools=[
         {"function": {"name": "user_tool", "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}},
     ],
-    "builtin_tools": [
+    builtin_tools=[
         {"function": {"name": "builtin_tool", "parameters": {"type": "object", "properties": {}}}},
     ],
-})
+)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
-For formats that support thinking (qwen, kimi, deepseek), pass `thinking` in the dict:
+For formats that support reasoning (like Qwen3, Deepseek-R1, Kimi-k2-thinking ), pass `reasoning` to enable/disable the reasoning mode:
 
 ```python
-fn = get_builtin_structural_tag_template_function("qwen")
-structural_tag = fn({"tools": tools, "thinking": True})
+structural_tag = get_structural_tag_for_model("qwen", tools=tools, reasoning=True)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
-If `thinking` is not passed, then the thinking mode will be enabled by default.
+If `reasoning` is not passed, reasoning mode is enabled by default. Besides, whe `reasoning` is `True`, You can also set the `force_empty_reasoning` to constrain the reasoning content.
 
 ---
 
