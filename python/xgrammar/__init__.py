@@ -25,6 +25,7 @@ from .matcher import (
 )
 from .structural_tag import StructuralTag
 from .structural_tag_for_model import (
+    SupportedModelStyles,
     get_structural_tag_for_model,
     get_structural_tag_supported_models,
 )
@@ -59,4 +60,5 @@ __all__ = [
     "VocabType",
     "get_structural_tag_for_model",
     "get_structural_tag_supported_models",
+    "SupportedModelStyles",
 ]
