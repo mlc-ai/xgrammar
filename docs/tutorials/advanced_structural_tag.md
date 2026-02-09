@@ -67,6 +67,12 @@ If `reasoning` is not passed, reasoning mode is enabled by default. Besides, whe
 
 ---
 
+## Supported models: `get_structural_tag_supported_models`
+
+`get_structural_tag_supported_models` returns the supported model list for each structural tag style. Call it with no args to get `Dict[str, List[str]]` (style → models), or pass a style name (e.g. `"llama"`, `"qwen"`) to get `List[str]` for that style. Use it to confirm which style a model uses before calling `get_structural_tag_for_model`.
+
+---
+
 ## Deprecated API: `Grammar.from_structural_tag(tags, triggers)`
 
 **The deprecated API is still available for backward compatibility. However, it is recommended to use the new API instead.**
