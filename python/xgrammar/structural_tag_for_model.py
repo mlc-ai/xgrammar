@@ -17,6 +17,7 @@ from .structural_tag import (
 SupportedModelStyles = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony"]
 _structural_tag_registry: Dict[SupportedModelStyles, Callable[[Dict[str, Any]], StructuralTag]] = {}
 _structural_tag_supported_models: Dict[SupportedModelStyles, List[str]] = {}
+_KTHINKEXCLUDES = ["<think>", "</think>"]
 
 
 def _validate_tool_function(tools: Any) -> None:
@@ -216,7 +217,9 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         )
 
     if len(tags) > 0:
-        return StructuralTag(format=TriggeredTagsFormat(triggers=['{"name": '], tags=tags))
+        return StructuralTag(
+            format=TriggeredTagsFormat(triggers=['{"name": '], tags=tags, excludes=_KTHINKEXCLUDES)
+        )
     else:
         return StructuralTag(format=AnyTextFormat())
 
@@ -256,7 +259,9 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     if len(tags) > 0:
         return StructuralTag(
-            format=TriggeredTagsFormat(triggers=["<|tool_call_begin|>"], tags=tags)
+            format=TriggeredTagsFormat(
+                triggers=["<|tool_call_begin|>"], tags=tags, excludes=_KTHINKEXCLUDES
+            )
         )
     else:
         return StructuralTag(format=AnyTextFormat())
@@ -300,7 +305,6 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
                 end="<｜tool▁call▁end｜>",
             )
         )
-    think_excludes = ["<think>", "</think>"]
 
     if reasoning:
         prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end="</think>")
@@ -310,10 +314,10 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
         suffix_tag = TriggeredTagsFormat(
             triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"],
             tags=tags,
-            excludes=think_excludes,
+            excludes=_KTHINKEXCLUDES,
         )
     else:
-        suffix_tag = AnyTextFormat(excludes=think_excludes)
+        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
 
@@ -352,7 +356,9 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
 
     if len(tags) > 0:
         return StructuralTag(
-            format=TriggeredTagsFormat(triggers=["<tool_call>\n<function="], tags=tags)
+            format=TriggeredTagsFormat(
+                triggers=["<tool_call>\n<function="], tags=tags, excludes=_KTHINKEXCLUDES
+            )
         )
     else:
         return StructuralTag(format=AnyTextFormat())
@@ -394,7 +400,6 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
                 end="}\n</tool_call>",
             )
         )
-    think_excludes = ["<think>", "</think>"]
 
     if reasoning:
         prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
@@ -402,10 +407,10 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
     if len(tags) > 0:
         suffix_tag = TriggeredTagsFormat(
-            triggers=["<tool_call>"], tags=tags, excludes=think_excludes
+            triggers=["<tool_call>"], tags=tags, excludes=_KTHINKEXCLUDES
         )
     else:
-        suffix_tag = AnyTextFormat(excludes=think_excludes)
+        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
 
