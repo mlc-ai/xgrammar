@@ -327,7 +327,7 @@ root ::= ((triggered_tags))
     ),
     # deepseek, thinking True / False
     (
-        "deepseek",
+        "deepseek_r1",
         {"tools": [], "reasoning": True},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
@@ -347,7 +347,7 @@ root ::= ((sequence))
 """,
     ),
     (
-        "deepseek",
+        "deepseek_r1",
         {"tools": [], "reasoning": False},
         r"""const_string ::= (("</think>"))
 any_text ::= TagDispatch(
@@ -361,7 +361,7 @@ root ::= ((sequence))
 """,
     ),
     (
-        "deepseek",
+        "deepseek_r1",
         {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": True},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
@@ -425,7 +425,7 @@ root ::= ((sequence))
 """,
     ),
     (
-        "deepseek",
+        "deepseek_r1",
         {"tools": make_tools(["tool_a", "tool_b"]), "reasoning": False},
         r"""const_string ::= (("</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
@@ -1034,27 +1034,27 @@ instance_cases: List[Tuple[str, Dict[str, Any], str, bool]] = [
     ("kimi", {"tools": []}, "123123", True),
     # ----- deepseek
     (
-        "deepseek",
+        "deepseek_r1",
         {"tools": _tools_deepseek, "reasoning": True},
         '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
         True,
     ),
     (
-        "deepseek",
+        "deepseek_r1",
         {"tools": _tools_deepseek, "reasoning": True},
         "123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{}<｜tool▁call▁end｜>",
         True,
     ),
     (
-        "deepseek",
+        "deepseek_r1",
         {"tools": _tools_deepseek, "reasoning": True},
         '132</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>wrong<｜tool▁sep｜>{"q":"v"}<｜tool▁call▁end｜>',
         False,
     ),
-    ("deepseek", {"tools": [], "reasoning": True}, "123123</think>", True),
-    ("deepseek", {"tools": [], "reasoning": True}, "</think>123123</think>", False),
-    ("deepseek", {"tools": [], "reasoning": False}, "</think>123</think>", False),
-    ("deepseek", {"tools": [], "reasoning": False}, "</think>123", True),
+    ("deepseek_r1", {"tools": [], "reasoning": True}, "123123</think>", True),
+    ("deepseek_r1", {"tools": [], "reasoning": True}, "</think>123123</think>", False),
+    ("deepseek_r1", {"tools": [], "reasoning": False}, "</think>123</think>", False),
+    ("deepseek_r1", {"tools": [], "reasoning": False}, "</think>123", True),
     # ----- qwen_coder
     (
         "qwen_coder",
