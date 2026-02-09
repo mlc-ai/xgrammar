@@ -148,7 +148,7 @@ def get_structural_tag_for_model(
         is only used for Harmony style.
     force_empty_reasoning : bool
         Whether to force empty reasoning mode. i.e. The model will output
-        the '<think>\n\n</think>' at the beginning of the response.
+        the empty thinking content at the beginning of the response.
 
     Returns
     -------
@@ -199,6 +199,8 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     Reference: https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
+    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
     Returns
     -------
@@ -207,11 +209,11 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         This format is used by Llama 3 and other models that follow the same style.
 
     """
-
     tools = input_dict.get("tools", [])
+    reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
 
     tags = []
-
     for tool in tools:
         if "function" not in tool:
             continue
@@ -228,11 +230,21 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         )
 
     if len(tags) > 0:
-        return StructuralTag(
-            format=TriggeredTagsFormat(triggers=['{"name": '], tags=tags, excludes=_KTHINKEXCLUDES)
+        suffix_tag = TriggeredTagsFormat(
+            triggers=['{"name": '], tags=tags, excludes=_KTHINKEXCLUDES
         )
     else:
-        return StructuralTag(format=AnyTextFormat())
+        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+    else:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
 @_register_structural_tag_template("kimi", ["kimi-k2", "kimi-k2.5"])
@@ -242,6 +254,7 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
     - "reasoning": a boolean indicating whether to enable reasoning mode.
+    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
     Returns
     -------
@@ -250,6 +263,8 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         This format is used by Kimi-k2 and other models that follow the same style.
     """
     tools = input_dict.get("tools", [])
+    reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
 
     tags = []
     for tool in tools:
@@ -268,13 +283,21 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         )
 
     if len(tags) > 0:
-        return StructuralTag(
-            format=TriggeredTagsFormat(
-                triggers=["<|tool_call_begin|>"], tags=tags, excludes=_KTHINKEXCLUDES
-            )
+        suffix_tag = TriggeredTagsFormat(
+            triggers=["<|tool_call_begin|>"], tags=tags, excludes=_KTHINKEXCLUDES
         )
     else:
-        return StructuralTag(format=AnyTextFormat())
+        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+    else:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
 @_register_structural_tag_template(
@@ -286,6 +309,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
     - "reasoning": a boolean indicating whether to enable reasoning mode.
+    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
     Returns
     -------
@@ -296,6 +320,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     """
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
 
     tags = []
     for tool in tools:
@@ -313,10 +338,6 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
             )
         )
 
-    if reasoning:
-        prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end="</think>")
-    else:
-        prefix_tag = ConstStringFormat(value="</think>")
     if len(tags) > 0:
         suffix_tag = TriggeredTagsFormat(
             triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"],
@@ -325,8 +346,16 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
         )
     else:
         suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
-    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
-    return StructuralTag(format=sequence_format)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="</think>")
+    else:
+        prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end="</think>")
+
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
 @_register_structural_tag_template("qwen_coder", ["qwen3-coder", "qwen3-coder-next"])
@@ -335,6 +364,8 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
     Reference: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
+    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
     Returns
     -------
@@ -343,6 +374,8 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
         This format is used by Qwen3-Coder and other models that follow the same style.
     """
     tools = input_dict.get("tools", [])
+    reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
 
     tags = []
     for tool in tools:
@@ -361,13 +394,21 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
         )
 
     if len(tags) > 0:
-        return StructuralTag(
-            format=TriggeredTagsFormat(
-                triggers=["<tool_call>\n<function="], tags=tags, excludes=_KTHINKEXCLUDES
-            )
+        suffix_tag = TriggeredTagsFormat(
+            triggers=["<tool_call>\n<function="], tags=tags, excludes=_KTHINKEXCLUDES
         )
     else:
-        return StructuralTag(format=AnyTextFormat())
+        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+    else:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
 @_register_structural_tag_template("qwen", ["qwen3"])
@@ -431,6 +472,8 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
     - "builtin_tools": a list of builtin tools, each builtin tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
+    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
     Returns
     -------
@@ -442,14 +485,22 @@ def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
     """
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     builtin_tools = input_dict.get("builtin_tools", [])
 
     tags = []
 
     if reasoning:
-        analysis_tag = TagFormat(
-            begin="<|channel|>analysis<|message|>", content=AnyTextFormat(), end="<|end|>"
-        )
+        if force_empty_reasoning:
+            analysis_tag = TagFormat(
+                begin="<|channel|>analysis<|message|>",
+                content=ConstStringFormat(value="<|end|>"),
+                end="",
+            )
+        else:
+            analysis_tag = TagFormat(
+                begin="<|channel|>analysis<|message|>", content=AnyTextFormat(), end="<|end|>"
+            )
         tags.append(analysis_tag)
 
     for tool in tools:
