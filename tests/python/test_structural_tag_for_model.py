@@ -10,7 +10,10 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.structural_tag import StructuralTag
-from xgrammar.structural_tag_for_model import get_structural_tag_for_model
+from xgrammar.structural_tag_for_model import (
+    get_structural_tag_for_model,
+    get_structural_tag_supported_models,
+)
 from xgrammar.testing import _is_grammar_accept_string
 
 
@@ -125,6 +128,43 @@ def test_get_structural_tag_for_model_unknown_format():
         get_structural_tag_for_model("unknown_format")
     assert "Unknown format type" in str(exc_info.value)
     assert "unknown_format" in str(exc_info.value)
+
+
+# ---------- Test: get_structural_tag_supported_models ----------
+
+
+def test_get_structural_tag_supported_models_all():
+    """get_structural_tag_supported_models() returns dict of all styles to model lists."""
+    result = get_structural_tag_supported_models()
+    assert isinstance(result, dict)
+    expected_styles = {"llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony"}
+    assert set(result.keys()) == expected_styles
+    for style, models in result.items():
+        assert isinstance(models, list)
+        assert all(isinstance(m, str) for m in models)
+
+
+@pytest.mark.parametrize(
+    "style, expected_models",
+    [
+        ("llama", ["llama3.1", "llama4"]),
+        ("kimi", ["kimi-k2", "kimi-k2.5"]),
+        ("deepseek_r1", ["deepseek-v3.1", "deepseek-r1", "deepseek-v3.2-exp"]),
+        ("qwen_coder", ["qwen3-coder", "qwen3-coder-next"]),
+        ("qwen", ["qwen3"]),
+        ("harmony", ["gpt-oss"]),
+    ],
+)
+def test_get_structural_tag_supported_models_by_style(style: str, expected_models: List[str]):
+    """get_structural_tag_supported_models(style) returns list of supported models for that style."""
+    result = get_structural_tag_supported_models(style)
+    assert result == expected_models
+
+
+def test_get_structural_tag_supported_models_unknown_style():
+    """get_structural_tag_supported_models(unknown_style) raises KeyError."""
+    with pytest.raises(KeyError):
+        get_structural_tag_supported_models("unknown_style")
 
 
 # ---------- Test: input validation errors ----------
