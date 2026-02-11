@@ -2939,21 +2939,11 @@ std::string JSONSchemaToEBNF(
       );
       return converter.Convert(spec);
     }
-    case JSONFormat::kQwenXML: {
-      XMLToolCallingConverter converter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
-      );
-      return converter.Convert(spec);
-    }
-    case JSONFormat::kMiniMaxXML: {
-      XMLToolCallingConverter converter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
-      );
-      return converter.Convert(spec);
-    }
+    case JSONFormat::kQwenXML:
+    case JSONFormat::kMiniMaxXML:
     case JSONFormat::kDeepSeekXML: {
       XMLToolCallingConverter converter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, json_format
       );
       return converter.Convert(spec);
     }

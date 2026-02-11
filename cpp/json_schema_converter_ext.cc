@@ -78,8 +78,10 @@ void XMLToolCallingConverter::AddBasicRules() {
       "stop_eos=true,"
       "stop_str=(),"
       "loop_after_dispatch=false,"
-      "excludes=(\"</parameter>\")"
-      ")"
+      "excludes=(\"" +
+          parameter_suffix_ +
+          "\")"
+          ")"
   );
   constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
   AddCache(kStringCacheKey, kXMLString);
