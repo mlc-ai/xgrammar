@@ -239,6 +239,33 @@ def test_qwen_parameter_xml_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+# JSONSchemaFormat with style="qwen_xml" (same behavior as qwen_xml_parameter)
+json_schema_style_qwen_xml_stag_grammar = [
+    (
+        {
+            "type": "json_schema",
+            "json_schema": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                "required": ["name", "age"],
+            },
+            "style": "qwen_xml",
+        },
+        qwen_parameter_xml_stag_grammar[0][1],  # same expected grammar as qwen_xml_parameter
+    )
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", json_schema_style_qwen_xml_stag_grammar)
+@pytest.mark.parametrize("instance, is_accepted", qwen_parameter_xml_instance_is_accepted)
+def test_json_schema_style_qwen_xml_format(
+    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+):
+    """Test JSONSchemaFormat with style='qwen_xml' produces same grammar and acceptance."""
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 ebnf_grammar_stag_grammar = [
     (
         {
@@ -1730,6 +1757,10 @@ json_format_error_test_data = [
         '{"type": "structural_tag", "format": {"type": "tags_with_separator", "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "separator": "sep", "stop_after_first": "not_boolean"}}',
         "stop_after_first must be a boolean",
     ),
+    (
+        '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
+        'style must be "json" or "qwen_xml"',
+    ),
 ]
 
 
@@ -1970,6 +2001,23 @@ basic_structural_tags_instance_is_accepted = [
     (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "string"}), '"abc"', True),
     (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "integer"}), "123", True),
     (xgr.structural_tag.JSONSchemaFormat(json_schema={"type": "integer"}), "abc", False),
+    # JSONSchemaFormat with style="qwen_xml"
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+            style="qwen_xml",
+        ),
+        "<parameter=name>value</parameter>",
+        True,
+    ),
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+            style="qwen_xml",
+        ),
+        "<parameter=name>value</param>",
+        False,
+    ),
     # AnyTextFormat
     (xgr.structural_tag.AnyTextFormat(), "", True),
     (xgr.structural_tag.AnyTextFormat(), "any text here", True),
