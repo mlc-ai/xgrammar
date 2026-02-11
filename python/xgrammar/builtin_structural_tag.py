@@ -12,11 +12,90 @@ from .structural_tag import (
     TriggeredTagsFormat,
 )
 
-# ---------- Structural Tag Template ----------
+# ---------- API Functions ----------
 
-SupportedModelStyles = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony"]
-_structural_tag_registry: Dict[SupportedModelStyles, Callable[[Dict[str, Any]], StructuralTag]] = {}
-_structural_tag_supported_models: Dict[SupportedModelStyles, List[str]] = {}
+
+BuiltinSupportedModels = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony"]
+
+
+def get_builtin_structural_tag(
+    model: BuiltinSupportedModels,
+    reasoning: bool = True,
+    tools: List[Dict[str, Any]] = [],
+    builtin_tools: List[Dict[str, Any]] = [],
+    force_empty_reasoning: bool = False,
+) -> StructuralTag:
+    r"""Get structural tag for model. This function can generate structural tag for the given model
+    with the given tools, builtin tools and reasoning mode.
+
+    Parameters
+    ----------
+    model : SupportedModelStyles
+        The model type of the structural tag template.
+    reasoning : bool
+        Whether to enable reasoning mode. i.e. whether to enable the <think>
+        and </think> tags.
+    tools : List[Dict[str, Any]]
+        A list of tools, each tool should have a "function" key, which is a
+        dictionary containing "name" and "parameters" fields.
+    builtin_tools : List[Dict[str, Any]]
+        A list of builtin tools, each builtin tool should have a "function" key,
+        which is a dictionary containing "name" and "parameters" fields. This
+        is only used for Harmony style.
+    force_empty_reasoning : bool
+        Whether to force empty reasoning mode. i.e. The model will output
+        the empty thinking content at the beginning of the response.
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for function calling format.
+    """
+    if not isinstance(reasoning, bool):
+        raise ValueError("The 'reasoning' key in the input_dict must be a boolean.")
+    if not isinstance(force_empty_reasoning, bool):
+        raise ValueError("The 'force_empty_reasoning' key in the input_dict must be a boolean.")
+    _validate_tool_function(tools)
+    _validate_tool_function(builtin_tools)
+
+    func = _get_builtin_structural_tag_function(model)
+    input_dict = {
+        "tools": tools,
+        "builtin_tools": builtin_tools,
+        "reasoning": reasoning,
+        "force_empty_reasoning": force_empty_reasoning,
+    }
+    return func(input_dict)
+
+
+def get_builtin_structural_tag_supported_models(
+    strucutural_tag_style: Optional[BuiltinSupportedModels] = None,
+) -> Union[Dict[str, List[str]], List[str]]:
+    """Get supported models for a given structural tag style.
+    If strucutural_tag_style is not provided, return all supported models.
+
+    Parameters
+    ----------
+    strucutural_tag_style : Optional[SupportedModelStyles]
+        The structural tag style.
+    Returns
+    -------
+    Union[Dict[str, List[str]], List[str]]
+        A dictionary of supported models for each structural tag style, or a list of supported models.
+    """
+    if strucutural_tag_style is None:
+        return _structural_tag_supported_models
+    else:
+        return _structural_tag_supported_models[strucutural_tag_style]
+
+
+# ---------- Helper Functions And Constants ----------
+
+
+_structural_tag_registry: Dict[
+    BuiltinSupportedModels, Callable[[Dict[str, Any]], StructuralTag]
+] = {}
+_structural_tag_supported_models: Dict[BuiltinSupportedModels, List[str]] = {}
 _KTHINKEXCLUDES = ["<think>", "</think>"]
 
 
@@ -40,7 +119,7 @@ def _validate_tool_function(tools: Any) -> None:
             raise ValueError("The 'parameters' key in each tool must be a dict.")
 
 
-def _register_structural_tag_template(name: str, supported_models: List[str]):
+def _register_structural_tag_function(name: str, supported_models: List[str]):
     """Register a structural tag template."""
 
     def decorator(func):
@@ -51,8 +130,8 @@ def _register_structural_tag_template(name: str, supported_models: List[str]):
     return decorator
 
 
-def _get_builtin_structural_tag_template_function(
-    format_type: SupportedModelStyles,
+def _get_builtin_structural_tag_function(
+    format_type: BuiltinSupportedModels,
 ) -> Callable[[Dict[str, Any]], StructuralTag]:
     """Get builtin structural tag template function by format type.
     In all the structural tag template formats, users should provide
@@ -97,10 +176,10 @@ def _get_builtin_structural_tag_template_function(
           Supported Models: Qwen3 and other models that follow the same style.
         - "qwen_coder": Qwen-Coder style structural tag format.
           Supported Models: Qwen3-Coder, Qwen3-Coder-Next and other models that follow the same style.
-        - "kimi": Kimi-k2 style structural tag format.
-          Supported Models: Kimi-k2, Kimi-k2.5 and other models that follow the same style.
-        - "deepseek_r1": Deepseek-v3.1 style structural tag format.
-          Supported Models: Deepseek-v3.1, Deepseek-R1, Deepseek-v3.2-exp and other models that follow the same style.
+        - "kimi": Kimi-K2 style structural tag format.
+          Supported Models: Kimi-K2, Kimi-K2.5 and other models that follow the same style.
+        - "deepseek_r1": Deepseek-R1 style structural tag format.
+          Supported Models: Deepseek-V3.1, Deepseek-R1, Deepseek-V3.2-exp and other models that follow the same style.
         - "harmony": OpenAI Harmony Response Format (gpt-oss).
           Supported Models: GPT-oss and other models that follow the same style.
 
@@ -122,80 +201,12 @@ def _get_builtin_structural_tag_template_function(
     return func
 
 
-def get_structural_tag_for_model(
-    model: SupportedModelStyles,
-    reasoning: bool = True,
-    tools: List[Dict[str, Any]] = [],
-    builtin_tools: List[Dict[str, Any]] = [],
-    force_empty_reasoning: bool = False,
-) -> StructuralTag:
-    r"""Get structural tag for model. This function can generate structural tag for the given model
-    with the given tools, builtin tools and reasoning mode.
-
-    Parameters
-    ----------
-    model : SupportedModelStyles
-        The model type of the structural tag template.
-    reasoning : bool
-        Whether to enable reasoning mode. i.e. whether to enable the <think>
-        and </think> tags.
-    tools : List[Dict[str, Any]]
-        A list of tools, each tool should have a "function" key, which is a
-        dictionary containing "name" and "parameters" fields.
-    builtin_tools : List[Dict[str, Any]]
-        A list of builtin tools, each builtin tool should have a "function" key,
-        which is a dictionary containing "name" and "parameters" fields. This
-        is only used for Harmony style.
-    force_empty_reasoning : bool
-        Whether to force empty reasoning mode. i.e. The model will output
-        the empty thinking content at the beginning of the response.
-
-    Returns
-    -------
-    StructuralTag
-        A structural tag for function calling format.
-    """
-    if not isinstance(reasoning, bool):
-        raise ValueError("The 'reasoning' key in the input_dict must be a boolean.")
-    if not isinstance(force_empty_reasoning, bool):
-        raise ValueError("The 'force_empty_reasoning' key in the input_dict must be a boolean.")
-    _validate_tool_function(tools)
-    _validate_tool_function(builtin_tools)
-
-    func = _get_builtin_structural_tag_template_function(model)
-    input_dict = {
-        "tools": tools,
-        "builtin_tools": builtin_tools,
-        "reasoning": reasoning,
-        "force_empty_reasoning": force_empty_reasoning,
-    }
-    return func(input_dict)
+# ---------- Each Built-in Structural Tag Function ----------
 
 
-def get_structural_tag_supported_models(
-    strucutural_tag_style: Optional[SupportedModelStyles] = None,
-) -> Union[Dict[str, List[str]], List[str]]:
-    """Get supported models for a given structural tag style.
-    If strucutural_tag_style is not provided, return all supported models.
-
-    Parameters
-    ----------
-    strucutural_tag_style : Optional[SupportedModelStyles]
-        The structural tag style.
-    Returns
-    -------
-    Union[Dict[str, List[str]], List[str]]
-        A dictionary of supported models for each structural tag style, or a list of supported models.
-    """
-    if strucutural_tag_style is None:
-        return _structural_tag_supported_models
-    else:
-        return _structural_tag_supported_models[strucutural_tag_style]
-
-
-@_register_structural_tag_template("llama", ["llama3.1", "llama4"])
-def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
-    """Get Llama 3.1 style structural tag format.
+@_register_structural_tag_function("llama", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"])
+def _get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    """Get Llama style structural tag format.
     Reference: https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
@@ -247,9 +258,9 @@ def _generate_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@_register_structural_tag_template("kimi", ["kimi-k2", "kimi-k2.5"])
-def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
-    """Get Kimi-k2 style structural tag format.
+@_register_structural_tag_function("kimi", ["Kimi-K2", "Kimi-K2.5"])
+def _get_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    """Get Kimi-K2 style structural tag format.
     Reference: https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/docs/tool_call_guidance.md
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
@@ -260,7 +271,7 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     -------
     StructuralTag
         A structural tag template.
-        This format is used by Kimi-k2 and other models that follow the same style.
+        This format is used by Kimi-K2 and other models that follow the same style.
     """
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
@@ -300,11 +311,11 @@ def _generate_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@_register_structural_tag_template(
-    "deepseek_r1", ["deepseek-v3.1", "deepseek-r1", "deepseek-v3.2-exp"]
+@_register_structural_tag_function(
+    "deepseek_r1", ["DeepSeek-V3.1", "DeepSeek-R1", "DeepSeek-V3.2-exp"]
 )
-def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
-    """Get Deepseek v3.1 style structural tag format.
+def _get_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    """Get DeepSeek-R1 style structural tag format.
     Reference: https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json
     The input_dict should be a dictionary with the following keys:
     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
@@ -315,7 +326,7 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     -------
     StructuralTag
         A structural tag for function calling format.
-        This format is used by Deepseek-v3.1 and other models that follow the same style.
+        This format is used by DeepSeek-R1 and other models that follow the same style.
 
     """
     tools = input_dict.get("tools", [])
@@ -358,8 +369,8 @@ def _generate_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@_register_structural_tag_template("qwen_coder", ["qwen3-coder", "qwen3-coder-next"])
-def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+@_register_structural_tag_function("qwen_coder", ["Qwen3-Coder", "Qwen3-Coder-Next"])
+def _get_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Qwen3-Coder style structural tag format.
     Reference: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja
     The input_dict should be a dictionary with the following keys:
@@ -411,8 +422,8 @@ def _generate_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> Structura
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@_register_structural_tag_template("qwen", ["qwen3"])
-def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+@_register_structural_tag_function("qwen", ["Qwen3"])
+def _get_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Qwen3 style structural tag format.
     Reference: https://qwen.readthedocs.io/en/latest/framework/function_call.html
     The input_dict should be a dictionary with the following keys:
@@ -464,8 +475,8 @@ def _generate_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     return StructuralTag(format=sequence_format)
 
 
-@_register_structural_tag_template("harmony", ["gpt-oss"])
-def _generate_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+@_register_structural_tag_function("harmony", ["gpt-oss"])
+def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get harmony(gpt-oss) style structural tag format.
     Reference: https://developers.openai.com/cookbook/articles/openai-harmony
     Reference: https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja

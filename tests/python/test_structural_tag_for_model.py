@@ -9,11 +9,11 @@ import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.structural_tag import StructuralTag
-from xgrammar.structural_tag_for_model import (
-    get_structural_tag_for_model,
-    get_structural_tag_supported_models,
+from xgrammar.builtin_structural_tag import (
+    get_builtin_structural_tag,
+    get_builtin_structural_tag_supported_models,
 )
+from xgrammar.structural_tag import StructuralTag
 from xgrammar.testing import _is_grammar_accept_string
 
 
@@ -82,7 +82,9 @@ def disable_profiler(request):
 def check_stag_with_grammar(structural_tag: StructuralTag, expected_grammar_ebnf: str):
     """Assert structural tag compiles to expected EBNF."""
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
-    assert str(stag_ebnf) == expected_grammar_ebnf
+    assert (
+        str(stag_ebnf) == expected_grammar_ebnf
+    ), f"Expected:\n{expected_grammar_ebnf}\nGot:\n{str(stag_ebnf)}"
 
 
 def check_stag_with_instance(
@@ -123,17 +125,17 @@ _builtin_harmony = make_tools(["analysis_tool"])
 def test_get_structural_tag_for_model_unknown_format():
     """get_structural_tag_for_model raises ValueError for unknown format type."""
     with pytest.raises(ValueError) as exc_info:
-        get_structural_tag_for_model("unknown_format")
+        get_builtin_structural_tag("unknown_format")
     assert "Unknown format type" in str(exc_info.value)
     assert "unknown_format" in str(exc_info.value)
 
 
-# ---------- Test: get_structural_tag_supported_models ----------
+# ---------- Test: get_builtin_structural_tag_supported_models ----------
 
 
-def test_get_structural_tag_supported_models_all():
+def test_get_builtin_structural_tag_supported_models_all():
     """get_structural_tag_supported_models() returns dict of all styles to model lists."""
-    result = get_structural_tag_supported_models()
+    result = get_builtin_structural_tag_supported_models()
     assert isinstance(result, dict)
     expected_styles = {"llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony"}
     assert set(result.keys()) == expected_styles
@@ -145,24 +147,24 @@ def test_get_structural_tag_supported_models_all():
 @pytest.mark.parametrize(
     "style, expected_models",
     [
-        ("llama", ["llama3.1", "llama4"]),
-        ("kimi", ["kimi-k2", "kimi-k2.5"]),
-        ("deepseek_r1", ["deepseek-v3.1", "deepseek-r1", "deepseek-v3.2-exp"]),
-        ("qwen_coder", ["qwen3-coder", "qwen3-coder-next"]),
-        ("qwen", ["qwen3"]),
+        ("llama", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]),
+        ("kimi", ["Kimi-K2", "Kimi-K2.5"]),
+        ("deepseek_r1", ["DeepSeek-V3.1", "DeepSeek-R1", "DeepSeek-V3.2-exp"]),
+        ("qwen_coder", ["Qwen3-Coder", "Qwen3-Coder-Next"]),
+        ("qwen", ["Qwen3"]),
         ("harmony", ["gpt-oss"]),
     ],
 )
 def test_get_structural_tag_supported_models_by_style(style: str, expected_models: List[str]):
     """get_structural_tag_supported_models(style) returns list of supported models for that style."""
-    result = get_structural_tag_supported_models(style)
+    result = get_builtin_structural_tag_supported_models(style)
     assert result == expected_models
 
 
 def test_get_structural_tag_supported_models_unknown_style():
     """get_structural_tag_supported_models(unknown_style) raises KeyError."""
     with pytest.raises(KeyError):
-        get_structural_tag_supported_models("unknown_style")
+        get_builtin_structural_tag_supported_models("unknown_style")
 
 
 # ---------- Test: input validation errors ----------
@@ -216,12 +218,12 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
 
 
 @pytest.mark.parametrize("format_type, input_dict, error_substring", input_validation_error_cases)
-def test_generate_structural_tag_input_validation_errors(
+def test_get_builtin_structural_tag_input_validation_errors(
     format_type: str, input_dict: Dict[str, Any], error_substring: str
 ):
-    """get_structural_tag_for_model raises ValueError for invalid input."""
+    """get_builtin_structural_tag raises ValueError for invalid input."""
     with pytest.raises(ValueError) as exc_info:
-        get_structural_tag_for_model(**_input_dict_to_get_stag_kwargs(format_type, input_dict))
+        get_builtin_structural_tag(**_input_dict_to_get_stag_kwargs(format_type, input_dict))
     msg = str(exc_info.value)
     if ".*" in error_substring:
         assert re.search(
@@ -790,15 +792,6 @@ root ::= ((sequence))
             (
                 r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-xml_string ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=false,
-  excludes=("</parameter>")
-)
-xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
-xml_string_0 ::= ((xml_string))
-xml_any ::= ((basic_number) | (xml_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
 basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
@@ -807,7 +800,16 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root_0 ::= ("" | ([ \n\t]* "<parameter=q>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>"))
+xml_string ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
+xml_any ::= ((xml_string) | (basic_array) | (basic_object))
+xml_object ::= (("<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1) | ([ \n\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+root_0 ::= (("<parameter=q>" [ \n\t]* xml_string [ \n\t]* "</parameter>") | ([ \n\t]*))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -817,6 +819,7 @@ basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+xml_object_1 ::= ("" | ("<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 triggered_tags_group ::= (("run_sql>\n" root_0 "\n</function>\n</tool_call>"))
 triggered_tags ::= TagDispatch(
@@ -840,15 +843,6 @@ root ::= ((triggered_tags))
 tag ::= (("<think>" any_text))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-xml_string ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=false,
-  excludes=("</parameter>")
-)
-xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
-xml_string_0 ::= ((xml_string))
-xml_any ::= ((basic_number) | (xml_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
 basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
@@ -857,7 +851,16 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root_0 ::= ("" | ([ \n\t]* "<parameter=q>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>"))
+xml_string ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
+xml_any ::= ((xml_string) | (basic_array) | (basic_object))
+xml_object ::= (("<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1) | ([ \n\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+root_0 ::= (("<parameter=q>" [ \n\t]* xml_string [ \n\t]* "</parameter>") | ([ \n\t]*))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -867,6 +870,7 @@ basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+xml_object_1 ::= ("" | ("<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 triggered_tags_group ::= (("run_sql>\n" root_0 "\n</function>\n</tool_call>"))
 triggered_tags ::= TagDispatch(
@@ -885,15 +889,6 @@ root ::= ((sequence))
                 r"""const_string ::= (("<think>\n\n</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-xml_string ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
-  loop_after_dispatch=false,
-  excludes=("</parameter>")
-)
-xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
-xml_string_0 ::= ((xml_string))
-xml_any ::= ((basic_number) | (xml_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
 basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
@@ -902,7 +897,16 @@ basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root_0 ::= ("" | ([ \n\t]* "<parameter=q>" [ \n\t]* xml_string_0 [ \n\t]* "</parameter>"))
+xml_string ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("</parameter>")
+)
+xml_any ::= ((xml_string) | (basic_array) | (basic_object))
+xml_object ::= (("<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1) | ([ \n\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+root_0 ::= (("<parameter=q>" [ \n\t]* xml_string [ \n\t]* "</parameter>") | ([ \n\t]*))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -912,6 +916,7 @@ basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+xml_object_1 ::= ("" | ("<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 triggered_tags_group ::= (("run_sql>\n" root_0 "\n</function>\n</tool_call>"))
 triggered_tags ::= TagDispatch(
@@ -1439,13 +1444,13 @@ root ::= ((tags_with_separator))
 @pytest.mark.parametrize(
     "format_type, input_dict, instances, expected_grammar_and_results", instance_cases
 )
-def test_generate_structural_tag_instance(
+def test_get_builtin_structural_tag_instance(
     format_type: str,
     input_dict: Dict[str, Any],
     instances: List[str],
     expected_grammar_and_results: List[Tuple[str, List[bool]]],
 ):
-    """Generated structural tag accepts/rejects instance as expected."""
+    """get_builtin_structural_tag accepts/rejects instance as expected."""
     assert (
         len(expected_grammar_and_results) == 3
     ), "3 modes: not reasoning, reasoning, empty reasoning"
@@ -1465,7 +1470,7 @@ def test_generate_structural_tag_instance(
         else:
             force_empty_reasoning = False
 
-        stag = get_structural_tag_for_model(
+        stag = get_builtin_structural_tag(
             format_type,
             reasoning=reasoning,
             force_empty_reasoning=force_empty_reasoning,

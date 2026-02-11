@@ -1,8 +1,8 @@
 # Advanced Topics of the Structural Tag
 
-## Structural tag for model: `get_structural_tag_for_model`
+## Built-in Structural Tag: `get_builtin_structural_tag`
 
-`get_structural_tag_for_model` generates a `StructuralTag` for the given model type with the specified tools and options. The returned structural tag can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain a grammar that matches the function-calling format in the corresponding model's style within any-form text.
+`get_builtin_structural_tag` generates a `StructuralTag` for the given model type with the specified tools and options. The returned structural tag can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain a grammar that matches the function-calling format in the corresponding model's style within any-form text.
 
 Use it when you need to constrain the model to output in a fixed pattern such as "tool name + parameter JSON", e.g. for Llama, Qwen, Kimi, DeepSeek, or OpenAI Harmony.
 
@@ -12,8 +12,8 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `"llama"`: Llama-style (e.g. Llama 3, Llama 4)
   - `"qwen"`: Qwen-style (e.g. Qwen3)
   - `"qwen_coder"`: Qwen Coder-style (e.g. Qwen3-Coder, Qwen3-Coder-Next)
-  - `"kimi"`: Kimi-style (e.g. Kimi-k2, Kimi-k2.5)
-  - `"deepseek_r1"`: DeepSeek-style (e.g. DeepSeek-v3.1, DeepSeek-R1, DeepSeek-v3.2-exp)
+  - `"kimi"`: Kimi-style (e.g. Kimi-K2, Kimi-K2.5)
+  - `"deepseek_r1"`: DeepSeek-style (e.g. DeepSeek-V3.1, DeepSeek-R1, DeepSeek-V3.2-exp)
   - `"harmony"`: OpenAI Harmony Response Format (e.g. gpt-oss)
 - **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags). Default `True`.
 - **tools** (`List[Dict[str, Any]]`, optional): List of tools; each item is a dict with a `"function"` key, which is a dict with `"name"` and `"parameters"` (`parameters` is a JSON Schema dict). Default `[]`.
@@ -29,7 +29,7 @@ Passing an unsupported `model` raises `ValueError`.
 ### Example
 
 ```python
-from xgrammar import Grammar, get_structural_tag_for_model
+from xgrammar import Grammar, get_builtin_structural_tag
 
 tools = [
     {"function": {"name": "get_weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}}},
@@ -37,14 +37,14 @@ tools = [
 ]
 
 # Get the Llama-style structural tag and build a grammar
-structural_tag = get_structural_tag_for_model("llama", tools=tools)
+structural_tag = get_builtin_structural_tag("llama", tools=tools)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
 For the Harmony format you must provide both `tools` and `builtin_tools`:
 
 ```python
-structural_tag = get_structural_tag_for_model(
+structural_tag = get_builtin_structural_tag(
     "harmony",
     tools=[
         {"function": {"name": "user_tool", "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}},
@@ -59,7 +59,7 @@ grammar = Grammar.from_structural_tag(structural_tag)
 For formats that support reasoning (like Qwen3, Deepseek-R1, Kimi-k2-thinking ), pass `reasoning` to enable/disable the reasoning mode:
 
 ```python
-structural_tag = get_structural_tag_for_model("qwen", tools=tools, reasoning=True)
+structural_tag = get_builtin_structural_tag("qwen", tools=tools, reasoning=True)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
@@ -67,9 +67,9 @@ If `reasoning` is not passed, reasoning mode is enabled by default. Besides, whe
 
 ---
 
-## Supported models: `get_structural_tag_supported_models`
+## Supported models: `get_builtin_structural_tag_supported_models`
 
-`get_structural_tag_supported_models` returns the supported model list for each structural tag style. Call it with no args to get `Dict[str, List[str]]` (style → models), or pass a style name (e.g. `"llama"`, `"qwen"`) to get `List[str]` for that style. Use it to confirm which style a model uses before calling `get_structural_tag_for_model`.
+`get_builtin_structural_tag_supported_models` returns the supported model list for each built-in structural tag function. Call it with no args to get `Dict[str, List[str]]` (style → models), or pass a style name (e.g. `"llama"`, `"qwen"`) to get `List[str]` for that style. Use it to confirm which style a model uses before calling `get_builtin_structural_tag`.
 
 ---
 

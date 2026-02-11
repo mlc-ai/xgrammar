@@ -1,4 +1,9 @@
 from . import exception, structural_tag, testing
+from .builtin_structural_tag import (
+    BuiltinSupportedModels,
+    get_builtin_structural_tag,
+    get_builtin_structural_tag_supported_models,
+)
 from .compiler import CompiledGrammar, GrammarCompiler
 from .config import (
     get_max_recursion_depth,
@@ -24,11 +29,6 @@ from .matcher import (
     reset_token_bitmask,
 )
 from .structural_tag import StructuralTag
-from .structural_tag_for_model import (
-    SupportedModelStyles,
-    get_structural_tag_for_model,
-    get_structural_tag_supported_models,
-)
 from .tokenizer_info import TokenizerInfo, VocabType
 
 __all__ = [
@@ -58,7 +58,7 @@ __all__ = [
     "StructuralTag",
     "TokenizerInfo",
     "VocabType",
-    "get_structural_tag_for_model",
-    "get_structural_tag_supported_models",
-    "SupportedModelStyles",
+    "get_builtin_structural_tag",
+    "get_builtin_structural_tag_supported_models",
+    "BuiltinSupportedModels",
 ]
