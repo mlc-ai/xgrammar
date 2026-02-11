@@ -704,7 +704,9 @@ window.addEventListener("load", load);</script>
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;json_schema&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json_schema&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
     <span class="n">json_schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema.&quot;&quot;&quot;</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema.&quot;&quot;&quot;</span>
+    <span class="n">style</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;json&quot;</span><span class="p">,</span> <span class="s2">&quot;qwen_xml&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;How to parse the content: \&quot;json\&quot; for standard JSON, \&quot;qwen_xml\&quot; for Qwen XML style.&quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="QwenXMLParameterFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.QwenXMLParameterFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>

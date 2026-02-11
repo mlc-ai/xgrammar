@@ -312,11 +312,28 @@ structural tag, the request should be like:</p>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">json_schema</span></code></p>
 <p>The output should be a valid JSON object that matches the JSON schema.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">style</span></code></strong> (optional, default: <code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>): Controls how the content is parsed. Supported values:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>: Standard JSON parsing. The output must be valid JSON that conforms to the schema.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code>: Qwen XML style parsing. The output uses XML-style tags such as <code class="docutils literal notranslate"><span class="pre">&lt;parameter=name&gt;value&lt;/parameter&gt;</span></code> to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy <code class="docutils literal notranslate"><span class="pre">qwen_xml_parameter</span></code> format.</p></li>
+</ul>
+<p>When <code class="docutils literal notranslate"><span class="pre">style</span></code> is omitted, it defaults to <code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
     &quot;type&quot;: &quot;json_schema&quot;,
     &quot;json_schema&quot;: {
         ...
-    }
+    },
+    &quot;style&quot;: &quot;json&quot;
+}
+</pre></div>
+</div>
+<p>For Qwen XML style output, set <code class="docutils literal notranslate"><span class="pre">style</span></code> to <code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code>:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;json_schema&quot;,
+    &quot;json_schema&quot;: {
+        ...
+    },
+    &quot;style&quot;: &quot;qwen_xml&quot;
 }
 </pre></div>
 </div>
@@ -343,18 +360,18 @@ structural tag, the request should be like:</p>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">sequence</span></code></p>
 <p>The output should match a sequence of elements.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;sequence&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;elements&quot;</span><span class="p">:</span> <span class="p">[</span>
-        <span class="p">{</span>
-            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span>
-        <span class="p">},</span>
-        <span class="p">{</span>
-            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span>
-        <span class="p">},</span>
-        <span class="o">...</span>
-    <span class="p">]</span>
-<span class="p">}</span>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;sequence&quot;,
+    &quot;elements&quot;: [
+        {
+            &quot;type&quot;: &quot;...&quot;,
+        },
+        {
+            &quot;type&quot;: &quot;...&quot;,
+        },
+        ...
+    ]
+}
 </pre></div>
 </div>
 </li>
@@ -471,9 +488,9 @@ prefix of the begin tag. All the strings in <code class="docutils literal notran
 </pre></div>
 </div>
 <p>The above structural tag can accept the following outputs:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
-<span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func2</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Jane&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
-<span class="n">any_text</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="n">any_text1</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func2</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Jane&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="n">any_text2</span>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;
+&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;
+any_text&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;any_text1&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;any_text2
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">at_least_one</span></code> makes sure at least one of the tags must be generated. The first tag will
@@ -522,9 +539,9 @@ will stop.</p>
 </pre></div>
 </div>
 <p>The above structural tag can accept an empty string, or the following outputs:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
-<span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="p">,</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func2</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Jane&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
-<span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="p">,</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func2</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Jane&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span><span class="p">,</span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;
+&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;
+&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;,&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">at_least_one</span></code> makes sure at least one of the tags must be generated.</p>
@@ -532,7 +549,8 @@ will stop.</p>
 tag is generated. If there are following tags, they will still be generated; otherwise, the
 generation will stop.</p>
 </li>
-<li><p><code class="docutils literal notranslate"><span class="pre">QwenXMLParameterFormat</span></code></p>
+<li><p><code class="docutils literal notranslate"><span class="pre">QwenXMLParameterFormat</span></code> <em>(not recommended)</em></p>
+<p><strong>Deprecated.</strong> This format is kept for backward compatibility only. Prefer using <code class="docutils literal notranslate"><span class="pre">json_schema</span></code> with <code class="docutils literal notranslate"><span class="pre">style:</span> <span class="pre">&quot;qwen_xml&quot;</span></code> instead (see the <code class="docutils literal notranslate"><span class="pre">json_schema</span></code> format above).</p>
 <p>This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
     &quot;type&quot;: &quot;qwen_xml_parameter&quot;,
@@ -595,7 +613,7 @@ generation will stop.</p>
 <h3>Example 1: Tool calling<a class="headerlink" href="#example-1-tool-calling" title="Permalink to this heading">¶</a></h3>
 <p>The structural tag can support most common tool calling formats.</p>
 <p>Llama JSON-based tool calling, Gemma:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;function_name&quot;</span><span class="p">,</span> <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="n">params</span><span class="p">}</span>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{&quot;name&quot;: &quot;function_name&quot;, &quot;parameters&quot;: params}
 </pre></div>
 </div>
 <p>Corresponding structural tag:</p>
@@ -621,7 +639,7 @@ generation will stop.</p>
 </pre></div>
 </div>
 <p>Llama user-defined custom tool calling:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">function_name</span><span class="o">&gt;</span><span class="n">params</span><span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+<div class="highlight-xml notranslate"><div class="highlight"><pre><span></span>&lt;function=function_name&gt;params&lt;/function&gt;
 </pre></div>
 </div>
 <p>Corresponding structural tag:</p>
@@ -647,9 +665,9 @@ generation will stop.</p>
 </pre></div>
 </div>
 <p>Qwen 2.5/3, Hermes:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">tool_call</span><span class="o">&gt;</span>
-<span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_current_temperature&quot;</span><span class="p">,</span> <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="s2">&quot;San Francisco, CA, USA&quot;</span><span class="p">}}</span>
-<span class="o">&lt;/</span><span class="n">tool_call</span><span class="o">&gt;</span>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;tool_call&gt;
+{&quot;name&quot;: &quot;get_current_temperature&quot;, &quot;arguments&quot;: {&quot;location&quot;: &quot;San Francisco, CA, USA&quot;}}
+&lt;/tool_call&gt;
 </pre></div>
 </div>
 <p>Corresponding structural tag:</p>
@@ -676,7 +694,7 @@ generation will stop.</p>
 </div>
 <p>DeepSeek:</p>
 <p>There is a special tag <code class="docutils literal notranslate"><span class="pre">&lt;｜tool▁calls▁begin｜&gt;</span> <span class="pre">...</span> <span class="pre">&lt;｜tool▁calls▁end｜&gt;</span></code> quotes the whole tool calling part.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&lt;｜tool▁calls▁begin｜&gt;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_1
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;｜tool▁calls▁begin｜&gt;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_1
 ```jsonc
 {params}
 ```&lt;｜tool▁call▁end｜&gt;
@@ -722,7 +740,7 @@ generation will stop.</p>
 </div>
 <p>Phi-4-mini:</p>
 <p>Similar to DeepSeek-V3, but the tool calling part is wrapped in <code class="docutils literal notranslate"><span class="pre">&lt;|tool_call|&gt;...&lt;|/tool_call|&gt;</span></code> and organized in a list.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;|</span><span class="n">tool_call</span><span class="o">|&gt;</span><span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;function_name_1&quot;</span><span class="p">,</span> <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">params</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;function_name_2&quot;</span><span class="p">,</span> <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">params</span><span class="p">}]</span><span class="o">&lt;|/</span><span class="n">tool_call</span><span class="o">|&gt;</span>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;|tool_call|&gt;[{&quot;name&quot;: &quot;function_name_1&quot;, &quot;arguments&quot;: params}, {&quot;name&quot;: &quot;function_name_2&quot;, &quot;arguments&quot;: params}]&lt;|/tool_call|&gt;
 </pre></div>
 </div>
 <p>Corresponding structural tag:</p>
@@ -763,7 +781,7 @@ generation will stop.</p>
 <h3>Example 2: Force think<a class="headerlink" href="#example-2-force-think" title="Permalink to this heading">¶</a></h3>
 <p>The output should start with a reasoning part (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>), then can generate a mix of text and tool calls.</p>
 <p>Format:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">think</span><span class="o">&gt;</span> <span class="n">any_text</span> <span class="o">&lt;/</span><span class="n">think</span><span class="o">&gt;</span> <span class="n">any_text</span> <span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span> <span class="n">any_text</span>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;think&gt; any_text &lt;/think&gt; any_text &lt;function=func1&gt; params &lt;/function&gt; any_text
 </pre></div>
 </div>
 <p>Corresponding structural tag:</p>
@@ -804,7 +822,7 @@ generation will stop.</p>
 <h3>Example 3: Think &amp; Force tool calling (Llama style)<a class="headerlink" href="#example-3-think-force-tool-calling-llama-style" title="Permalink to this heading">¶</a></h3>
 <p>The output should start with a reasoning part (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>), then need to generate exactly one tool call in the tool set.</p>
 <p>Format:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">think</span><span class="o">&gt;</span> <span class="n">any_text</span> <span class="o">&lt;/</span><span class="n">think</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">function</span><span class="o">=</span><span class="n">func1</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">&lt;/</span><span class="n">function</span><span class="o">&gt;</span>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;think&gt; any_text &lt;/think&gt; &lt;function=func1&gt; params &lt;/function&gt;
 </pre></div>
 </div>
 <p>Corresponding structural tag:</p>
