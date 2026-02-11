@@ -71,9 +71,14 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::optional<std::string> GetCache(const std::string& key) const override;
 
  private:
-  // XML-specific rule names
-  static const std::unordered_map<JSONFormat, std::unordered_map<std::string, std::string>>
-      kKeyWrapperMap;
+  // Wrapper strings for XML parameter tags (prefix, suffix, closing tag)
+  struct XMLWrapper {
+    std::string key_wrapper_prefix;
+    std::string key_wrapper_suffix;
+    std::string parameter_suffix;
+  };
+
+  static const std::unordered_map<JSONFormat, XMLWrapper> kKeyWrapperMap;
   static const std::string kXMLString;
   static const std::string kXMLAny;
   static const std::string kXMLObject;
@@ -81,9 +86,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   // Track if we're at the root object level
   int nested_object_level_ = 0;
-  const std::string key_wrapper_prefix_;
-  const std::string key_wrapper_suffix_;
-  const std::string parameter_suffix_;
+  const XMLWrapper xml_wrapper_;
 };
 
 }  // namespace xgrammar
