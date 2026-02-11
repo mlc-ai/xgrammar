@@ -5,9 +5,10 @@
  */
 #include "json_schema_converter_ext.h"
 
+#include <unordered_map>
+
 #include "json_schema_converter.h"
 #include "regex_converter.h"
-#include "support/logging.h"
 
 namespace xgrammar {
 
@@ -16,16 +17,43 @@ const std::string XMLToolCallingConverter::kXMLString = "xml_string";
 const std::string XMLToolCallingConverter::kXMLAny = "xml_any";
 const std::string XMLToolCallingConverter::kXMLObject = "xml_object";
 const std::string XMLToolCallingConverter::kXMLVariableName = "xml_variable_name";
+const std::unordered_map<JSONFormat, std::unordered_map<std::string, std::string>>
+    XMLToolCallingConverter::kKeyWrapperMap = {
+        {JSONFormat::kQwenXML,
+         {
+             {"key_wrapper_prefix", "<parameter="},
+             {"key_wrapper_suffix", ">"},
+             {"parameter_suffix", "</parameter>"},
+         }},
+        {JSONFormat::kMiniMaxXML,
+         {
+             {"key_wrapper_prefix", "<parameter name=\\\""},
+             {"key_wrapper_suffix", "\\\">"},
+             {"parameter_suffix", "</parameter>"},
+         }},
+        {JSONFormat::kDeepSeekXML,
+         {
+             {"key_wrapper_prefix", "<{dsml_token}parameter name=\\\""},
+             {"key_wrapper_suffix", "\\\" string=\\\"\" (\"true\" | \"false\") \"\\\">"
+             },  // TODO(Linzhang): we do not validate the string's value, and we accept both.
+             {"parameter_suffix", "</{dsml_token}parameter>"},
+         }},
+
+};
 
 XMLToolCallingConverter::XMLToolCallingConverter(
     std::optional<int> indent,
     std::optional<std::pair<std::string, std::string>> separators,
     bool any_whitespace,
     std::optional<int> max_whitespace_cnt,
-    RefResolver ref_resolver
+    RefResolver ref_resolver,
+    JSONFormat json_format
 )
     : JSONSchemaConverter(indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver),
-      nested_object_level_(0) {}
+      nested_object_level_(0),
+      key_wrapper_prefix_(kKeyWrapperMap.at(json_format).at("key_wrapper_prefix")),
+      key_wrapper_suffix_(kKeyWrapperMap.at(json_format).at("key_wrapper_suffix")),
+      parameter_suffix_(kKeyWrapperMap.at(json_format).at("parameter_suffix")) {}
 
 std::string XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
   nested_object_level_ = 0;
@@ -159,7 +187,7 @@ std::string XMLToolCallingConverter::GenerateArray(
 
 std::string XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
   if (nested_object_level_ <= 1) {
-    return "\"<parameter=" + key + ">\"";
+    return "\"" + key_wrapper_prefix_ + key + key_wrapper_suffix_ + "\"";
   }
   return JSONSchemaConverter::FormatPropertyKey(key);
 }
@@ -169,8 +197,8 @@ std::string XMLToolCallingConverter::FormatProperty(
 ) {
   if (nested_object_level_ <= 1) {
     std::string whitespace = GetWhitespacePattern();
-    return "\"<parameter=" + key + ">\" " + whitespace + " " + value_rule + " " + whitespace +
-           " \"</parameter>\"";
+    return "\"" + key_wrapper_prefix_ + key + key_wrapper_suffix_ + "\" " + whitespace + " " +
+           value_rule + " " + whitespace + " \"" + parameter_suffix_ + "\"";
   }
   return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
 }
@@ -183,8 +211,8 @@ std::string XMLToolCallingConverter::FormatOtherProperty(
 ) {
   if (nested_object_level_ <= 1) {
     std::string whitespace = GetWhitespacePattern();
-    return "\"<parameter=\" " + key_pattern + " \">\" " + whitespace + " " + value_rule + " " +
-           whitespace + " \"</parameter>\"";
+    return "\"" + key_wrapper_prefix_ + "\" " + key_pattern + " \"" + key_wrapper_suffix_ + "\" " +
+           whitespace + " " + value_rule + " " + whitespace + " \"" + parameter_suffix_ + "\"";
   }
   return JSONSchemaConverter::FormatOtherProperty(
       key_pattern, value_rule, rule_name, rule_name_suffix

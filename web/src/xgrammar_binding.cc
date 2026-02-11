@@ -154,7 +154,9 @@ std::vector<int> VecIntFromJSArray(const emscripten::val& js_array) {
 EMSCRIPTEN_BINDINGS(xgrammar) {
   enum_<xgrammar::JSONFormat>("JSONFormat")
       .value("kJSON", xgrammar::JSONFormat::kJSON)
-      .value("kXML", xgrammar::JSONFormat::kXML);
+      .value("kQwenXML", xgrammar::JSONFormat::kQwenXML)
+      .value("kMiniMaxXML", xgrammar::JSONFormat::kMiniMaxXML)
+      .value("kDeepSeekXML", xgrammar::JSONFormat::kDeepSeekXML);
 
   // Register std::optional used in Grammar::FromJSONSchema
   register_optional<int>();
