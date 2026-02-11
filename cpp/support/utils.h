@@ -25,7 +25,7 @@ namespace xgrammar {
  * \brief Hash and combine value into seed.
  * \ref https://www.boost.org/doc/libs/1_84_0/boost/intrusive/detail/hash_combine.hpp
  */
-inline void HashCombineBinary(size_t& seed, size_t value) {
+inline void HashCombineBinary(uint64_t& seed, uint64_t value) {
   seed ^= value + 0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2);
 }
 
@@ -33,8 +33,8 @@ inline void HashCombineBinary(size_t& seed, size_t value) {
  * \brief Find the hash sum of several size_t args.
  */
 template <typename... Args>
-inline size_t HashCombine(Args... args) {
-  size_t seed = 0;
+inline uint64_t HashCombine(Args... args) {
+  uint64_t seed = 0;
   (..., HashCombineBinary(seed, args));
   return seed;
 }
