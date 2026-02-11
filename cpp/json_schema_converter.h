@@ -184,7 +184,9 @@ struct SchemaSpec {
 
 enum class JSONFormat : int {
   kJSON = 0,
-  kXML = 1,
+  kQwenXML = 1,
+  kMiniMaxXML = 2,
+  kDeepSeekXML = 3,
 };
 
 /*!
@@ -516,6 +518,22 @@ std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<d
  * in Qwen xml style.
  */
 std::string QwenXMLToolCallingToEBNF(const std::string& schema);
+
+/*!
+ * \brief Convert a function call to a Grammar.
+ * \param schema The schema of the parameters of the function call.
+ * \return The ebnf-grammar to match the requirements of the schema, and
+ * in MiniMax xml style.
+ */
+std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema);
+
+/*!
+ * \brief Convert a function call to a Grammar.
+ * \param schema The schema of the parameters of the function call.
+ * \return The ebnf-grammar to match the requirements of the schema, and
+ * in DeepSeek xml style.
+ */
+std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema);
 
 }  // namespace xgrammar
 

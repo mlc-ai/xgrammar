@@ -7,6 +7,9 @@
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 #define XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 
+#include <unordered_map>
+#include <utility>
+
 #include "json_schema_converter.h"
 
 namespace xgrammar {
@@ -25,7 +28,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       std::optional<std::pair<std::string, std::string>> separators,
       bool any_whitespace,
       std::optional<int> max_whitespace_cnt,
-      RefResolver ref_resolver = nullptr
+      RefResolver ref_resolver = nullptr,
+      JSONFormat json_format = JSONFormat::kQwenXML
   );
 
   /*! \brief Convert SchemaSpec to EBNF with XML format for root object. Note that this function is
@@ -67,7 +71,14 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::optional<std::string> GetCache(const std::string& key) const override;
 
  private:
-  // XML-specific rule names
+  // Wrapper strings for XML parameter tags (prefix, suffix, closing tag)
+  struct XMLWrapper {
+    std::string key_wrapper_prefix;
+    std::string key_wrapper_suffix;
+    std::string parameter_suffix;
+  };
+
+  static const std::unordered_map<JSONFormat, XMLWrapper> kKeyWrapperMap;
   static const std::string kXMLString;
   static const std::string kXMLAny;
   static const std::string kXMLObject;
@@ -75,6 +86,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   // Track if we're at the root object level
   int nested_object_level_ = 0;
+  const XMLWrapper xml_wrapper_;
 };
 
 }  // namespace xgrammar
