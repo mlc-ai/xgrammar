@@ -169,7 +169,8 @@ schema__grammar__accepted_instances__rejected_instances__test_non_strict = [
     (
         {"type": "array", "prefixItems": [{"type": "integer"}, {"type": "integer"}]},
         basic_json_rules_ebnf
-        + r"""root ::= ("[" [ \n\t]* (basic_integer [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]")
+        + r"""root_additional ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+root ::= ("[" [ \n\t]* (basic_integer [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* root_additional)* [ \n\t]* "]")
 """,
         [[1, 2], [1, 2, 3], [1, 2, 3, "123"]],
         [[1]],
@@ -181,7 +182,8 @@ schema__grammar__accepted_instances__rejected_instances__test_non_strict = [
             "required": ["foo", "bar"],
         },
         basic_json_rules_ebnf
-        + r"""root_part_1 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)*
+        + r"""root_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+root_part_1 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* root_addl)*
 root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"bar\"" [ \n\t]* ":" [ \n\t]* basic_integer root_part_1
 root ::= "{" [ \n\t]* (("\"foo\"" [ \n\t]* ":" [ \n\t]* basic_integer root_part_0)) [ \n\t]* "}"
 """,
@@ -304,10 +306,11 @@ def test_all_optional_non_strict():
         num: float = 0
 
     ebnf_grammar_non_strict = basic_json_rules_ebnf_no_space + (
-        r"""root_part_2 ::= (", " basic_string ": " basic_any)*
+        r"""root_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+root_part_2 ::= (", " basic_string ": " root_addl)*
 root_part_1 ::= root_part_2 | ", " "\"num\"" ": " basic_number root_part_2
 root_part_0 ::= root_part_1 | ", " "\"state\"" ": " basic_boolean root_part_1
-root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": " basic_boolean root_part_1) | ("\"num\"" ": " basic_number root_part_2) | basic_string ": " basic_any root_part_2) "" "}") | "{" "}"
+root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": " basic_boolean root_part_1) | ("\"num\"" ": " basic_number root_part_2) | basic_string ": " root_addl root_part_2) "" "}") | "{" "}"
 """
     )
 
@@ -753,7 +756,8 @@ root ::= "{" [ \n\t]* (("\"value\"" [ \n\t]* ":" [ \n\t]* basic_string root_part
     ebnf_grammar = basic_json_rules_ebnf + (
         r"""root_prop_1 ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-root_part_2 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)*
+root_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+root_part_2 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* root_addl)*
 root_part_1 ::= [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 root_part_2
 root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 root_part_1
 root ::= "{" [ \n\t]* (("\"value\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0)) [ \n\t]* "}"
@@ -1464,7 +1468,7 @@ def test_object_error_handle():
 
     with pytest.raises(Exception) as e:
         compile_from_schema({"type": "object", "minProperties": 5, "maxProperties": 3})
-    assert "minxPropertiesmax is greater than maxProperties" in str(e.value)
+    assert "minProperties is greater than maxProperties" in str(e.value)
 
     with pytest.raises(Exception) as e:
         compile_from_schema({"type": "object", "maxProperties": 1, "required": ["key1", "key2"]})
@@ -1566,8 +1570,7 @@ def test_email_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "email"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( ( [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ ( "." [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ )* ) | "\\" "\"" ( "\\" [ -~] | [ !#-[\]-~] )* "\\" "\"" ) "@" ( [A-Za-z0-9] ( [\-A-Za-z0-9]* [A-Za-z0-9] )? ) ( ( "." [A-Za-z0-9] [\-A-Za-z0-9]* [A-Za-z0-9] )* ) "\""
-root ::= string
+        r"""root ::= "\"" ( ( [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ ( "." [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ )* ) | "\\" "\"" ( "\\" [ -~] | [ !#-[\]-~] )* "\\" "\"" ) "@" ( [A-Za-z0-9] ( [\-A-Za-z0-9]* [A-Za-z0-9] )? ) ( ( "." [A-Za-z0-9] [\-A-Za-z0-9]* [A-Za-z0-9] )* ) "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1591,8 +1594,7 @@ def test_date_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "date"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( [0-9]{4} "-" ( "0" [1-9] | "1" [0-2] ) "-" ( "0" [1-9] | [1-2] [0-9] | "3" [01] ) ) "\""
-root ::= string
+        r"""root ::= "\"" ( [0-9]{4} "-" ( "0" [1-9] | "1" [0-2] ) "-" ( "0" [1-9] | [1-2] [0-9] | "3" [01] ) ) "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1628,12 +1630,37 @@ def test_time_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "time"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] ":" ( [0-5] [0-9] | "6" "0" ) ( "." [0-9]+ )? ( "Z" | [+-] ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] ) "\""
-root ::= string
+        r"""root ::= "\"" ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] ":" ( [0-5] [0-9] | "6" "0" ) ( "." [0-9]+ )? ( "Z" | [+-] ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] ) "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
 
+    check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
+
+
+instance__accepted__test_date_time_format = [
+    (r"2024-05-19T14:23:45Z", True),
+    (r"2019-11-30T08:15:27+05:30", True),
+    (r"2030-02-01T22:59:59-07:00", True),
+    (r"2021-07-04T00:00:00.123456Z", True),
+    (r"2022-12-31T23:45:12-03:00", True),
+    (r"2024-12-31T23:45:60.123456Z", True),
+    (r"2024-12-31T23:60:12.123456+05:30", False),
+    (r"2024-13-15T14:30:00Z", False),
+    (r"2023-02-2010:59:59Z", False),
+    (r"2021-11-05T24:00:00+05:30", False),
+    (r"2022-08-20T12:61:10-03:00", False),
+]
+
+
+@pytest.mark.parametrize("instance, accepted", instance__accepted__test_date_time_format)
+def test_date_time_format(instance: str, accepted: bool):
+    schema = {"type": "string", "format": "date-time"}
+    expected_grammar = basic_json_rules_ebnf + (
+        r"""root ::= "\"" ( [0-9]{4} "-" ( "0" [1-9] | "1" [0-2] ) "-" ( "0" [1-9] | [1-2] [0-9] | "3" [01] ) ) "T" ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] ":" ( [0-5] [0-9] | "6" "0" ) ( "." [0-9]+ )? ( "Z" | [+-] ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] ) "\""
+"""
+    )
+    check_schema_with_grammar(schema, expected_grammar)
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
@@ -1669,8 +1696,7 @@ def test_duration_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "duration"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" "P" ( ( [0-9]+ "D" | [0-9]+ "M" ( [0-9]+ "D" )? | [0-9]+ "Y" ( [0-9]+ "M" ( [0-9]+ "D" )? )? ) ( "T" ( [0-9]+ "S" | [0-9]+ "M" ( [0-9]+ "S" )? | [0-9]+ "H" ( [0-9]+ "M" ( [0-9]+ "S" )? )? ) )? | "T" ( [0-9]+ "S" | [0-9]+ "M" ( [0-9]+ "S" )? | [0-9]+ "H" ( [0-9]+ "M" ( [0-9]+ "S" )? )? ) | [0-9]+ "W" ) "\""
-root ::= string
+        r"""root ::= "\"" "P" ( ( [0-9]+ "D" | [0-9]+ "M" ( [0-9]+ "D" )? | [0-9]+ "Y" ( [0-9]+ "M" ( [0-9]+ "D" )? )? ) ( "T" ( [0-9]+ "S" | [0-9]+ "M" ( [0-9]+ "S" )? | [0-9]+ "H" ( [0-9]+ "M" ( [0-9]+ "S" )? )? ) )? | "T" ( [0-9]+ "S" | [0-9]+ "M" ( [0-9]+ "S" )? | [0-9]+ "H" ( [0-9]+ "M" ( [0-9]+ "S" )? )? ) | [0-9]+ "W" ) "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1737,8 +1763,7 @@ def test_ipv6_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "ipv6"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( ( [0-9a-fA-F]{1,4} ":" ){7,7} [0-9a-fA-F]{1,4} | ( [0-9a-fA-F]{1,4} ":" ){1,7} ":" | ( [0-9a-fA-F]{1,4} ":" ){1,6} ":" [0-9a-fA-F]{1,4} | ( [0-9a-fA-F]{1,4} ":" ){1,5} ( ":" [0-9a-fA-F]{1,4} ){1,2} | ( [0-9a-fA-F]{1,4} ":" ){1,4} ( ":" [0-9a-fA-F]{1,4} ){1,3} | ( [0-9a-fA-F]{1,4} ":" ){1,3} ( ":" [0-9a-fA-F]{1,4} ){1,4} | ( [0-9a-fA-F]{1,4} ":" ){1,2} ( ":" [0-9a-fA-F]{1,4} ){1,5} | [0-9a-fA-F]{1,4} ":" ( ( ":" [0-9a-fA-F]{1,4} ){1,6} ) | ":" ( ( ":" [0-9a-fA-F]{1,4} ){1,7} | ":" ) | ":" ":" ( "f" "f" "f" "f" ( ":" "0"{1,4} ){0,1} ":" ){0,1} ( ( "2" "5" [0-5] | ( "2" [0-4] | "1"{0,1} [0-9] ){0,1} [0-9] ) "." ){3,3} ( "2" "5" [0-5] | ( "2" [0-4] | "1"{0,1} [0-9] ){0,1} [0-9] ) | ( [0-9a-fA-F]{1,4} ":" ){1,4} ":" ( ( "2" "5" [0-5] | ( "2" [0-4] | "1"{0,1} [0-9] ){0,1} [0-9] ) "." ){3,3} ( "2" "5" [0-5] | ( "2" [0-4] | "1"{0,1} [0-9] ){0,1} [0-9] ) ) "\""
-root ::= string
+        r"""root ::= "\"" ( ( [0-9a-fA-F]{1,4} ":" ){7,7} [0-9a-fA-F]{1,4} | ( [0-9a-fA-F]{1,4} ":" ){1,7} ":" | ( [0-9a-fA-F]{1,4} ":" ){1,6} ":" [0-9a-fA-F]{1,4} | ( [0-9a-fA-F]{1,4} ":" ){1,5} ( ":" [0-9a-fA-F]{1,4} ){1,2} | ( [0-9a-fA-F]{1,4} ":" ){1,4} ( ":" [0-9a-fA-F]{1,4} ){1,3} | ( [0-9a-fA-F]{1,4} ":" ){1,3} ( ":" [0-9a-fA-F]{1,4} ){1,4} | ( [0-9a-fA-F]{1,4} ":" ){1,2} ( ":" [0-9a-fA-F]{1,4} ){1,5} | [0-9a-fA-F]{1,4} ":" ( ( ":" [0-9a-fA-F]{1,4} ){1,6} ) | ":" ( ( ":" [0-9a-fA-F]{1,4} ){1,7} | ":" ) | ":" ":" ( "f" "f" "f" "f" ( ":" "0"{1,4} ){0,1} ":" ){0,1} ( ( "2" "5" [0-5] | ( "2" [0-4] | "1"{0,1} [0-9] ){0,1} [0-9] ) "." ){3,3} ( "2" "5" [0-5] | ( "2" [0-4] | "1"{0,1} [0-9] ){0,1} [0-9] ) | ( [0-9a-fA-F]{1,4} ":" ){1,4} ":" ( ( "2" "5" [0-5] | ( "2" [0-4] | "1"{0,1} [0-9] ){0,1} [0-9] ) "." ){3,3} ( "2" "5" [0-5] | ( "2" [0-4] | "1"{0,1} [0-9] ){0,1} [0-9] ) ) "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1767,8 +1792,7 @@ def test_ipv4_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "ipv4"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( ( "2" "5" [0-5] | "2" [0-4] [0-9] | [0-1]? [0-9]? [0-9] ) "." ){3} ( "2" "5" [0-5] | "2" [0-4] [0-9] | [0-1]? [0-9]? [0-9] ) "\""
-root ::= string
+        r"""root ::= "\"" ( ( "2" "5" [0-5] | "2" [0-4] [0-9] | [0-1]? [0-9]? [0-9] ) "." ){3} ( "2" "5" [0-5] | "2" [0-4] [0-9] | [0-1]? [0-9]? [0-9] ) "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1806,8 +1830,7 @@ def test_hostname_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "hostname"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( [a-z0-9] ( [a-z0-9-]* [a-z0-9] )? ) ( "." [a-z0-9] ( [a-z0-9-]* [a-z0-9] )? )* "\""
-root ::= string
+        r"""root ::= "\"" ( [a-z0-9] ( [a-z0-9-]* [a-z0-9] )? ) ( "." [a-z0-9] ( [a-z0-9-]* [a-z0-9] )? )* "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1839,8 +1862,7 @@ def test_uuid_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "uuid"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" [0-9A-Fa-f]{8} "-" [0-9A-Fa-f]{4} "-" [0-9A-Fa-f]{4} "-" [0-9A-Fa-f]{4} "-" [0-9A-Fa-f]{12} "\""
-root ::= string
+        r"""root ::= "\"" [0-9A-Fa-f]{8} "-" [0-9A-Fa-f]{4} "-" [0-9A-Fa-f]{4} "-" [0-9A-Fa-f]{4} "-" [0-9A-Fa-f]{12} "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1875,8 +1897,7 @@ def test_uri_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "uri"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" [a-zA-Z] [a-zA-Z+.-]* ":" ( "/" "/" ( ( [a-zA-Z0-9_.~!$&'()*+,;=:-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* "@" )? ( [a-zA-Z0-9_.~!$&'()*+,;=-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* ( ":" [0-9]* )? ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* | "/"? ( ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )+ ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* )? ) ( "\?" ( [a-zA-Z0-9_.~!$&'()*+,;=:@/\?-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )? ( "#" ( [a-zA-Z0-9_.~!$&'()*+,;=:@/\?-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )? "\""
-root ::= string
+        r"""root ::= "\"" [a-zA-Z] [a-zA-Z+.-]* ":" ( "/" "/" ( ( [a-zA-Z0-9_.~!$&'()*+,;=:-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* "@" )? ( [a-zA-Z0-9_.~!$&'()*+,;=-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* ( ":" [0-9]* )? ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* | "/"? ( ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )+ ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* )? ) ( "\?" ( [a-zA-Z0-9_.~!$&'()*+,;=:@/\?-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )? ( "#" ( [a-zA-Z0-9_.~!$&'()*+,;=:@/\?-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )? "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1911,8 +1932,7 @@ def test_uri_reference_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "uri-reference"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( "/" "/" ( ( [a-zA-Z0-9_.~!$&'()*+,;=:-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* "@" )? ( [a-zA-Z0-9_.~!$&'()*+,;=-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* ( ":" [0-9]* )? ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* | "/" ( ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )+ ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* )? | ( [a-zA-Z0-9_.~!$&'()*+,;=@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )+ ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* )? ( "\?" ( [a-zA-Z0-9_.~!$&'()*+,;=:@/\?-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )? ( "#" ( [a-zA-Z0-9_.~!$&'()*+,;=:@/\?-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )? "\""
-root ::= string
+        r"""root ::= "\"" ( "/" "/" ( ( [a-zA-Z0-9_.~!$&'()*+,;=:-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* "@" )? ( [a-zA-Z0-9_.~!$&'()*+,;=-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* ( ":" [0-9]* )? ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* | "/" ( ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )+ ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* )? | ( [a-zA-Z0-9_.~!$&'()*+,;=@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )+ ( "/" ( [a-zA-Z0-9_.~!$&'()*+,;=:@-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )* )? ( "\?" ( [a-zA-Z0-9_.~!$&'()*+,;=:@/\?-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )? ( "#" ( [a-zA-Z0-9_.~!$&'()*+,;=:@/\?-] | "%" [0-9A-Fa-f] [0-9A-Fa-f] )* )? "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1951,8 +1971,7 @@ def test_uri_template_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "uri-template"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( ( [!#-$&(-;=\?-[\]_a-z~] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) | "{" ( [+#./;\?&=,!@|] )? ( [a-zA-Z0-9_] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) ( "."? ( [a-zA-Z0-9_] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) )* ( ":" [1-9] [0-9]? [0-9]? [0-9]? | "*" )? ( "," ( [a-zA-Z0-9_] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) ( "."? ( [a-zA-Z0-9_] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) )* ( ":" [1-9] [0-9]? [0-9]? [0-9]? | "*" )? )* "}" )* "\""
-root ::= string
+        r"""root ::= "\"" ( ( [!#-$&(-;=\?-[\]_a-z~] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) | "{" ( [+#./;\?&=,!@|] )? ( [a-zA-Z0-9_] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) ( "."? ( [a-zA-Z0-9_] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) )* ( ":" [1-9] [0-9]? [0-9]? [0-9]? | "*" )? ( "," ( [a-zA-Z0-9_] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) ( "."? ( [a-zA-Z0-9_] | "%" [0-9A-Fa-f] [0-9A-Fa-f] ) )* ( ":" [1-9] [0-9]? [0-9]? [0-9]? | "*" )? )* "}" )* "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -1976,8 +1995,7 @@ def test_json_pointer_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "json-pointer"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( "/" ( [\0-.] | [0-}] | [\x7f-\U0010ffff] | "~" [01] )* )* "\""
-root ::= string
+        r"""root ::= "\"" ( "/" ( [\0-.] | [0-}] | [\x7f-\U0010ffff] | "~" [01] )* )* "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -2004,8 +2022,7 @@ def test_relative_json_pointer_format(instance: str, accepted: bool):
     schema = {"type": "string", "format": "relative-json-pointer"}
 
     expected_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" ( "0" | [1-9] [0-9]* ) ( "#" | ( "/" ( [\0-.] | [0-}] | [\x7f-\U0010ffff] | "~" [01] )* )* ) "\""
-root ::= string
+        r"""root ::= "\"" ( "0" | [1-9] [0-9]* ) ( "#" | ( "/" ( [\0-.] | [0-}] | [\x7f-\U0010ffff] | "~" [01] )* )* ) "\""
 """
     )
     check_schema_with_grammar(schema, expected_grammar)
@@ -2017,8 +2034,7 @@ def test_min_max_length():
     schema = {"type": "string", "minLength": 1, "maxLength": 10}
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""string ::= "\"" [^"\\\r\n]{1,10} "\""
-root ::= string
+        r"""root ::= "\"" [^"\\\r\n]{1,10} "\""
 """
     )
 
@@ -2041,10 +2057,9 @@ def test_type_array():
     }
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root_integer ::= ( ( [1-9] | "1" "0" ) )
-string ::= "\"" [^"\\\r\n]{1,10} "\""
-root_string ::= string
-root ::= root_integer | root_string
+        r"""root_type_0 ::= ( ( [1-9] | "1" "0" ) )
+root_type_1 ::= "\"" [^"\\\r\n]{1,10} "\""
+root ::= root_type_0 | root_type_1
 """
     )
 
@@ -2065,7 +2080,7 @@ def test_type_array_empty():
     schema = {"type": []}
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+        r"""root ::= basic_any
 """
     )
 
