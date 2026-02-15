@@ -15,7 +15,6 @@
 #include "grammar_functor.h"
 #include "grammar_impl.h"
 #include "json_schema_converter.h"
-#include "support/logging.h"
 #include "support/recursion_guard.h"
 #include "support/utils.h"
 #include "xgrammar/grammar.h"
@@ -829,16 +828,14 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const RegexFormat&
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextFormat& format) {
-  if (!format.detected_end_strs_.empty()) {
-    // Filter out empty strings
-    std::vector<std::string> non_empty_ends;
-    for (const auto& s : format.detected_end_strs_) {
-      if (!s.empty()) {
-        non_empty_ends.push_back(s);
-      }
+  // Filter out empty strings
+  std::vector<std::string> non_empty_ends;
+  for (const auto& s : format.detected_end_strs_) {
+    if (!s.empty()) {
+      non_empty_ends.push_back(s);
     }
-    XGRAMMAR_DCHECK(!non_empty_ends.empty())
-        << "At least one detected end string must be non-empty";
+  }
+  if (!non_empty_ends.empty()) {
     // TagDispatch supports multiple stop strings
     auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
         Grammar::Impl::TagDispatch{{}, false, non_empty_ends, false, format.excludes}
@@ -1084,14 +1081,13 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   // Step 3.2 Add TagDispatch.
   int32_t rule_expr_id;
   bool loop_after_dispatch = !format.stop_after_first;
-  if (!format.detected_end_strs_.empty()) {
-    // Filter out empty strings
-    std::vector<std::string> non_empty_ends;
-    for (const auto& s : format.detected_end_strs_) {
-      if (!s.empty()) {
-        non_empty_ends.push_back(s);
-      }
+  std::vector<std::string> non_empty_ends;
+  for (const auto& s : format.detected_end_strs_) {
+    if (!s.empty()) {
+      non_empty_ends.push_back(s);
     }
+  }
+  if (!non_empty_ends.empty()) {
     rule_expr_id = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
         tag_rule_pairs, false, non_empty_ends, loop_after_dispatch, format.excludes
     });
