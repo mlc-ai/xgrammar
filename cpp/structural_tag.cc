@@ -829,14 +829,14 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const RegexFormat&
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextFormat& format) {
-  if (!format.detected_end_strs_.empty()) {
-    // Filter out empty strings
-    std::vector<std::string> non_empty_ends;
-    for (const auto& s : format.detected_end_strs_) {
-      if (!s.empty()) {
-        non_empty_ends.push_back(s);
-      }
+  // Filter out empty strings
+  std::vector<std::string> non_empty_ends;
+  for (const auto& s : format.detected_end_strs_) {
+    if (!s.empty()) {
+      non_empty_ends.push_back(s);
     }
+  }
+  if (!non_empty_ends.empty()) {
     XGRAMMAR_DCHECK(!non_empty_ends.empty())
         << "At least one detected end string must be non-empty";
     // TagDispatch supports multiple stop strings
