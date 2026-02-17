@@ -314,8 +314,10 @@ structural tag, the request should be like:</p>
 <p>The output should be a valid JSON object that matches the JSON schema.</p>
 <p><strong><code class="docutils literal notranslate"><span class="pre">style</span></code></strong> (optional, default: <code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>): Controls how the content is parsed. Supported values:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>: Standard JSON parsing. The output must be valid JSON that conforms to the schema.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code>: Qwen XML style parsing. The output uses XML-style tags such as <code class="docutils literal notranslate"><span class="pre">&lt;parameter=name&gt;value&lt;/parameter&gt;</span></code> to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy <code class="docutils literal notranslate"><span class="pre">qwen_xml_parameter</span></code> format.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>: Standard JSON format. The output must be valid JSON that conforms to the schema.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code>: Qwen-coder XML style format. The output uses XML-style tags such as <code class="docutils literal notranslate"><span class="pre">&lt;parameter=name&gt;value&lt;/parameter&gt;</span></code> to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy <code class="docutils literal notranslate"><span class="pre">qwen_xml_parameter</span></code> format.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;minimax_xml&quot;</span></code>: MiniMax XML style format. The output uses XML-style tags such as <code class="docutils literal notranslate"><span class="pre">&lt;parameter</span> <span class="pre">name=&quot;key&quot;&gt;value&lt;/parameter&gt;</span></code> (attribute form) to represent schema properties, as used in MiniMax tool-calling formats. Same semantics as <code class="docutils literal notranslate"><span class="pre">qwen_xml</span></code> except the tag format is <code class="docutils literal notranslate"><span class="pre">&lt;parameter</span> <span class="pre">name=&quot;key&quot;&gt;</span></code> instead of <code class="docutils literal notranslate"><span class="pre">&lt;parameter=key&gt;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;deepseek_xml&quot;</span></code>: DeepSeek-v3.2 XML style format. The output should be in the format of <code class="docutils literal notranslate"><span class="pre">&lt;{dsml_token}parameter</span> <span class="pre">name=\&quot;key\&quot;</span> <span class="pre">string=\&quot;true|false\&quot;&gt;value&lt;/{dsml_token}parameter&gt;</span></code>.</p></li>
 </ul>
 <p>When <code class="docutils literal notranslate"><span class="pre">style</span></code> is omitted, it defaults to <code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
@@ -327,13 +329,13 @@ structural tag, the request should be like:</p>
 }
 </pre></div>
 </div>
-<p>For Qwen XML style output, set <code class="docutils literal notranslate"><span class="pre">style</span></code> to <code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code>:</p>
+<p>For Qwen / MiniMax / Deepseek XML style output, set <code class="docutils literal notranslate"><span class="pre">style</span></code> to <code class="docutils literal notranslate"><span class="pre">qwen_xml</span></code> / <code class="docutils literal notranslate"><span class="pre">minimax_xml</span></code> / <code class="docutils literal notranslate"><span class="pre">deepseek_xml</span></code>:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
     &quot;type&quot;: &quot;json_schema&quot;,
     &quot;json_schema&quot;: {
         ...
     },
-    &quot;style&quot;: &quot;qwen_xml&quot;
+    &quot;style&quot;: &quot;qwen_xml&quot; / &quot;minimax_xml&quot; / &quot;deepseek_xml&quot;
 }
 </pre></div>
 </div>
