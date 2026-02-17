@@ -887,6 +887,10 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       auto rule = base_grammar_->GetRule(i);
       auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
       if (grammar_expr.type == GrammarExprType::kTagDispatch) {
+        auto tag_dispatch = base_grammar_->GetTagDispatch(grammar_expr);
+        if (tag_dispatch.stop_eos == true) {
+          empty_rule_id_set->insert(i);
+        }
         continue;
       }
 

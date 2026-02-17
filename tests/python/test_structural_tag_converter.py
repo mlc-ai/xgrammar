@@ -582,6 +582,49 @@ def test_any_text_only_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+test_no_end_anytext_format_with_excludes_instance_is_accepted = [
+    ("<TOOL>hello world", True),
+    ("<TOOL>hello world<END>", True),
+    ("<TOOL>", True),
+]
+
+
+@pytest.mark.parametrize(
+    "instance, is_accepted", test_no_end_anytext_format_with_excludes_instance_is_accepted
+)
+def test_no_end_anytext_format_with_excludes(instance: str, is_accepted: bool):
+
+    stag_format = {
+        "type": "triggered_tags",
+        "triggers": ["<TOOL>"],
+        "tags": [
+            {"begin": "<TOOL>", "content": {"type": "any_text", "excludes": ["<END>"]}, "end": ""}
+        ],
+        "at_least_one": True,
+    }
+    expected_grammar = r"""any_text ::= TagDispatch(
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=("<END>")
+)
+triggered_tags_group ::= (("" any_text))
+triggered_tags_first ::= (("<TOOL>" any_text))
+triggered_tags_sub ::= TagDispatch(
+  ("<TOOL>", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
+root ::= ((triggered_tags))
+"""
+
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 def _get_triggered_tag_format(at_least_one: bool, stop_after_first: bool):
     return {
         "type": "triggered_tags",
