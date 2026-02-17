@@ -87,7 +87,7 @@ export class Testings {
     // user specifies indent to be undefined, it still becomes 2.
     const optionalIndent: number | undefined = indent == -1 ? undefined : indent;
     const formatEnum = jsonFormat === "xml"
-      ? binding.JSONFormat.kXML
+      ? binding.JSONFormat.kQwenXML
       : binding.JSONFormat.kJSON;
     return binding._JSONSchemaToEBNF(
       schema,

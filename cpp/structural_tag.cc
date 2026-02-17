@@ -201,11 +201,13 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     auto it = obj.find("style");
     if (it != obj.end() && it->second.is<std::string>()) {
       style = it->second.get<std::string>();
+      if (style != "json" && style != "qwen_xml" && style != "minimax_xml" &&
+          style != "deepseek_xml") {
+        return ResultErr<ISTError>(
+            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", or \"deepseek_xml\""
+        );
+      }
     }
-  }
-
-  if (style != "json" && style != "qwen_xml") {
-    return ResultErr<ISTError>("style must be \"json\" or \"qwen_xml\"");
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
   return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false), style);
@@ -808,9 +810,30 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
-  Grammar sub_grammar = (format.style == "qwen_xml")
-                            ? Grammar::FromEBNF(QwenXMLToolCallingToEBNF(format.json_schema))
-                            : Grammar::FromJSONSchema(format.json_schema);
+  const static std::unordered_map<std::string, std::function<std::string(const std::string&)>>
+      style_to_grammar_converter = {
+          {"json",
+           [&](const std::string& json_schema) -> std::string {
+             return JSONSchemaToEBNF(json_schema);
+           }},
+          {"qwen_xml",
+           [&](const std::string& json_schema) -> std::string {
+             return QwenXMLToolCallingToEBNF(json_schema);
+           }},
+          {"minimax_xml",
+           [&](const std::string& json_schema) -> std::string {
+             return MiniMaxXMLToolCallingToEBNF(json_schema);
+           }},
+          {"deepseek_xml",
+           [&](const std::string& json_schema) -> std::string {
+             return DeepSeekXMLToolCallingToEBNF(json_schema);
+           }},
+      };
+  auto converter = style_to_grammar_converter.find(format.style);
+  if (converter == style_to_grammar_converter.end()) {
+    return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
+  }
+  auto sub_grammar = Grammar::FromEBNF(converter->second(format.json_schema));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }
