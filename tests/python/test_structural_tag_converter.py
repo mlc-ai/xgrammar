@@ -428,7 +428,7 @@ root ::= ((root_0))
 def test_json_schema_style_deepseek_xml_format(
     stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
 ):
-    """Test JSONSchemaFormat with style='deepseek_xml' (<{｜DSML｜}parameter name=\"key\" string=\"true|false\">value</{｜DSML｜}parameter>)."""
+    """Test JSONSchemaFormat with style='deepseek_xml' (<｜DSML｜parameter name=\"key\" string=\"true|false\">value</｜DSML｜parameter>)."""
     check_stag_with_grammar(stag_format, expected_grammar)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
