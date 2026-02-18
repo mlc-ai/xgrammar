@@ -248,6 +248,31 @@ def test_get_builtin_structural_tag_input_validation_errors(
 
 # ---------- Test: instance positive / negative ----------
 
+# Case: (input_dict, instances, reasoning, force_empty_reasoning, expected_grammar_ebnf, expected_accept_per_instance)
+InstanceCase = Tuple[Dict[str, Any], List[str], bool, bool, str, List[bool]]
+
+
+def _run_instance_cases_explicit(format_type: str, cases: List[InstanceCase]):
+    """Run instance tests from explicit cases with reasoning/force_empty_reasoning per case."""
+    for (
+        input_dict,
+        instances,
+        reasoning,
+        force_empty_reasoning,
+        expected_grammar_ebnf,
+        expected_accept_per_instance,
+    ) in cases:
+        stag = get_builtin_structural_tag(
+            format_type,
+            reasoning=reasoning,
+            force_empty_reasoning=force_empty_reasoning,
+            tools=input_dict.get("tools", []),
+            builtin_tools=input_dict.get("builtin_tools", []),
+        )
+        check_stag_with_grammar(stag, expected_grammar_ebnf)
+        for j, instance in enumerate(instances):
+            check_stag_with_instance(stag, instance, expected_accept_per_instance[j])
+
 
 def _run_instance_cases_for_style(
     format_type: str, cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]]
@@ -289,19 +314,29 @@ def _run_instance_cases_for_style(
 
 # ----- llama
 
-llama_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
+_llama_instances_with_tools = [
+    '{"name": "t1", "parameters": {"q": "v"}}',
+    'text{"name": "t1", "parameters": {}}',
+    '<think>123</think>text{"name": "t1", "parameters": {"q": ""}}',
+    "<think>\n\n</think></think>",
+    '<think>\n\n</think>text{"name": "t1", "parameters": {"q": "v"}}',
+]
+_llama_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>text",
+    "<think>\n\n</think></think>",
+    "<think>\n\n</think>text",
+]
+
+llama_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False, force_empty_reasoning=False
     (
         {"tools": _tools_llama},
-        [
-            '{"name": "t1", "parameters": {"q": "v"}}',
-            'text{"name": "t1", "parameters": {}}',
-            '<think>123</think>text{"name": "t1", "parameters": {"q": ""}}',
-            "<think>\n\n</think></think>",
-            '<think>\n\n</think>text{"name": "t1", "parameters": {"q": "v"}}',
-        ],
-        [
-            (
-                r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        _llama_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -332,10 +367,15 @@ triggered_tags ::= TagDispatch(
 )
 root ::= ((triggered_tags))
 """,
-                [True, True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, True, False, False, False],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=False
+    (
+        {"tools": _tools_llama},
+        _llama_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -374,10 +414,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((tag triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, False, True, False, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=True
+    (
+        {"tools": _tools_llama},
+        _llama_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -410,22 +455,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((const_string triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
+    # no tools, reasoning=False, force_empty_reasoning=False
     (
         {},
-        [
-            "",
-            "text",
-            "<think>123</think>text",
-            "<think>\n\n</think></think>",
-            "<think>\n\n</think>text",
-        ],
-        [
-            (
-                r"""any_text ::= TagDispatch(
+        _llama_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
@@ -433,10 +471,15 @@ root ::= ((sequence))
 )
 root ::= ((any_text))
 """,
-                [True, True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=False
+    (
+        {},
+        _llama_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -452,10 +495,15 @@ any_text_1 ::= TagDispatch(
 sequence ::= ((tag any_text_1))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, False, True, False, True],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=True
+    (
+        {},
+        _llama_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
@@ -465,33 +513,41 @@ any_text ::= TagDispatch(
 sequence ::= ((const_string any_text))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
 ]
 
 
 def test_get_llama_structural_tag_instance():
     """get_builtin_structural_tag(llama) accepts/rejects instance as expected."""
-    _run_instance_cases_for_style("llama", llama_instance_cases)
+    _run_instance_cases_explicit("llama", llama_instance_cases)
 
 
 # ----- kimi
 
-kimi_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
+_kimi_instances_with_tools = [
+    '123<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+    "123<|tool_call_begin|>123<|tool_call_argument_begin|>{}<|tool_call_end|>",
+    "<think>123</think>",
+    "<think>\n\n</think></think>",
+    '<think>\n\n</think>123<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+]
+_kimi_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>",
+    "<think>\n\n</think></think>",
+    "<think>\n\n</think>text",
+]
+
+kimi_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False, force_empty_reasoning=False
     (
         {"tools": _tools_kimi},
-        [
-            '123<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
-            "123<|tool_call_begin|>123<|tool_call_argument_begin|>{}<|tool_call_end|>",
-            "<think>123</think>",
-            "<think>\n\n</think></think>",
-            '<think>\n\n</think>123<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
-        ],
-        [
-            (
-                r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        _kimi_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -522,10 +578,15 @@ triggered_tags ::= TagDispatch(
 )
 root ::= ((triggered_tags))
 """,
-                [True, False, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=False
+    (
+        {"tools": _tools_kimi},
+        _kimi_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -564,10 +625,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((tag triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, False, True, False, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=True
+    (
+        {"tools": _tools_kimi},
+        _kimi_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -600,22 +666,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((const_string triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
+    # no tools, reasoning=False, force_empty_reasoning=False
     (
         {},
-        [
-            "",
-            "text",
-            "<think>123</think>",
-            "<think>\n\n</think></think>",
-            "<think>\n\n</think>text",
-        ],
-        [
-            (
-                r"""any_text ::= TagDispatch(
+        _kimi_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
@@ -623,10 +682,15 @@ root ::= ((sequence))
 )
 root ::= ((any_text))
 """,
-                [True, True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=False
+    (
+        {},
+        _kimi_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -642,10 +706,15 @@ any_text_1 ::= TagDispatch(
 sequence ::= ((tag any_text_1))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, False, True, False, True],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=True
+    (
+        {},
+        _kimi_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
@@ -655,33 +724,35 @@ any_text ::= TagDispatch(
 sequence ::= ((const_string any_text))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
 ]
 
 
 def test_get_kimi_structural_tag_instance():
     """get_builtin_structural_tag(kimi) accepts/rejects instance as expected."""
-    _run_instance_cases_for_style("kimi", kimi_instance_cases)
+    _run_instance_cases_explicit("kimi", kimi_instance_cases)
 
 
 # ----- deepseek_r1
 
-deepseek_r1_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
+_deepseek_r1_instances_with_tools = [
+    'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+    '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+    'thinking</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+    "</think>text<think>123</think>",
+    '</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+]
+_deepseek_r1_instances_no_tools = ["", "text", "123</think>123", "</think></think>", "</think>text"]
+
+deepseek_r1_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False, force_empty_reasoning=False
     (
         {"tools": _tools_deepseek},
-        [
-            'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
-            '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
-            'thinking</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
-            "</think>text<think>123</think>",
-            '</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
-        ],
-        [
-            (
-                r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        _deepseek_r1_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -712,10 +783,15 @@ triggered_tags ::= TagDispatch(
 )
 root ::= ((triggered_tags))
 """,
-                [True, False, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=False
+    (
+        {"tools": _tools_deepseek},
+        _deepseek_r1_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -754,10 +830,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((tag triggered_tags))
 root ::= ((sequence))
 """,
-                [False, True, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("</think>"))
+        [False, True, True, False, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=True
+    (
+        {"tools": _tools_deepseek},
+        _deepseek_r1_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -790,16 +871,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((const_string triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
+    # no tools, reasoning=False, force_empty_reasoning=False
     (
         {},
-        ["", "text", "123</think>123", "</think></think>", "</think>text"],
-        [
-            (
-                r"""any_text ::= TagDispatch(
+        _deepseek_r1_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
@@ -807,10 +887,15 @@ root ::= ((sequence))
 )
 root ::= ((any_text))
 """,
-                [True, True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=False
+    (
+        {},
+        _deepseek_r1_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -826,10 +911,15 @@ any_text_1 ::= TagDispatch(
 sequence ::= ((tag any_text_1))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("</think>"))
+        [False, False, True, False, True],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=True
+    (
+        {},
+        _deepseek_r1_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
@@ -839,35 +929,41 @@ any_text ::= TagDispatch(
 sequence ::= ((const_string any_text))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
 ]
 
 
 def test_get_deepseek_r1_structural_tag_instance():
     """get_builtin_structural_tag(deepseek_r1) accepts/rejects instance as expected."""
-    _run_instance_cases_for_style("deepseek_r1", deepseek_r1_instance_cases)
+    _run_instance_cases_explicit("deepseek_r1", deepseek_r1_instance_cases)
 
 
 # ----- deepseek_v3_2
 
-deepseek_v3_2_instance_cases: List[
-    Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]
-] = [
+_deepseek_v3_2_instances_with_tools = [
+    'text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+    '<think>123</think><｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+    '<think>123</think>text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+    "<think>\n\n</think>text<think>123</think>",
+    '<think>\n\n</think>text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+]
+_deepseek_v3_2_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think></think></think>",
+    "<think>\n\n</think>text",
+]
+
+deepseek_v3_2_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False, force_empty_reasoning=False
     (
         {"tools": _tools_deepseek_v3_2},
-        [
-            'text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
-            '<think>123</think><｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
-            '<think>123</think>text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
-            "<think>\n\n</think>text<think>123</think>",
-            '<think>\n\n</think>text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
-        ],
-        [
-            (
-                r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        _deepseek_v3_2_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -915,10 +1011,15 @@ triggered_tags ::= TagDispatch(
 )
 root ::= ((triggered_tags))
 """,
-                [True, False, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=False
+    (
+        {"tools": _tools_deepseek_v3_2},
+        _deepseek_v3_2_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -974,10 +1075,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((tag triggered_tags))
 root ::= ((sequence))
 """,
-                [False, True, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, True, True, False, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=True
+    (
+        {"tools": _tools_deepseek_v3_2},
+        _deepseek_v3_2_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -1027,16 +1133,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((const_string triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
+    # no tools, reasoning=False, force_empty_reasoning=False
     (
         {},
-        ["", "text", "<think>123</think>123", "<think></think></think>", "<think>\n\n</think>text"],
-        [
-            (
-                r"""any_text ::= TagDispatch(
+        _deepseek_v3_2_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
@@ -1044,10 +1149,15 @@ root ::= ((sequence))
 )
 root ::= ((any_text))
 """,
-                [True, True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=False
+    (
+        {},
+        _deepseek_v3_2_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -1063,10 +1173,15 @@ any_text_1 ::= TagDispatch(
 sequence ::= ((tag any_text_1))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, False, True, False, True],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=True
+    (
+        {},
+        _deepseek_v3_2_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
@@ -1076,33 +1191,41 @@ any_text ::= TagDispatch(
 sequence ::= ((const_string any_text))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
 ]
 
 
 def test_get_deepseek_v3_2_structural_tag_instance():
     """get_builtin_structural_tag(deepseek_v3_2) accepts/rejects instance as expected."""
-    _run_instance_cases_for_style("deepseek_v3_2", deepseek_v3_2_instance_cases)
+    _run_instance_cases_explicit("deepseek_v3_2", deepseek_v3_2_instance_cases)
 
 
 # ----- minimax
 
-minimax_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
+_minimax_instances_with_tools = [
+    'text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
+    '<think>123</think><minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
+    '<think>123</think>text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
+    "<think>\n\n</think>text<think>123</think>",
+    '<think>\n\n</think>text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
+]
+_minimax_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think></think></think>",
+    "<think>\n\n</think>text",
+]
+
+minimax_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False, force_empty_reasoning=False
     (
         {"tools": _tools_minimax},
-        [
-            'text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
-            '<think>123</think><minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
-            '<think>123</think>text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
-            "<think>\n\n</think>text<think>123</think>",
-            '<think>\n\n</think>text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
-        ],
-        [
-            (
-                r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        _minimax_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -1147,10 +1270,15 @@ triggered_tags ::= TagDispatch(
 )
 root ::= ((triggered_tags))
 """,
-                [True, False, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=False
+    (
+        {"tools": _tools_minimax},
+        _minimax_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -1203,10 +1331,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((tag triggered_tags))
 root ::= ((sequence))
 """,
-                [False, True, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, True, True, False, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=True
+    (
+        {"tools": _tools_minimax},
+        _minimax_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -1253,16 +1386,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((const_string triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
+    # no tools, reasoning=False, force_empty_reasoning=False
     (
         {},
-        ["", "text", "<think>123</think>123", "<think></think></think>", "<think>\n\n</think>text"],
-        [
-            (
-                r"""any_text ::= TagDispatch(
+        _minimax_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
@@ -1270,10 +1402,15 @@ root ::= ((sequence))
 )
 root ::= ((any_text))
 """,
-                [True, True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=False
+    (
+        {},
+        _minimax_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -1289,10 +1426,15 @@ any_text_1 ::= TagDispatch(
 sequence ::= ((tag any_text_1))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, False, True, False, True],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=True
+    (
+        {},
+        _minimax_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
@@ -1302,33 +1444,41 @@ any_text ::= TagDispatch(
 sequence ::= ((const_string any_text))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
 ]
 
 
 def test_get_minimax_structural_tag_instance():
     """get_builtin_structural_tag(minimax) accepts/rejects instance as expected."""
-    _run_instance_cases_for_style("minimax", minimax_instance_cases)
+    _run_instance_cases_explicit("minimax", minimax_instance_cases)
 
 
 # ----- qwen_coder
 
-qwen_coder_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
+_qwen_coder_instances_with_tools = [
+    "<tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+    "<tool_call>\n<function=other>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+    "<think>123</think><tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+    "<think>\n\n</think><think></think>",
+    "<think>\n\n</think>text<tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+]
+_qwen_coder_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think>\n\n</think></think>",
+    "<think>\n\n</think>text",
+]
+
+qwen_coder_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False, force_empty_reasoning=False
     (
         {"tools": _tools_qwen_coder},
-        [
-            "<tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
-            "<tool_call>\n<function=other>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
-            "<think>123</think><tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
-            "<think>\n\n</think><think></think>",
-            "<think>\n\n</think>text<tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
-        ],
-        [
-            (
-                r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        _qwen_coder_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -1369,10 +1519,15 @@ triggered_tags ::= TagDispatch(
 )
 root ::= ((triggered_tags))
 """,
-                [True, False, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=False
+    (
+        {"tools": _tools_qwen_coder},
+        _qwen_coder_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -1421,10 +1576,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((tag triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, False, True, False, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=True
+    (
+        {"tools": _tools_qwen_coder},
+        _qwen_coder_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -1467,22 +1627,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((const_string triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
+    # no tools, reasoning=False, force_empty_reasoning=False
     (
         {},
-        [
-            "",
-            "text",
-            "<think>123</think>123",
-            "<think>\n\n</think></think>",
-            "<think>\n\n</think>text",
-        ],
-        [
-            (
-                r"""any_text ::= TagDispatch(
+        _qwen_coder_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
@@ -1490,10 +1643,15 @@ root ::= ((sequence))
 )
 root ::= ((any_text))
 """,
-                [True, True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=False
+    (
+        {},
+        _qwen_coder_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -1509,10 +1667,15 @@ any_text_1 ::= TagDispatch(
 sequence ::= ((tag any_text_1))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, False, True, False, True],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=True
+    (
+        {},
+        _qwen_coder_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
@@ -1522,32 +1685,40 @@ any_text ::= TagDispatch(
 sequence ::= ((const_string any_text))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
 ]
 
 
 def test_get_qwen_coder_structural_tag_instance():
     """get_builtin_structural_tag(qwen_coder) accepts/rejects instance as expected."""
-    _run_instance_cases_for_style("qwen_coder", qwen_coder_instance_cases)
+    _run_instance_cases_explicit("qwen_coder", qwen_coder_instance_cases)
 
 
 # ----- qwen
 
-qwen_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
+_qwen_instances_with_tools = [
+    'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+    '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+    "<think>\n\n</think></think>",
+    '<think>\n\n</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+]
+_qwen_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think>\n\n</think></think>",
+    "<think>\n\n</think>text",
+]
+
+qwen_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False, force_empty_reasoning=False
     (
         {"tools": _tools_qwen},
-        [
-            'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
-            '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
-            "<think>\n\n<think></think>"
-            '<think>\n\n</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
-        ],
-        [
-            (
-                r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        _qwen_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -1578,10 +1749,15 @@ triggered_tags ::= TagDispatch(
 )
 root ::= ((triggered_tags))
 """,
-                [True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, False, False, False],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=False
+    (
+        {"tools": _tools_qwen},
+        _qwen_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -1620,10 +1796,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((tag triggered_tags))
 root ::= ((sequence))
 """,
-                [False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, True, False, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=True
+    (
+        {"tools": _tools_qwen},
+        _qwen_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
@@ -1656,22 +1837,15 @@ triggered_tags ::= TagDispatch(
 sequence ::= ((const_string triggered_tags))
 root ::= ((sequence))
 """,
-                [False, False, False, True],
-            ),
-        ],
+        [False, False, False, True],
     ),
+    # no tools, reasoning=False, force_empty_reasoning=False
     (
         {},
-        [
-            "",
-            "text",
-            "<think>123</think>123",
-            "<think>\n\n</think></think>",
-            "<think>\n\n</think>text",
-        ],
-        [
-            (
-                r"""any_text ::= TagDispatch(
+        _qwen_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
@@ -1679,10 +1853,15 @@ root ::= ((sequence))
 )
 root ::= ((any_text))
 """,
-                [True, True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=False
+    (
+        {},
+        _qwen_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("</think>"),
   loop_after_dispatch=false,
@@ -1698,10 +1877,15 @@ any_text_1 ::= TagDispatch(
 sequence ::= ((tag any_text_1))
 root ::= ((sequence))
 """,
-                [False, False, True, False, True],
-            ),
-            (
-                r"""const_string ::= (("<think>\n\n</think>"))
+        [False, False, True, False, True],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=True
+    (
+        {},
+        _qwen_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
 any_text ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
@@ -1711,34 +1895,42 @@ any_text ::= TagDispatch(
 sequence ::= ((const_string any_text))
 root ::= ((sequence))
 """,
-                [False, False, False, False, True],
-            ),
-        ],
+        [False, False, False, False, True],
     ),
 ]
 
 
 def test_get_qwen_structural_tag_instance():
     """get_builtin_structural_tag(qwen) accepts/rejects instance as expected."""
-    _run_instance_cases_for_style("qwen", qwen_instance_cases)
+    _run_instance_cases_explicit("qwen", qwen_instance_cases)
 
 
 # ----- harmony
 
-harmony_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
+_harmony_instances_with_tools = [
+    "<|channel|>analysis<|message|><|end|>",
+    '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
+    '<|channel|>analysis to=analysis_tool<|message|>{"q": "v"}<|call|>',
+    "<|channel|>commentary to=wrong_tool<|constrain|>json<|message|>{}<|call|>",
+    "<|channel|>analysis<|message|>think<|end|><|start|>assistant<|channel|>final<|message|>123<|end|>",
+    '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
+]
+_harmony_instances_no_tools = [
+    "",
+    "<|channel|>final<|message|>123<|end|>",
+    "<|channel|>analysis<|message|>123<|end|><|start|>assistant<|channel|>final<|message|>123<|end|>",
+    "<|channel|>analysis<|message|><|end|>",
+    "<think>\n\n</think>text",
+]
+
+harmony_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False, force_empty_reasoning=False
     (
         {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
-        [
-            "<|channel|>analysis<|message|><|end|>",
-            '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
-            '<|channel|>analysis to=analysis_tool<|message|>{"q": "v"}<|call|>',
-            "<|channel|>commentary to=wrong_tool<|constrain|>json<|message|>{}<|call|>",
-            "<|channel|>analysis<|message|>think<|end|><|start|>assistant<|channel|>final<|message|>123<|end|>",
-            '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
-        ],
-        [
-            (
-                r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+        _harmony_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
@@ -1794,10 +1986,15 @@ tags_with_separator_sub ::= ("" | ("<|start|>assistant" tags_with_separator_tags
 tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
 """,
-                [False, True, True, False, False, True],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [False, True, True, False, False, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=False
+    (
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
+        _harmony_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<|end|>"),
   loop_after_dispatch=false,
@@ -1860,10 +2057,15 @@ tags_with_separator_sub ::= ("" | ("<|start|>assistant" tags_with_separator_tags
 tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
 """,
-                [True, True, True, False, True, True],
-            ),
-            (
-                r"""const_string ::= (("<|end|>"))
+        [True, True, True, False, True, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=True
+    (
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
+        _harmony_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("<|end|>"))
 tag ::= (("<|channel|>analysis<|message|>" const_string))
 basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
@@ -1921,22 +2123,15 @@ tags_with_separator_sub ::= ("" | ("<|start|>assistant" tags_with_separator_tags
 tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
 """,
-                [True, True, True, False, False, True],
-            ),
-        ],
+        [True, True, True, False, False, True],
     ),
+    # no tools, reasoning=False, force_empty_reasoning=False
     (
         {},
-        [
-            "",
-            "<|channel|>final<|message|>123<|end|>",
-            "<|channel|>analysis<|message|>123<|end|><|start|>assistant<|channel|>final<|message|>123<|end|>",
-            "<|channel|>analysis<|message|><|end|>",
-            "<think>\n\n</think>text",
-        ],
-        [
-            (
-                r"""any_text ::= TagDispatch(
+        _harmony_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<|end|>"),
   loop_after_dispatch=false,
@@ -1948,10 +2143,15 @@ tags_with_separator_sub ::= ("" | ("<|start|>assistant" tags_with_separator_tags
 tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
 """,
-                [True, True, False, False, False],
-            ),
-            (
-                r"""any_text ::= TagDispatch(
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=False
+    (
+        {},
+        _harmony_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
   stop_eos=false,
   stop_str=("<|end|>"),
   loop_after_dispatch=false,
@@ -1970,10 +2170,15 @@ tags_with_separator_sub ::= ("" | ("<|start|>assistant" tags_with_separator_tags
 tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
 """,
-                [True, True, True, True, False],
-            ),
-            (
-                r"""const_string ::= (("<|end|>"))
+        [True, True, True, True, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=True
+    (
+        {},
+        _harmony_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<|end|>"))
 tag ::= (("<|channel|>analysis<|message|>" const_string))
 any_text ::= TagDispatch(
   stop_eos=false,
@@ -1987,13 +2192,11 @@ tags_with_separator_sub ::= ("" | ("<|start|>assistant" tags_with_separator_tags
 tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
 """,
-                [True, True, False, True, False],
-            ),
-        ],
+        [True, True, False, True, False],
     ),
 ]
 
 
 def test_get_harmony_structural_tag_instance():
     """get_builtin_structural_tag(harmony) accepts/rejects instance as expected."""
-    _run_instance_cases_for_style("harmony", harmony_instance_cases)
+    _run_instance_cases_explicit("harmony", harmony_instance_cases)
