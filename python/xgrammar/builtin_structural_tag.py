@@ -571,7 +571,7 @@ def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
         name = function["name"]
         tags.append(
             TagFormat(
-                begin='<｜DSML｜invoke name=">' + name + '">\n',
+                begin='<｜DSML｜invoke name="' + name + '">\n',
                 content=JSONSchemaFormat(json_schema=parameters, style="deepseek_xml"),
                 end="</｜DSML｜invoke>\n",
             )
@@ -592,6 +592,7 @@ def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
                     end="</｜DSML｜function_calls>\n",
                 )
             ],
+            excludes=_KTHINKEXCLUDES,
         )
     else:
         suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
@@ -624,7 +625,7 @@ def _get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         name = function["name"]
         tags.append(
             TagFormat(
-                begin='<invoke name=">' + name + '">\n',
+                begin='<invoke name="' + name + '">\n',
                 content=JSONSchemaFormat(json_schema=parameters, style="minimax_xml"),
                 end="</invoke>\n",
             )
@@ -645,6 +646,7 @@ def _get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
                     end="</minimax:tool_call>\n",
                 )
             ],
+            excludes=_KTHINKEXCLUDES,
         )
     else:
         suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
