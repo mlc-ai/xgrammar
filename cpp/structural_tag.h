@@ -84,6 +84,7 @@ struct AnyTextFormat {
   std::vector<std::string> detected_end_strs_;
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;
+  friend class FormatFingerprinter;
 };
 
 /******************** Combinatorial Formats ********************/

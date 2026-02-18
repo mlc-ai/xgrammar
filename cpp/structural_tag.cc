@@ -274,7 +274,18 @@ Result<SequenceFormat, ISTError> StructuralTagParser::ParseSequenceFormat(
     if (format.IsErr()) {
       return ResultErr<ISTError>(std::move(format).UnwrapErr());
     }
-    elements.push_back(std::move(format).Unwrap());
+    Format parsed_format = std::move(format).Unwrap();
+
+    // Flatten nested sequences: if the parsed element is itself a sequence,
+    // inline its elements rather than nesting.
+    if (std::holds_alternative<SequenceFormat>(parsed_format)) {
+      auto& nested_seq = std::get<SequenceFormat>(parsed_format);
+      for (auto& nested_elem : nested_seq.elements) {
+        elements.push_back(std::move(nested_elem));
+      }
+    } else {
+      elements.push_back(std::move(parsed_format));
+    }
   }
   if (elements.size() == 0) {
     return ResultErr<ISTError>("Sequence format must have at least one element");
@@ -741,6 +752,117 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TagsWithSeparatorFormat*
   return std::nullopt;
 }
 
+/************** Format Fingerprinting for Deduplication **************/
+
+/*!
+ * \brief Compute a fingerprint string for a Format to enable deduplication.
+ * Formats with identical fingerprints can reuse the same grammar rule.
+ */
+class FormatFingerprinter {
+ public:
+  static std::string Compute(const Format& format);
+
+ private:
+  std::string ComputeImpl(const Format& format);
+  std::string VisitSub(const ConstStringFormat& format);
+  std::string VisitSub(const JSONSchemaFormat& format);
+  std::string VisitSub(const QwenXmlParameterFormat& format);
+  std::string VisitSub(const AnyTextFormat& format);
+  std::string VisitSub(const GrammarFormat& format);
+  std::string VisitSub(const RegexFormat& format);
+  std::string VisitSub(const SequenceFormat& format);
+  std::string VisitSub(const OrFormat& format);
+  std::string VisitSub(const TagFormat& format);
+  std::string VisitSub(const TriggeredTagsFormat& format);
+  std::string VisitSub(const TagsWithSeparatorFormat& format);
+};
+
+std::string FormatFingerprinter::Compute(const Format& format) {
+  return FormatFingerprinter().ComputeImpl(format);
+}
+
+std::string FormatFingerprinter::ComputeImpl(const Format& format) {
+  return std::visit([&](auto&& arg) -> std::string { return VisitSub(arg); }, format);
+}
+
+std::string FormatFingerprinter::VisitSub(const ConstStringFormat& format) {
+  return std::string("CS:") + format.value;
+}
+
+std::string FormatFingerprinter::VisitSub(const JSONSchemaFormat& format) {
+  return std::string("JS:") + format.json_schema;
+}
+
+std::string FormatFingerprinter::VisitSub(const QwenXmlParameterFormat& format) {
+  return std::string("QX:") + format.xml_schema;
+}
+
+std::string FormatFingerprinter::VisitSub(const AnyTextFormat& format) {
+  std::string result = "AT:";
+  for (const auto& s : format.excluded_strs) {
+    result += s + "|";
+  }
+  // Include detected end strings in the fingerprint as they affect the grammar
+  result += "E:";
+  for (const auto& s : format.detected_end_strs_) {
+    result += s + "|";
+  }
+  return result;
+}
+
+std::string FormatFingerprinter::VisitSub(const GrammarFormat& format) {
+  return std::string("GR:") + format.grammar;
+}
+
+std::string FormatFingerprinter::VisitSub(const RegexFormat& format) {
+  return std::string("RX:") + format.pattern;
+}
+
+std::string FormatFingerprinter::VisitSub(const SequenceFormat& format) {
+  std::string result = "SQ[";
+  for (const auto& element : format.elements) {
+    result += ComputeImpl(element) + ",";
+  }
+  result += "]";
+  return result;
+}
+
+std::string FormatFingerprinter::VisitSub(const OrFormat& format) {
+  std::string result = "OR[";
+  for (const auto& element : format.elements) {
+    result += ComputeImpl(element) + ",";
+  }
+  result += "]";
+  return result;
+}
+
+std::string FormatFingerprinter::VisitSub(const TagFormat& format) {
+  std::string result = "TG:" + format.begin + ":{";
+  result += ComputeImpl(*format.content);
+  result += "}:";
+  for (const auto& end_str : format.end) {
+    result += end_str + "|";
+  }
+  return result;
+}
+
+std::string FormatFingerprinter::VisitSub(const TriggeredTagsFormat& format) {
+  // TriggeredTags are complex and rarely duplicated, use a simple hash
+  std::string result = "TT:";
+  for (const auto& trigger : format.triggers) {
+    result += trigger + ",";
+  }
+  result += ":";
+  result += std::to_string(format.at_least_one) + "," + std::to_string(format.stop_after_first);
+  return result;
+}
+
+std::string FormatFingerprinter::VisitSub(const TagsWithSeparatorFormat& format) {
+  std::string result = "TS:" + format.separator + ":";
+  result += std::to_string(format.at_least_one) + "," + std::to_string(format.stop_after_first);
+  return result;
+}
+
 /************** StructuralTag to Grammar Converter **************/
 
 class StructuralTagGrammarConverter {
@@ -752,6 +874,7 @@ class StructuralTagGrammarConverter {
    * \brief Visit a Format and return the rule id of the added rule.
    * \param format The Format to visit.
    * \return The rule id of the added rule. If the visit fails, the error is returned.
+   * \note This method uses fingerprinting to deduplicate identical formats.
    */
   Result<int, ISTError> Visit(const Format& format);
   Result<int, ISTError> VisitSub(const ConstStringFormat& format);
@@ -769,6 +892,12 @@ class StructuralTagGrammarConverter {
   bool IsPrefix(const std::string& prefix, const std::string& full_str);
 
   GrammarBuilder grammar_builder_;
+
+  /*!
+   * \brief Cache from format fingerprint to rule id.
+   * This enables deduplication of identical formats to reduce grammar size.
+   */
+  std::unordered_map<std::string, int> fingerprint_to_rule_id_;
 };
 
 bool StructuralTagGrammarConverter::IsPrefix(
@@ -799,7 +928,23 @@ Grammar StructuralTagGrammarConverter::AddRootRuleAndGetGrammar(int ref_rule_id)
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::Visit(const Format& format) {
-  return std::visit([&](auto&& arg) -> Result<int, ISTError> { return VisitSub(arg); }, format);
+  // Compute fingerprint for deduplication
+  std::string fingerprint = FormatFingerprinter::Compute(format);
+
+  // Check if we've already processed an identical format
+  auto it = fingerprint_to_rule_id_.find(fingerprint);
+  if (it != fingerprint_to_rule_id_.end()) {
+    return ResultOk(it->second);
+  }
+
+  // Process the format and cache the result
+  auto result = std::visit([&](auto&& arg) -> Result<int, ISTError> { return VisitSub(arg); }, format);
+  if (result.IsOk()) {
+    int rule_id = std::move(result).Unwrap();
+    fingerprint_to_rule_id_[fingerprint] = rule_id;
+    return ResultOk(rule_id);
+  }
+  return result;
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringFormat& format) {
