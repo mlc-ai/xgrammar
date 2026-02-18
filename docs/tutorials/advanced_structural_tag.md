@@ -4,7 +4,7 @@
 
 `get_builtin_structural_tag` generates a `StructuralTag` for the given model type with the specified tools and options. The returned structural tag can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain a grammar that matches the function-calling format in the corresponding model's style within any-form text.
 
-Use it when you need to constrain the model to output in a fixed pattern such as "tool name + parameter JSON", e.g. for Llama, Qwen, Kimi, DeepSeek, or OpenAI Harmony.
+Use it when you need to constrain the model to output in a fixed pattern such as "tool name + parameter JSON", e.g. for Llama, Qwen, Kimi, DeepSeek, or OpenAI Harmony, etc.
 
 ### Parameters
 
@@ -15,6 +15,8 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `"kimi"`: Kimi-style (e.g. Kimi-K2, Kimi-K2.5)
   - `"deepseek_r1"`: DeepSeek-style (e.g. DeepSeek-V3.1, DeepSeek-R1, DeepSeek-V3.2-exp)
   - `"harmony"`: OpenAI Harmony Response Format (e.g. gpt-oss)
+  - `"deepseek_v3_2"`: DeepSeek-V3.2-style (e.g. DeepSeek-V3.2)
+  - `"minimax"`: MiniMax-style (e.g. MiniMax-M2)
 - **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags). Default `True`.
 - **tools** (`List[Dict[str, Any]]`, optional): List of tools; each item is a dict with a `"function"` key, which is a dict with `"name"` and `"parameters"` (`parameters` is a JSON Schema dict). Default `[]`.
 - **builtin_tools** (`List[Dict[str, Any]]`, optional): List of built-in tools (harmony only); same structure as `tools`. Default `[]`.
@@ -63,7 +65,7 @@ structural_tag = get_builtin_structural_tag("qwen", tools=tools, reasoning=True)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
-If `reasoning` is not passed, reasoning mode is enabled by default. Besides, whe `reasoning` is `True`, You can also set the `force_empty_reasoning` to constrain the reasoning content.
+If `reasoning` is not passed, reasoning mode is enabled by default. Besides, when `reasoning` is `True`, you can also set `force_empty_reasoning` to constrain the reasoning content.
 
 ---
 
@@ -91,16 +93,16 @@ To use this grammar in grammar-guided generation, the GrammarMatcher constructed
 
 The benefit of this method is the token boundary between tags and triggers is automatically handled. The user does not need to worry about the token boundary.
 
-### Parameters(deprecated)
+### Parameters (deprecated)
 
 - **tags** (`List[StructuralTagItem]`): The structural tags.
 - **triggers** (`List[str]`): The triggers.
 
-### Returns(deprecated)
+### Returns (deprecated)
 
 - **grammar** (`Grammar`): The constructed grammar.
 
-### Example(deprecated)
+### Example (deprecated)
 
 ```python
 from pydantic import BaseModel

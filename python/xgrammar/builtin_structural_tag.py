@@ -15,7 +15,9 @@ from .structural_tag import (
 # ---------- API Functions ----------
 
 
-BuiltinSupportedModels = Literal["llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony"]
+BuiltinSupportedModels = Literal[
+    "llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony", "deepseek_v3_2", "minimax"
+]
 
 
 def get_builtin_structural_tag(
@@ -551,3 +553,109 @@ def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     tags.append(final_tag)
     tags_with_separator = TagsWithSeparatorFormat(tags=tags, separator="<|start|>assistant")
     return StructuralTag(format=tags_with_separator)
+
+
+@_register_structural_tag_function("deepseek_v3_2", ["DeepSeek-V3.2"])
+def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    tools = input_dict.get("tools", [])
+    reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+
+    tags = []
+    for tool in tools:
+        if "function" not in tool:
+            continue
+
+        function = tool["function"]
+        parameters = function["parameters"]
+        name = function["name"]
+        tags.append(
+            TagFormat(
+                begin='<｜DSML｜invoke name=">' + name + '">\n',
+                content=JSONSchemaFormat(json_schema=parameters, style="deepseek_xml"),
+                end="</｜DSML｜invoke>\n",
+            )
+        )
+
+    # generate function calling triggered tag
+    if len(tags) > 0:
+        function_calling_tags = TagsWithSeparatorFormat(
+            tags=tags, separator="\n", at_least_one=True
+        )
+
+        suffix_tag = TriggeredTagsFormat(
+            triggers=["<｜DSML｜function_calls>"],
+            tags=[
+                TagFormat(
+                    begin="<｜DSML｜function_calls>\n",
+                    content=function_calling_tags,
+                    end="</｜DSML｜function_calls>\n",
+                )
+            ],
+        )
+    else:
+        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+    else:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+
+    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
+    return StructuralTag(format=sequence_format)
+
+
+@_register_structural_tag_function("minimax", ["MiniMax-M2.5"])
+def _get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    tools = input_dict.get("tools", [])
+    reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+
+    tags = []
+    for tool in tools:
+        if "function" not in tool:
+            continue
+
+        function = tool["function"]
+        parameters = function["parameters"]
+        name = function["name"]
+        tags.append(
+            TagFormat(
+                begin='<invoke name=">' + name + '">\n',
+                content=JSONSchemaFormat(json_schema=parameters, style="minimax_xml"),
+                end="</invoke>\n",
+            )
+        )
+
+    # generate function calling triggered tag
+    if len(tags) > 0:
+        function_calling_tags = TagsWithSeparatorFormat(
+            tags=tags, separator="\n", at_least_one=True
+        )
+
+        suffix_tag = TriggeredTagsFormat(
+            triggers=["<minimax:tool_call>"],
+            tags=[
+                TagFormat(
+                    begin="<minimax:tool_call>\n",
+                    content=function_calling_tags,
+                    end="</minimax:tool_call>\n",
+                )
+            ],
+        )
+    else:
+        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+    else:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+
+    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
+    return StructuralTag(format=sequence_format)
