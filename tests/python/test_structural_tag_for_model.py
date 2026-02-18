@@ -248,11 +248,49 @@ def test_get_builtin_structural_tag_input_validation_errors(
 
 # ---------- Test: instance positive / negative ----------
 
-# (format_type, input_dict, instances, grammar and is_accepted cases(not reasoning, reasoning, empty reasoning))
-instance_cases: List[Tuple[str, Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
-    # ----- llama
+
+def _run_instance_cases_for_style(
+    format_type: str, cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]]
+):
+    """Run instance accept/reject tests for a style. Each case is (input_dict, instances, expected_grammar_and_results)."""
+    for input_dict, instances, expected_grammar_and_results in cases:
+        assert (
+            len(expected_grammar_and_results) == 3
+        ), "3 modes: not reasoning, reasoning, empty reasoning"
+        for i in range(3):
+            current_grammar = expected_grammar_and_results[i][0]
+            current_results = expected_grammar_and_results[i][1]
+            tools = input_dict.get("tools", [])
+            builtin_tools = input_dict.get("builtin_tools", [])
+
+            if i == 0:
+                reasoning = False
+            else:
+                reasoning = True
+
+            if i == 2:
+                force_empty_reasoning = True
+            else:
+                force_empty_reasoning = False
+
+            stag = get_builtin_structural_tag(
+                format_type,
+                reasoning=reasoning,
+                force_empty_reasoning=force_empty_reasoning,
+                tools=tools,
+                builtin_tools=builtin_tools,
+            )
+            check_stag_with_grammar(stag, current_grammar)
+            for j in range(len(instances)):
+                instance = instances[j]
+                is_accepted = current_results[j]
+                check_stag_with_instance(stag, instance, is_accepted)
+
+
+# ----- llama
+
+llama_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
     (
-        "llama",
         {"tools": _tools_llama},
         [
             '{"name": "t1", "parameters": {"q": "v"}}',
@@ -377,7 +415,6 @@ root ::= ((sequence))
         ],
     ),
     (
-        "llama",
         {},
         [
             "",
@@ -432,9 +469,18 @@ root ::= ((sequence))
             ),
         ],
     ),
-    # ----- kimi
+]
+
+
+def test_get_llama_structural_tag_instance():
+    """get_builtin_structural_tag(llama) accepts/rejects instance as expected."""
+    _run_instance_cases_for_style("llama", llama_instance_cases)
+
+
+# ----- kimi
+
+kimi_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
     (
-        "kimi",
         {"tools": _tools_kimi},
         [
             '123<|tool_call_begin|>get_weather<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
@@ -559,7 +605,6 @@ root ::= ((sequence))
         ],
     ),
     (
-        "kimi",
         {},
         [
             "",
@@ -614,9 +659,18 @@ root ::= ((sequence))
             ),
         ],
     ),
-    # ----- deepseek
+]
+
+
+def test_get_kimi_structural_tag_instance():
+    """get_builtin_structural_tag(kimi) accepts/rejects instance as expected."""
+    _run_instance_cases_for_style("kimi", kimi_instance_cases)
+
+
+# ----- deepseek_r1
+
+deepseek_r1_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
     (
-        "deepseek_r1",
         {"tools": _tools_deepseek},
         [
             'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
@@ -741,7 +795,6 @@ root ::= ((sequence))
         ],
     ),
     (
-        "deepseek_r1",
         {},
         ["", "text", "123</think>123", "</think></think>", "</think>text"],
         [
@@ -790,9 +843,20 @@ root ::= ((sequence))
             ),
         ],
     ),
-    # ----- deepseek_v3_2
+]
+
+
+def test_get_deepseek_r1_structural_tag_instance():
+    """get_builtin_structural_tag(deepseek_r1) accepts/rejects instance as expected."""
+    _run_instance_cases_for_style("deepseek_r1", deepseek_r1_instance_cases)
+
+
+# ----- deepseek_v3_2
+
+deepseek_v3_2_instance_cases: List[
+    Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]
+] = [
     (
-        "deepseek_v3_2",
         {"tools": _tools_deepseek_v3_2},
         [
             'text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
@@ -968,7 +1032,6 @@ root ::= ((sequence))
         ],
     ),
     (
-        "deepseek_v3_2",
         {},
         ["", "text", "<think>123</think>123", "<think></think></think>", "<think>\n\n</think>text"],
         [
@@ -1017,9 +1080,18 @@ root ::= ((sequence))
             ),
         ],
     ),
-    # ----- minimax
+]
+
+
+def test_get_deepseek_v3_2_structural_tag_instance():
+    """get_builtin_structural_tag(deepseek_v3_2) accepts/rejects instance as expected."""
+    _run_instance_cases_for_style("deepseek_v3_2", deepseek_v3_2_instance_cases)
+
+
+# ----- minimax
+
+minimax_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
     (
-        "minimax",
         {"tools": _tools_minimax},
         [
             'text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
@@ -1186,7 +1258,6 @@ root ::= ((sequence))
         ],
     ),
     (
-        "minimax",
         {},
         ["", "text", "<think>123</think>123", "<think></think></think>", "<think>\n\n</think>text"],
         [
@@ -1235,9 +1306,18 @@ root ::= ((sequence))
             ),
         ],
     ),
-    # ----- qwen_coder
+]
+
+
+def test_get_minimax_structural_tag_instance():
+    """get_builtin_structural_tag(minimax) accepts/rejects instance as expected."""
+    _run_instance_cases_for_style("minimax", minimax_instance_cases)
+
+
+# ----- qwen_coder
+
+qwen_coder_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
     (
-        "qwen_coder",
         {"tools": _tools_qwen_coder},
         [
             "<tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
@@ -1392,7 +1472,6 @@ root ::= ((sequence))
         ],
     ),
     (
-        "qwen_coder",
         {},
         [
             "",
@@ -1447,9 +1526,18 @@ root ::= ((sequence))
             ),
         ],
     ),
-    # ----- qwen
+]
+
+
+def test_get_qwen_coder_structural_tag_instance():
+    """get_builtin_structural_tag(qwen_coder) accepts/rejects instance as expected."""
+    _run_instance_cases_for_style("qwen_coder", qwen_coder_instance_cases)
+
+
+# ----- qwen
+
+qwen_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
     (
-        "qwen",
         {"tools": _tools_qwen},
         [
             'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
@@ -1573,7 +1661,6 @@ root ::= ((sequence))
         ],
     ),
     (
-        "qwen",
         {},
         [
             "",
@@ -1628,9 +1715,18 @@ root ::= ((sequence))
             ),
         ],
     ),
-    # ----- harmony
+]
+
+
+def test_get_qwen_structural_tag_instance():
+    """get_builtin_structural_tag(qwen) accepts/rejects instance as expected."""
+    _run_instance_cases_for_style("qwen", qwen_instance_cases)
+
+
+# ----- harmony
+
+harmony_instance_cases: List[Tuple[Dict[str, Any], List[str], List[Tuple[str, List[bool]]]]] = [
     (
-        "harmony",
         {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
         [
             "<|channel|>analysis<|message|><|end|>",
@@ -1830,7 +1926,6 @@ root ::= ((tags_with_separator))
         ],
     ),
     (
-        "harmony",
         {},
         [
             "",
@@ -1899,44 +1994,6 @@ root ::= ((tags_with_separator))
 ]
 
 
-@pytest.mark.parametrize(
-    "format_type, input_dict, instances, expected_grammar_and_results", instance_cases
-)
-def test_get_builtin_structural_tag_instance(
-    format_type: str,
-    input_dict: Dict[str, Any],
-    instances: List[str],
-    expected_grammar_and_results: List[Tuple[str, List[bool]]],
-):
-    """get_builtin_structural_tag accepts/rejects instance as expected."""
-    assert (
-        len(expected_grammar_and_results) == 3
-    ), "3 modes: not reasoning, reasoning, empty reasoning"
-    for i in range(3):
-        current_grammar = expected_grammar_and_results[i][0]
-        current_results = expected_grammar_and_results[i][1]
-        tools = input_dict.get("tools", [])
-        builtin_tools = input_dict.get("builtin_tools", [])
-
-        if i == 0:
-            reasoning = False
-        else:
-            reasoning = True
-
-        if i == 2:
-            force_empty_reasoning = True
-        else:
-            force_empty_reasoning = False
-
-        stag = get_builtin_structural_tag(
-            format_type,
-            reasoning=reasoning,
-            force_empty_reasoning=force_empty_reasoning,
-            tools=tools,
-            builtin_tools=builtin_tools,
-        )
-        check_stag_with_grammar(stag, current_grammar)
-        for j in range(len(instances)):
-            instance = instances[j]
-            is_accepted = current_results[j]
-            check_stag_with_instance(stag, instance, is_accepted)
+def test_get_harmony_structural_tag_instance():
+    """get_builtin_structural_tag(harmony) accepts/rejects instance as expected."""
+    _run_instance_cases_for_style("harmony", harmony_instance_cases)
