@@ -22,10 +22,10 @@ const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
         {JSONFormat::kQwenXML, {"<parameter=", ">", "</parameter>"}},
         {JSONFormat::kMiniMaxXML, {"<parameter name=\\\"", "\\\">", "</parameter>"}},
         {JSONFormat::kDeepSeekXML,
-         {"<{dsml_token}parameter name=\\\"",
+         {"<｜DSML｜parameter name=\\\"",
           "\\\" string=\\\"\" (\"true\" | \"false\") \"\\\">",
           // TODO(Linzhang): we do not validate the string's value, and we accept both.
-          "</{dsml_token}parameter>"}},
+          "</｜DSML｜parameter>"}},
 };
 
 XMLToolCallingConverter::XMLToolCallingConverter(

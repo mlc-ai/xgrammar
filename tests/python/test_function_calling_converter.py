@@ -872,41 +872,41 @@ root ::=   (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</paramet
 
 
 # ---------- DeepSeek XML tool calling (_deepseek_xml_tool_calling_to_ebnf) ----------
-# Format: <{dsml_token}parameter name="$PARAMETER_NAME" string="true|false">$PARAMETER_VALUE</{dsml_token}parameter>
+# Format: <｜DSML｜parameter name="$PARAMETER_NAME" string="true|false">$PARAMETER_VALUE</｜DSML｜parameter>
 
 
 deepseek_test_string_schema_input_str_accepted = (
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">\t100\n</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">\t100\n</｜DSML｜parameter>',
         True,
     ),
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter>\t\n<{dsml_token}parameter name="age" string="true">\t100\n</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>\t\n<｜DSML｜parameter name="age" string="true">\t100\n</｜DSML｜parameter>',
         False,
     ),
     (
-        '<{dsml_token}parameter name="name" string="false">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="true">100</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="false">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="true">100</｜DSML｜parameter>',
         True,
     ),
     (
-        """<{dsml_token}parameter name="name" string="true"><!DOCTYPE html>
+        """<｜DSML｜parameter name="name" string="true"><!DOCTYPE html>
 <html lang="en">
   <body><h1>Hello</h1></body>
-</html></{dsml_token}parameter><{dsml_token}parameter name="age" string="false">100</{dsml_token}parameter>""",
+</html></｜DSML｜parameter><｜DSML｜parameter name="age" string="false">100</｜DSML｜parameter>""",
         True,
     ),
-    ('<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter>', False),
-    ('<{dsml_token}parameter name="age" string="false">100</{dsml_token}parameter>', False),
+    ('<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="age" string="false">100</｜DSML｜parameter>', False),
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">100',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">100',
         False,
     ),
     (
-        '<{dsml_token}parameter name="name">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">100</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">100</｜DSML｜parameter>',
         False,
     ),
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</parameter><{dsml_token}parameter name="age" string="false">100</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</parameter><｜DSML｜parameter name="age" string="false">100</｜DSML｜parameter>',
         False,
     ),
 )
@@ -924,13 +924,13 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</{dsml_token}parameter>"))
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>" ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>")* ) | [ \n\t]*
+xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::=  "<{dsml_token}parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</{dsml_token}parameter>" ""
-root ::=   (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</{dsml_token}parameter>" root_part_0))
+root_part_0 ::=  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
+root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0))
 """
     schema = {
         "type": "object",
@@ -942,20 +942,17 @@ root ::=   (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false")
 
 deepseek_test_additional_properties_schema_input_str_accepted = (
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">\t100\n</{dsml_token}parameter><{dsml_token}parameter name="location" string="true">New York</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">\t100\n</｜DSML｜parameter><｜DSML｜parameter name="location" string="true">New York</｜DSML｜parameter>',
         True,
     ),
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="true">100</{dsml_token}parameter><{dsml_token}parameter name="123invalid" string="false">A</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="true">100</｜DSML｜parameter><｜DSML｜parameter name="123invalid" string="false">A</｜DSML｜parameter>',
         False,
     ),
+    ('<｜DSML｜parameter name="location" string="true">New York</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>', False),
     (
-        '<{dsml_token}parameter name="location" string="true">New York</{dsml_token}parameter>',
-        False,
-    ),
-    ('<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter>', False),
-    (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">100',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">100',
         False,
     ),
 )
@@ -975,15 +972,15 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</{dsml_token}parameter>"))
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>" ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>")* ) | [ \n\t]*
+xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</{dsml_token}parameter>")*
-root_part_0 ::=  "<{dsml_token}parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</{dsml_token}parameter>" root_part_1
-root ::=   (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</{dsml_token}parameter>" root_part_0))
+root_part_1 ::= ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
+root_part_0 ::=  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
+root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0))
 """
     schema = {
         "type": "object",
@@ -996,19 +993,16 @@ root ::=   (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false")
 
 deepseek_test_not_required_properties_schema_input_str_accepted = (
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">\t100\n</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">\t100\n</｜DSML｜parameter>',
         True,
     ),
-    ('<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter>', True),
-    ('<{dsml_token}parameter name="age" string="false">100</{dsml_token}parameter>', True),
+    ('<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="age" string="false">100</｜DSML｜parameter>', True),
     ("", True),
-    (
-        '<{dsml_token}parameter name="anything" string="true">It\'s a string.</{dsml_token}parameter>',
-        True,
-    ),
-    ('<{dsml_token}parameter name="name" string="true">Bob', False),
-    ('<{dsml_token}parameter name="name">Bob</{dsml_token}parameter>', False),
-    ('<{dsml_token}parameter name="x" string="true">y</parameter>', False),
+    ('<｜DSML｜parameter name="anything" string="true">It\'s a string.</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="name" string="true">Bob', False),
+    ('<｜DSML｜parameter name="name">Bob</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="x" string="true">y</parameter>', False),
 )
 
 
@@ -1026,15 +1020,15 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</{dsml_token}parameter>"))
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>" ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>")* ) | [ \n\t]*
+xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</{dsml_token}parameter>")*
-root_part_0 ::= root_part_1 |  "<{dsml_token}parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</{dsml_token}parameter>" root_part_1
-root ::= (  (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</{dsml_token}parameter>" root_part_0) | ("<{dsml_token}parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</{dsml_token}parameter>" root_part_1) | "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</{dsml_token}parameter>" root_part_1) ) | [ \n\t]*
+root_part_1 ::= ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= root_part_1 |  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
+root ::= (  (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1) | "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>" root_part_1) ) | [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -1046,23 +1040,20 @@ root ::= (  (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false"
 
 deepseek_test_part_required_properties_schema_input_str_accepted = (
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">\t100\n</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">\t100\n</｜DSML｜parameter>',
         True,
     ),
-    ('<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter>', True),
-    ('<{dsml_token}parameter name="age" string="true">100</{dsml_token}parameter>', False),
+    ('<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="age" string="true">100</｜DSML｜parameter>', False),
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">\t100\n</{dsml_token}parameter><{dsml_token}parameter name="anything" string="true">It\'s a string.</{dsml_token}parameter>',
-        True,
-    ),
-    (
-        '<{dsml_token}parameter name="name" string="false">Bob</{dsml_token}parameter><{dsml_token}parameter name="anything" string="true">It\'s a string.</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">\t100\n</｜DSML｜parameter><｜DSML｜parameter name="anything" string="true">It\'s a string.</｜DSML｜parameter>',
         True,
     ),
     (
-        '<{dsml_token}parameter name="anything" string="true">It\'s a string.</{dsml_token}parameter>',
-        False,
+        '<｜DSML｜parameter name="name" string="false">Bob</｜DSML｜parameter><｜DSML｜parameter name="anything" string="true">It\'s a string.</｜DSML｜parameter>',
+        True,
     ),
+    ('<｜DSML｜parameter name="anything" string="true">It\'s a string.</｜DSML｜parameter>', False),
 )
 
 
@@ -1080,15 +1071,15 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</{dsml_token}parameter>"))
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>" ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>")* ) | [ \n\t]*
+xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</{dsml_token}parameter>")*
-root_part_0 ::= root_part_1 |  "<{dsml_token}parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</{dsml_token}parameter>" root_part_1
-root ::=   (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</{dsml_token}parameter>" root_part_0))
+root_part_1 ::= ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= root_part_1 |  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
+root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0))
 """
     schema = {
         "type": "object",
@@ -1101,35 +1092,35 @@ root ::=   (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false")
 
 deepseek_test_inner_object_schema_input_str_accepted = (
     (
-        '<{dsml_token}parameter name="address" string="true">{"street": "Main St", "city": "New York"}</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="address" string="true">{"street": "Main St", "city": "New York"}</｜DSML｜parameter>',
         True,
     ),
     (
-        '<{dsml_token}parameter name="address" string="false">{"street": "Main St", "city": "No more xml escape&<>"}</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="address" string="false">{"street": "Main St", "city": "No more xml escape&<>"}</｜DSML｜parameter>',
         True,
     ),
     (
-        '<{dsml_token}parameter name="address" string="true">{"street": Main St, "city": New York}</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="address" string="true">{"street": Main St, "city": New York}</｜DSML｜parameter>',
         False,
     ),
     (
-        '<{dsml_token}parameter name="address" string="true"><{dsml_token}parameter name="street" string="true">Main St</{dsml_token}parameter><{dsml_token}parameter name="city" string="true">New York</{dsml_token}parameter></{dsml_token}parameter>',
+        '<｜DSML｜parameter name="address" string="true"><｜DSML｜parameter name="street" string="true">Main St</｜DSML｜parameter><｜DSML｜parameter name="city" string="true">New York</｜DSML｜parameter></｜DSML｜parameter>',
         False,
     ),
     (
-        '<{dsml_token}parameter name="address" string="true">{"street": "Main St"}</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="address" string="true">{"street": "Main St"}</｜DSML｜parameter>',
         False,
     ),
     (
-        '<{dsml_token}parameter name="address" string="false">{"city": "New York"}</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="address" string="false">{"city": "New York"}</｜DSML｜parameter>',
         False,
     ),
     (
-        '<{dsml_token}parameter name="address" string="true">{"street": "Main St", "city": "New York", "additional_property": "value"}</{dsml_token}parameter><{dsml_token}parameter name="additional_property" string="true">value</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="address" string="true">{"street": "Main St", "city": "New York", "additional_property": "value"}</｜DSML｜parameter><｜DSML｜parameter name="additional_property" string="true">value</｜DSML｜parameter>',
         True,
     ),
     (
-        '<{dsml_token}parameter name="address" string="true">{"street": "Main St", "city": "New York", "additional_property": value}</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="address" string="true">{"street": "Main St", "city": "New York", "additional_property": value}</｜DSML｜parameter>',
         False,
     ),
 )
@@ -1149,17 +1140,17 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</{dsml_token}parameter>"))
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>" ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>")* ) | [ \n\t]*
+xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 root_prop_0_part_1 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* root_prop_0_addl)*
 root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_1
 root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
 root_addl ::= xml_string | basic_array | basic_object
-root_part_0 ::= ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</{dsml_token}parameter>")*
-root ::=   (("<{dsml_token}parameter name=\"address\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_0 [ \n\t]* "</{dsml_token}parameter>" root_part_0))
+root_part_0 ::= ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
+root ::=   (("<｜DSML｜parameter name=\"address\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_0 [ \n\t]* "</｜DSML｜parameter>" root_part_0))
 """
     schema = {
         "type": "object",
@@ -1178,17 +1169,17 @@ root ::=   (("<{dsml_token}parameter name=\"address\" string=\"" ("true" | "fals
 
 
 deepseek_test_numbers_schema_input_str_accepted = (
-    ('<{dsml_token}parameter name="age" string="false">25</{dsml_token}parameter>', False),
+    ('<｜DSML｜parameter name="age" string="false">25</｜DSML｜parameter>', False),
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">25</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">25</｜DSML｜parameter>',
         True,
     ),
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="ID" string="false">123456</{dsml_token}parameter><{dsml_token}parameter name="is_student" string="true">true</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="ID" string="false">123456</｜DSML｜parameter><｜DSML｜parameter name="is_student" string="true">true</｜DSML｜parameter>',
         True,
     ),
     (
-        '<{dsml_token}parameter name="name" string="true">John</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">1</{dsml_token}parameter><{dsml_token}parameter name="ID" string="false">1</{dsml_token}parameter><{dsml_token}parameter name="is_student" string="false">false</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">John</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">1</｜DSML｜parameter><｜DSML｜parameter name="ID" string="false">1</｜DSML｜parameter><｜DSML｜parameter name="is_student" string="false">false</｜DSML｜parameter>',
         False,
     ),
 )
@@ -1206,20 +1197,20 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</{dsml_token}parameter>"))
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>" ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>")* ) | [ \n\t]*
+xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::=  "<{dsml_token}parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</{dsml_token}parameter>" ""
-root_part_2_2 ::= "" |  "<{dsml_token}parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</{dsml_token}parameter>" ""
+root_part_2_1 ::=  "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
+root_part_2_2 ::= "" |  "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 |  "<{dsml_token}parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</{dsml_token}parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 |  "<{dsml_token}parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</{dsml_token}parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 |  "<{dsml_token}parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</{dsml_token}parameter>" root_part_1_2
-root ::=   (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</{dsml_token}parameter>" root_part_0_1) | ("<{dsml_token}parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</{dsml_token}parameter>" root_part_1_1) | ("<{dsml_token}parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</{dsml_token}parameter>" root_part_2_1))
+root_part_1_1 ::= root_part_2_1 |  "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 |  "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 |  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_2
+root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0_1) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_1) | ("<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_1))
 """
     schema = {
         "type": "object",
@@ -1235,7 +1226,7 @@ root ::=   (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false")
     _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
 
 
-# DeepSeek: reject Qwen format <parameter=key>, Minimax format <parameter name="key"> (no string=), accept <{dsml_token}parameter name="key" string="true|false">
+# DeepSeek: reject Qwen format <parameter=key>, Minimax format <parameter name="key"> (no string=), accept <｜DSML｜parameter name="key" string="true|false">
 deepseek_reject_wrong_parameter_format_input_str_accepted = (
     ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", False),  # Qwen format
     (
@@ -1243,7 +1234,7 @@ deepseek_reject_wrong_parameter_format_input_str_accepted = (
         False,
     ),  # Minimax format (no string=)
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">100</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">100</｜DSML｜parameter>',
         True,
     ),  # correct
 )
@@ -1253,7 +1244,7 @@ deepseek_reject_wrong_parameter_format_input_str_accepted = (
     "input_str, accepted", deepseek_reject_wrong_parameter_format_input_str_accepted
 )
 def test_deepseek_reject_wrong_parameter_format(input_str: str, accepted: bool):
-    """DeepSeek grammar must accept <{dsml_token}parameter name=\"key\" string=\"true|false\">, reject Qwen and Minimax formats."""
+    """DeepSeek grammar must accept <｜DSML｜parameter name=\"key\" string=\"true|false\">, reject Qwen and Minimax formats."""
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
 basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
@@ -1264,13 +1255,13 @@ basic_boolean ::= "true" | "false"
 basic_null ::= "null"
 basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
-xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</{dsml_token}parameter>"))
+xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>" ( "<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>")* ) | [ \n\t]*
+xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::=  "<{dsml_token}parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</{dsml_token}parameter>" ""
-root ::=   (("<{dsml_token}parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</{dsml_token}parameter>" root_part_0))
+root_part_0 ::=  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
+root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0))
 """
     schema = {
         "type": "object",

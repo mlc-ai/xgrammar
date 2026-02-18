@@ -344,25 +344,25 @@ def test_json_schema_style_minimax_xml_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
-# JSONSchemaFormat with style="deepseek_xml" (<{dsml_token}parameter name="key" string="true|false">value</{dsml_token}parameter>)
+# JSONSchemaFormat with style="deepseek_xml" (<｜DSML｜parameter name="key" string="true|false">value</｜DSML｜parameter>)
 deepseek_xml_instance_is_accepted = [
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="false">\t100\n</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">\t100\n</｜DSML｜parameter>',
         True,
     ),
     (
-        '<{dsml_token}parameter name="name" string="true">Bob</{dsml_token}parameter>\t\n<{dsml_token}parameter name="age" string="true">\t100\n</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>\t\n<｜DSML｜parameter name="age" string="true">\t100\n</｜DSML｜parameter>',
         False,
     ),
     (
-        '<{dsml_token}parameter name="name" string="false">Bob</{dsml_token}parameter><{dsml_token}parameter name="age" string="true">100</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="false">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="true">100</｜DSML｜parameter>',
         True,
     ),
     (
-        """<{dsml_token}parameter name="name" string="true"><!DOCTYPE html>
+        """<｜DSML｜parameter name="name" string="true"><!DOCTYPE html>
 <html lang="en">
   <body><h1>Hello</h1></body>
-</html></{dsml_token}parameter><{dsml_token}parameter name="age" string="false">100</{dsml_token}parameter>""",
+</html></｜DSML｜parameter><｜DSML｜parameter name="age" string="false">100</｜DSML｜parameter>""",
         True,
     ),
 ]
@@ -391,14 +391,14 @@ xml_string ::= TagDispatch(
   stop_eos=true,
   stop_str=(),
   loop_after_dispatch=false,
-  excludes=("</{dsml_token}parameter>")
+  excludes=("</\uff5cDSML\uff5cparameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
-xml_object ::= (("<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" xml_object_2 "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>" xml_object_1) | ([ \n\t]*))
+xml_object ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_2 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1) | ([ \n\t]*))
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*))
-root_part_0 ::= (("<{dsml_token}parameter name=\"age\" string=\"" root_part_0_1 "\">" [ \n\t]* root_prop_1 [ \n\t]* "</{dsml_token}parameter>"))
-root_0 ::= (("<{dsml_token}parameter name=\"name\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</{dsml_token}parameter>" root_part_0))
+root_part_0 ::= (("<\uff5cDSML\uff5cparameter name=\"age\" string=\"" root_part_0_1 "\">" [ \n\t]* root_prop_1 [ \n\t]* "</\uff5cDSML\uff5cparameter>"))
+root_0 ::= (("<\uff5cDSML\uff5cparameter name=\"name\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</\uff5cDSML\uff5cparameter>" root_part_0))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -408,7 +408,7 @@ basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
-xml_object_1 ::= ("" | ("<{dsml_token}parameter name=\"" xml_variable_name "\" string=\"" xml_object_1_1 "\">" [ \n\t]* xml_any [ \n\t]* "</{dsml_token}parameter>" xml_object_1))
+xml_object_1 ::= ("" | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1))
 root_prop_1_1 ::= ("" | ("-"))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 xml_object_2 ::= (("true") | ("false"))
@@ -428,7 +428,7 @@ root ::= ((root_0))
 def test_json_schema_style_deepseek_xml_format(
     stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
 ):
-    """Test JSONSchemaFormat with style='deepseek_xml' (<{{dsml_token}}parameter name=\"key\" string=\"true|false\">value</{{dsml_token}}parameter>)."""
+    """Test JSONSchemaFormat with style='deepseek_xml' (<{｜DSML｜}parameter name=\"key\" string=\"true|false\">value</{｜DSML｜}parameter>)."""
     check_stag_with_grammar(stag_format, expected_grammar)
     check_stag_with_instance(stag_format, instance, is_accepted)
 
@@ -2251,7 +2251,7 @@ basic_structural_tags_instance_is_accepted = [
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
             style="deepseek_xml",
         ),
-        '<{dsml_token}parameter name="name" string="true">value</{dsml_token}parameter>',
+        '<｜DSML｜parameter name="name" string="true">value</｜DSML｜parameter>',
         True,
     ),
     (
@@ -2259,7 +2259,7 @@ basic_structural_tags_instance_is_accepted = [
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
             style="deepseek_xml",
         ),
-        '<{dsml_token}parameter name="name" string="true">value</param>',
+        '<｜DSML｜parameter name="name" string="true">value</param>',
         False,
     ),
     # AnyTextFormat
