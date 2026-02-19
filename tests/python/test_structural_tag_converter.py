@@ -1835,15 +1835,11 @@ json_format_error_test_data = [
     # ConstStringFormat Errors
     (
         '{"type": "structural_tag", "format": {"type": "const_string"}}',
-        "ConstString format must have a value field with a non-empty string",
+        "ConstString format must have a value field with a string",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "const_string", "value": 123}}',
-        "ConstString format must have a value field with a non-empty string",
-    ),
-    (
-        '{"type": "structural_tag", "format": {"type": "const_string", "value": ""}}',
-        "ConstString format must have a value field with a non-empty string",
+        "ConstString format must have a value field with a string",
     ),
     # JSONSchemaFormat Errors
     (
