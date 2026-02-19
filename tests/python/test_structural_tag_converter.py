@@ -98,7 +98,7 @@ const_string_stag_grammar = [
         r"""const_string ::= (("Hello!"))
 root ::= ((const_string))
 """,
-    ),
+    )
 ]
 
 const_string_instance_is_accepted = [
