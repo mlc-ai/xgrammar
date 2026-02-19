@@ -98,7 +98,7 @@ const_string_stag_grammar = [
         r"""const_string ::= (("Hello!"))
 root ::= ((const_string))
 """,
-    )
+    ),
 ]
 
 const_string_instance_is_accepted = [
@@ -107,6 +107,11 @@ const_string_instance_is_accepted = [
     ("Hello!!", False),
     ("HELLO!", False),
 ]
+
+
+def test_const_string_empty():
+    check_stag_with_instance({"type": "const_string", "value": ""}, "", True)
+    check_stag_with_instance({"type": "const_string", "value": ""}, "x", False)
 
 
 @pytest.mark.parametrize("stag_format, expected_grammar", const_string_stag_grammar)
