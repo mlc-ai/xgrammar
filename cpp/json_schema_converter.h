@@ -415,10 +415,11 @@ class JSONSchemaConverter {
   static std::string GenerateSubRangeRegex(int64_t lower, int64_t upper);
   static std::string FormatFloat(double value, int precision);
 
- protected:
   // JSON string helpers
-  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
   static std::string JSONStrToPrintableStr(const std::string& json_str);
+
+ protected:
+  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
 
   // Expose for testing
   friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
