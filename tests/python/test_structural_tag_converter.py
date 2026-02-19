@@ -2806,5 +2806,82 @@ root ::= ((sequence))
     check_stag_with_instance(stag, instance, is_accepted)
 
 
+# ==================== XML const/enum/anyOf string value tests ====================
+
+
+def _make_xml_property_format(prop_schema, style="qwen_xml"):
+    return {
+        "type": "json_schema",
+        "json_schema": {"type": "object", "properties": {"v": prop_schema}, "required": ["v"]},
+        "style": style,
+    }
+
+
+xml_const_enum_instances = [
+    # String const: unquoted
+    (_make_xml_property_format({"const": "hello"}), "<parameter=v>hello</parameter>", True),
+    (_make_xml_property_format({"const": "hello"}), '<parameter=v>"hello"</parameter>', False),
+    # Integer const: unchanged
+    (_make_xml_property_format({"const": 42}), "<parameter=v>42</parameter>", True),
+    (_make_xml_property_format({"const": 42}), "<parameter=v>43</parameter>", False),
+    # Boolean const
+    (_make_xml_property_format({"const": True}), "<parameter=v>true</parameter>", True),
+    # Null const
+    (_make_xml_property_format({"const": None}), "<parameter=v>null</parameter>", True),
+    (_make_xml_property_format({"const": '"\\'}), '<parameter=v>"\\</parameter>', True),
+    # String enum: unquoted
+    (_make_xml_property_format({"enum": ["red", "green"]}), "<parameter=v>red</parameter>", True),
+    (
+        _make_xml_property_format({"enum": ["red", "green"]}),
+        '<parameter=v>"red"</parameter>',
+        False,
+    ),
+    (_make_xml_property_format({"enum": ["red", "green"]}), "<parameter=v>blue</parameter>", False),
+    # Mixed enum: string unquoted, integer raw
+    (
+        _make_xml_property_format({"enum": ["hello", 42, '"\\']}),
+        "<parameter=v>hello</parameter>",
+        True,
+    ),
+    (
+        _make_xml_property_format({"enum": ["hello", 42, '"\\']}),
+        "<parameter=v>42</parameter>",
+        True,
+    ),
+    (
+        _make_xml_property_format({"enum": ["hello", 42, '"\\']}),
+        '<parameter=v>"\\</parameter>',
+        True,
+    ),
+    # anyOf with string const branches
+    (
+        _make_xml_property_format({"anyOf": [{"const": "a"}, {"const": "b"}]}),
+        "<parameter=v>a</parameter>",
+        True,
+    ),
+    (
+        _make_xml_property_format({"anyOf": [{"const": "a"}, {"const": "b"}]}),
+        "<parameter=v>c</parameter>",
+        False,
+    ),
+    # anyOf with string + integer branches
+    (
+        _make_xml_property_format({"anyOf": [{"type": "string"}, {"type": "integer"}]}),
+        "<parameter=v>hello world</parameter>",
+        True,
+    ),
+    (
+        _make_xml_property_format({"anyOf": [{"type": "string"}, {"type": "integer"}]}),
+        "<parameter=v>123</parameter>",
+        True,
+    ),
+]
+
+
+@pytest.mark.parametrize("stag_format, instance, is_accepted", xml_const_enum_instances)
+def test_xml_const_enum_values(stag_format: Dict[str, Any], instance: str, is_accepted: bool):
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
