@@ -178,9 +178,9 @@ std::string XMLToolCallingConverter::GenerateConst(
   if (nested_object_level_ <= 1) {
     const std::string& val = spec.json_value;
     if (val.size() >= 2 && val.front() == '"' && val.back() == '"') {
-      return "\"" + val.substr(1, val.size() - 2) + "\"";
+      return "\"" + JSONStrToPrintableStr(val.substr(1, val.size() - 2)) + "\"";
     }
-    return "\"" + val + "\"";
+    return "\"" + JSONStrToPrintableStr(val) + "\"";
   }
   return JSONSchemaConverter::GenerateConst(spec, rule_name);
 }
@@ -196,9 +196,9 @@ std::string XMLToolCallingConverter::GenerateEnum(
       }
       const std::string& val = spec.json_values[i];
       if (val.size() >= 2 && val.front() == '"' && val.back() == '"') {
-        result += "(\"" + val.substr(1, val.size() - 2) + "\")";
+        result += "(\"" + JSONStrToPrintableStr(val.substr(1, val.size() - 2)) + "\")";
       } else {
-        result += "(\"" + val + "\")";
+        result += "(\"" + JSONStrToPrintableStr(val) + "\")";
       }
     }
     return result;
