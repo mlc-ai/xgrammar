@@ -2812,11 +2812,7 @@ root ::= ((sequence))
 def _make_xml_property_format(prop_schema, style="qwen_xml"):
     return {
         "type": "json_schema",
-        "json_schema": {
-            "type": "object",
-            "properties": {"v": prop_schema},
-            "required": ["v"],
-        },
+        "json_schema": {"type": "object", "properties": {"v": prop_schema}, "required": ["v"]},
         "style": style,
     }
 
@@ -2832,31 +2828,29 @@ xml_const_enum_instances = [
     (_make_xml_property_format({"const": True}), "<parameter=v>true</parameter>", True),
     # Null const
     (_make_xml_property_format({"const": None}), "<parameter=v>null</parameter>", True),
+    (_make_xml_property_format({"const": '"\\'}), '<parameter=v>"\\</parameter>', True),
     # String enum: unquoted
-    (
-        _make_xml_property_format({"enum": ["red", "green"]}),
-        "<parameter=v>red</parameter>",
-        True,
-    ),
+    (_make_xml_property_format({"enum": ["red", "green"]}), "<parameter=v>red</parameter>", True),
     (
         _make_xml_property_format({"enum": ["red", "green"]}),
         '<parameter=v>"red"</parameter>',
         False,
     ),
-    (
-        _make_xml_property_format({"enum": ["red", "green"]}),
-        "<parameter=v>blue</parameter>",
-        False,
-    ),
+    (_make_xml_property_format({"enum": ["red", "green"]}), "<parameter=v>blue</parameter>", False),
     # Mixed enum: string unquoted, integer raw
     (
-        _make_xml_property_format({"enum": ["hello", 42]}),
+        _make_xml_property_format({"enum": ["hello", 42, '"\\']}),
         "<parameter=v>hello</parameter>",
         True,
     ),
     (
-        _make_xml_property_format({"enum": ["hello", 42]}),
+        _make_xml_property_format({"enum": ["hello", 42, '"\\']}),
         "<parameter=v>42</parameter>",
+        True,
+    ),
+    (
+        _make_xml_property_format({"enum": ["hello", 42, '"\\']}),
+        '<parameter=v>"\\</parameter>',
         True,
     ),
     # anyOf with string const branches
@@ -2885,9 +2879,7 @@ xml_const_enum_instances = [
 
 
 @pytest.mark.parametrize("stag_format, instance, is_accepted", xml_const_enum_instances)
-def test_xml_const_enum_values(
-    stag_format: Dict[str, Any], instance: str, is_accepted: bool
-):
+def test_xml_const_enum_values(stag_format: Dict[str, Any], instance: str, is_accepted: bool):
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
