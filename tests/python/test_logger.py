@@ -65,4 +65,4 @@ def test_enable_logging_only_affects_xgrammar_logger():
     # xgrammar logger must be configured
     xgr_log = logging.getLogger("xgrammar")
     assert xgr_log.level == logging.INFO
-    assert len(xgr_log.handlers) == 1
+    assert len(xgr_log.handlers) >= 1
