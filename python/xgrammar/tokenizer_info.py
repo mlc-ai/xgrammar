@@ -18,7 +18,6 @@ from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 from .base import XGRObject, _core
 from .support import logging
 
-logging.enable_logging()
 logger = logging.getLogger(__name__)
 
 
