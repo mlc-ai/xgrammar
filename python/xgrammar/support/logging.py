@@ -11,6 +11,7 @@ def enable_logging():
 
     log = logging.getLogger("xgrammar")
     log.setLevel(logging.INFO)
+    log.propagate = False
     if not log.handlers:
         handler = logging.StreamHandler()
         handler.setFormatter(

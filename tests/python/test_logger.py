@@ -1,19 +1,13 @@
 """Tests that importing xgrammar does not modify the root logger (no side-effects on import)."""
 
 import logging
-import os
 import subprocess
 import sys
 
 
 def _run_in_subprocess(code: str) -> subprocess.CompletedProcess:
     """Run code in a fresh interpreter so 'import xgrammar' happens after our setup."""
-    python_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "python"))
-    env = os.environ.copy()
-    env["PYTHONPATH"] = python_dir + os.pathsep + env.get("PYTHONPATH", "")
-    return subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=10
-    )
+    return subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=10)
 
 
 def test_import_xgrammar_does_not_change_root_logger_level():
@@ -71,4 +65,4 @@ def test_enable_logging_only_affects_xgrammar_logger():
     # xgrammar logger must be configured
     xgr_log = logging.getLogger("xgrammar")
     assert xgr_log.level == logging.INFO
-    assert len(xgr_log.handlers) >= 1
+    assert len(xgr_log.handlers) == 1
