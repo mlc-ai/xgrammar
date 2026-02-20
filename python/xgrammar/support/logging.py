@@ -7,13 +7,21 @@ import logging
 
 
 def enable_logging():
-    """Enable XGrammar's default logging formpat"""
-    logging.basicConfig(
-        level=logging.INFO,
-        style="{",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        format="[{asctime}] {levelname} {filename}:{lineno}: {message}",
-    )
+    """Enable XGrammar's default logging format for the xgrammar logger only."""
+
+    log = logging.getLogger("xgrammar")
+    log.setLevel(logging.INFO)
+    log.propagate = False
+    if not log.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter(
+                "[{asctime}] {levelname} {filename}:{lineno}: {message}",
+                datefmt="%Y-%m-%d %H:%M:%S",
+                style="{",
+            )
+        )
+        log.addHandler(handler)
 
 
 def getLogger(name: str):  # pylint: disable=invalid-name
