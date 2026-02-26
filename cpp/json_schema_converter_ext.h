@@ -44,6 +44,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   ) override;
   std::string GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
   std::string GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
+  std::string GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  std::string GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
 
   // Override format hooks
   std::string FormatPropertyKey(const std::string& key) override;
