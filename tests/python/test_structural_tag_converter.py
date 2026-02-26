@@ -109,6 +109,11 @@ const_string_instance_is_accepted = [
 ]
 
 
+def test_const_string_empty():
+    check_stag_with_instance({"type": "const_string", "value": ""}, "", True)
+    check_stag_with_instance({"type": "const_string", "value": ""}, "x", False)
+
+
 @pytest.mark.parametrize("stag_format, expected_grammar", const_string_stag_grammar)
 @pytest.mark.parametrize("instance, is_accepted", const_string_instance_is_accepted)
 def test_const_string_format(
@@ -1830,15 +1835,11 @@ json_format_error_test_data = [
     # ConstStringFormat Errors
     (
         '{"type": "structural_tag", "format": {"type": "const_string"}}',
-        "ConstString format must have a value field with a non-empty string",
+        "ConstString format must have a value field with a string",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "const_string", "value": 123}}',
-        "ConstString format must have a value field with a non-empty string",
-    ),
-    (
-        '{"type": "structural_tag", "format": {"type": "const_string", "value": ""}}',
-        "ConstString format must have a value field with a non-empty string",
+        "ConstString format must have a value field with a string",
     ),
     # JSONSchemaFormat Errors
     (
