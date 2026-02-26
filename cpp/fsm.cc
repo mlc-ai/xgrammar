@@ -49,11 +49,11 @@ class FSMImplBase {
   /*! \brief Default constructor. */
   FSMImplBase() = default;
 
-  /*! \brief Copy constructor. */
-  FSMImplBase(const ContainerType& edges) : edges_(edges) {}
+  FSMImplBase(const ContainerType& edges, std::vector<int32_t> edge_aux_data = {})
+      : edges_(edges), edge_aux_data_(std::move(edge_aux_data)) {}
 
-  /*! \brief Move constructor. */
-  FSMImplBase(ContainerType&& edges) : edges_(std::move(edges)) {}
+  FSMImplBase(ContainerType&& edges, std::vector<int32_t> edge_aux_data = {})
+      : edges_(std::move(edges)), edge_aux_data_(std::move(edge_aux_data)) {}
 
   int NumStates() const { return edges_.size(); }
 
@@ -72,8 +72,15 @@ class FSMImplBase {
 
   void GetReachableStates(const std::vector<int>& from, std::unordered_set<int>* result) const;
 
+  const std::vector<int32_t>& GetEdgeAuxData() const { return edge_aux_data_; }
+
+  void SetEdgeAuxData(std::vector<int32_t> data) { edge_aux_data_ = std::move(data); }
+
+  RepeatEdgeRef GetRepeatEdgeInfo(int16_t idx) const { return {edge_aux_data_.data() + idx}; }
+
  protected:
   ContainerType edges_;
+  std::vector<int32_t> edge_aux_data_;
   friend struct member_trait<CompactFSM::Impl>;
 };
 
@@ -99,6 +106,11 @@ std::string FSMImplBase<ContainerType>::EdgesToString(std::optional<std::vector<
         result += "Eps->" + std::to_string(edge.target);
       } else if (edge.min == FSMEdge::EdgeType::kEOS) {
         result += "EOS->" + std::to_string(edge.target);
+      } else if (edge.min == FSMEdge::EdgeType::kRepeatRef) {
+        auto info = GetRepeatEdgeInfo(edge.max);
+        result += "Repeat(rule=" + std::to_string(info.RuleId()) +
+                  ", min=" + std::to_string(info.Lower()) +
+                  ", max=" + std::to_string(info.Upper()) + ")->" + std::to_string(edge.target);
       }
       if (j < static_cast<int>(edges.size()) - 1) {
         result += ", ";
@@ -220,6 +232,17 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   void AddEOSEdge(int from, int to) { AddEdge(from, to, FSMEdge::EdgeType::kEOS, 0); }
 
+  void AddRepeatEdge(int from, int to, int32_t rule_id, int32_t lower, int32_t upper) {
+    XGRAMMAR_DCHECK(edges_[from].empty())
+        << "A state with a kRepeatRef edge must have no other outgoing edges.";
+    int16_t aux_index = static_cast<int16_t>(edge_aux_data_.size());
+    edge_aux_data_.reserve(edge_aux_data_.size() + 3);
+    edge_aux_data_.emplace_back(rule_id);
+    edge_aux_data_.emplace_back(lower);
+    edge_aux_data_.emplace_back(upper);
+    AddEdge(from, to, FSMEdge::EdgeType::kRepeatRef, aux_index);
+  }
+
   void AddFSM(const FSM& fsm, std::vector<int>* state_mapping);
 
   FSM RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const;
@@ -255,6 +278,10 @@ int FSM::Impl::GetNextState(int from, int value, EdgeType edge_type) const {
       }
     }
     return FSM::kNoNextState;
+  } else if (edge_type == EdgeType::kRepeatRef) {
+    // By invariant, a state with kRepeatRef has exactly one outgoing edge.
+    XGRAMMAR_DCHECK(edges_[from].size() == 1 && edges_[from][0].IsRepeatRef());
+    return edges_[from][0].target;
   } else {
     XGRAMMAR_DCHECK(false) << "Invalid edge type: " << static_cast<int>(edge_type);
   }
@@ -308,6 +335,13 @@ void FSM::Impl::Advance(
         }
       }
     }
+  } else if (edge_type == EdgeType::kRepeatRef) {
+    // By invariant, a state with kRepeatRef has exactly one outgoing edge.
+    for (const auto& state : *start_closure) {
+      if (!edges_[state].empty() && edges_[state][0].IsRepeatRef()) {
+        result->insert(edges_[state][0].target);
+      }
+    }
   } else {
     XGRAMMAR_DCHECK(false) << "Invalid edge type: " << static_cast<int>(edge_type);
   }
@@ -318,6 +352,10 @@ void FSM::Impl::Advance(
 
 void FSM::Impl::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
   int old_num_states = NumStates();
+  int16_t aux_offset = static_cast<int16_t>(edge_aux_data_.size());
+
+  const auto& other_aux = fsm.GetEdgeAuxData();
+  edge_aux_data_.insert(edge_aux_data_.end(), other_aux.begin(), other_aux.end());
 
   if (state_mapping != nullptr) {
     state_mapping->clear();
@@ -331,7 +369,11 @@ void FSM::Impl::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
 
   for (int i = 0; i < fsm.NumStates(); ++i) {
     for (const auto& edge : fsm.GetEdges()[i]) {
-      AddEdge(i + old_num_states, edge.target + old_num_states, edge.min, edge.max);
+      int16_t max_val = edge.max;
+      if (edge.IsAuxEdge() && aux_offset > 0) {
+        max_val = static_cast<int16_t>(edge.max + aux_offset);
+      }
+      AddEdge(i + old_num_states, edge.target + old_num_states, edge.min, max_val);
     }
   }
 }
@@ -346,12 +388,13 @@ FSM FSM::Impl::RebuildWithMapping(const std::vector<int>& state_mapping, int new
       new_edges[state_mapping[i]].emplace_back(edge.min, edge.max, state_mapping[edge.target]);
     }
   }
+  // aux_indices remain stable since only state ids are remapped
   for (int i = 0; i < new_num_states; ++i) {
     std::sort(new_edges[i].begin(), new_edges[i].end());
     const auto& end_iter = std::unique(new_edges[i].begin(), new_edges[i].end());
     new_edges[i].erase(end_iter, new_edges[i].end());
   }
-  return FSM(std::move(new_edges));
+  return FSM(std::move(new_edges), std::vector<int32_t>(edge_aux_data_));
 }
 
 void FSM::Impl::SortEdges() {
@@ -366,17 +409,18 @@ CompactFSM FSM::Impl::ToCompact() {
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     edges.PushBack(edges_[i]);
   }
-  return CompactFSM(edges);
+  return CompactFSM(std::move(edges), std::move(edge_aux_data_));
 }
 
 /****************** FSM ******************/
 
 FSM::FSM(int num_states) : pimpl_(std::make_shared<Impl>(num_states)) {}
 
-FSM::FSM(const std::vector<std::vector<FSMEdge>>& edges) : pimpl_(std::make_shared<Impl>(edges)) {}
+FSM::FSM(const std::vector<std::vector<FSMEdge>>& edges, std::vector<int32_t> edge_aux_data)
+    : pimpl_(std::make_shared<Impl>(edges, std::move(edge_aux_data))) {}
 
-FSM::FSM(std::vector<std::vector<FSMEdge>>&& edges)
-    : pimpl_(std::make_shared<Impl>(std::move(edges))) {}
+FSM::FSM(std::vector<std::vector<FSMEdge>>&& edges, std::vector<int32_t> edge_aux_data)
+    : pimpl_(std::make_shared<Impl>(std::move(edges), std::move(edge_aux_data))) {}
 
 int FSM::NumStates() const { return pimpl_->NumStates(); }
 
@@ -386,11 +430,25 @@ void FSM::AddEdge(int from, int to, int16_t min, int16_t max) {
   pimpl_->AddEdge(from, to, min, max);
 }
 
+void FSM::AddEdge(int from, int to, FSMEdge::EdgeType type, int16_t value) {
+  pimpl_->AddEdge(from, to, type, value);
+}
+
 void FSM::AddEpsilonEdge(int from, int to) { pimpl_->AddEpsilonEdge(from, to); }
 
 void FSM::AddRuleEdge(int from, int to, int16_t rule_id) { pimpl_->AddRuleEdge(from, to, rule_id); }
 
 void FSM::AddEOSEdge(int from, int to) { pimpl_->AddEOSEdge(from, to); }
+
+void FSM::AddRepeatEdge(int from, int to, int32_t rule_id, int32_t lower, int32_t upper) {
+  pimpl_->AddRepeatEdge(from, to, rule_id, lower, upper);
+}
+
+const std::vector<int32_t>& FSM::GetEdgeAuxData() const { return pimpl_->GetEdgeAuxData(); }
+
+void FSM::SetEdgeAuxData(std::vector<int32_t> data) { pimpl_->SetEdgeAuxData(std::move(data)); }
+
+RepeatEdgeRef FSM::GetRepeatEdgeInfo(int16_t idx) const { return pimpl_->GetRepeatEdgeInfo(idx); }
 
 void FSM::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
   pimpl_->AddFSM(fsm, state_mapping);
@@ -464,10 +522,18 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
 
   FSM ToFSM() const;
 
-  friend std::size_t MemorySize(const Impl& impl) { return MemorySize(impl.edges_); }
+  friend std::size_t MemorySize(const Impl& impl) {
+    return MemorySize(impl.edges_) + MemorySize(impl.edge_aux_data_);
+  }
 };
 
-XGRAMMAR_MEMBER_ARRAY(CompactFSM::Impl, &CompactFSM::Impl::edges_);
+XGRAMMAR_MEMBER_TABLE(
+    CompactFSM::Impl,
+    "edges",
+    &CompactFSM::Impl::edges_,
+    "edge_aux_data",
+    &CompactFSM::Impl::edge_aux_data_
+);
 
 void CompactFSM::Impl::GetNextStates(
     int from, int value, EdgeType edge_type, std::vector<int>* targets
@@ -503,6 +569,14 @@ void CompactFSM::Impl::GetNextStates(
         break;
       } else if (edge.max >= EdgeType::kEOS) {
         targets->push_back(edge.target);
+      }
+    }
+  } else if (edge_type == EdgeType::kRepeatRef) {
+    // By invariant, a state with kRepeatRef has exactly one outgoing edge.
+    for (const auto& edge : edges_[from]) {
+      if (edge.IsRepeatRef()) {
+        targets->push_back(edge.target);
+        break;
       }
     }
   } else {
@@ -566,6 +640,16 @@ void CompactFSM::Impl::Advance(
         }
       }
     }
+  } else if (edge_type == EdgeType::kRepeatRef) {
+    // By invariant, a state with kRepeatRef has exactly one outgoing edge.
+    for (const auto& state : *start_closure) {
+      for (const auto& edge : edges_[state]) {
+        if (edge.IsRepeatRef()) {
+          result->insert(edge.target);
+          break;
+        }
+      }
+    }
   } else {
     XGRAMMAR_DCHECK(false) << "Invalid edge type: " << static_cast<int>(edge_type);
   }
@@ -580,16 +664,16 @@ FSM CompactFSM::Impl::ToFSM() const {
     const auto& row = edges_[i];
     edges[i].insert(edges[i].end(), row.begin(), row.end());
   }
-  return FSM(edges);
+  return FSM(std::move(edges), std::vector<int32_t>(edge_aux_data_));
 }
 
 /****************** CompactFSM ******************/
 
-CompactFSM::CompactFSM(const Compact2DArray<FSMEdge>& edges)
-    : pimpl_(std::make_shared<Impl>(edges)) {}
+CompactFSM::CompactFSM(const Compact2DArray<FSMEdge>& edges, std::vector<int32_t> edge_aux_data)
+    : pimpl_(std::make_shared<Impl>(edges, std::move(edge_aux_data))) {}
 
-CompactFSM::CompactFSM(Compact2DArray<FSMEdge>&& edges)
-    : pimpl_(std::make_shared<Impl>(std::move(edges))) {}
+CompactFSM::CompactFSM(Compact2DArray<FSMEdge>&& edges, std::vector<int32_t> edge_aux_data)
+    : pimpl_(std::make_shared<Impl>(std::move(edges), std::move(edge_aux_data))) {}
 
 int CompactFSM::NumStates() const { return pimpl_->NumStates(); }
 
@@ -633,6 +717,16 @@ void CompactFSM::GetReachableStates(const std::vector<int>& from, std::unordered
 }
 
 FSM CompactFSM::ToFSM() const { return pimpl_->ToFSM(); }
+
+const std::vector<int32_t>& CompactFSM::GetEdgeAuxData() const { return pimpl_->GetEdgeAuxData(); }
+
+void CompactFSM::SetEdgeAuxData(std::vector<int32_t> data) {
+  pimpl_->SetEdgeAuxData(std::move(data));
+}
+
+RepeatEdgeRef CompactFSM::GetRepeatEdgeInfo(int16_t idx) const {
+  return pimpl_->GetRepeatEdgeInfo(idx);
+}
 
 picojson::value SerializeJSONValue(const CompactFSM& value) {
   return detail::json_serializer::AutoSerializeJSONValuePImpl(value);
@@ -1017,6 +1111,8 @@ bool FSMWithStartEnd::IsDFA() {
         }
         rule_transitions.insert(edge.GetRefRuleId());
       }
+      // kRepeatRef: by invariant, a state with kRepeatRef has exactly one edge, always
+      // deterministic.
     }
   }
   is_dfa_ = true;
@@ -1387,6 +1483,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
   FSMWithStartEnd dfa(FSM(0), 0, std::vector<bool>(), true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
+  std::unordered_set<int16_t> repeat_aux_indices;
   int now_process = 0;
   std::unordered_set<int> closure;
   closure.insert(start_);
@@ -1394,6 +1491,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
   closures.push_back(closure);
   while (now_process < static_cast<int>(closures.size())) {
     rules.clear();
+    repeat_aux_indices.clear();
     std::set<int> interval_ends;
     std::bitset<256> allowed_characters;
     dfa.AddState();
@@ -1413,6 +1511,8 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
           continue;
         } else if (edge.IsRuleRef()) {
           rules.insert(edge.GetRefRuleId());
+        } else if (edge.IsRepeatRef()) {
+          repeat_aux_indices.insert(edge.GetAuxIndex());
         }
       }
     }
@@ -1499,8 +1599,38 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
         closures.push_back(next_closure);
       }
     }
+
+    for (auto aux_idx : repeat_aux_indices) {
+      std::unordered_set<int> next_closure;
+      for (const auto& state : closures[now_process]) {
+        const auto& edges = fsm_.GetEdges(state);
+        for (const auto& edge : edges) {
+          if (edge.IsRepeatRef() && edge.GetAuxIndex() == aux_idx) {
+            if (next_closure.find(edge.target) == next_closure.end()) {
+              std::unordered_set<int> epsilon_closure;
+              epsilon_closure.insert(edge.target);
+              fsm_.GetEpsilonClosure(&epsilon_closure);
+              next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
+            }
+          }
+        }
+      }
+      bool flag = false;
+      for (int j = 0; j < static_cast<int>(closures.size()); j++) {
+        if (closures[j] == next_closure) {
+          dfa.GetFsm().AddEdge(now_process, j, FSMEdge::EdgeType::kRepeatRef, aux_idx);
+          flag = true;
+          break;
+        }
+      }
+      if (!flag) {
+        dfa.GetFsm().AddEdge(now_process, closures.size(), FSMEdge::EdgeType::kRepeatRef, aux_idx);
+        closures.push_back(next_closure);
+      }
+    }
     now_process++;
   }
+  dfa.GetFsm().SetEdgeAuxData(std::vector<int32_t>(fsm_.GetEdgeAuxData()));
   dfa.is_dfa_ = true;
   return ResultOk(dfa);
 }

@@ -1047,6 +1047,7 @@ class GrammarFSMBuilderImpl {
   static FSMWithStartEnd RuleRef(const GrammarExpr& expr);
   static FSMWithStartEnd CharacterClass(const GrammarExpr& expr);
   static FSMWithStartEnd ByteString(const GrammarExpr& expr);
+  static FSMWithStartEnd Repeat(const GrammarExpr& expr);
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
@@ -1359,6 +1360,19 @@ FSMWithStartEnd GrammarFSMBuilderImpl::CharacterClass(const GrammarExpr& expr) {
   return result_fsm;
 }
 
+FSMWithStartEnd GrammarFSMBuilderImpl::Repeat(const GrammarExpr& expr) {
+  int32_t rule_id = expr[0];
+  int32_t lower = expr[1];
+  int32_t upper = expr[2];
+  FSMWithStartEnd repeat_fsm;
+  repeat_fsm.AddState();
+  repeat_fsm.AddState();
+  repeat_fsm.SetStartState(0);
+  repeat_fsm.AddEndState(1);
+  repeat_fsm.GetFsm().AddRepeatEdge(0, 1, rule_id, lower, upper);
+  return repeat_fsm;
+}
+
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
     const GrammarExpr& expr, const Grammar& grammar
 ) {
@@ -1379,6 +1393,10 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
       case (ExprType::kCharacterClass):
       case (ExprType::kCharacterClassStar): {
         fsm_lists.push_back(CharacterClass(sequence_expr));
+        break;
+      }
+      case (ExprType::kRepeat): {
+        fsm_lists.push_back(Repeat(sequence_expr));
         break;
       }
       default: {
@@ -1433,7 +1451,6 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
   bool nullable = false;
   for (const auto& choice_id : expr) {
     const auto& choice_expr = grammar->GetGrammarExpr(choice_id);
-    // The choice expression should be either a sequence or an empty string.
     if (choice_expr.type == ExprType::kEmptyStr) {
       nullable = true;
       continue;
@@ -1990,33 +2007,42 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
 
     // Hash the edges.
 
-    // First, check the edges which are rule references. To keep consistent, we need to sort them
-    // with hashes.
+    // First, check the edges which are rule references (including repeat refs).
+    // To keep consistent, we need to sort them with hashes.
     int32_t unhashed_rules_count = 0;
-    for (const auto& edge : sorted_edges_[current_old_state_id]) {
-      if (!edge.IsRuleRef()) {
-        continue;
+    auto hash_rule_like_edge = [&](int32_t ref_rule_id, int32_t target) {
+      if (ref_rule_id == fsm_index) {
+        hash_and_target.insert({kSelfRecursionFlag, target});
+        return true;
       }
-      if (edge.GetRefRuleId() == fsm_index) {
-        hash_and_target.insert({kSelfRecursionFlag, edge.target});
-        continue;
-      }
-      if (!grammar_->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].has_value()) {
-        // Can't be hashed.
+      if (!grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value()) {
         if (!is_start) {
-          return {false, 0};
+          return false;
         } else {
           unhashed_rules_count++;
           if (unhashed_rules_count > 1) {
-            return {false, 0};
+            return false;
           }
-          hash_and_target.insert({kUnKnownFlag, edge.target});
+          hash_and_target.insert({kUnKnownFlag, target});
         }
-        continue;
+        return true;
       }
-      hash_and_target.insert(
-          {grammar_->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].value(), edge.target}
+      hash_and_target.insert({grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value(), target}
       );
+      return true;
+    };
+
+    for (const auto& edge : sorted_edges_[current_old_state_id]) {
+      if (edge.IsRuleRef()) {
+        if (!hash_rule_like_edge(edge.GetRefRuleId(), edge.target)) {
+          return {false, 0};
+        }
+      } else if (edge.IsRepeatRef()) {
+        auto info = grammar_->ImplPtr()->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+        if (!hash_rule_like_edge(info.RuleId(), edge.target)) {
+          return {false, 0};
+        }
+      }
     }
 
     // Hash them.
@@ -2030,16 +2056,15 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
       hash_result = HashCombine(hash_result, current_new_state_id, hash, target_new_id);
     }
 
-    // Then, check the edges which are not rule references.
+    // Then, check the edges which are not rule/repeat references.
     for (const auto& edge : sorted_edges_[current_old_state_id]) {
-      // Visit a new node.
       if (original_state_id_to_new_id.find(edge.target) == original_state_id_to_new_id.end()) {
         original_state_id_to_new_id[edge.target] =
             static_cast<int32_t>(original_state_id_to_new_id.size());
         bfs_queue.push(edge.target);
       }
       int32_t target_new_id = original_state_id_to_new_id[edge.target];
-      if (edge.IsRuleRef()) {
+      if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
       hash_result = HashCombine(
@@ -2095,20 +2120,31 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
 
     // Hash the edges.
 
-    // First, check the edges which are rule references. To keep consistent, we need to sort them
-    // with hashes.
+    // First, check the edges which are rule references (including repeat refs).
+    // To keep consistent, we need to sort them with hashes.
     for (const auto& edge : sorted_edges_[current_old_state_id]) {
-      if (!edge.IsRuleRef()) {
-        continue;
+      if (edge.IsRuleRef()) {
+        int32_t ref_rule_id = edge.GetRefRuleId();
+        if (ref_rule_id == fsm_index) {
+          hash_and_target.insert({kSelfRecursionFlag, edge.target});
+        } else {
+          XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value());
+          hash_and_target.insert(
+              {grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value(), edge.target}
+          );
+        }
+      } else if (edge.IsRepeatRef()) {
+        auto info = grammar_->ImplPtr()->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+        int32_t ref_rule_id = info.RuleId();
+        if (ref_rule_id == fsm_index) {
+          hash_and_target.insert({kSelfRecursionFlag, edge.target});
+        } else {
+          XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value());
+          uint64_t base_hash = grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value();
+          uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
+          hash_and_target.insert({static_cast<int32_t>(repeat_hash), edge.target});
+        }
       }
-      if (edge.GetRefRuleId() == fsm_index) {
-        hash_and_target.insert({kSelfRecursionFlag, edge.target});
-        continue;
-      }
-      XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].has_value());
-      hash_and_target.insert(
-          {grammar_->ImplPtr()->per_rule_fsm_hashes[edge.GetRefRuleId()].value(), edge.target}
-      );
     }
 
     // Hash them.
@@ -2122,16 +2158,15 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
       hash_result = HashCombine(hash_result, current_new_state_id, hash, target_new_id);
     }
 
-    // Then, check the edges which are not rule references.
+    // Then, check the edges which are not rule/repeat references.
     for (const auto& edge : sorted_edges_[current_old_state_id]) {
-      // Visit a new node.
       if (original_state_id_to_new_id.find(edge.target) == original_state_id_to_new_id.end()) {
         original_state_id_to_new_id[edge.target] =
             static_cast<int32_t>(original_state_id_to_new_id.size());
         bfs_queue.push(edge.target);
       }
       int32_t target_new_id = original_state_id_to_new_id[edge.target];
-      if (edge.IsRuleRef()) {
+      if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
       hash_result = HashCombine(
