@@ -86,7 +86,7 @@ def test_traverse_draft_tree_shape_assertion(compiled_grammar):
     """Test that _traverse_draft_tree raises RuntimeError for mismatched shapes/dtypes."""
     matcher = xgr.GrammarMatcher(compiled_grammar)
     retrieve_next_token = torch.tensor([1, 2, -1], dtype=torch.int64)
-    draft_tokens = torch.tensor([3, 6, 4], dtype=torch.int32)
+    draft_tokens = torch.tensor([3, 6, 4], dtype=torch.int64)
     bitmask = allocate_token_bitmask(3, VOCAB_SIZE)
 
     # Wrong shape for retrieve_next_sibling
