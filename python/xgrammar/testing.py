@@ -368,7 +368,8 @@ def _traverse_draft_tree(
     draft_tokens: torch.Tensor,
     matcher: "GrammarMatcher",
     allocate_token_bitmask: torch.Tensor,
-) -> None:
+    time_threshold: float = -1.0,
+) -> bool:
     """Traverse the tree constructed by the draft model to generate the logits mask.
 
     Parameters
@@ -385,13 +386,23 @@ def _traverse_draft_tree(
         The grammar matcher to use for validation.
     allocate_token_bitmask : torch.Tensor
         2D int32 tensor (num_nodes x bitmask_size) to store the generated bitmasks.
+    time_threshold : float
+        Maximum allowed time in seconds for the DFS traversal. If the traversal
+        exceeds this threshold, it returns False. A value <= 0 disables the timeout
+        (default: -1.0).
+
+    Returns
+    -------
+    bool
+        True if the traversal completed successfully, False if it timed out.
     """
-    _core.testing._traverse_draft_tree(
+    return _core.testing._traverse_draft_tree(
         retrieve_next_token,
         retrieve_next_sibling,
         draft_tokens,
         matcher._handle,
         allocate_token_bitmask,
+        time_threshold,
     )
 
 
