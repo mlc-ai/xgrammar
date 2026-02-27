@@ -395,7 +395,11 @@ NB_MODULE(xgrammar_bindings, m) {
             DLTensor* bitmask_ptr =
                 reinterpret_cast<DLTensor*>(reinterpret_cast<char*>(&bitmask) + sizeof(void*));
             return TraverseDraftTree(
-                next_token_ptr, next_sibling_ptr, draft_tokens_ptr, matcher, bitmask_ptr,
+                next_token_ptr,
+                next_sibling_ptr,
+                draft_tokens_ptr,
+                matcher,
+                bitmask_ptr,
                 time_threshold
             );
           },

@@ -106,17 +106,16 @@ bool DFS(
       matcher.FillNextTokenBitmask(bitmask, curr);
 
       if (retrieve_next_token[curr] != -1) {
-        bool success = DFS(
-            retrieve_next_token[curr],
-            curr,
-            retrieve_next_token,
-            retrieve_next_sibling,
-            draft_tokens,
-            matcher,
-            bitmask,
-            time_threshold,
-            start_time
-        );
+        bool success =
+            DFS(retrieve_next_token[curr],
+                curr,
+                retrieve_next_token,
+                retrieve_next_sibling,
+                draft_tokens,
+                matcher,
+                bitmask,
+                time_threshold,
+                start_time);
         if (!success) {
           if (curr != 0) {
             matcher.Rollback(1);
@@ -132,17 +131,16 @@ bool DFS(
   }
 
   if (retrieve_next_sibling[curr] != -1) {
-    bool success = DFS(
-        retrieve_next_sibling[curr],
-        parent_pos,
-        retrieve_next_token,
-        retrieve_next_sibling,
-        draft_tokens,
-        matcher,
-        bitmask,
-        time_threshold,
-        start_time
-    );
+    bool success =
+        DFS(retrieve_next_sibling[curr],
+            parent_pos,
+            retrieve_next_token,
+            retrieve_next_sibling,
+            draft_tokens,
+            matcher,
+            bitmask,
+            time_threshold,
+            start_time);
     if (!success) {
       return false;
     }
