@@ -1042,7 +1042,8 @@ window.addEventListener("load", load);</script>
     <span class="n">draft_tokens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
     <span class="n">matcher</span><span class="p">:</span> <span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">,</span>
     <span class="n">allocate_token_bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">time_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Traverse the tree constructed by the draft model to generate the logits mask.</span>
 
 <span class="sd">    Parameters</span>
@@ -1059,13 +1060,23 @@ window.addEventListener("load", load);</script>
 <span class="sd">        The grammar matcher to use for validation.</span>
 <span class="sd">    allocate_token_bitmask : torch.Tensor</span>
 <span class="sd">        2D int32 tensor (num_nodes x bitmask_size) to store the generated bitmasks.</span>
+<span class="sd">    time_threshold : float</span>
+<span class="sd">        Maximum allowed time in seconds for the DFS traversal. If the traversal</span>
+<span class="sd">        exceeds this threshold, it returns False. A value &lt;= 0 disables the timeout</span>
+<span class="sd">        (default: -1.0).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    bool</span>
+<span class="sd">        True if the traversal completed successfully, False if it timed out.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_traverse_draft_tree</span><span class="p">(</span>
+    <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_traverse_draft_tree</span><span class="p">(</span>
         <span class="n">retrieve_next_token</span><span class="p">,</span>
         <span class="n">retrieve_next_sibling</span><span class="p">,</span>
         <span class="n">draft_tokens</span><span class="p">,</span>
         <span class="n">matcher</span><span class="o">.</span><span class="n">_handle</span><span class="p">,</span>
         <span class="n">allocate_token_bitmask</span><span class="p">,</span>
+        <span class="n">time_threshold</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
