@@ -32,7 +32,7 @@ SIBLING_TREE = (
 )
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def compiled_grammar():
     """Compile the built-in JSON grammar with our small test vocab."""
     grammar = xgr.Grammar.builtin_json_grammar()
@@ -136,7 +136,7 @@ def test_traverse_draft_tree_timeout_triggers(compiled_grammar):
     Timeout is only checked for non-root nodes, so the root bitmask is always
     computed.  We build a deep linear chain so the timeout check is exercised.
     """
-    num_nodes = 200
+    num_nodes = 10000
     deep_chain = (
         torch.tensor([i + 1 for i in range(num_nodes - 1)] + [-1], dtype=torch.int64),
         torch.full((num_nodes,), -1, dtype=torch.int64),
