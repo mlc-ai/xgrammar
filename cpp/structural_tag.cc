@@ -53,6 +53,9 @@ class StructuralTagParser {
   /*! \brief ParseTagFormat with extra check for object and the type field. */
   Result<TagFormat, ISTError> ParseTagFormat(const picojson::value& value);
   Result<TagFormat, ISTError> ParseTagFormat(const picojson::object& value);
+  Result<std::variant<std::string, RegexBegin>, ISTError> ParseTagBeginField(
+      const picojson::value& value
+  );
   Result<TriggeredTagsFormat, ISTError> ParseTriggeredTagsFormat(const picojson::object& value);
   Result<TagsWithSeparatorFormat, ISTError> ParseTagsWithSeparatorFormat(
       const picojson::object& value
@@ -314,12 +317,101 @@ Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::
   return ParseTagFormat(obj);
 }
 
-Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::object& obj) {
-  // begin is required.
-  auto begin_it = obj.find("begin");
-  if (begin_it == obj.end() || !begin_it->second.is<std::string>()) {
-    return ResultErr<ISTError>("Tag format's begin field must be a string");
+Result<std::variant<std::string, RegexBegin>, ISTError> StructuralTagParser::ParseTagBeginField(
+    const picojson::value& value
+) {
+  if (value.is<std::string>()) {
+    // String case
+    return ResultOk<std::variant<std::string, RegexBegin>>(value.get<std::string>());
+  } else if (value.is<picojson::object>()) {
+    // Object case - can be either:
+    // 1. Simple regex format: {"type": "regex", "pattern": "..."}
+    // 2. Full RegexBegin format: {"type": "regex_begin", "trigger": "...", "regex": {...}}
+    const auto& begin_obj = value.get<picojson::object>();
+
+    // Check type field
+    auto type_it = begin_obj.find("type");
+    if (type_it == begin_obj.end() || !type_it->second.is<std::string>()) {
+      return ResultErr<ISTError>(
+          "Tag format's begin field, when it is an object, must have a 'type' field."
+      );
+    }
+    const std::string& type_value = type_it->second.get<std::string>();
+
+    if (type_value == "regex") {
+      // Simple regex format: {"type": "regex", "pattern": "..."}
+      auto pattern_it = begin_obj.find("pattern");
+      if (pattern_it == begin_obj.end() || !pattern_it->second.is<std::string>()) {
+        return ResultErr<ISTError>(
+            "Tag format's begin field with type='regex' must have a 'pattern' field with a string "
+            "value."
+        );
+      }
+      // Create RegexBegin with no trigger
+      return ResultOk<std::variant<std::string, RegexBegin>>(
+          RegexBegin(std::nullopt, RegexFormat(pattern_it->second.get<std::string>()))
+      );
+    } else if (type_value == "regex_begin") {
+      // Full RegexBegin format: {"type": "regex_begin", "trigger": "...", "regex": {...}}
+      std::optional<std::string> trigger = std::nullopt;
+      auto trigger_it = begin_obj.find("trigger");
+      if (trigger_it != begin_obj.end() && trigger_it->second.is<std::string>()) {
+        trigger = trigger_it->second.get<std::string>();
+      }
+
+      const auto& regex_obj_it = begin_obj.find("regex");
+      if (regex_obj_it == begin_obj.end() || !regex_obj_it->second.is<picojson::object>()) {
+        return ResultErr<ISTError>(
+            "Tag format's begin field with type='regex_begin' must have a 'regex' object field."
+        );
+      }
+      const auto& regex_obj = regex_obj_it->second.get<picojson::object>();
+
+      // Check regex type field is "regex"
+      auto regex_type_it = regex_obj.find("type");
+      if (regex_type_it == regex_obj.end() || !regex_type_it->second.is<std::string>() ||
+          regex_type_it->second.get<std::string>() != "regex") {
+        return ResultErr<ISTError>(
+            "Tag format's begin.regex field must be an object with type='regex'."
+        );
+      }
+      // Parse pattern field
+      auto pattern_it = regex_obj.find("pattern");
+      if (pattern_it == regex_obj.end() || !pattern_it->second.is<std::string>()) {
+        return ResultErr<ISTError>(
+            "Tag format's begin.regex field must have a 'pattern' field with a string value."
+        );
+      }
+      return ResultOk<std::variant<std::string, RegexBegin>>(
+          RegexBegin(trigger, RegexFormat(pattern_it->second.get<std::string>()))
+      );
+    } else {
+      return ResultErr<ISTError>(
+          "Tag format's begin field type must be 'regex' or 'regex_begin', got '" + type_value +
+          "'."
+      );
+    }
+  } else {
+    return ResultErr<ISTError>(
+        "Tag format's begin field must be a string, a regex object, or a regex_begin object."
+    );
   }
+}
+
+Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::object& obj) {
+  // begin is required - can be string or regex format object
+  auto begin_it = obj.find("begin");
+  if (begin_it == obj.end()) {
+    return ResultErr<ISTError>(
+        "Tag format's begin field must be a string, a regex object, or a regex_begin object."
+    );
+  }
+
+  auto begin_result = ParseTagBeginField(begin_it->second);
+  if (begin_result.IsErr()) {
+    return ResultErr<ISTError>(std::move(begin_result).UnwrapErr());
+  }
+
   // content is required.
   auto content_it = obj.find("content");
   if (content_it == obj.end()) {
@@ -356,7 +448,7 @@ Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::
   }
 
   return ResultOk<TagFormat>(
-      begin_it->second.get<std::string>(),
+      std::move(begin_result).Unwrap(),
       std::make_shared<Format>(std::move(content).Unwrap()),
       std::move(end_strings)
   );
@@ -766,6 +858,11 @@ class StructuralTagGrammarConverter {
 
   bool IsPrefix(const std::string& prefix, const std::string& full_str);
 
+  /*! \brief Create an expression for the begin field of a TagFormat. */
+  Result<int, ISTError> CreateBeginExpr(
+      const TagFormat& tag, const std::optional<std::string>& trigger = std::nullopt
+  );
+
   GrammarBuilder grammar_builder_;
 };
 
@@ -774,6 +871,48 @@ bool StructuralTagGrammarConverter::IsPrefix(
 ) {
   return prefix.size() <= full_str.size() &&
          std::string_view(full_str).substr(0, prefix.size()) == prefix;
+}
+
+Result<int, ISTError> StructuralTagGrammarConverter::CreateBeginExpr(
+    const TagFormat& tag, const std::optional<std::string>& trigger
+) {
+  return std::visit(
+      [&](auto&& arg) -> Result<int, ISTError> {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, std::string>) {
+          // String case: use substring after trigger (if trigger is provided and non-empty)
+          std::string remaining =
+              (!trigger.has_value() || trigger->empty()) ? arg : arg.substr(trigger->size());
+          // Always call AddByteString, even with an empty remaining string, to ensure the
+          // regression unit test passes.
+          return ResultOk(grammar_builder_.AddByteString(remaining));
+        } else if constexpr (std::is_same_v<T, RegexBegin>) {
+          auto arg_has_trigger = arg.trigger.has_value() && (!arg.trigger->empty());
+          // Regex case: convert regex to grammar and add as sub-grammar after trigger (if trigger
+          // is provided and non-empty)
+          if (trigger.has_value() && (!trigger->empty()) && (trigger != arg.trigger)) {
+            return ResultErr<ISTError>("One tag's regex begin does not match trigger");
+          } else if ((trigger.has_value() && (!trigger->empty()) && (trigger == arg.trigger)) ||
+                     (!arg_has_trigger)) {
+            auto sub_grammar = Grammar::FromRegex(arg.regex.pattern);
+            auto regex_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
+            return ResultOk(grammar_builder_.AddRuleRef(regex_rule_id));
+          } else if (arg_has_trigger) {
+            // The normal case, add trigger string before regex grammar
+            auto trigger_expr_id = grammar_builder_.AddByteString(arg.trigger.value());
+            auto sub_grammar = Grammar::FromRegex(arg.regex.pattern);
+            auto regex_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
+            auto begin_expr_id = grammar_builder_.AddSequence(
+                {trigger_expr_id, grammar_builder_.AddRuleRef(regex_rule_id)}
+            );
+            return ResultOk(begin_expr_id);
+          }
+        }
+        // Unreachable
+        return ResultErr<ISTError>("Unknown begin field type");
+      },
+      tag.begin
+  );
 }
 
 Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(const StructuralTag& structural_tag
@@ -913,7 +1052,14 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
     return result;
   }
   auto sub_rule_id = std::move(result).Unwrap();
-  auto begin_expr = grammar_builder_.AddByteString(format.begin);
+
+  // Handle begin field - can be string or RegexBegin
+  auto begin_result = CreateBeginExpr(format);
+  if (begin_result.IsErr()) {
+    return begin_result;
+  }
+  int begin_expr = std::move(begin_result).Unwrap();
+
   auto rule_ref_expr = grammar_builder_.AddRuleRef(sub_rule_id);
 
   if (format.end.size() > 1) {
@@ -956,16 +1102,34 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
 
   for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
     const auto& tag = format.tags[it_tag];
+
+    // Check if begin is a regex, checking format.trigger matched tage.begin.trigger
+    bool is_regex_begin = std::holds_alternative<RegexBegin>(tag.begin);
+
     // Find matched triggers
     int matched_trigger_id = -1;
-    for (int it_trigger = 0; it_trigger < static_cast<int>(format.triggers.size()); ++it_trigger) {
-      const auto& trigger = format.triggers[it_trigger];
-      if (IsPrefix(trigger, tag.begin)) {
-        if (matched_trigger_id != -1) {
-          return ResultErr<ISTError>("One tag matches multiple triggers in a triggered tags format"
-          );
+    if (is_regex_begin) {
+      // For regex begin, check trigger == tag.begin.trigger
+      for (int it_trigger = 0; it_trigger < static_cast<int>(format.triggers.size());
+           ++it_trigger) {
+        const auto& trigger = format.triggers[it_trigger];
+        if (trigger == std::get<RegexBegin>(tag.begin).trigger) {
+          matched_trigger_id = it_trigger;
         }
-        matched_trigger_id = it_trigger;
+      }
+    } else {
+      // For string begin, use IsPrefix matching
+      for (int it_trigger = 0; it_trigger < static_cast<int>(format.triggers.size());
+           ++it_trigger) {
+        const auto& trigger = format.triggers[it_trigger];
+        if (IsPrefix(trigger, std::get<std::string>(tag.begin))) {
+          if (matched_trigger_id != -1) {
+            return ResultErr<ISTError>(
+                "One tag matches multiple triggers in a triggered tags format"
+            );
+          }
+          matched_trigger_id = it_trigger;
+        }
       }
     }
     if (matched_trigger_id == -1) {
@@ -990,7 +1154,14 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     std::vector<int> choice_elements;
     for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
       const auto& tag = format.tags[it_tag];
-      auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
+
+      // Handle begin field - can be string or RegexBegin
+      auto begin_result = CreateBeginExpr(tag);
+      if (begin_result.IsErr()) {
+        return ResultErr(std::move(begin_result).UnwrapErr());
+      }
+      int begin_expr_id = std::move(begin_result).Unwrap();
+
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
       if (tag.end.empty()) {
         // Unlimited content case - skip adding end string
@@ -1067,7 +1238,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     std::vector<int> choice_elements;
     for (const auto& tag_id : trigger_to_tag_ids[it_trigger]) {
       const auto& tag = format.tags[tag_id];
-      int begin_expr_id = grammar_builder_.AddByteString(tag.begin.substr(trigger.size()));
+      // Handle begin field - can be string or RegexBegin
+      auto begin_result = CreateBeginExpr(tag, trigger);
+      if (begin_result.IsErr()) {
+        return ResultErr(std::move(begin_result).UnwrapErr());
+      }
+      int begin_expr_id = std::move(begin_result).Unwrap();
       int rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[tag_id]);
       if (tag.end.empty()) {
         // Unlimited content case - skip adding end string
@@ -1125,7 +1301,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     std::vector<int> first_choice_elements;
     for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
       const auto& tag = format.tags[it_tag];
-      auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
+      // Handle begin field - can be string or RegexBegin
+      auto begin_result = CreateBeginExpr(tag);
+      if (begin_result.IsErr()) {
+        return ResultErr(std::move(begin_result).UnwrapErr());
+      }
+      int begin_expr_id = std::move(begin_result).Unwrap();
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
       if (tag.end.empty()) {
         // Unlimited content case - skip adding end string

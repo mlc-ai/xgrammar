@@ -699,6 +699,94 @@ def test_tag_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+tag_with_regex_begin_stag_grammar = [
+    (
+        {
+            "type": "tag",
+            "begin": {"type": "regex_begin", "regex": {"type": "regex", "pattern": r"BEG[a-z]*"}},
+            "content": {"type": "json_schema", "json_schema": {"type": "number"}},
+            "end": "END",
+        },
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= ((basic_number))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+root_1 ::= (("B" "E" "G" [a-z]*))
+tag ::= ((root_1 root_0 "END"))
+root ::= ((tag))
+""",
+    ),
+    (
+        {
+            "type": "tag",
+            # "For Normal TagsFormat, 'begin.trigger' is not necessary; using a RegexFormat object as 'begin' directly is acceptable."
+            "begin": {"type": "regex", "pattern": r"BEG[a-z]*"},
+            "content": {"type": "grammar", "grammar": "root ::= [+\\-]?[1-9][0-9]*"},
+            "end": "END",
+        },
+        r"""root_0 ::= ((root_1 [1-9] [0-9]*))
+root_1 ::= ("" | ([+\-]))
+root_2 ::= (("B" "E" "G" [a-z]*))
+tag ::= ((root_2 root_0 "END"))
+root ::= ((tag))
+""",
+    ),
+    (
+        {
+            "type": "tag",
+            # "For Normal TagsFormat, 'begin.trigger' is not necessary; using a RegexFormat object as 'begin' directly is acceptable."
+            "begin": {"type": "regex", "pattern": r"BEG[a-z]*"},
+            "content": {"type": "regex", "pattern": "[+\\-]?[1-9][0-9]*"},
+            "end": "END",
+        },
+        r"""root_0 ::= ((root_1 [1-9] [0-9]*))
+root_1 ::= ("" | ([+\-]))
+root_2 ::= (("B" "E" "G" [a-z]*))
+tag ::= ((root_2 root_0 "END"))
+root ::= ((tag))
+""",
+    ),
+]
+
+
+tag_with_regex_begin_instance_is_accepted = [
+    ("BEG12345END", True),
+    ("BEG123456END", True),
+    ("BEG1234567END", True),
+    ("BEG???END", False),
+    ("BEG12345ENDEND", False),
+    ("BEGa12345END", True),
+    ("BEGaa12345END", True),
+    ("BEG1a12345END", False),
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", tag_with_regex_begin_stag_grammar)
+@pytest.mark.parametrize("instance, is_accepted", tag_with_regex_begin_instance_is_accepted)
+def test_tag_with_regex_begin(
+    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 any_text_stag_grammar = [
     (
         {"type": "tag", "begin": "BEG", "content": {"type": "any_text"}, "end": "END"},
@@ -876,6 +964,7 @@ root ::= ((triggered_tags))
 triggered_tag_instance_accepted_results = [
     ("textA1L1AtextA2L2AText", [True, False, False, False]),
     ("textA1L1AtextA2L2A", [True, False, False, False]),
+    ("A1L1AA2L2Atext", [True, True, False, False]),
     ("A1L1Atext", [True, True, False, False]),
     ("A1L1AtextA2L2A", [True, True, False, False]),
     ("A1L1A", [True, True, True, True]),
@@ -890,6 +979,130 @@ triggered_tag_instance_accepted_results = [
 @pytest.mark.parametrize("stag_id, stag_format, expected_grammar", triggered_tag_stag_grammar)
 @pytest.mark.parametrize("instance, accepted_results", triggered_tag_instance_accepted_results)
 def test_triggered_tag_format(
+    stag_id: int,
+    stag_format: Dict[str, Any],
+    expected_grammar: str,
+    instance: str,
+    accepted_results: List[bool],
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
+
+
+def _get_triggered_tag_format_with_regex_begin(at_least_one: bool, stop_after_first: bool):
+    regex_begin = {
+        "type": "regex_begin",
+        "trigger": "A",
+        "regex": {"type": "regex", "pattern": r"[13-9]"},
+    }
+    return {
+        "type": "triggered_tags",
+        "triggers": ["A"],
+        "tags": [
+            {"begin": regex_begin, "content": {"type": "const_string", "value": "L1"}, "end": "A"},
+            {"begin": "A2", "content": {"type": "const_string", "value": "L2"}, "end": "A"},
+        ],
+        "at_least_one": at_least_one,
+        "stop_after_first": stop_after_first,
+    }
+
+
+triggered_tag_with_regex_begin_stag_grammar = [
+    (
+        0,
+        _get_triggered_tag_format_with_regex_begin(at_least_one=False, stop_after_first=False),
+        r"""const_string ::= (("L1"))
+const_string_1 ::= (("L2"))
+root_0 ::= (([13-9]))
+triggered_tags_group ::= ((root_0 const_string "A") | ("2" const_string_1 "A"))
+triggered_tags ::= TagDispatch(
+  ("A", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+root ::= ((triggered_tags))
+""",
+    ),
+    (
+        1,
+        _get_triggered_tag_format_with_regex_begin(at_least_one=True, stop_after_first=False),
+        r"""const_string ::= (("L1"))
+const_string_1 ::= (("L2"))
+root_0 ::= (([13-9]))
+triggered_tags_group ::= ((root_0 const_string "A") | ("2" const_string_1 "A"))
+root_1 ::= (([13-9]))
+triggered_tags_first ::= (("A" root_1 const_string "A") | ("A2" const_string_1 "A"))
+triggered_tags_sub ::= TagDispatch(
+  ("A", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=true,
+  excludes=()
+)
+triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
+root ::= ((triggered_tags))
+""",
+    ),
+    (
+        2,
+        _get_triggered_tag_format_with_regex_begin(at_least_one=False, stop_after_first=True),
+        r"""const_string ::= (("L1"))
+const_string_1 ::= (("L2"))
+root_0 ::= (([13-9]))
+triggered_tags_group ::= ((root_0 const_string "A") | ("2" const_string_1 "A"))
+triggered_tags ::= TagDispatch(
+  ("A", triggered_tags_group),
+  stop_eos=true,
+  stop_str=(),
+  loop_after_dispatch=false,
+  excludes=()
+)
+root ::= ((triggered_tags))
+""",
+    ),
+    (
+        3,
+        _get_triggered_tag_format_with_regex_begin(at_least_one=True, stop_after_first=True),
+        r"""const_string ::= (("L1"))
+const_string_1 ::= (("L2"))
+root_0 ::= (([13-9]))
+triggered_tags ::= (("A" root_0 const_string "A") | ("A2" const_string_1 "A"))
+root ::= ((triggered_tags))
+""",
+    ),
+]
+
+
+triggered_tag_with_regex_begin_instance_accepted_results = [
+    ("textA1L1AtextA2L2AText", [True, False, False, False]),
+    ("textA1L1AtextA2L2A", [True, False, False, False]),
+    ("A1L1AA2L2Atext", [True, True, False, False]),
+    ("A1L1Atext", [True, True, False, False]),
+    ("A1L1AtextA2L2A", [True, True, False, False]),
+    ("A1L1A", [True, True, True, True]),
+    ("textA3L1AtextA2L2AText", [True, False, False, False]),
+    ("textA3L1AtextA2L2A", [True, False, False, False]),
+    ("A3L1AA2L2Atext", [True, True, False, False]),
+    ("A3L1Atext", [True, True, False, False]),
+    ("A3L1AtextA2L2A", [True, True, False, False]),
+    ("A3L1A", [True, True, True, True]),
+    ("text", [True, False, True, False]),
+    ("", [True, False, True, False]),
+    ("AA", [False, False, False, False]),
+    ("A1L2A", [False, False, False, False]),
+    ("A1L1A2L2A", [False, False, False, False]),
+]
+
+
+@pytest.mark.parametrize(
+    "stag_id, stag_format, expected_grammar", triggered_tag_with_regex_begin_stag_grammar
+)
+@pytest.mark.parametrize(
+    "instance, accepted_results", triggered_tag_with_regex_begin_instance_accepted_results
+)
+def test_triggered_tag_with_regex_begin(
     stag_id: int,
     stag_format: Dict[str, Any],
     expected_grammar: str,
@@ -1879,11 +2092,11 @@ json_format_error_test_data = [
     # TagFormat Errors
     (
         '{"type": "structural_tag", "format": {"type": "tag", "content": {"type": "const_string", "value": "hello"}, "end": "end"}}',
-        "Tag format's begin field must be a string",
+        "Tag format's begin field must be a string, a regex object, or a regex_begin object.",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tag", "begin": 123, "content": {"type": "const_string", "value": "hello"}, "end": "end"}}',
-        "Tag format's begin field must be a string",
+        "Tag format's begin field must be a string, a regex object, or a regex_begin object.",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tag", "begin": "start", "end": "end"}}',
@@ -1937,6 +2150,18 @@ json_format_error_test_data = [
     (
         '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": ["trigger"], "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}], "stop_after_first": "not_boolean"}}',
         "stop_after_first must be a boolean",
+    ),
+    (
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": ["trigger"], "tags": [{"begin": {"type": "regex_begin", "regex": {"type": "regex", "pattern": "A+"}}, "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
+        "One tag does not match any trigger in a triggered tags format",
+    ),
+    (
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": ["trigger"], "tags": [{"begin": {"type": "regex_begin", "trigger": "triggers", "regex": {"type": "regex", "pattern": "A+"}}, "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
+        "One tag does not match any trigger in a triggered tags format",
+    ),
+    (
+        '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": ["trigger"], "tags": [{"begin": {"type": "regex", "pattern": "A+"}, "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
+        "One tag does not match any trigger in a triggered tags format",
     ),
     # TagsWithSeparatorFormat Errors
     (
@@ -2332,6 +2557,88 @@ basic_structural_tags_instance_is_accepted = [
         ),
         "<b>text</b",
         False,
+    ),
+    (
+        xgr.structural_tag.TagFormat(
+            begin=xgr.structural_tag.RegexFormat(pattern='<b id="\\d+">'),
+            content=xgr.structural_tag.AnyTextFormat(),
+            end="</b>",
+        ),
+        '<b id="1">text</b>',
+        True,
+    ),
+    (
+        xgr.structural_tag.TagFormat(
+            begin=xgr.structural_tag.RegexFormat(pattern='<b id="\\d+">'),
+            content=xgr.structural_tag.AnyTextFormat(),
+            end="</b>",
+        ),
+        "<b>text</b>",
+        False,
+    ),
+    (
+        xgr.structural_tag.TagFormat(
+            begin=xgr.structural_tag.RegexBegin(
+                # The trigger arg of RegexBegin is optional
+                regex=xgr.structural_tag.RegexFormat(pattern='<b id="\\d+">')
+            ),
+            content=xgr.structural_tag.AnyTextFormat(),
+            end="</b>",
+        ),
+        '<b id="1">text</b>',
+        True,
+    ),
+    # TriggeredTagsFormat
+    (
+        xgr.structural_tag.TriggeredTagsFormat(
+            triggers=["<"],
+            tags=[
+                xgr.structural_tag.TagFormat(
+                    begin=xgr.structural_tag.RegexBegin(
+                        trigger="<",
+                        # The trigger text itself should not be part of the regex pattern
+                        regex=xgr.structural_tag.RegexFormat(pattern='b id="\\d+">'),
+                    ),
+                    content=xgr.structural_tag.AnyTextFormat(),
+                    end="</b>",
+                )
+            ],
+            at_least_one=False,
+            stop_after_first=False,
+        ),
+        '<b id="1">"1"</b>,<b id="2">"2"</b>',
+        True,
+    ),
+    (
+        xgr.structural_tag.TriggeredTagsFormat(
+            triggers=["<"],
+            tags=[
+                xgr.structural_tag.TagFormat(
+                    begin='<b id="1">', content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+                )
+            ],
+            at_least_one=False,
+            stop_after_first=False,
+        ),
+        '<b id="1">"1"</b>,<b id="2">"2"</b>',
+        False,
+    ),
+    (
+        xgr.structural_tag.TriggeredTagsFormat(
+            triggers=["<"],
+            tags=[
+                xgr.structural_tag.TagFormat(
+                    begin='<b id="1">', content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+                ),
+                xgr.structural_tag.TagFormat(
+                    begin='<b id="2">', content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+                ),
+            ],
+            at_least_one=False,
+            stop_after_first=False,
+        ),
+        '<b id="1">"1"</b>,<b id="2">"2"</b>',
+        True,
     ),
     # TagsWithSeparatorFormat
     (
