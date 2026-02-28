@@ -282,3 +282,6 @@ _docs/
 
 # GDB history file
 .gdb_history
+
+# AI assistant files
+.cursor/

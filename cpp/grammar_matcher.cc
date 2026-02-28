@@ -798,68 +798,23 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
     // -1 means not found yet; 0~255 means the next char
     int next_char = -1;
     for (const auto& state : states) {
-      if (state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value()) {
-        const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
-        const auto& current_edges = fsm.GetFsm().GetEdges(state.element_id);
-        for (const auto& edge : current_edges) {
-          if (!edge.IsCharRange()) {
-            continue;
-          }
-          if (edge.min != edge.max) {
-            can_find_next_char = false;
-            break;
-          }
-          if (next_char == -1) {
-            next_char = edge.min;
-          } else if (next_char != edge.min) {
-            can_find_next_char = false;
-            break;
-          }
+      XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
+      const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
+      const auto& current_edges = fsm.GetFsm().GetEdges(state.element_id);
+      for (const auto& edge : current_edges) {
+        if (!edge.IsCharRange()) {
+          continue;
         }
-        continue;
-      }
-
-      auto cur_sequence = grammar_->GetGrammarExpr(state.sequence_id);
-
-      // We cannot deduce the next char for tag dispatch
-      if (cur_sequence.type == GrammarExprType::kTagDispatch) {
-        can_find_next_char = false;
-        break;
-      }
-      // The ParserState comes to the end of the grammar
-      XGRAMMAR_DCHECK(state.element_id != cur_sequence.size());
-      XGRAMMAR_DCHECK(
-          cur_sequence.type != GrammarExprType::kChoices &&
-          cur_sequence.type != GrammarExprType::kEmptyStr
-      );
-      const auto& cur_element = grammar_->GetGrammarExpr(cur_sequence[state.element_id]);
-      if (cur_element.type == GrammarExprType::kByteString) {
-        XGRAMMAR_DCHECK(state.sub_element_id < cur_element.size());
-        if (next_char == -1) {
-          next_char = cur_element[state.sub_element_id];
-        } else if (next_char != cur_element[state.sub_element_id]) {
+        if (edge.min != edge.max) {
           can_find_next_char = false;
           break;
         }
-        continue;
-      }
-      if (cur_element.type == GrammarExprType::kRuleRef) {
-        continue;
-      }
-
-      XGRAMMAR_DCHECK(
-          cur_element.type == GrammarExprType::kCharacterClass ||
-          cur_element.type == GrammarExprType::kCharacterClassStar
-      );
-      if (state.sub_element_id > 0 || cur_element.size() != 3 || cur_element[0] != 0 ||
-          cur_element[1] != cur_element[2]) {
-        can_find_next_char = false;
-        break;
-      } else if (next_char == -1) {
-        next_char = cur_element[1];
-      } else if (next_char != cur_element[1]) {
-        can_find_next_char = false;
-        break;
+        if (next_char == -1) {
+          next_char = edge.min;
+        } else if (next_char != edge.min) {
+          can_find_next_char = false;
+          break;
+        }
       }
     }
 

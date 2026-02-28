@@ -1027,6 +1027,12 @@ class GrammarFSMBuilderImpl {
       }
     }
 
+    for (int i = 0; i < (*grammar)->NumRules(); ++i) {
+      XGRAMMAR_DCHECK(per_rule_fsms[i].has_value())
+          << "Rule " << i << " (" << (*grammar)->GetRule(i).name
+          << ") does not have an FSM after optimization";
+    }
+
     // Compress to compact fsm
     CompactFSM compact_complete_fsm = complete_fsm.ToCompact();
     std::vector<std::optional<CompactFSMWithStartEnd>> compact_per_rule_fsms((*grammar)->NumRules()
