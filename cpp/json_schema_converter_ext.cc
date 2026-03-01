@@ -61,7 +61,7 @@ void XMLToolCallingConverter::AddBasicRules() {
       kXMLString,
       "TagDispatch("
       "stop_eos=true,"
-      "stop_str=(),"
+      "stops=(),"
       "loop_after_dispatch=false,"
       "excludes=(\"" +
           xml_wrapper_.parameter_suffix +

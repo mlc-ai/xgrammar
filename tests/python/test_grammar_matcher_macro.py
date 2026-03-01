@@ -188,7 +188,7 @@ rule1 ::= "12345"
     expected = """root ::= TagDispatch(
   ("start", rule1),
   stop_eos=false,
-  stop_str=("</think>"),
+  stops=("</think>"),
   loop_after_dispatch=true,
   excludes=("</conclude>")
 )

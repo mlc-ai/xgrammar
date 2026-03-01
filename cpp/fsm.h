@@ -41,6 +41,8 @@ struct alignas(8) FSMEdge {
     kRuleRef = -2,
     kEOS = -3,
     kRepeatRef = -4,
+    kTokenSet = -5,
+    kTokenExclude = -6,
   };
 
   inline static constexpr int kMaxChar = 255;
@@ -112,6 +114,10 @@ struct alignas(8) FSMEdge {
    */
   bool IsRepeatRef() const { return min == EdgeType::kRepeatRef; }
 
+  bool IsTokenSet() const { return min == EdgeType::kTokenSet; }
+
+  bool IsTokenExclude() const { return min == EdgeType::kTokenExclude; }
+
   /*!
    * \brief Get the rule id of the edge.
    * \return The rule id of the edge. -1 if the edge is not a rule reference.
@@ -122,10 +128,12 @@ struct alignas(8) FSMEdge {
    * \brief Get the auxiliary data index for repeat reference edges.
    * \return The index into the owning FSM's edge_aux_data. -1 if not a repeat reference.
    */
-  int16_t GetAuxIndex() const { return IsRepeatRef() ? max : -1; }
+  int16_t GetAuxIndex() const {
+    return (IsRepeatRef() || IsTokenSet() || IsTokenExclude()) ? max : -1;
+  }
 
-  /*! \brief Check if the edge uses auxiliary data (currently only kRepeatRef). */
-  bool IsAuxEdge() const { return IsRepeatRef(); }
+  /*! \brief Check if the edge uses auxiliary data. */
+  bool IsAuxEdge() const { return IsRepeatRef() || IsTokenSet() || IsTokenExclude(); }
 
   friend struct member_trait<FSMEdge>;
 };
@@ -136,6 +144,26 @@ struct RepeatEdgeRef {
   int16_t RuleId() const { return static_cast<int16_t>(data[0]); }
   int32_t Lower() const { return data[1]; }
   int32_t Upper() const { return data[2]; }
+};
+
+/*! \brief View into edge_aux_data for a token set edge (layout: [count, token_id_0, ...]). */
+struct TokenSetEdgeRef {
+  const int32_t* data;
+  int32_t Count() const { return data[0]; }
+  const int32_t* TokenIds() const { return data + 1; }
+  bool Contains(int32_t token_id) const {
+    return std::binary_search(TokenIds(), TokenIds() + Count(), token_id);
+  }
+};
+
+/*! \brief View into edge_aux_data for a token exclude edge (layout: [count, token_id_0, ...]). */
+struct TokenExcludeEdgeRef {
+  const int32_t* data;
+  int32_t Count() const { return data[0]; }
+  const int32_t* TokenIds() const { return data + 1; }
+  bool Contains(int32_t token_id) const {
+    return std::binary_search(TokenIds(), TokenIds() + Count(), token_id);
+  }
 };
 
 /*!
@@ -325,6 +353,10 @@ class FSM {
    */
   void AddRepeatEdge(int from, int to, int32_t rule_id, int32_t lower, int32_t upper);
 
+  void AddTokenSetEdge(int from, int to, const std::vector<int32_t>& token_ids);
+
+  void AddTokenExcludeEdge(int state, const std::vector<int32_t>& token_ids);
+
   /*! \brief Get the edge auxiliary data. */
   const std::vector<int32_t>& GetEdgeAuxData() const;
 
@@ -333,6 +365,12 @@ class FSM {
 
   /*! \brief Get repeat edge info by aux index. */
   RepeatEdgeRef GetRepeatEdgeInfo(int16_t idx) const;
+
+  /*! \brief Get token set edge info by aux index. */
+  TokenSetEdgeRef GetTokenSetEdgeInfo(int16_t idx) const;
+
+  /*! \brief Get token exclude edge info by aux index. */
+  TokenExcludeEdgeRef GetTokenExcludeEdgeInfo(int16_t idx) const;
 
   /*!
    * \brief Add a whole FSM to the current FSM.
@@ -496,6 +534,12 @@ class CompactFSM {
   /*! \brief Get repeat edge info by aux index. */
   RepeatEdgeRef GetRepeatEdgeInfo(int16_t idx) const;
 
+  /*! \brief Get token set edge info by aux index. */
+  TokenSetEdgeRef GetTokenSetEdgeInfo(int16_t idx) const;
+
+  /*! \brief Get token exclude edge info by aux index. */
+  TokenExcludeEdgeRef GetTokenExcludeEdgeInfo(int16_t idx) const;
+
   /****************** CompactFSM Construction Methods ******************/
 
   /*!
@@ -562,7 +606,7 @@ class FSMWithStartEndBase {
    */
   bool IsScanableState(int state) const {
     for (const auto& edge : fsm_.GetEdges(state)) {
-      if (edge.IsCharRange()) {
+      if (edge.IsCharRange() || edge.IsTokenSet()) {
         return true;
       }
     }

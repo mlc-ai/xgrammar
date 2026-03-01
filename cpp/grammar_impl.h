@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "fsm.h"
@@ -119,14 +120,12 @@ class Grammar::Impl {
     kSequence,
     // data format: [grammar_expr_id0, grammar_expr_id1, ...]
     kChoices,
-    // data format: [tag_expr0, rule_id0, tag_expr1, rule_id1, ..., stop_eos, stop_str_expr_id,
-    // loop_after_dispatch]
-    // where stop_eos is a bool, stop_str_expr_id is a choices GrammarExpr id.
-    // tag_expr should be a byte string, and rule_id should be a rule id.
-    // loop_after_dispatch is a bool.
+    // Count-based segmented format. See GetTagDispatch/AddTagDispatch for details.
     kTagDispatch,
     // data format: [rule_id, min_repeat_count, max_repeat_count]
     kRepeat,
+    // data format: [token_id_0, token_id_1, ...]
+    kTokenSet,
   };
 
   /*! \brief The object representing a grammar expr. */
@@ -186,61 +185,86 @@ class Grammar::Impl {
 
   /*! \brief The object representing a tag dispatch. */
   struct TagDispatch {
-    /*! \brief The tag and rule id pairs. */
-    std::vector<std::pair<std::string, int32_t>> tag_rule_pairs;
+    /*! \brief Unified triggers: string = string trigger, int32_t = token trigger. */
+    std::vector<std::pair<std::variant<std::string, int32_t>, int32_t>> trigger_rule_pairs;
     /*! \brief If true, EOS is allowed to generate and will stop the tag dispatch. */
     bool stop_eos;
-    /*! \brief The strings that will stop the tag dispatch. Only work if stop_eos is false. */
-    std::vector<std::string> stop_str;
+    /*! \brief Unified stops: string = stop string, int32_t = stop token. */
+    std::vector<std::variant<std::string, int32_t>> stops;
     /*! \brief If true, the tag dispatch will loop after dispatching. */
     bool loop_after_dispatch;
-    /*! \brief The strings that are excluded by the tap dispatch. */
-    std::vector<std::string> excluded_str;
-    static const int kTagDispatchExtraParameter = 4;
+    /*! \brief Unified excludes: string = substring exclude, int32_t = token exclude. */
+    std::vector<std::variant<std::string, int32_t>> excludes;
   };
 
-  /*! \brief Get the tag dispatch from the grammar expr. */
+  /*!
+   * \brief Get the tag dispatch from the grammar expr.
+   *
+   * Packed format:
+   *   [string_trigger_count, (str_expr_id, rule_id) × N,
+   *    token_trigger_count, (token_id, rule_id) × M,
+   *    stop_eos,
+   *    stop_str_count, str_expr_id × K,
+   *    stop_token_count, token_id × L,
+   *    loop_after_dispatch,
+   *    string_excludes_count, str_expr_id × P,
+   *    token_excludes_count, token_id × Q]
+   */
   TagDispatch GetTagDispatch(const GrammarExpr& grammar_expr) {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTagDispatch)
         << "GrammarExpr is not a tag dispatch";
 
     TagDispatch result;
-    XGRAMMAR_DCHECK(grammar_expr.size() >= TagDispatch::kTagDispatchExtraParameter);
-    result.tag_rule_pairs.reserve(
-        (grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter) / 2
-    );
+    int pos = 0;
 
-    for (int i = 0; i < grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter; i += 2) {
-      auto tag_expr_id = grammar_expr[i];
-      auto rule_id = grammar_expr[i + 1];
-      result.tag_rule_pairs.push_back({GetByteString(tag_expr_id), rule_id});
+    // String triggers
+    int32_t string_trigger_count = grammar_expr[pos++];
+    for (int i = 0; i < string_trigger_count; ++i) {
+      auto str_expr_id = grammar_expr[pos++];
+      auto rule_id = grammar_expr[pos++];
+      result.trigger_rule_pairs.push_back({GetByteString(str_expr_id), rule_id});
     }
 
-    result.stop_eos = static_cast<bool>(
-        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter]
-    );
-
-    auto stop_str_expr = GetGrammarExpr(
-        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 1]
-    );
-    XGRAMMAR_DCHECK(stop_str_expr.type == GrammarExprType::kChoices);
-    result.stop_str.reserve(stop_str_expr.size());
-    for (int j = 0; j < stop_str_expr.size(); j++) {
-      result.stop_str.push_back(GetByteString(stop_str_expr[j]));
+    // Token triggers
+    int32_t token_trigger_count = grammar_expr[pos++];
+    for (int i = 0; i < token_trigger_count; ++i) {
+      auto token_id = grammar_expr[pos++];
+      auto rule_id = grammar_expr[pos++];
+      result.trigger_rule_pairs.push_back({token_id, rule_id});
     }
 
-    result.loop_after_dispatch = static_cast<bool>(
-        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 2]
-    );
+    // stop_eos
+    result.stop_eos = static_cast<bool>(grammar_expr[pos++]);
 
-    auto exclude_str_expr = GetGrammarExpr(
-        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 3]
-    );
-    XGRAMMAR_DCHECK(exclude_str_expr.type == GrammarExprType::kChoices);
-    result.excluded_str.reserve(exclude_str_expr.size());
-    for (int j = 0; j < exclude_str_expr.size(); j++) {
-      result.excluded_str.push_back(GetByteString(exclude_str_expr[j]));
+    // Stop strings
+    int32_t stop_str_count = grammar_expr[pos++];
+    for (int i = 0; i < stop_str_count; ++i) {
+      result.stops.push_back(GetByteString(grammar_expr[pos++]));
     }
+
+    // Stop tokens
+    int32_t stop_token_count = grammar_expr[pos++];
+    for (int i = 0; i < stop_token_count; ++i) {
+      result.stops.push_back(grammar_expr[pos++]);
+    }
+
+    // loop_after_dispatch
+    result.loop_after_dispatch = static_cast<bool>(grammar_expr[pos++]);
+
+    // String excludes
+    int32_t string_excludes_count = grammar_expr[pos++];
+    for (int i = 0; i < string_excludes_count; ++i) {
+      result.excludes.push_back(GetByteString(grammar_expr[pos++]));
+    }
+
+    // Token excludes
+    int32_t token_excludes_count = grammar_expr[pos++];
+    for (int i = 0; i < token_excludes_count; ++i) {
+      result.excludes.push_back(grammar_expr[pos++]);
+    }
+
+    XGRAMMAR_DCHECK(pos == grammar_expr.size()) << "TagDispatch packed data size mismatch: read "
+                                                << pos << " but expected " << grammar_expr.size();
     return result;
   }
 
