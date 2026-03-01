@@ -195,7 +195,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("</parameter>")
 )
@@ -309,7 +309,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("</parameter>")
 )
@@ -394,7 +394,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("</\uff5cDSML\uff5cparameter>")
 )
@@ -704,7 +704,7 @@ any_text_stag_grammar = [
         {"type": "tag", "begin": "BEG", "content": {"type": "any_text"}, "end": "END"},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("END"),
+  stops=("END"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -776,7 +776,7 @@ def test_no_end_anytext_format_with_excludes(instance: str, is_accepted: bool):
     }
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("<END>")
 )
@@ -785,7 +785,7 @@ triggered_tags_first ::= (("<TOOL>" any_text))
 triggered_tags_sub ::= TagDispatch(
   ("<TOOL>", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -820,7 +820,7 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -837,7 +837,7 @@ triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -854,7 +854,7 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -918,7 +918,7 @@ triggered_tags_group ::= (("" const_string "<end>"))
 triggered_tags ::= TagDispatch(
   ("<start>", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -981,7 +981,7 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
-  stop_str=("end"),
+  stops=("end"),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -999,7 +999,7 @@ triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
-  stop_str=("end"),
+  stops=("end"),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -1017,7 +1017,7 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
-  stop_str=("end"),
+  stops=("end"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1600,7 +1600,7 @@ end_string_detector_test_data = [
         r"""const_string ::= (("[TEXT]"))
 any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end>"),
+  stops=("<end>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1651,7 +1651,7 @@ root ::= ((tag))
         },
         r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end2>"),
+  stops=("<end2>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1660,7 +1660,7 @@ triggered_tags_first ::= (("<start2>" any_text))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=false,
-  stop_str=("<end>"),
+  stops=("<end>"),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -1668,14 +1668,14 @@ triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 const_string ::= (("[TEXT2]"))
 any_text_1 ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end>"),
+  stops=("<end>"),
   loop_after_dispatch=false,
   excludes=()
 )
 sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end3>"),
+  stops=("<end3>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1742,7 +1742,7 @@ root ::= ((tag_1))
         },
         r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end2>"),
+  stops=("<end2>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1751,7 +1751,7 @@ triggered_tags_first ::= (("<start2>" any_text))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -1761,7 +1761,7 @@ any_text_1 ::= (([\0-\U0010ffff]*))
 sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end3>"),
+  stops=("<end3>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1879,11 +1879,11 @@ json_format_error_test_data = [
     # TagFormat Errors
     (
         '{"type": "structural_tag", "format": {"type": "tag", "content": {"type": "const_string", "value": "hello"}, "end": "end"}}',
-        "Tag format's begin field must be a string",
+        "Tag format's begin field must be a string or TokenFormat",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tag", "begin": 123, "content": {"type": "const_string", "value": "hello"}, "end": "end"}}',
-        "Tag format's begin field must be a string",
+        "Tag format's begin field must be a string or TokenFormat",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tag", "begin": "start", "end": "end"}}',
@@ -1895,7 +1895,7 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "tag", "begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": 123}}',
-        "Tag format's end field must be a string or array of strings",
+        "Tag format's end field must be a string, array of strings, or TokenFormat",
     ),
     # TriggeredTagsFormat Errors
     (
@@ -1912,11 +1912,11 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": [123], "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
-        "Triggered tags format's triggers must be non-empty strings",
+        "triggers array elements must be strings or TokenFormat objects",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": [""], "tags": [{"begin": "start", "content": {"type": "const_string", "value": "hello"}, "end": "end"}]}}',
-        "Triggered tags format's triggers must be non-empty strings",
+        "Triggered tags format's string triggers must be non-empty",
     ),
     (
         '{"type": "structural_tag", "format": {"type": "triggered_tags", "triggers": ["trigger"]}}',
@@ -2450,7 +2450,7 @@ multiple_end_tokens_any_text_stag_grammar = [
         {"type": "tag", "begin": "BEG", "content": {"type": "any_text"}, "end": ["END1", "END2"]},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("END1", "END2"),
+  stops=("END1", "END2"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -2633,7 +2633,7 @@ def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
 
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("."),
+  stops=("."),
   loop_after_dispatch=false,
   excludes=("<end>", "</tag>")
 )
@@ -2679,7 +2679,7 @@ triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=("L1", "L2")
 )
@@ -2708,7 +2708,7 @@ def test_excluded_strings_in_single_any_text(instance: str, is_accepted: bool):
 
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("ABC")
 )
@@ -2744,7 +2744,7 @@ def test_excluded_any_text_within_sequence(instance: str, is_accepted: bool):
 
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("ABC")
 )
@@ -2786,7 +2786,7 @@ def test_excludes_triggered_tags_without_end(instance: str, is_accepted: bool):
 
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("1"),
+  stops=("1"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -2794,7 +2794,7 @@ triggered_tags_group ::= (("" any_text))
 triggered_tags ::= TagDispatch(
   ("1", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=("ABC")
 )
@@ -2882,6 +2882,292 @@ xml_const_enum_instances = [
 @pytest.mark.parametrize("stag_format, instance, is_accepted", xml_const_enum_instances)
 def test_xml_const_enum_values(stag_format: Dict[str, Any], instance: str, is_accepted: bool):
     check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+# ==================== TokenFormat Tests ====================
+
+
+def test_parse_token_format_in_tag_begin():
+    """Token begin should generate Token() expression in grammar."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": 42},
+            "content": {"type": "const_string", "value": "hello"},
+            "end": "</end>",
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    grammar_str = str(grammar)
+    assert "Token(42)" in grammar_str
+
+
+def test_parse_token_format_in_tag_end():
+    """Token end should generate Token() expression in grammar."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": "<begin>",
+            "content": {"type": "const_string", "value": "hello"},
+            "end": {"type": "token", "token": 43},
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    grammar_str = str(grammar)
+    assert "Token(43)" in grammar_str
+
+
+def test_parse_token_format_in_excludes():
+    """AnyText with mixed string/token excludes should parse."""
+    stag = {
+        "type": "structural_tag",
+        "format": {"type": "any_text", "excludes": ["bad_word", {"type": "token", "token": 42}]},
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    grammar_str = str(grammar)
+    assert "bad_word" in grammar_str
+    assert "42" in grammar_str
+
+
+def test_parse_str_token_requires_tokenizer():
+    """String-valued TokenFormat without tokenizer_info should raise error."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": "<tool>"},
+            "content": {"type": "any_text"},
+            "end": "</end>",
+        },
+    }
+    with pytest.raises(Exception, match="requires tokenizer_info"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_token_trigger_matches_token_begin():
+    """Token trigger with matching token begin should succeed."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "triggered_tags",
+            "triggers": [{"type": "token", "token": 42}],
+            "tags": [
+                {
+                    "begin": {"type": "token", "token": 42},
+                    "content": {"type": "const_string", "value": "body"},
+                    "end": "</end>",
+                }
+            ],
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    assert grammar is not None
+    grammar_str = str(grammar)
+    assert "42" in grammar_str
+
+
+def test_token_trigger_rejects_string_begin():
+    """Token trigger with string begin should fail (cross-type mismatch)."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "triggered_tags",
+            "triggers": [{"type": "token", "token": 42}],
+            "tags": [
+                {
+                    "begin": "<tool>",
+                    "content": {"type": "const_string", "value": "body"},
+                    "end": "</end>",
+                }
+            ],
+        },
+    }
+    with pytest.raises(Exception, match="does not match any trigger"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_string_trigger_rejects_token_begin():
+    """String trigger with token begin should fail (cross-type mismatch)."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "triggered_tags",
+            "triggers": ["<tool>"],
+            "tags": [
+                {
+                    "begin": {"type": "token", "token": 42},
+                    "content": {"type": "const_string", "value": "body"},
+                    "end": "</end>",
+                }
+            ],
+        },
+    }
+    with pytest.raises(Exception, match="does not match any trigger"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_tag_token_begin_end_accept():
+    """End-to-end: Tag with token begin/end should accept matching token sequence."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": 2},
+            "content": {"type": "const_string", "value": "hello"},
+            "end": {"type": "token", "token": 3},
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "d", "hello", "world"])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    compiled_grammar = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+
+    # Accept token 2 (begin), then "hello" (token 4), then token 3 (end)
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(4)
+    assert matcher.accept_token(3)
+    assert matcher.is_terminated()
+
+
+def test_any_text_exclude_token_mask():
+    """AnyText with token excludes should block specific tokens in bitmask."""
+    stag = {
+        "type": "structural_tag",
+        "format": {"type": "any_text", "excludes": [{"type": "token", "token": 2}]},
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "d"])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    compiled_grammar = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    from xgrammar.testing import _get_masked_tokens_from_bitmask
+
+    masked = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert 2 in masked, "Token 2 should be masked (excluded)"
+
+
+def test_triggered_tags_token_trigger_accept():
+    """TriggeredTags with token trigger dispatches correctly."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "triggered_tags",
+            "triggers": [{"type": "token", "token": 2}],
+            "tags": [
+                {
+                    "begin": {"type": "token", "token": 2},
+                    "content": {"type": "const_string", "value": "bb"},
+                    "end": "d",
+                }
+            ],
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "d", "bb"])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    compiled_grammar = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+
+    # Accept token 2 (trigger + begin), then "bb" (token 4), then "d" (token 3)
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(4)
+    assert matcher.accept_token(3)
+    assert matcher.is_terminated()
+
+
+def test_compile_structural_tag_with_token_auto_tokenizer():
+    """GrammarCompiler.compile_structural_tag auto-passes tokenizer_info."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": 2},
+            "content": {"type": "const_string", "value": "hello"},
+            "end": {"type": "token", "token": 3},
+        },
+    }
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "d", "hello", "world"])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    compiled_grammar = compiler.compile_structural_tag(stag)
+    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(4)
+    assert matcher.accept_token(3)
+    assert matcher.is_terminated()
+
+
+def test_token_format_str_resolution_with_tokenizer():
+    """String-valued TokenFormat resolved to int via tokenizer_info."""
+    vocab = ["hello", "world", "<tool>", "</tool>"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": "<tool>"},
+            "content": {"type": "const_string", "value": "hello"},
+            "end": {"type": "token", "token": "</tool>"},
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag, tokenizer_info=tokenizer_info)
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    compiled_grammar = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+
+    assert matcher.accept_token(2)  # <tool>
+    assert matcher.accept_token(0)  # hello
+    assert matcher.accept_token(3)  # </tool>
+    assert matcher.is_terminated()
+
+
+def test_any_text_token_end_propagation():
+    """Token end of enclosing tag is propagated to inner AnyTextFormat as stop."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": "start",
+            "content": {"type": "any_text"},
+            "end": {"type": "token", "token": 3},
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    grammar_str = str(grammar)
+    assert "3" in grammar_str
+
+
+def test_mixed_string_token_triggers():
+    """TriggeredTags with both string and token triggers."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "triggered_tags",
+            "triggers": ["<fn=", {"type": "token", "token": 5}],
+            "tags": [
+                {
+                    "begin": "<fn=a>",
+                    "content": {"type": "const_string", "value": "body1"},
+                    "end": "</fn>",
+                },
+                {
+                    "begin": {"type": "token", "token": 5},
+                    "content": {"type": "const_string", "value": "body2"},
+                    "end": "</fn>",
+                },
+            ],
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(stag)
+    grammar_str = str(grammar)
+    assert "5" in grammar_str
+    assert "<fn=" in grammar_str
 
 
 if __name__ == "__main__":

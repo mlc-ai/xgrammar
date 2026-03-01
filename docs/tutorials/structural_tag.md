@@ -150,20 +150,24 @@ The format field requires a format object. We provide several basic format objec
 
 7. `tag`
 
-    The output must follow `begin content end`. `begin` and `end` are strings, and `content` can be
-    any format object. This is useful for LLM outputs such as `<think>...</think>` or
-    `<function>...</function>`.
+    The output must follow `begin content end`. `begin` and `end` can be strings or
+    `TokenFormat` objects (for token-level matching). `content` can be any format object.
+    This is useful for LLM outputs such as `<think>...</think>` or `<function>...</function>`.
 
     ```json
     {
         "type": "tag",
-        "begin": "...",
+        "begin": "..." or {"type": "token", "token": 42},
         "content": {
             "type": "...",
         },
-        "end": "..."
+        "end": "..." or ["...", "..."] or {"type": "token", "token": 43}
     }
     ```
+
+    When `begin` or `end` is a `TokenFormat`, the grammar matches the token by ID instead of
+    by character sequence. This is useful for models with special tokens that cannot be
+    represented as plain strings.
 
 8. `any_text`
 
@@ -172,9 +176,12 @@ The format field requires a format object. We provide several basic format objec
     ```json
     {
         "type": "any_text",
-        "excludes": ["...", ]
+        "excludes": ["...", {"type": "token", "token": 42}]
     }
     ```
+
+    Each element in `excludes` can be a string (substring exclusion) or a `TokenFormat`
+    (token-level exclusion).
 
     We will handle it as a special case when wrapped in a tag:
 
@@ -204,7 +211,7 @@ The format field requires a format object. We provide several basic format objec
     ```json
     {
         "type": "triggered_tags",
-        "triggers": ["<function="],
+        "triggers": ["<function=", {"type": "token", "token": 42}],
         "tags": [
             {
                 "begin": "...",
@@ -214,7 +221,7 @@ The format field requires a format object. We provide several basic format objec
                 "end": "..."
             },
             {
-                "begin": "...",
+                "begin": {"type": "token", "token": 42},
                 "content": {
                     ...
                 },
@@ -223,9 +230,13 @@ The format field requires a format object. We provide several basic format objec
         ],
         "at_least_one": bool,
         "stop_after_first": bool,
-        "excludes": ["...", ]
+        "excludes": ["...", {"type": "token", "token": 99}]
     }
     ```
+
+    Both `triggers` and `excludes` accept a mix of strings and `TokenFormat` objects.
+    String triggers match string tag begins by prefix; token triggers match token tag begins
+    by token ID equality. Cross-type matching is not allowed.
 
     For example,
 
@@ -397,6 +408,38 @@ The format field requires a format object. We provide several basic format objec
     ```xml
     <parameter=address><parameter=street>Main St</parameter><parameter=city>New York</parameter></parameter>
     ```
+
+## TokenFormat
+
+The `TokenFormat` type allows specifying tokens by ID or text for use in `tag` begin/end,
+`triggered_tags` triggers/excludes, and `any_text` excludes:
+
+```json
+{"type": "token", "token": 42}
+{"type": "token", "token": "<|tool_call|>"}
+```
+
+- `int` value: used as a direct token ID.
+- `str` value: resolved to a token ID using `tokenizer_info` (must be provided).
+
+### Using `from_structural_tag` with TokenFormat
+
+When a structural tag contains `TokenFormat` with string tokens, `tokenizer_info` is required:
+
+```python
+import xgrammar as xgr
+
+tokenizer_info = xgr.TokenizerInfo(...)  # from your tokenizer
+grammar = xgr.Grammar.from_structural_tag(stag, tokenizer_info=tokenizer_info)
+```
+
+When using `GrammarCompiler.compile_structural_tag`, the tokenizer info is automatically
+passed from the compiler.
+
+```python
+compiler = xgr.GrammarCompiler(tokenizer_info)
+compiled = compiler.compile_structural_tag(stag)  # no extra tokenizer_info needed
+```
 
 ## Examples
 

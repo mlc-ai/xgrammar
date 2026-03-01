@@ -8,6 +8,7 @@ from typing_extensions import deprecated
 
 from .base import XGRObject, _core
 from .structural_tag import StructuralTag, StructuralTagItem
+from .tokenizer_info import TokenizerInfo
 
 
 def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]) -> str:
@@ -285,7 +286,9 @@ class Grammar(XGRObject):
     @overload
     @staticmethod
     def from_structural_tag(
-        structural_tag: Union[StructuralTag, str, Dict[str, Any]]
+        structural_tag: Union[StructuralTag, str, Dict[str, Any]],
+        *,
+        tokenizer_info: Optional["TokenizerInfo"] = None,
     ) -> "Grammar": ...
 
     @overload
@@ -304,7 +307,7 @@ class Grammar(XGRObject):
         This method supports two calling patterns:
 
         1. Single structural tag parameter:
-           from_structural_tag(structural_tag)
+           from_structural_tag(structural_tag, *, tokenizer_info=None)
 
         2. Legacy pattern (deprecated):
            from_structural_tag(tags, triggers)
@@ -313,6 +316,10 @@ class Grammar(XGRObject):
         ----------
         structural_tag : Union[StructuralTag, str, Dict[str, Any]]
             The structural tag either as a StructuralTag object, or a JSON string or a dictionary.
+
+        tokenizer_info : Optional[TokenizerInfo]
+            Optional tokenizer info for resolving string-valued TokenFormat tokens to token IDs.
+            Required when the structural tag contains TokenFormat with string token values.
 
         tags : List[StructuralTagItem]
             (Deprecated) The structural tags. Use StructuralTag class instead.
@@ -344,10 +351,13 @@ class Grammar(XGRObject):
         encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
         grammar will allow any following output, until the next trigger is encountered. See the
         Advanced Topics of the Structural Tag in XGrammar documentation for its semantic.
-        Structural Tag in XGrammar documentation for its semantic.
         """
+        tokenizer_info = kwargs.pop("tokenizer_info", None)
         structural_tag_str = _get_structural_tag_str_from_args(args, kwargs)
-        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(structural_tag_str))
+        ti_handle = tokenizer_info._handle if tokenizer_info is not None else None
+        return Grammar._create_from_handle(
+            _core.Grammar.from_structural_tag(structural_tag_str, ti_handle)
+        )
 
     @staticmethod
     def builtin_json_grammar() -> "Grammar":

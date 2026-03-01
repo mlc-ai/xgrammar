@@ -1,5 +1,67 @@
 # Advanced Topics of the Structural Tag
 
+## Token-Level Matching with TokenFormat
+
+The `TokenFormat` type enables token-level matching in structural tags. Instead of matching
+text character-by-character, you can match entire tokens by their ID. This is useful for
+models that use special tokens (e.g., `<|tool_call|>`) that may not be representable as
+plain strings.
+
+### JSON Format
+
+```json
+{"type": "token", "token": 42}
+{"type": "token", "token": "<|tool_call|>"}
+```
+
+### Where TokenFormat Can Be Used
+
+- **`tag.begin`**: Match a token as the beginning of a tag
+- **`tag.end`**: Match a token as the end of a tag
+- **`any_text.excludes`**: Exclude specific tokens from free text generation
+- **`triggered_tags.triggers`**: Use a token as a dispatch trigger
+- **`triggered_tags.excludes`**: Exclude specific tokens in free text before triggers
+
+### Example: Token-Based Tool Calling
+
+```python
+import xgrammar as xgr
+
+stag = {
+    "type": "structural_tag",
+    "format": {
+        "type": "triggered_tags",
+        "triggers": [{"type": "token", "token": 42}],
+        "tags": [{
+            "begin": {"type": "token", "token": 42},
+            "content": {"type": "json_schema", "json_schema": {"type": "object"}},
+            "end": {"type": "token", "token": 43},
+        }],
+        "excludes": [{"type": "token", "token": 99}],
+    }
+}
+
+# With int token IDs, no tokenizer_info needed
+grammar = xgr.Grammar.from_structural_tag(stag)
+
+# With string token values, tokenizer_info is required
+stag_str = {
+    "type": "structural_tag",
+    "format": {
+        "type": "tag",
+        "begin": {"type": "token", "token": "<|tool_call|>"},
+        "content": {"type": "json_schema", "json_schema": {"type": "object"}},
+        "end": {"type": "token", "token": "<|end_tool_call|>"},
+    }
+}
+tokenizer_info = xgr.TokenizerInfo(...)
+grammar = xgr.Grammar.from_structural_tag(stag_str, tokenizer_info=tokenizer_info)
+
+# GrammarCompiler auto-passes tokenizer_info
+compiler = xgr.GrammarCompiler(tokenizer_info)
+compiled = compiler.compile_structural_tag(stag_str)
+```
+
 ## Deprecated API: `Grammar.from_structural_tag(tags, triggers)`
 
 **The deprecated API is still available for backward compatibility. However, it is recommended to use the new API instead.**

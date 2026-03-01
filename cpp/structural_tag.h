@@ -9,7 +9,9 @@
 
 #include <xgrammar/exception.h>
 #include <xgrammar/grammar.h>
+#include <xgrammar/tokenizer_info.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <variant>
@@ -23,6 +25,7 @@ namespace xgrammar {
 
 // TODO(yixin): Consider moving the definition to Public API.
 
+struct TokenFormat;
 struct ConstStringFormat;
 struct JSONSchemaFormat;
 struct AnyTextFormat;
@@ -45,6 +48,15 @@ using Format = std::variant<
     TagFormat,
     TriggeredTagsFormat,
     TagsWithSeparatorFormat>;
+
+/******************** Token Format ********************/
+
+struct TokenFormat {
+  static constexpr const char* type = "token";
+  std::variant<int32_t, std::string> token;
+  TokenFormat(int32_t token_id) : token(token_id) {}
+  TokenFormat(std::string token_str) : token(std::move(token_str)) {}
+};
 
 /******************** Basic Formats ********************/
 
@@ -76,13 +88,16 @@ struct RegexFormat {
 
 struct AnyTextFormat {
   static constexpr const char* type = "any_text";
-  std::vector<std::string> excludes;
-  AnyTextFormat(std::vector<std::string> excluded_strs) : excludes(std::move(excluded_strs)) {}
+  std::vector<std::variant<std::string, TokenFormat>> excludes;
+  AnyTextFormat(std::vector<std::variant<std::string, TokenFormat>> excludes)
+      : excludes(std::move(excludes)) {}
 
  private:
-  // Detected in StructuralTagAnalyzer - supports multiple end strings
   std::vector<std::string> detected_end_strs_;
+  std::vector<int32_t> detected_end_token_ids_;
+  std::vector<int32_t> resolved_exclude_token_ids_;
   friend class StructuralTagAnalyzer;
+  friend class StructuralTagTokenResolver;
   friend class StructuralTagGrammarConverter;
 };
 
@@ -114,26 +129,30 @@ struct OrFormat {
 
 struct TagFormat {
   static constexpr const char* type = "tag";
-  std::string begin;
+  std::variant<std::string, TokenFormat> begin;
   std::shared_ptr<Format> content;
-  std::vector<std::string> end;  // Supports multiple end tokens
+  std::variant<std::vector<std::string>, TokenFormat> end;
 
-  TagFormat(std::string begin, std::shared_ptr<Format> content, std::vector<std::string> end)
+  TagFormat(
+      std::variant<std::string, TokenFormat> begin,
+      std::shared_ptr<Format> content,
+      std::variant<std::vector<std::string>, TokenFormat> end
+  )
       : begin(std::move(begin)), content(std::move(content)), end(std::move(end)) {}
 };
 
 struct TriggeredTagsFormat {
   static constexpr const char* type = "triggered_tags";
-  std::vector<std::string> triggers;
+  std::vector<std::variant<std::string, TokenFormat>> triggers;
   std::vector<TagFormat> tags;
-  std::vector<std::string> excludes;
+  std::vector<std::variant<std::string, TokenFormat>> excludes;
   bool at_least_one = false;
   bool stop_after_first = false;
 
   TriggeredTagsFormat(
-      std::vector<std::string> triggers,
+      std::vector<std::variant<std::string, TokenFormat>> triggers,
       std::vector<TagFormat> tags,
-      std::vector<std::string> excludes,
+      std::vector<std::variant<std::string, TokenFormat>> excludes,
       bool at_least_one,
       bool stop_after_first
   )
@@ -144,9 +163,12 @@ struct TriggeredTagsFormat {
         stop_after_first(stop_after_first) {}
 
  private:
-  // Detected in StructuralTagAnalyzer - supports multiple end strings
   std::vector<std::string> detected_end_strs_;
+  std::vector<int32_t> detected_end_token_ids_;
+  std::vector<int32_t> resolved_token_trigger_ids_;
+  std::vector<int32_t> resolved_exclude_token_ids_;
   friend class StructuralTagAnalyzer;
+  friend class StructuralTagTokenResolver;
   friend class StructuralTagGrammarConverter;
 };
 
@@ -166,8 +188,8 @@ struct TagsWithSeparatorFormat {
         stop_after_first(stop_after_first) {}
 
  private:
-  // Detected in StructuralTagAnalyzer - supports multiple end strings
   std::vector<std::string> detected_end_strs_;
+  std::vector<int32_t> detected_end_token_ids_;
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;
 };
@@ -186,9 +208,12 @@ struct StructuralTag {
 /*!
  * \brief Convert a structural tag JSON string to a grammar.
  * \param structural_tag_json The JSON string of the structural tag.
+ * \param tokenizer_info Optional tokenizer info for resolving string-valued TokenFormat tokens.
  * \return A grammar if the JSON is valid, otherwise an error message in std::string.
  */
-Result<Grammar, StructuralTagError> StructuralTagToGrammar(const std::string& structural_tag_json);
+Result<Grammar, StructuralTagError> StructuralTagToGrammar(
+    const std::string& structural_tag_json, const TokenizerInfo* tokenizer_info = nullptr
+);
 
 }  // namespace xgrammar
 

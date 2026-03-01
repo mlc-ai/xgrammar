@@ -1137,7 +1137,7 @@ CompiledGrammar GrammarCompilerSub::CompileJSONSchema(
 }
 
 CompiledGrammar GrammarCompilerSub::CompileStructuralTag(const std::string& structural_tag_json) {
-  auto result = Grammar::FromStructuralTag(structural_tag_json);
+  auto result = Grammar::FromStructuralTag(structural_tag_json, &tokenizer_info_);
   XGRAMMAR_CHECK(std::holds_alternative<Grammar>(result))
       << GetMessageFromVariantError(std::get<1>(result));
   return MultiThreadCompileGrammar(std::get<0>(result));
