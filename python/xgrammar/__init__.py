@@ -1,4 +1,4 @@
-from . import exception, structural_tag, testing
+from . import load_binding, structural_tag, testing
 from .builtin_structural_tag import (
     get_builtin_structural_tag,
     get_builtin_structural_tag_supported_models,
@@ -11,12 +11,6 @@ from .config import (
     set_max_recursion_depth,
 )
 from .contrib import hf
-from .exception import (
-    DeserializeFormatError,
-    DeserializeVersionError,
-    InvalidJSONError,
-    InvalidStructuralTagError,
-)
 from .grammar import Grammar, StructuralTagItem
 from .matcher import (
     BatchGrammarMatcher,
@@ -31,7 +25,6 @@ from .structural_tag import StructuralTag
 from .tokenizer_info import TokenizerInfo, VocabType
 
 __all__ = [
-    "exception",
     "structural_tag",
     "testing",
     "CompiledGrammar",
@@ -41,10 +34,6 @@ __all__ = [
     "max_recursion_depth",
     "set_max_recursion_depth",
     "hf",
-    "DeserializeFormatError",
-    "DeserializeVersionError",
-    "InvalidJSONError",
-    "InvalidStructuralTagError",
     "Grammar",
     "StructuralTagItem",
     "BatchGrammarMatcher",

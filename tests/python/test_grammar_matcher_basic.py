@@ -108,8 +108,8 @@ def test_fill_next_token_bitmask(
 
     for i, c in enumerate(input_bytes):
         matcher.fill_next_token_bitmask(token_bitmask)
-        rejected_token_ids = _get_masked_tokens_from_bitmask(
-            token_bitmask, tokenizer_info.vocab_size
+        rejected_token_ids = list(
+            _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
         )
         rejected_sizes.append(len(rejected_token_ids))
         if expected_rejected_sizes is not None:
@@ -336,7 +336,9 @@ def test_vocab_size():
     matcher.fill_next_token_bitmask(token_bitmask)
     assert token_bitmask.shape == (1, 2)
 
-    rejected_tokens = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    rejected_tokens = list(
+        _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
+    )
     assert rejected_tokens == [i for i in range(64) if i != 7]
 
 

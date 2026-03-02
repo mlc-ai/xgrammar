@@ -16,8 +16,8 @@ except ImportError:
 
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
-from .base import XGRObject, _core
-
+from .base import XGRObject
+from .tvm_ffi_binding import _ffi_api
 
 class VocabType(Enum):
     """The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of
@@ -98,7 +98,7 @@ class TokenizerInfo(XGRObject):
         if isinstance(stop_token_ids, int):
             stop_token_ids = [stop_token_ids]
         self._init_handle(
-            _core.TokenizerInfo(
+            _ffi_api.TokenizerInfo(
                 encoded_vocab, vocab_type.value, vocab_size, stop_token_ids, add_prefix_space
             )
         )
@@ -343,18 +343,18 @@ class TokenizerInfo(XGRObject):
     @property
     def vocab_type(self) -> VocabType:
         """The type of the vocabulary."""
-        return VocabType(self._handle.vocab_type)
+        return VocabType(self._handle.vocab_type())
 
     @property
     def vocab_size(self) -> int:
         """The size of the vocabulary."""
-        return self._handle.vocab_size
+        return self._handle.vocab_size()
 
     @property
     def add_prefix_space(self) -> bool:
         """Whether the tokenizer will prepend a space before the text in the tokenization
         process."""
-        return self._handle.add_prefix_space
+        return self._handle.add_prefix_space()
 
     @property
     def prepend_space_in_tokenization(self) -> bool:
@@ -372,18 +372,18 @@ class TokenizerInfo(XGRObject):
         vocabulary back to the original format of the input text. E.g. for type ByteFallback,
         the token <0x1B> is converted back to "\u001b".
         """
-        return self._handle.decoded_vocab
+        return self._handle.decoded_vocab()
 
     @property
     def stop_token_ids(self) -> List[int]:
         """The stop token ids."""
-        return self._handle.stop_token_ids
+        return self._handle.stop_token_ids()
 
     @property
     def special_token_ids(self) -> List[int]:
         """The special token ids. Special tokens include control tokens, reserved tokens,
         padded tokens, etc. Now it is automatically detected from the vocabulary."""
-        return self._handle.special_token_ids
+        return self._handle.special_token_ids()
 
     def dump_metadata(self) -> str:
         """Dump the metadata of the tokenizer to a json string. It can be used to construct the
@@ -406,7 +406,7 @@ class TokenizerInfo(XGRObject):
             The metadata string in json format.
         """
         return TokenizerInfo._create_from_handle(
-            _core.TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata)
+            _ffi_api.TokenizerInfo.from_vocab_and_metadata(encoded_vocab, metadata)
         )
 
     @staticmethod
@@ -417,7 +417,7 @@ class TokenizerInfo(XGRObject):
         It returns {"vocab_type": VocabType, "add_prefix_space": bool}.
         """
         # the metadata_str should in the format of {"vocab_type": int, "add_prefix_space": bool}
-        metadata_str = _core.TokenizerInfo._detect_metadata_from_hf(backend_str)
+        metadata_str = _ffi_api.TokenizerInfo._detect_metadata_from_hf(backend_str)
         metadata = json.loads(metadata_str)
         return {
             "vocab_type": VocabType(metadata["vocab_type"]),
@@ -450,11 +450,10 @@ class TokenizerInfo(XGRObject):
 
         Raises
         ------
-        InvalidJSONError
-            When the JSON string is invalid.
-        DeserializeFormatError
-            When the JSON string does not follow the serialization format of the tokenizer info.
-        DeserializeVersionError
-            When the __VERSION__ field in the JSON string is not the same as the current version.
+        RuntimeError
+            When the JSON string is invalid, or does not follow the serialization format of the
+            tokenizer info, or the __VERSION__ field is not the same as the current version.
         """
-        return TokenizerInfo._create_from_handle(_core.TokenizerInfo.deserialize_json(json_string))
+        return TokenizerInfo._create_from_handle(
+            _ffi_api.TokenizerInfo.deserialize_json(json_string)
+        )

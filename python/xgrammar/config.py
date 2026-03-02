@@ -2,7 +2,10 @@
 
 from contextlib import contextmanager
 
-from .base import _core
+# Use absolute import to avoid circular import when this file is loaded as xgrammar.config
+from .tvm_ffi_binding.config import get_max_recursion_depth as _get_max_recursion_depth_impl
+from .tvm_ffi_binding.config import get_serialization_version as _get_serialization_version_impl
+from .tvm_ffi_binding.config import set_max_recursion_depth as _set_max_recursion_depth_impl
 
 
 def get_max_recursion_depth() -> int:
@@ -19,7 +22,7 @@ def get_max_recursion_depth() -> int:
     max_recursion_depth : int
         The maximum allowed recursion depth.
     """
-    return _core.config.get_max_recursion_depth()
+    return _get_max_recursion_depth_impl()
 
 
 def set_max_recursion_depth(max_recursion_depth: int) -> None:
@@ -31,7 +34,7 @@ def set_max_recursion_depth(max_recursion_depth: int) -> None:
     max_recursion_depth : int
         The maximum allowed recursion depth.
     """
-    _core.config.set_max_recursion_depth(max_recursion_depth)
+    _set_max_recursion_depth_impl(max_recursion_depth)
 
 
 @contextmanager
@@ -61,4 +64,4 @@ def get_serialization_version() -> str:
     serialization_version : str
         The serialization version number.
     """
-    return _core.config.get_serialization_version()
+    return _get_serialization_version_impl()
