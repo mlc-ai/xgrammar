@@ -110,6 +110,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
     bool handled_as_repeat = false;
     const auto& parent_fsm = grammar_->per_rule_fsms[parent_state.rule_id].value();
     for (const auto& edge : parent_fsm.GetFsm().GetEdges(parent_state.element_id)) {
+      // Because of invariance, a state with a kRepeatRef edge has exactly one outgoing edge.
       if (!edge.IsRepeatRef()) continue;
       auto info = grammar_->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
       if (info.RuleId() != ref_id) continue;
