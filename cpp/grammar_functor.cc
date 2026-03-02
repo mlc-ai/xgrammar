@@ -1981,7 +1981,7 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
   std::map<int32_t, int32_t> original_state_id_to_new_id;
   original_state_id_to_new_id[fsm->GetStart()] = 0;
   std::queue<int32_t> bfs_queue;
-  std::set<std::pair<int32_t, int32_t>> hash_and_target;
+  std::set<std::pair<uint64_t, int32_t>> hash_and_target;
   bfs_queue.push(fsm->GetStart());
   // Perform a bfs to hash all the edges.
   while (!bfs_queue.empty()) {
@@ -2137,7 +2137,9 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
         auto info = grammar_->ImplPtr()->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
         int32_t ref_rule_id = info.RuleId();
         if (ref_rule_id == fsm_index) {
-          hash_and_target.insert({kSelfRecursionFlag, edge.target});
+          uint64_t base_hash = kSelfRecursionFlag;
+          uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
+          hash_and_target.insert({repeat_hash, edge.target});
         } else {
           XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value());
           uint64_t base_hash = grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value();
