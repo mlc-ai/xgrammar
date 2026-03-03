@@ -482,7 +482,9 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
       // which calls the fsm itself.
       if (fsm.GetStart() == initial_state_.element_id) {
         for (const auto& next_edge : fsm.GetFsm().GetEdges(edge.target)) {
-          if (next_edge.IsRuleRef() && next_edge.GetRefRuleId() == init_rule_id_) {
+          if ((next_edge.IsRuleRef() && next_edge.GetRefRuleId() == init_rule_id_) ||
+              (next_edge.IsRepeatRef() &&
+               fsm.GetFsm().GetRepeatEdgeInfo(next_edge.GetAuxIndex()).RuleId() == init_rule_id_)) {
             can_be_applied = true;
             for (int ch = edge.min; ch <= edge.max; ++ch) {
               speculative_mask.set(ch);

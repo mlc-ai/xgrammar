@@ -15,6 +15,7 @@ from xgrammar.testing import (
     _get_masked_tokens_from_bitmask,
     _get_matcher_from_grammar_and_tokenizer_info,
     _is_grammar_accept_string,
+    _print_grammar_fsms,
 )
 
 
@@ -779,6 +780,179 @@ def test_positive_utf8_character_class_with_quantifier():
     assert not _is_grammar_accept_string(grammar, "HELLO")  # Uppercase ASCII
     assert not _is_grammar_accept_string(grammar, "123")  # digits
     assert not _is_grammar_accept_string(grammar, "hello!")  # with special char
+
+
+def _assert_repeat_ref_active(grammar):
+    """Compile the grammar and assert that RepeatRef edges exist in the FSM."""
+    tokenizer_info = xgr.TokenizerInfo([])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    compiled = compiler.compile_grammar(grammar)
+    fsm_str = _print_grammar_fsms(compiled.grammar)
+    assert "Repeat(" in fsm_str, f"Expected RepeatRef edges in FSM, got:\n{fsm_str}"
+
+
+def test_repeat_ref_exact():
+    """Test exact repetition {200} that activates the kRepeatRef FSM path."""
+    grammar = xgr.Grammar.from_ebnf('root ::= "a"{200}')
+    _assert_repeat_ref_active(grammar)
+
+    assert _is_grammar_accept_string(grammar, "a" * 200)
+    assert not _is_grammar_accept_string(grammar, "a" * 199)
+    assert not _is_grammar_accept_string(grammar, "a" * 201)
+    assert not _is_grammar_accept_string(grammar, "")
+
+
+def test_repeat_ref_unbounded():
+    """Test unbounded repetition {200,} that activates the kRepeatRef FSM path."""
+    grammar = xgr.Grammar.from_ebnf('root ::= "a"{200,}')
+    _assert_repeat_ref_active(grammar)
+
+    assert _is_grammar_accept_string(grammar, "a" * 200)
+    assert _is_grammar_accept_string(grammar, "a" * 300)
+    assert _is_grammar_accept_string(grammar, "a" * 1000)
+    assert not _is_grammar_accept_string(grammar, "a" * 199)
+    assert not _is_grammar_accept_string(grammar, "")
+
+
+def test_repeat_ref_range():
+    """Test range repetition {100,200} that activates the kRepeatRef FSM path."""
+    grammar = xgr.Grammar.from_ebnf('root ::= "a"{100,200}')
+    _assert_repeat_ref_active(grammar)
+
+    assert _is_grammar_accept_string(grammar, "a" * 100)
+    assert _is_grammar_accept_string(grammar, "a" * 150)
+    assert _is_grammar_accept_string(grammar, "a" * 200)
+    assert not _is_grammar_accept_string(grammar, "a" * 99)
+    assert not _is_grammar_accept_string(grammar, "a" * 201)
+
+
+def test_repeat_ref_boundary():
+    """Test that {128} does NOT activate RepeatRef, but {129} does."""
+    g128 = xgr.Grammar.from_ebnf('root ::= "a"{128}')
+    tokenizer_info = xgr.TokenizerInfo([])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    fsm128 = _print_grammar_fsms(compiler.compile_grammar(g128).grammar)
+    assert "Repeat(" not in fsm128
+
+    assert _is_grammar_accept_string(g128, "a" * 128)
+    assert not _is_grammar_accept_string(g128, "a" * 127)
+    assert not _is_grammar_accept_string(g128, "a" * 129)
+
+    g129 = xgr.Grammar.from_ebnf('root ::= "a"{129}')
+    _assert_repeat_ref_active(g129)
+
+    assert _is_grammar_accept_string(g129, "a" * 129)
+    assert not _is_grammar_accept_string(g129, "a" * 128)
+    assert not _is_grammar_accept_string(g129, "a" * 130)
+
+
+def test_repeat_ref_multichar_rule():
+    """Test RepeatRef with a multi-character rule body."""
+    grammar_str = """
+        root ::= item{200}
+        item ::= "ab"
+    """
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    _assert_repeat_ref_active(grammar)
+
+    assert _is_grammar_accept_string(grammar, "ab" * 200)
+    assert not _is_grammar_accept_string(grammar, "ab" * 199)
+    assert not _is_grammar_accept_string(grammar, "ab" * 201)
+    assert not _is_grammar_accept_string(grammar, "a" * 400)
+
+
+def test_repeat_ref_range_from_zero():
+    """Test range repetition {0,200} that activates the kRepeatRef FSM path."""
+    grammar = xgr.Grammar.from_ebnf('root ::= "a"{0,200}')
+    _assert_repeat_ref_active(grammar)
+
+    assert _is_grammar_accept_string(grammar, "")
+    assert _is_grammar_accept_string(grammar, "a" * 1)
+    assert _is_grammar_accept_string(grammar, "a" * 128)
+    assert _is_grammar_accept_string(grammar, "a" * 200)
+    assert not _is_grammar_accept_string(grammar, "a" * 201)
+
+
+def test_repeat_ref_nested_inner():
+    """Test repeat containing a rule with choices (repeat wraps complex rule)."""
+    grammar_str = """
+        root ::= item{200}
+        item ::= "a" | "b"
+    """
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    _assert_repeat_ref_active(grammar)
+
+    assert _is_grammar_accept_string(grammar, "a" * 200)
+    assert _is_grammar_accept_string(grammar, "b" * 200)
+    assert _is_grammar_accept_string(grammar, "ab" * 100)
+    assert _is_grammar_accept_string(grammar, "a" * 100 + "b" * 100)
+    assert not _is_grammar_accept_string(grammar, "a" * 199)
+    assert not _is_grammar_accept_string(grammar, "a" * 201)
+    assert not _is_grammar_accept_string(grammar, "c" * 200)
+
+
+def test_repeat_ref_nested_outer():
+    """Test repeat used as part of a larger sequence (other rules wrap repeat)."""
+    grammar_str = """
+        root ::= "start-" body "-end"
+        body ::= [a-z]{200}
+    """
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    _assert_repeat_ref_active(grammar)
+
+    assert _is_grammar_accept_string(grammar, "start-" + "a" * 200 + "-end")
+    assert _is_grammar_accept_string(grammar, "start-" + "xyz" * 66 + "xy" + "-end")
+    assert not _is_grammar_accept_string(grammar, "start-" + "a" * 199 + "-end")
+    assert not _is_grammar_accept_string(grammar, "start-" + "a" * 201 + "-end")
+    assert not _is_grammar_accept_string(grammar, "a" * 200)
+
+
+def test_repeat_ref_sequence_with_repeat():
+    """Test repeat adjacent to other elements in a sequence."""
+    grammar_str = """
+        root ::= prefix middle suffix
+        prefix ::= "x"{129}
+        middle ::= [0-9]{200}
+        suffix ::= "y"{129}
+    """
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    _assert_repeat_ref_active(grammar)
+
+    assert _is_grammar_accept_string(grammar, "x" * 129 + "0" * 200 + "y" * 129)
+    assert _is_grammar_accept_string(grammar, "x" * 129 + "1234567890" * 20 + "y" * 129)
+    assert not _is_grammar_accept_string(grammar, "x" * 128 + "0" * 200 + "y" * 129)
+    assert not _is_grammar_accept_string(grammar, "x" * 129 + "0" * 199 + "y" * 129)
+    assert not _is_grammar_accept_string(grammar, "x" * 129 + "0" * 200 + "y" * 128)
+
+
+def test_repeat_ref_complex_nested():
+    """Test deeply nested structure: repeat of sequence containing repeat and choices."""
+    grammar_str = """
+        root ::= "[" row{150} "]"
+        row ::= "(" cell{130} ")" sep
+        cell ::= [a-c]
+        sep ::= "," | ""
+    """
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    _assert_repeat_ref_active(grammar)
+
+    single_row = "(" + "a" * 130 + ")"
+    # 150 rows: 149 with comma separator, last without
+    body = (single_row + ",") * 149 + single_row
+    assert _is_grammar_accept_string(grammar, "[" + body + "]")
+
+    mixed_row = "(" + "abc" * 43 + "a" + ")"
+    body_mixed = (mixed_row + ",") * 149 + mixed_row
+    assert _is_grammar_accept_string(grammar, "[" + body_mixed + "]")
+
+    # Too few cells in a row
+    short_row = "(" + "a" * 129 + ")"
+    bad_body = (short_row + ",") * 149 + short_row
+    assert not _is_grammar_accept_string(grammar, "[" + bad_body + "]")
+
+    # Too few rows
+    body_few = (single_row + ",") * 148 + single_row
+    assert not _is_grammar_accept_string(grammar, "[" + body_few + "]")
 
 
 if __name__ == "__main__":
