@@ -32,7 +32,7 @@ def get_builtin_structural_tag(
 
     Parameters
     ----------
-    model : SupportedModelStyles
+    model : BuiltinModels
         The model type of the structural tag template.
     reasoning : bool
         Whether to enable reasoning mode. i.e. whether to enable the <think>
@@ -78,7 +78,7 @@ def get_builtin_structural_tag_supported_models(
 
     Parameters
     ----------
-    strucutural_tag_style : Optional[SupportedModelStyles]
+    strucutural_tag_style : Optional[BuiltinModels]
         The structural tag style.
     Returns
     -------
@@ -121,7 +121,7 @@ def _validate_tool_function(tools: Any) -> None:
             raise ValueError("The 'parameters' key in each tool must be a dict.")
 
 
-def _register_structural_tag_function(name: str, supported_models: List[str]):
+def _register_builtin_structural_tag(name: str, supported_models: List[str]):
     """Register a structural tag template."""
 
     def decorator(func):
@@ -169,7 +169,7 @@ def _get_builtin_structural_tag_function(
 
     Parameters
     ----------
-    format_type : SupportedModelStyles
+    format_type : BuiltinModels
         The format type of the structural tag template.
         Currently supported format types are:
         - "llama": Llama3.1 style structural tag format.
@@ -206,7 +206,7 @@ def _get_builtin_structural_tag_function(
 # ---------- Each Built-in Structural Tag Function ----------
 
 
-@_register_structural_tag_function("llama", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"])
+@_register_builtin_structural_tag("llama", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"])
 def _get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Llama style structural tag format.
     Reference: https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/
@@ -260,7 +260,7 @@ def _get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@_register_structural_tag_function("kimi", ["Kimi-K2", "Kimi-K2.5"])
+@_register_builtin_structural_tag("kimi", ["Kimi-K2", "Kimi-K2.5"])
 def _get_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Kimi-K2 style structural tag format.
     Reference: https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/docs/tool_call_guidance.md
@@ -313,7 +313,7 @@ def _get_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@_register_structural_tag_function(
+@_register_builtin_structural_tag(
     "deepseek_r1", ["DeepSeek-V3.1", "DeepSeek-R1", "DeepSeek-V3.2-exp"]
 )
 def _get_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
@@ -371,7 +371,7 @@ def _get_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@_register_structural_tag_function("qwen_coder", ["Qwen3-Coder", "Qwen3-Coder-Next"])
+@_register_builtin_structural_tag("qwen_coder", ["Qwen3-Coder", "Qwen3-Coder-Next"])
 def _get_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Qwen3-Coder style structural tag format.
     Reference: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja
@@ -424,7 +424,7 @@ def _get_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@_register_structural_tag_function("qwen", ["Qwen3"])
+@_register_builtin_structural_tag("qwen", ["Qwen3"])
 def _get_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Qwen3 style structural tag format.
     Reference: https://qwen.readthedocs.io/en/latest/framework/function_call.html
@@ -477,7 +477,7 @@ def _get_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     return StructuralTag(format=sequence_format)
 
 
-@_register_structural_tag_function("harmony", ["gpt-oss"])
+@_register_builtin_structural_tag("harmony", ["gpt-oss"])
 def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get harmony(gpt-oss) style structural tag format.
     Reference: https://developers.openai.com/cookbook/articles/openai-harmony
@@ -555,7 +555,7 @@ def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     return StructuralTag(format=tags_with_separator)
 
 
-@_register_structural_tag_function("deepseek_v3_2", ["DeepSeek-V3.2"])
+@_register_builtin_structural_tag("deepseek_v3_2", ["DeepSeek-V3.2"])
 def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
@@ -609,7 +609,7 @@ def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     return StructuralTag(format=sequence_format)
 
 
-@_register_structural_tag_function("minimax", ["MiniMax-M2.5"])
+@_register_builtin_structural_tag("minimax", ["MiniMax-M2.5"])
 def _get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)

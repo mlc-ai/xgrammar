@@ -8,7 +8,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`SupportedModelStyles`): The model type. Supported values:
+- **model** (`BuiltinModels`): The model type. Supported values:
   - `"llama"`: Llama-style (e.g. Llama 3, Llama 4)
   - `"qwen"`: Qwen-style (e.g. Qwen3)
   - `"qwen_coder"`: Qwen Coder-style (e.g. Qwen3-Coder, Qwen3-Coder-Next)
