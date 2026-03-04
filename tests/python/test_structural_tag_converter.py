@@ -195,7 +195,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("</parameter>")
 )
@@ -309,7 +309,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("</parameter>")
 )
@@ -394,7 +394,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("</\uff5cDSML\uff5cparameter>")
 )
@@ -704,7 +704,7 @@ any_text_stag_grammar = [
         {"type": "tag", "begin": "BEG", "content": {"type": "any_text"}, "end": "END"},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("END"),
+  stops=("END"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -776,7 +776,7 @@ def test_no_end_anytext_format_with_excludes(instance: str, is_accepted: bool):
     }
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("<END>")
 )
@@ -785,7 +785,7 @@ triggered_tags_first ::= (("<TOOL>" any_text))
 triggered_tags_sub ::= TagDispatch(
   ("<TOOL>", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -820,7 +820,7 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -837,7 +837,7 @@ triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -854,7 +854,7 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -918,7 +918,7 @@ triggered_tags_group ::= (("" const_string "<end>"))
 triggered_tags ::= TagDispatch(
   ("<start>", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -981,7 +981,7 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
-  stop_str=("end"),
+  stops=("end"),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -999,7 +999,7 @@ triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
-  stop_str=("end"),
+  stops=("end"),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -1017,7 +1017,7 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=false,
-  stop_str=("end"),
+  stops=("end"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1600,7 +1600,7 @@ end_string_detector_test_data = [
         r"""const_string ::= (("[TEXT]"))
 any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end>"),
+  stops=("<end>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1651,7 +1651,7 @@ root ::= ((tag))
         },
         r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end2>"),
+  stops=("<end2>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1660,7 +1660,7 @@ triggered_tags_first ::= (("<start2>" any_text))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=false,
-  stop_str=("<end>"),
+  stops=("<end>"),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -1668,14 +1668,14 @@ triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 const_string ::= (("[TEXT2]"))
 any_text_1 ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end>"),
+  stops=("<end>"),
   loop_after_dispatch=false,
   excludes=()
 )
 sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end3>"),
+  stops=("<end3>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1742,7 +1742,7 @@ root ::= ((tag_1))
         },
         r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end2>"),
+  stops=("<end2>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -1751,7 +1751,7 @@ triggered_tags_first ::= (("<start2>" any_text))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -1761,7 +1761,7 @@ any_text_1 ::= (([\0-\U0010ffff]*))
 sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
   stop_eos=false,
-  stop_str=("<end3>"),
+  stops=("<end3>"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -2450,7 +2450,7 @@ multiple_end_tokens_any_text_stag_grammar = [
         {"type": "tag", "begin": "BEG", "content": {"type": "any_text"}, "end": ["END1", "END2"]},
         r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("END1", "END2"),
+  stops=("END1", "END2"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -2633,7 +2633,7 @@ def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
 
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("."),
+  stops=("."),
   loop_after_dispatch=false,
   excludes=("<end>", "</tag>")
 )
@@ -2679,7 +2679,7 @@ triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=("L1", "L2")
 )
@@ -2708,7 +2708,7 @@ def test_excluded_strings_in_single_any_text(instance: str, is_accepted: bool):
 
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("ABC")
 )
@@ -2744,7 +2744,7 @@ def test_excluded_any_text_within_sequence(instance: str, is_accepted: bool):
 
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=false,
   excludes=("ABC")
 )
@@ -2786,7 +2786,7 @@ def test_excludes_triggered_tags_without_end(instance: str, is_accepted: bool):
 
     expected_grammar = r"""any_text ::= TagDispatch(
   stop_eos=false,
-  stop_str=("1"),
+  stops=("1"),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -2794,7 +2794,7 @@ triggered_tags_group ::= (("" any_text))
 triggered_tags ::= TagDispatch(
   ("1", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=("ABC")
 )

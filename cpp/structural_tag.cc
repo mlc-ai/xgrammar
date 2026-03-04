@@ -851,7 +851,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const RegexFormat&
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextFormat& format) {
   // Filter out empty strings
-  std::vector<std::string> non_empty_ends;
+  std::vector<std::variant<std::string, int32_t>> non_empty_ends;
+  std::vector<std::variant<std::string, int32_t>> processed_excludes;
+  processed_excludes.reserve(format.excludes.size());
+  for (const auto& s : format.excludes) {
+    processed_excludes.push_back(s);
+  }
   for (const auto& s : format.detected_end_strs_) {
     if (!s.empty()) {
       non_empty_ends.push_back(s);
@@ -860,12 +865,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextForma
   if (!non_empty_ends.empty()) {
     // TagDispatch supports multiple stop strings
     auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, false, non_empty_ends, false, format.excludes}
+        Grammar::Impl::TagDispatch{{}, false, non_empty_ends, false, processed_excludes}
     );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else if (format.excludes.size() > 0) {
     auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, true, {}, false, format.excludes}
+        Grammar::Impl::TagDispatch{{}, true, {}, false, processed_excludes}
     );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
@@ -1061,7 +1066,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   //   Otherwise, we set stop_eos to true to generate until EOS.
 
   // Step 3.1 Get tag_rule_pairs.
-  std::vector<std::pair<std::string, int32_t>> tag_rule_pairs;
+  std::vector<std::pair<std::variant<std::string, int32_t>, int32_t>> tag_rule_pairs;
   for (int it_trigger = 0; it_trigger < static_cast<int>(format.triggers.size()); ++it_trigger) {
     const auto& trigger = format.triggers[it_trigger];
     std::vector<int> choice_elements;
@@ -1103,7 +1108,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   // Step 3.2 Add TagDispatch.
   int32_t rule_expr_id;
   bool loop_after_dispatch = !format.stop_after_first;
-  std::vector<std::string> non_empty_ends;
+  std::vector<std::variant<std::string, int32_t>> non_empty_ends;
+  std::vector<std::variant<std::string, int32_t>> processed_excludes;
+  processed_excludes.reserve(format.excludes.size());
+  for (const auto& s : format.excludes) {
+    processed_excludes.push_back(s);
+  }
   for (const auto& s : format.detected_end_strs_) {
     if (!s.empty()) {
       non_empty_ends.push_back(s);
@@ -1111,12 +1121,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   }
   if (!non_empty_ends.empty()) {
     rule_expr_id = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
-        tag_rule_pairs, false, non_empty_ends, loop_after_dispatch, format.excludes
+        tag_rule_pairs, false, non_empty_ends, loop_after_dispatch, processed_excludes
     });
   } else {
-    rule_expr_id = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch, format.excludes}
-    );
+    rule_expr_id = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
+        tag_rule_pairs, true, {}, loop_after_dispatch, processed_excludes
+    });
   }
 
   // Step 3.3 Consider at_least_one
