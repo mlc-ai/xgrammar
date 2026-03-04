@@ -47,6 +47,9 @@ def get_builtin_structural_tag(
     force_empty_reasoning : bool
         Whether to force empty reasoning mode. i.e. The model will output
         the empty thinking content at the beginning of the response.
+        Some models like Qwen3, DeepSeek-R1 and etc. prefer empty-thinking mode to disable
+        reasoning mode instead of non-thinking mode.
+
 
     Returns
     -------
