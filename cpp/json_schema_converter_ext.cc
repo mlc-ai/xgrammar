@@ -172,6 +172,40 @@ std::string XMLToolCallingConverter::GenerateArray(
   return result;
 }
 
+std::string XMLToolCallingConverter::GenerateConst(
+    const ConstSpec& spec, const std::string& rule_name
+) {
+  if (nested_object_level_ <= 1) {
+    const std::string& val = spec.json_value;
+    if (val.size() >= 2 && val.front() == '"' && val.back() == '"') {
+      return "\"" + val.substr(1, val.size() - 2) + "\"";
+    }
+    return "\"" + val + "\"";
+  }
+  return JSONSchemaConverter::GenerateConst(spec, rule_name);
+}
+
+std::string XMLToolCallingConverter::GenerateEnum(
+    const EnumSpec& spec, const std::string& rule_name
+) {
+  if (nested_object_level_ <= 1) {
+    std::string result;
+    for (size_t i = 0; i < spec.json_values.size(); ++i) {
+      if (i != 0) {
+        result += " | ";
+      }
+      const std::string& val = spec.json_values[i];
+      if (val.size() >= 2 && val.front() == '"' && val.back() == '"') {
+        result += "(\"" + val.substr(1, val.size() - 2) + "\")";
+      } else {
+        result += "(\"" + val + "\")";
+      }
+    }
+    return result;
+  }
+  return JSONSchemaConverter::GenerateEnum(spec, rule_name);
+}
+
 std::string XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
   if (nested_object_level_ <= 1) {
     return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix + "\"";

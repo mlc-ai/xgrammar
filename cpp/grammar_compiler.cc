@@ -436,33 +436,8 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
     return {true, speculative_mask};
   }
 
-  // Check if the initial state is self-recursive-like. If the state is self-recursive-like,
-  // and it covers a large part of the vocabulary, we will do speculative calculation in compiling.
-  if (!grammar_->per_rule_fsms[init_rule_id_].has_value()) {
-    if (initial_state_.sub_element_id == 0) {
-      const auto& sequence_expr = grammar_->GetGrammarExpr(initial_state_.sequence_id);
-      // A self-recursive-like rule must be a sequence.
-      if (sequence_expr.type == GrammarExprType::kSequence) {
-        const auto& current_element_expr =
-            grammar_->GetGrammarExpr(sequence_expr[initial_state_.element_id]);
-        // If the current element is a character class star, then it's self-recursive without doubt.
-        if (current_element_expr.type == GrammarExprType::kCharacterClassStar) {
-          return {true, {}};
-          // If the current element is a character class, and the next element is a rule ref to
-          // itself, and the rule only has 2 elements, then it's self-recursive-like.
-        } else if (current_element_expr.type == GrammarExprType::kCharacterClass &&
-                   sequence_expr.size() == 2 && initial_state_.element_id == 0) {
-          const auto& end_element_expr = grammar_->GetGrammarExpr(sequence_expr[1]);
-          if (end_element_expr.type == GrammarExprType::kRuleRef &&
-              end_element_expr[0] == initial_state_.rule_id) {
-            return {true, {}};
-          }
-        }
-      }
-    }
-    return {false, {}};
-  }
-  // If the initial state is a FSM, we will check if the FSM is self-recursive-like.
+  // Check if the initial state is self-recursive-like via FSM.
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[init_rule_id_].has_value());
   bool can_be_applied = false;
   std::bitset<256> speculative_mask;
   const auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
@@ -482,7 +457,9 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
       // which calls the fsm itself.
       if (fsm.GetStart() == initial_state_.element_id) {
         for (const auto& next_edge : fsm.GetFsm().GetEdges(edge.target)) {
-          if (next_edge.IsRuleRef() && next_edge.GetRefRuleId() == init_rule_id_) {
+          if ((next_edge.IsRuleRef() && next_edge.GetRefRuleId() == init_rule_id_) ||
+              (next_edge.IsRepeatRef() &&
+               fsm.GetFsm().GetRepeatEdgeInfo(next_edge.GetAuxIndex()).RuleId() == init_rule_id_)) {
             can_be_applied = true;
             for (int ch = edge.min; ch <= edge.max; ++ch) {
               speculative_mask.set(ch);
@@ -520,16 +497,8 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     }
   }
 
-  bool speculative_calculation = false;
-  std::bitset<256> speculative_mask;
-  if (init_rule_id_ == -1 || !grammar_->per_rule_fsms[init_rule_id_].has_value()) {
-    speculative_calculation =
-        GetSpeculativeCalculation().first &&
-        (possible_token_num >= static_cast<int>(sorted_decoded_vocab.size() / 4));
-    speculative_mask = first_char_mask;
-  } else {
-    std::tie(speculative_calculation, speculative_mask) = GetSpeculativeCalculation();
-  }
+  XGRAMMAR_DCHECK(init_rule_id_ != -1 && grammar_->per_rule_fsms[init_rule_id_].has_value());
+  auto [speculative_calculation, speculative_mask] = GetSpeculativeCalculation();
 
   int prev_matched_size = 0;
   int last_rejected_range = 0;
@@ -700,49 +669,13 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 void GrammarMatcherForTokenMaskCache::GetFirstCharacterMask(std::bitset<256>& first_character_mask
 ) {
   first_character_mask.reset();
-  const auto& sequence = grammar_->GetGrammarExpr(initial_state_.sequence_id);
-  if (!grammar_->per_rule_fsms[init_rule_id_].has_value()) {
-    const auto& sub_sequence = grammar_->GetGrammarExpr(sequence[initial_state_.element_id]);
-    switch (sub_sequence.type) {
-      case Grammar::Impl::GrammarExprType::kByteString: {
-        first_character_mask[sub_sequence[initial_state_.sub_element_id]] = true;
-        break;
-      }
-      case xgrammar::Grammar::Impl::GrammarExprType::kCharacterClass:
-      case xgrammar::Grammar::Impl::GrammarExprType::kCharacterClassStar: {
-        if (initial_state_.sub_element_id == 0) {
-          bool is_negative = sub_sequence[0];
-          for (int i = 1; i < sub_sequence.size(); i += 2) {
-            int left_char = static_cast<uint8_t>(sub_sequence[i]);
-            int right_char = static_cast<uint8_t>(sub_sequence[i + 1]);
-            for (int c = left_char; c <= right_char; ++c) {
-              first_character_mask[c] = true;
-            }
-          }
-          if (is_negative) {
-            first_character_mask = ~first_character_mask;
-          }
-          break;
-        }
-        // Otherwise, it's matching a UTF-8 character. We can optimize the matching process
-        // here.
-        for (size_t i = 0x80; i < 0xC0; ++i) {
-          first_character_mask[i] = true;
-        }
-        break;
-      }
-      default: {
-        XGRAMMAR_LOG(FATAL) << "Unsupported grammar expr type: " << static_cast<int>(sequence.type);
-      }
-    }
-  } else {
-    const auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
-    const auto& edges = fsm.GetFsm().GetEdges(initial_state_.element_id);
-    for (const auto& edge : edges) {
-      if (edge.IsCharRange()) {
-        for (int c = edge.min; c <= edge.max; ++c) {
-          first_character_mask[c] = true;
-        }
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[init_rule_id_].has_value());
+  const auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
+  const auto& edges = fsm.GetFsm().GetEdges(initial_state_.element_id);
+  for (const auto& edge : edges) {
+    if (edge.IsCharRange()) {
+      for (int c = edge.min; c <= edge.max; ++c) {
+        first_character_mask[c] = true;
       }
     }
   }
@@ -996,8 +929,6 @@ class GrammarCompilerSub {
 };
 
 CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
-  using GrammarExprType = Grammar::Impl::GrammarExprType;
-
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
 
   compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
@@ -1062,52 +993,18 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   for (int32_t rule_id = 0; rule_id < static_cast<int>(compiled_grammar_impl->grammar->NumRules());
        ++rule_id) {
     auto rule = compiled_grammar_impl->grammar->GetRule(rule_id);
-    auto rule_body = compiled_grammar_impl->grammar->GetGrammarExpr(rule.body_expr_id);
     const auto& rule_fsm = compiled_grammar_impl->grammar->per_rule_fsms[rule_id];
-    if (rule_fsm.has_value()) {
-      auto cur_stack_element =
-          ParserState(rule_id, rule.body_expr_id, 0, ParserState::kNoPrevInputPos, 0);
-      std::unordered_set<int> reachable_states;
-      rule_fsm->GetReachableStates(&reachable_states);
-      for (int i : reachable_states) {
-        cur_stack_element.element_id = i;
-        if (!rule_fsm->IsScanableState(i)) {
-          continue;
-        }
-        add_task_adaptive_token_mask(cur_stack_element, rule_id == root_rule_id);
-      }
-      continue;
-    }
-    XGRAMMAR_DCHECK(rule_body.type == GrammarExprType::kChoices);
-    for (auto sequence_id : rule_body) {
-      const auto& sequence = compiled_grammar_impl->grammar->GetGrammarExpr(sequence_id);
-      if (sequence.type == GrammarExprType::kEmptyStr) {
+    XGRAMMAR_DCHECK(rule_fsm.has_value());
+    auto cur_stack_element =
+        ParserState(rule_id, rule.body_expr_id, 0, ParserState::kNoPrevInputPos, 0);
+    std::unordered_set<int> reachable_states;
+    rule_fsm->GetReachableStates(&reachable_states);
+    for (int i : reachable_states) {
+      cur_stack_element.element_id = i;
+      if (!rule_fsm->IsScanableState(i)) {
         continue;
       }
-      XGRAMMAR_DCHECK(sequence.type == GrammarExprType::kSequence);
-      auto state = ParserState(rule_id, sequence_id, 0, ParserState::kNoPrevInputPos, 0);
-      for (int element_id = 0; element_id < sequence.size(); ++element_id) {
-        state.element_id = element_id;
-        auto element = compiled_grammar_impl->grammar->GetGrammarExpr(sequence[element_id]);
-        if (element.type == GrammarExprType::kRuleRef || element.type == GrammarExprType::kRepeat) {
-          continue;
-        }
-        if (element.type == GrammarExprType::kByteString) {
-          for (int idx = 0; idx < element.size(); ++idx) {
-            state.sub_element_id = idx;
-            add_task_adaptive_token_mask(state, rule_id == root_rule_id);
-          }
-        } else {
-          XGRAMMAR_DCHECK(
-              element.type == GrammarExprType::kCharacterClassStar ||
-              element.type == GrammarExprType::kCharacterClass
-          );
-          for (int left_utf8_bytes = 0; left_utf8_bytes <= 3; ++left_utf8_bytes) {
-            state.sub_element_id = left_utf8_bytes;
-            add_task_adaptive_token_mask(state, rule_id == root_rule_id);
-          }
-        }
-      }
+      add_task_adaptive_token_mask(cur_stack_element, rule_id == root_rule_id);
     }
   }
 

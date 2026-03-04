@@ -520,7 +520,9 @@ TEST(XGrammarSerializationTest, TestCompactFSM) {
     ASSERT_TRUE(json_value.is<picojson::object>());
 
     // Test literal string comparison - edges are sorted by CompactFSM
-    std::string expected = "{\"data_\":[[-1,0,2],[97,97,1],[98,98,2]],\"indptr_\":[0,2,3,3]}";
+    std::string expected =
+        "{\"edges\":{\"data_\":[[-1,0,2],[97,97,1],[98,98,2]],\"indptr_\":[0,2,3,3]},\"edge_aux_"
+        "data\":[]}";
     ASSERT_EQ(json_value.serialize(), expected);
 
     CompactFSM deserialized;
@@ -547,7 +549,9 @@ TEST(XGrammarSerializationTest, TestCompactFSM) {
     auto json_value = AutoSerializeJSONValue(compact_fsm);
 
     // Test literal string comparison
-    std::string expected = "{\"data_\":[[97,122,1],[-2,5,2],[-3,0,0]],\"indptr_\":[0,1,2,3]}";
+    std::string expected =
+        "{\"edges\":{\"data_\":[[97,122,1],[-2,5,2],[-3,0,0]],\"indptr_\":[0,1,2,3]},\"edge_aux_"
+        "data\":[]}";
     ASSERT_EQ(json_value.serialize(), expected);
 
     CompactFSM deserialized;
@@ -580,7 +584,8 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
 
     // Test literal string comparison - edges are sorted by CompactFSM
     std::string expected =
-        "[{\"data_\":[[-1,0,2],[97,97,1],[98,98,2]],\"indptr_\":[0,2,3,3]},0,[2],false,3]";
+        "[{\"edges\":{\"data_\":[[-1,0,2],[97,97,1],[98,98,2]],\"indptr_\":[0,2,3,3]},\"edge_aux_"
+        "data\":[]},0,[2],false,3]";
     ASSERT_EQ(json_value.serialize(), expected);
 
     CompactFSMWithStartEnd deserialized;
@@ -612,7 +617,8 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
 
     // Test literal string comparison
     std::string expected =
-        "[{\"data_\":[[97,122,1],[-2,5,2],[-3,0,0]],\"indptr_\":[0,1,2,3]},0,[2],false,3]";
+        "[{\"edges\":{\"data_\":[[97,122,1],[-2,5,2],[-3,0,0]],\"indptr_\":[0,1,2,3]},\"edge_aux_"
+        "data\":[]},0,[2],false,3]";
     ASSERT_EQ(json_value.serialize(), expected);
 
     CompactFSMWithStartEnd deserialized;

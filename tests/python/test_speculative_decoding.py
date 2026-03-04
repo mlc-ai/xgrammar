@@ -9,97 +9,145 @@ import xgrammar as xgr
 from xgrammar.matcher import allocate_token_bitmask
 from xgrammar.testing import _traverse_draft_tree
 
+VOCAB = ["a", "b", "c", "{", "}", '"', ":", ",", " ", "true", "false", "null"]
+VOCAB_SIZE = len(VOCAB)
 
-def test_traverse_draft_tree_linear():
-    """Test _traverse_draft_tree with a simple linear tree structure."""
-    # Create a simple grammar for JSON
+# ── Tree definitions ──────────────────────────────────────────────────────────
+
+# Linear tree: 0 -> 1 -> 2
+LINEAR_TREE = (
+    torch.tensor([1, 2, -1], dtype=torch.int64),  # next_token
+    torch.tensor([-1, -1, -1], dtype=torch.int64),  # next_sibling
+    torch.tensor([3, 6, 4], dtype=torch.int64),  # draft tokens: {, :, }
+)
+
+# Tree with siblings:
+#       0
+#      / \
+#     1   2
+SIBLING_TREE = (
+    torch.tensor([1, -1, -1], dtype=torch.int64),  # next_token
+    torch.tensor([-1, 2, -1], dtype=torch.int64),  # next_sibling
+    torch.tensor([3, 5, 4], dtype=torch.int64),  # draft tokens: {, ", }
+)
+
+
+@pytest.fixture(scope="module")
+def compiled_grammar():
+    """Compile the built-in JSON grammar with our small test vocab."""
     grammar = xgr.Grammar.builtin_json_grammar()
-
-    # Create a simple tokenizer info with some tokens
-    vocab = ["a", "b", "c", "{", "}", '"', ":", ",", " ", "true", "false", "null"]
-    tokenizer_info = xgr.TokenizerInfo(vocab, vocab_size=len(vocab), stop_token_ids=[])
-
-    # Compile the grammar
+    tokenizer_info = xgr.TokenizerInfo(VOCAB, vocab_size=VOCAB_SIZE, stop_token_ids=[])
     compiler = xgr.GrammarCompiler(tokenizer_info)
-    compiled_grammar = compiler.compile_grammar(grammar)
+    return compiler.compile_grammar(grammar)
 
-    # Create a matcher
+
+def _run_traverse(compiled_grammar, tree, **traverse_kwargs):
+    """Run _traverse_draft_tree on a tree and return (result, bitmask).
+
+    Extra keyword arguments (e.g. time_threshold) are forwarded to
+    _traverse_draft_tree.
+    """
+    retrieve_next_token, retrieve_next_sibling, draft_tokens = tree
+    num_nodes = retrieve_next_token.shape[0]
     matcher = xgr.GrammarMatcher(compiled_grammar)
+    bitmask = allocate_token_bitmask(num_nodes, VOCAB_SIZE)
+    result = _traverse_draft_tree(
+        retrieve_next_token,
+        retrieve_next_sibling,
+        draft_tokens,
+        matcher,
+        bitmask,
+        **traverse_kwargs,
+    )
+    return result, bitmask
 
-    # Create test tree structure (simple linear tree: 0 -> 1 -> 2)
-    num_nodes = 3
-    retrieve_next_token = torch.tensor([1, 2, -1], dtype=torch.int64)
-    retrieve_next_sibling = torch.tensor([-1, -1, -1], dtype=torch.int64)
-    draft_tokens = torch.tensor([3, 6, 4], dtype=torch.int64)  # {, :, }
 
-    # Allocate bitmask
-    bitmask = allocate_token_bitmask(num_nodes, len(vocab))
+# ── Basic traversal tests ────────────────────────────────────────────────────
 
-    # Call the function
-    _traverse_draft_tree(retrieve_next_token, retrieve_next_sibling, draft_tokens, matcher, bitmask)
 
-    # Verify that the bitmask was filled (at least the first position should be non-zero)
+def test_traverse_draft_tree_linear(compiled_grammar):
+    """Test _traverse_draft_tree with a simple linear tree structure."""
+    result, bitmask = _run_traverse(compiled_grammar, LINEAR_TREE)
+    assert result is True
     assert bitmask[0].any(), "First position bitmask should be non-zero"
 
 
-def test_traverse_draft_tree_with_siblings():
+def test_traverse_draft_tree_with_siblings(compiled_grammar):
     """Test _traverse_draft_tree with a tree that has sibling nodes."""
-    grammar = xgr.Grammar.builtin_json_grammar()
-
-    vocab = ["a", "b", "c", "{", "}", '"', ":", ",", " ", "true", "false", "null"]
-    tokenizer_info = xgr.TokenizerInfo(vocab, vocab_size=len(vocab), stop_token_ids=[])
-
-    compiler = xgr.GrammarCompiler(tokenizer_info)
-    compiled_grammar = compiler.compile_grammar(grammar)
-
-    matcher = xgr.GrammarMatcher(compiled_grammar)
-
-    # Tree structure:
-    #       0
-    #      / \
-    #     1   2
-    num_nodes = 3
-    retrieve_next_token = torch.tensor([1, -1, -1], dtype=torch.int64)
-    retrieve_next_sibling = torch.tensor([-1, 2, -1], dtype=torch.int64)
-    draft_tokens = torch.tensor([3, 5, 4], dtype=torch.int64)  # {, ", }
-
-    bitmask = allocate_token_bitmask(num_nodes, len(vocab))
-
-    _traverse_draft_tree(retrieve_next_token, retrieve_next_sibling, draft_tokens, matcher, bitmask)
-
-    # Verify that the bitmask was filled
+    result, bitmask = _run_traverse(compiled_grammar, SIBLING_TREE)
+    assert result is True
     assert bitmask[0].any(), "Root position bitmask should be non-zero"
 
 
-def test_traverse_draft_tree_shape_assertion():
-    """Test that _traverse_draft_tree raises assertion error for mismatched shapes."""
-    grammar = xgr.Grammar.builtin_json_grammar()
+# ── Shape / dtype validation ─────────────────────────────────────────────────
 
-    vocab = ["a", "b", "c", "{", "}", '"', ":", ",", " ", "true", "false", "null"]
-    tokenizer_info = xgr.TokenizerInfo(vocab, vocab_size=len(vocab), stop_token_ids=[])
 
-    compiler = xgr.GrammarCompiler(tokenizer_info)
-    compiled_grammar = compiler.compile_grammar(grammar)
-
+def test_traverse_draft_tree_shape_assertion(compiled_grammar):
+    """Test that _traverse_draft_tree raises RuntimeError for mismatched shapes/dtypes."""
     matcher = xgr.GrammarMatcher(compiled_grammar)
-
-    # Mismatched shapes
     retrieve_next_token = torch.tensor([1, 2, -1], dtype=torch.int64)
-    retrieve_next_sibling_wrong_shape = torch.tensor([-1, -1], dtype=torch.int64)  # Wrong shape
-    retrieve_next_sibling_wrong_dtype = torch.tensor([-1, -1, -1], dtype=torch.int32)  # Wrong dtype
-    draft_tokens = torch.tensor([3, 6, 4], dtype=torch.int32)
+    draft_tokens = torch.tensor([3, 6, 4], dtype=torch.int64)
+    bitmask = allocate_token_bitmask(3, VOCAB_SIZE)
 
-    bitmask = allocate_token_bitmask(3, len(vocab))
-
+    # Wrong shape for retrieve_next_sibling
     with pytest.raises(RuntimeError):
         _traverse_draft_tree(
-            retrieve_next_token, retrieve_next_sibling_wrong_shape, draft_tokens, matcher, bitmask
+            retrieve_next_token,
+            torch.tensor([-1, -1], dtype=torch.int64),
+            draft_tokens,
+            matcher,
+            bitmask,
         )
 
+    # Wrong dtype for retrieve_next_sibling
     with pytest.raises(RuntimeError):
         _traverse_draft_tree(
-            retrieve_next_token, retrieve_next_sibling_wrong_dtype, draft_tokens, matcher, bitmask
+            retrieve_next_token,
+            torch.tensor([-1, -1, -1], dtype=torch.int32),
+            draft_tokens,
+            matcher,
+            bitmask,
         )
+
+
+# ── Timeout tests ────────────────────────────────────────────────────────────
+
+
+def test_traverse_draft_tree_timeout_no_change(compiled_grammar):
+    """Results should be identical whether time_threshold is omitted or set generously."""
+    for tree in [LINEAR_TREE, SIBLING_TREE]:
+        # Baseline with timeout explicitly disabled
+        _, bitmask_baseline = _run_traverse(compiled_grammar, tree, time_threshold=-1.0)
+
+        # Omitting time_threshold entirely (exercises the Python default)
+        result_default, bitmask_default = _run_traverse(compiled_grammar, tree)
+        assert result_default is True
+        assert torch.equal(bitmask_baseline, bitmask_default)
+
+        # Large timeout should also produce identical results
+        result_large, bitmask_large = _run_traverse(compiled_grammar, tree, time_threshold=100.0)
+        assert result_large is True
+        assert torch.equal(bitmask_baseline, bitmask_large)
+
+
+def test_traverse_draft_tree_timeout_triggers(compiled_grammar):
+    """A near-zero time_threshold should cause the traversal to time out.
+
+    Timeout is only checked for non-root nodes, so the root bitmask is always
+    computed.  We build a deep linear chain so the timeout check is exercised.
+    """
+    num_nodes = 10000
+    deep_chain = (
+        torch.tensor([i + 1 for i in range(num_nodes - 1)] + [-1], dtype=torch.int64),
+        torch.full((num_nodes,), -1, dtype=torch.int64),
+        torch.zeros(num_nodes, dtype=torch.int64),
+    )
+
+    result, bitmask = _run_traverse(compiled_grammar, deep_chain, time_threshold=1e-7)
+
+    assert result is False, "Traversal should time out with near-zero threshold"
+    # Root bitmask should still be filled since timeout is only checked for non-root nodes
+    assert bitmask[0].any(), "Root bitmask should still be computed even when timed out"
 
 
 if __name__ == "__main__":

@@ -40,6 +40,7 @@ struct alignas(8) FSMEdge {
     kEpsilon = -1,
     kRuleRef = -2,
     kEOS = -3,
+    kRepeatRef = -4,
   };
 
   inline static constexpr int kMaxChar = 255;
@@ -50,6 +51,9 @@ struct alignas(8) FSMEdge {
    * When min == EdgeType::kRuleRef, it represents a reference to a rule. max is the rule id.
    * When min == EdgeType::kEpsilon, it means the edge is an epsilon transition.
    * When min == EdgeType::kEOS, it means the edge accepts an EOS token.
+   * When min == EdgeType::kRepeatRef, it represents a repeated rule reference.
+   *   max is the index into the owning FSM's edge_aux_data (layout: [rule_id, lower, upper]).
+   *   Invariant: a state with a kRepeatRef edge has exactly one outgoing edge.
    */
   int16_t min, max;
 
@@ -104,12 +108,34 @@ struct alignas(8) FSMEdge {
   bool IsEOS() const { return min == EdgeType::kEOS; }
 
   /*!
+   * \brief Check if the edge is a repeat reference.
+   */
+  bool IsRepeatRef() const { return min == EdgeType::kRepeatRef; }
+
+  /*!
    * \brief Get the rule id of the edge.
    * \return The rule id of the edge. -1 if the edge is not a rule reference.
    */
   int32_t GetRefRuleId() const { return IsRuleRef() ? max : -1; }
 
+  /*!
+   * \brief Get the auxiliary data index for repeat reference edges.
+   * \return The index into the owning FSM's edge_aux_data. -1 if not a repeat reference.
+   */
+  int16_t GetAuxIndex() const { return IsRepeatRef() ? max : -1; }
+
+  /*! \brief Check if the edge uses auxiliary data (currently only kRepeatRef). */
+  bool IsAuxEdge() const { return IsRepeatRef(); }
+
   friend struct member_trait<FSMEdge>;
+};
+
+/*! \brief View into edge_aux_data for a repeat edge (layout: [rule_id, lower, upper]). */
+struct RepeatEdgeRef {
+  const int32_t* data;
+  int16_t RuleId() const { return static_cast<int16_t>(data[0]); }
+  int32_t Lower() const { return data[1]; }
+  int32_t Upper() const { return data[2]; }
 };
 
 /*!
@@ -148,12 +174,12 @@ class FSM {
   /*!
    * \brief Construct an FSM with a given set of edges.
    */
-  FSM(const std::vector<std::vector<FSMEdge>>& edges);
+  FSM(const std::vector<std::vector<FSMEdge>>& edges, std::vector<int32_t> edge_aux_data = {});
 
   /*!
    * \brief Construct an FSM with a given set of edges.
    */
-  FSM(std::vector<std::vector<FSMEdge>>&& edges);
+  FSM(std::vector<std::vector<FSMEdge>>&& edges, std::vector<int32_t> edge_aux_data = {});
 
   /****************** FSM Visitors ******************/
 
@@ -264,6 +290,9 @@ class FSM {
    */
   void AddEdge(int from, int to, int16_t min, int16_t max);
 
+  /*! \brief Add a raw edge with explicit type and value. */
+  void AddEdge(int from, int to, FSMEdge::EdgeType type, int16_t value);
+
   /*!
    * \brief Add an epsilon transition between two states.
    * \param from The source state.
@@ -285,6 +314,25 @@ class FSM {
    * \param to The target state.
    */
   void AddEOSEdge(int from, int to);
+
+  /*!
+   * \brief Add a repeat reference edge between states, allocating auxiliary data.
+   * \param from The source state.
+   * \param to The target state.
+   * \param rule_id The rule to repeat.
+   * \param lower Minimum repeat count.
+   * \param upper Maximum repeat count (-1 for unlimited).
+   */
+  void AddRepeatEdge(int from, int to, int32_t rule_id, int32_t lower, int32_t upper);
+
+  /*! \brief Get the edge auxiliary data. */
+  const std::vector<int32_t>& GetEdgeAuxData() const;
+
+  /*! \brief Set the edge auxiliary data (used during FSM construction). */
+  void SetEdgeAuxData(std::vector<int32_t> data);
+
+  /*! \brief Get repeat edge info by aux index. */
+  RepeatEdgeRef GetRepeatEdgeInfo(int16_t idx) const;
 
   /*!
    * \brief Add a whole FSM to the current FSM.
@@ -341,9 +389,11 @@ class CompactFSM {
   // for serialization only
   CompactFSM() = default;
 
-  explicit CompactFSM(const Compact2DArray<FSMEdge>& edges);
+  explicit CompactFSM(
+      const Compact2DArray<FSMEdge>& edges, std::vector<int32_t> edge_aux_data = {}
+  );
 
-  explicit CompactFSM(Compact2DArray<FSMEdge>&& edges);
+  explicit CompactFSM(Compact2DArray<FSMEdge>&& edges, std::vector<int32_t> edge_aux_data = {});
 
   /****************** CompactFSM Visitors ******************/
 
@@ -435,6 +485,17 @@ class CompactFSM {
    */
   void GetReachableStates(const std::vector<int>& from, std::unordered_set<int>* result) const;
 
+  /****************** CompactFSM Auxiliary Data ******************/
+
+  /*! \brief Get the edge auxiliary data. */
+  const std::vector<int32_t>& GetEdgeAuxData() const;
+
+  /*! \brief Set the edge auxiliary data (used during FSM construction). */
+  void SetEdgeAuxData(std::vector<int32_t> data);
+
+  /*! \brief Get repeat edge info by aux index. */
+  RepeatEdgeRef GetRepeatEdgeInfo(int16_t idx) const;
+
   /****************** CompactFSM Construction Methods ******************/
 
   /*!
@@ -515,7 +576,7 @@ class FSMWithStartEndBase {
    */
   bool IsNonTerminalState(int state) const {
     for (const auto& edge : fsm_.GetEdges(state)) {
-      if (edge.IsRuleRef() || edge.IsEpsilon()) {
+      if (edge.IsRuleRef() || edge.IsEpsilon() || edge.IsRepeatRef()) {
         return true;
       }
     }
@@ -840,7 +901,7 @@ inline bool FSMWithStartEndBase<FSMType>::IsLeaf() const {
   GetReachableStates(&reachable_states);
   for (const auto& state : reachable_states) {
     for (const auto& edge : fsm_.GetEdges(state)) {
-      if (edge.IsRuleRef()) {
+      if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         return false;
       }
     }
