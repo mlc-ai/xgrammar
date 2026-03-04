@@ -76,8 +76,9 @@ struct RegexFormat {
 
 struct AnyTextFormat {
   static constexpr const char* type = "any_text";
-  std::vector<std::string> excludes;
-  AnyTextFormat(std::vector<std::string> excluded_strs) : excludes(std::move(excluded_strs)) {}
+  std::vector<std::variant<std::string, int32_t>> excludes;
+  AnyTextFormat(std::vector<std::variant<std::string, int32_t>> excludes)
+      : excludes(std::move(excludes)) {}
 
  private:
   // Detected in StructuralTagAnalyzer - supports multiple end strings
@@ -126,14 +127,14 @@ struct TriggeredTagsFormat {
   static constexpr const char* type = "triggered_tags";
   std::vector<std::string> triggers;
   std::vector<TagFormat> tags;
-  std::vector<std::string> excludes;
+  std::vector<std::variant<std::string, int32_t>> excludes;
   bool at_least_one = false;
   bool stop_after_first = false;
 
   TriggeredTagsFormat(
       std::vector<std::string> triggers,
       std::vector<TagFormat> tags,
-      std::vector<std::string> excludes,
+      std::vector<std::variant<std::string, int32_t>> excludes,
       bool at_least_one,
       bool stop_after_first
   )
