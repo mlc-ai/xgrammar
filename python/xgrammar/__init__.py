@@ -1,6 +1,5 @@
 from . import exception, structural_tag, testing
 from .builtin_structural_tag import (
-    BuiltinSupportedModels,
     get_builtin_structural_tag,
     get_builtin_structural_tag_supported_models,
 )
