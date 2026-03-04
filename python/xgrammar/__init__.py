@@ -59,5 +59,4 @@ __all__ = [
     "VocabType",
     "get_builtin_structural_tag",
     "get_builtin_structural_tag_supported_models",
-    "BuiltinSupportedModels",
 ]
