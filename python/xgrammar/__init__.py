@@ -1,4 +1,8 @@
 from . import exception, structural_tag, testing
+from .builtin_structural_tag import (
+    get_builtin_structural_tag,
+    get_builtin_structural_tag_supported_models,
+)
 from .compiler import CompiledGrammar, GrammarCompiler
 from .config import (
     get_max_recursion_depth,
@@ -53,4 +57,6 @@ __all__ = [
     "StructuralTag",
     "TokenizerInfo",
     "VocabType",
+    "get_builtin_structural_tag",
+    "get_builtin_structural_tag_supported_models",
 ]
