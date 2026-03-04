@@ -98,7 +98,7 @@ _structural_tag_registry: Dict[
     BuiltinSupportedModels, Callable[[Dict[str, Any]], StructuralTag]
 ] = {}
 _structural_tag_supported_models: Dict[BuiltinSupportedModels, List[str]] = {}
-_KTHINKEXCLUDES = ["<think>", "</think>"]
+_THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 
 
 def _validate_tool_function(tools: Any) -> None:
@@ -244,10 +244,10 @@ def _get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     if len(tags) > 0:
         suffix_tag = TriggeredTagsFormat(
-            triggers=['{"name": '], tags=tags, excludes=_KTHINKEXCLUDES
+            triggers=['{"name": '], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
         )
     else:
-        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
@@ -297,10 +297,10 @@ def _get_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     if len(tags) > 0:
         suffix_tag = TriggeredTagsFormat(
-            triggers=["<|tool_call_begin|>"], tags=tags, excludes=_KTHINKEXCLUDES
+            triggers=["<|tool_call_begin|>"], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
         )
     else:
-        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
@@ -355,10 +355,10 @@ def _get_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         suffix_tag = TriggeredTagsFormat(
             triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"],
             tags=tags,
-            excludes=_KTHINKEXCLUDES,
+            excludes=_THINK_EXCLUDE_TOKENS,
         )
     else:
-        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
@@ -408,10 +408,10 @@ def _get_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     if len(tags) > 0:
         suffix_tag = TriggeredTagsFormat(
-            triggers=["<tool_call>\n<function="], tags=tags, excludes=_KTHINKEXCLUDES
+            triggers=["<tool_call>\n<function="], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
         )
     else:
-        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
@@ -460,10 +460,10 @@ def _get_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         )
     if len(tags) > 0:
         suffix_tag = TriggeredTagsFormat(
-            triggers=["<tool_call>"], tags=tags, excludes=_KTHINKEXCLUDES
+            triggers=["<tool_call>"], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
         )
     else:
-        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
@@ -592,10 +592,10 @@ def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
                     end="</｜DSML｜function_calls>\n",
                 )
             ],
-            excludes=_KTHINKEXCLUDES,
+            excludes=_THINK_EXCLUDE_TOKENS,
         )
     else:
-        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
@@ -646,10 +646,10 @@ def _get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
                     end="</minimax:tool_call>\n",
                 )
             ],
-            excludes=_KTHINKEXCLUDES,
+            excludes=_THINK_EXCLUDE_TOKENS,
         )
     else:
-        suffix_tag = AnyTextFormat(excludes=_KTHINKEXCLUDES)
+        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
