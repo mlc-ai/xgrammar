@@ -1,14 +1,12 @@
 """Tests for Token() edge support in grammar parsing, matching, and bitmask generation."""
 
 import pytest
-import torch
 
 import xgrammar as xgr
 from xgrammar.testing import (
     _ebnf_to_grammar_no_normalization,
     _get_masked_tokens_from_bitmask,
     _get_matcher_from_grammar_and_tokenizer_info,
-    _is_grammar_accept_string,
 )
 
 # --- Parser / Printer roundtrip tests ---
