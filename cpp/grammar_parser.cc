@@ -7,6 +7,7 @@
 
 #include <picojson.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -490,6 +491,7 @@ class EBNFParser {
   MacroIR::NodePtr ParseMacroValue();
 
   int32_t ParseTagDispatch();
+  int32_t ParseTokenSet();
 
   // Helper functions
 
@@ -540,6 +542,7 @@ class EBNFParser {
 const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
     EBNFParser::kMacroFunctions = {
         {"TagDispatch", [](EBNFParser* parser) { return parser->ParseTagDispatch(); }},
+        {"Token", [](EBNFParser* parser) { return parser->ParseTokenSet(); }},
 };
 
 const EBNFParser::Token& EBNFParser::Peek(int delta) const { return *(current_token_ + delta); }
@@ -1051,7 +1054,7 @@ int32_t EBNFParser::ParseTagDispatch() {
 
   Grammar::Impl::TagDispatch tag_dispatch;
 
-  // Position parameters: ("tag", rule_name)
+  // Positional parameters: ("tag", rule_name) or (token_id, rule_name)
   for (const auto& arg : args.arguments) {
     auto tuple_node = std::get_if<MacroIR::TupleNode>(arg.get());
     if (tuple_node == nullptr) {
@@ -1062,11 +1065,6 @@ int32_t EBNFParser::ParseTagDispatch() {
       ReportParseError("Each tag dispatch element must be a pair (tag, rule)", delta_element);
     }
 
-    // First element should be a string (tag)
-    auto tag_str_node = std::get_if<MacroIR::StringNode>(tuple_node->elements[0].get());
-    if (tag_str_node == nullptr || tag_str_node->value.empty()) {
-      ReportParseError("Tag must be a non-empty string literal", delta_element);
-    }
     // Second element should be an identifier (rule name)
     auto rule_name_node = std::get_if<MacroIR::IdentifierNode>(tuple_node->elements[1].get());
     if (rule_name_node == nullptr) {
@@ -1078,7 +1076,24 @@ int32_t EBNFParser::ParseTagDispatch() {
       ReportParseError("Rule \"" + rule_name_node->name + "\" is not defined", delta_element);
     }
 
-    tag_dispatch.tag_rule_pairs.push_back({tag_str_node->value, rule_id});
+    // First element: string → string trigger, integer → token trigger
+    if (auto tag_str_node = std::get_if<MacroIR::StringNode>(tuple_node->elements[0].get())) {
+      if (tag_str_node->value.empty()) {
+        ReportParseError("Tag must be a non-empty string literal", delta_element);
+      }
+      tag_dispatch.trigger_rule_pairs.push_back({tag_str_node->value, rule_id});
+    } else if (auto tag_int_node =
+                   std::get_if<MacroIR::IntegerNode>(tuple_node->elements[0].get())) {
+      if (tag_int_node->value < 0) {
+        ReportParseError("Token trigger ID must be a non-negative integer", delta_element);
+      }
+      tag_dispatch.trigger_rule_pairs.push_back({static_cast<int32_t>(tag_int_node->value), rule_id}
+      );
+    } else {
+      ReportParseError(
+          "Tag must be a non-empty string literal or a non-negative integer", delta_element
+      );
+    }
   }
 
   // stop_eos
@@ -1091,20 +1106,43 @@ int32_t EBNFParser::ParseTagDispatch() {
     tag_dispatch.stop_eos = bool_node->value;
   }
 
-  // stop_str
-  if (auto it = args.named_arguments.find("stop_str"); it != args.named_arguments.end()) {
-    auto tuple_node = std::get_if<MacroIR::TupleNode>(it->second.get());
+  // stops (new unified parameter, also accept stop_str as alias for backward compat)
+  auto stops_it = args.named_arguments.find("stops");
+  auto stop_str_it = args.named_arguments.find("stop_str");
+  if (stops_it != args.named_arguments.end() && stop_str_it != args.named_arguments.end()) {
+    ReportParseError("Cannot specify both 'stops' and 'stop_str'", delta_element);
+  }
+
+  auto parse_stops = [&](const MacroIR::NodePtr& node, bool allow_tokens) {
+    auto tuple_node = std::get_if<MacroIR::TupleNode>(node.get());
     if (tuple_node == nullptr) {
-      ReportParseError("Stop strings must be a tuple", delta_element);
+      ReportParseError("Stops must be a tuple", delta_element);
     }
 
     for (const auto& element : tuple_node->elements) {
-      auto stop_str_node = std::get_if<MacroIR::StringNode>(element.get());
-      if (stop_str_node == nullptr || stop_str_node->value.empty()) {
-        ReportParseError("Stop string must be a non-empty string literal", delta_element);
+      if (auto str_node = std::get_if<MacroIR::StringNode>(element.get())) {
+        if (str_node->value.empty()) {
+          ReportParseError("Stop string must be a non-empty string literal", delta_element);
+        }
+        tag_dispatch.stops.push_back(str_node->value);
+      } else if (allow_tokens) {
+        auto int_node = std::get_if<MacroIR::IntegerNode>(element.get());
+        if (int_node == nullptr || int_node->value < 0) {
+          ReportParseError(
+              "Stop element must be a non-empty string or non-negative integer", delta_element
+          );
+        }
+        tag_dispatch.stops.push_back(static_cast<int32_t>(int_node->value));
+      } else {
+        ReportParseError("stop_str elements must be non-empty string literals", delta_element);
       }
-      tag_dispatch.stop_str.push_back(stop_str_node->value);
     }
+  };
+
+  if (stops_it != args.named_arguments.end()) {
+    parse_stops(stops_it->second, true);
+  } else if (stop_str_it != args.named_arguments.end()) {
+    parse_stops(stop_str_it->second, false);
   }
 
   // loop_after_dispatch
@@ -1118,40 +1156,115 @@ int32_t EBNFParser::ParseTagDispatch() {
     tag_dispatch.loop_after_dispatch = bool_node->value;
   }
 
-  // exclude_str
+  // excludes (mixed string/token)
   if (auto it = args.named_arguments.find("excludes"); it != args.named_arguments.end()) {
     auto tuple_node = std::get_if<MacroIR::TupleNode>(it->second.get());
     if (tuple_node == nullptr) {
-      ReportParseError("excluded strings must be a tuple", delta_element);
+      ReportParseError("excludes must be a tuple", delta_element);
     }
 
     for (const auto& element : tuple_node->elements) {
-      auto exclude_str_node = std::get_if<MacroIR::StringNode>(element.get());
-      if (exclude_str_node == nullptr || exclude_str_node->value.empty()) {
-        ReportParseError("Stop string must be a non-empty string literal", delta_element);
-      }
-      tag_dispatch.excluded_str.push_back(exclude_str_node->value);
-    }
-  }
-
-  // Well formed check
-  if (!tag_dispatch.stop_eos && tag_dispatch.stop_str.empty()) {
-    ReportParseError(
-        "The TagDispatch must have stop_eos=true or stop_str is not empty", delta_element
-    );
-  }
-  for (const auto& exclude_str : tag_dispatch.excluded_str) {
-    for (const auto& stop_str : tag_dispatch.stop_str) {
-      if (stop_str == exclude_str) {
+      if (auto str_node = std::get_if<MacroIR::StringNode>(element.get())) {
+        if (str_node->value.empty()) {
+          ReportParseError("Exclude string must be a non-empty string literal", delta_element);
+        }
+        tag_dispatch.excludes.push_back(str_node->value);
+      } else if (auto int_node = std::get_if<MacroIR::IntegerNode>(element.get())) {
+        if (int_node->value < 0) {
+          ReportParseError("Exclude token ID must be a non-negative integer", delta_element);
+        }
+        tag_dispatch.excludes.push_back(static_cast<int32_t>(int_node->value));
+      } else {
         ReportParseError(
-            "The TagDispatch should not have a common stop_str and exclude_str: " + stop_str,
-            delta_element
+            "Exclude element must be a non-empty string or non-negative integer", delta_element
         );
       }
     }
   }
 
+  // Well-formedness checks
+
+  // Collect string stops for cross-checks
+  std::vector<std::string> stop_strings;
+  for (const auto& stop : tag_dispatch.stops) {
+    if (auto* str = std::get_if<std::string>(&stop)) {
+      stop_strings.push_back(*str);
+    }
+  }
+
+  if (!tag_dispatch.stop_eos && tag_dispatch.stops.empty()) {
+    ReportParseError(
+        "The TagDispatch must have stop_eos=true or stops is not empty", delta_element
+    );
+  }
+
+  // Check string excludes vs string stops overlap
+  for (const auto& excl : tag_dispatch.excludes) {
+    if (auto* excl_str = std::get_if<std::string>(&excl)) {
+      for (const auto& stop_str : stop_strings) {
+        if (stop_str == *excl_str) {
+          ReportParseError(
+              "The TagDispatch should not have a common stop and exclude string: " + stop_str,
+              delta_element
+          );
+        }
+      }
+    }
+  }
+
+  // Collect token trigger IDs for overlap check with exclude int IDs
+  std::vector<int32_t> token_trigger_ids;
+  for (const auto& [trigger, rule_id] : tag_dispatch.trigger_rule_pairs) {
+    if (auto* tid = std::get_if<int32_t>(&trigger)) {
+      token_trigger_ids.push_back(*tid);
+    }
+  }
+
+  for (const auto& excl : tag_dispatch.excludes) {
+    if (auto* excl_id = std::get_if<int32_t>(&excl)) {
+      for (auto tid : token_trigger_ids) {
+        if (tid == *excl_id) {
+          ReportParseError(
+              "Token trigger ID " + std::to_string(tid) + " must not overlap with exclude token ID",
+              delta_element
+          );
+        }
+      }
+    }
+  }
+
   return builder_.AddTagDispatch(tag_dispatch);
+}
+
+int32_t EBNFParser::ParseTokenSet() {
+  Consume();  // Consume Token identifier
+  auto start = current_token_;
+  auto args = ParseMacroArguments();
+  auto delta_element = start - current_token_;
+
+  if (!args.named_arguments.empty()) {
+    ReportParseError("Token() does not accept named arguments", delta_element);
+  }
+
+  if (args.arguments.empty()) {
+    ReportParseError("Token() requires at least one integer argument", delta_element);
+  }
+
+  std::vector<int32_t> token_ids;
+  for (const auto& arg : args.arguments) {
+    auto int_node = std::get_if<MacroIR::IntegerNode>(arg.get());
+    if (int_node == nullptr || int_node->value < 0) {
+      ReportParseError("Token() arguments must be non-negative integers", delta_element);
+    }
+    token_ids.push_back(static_cast<int32_t>(int_node->value));
+  }
+
+  std::sort(token_ids.begin(), token_ids.end());
+  token_ids.erase(std::unique(token_ids.begin(), token_ids.end()), token_ids.end());
+
+  return builder_.AddGrammarExpr(
+      {GrammarExprType::kTokenSet, token_ids.data(), static_cast<int32_t>(token_ids.size())}
+  );
 }
 
 int32_t EBNFParser::ParseLookaheadAssertion() {

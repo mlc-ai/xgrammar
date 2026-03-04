@@ -73,7 +73,7 @@ triggered_tags ::= TagDispatch(
   ("<function=f", triggered_tags_group),
   ("<function=g", triggered_tags_group_1),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -154,7 +154,7 @@ triggered_tags ::= TagDispatch(
   ("<function=f", triggered_tags_group),
   ("<function=g", triggered_tags_group_1),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -305,7 +305,7 @@ def test_structural_tag_mask_gen():
 def test_empty_tag_dispatch():
     grammar_str = """root ::= TagDispatch(
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true
 )
 """
@@ -316,7 +316,7 @@ def test_empty_tag_dispatch():
 
     grammar_with_stop_str_str = """root ::= TagDispatch(
   stop_eos=false,
-  stop_str=("end"),
+  stops=("end"),
   loop_after_dispatch=true
 )
 """

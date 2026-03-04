@@ -110,7 +110,7 @@ triggered_tags_group ::= (("" root_0 "end"))
 triggered_tags ::= TagDispatch(
   ("start", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -144,7 +144,7 @@ triggered_tags_group ::= (("" root_0 "end"))
 triggered_tags ::= TagDispatch(
   ("start", triggered_tags_group),
   stop_eos=true,
-  stop_str=(),
+  stops=(),
   loop_after_dispatch=true,
   excludes=()
 )

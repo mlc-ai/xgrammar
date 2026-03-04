@@ -4,6 +4,11 @@
 
 export type JSONSchemaValue = boolean | Record<string, unknown>;
 
+export interface TokenFormat {
+  type: "token";
+  token: number | string;
+}
+
 export interface ConstStringFormat {
   type: "const_string";
   value: string;
@@ -21,6 +26,7 @@ export interface QwenXMLParameterFormat {
 
 export interface AnyTextFormat {
   type: "any_text";
+  excludes?: (string | TokenFormat)[];
 }
 
 export interface GrammarFormat {
@@ -45,17 +51,18 @@ export interface OrFormat {
 
 export interface TagFormat {
   type: "tag";
-  begin: string;
+  begin: string | TokenFormat;
   content: StructuralTagFormat;
-  end: string;
+  end: string | string[] | TokenFormat;
 }
 
 export interface TriggeredTagsFormat {
   type: "triggered_tags";
-  triggers: string[];
+  triggers: (string | TokenFormat)[];
   tags: TagFormat[];
   at_least_one?: boolean;
   stop_after_first?: boolean;
+  excludes?: (string | TokenFormat)[];
 }
 
 export interface TagsWithSeparatorFormat {

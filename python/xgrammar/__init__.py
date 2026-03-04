@@ -23,7 +23,7 @@ from .matcher import (
     get_bitmask_shape,
     reset_token_bitmask,
 )
-from .structural_tag import StructuralTag
+from .structural_tag import StructuralTag, TokenFormat
 from .tokenizer_info import TokenizerInfo, VocabType
 
 __all__ = [
@@ -51,6 +51,7 @@ __all__ = [
     "get_bitmask_shape",
     "reset_token_bitmask",
     "StructuralTag",
+    "TokenFormat",
     "TokenizerInfo",
     "VocabType",
 ]

@@ -23,6 +23,13 @@ Format Union
 
 .. autodata:: Format
 
+Token Format
+------------
+
+.. autopydantic_model:: TokenFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
 Basic Formats
 -------------
 

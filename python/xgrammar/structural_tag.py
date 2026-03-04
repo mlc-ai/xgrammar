@@ -12,6 +12,18 @@ except ImportError:
 
 from pydantic import BaseModel, Field
 
+# ---------- Token Format ----------
+
+
+class TokenFormat(BaseModel):
+    """A format that represents a single token, identified by token ID or token text."""
+
+    type: Literal["token"] = "token"
+    """The type of the format."""
+    token: Union[int, str]
+    """The token ID (int) or token text (str). String tokens require tokenizer_info for resolution."""
+
+
 # ---------- Basic Formats ----------
 
 
@@ -75,8 +87,9 @@ class AnyTextFormat(BaseModel):
     type: Literal["any_text"] = "any_text"
     """The type of the format."""
 
-    excludes: List[str] = []
-    """List of strings that should not appear in the matched text."""
+    excludes: List[Union[str, TokenFormat]] = []
+    """List of strings or TokenFormat objects that should be excluded. Strings are substring
+    excludes; TokenFormat objects are token-level excludes."""
 
 
 class GrammarFormat(BaseModel):
@@ -146,12 +159,12 @@ class TagFormat(BaseModel):
 
     type: Literal["tag"] = "tag"
     """The type of the format."""
-    begin: str
-    """The begin tag."""
+    begin: Union[str, TokenFormat]
+    """The begin tag. Can be a string or a TokenFormat for token-level matching."""
     content: "Format"
     """The content of the tag. It can be any of the formats."""
-    end: Union[str, List[str]]
-    """The end tag(s). Can be a single string or a list of possible end strings."""
+    end: Union[str, List[str], TokenFormat]
+    """The end tag(s). Can be a string, list of strings, or TokenFormat."""
 
 
 class TriggeredTagsFormat(BaseModel):
@@ -195,16 +208,16 @@ class TriggeredTagsFormat(BaseModel):
 
     type: Literal["triggered_tags"] = "triggered_tags"
     """The type of the format."""
-    triggers: List[str]
-    """The triggers of the triggered tags."""
+    triggers: List[Union[str, TokenFormat]]
+    """The triggers of the triggered tags. Strings for prefix triggers; TokenFormat for token triggers."""
     tags: List[TagFormat]
     """The tags of the triggered tags."""
     at_least_one: bool = False
     """Whether at least one of the tags must be generated."""
     stop_after_first: bool = False
     """Whether to stop after the first tag is generated."""
-    excludes: List[str] = []
-    """List of strings that should not appear in the matched text."""
+    excludes: List[Union[str, TokenFormat]] = []
+    """List of strings or TokenFormat objects to exclude."""
 
 
 class TagsWithSeparatorFormat(BaseModel):
@@ -261,6 +274,7 @@ Format = Annotated[
         TagFormat,
         TriggeredTagsFormat,
         TagsWithSeparatorFormat,
+        TokenFormat,
     ],
     Field(discriminator="type"),
 ]
@@ -355,6 +369,7 @@ class StructuralTag(BaseModel):
 
 
 __all__ = [
+    "TokenFormat",
     "ConstStringFormat",
     "JSONSchemaFormat",
     "QwenXMLParameterFormat",

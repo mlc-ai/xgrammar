@@ -7,10 +7,13 @@
 #include <picojson.h>
 #include <xgrammar/exception.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 #include "grammar_functor.h"
 #include "grammar_impl.h"
@@ -18,6 +21,7 @@
 #include "support/recursion_guard.h"
 #include "support/utils.h"
 #include "xgrammar/grammar.h"
+#include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
 
@@ -58,6 +62,10 @@ class StructuralTagParser {
       const picojson::object& value
   );
 
+  static Result<TokenFormat, ISTError> ParseTokenFormat(const picojson::value& value);
+  static Result<std::vector<std::variant<std::string, TokenFormat>>, ISTError>
+  ParseMixedStringTokenArray(const picojson::array& arr, const char* field_name);
+
   int parse_format_recursion_depth_ = 0;
 };
 
@@ -70,6 +78,56 @@ Result<StructuralTag, StructuralTagError> StructuralTagParser::FromJSON(const st
   return Result<StructuralTag, StructuralTagError>::Convert(
       StructuralTagParser().ParseStructuralTag(value)
   );
+}
+
+Result<TokenFormat, ISTError> StructuralTagParser::ParseTokenFormat(const picojson::value& value) {
+  if (!value.is<picojson::object>()) {
+    return ResultErr<ISTError>("TokenFormat must be an object");
+  }
+  const auto& obj = value.get<picojson::object>();
+  auto type_it = obj.find("type");
+  if (type_it == obj.end() || !type_it->second.is<std::string>() ||
+      type_it->second.get<std::string>() != "token") {
+    return ResultErr<ISTError>("TokenFormat's type must be \"token\"");
+  }
+  auto token_it = obj.find("token");
+  if (token_it == obj.end()) {
+    return ResultErr<ISTError>("TokenFormat must have a token field");
+  }
+  if (token_it->second.is<double>()) {
+    double val = token_it->second.get<double>();
+    if (val != static_cast<int32_t>(val) || val < 0) {
+      return ResultErr<ISTError>("TokenFormat's token must be a non-negative integer or a string");
+    }
+    return ResultOk<TokenFormat>(static_cast<int32_t>(val));
+  } else if (token_it->second.is<std::string>()) {
+    return ResultOk<TokenFormat>(token_it->second.get<std::string>());
+  }
+  return ResultErr<ISTError>("TokenFormat's token must be an integer or a string");
+}
+
+Result<std::vector<std::variant<std::string, TokenFormat>>, ISTError>
+StructuralTagParser::ParseMixedStringTokenArray(
+    const picojson::array& arr, const char* field_name
+) {
+  std::vector<std::variant<std::string, TokenFormat>> result;
+  result.reserve(arr.size());
+  for (const auto& item : arr) {
+    if (item.is<std::string>()) {
+      result.push_back(item.get<std::string>());
+    } else if (item.is<picojson::object>()) {
+      auto tf = ParseTokenFormat(item);
+      if (tf.IsErr()) {
+        return ResultErr<ISTError>(std::move(tf).UnwrapErr());
+      }
+      result.push_back(std::move(tf).Unwrap());
+    } else {
+      return ResultErr<ISTError>(
+          std::string(field_name) + " array elements must be strings or TokenFormat objects"
+      );
+    }
+  }
+  return ResultOk(std::move(result));
 }
 
 Result<StructuralTag, ISTError> StructuralTagParser::ParseStructuralTag(const picojson::value& value
@@ -218,21 +276,17 @@ Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const pi
     if ((obj.find("type") == obj.end())) {
       return ResultErr<ISTError>("Any text format should not have any fields other than type");
     }
-    return ResultOk<AnyTextFormat>(std::vector<std::string>{});
+    return ResultOk<AnyTextFormat>(std::vector<std::variant<std::string, TokenFormat>>{});
   }
   if (!excluded_strs_it->second.is<picojson::array>()) {
-    return ResultErr<ISTError>("AnyText format's excluded_strs field must be an array");
+    return ResultErr<ISTError>("AnyText format's excludes field must be an array");
   }
-  const auto& excluded_strs_array = excluded_strs_it->second.get<picojson::array>();
-  std::vector<std::string> excluded_strs;
-  excluded_strs.reserve(excluded_strs_array.size());
-  for (const auto& excluded_str : excluded_strs_array) {
-    if (!excluded_str.is<std::string>()) {
-      return ResultErr<ISTError>("AnyText format's excluded_strs array must contain strings");
-    }
-    excluded_strs.push_back(excluded_str.get<std::string>());
+  auto excludes =
+      ParseMixedStringTokenArray(excluded_strs_it->second.get<picojson::array>(), "excludes");
+  if (excludes.IsErr()) {
+    return ResultErr<ISTError>(std::move(excludes).UnwrapErr());
   }
-  return ResultOk<AnyTextFormat>(std::move(excluded_strs));
+  return ResultOk<AnyTextFormat>(std::move(excludes).Unwrap());
 }
 
 Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const picojson::object& obj
@@ -315,11 +369,24 @@ Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::
 }
 
 Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::object& obj) {
-  // begin is required.
+  // begin is required - can be string or TokenFormat
   auto begin_it = obj.find("begin");
-  if (begin_it == obj.end() || !begin_it->second.is<std::string>()) {
-    return ResultErr<ISTError>("Tag format's begin field must be a string");
+  if (begin_it == obj.end()) {
+    return ResultErr<ISTError>("Tag format's begin field must be a string or TokenFormat");
   }
+  std::variant<std::string, TokenFormat> begin;
+  if (begin_it->second.is<std::string>()) {
+    begin = begin_it->second.get<std::string>();
+  } else if (begin_it->second.is<picojson::object>()) {
+    auto tf = ParseTokenFormat(begin_it->second);
+    if (tf.IsErr()) {
+      return ResultErr<ISTError>(std::move(tf).UnwrapErr());
+    }
+    begin = std::move(tf).Unwrap();
+  } else {
+    return ResultErr<ISTError>("Tag format's begin field must be a string or TokenFormat");
+  }
+
   // content is required.
   auto content_it = obj.find("content");
   if (content_it == obj.end()) {
@@ -329,36 +396,43 @@ Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::
   if (content.IsErr()) {
     return ResultErr<ISTError>(std::move(content).UnwrapErr());
   }
-  // end is required - can be string or array of strings
+
+  // end is required - can be string, array of strings, or TokenFormat
   auto end_it = obj.find("end");
   if (end_it == obj.end()) {
     return ResultErr<ISTError>("Tag format must have an end field");
   }
 
-  std::vector<std::string> end_strings;
+  std::variant<std::vector<std::string>, TokenFormat> end;
   if (end_it->second.is<std::string>()) {
-    // Single string case
-    end_strings.push_back(end_it->second.get<std::string>());
+    end = std::vector<std::string>{end_it->second.get<std::string>()};
   } else if (end_it->second.is<picojson::array>()) {
-    // Array case
     const auto& end_array = end_it->second.get<picojson::array>();
     if (end_array.empty()) {
       return ResultErr<ISTError>("Tag format's end array cannot be empty");
     }
+    std::vector<std::string> end_strings;
     for (const auto& item : end_array) {
       if (!item.is<std::string>()) {
         return ResultErr<ISTError>("Tag format's end array must contain only strings");
       }
       end_strings.push_back(item.get<std::string>());
     }
+    end = std::move(end_strings);
+  } else if (end_it->second.is<picojson::object>()) {
+    auto tf = ParseTokenFormat(end_it->second);
+    if (tf.IsErr()) {
+      return ResultErr<ISTError>(std::move(tf).UnwrapErr());
+    }
+    end = std::move(tf).Unwrap();
   } else {
-    return ResultErr<ISTError>("Tag format's end field must be a string or array of strings");
+    return ResultErr<ISTError>(
+        "Tag format's end field must be a string, array of strings, or TokenFormat"
+    );
   }
 
   return ResultOk<TagFormat>(
-      begin_it->second.get<std::string>(),
-      std::make_shared<Format>(std::move(content).Unwrap()),
-      std::move(end_strings)
+      std::move(begin), std::make_shared<Format>(std::move(content).Unwrap()), std::move(end)
   );
 }
 
@@ -370,19 +444,21 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
   if (triggers_it == obj.end() || !triggers_it->second.is<picojson::array>()) {
     return ResultErr<ISTError>("Triggered tags format must have a triggers field with an array");
   }
-  const auto& triggers_array = triggers_it->second.get<picojson::array>();
-  std::vector<std::string> excluded_strs;
-  std::vector<std::string> triggers;
-  triggers.reserve(triggers_array.size());
-  for (const auto& trigger : triggers_array) {
-    if (!trigger.is<std::string>() || trigger.get<std::string>().empty()) {
-      return ResultErr<ISTError>("Triggered tags format's triggers must be non-empty strings");
-    }
-    triggers.push_back(trigger.get<std::string>());
+  auto triggers =
+      ParseMixedStringTokenArray(triggers_it->second.get<picojson::array>(), "triggers");
+  if (triggers.IsErr()) {
+    return ResultErr<ISTError>(std::move(triggers).UnwrapErr());
   }
-  if (triggers.size() == 0) {
+  auto triggers_vec = std::move(triggers).Unwrap();
+  if (triggers_vec.empty()) {
     return ResultErr<ISTError>("Triggered tags format's triggers must be non-empty");
   }
+  for (const auto& t : triggers_vec) {
+    if (std::holds_alternative<std::string>(t) && std::get<std::string>(t).empty()) {
+      return ResultErr<ISTError>("Triggered tags format's string triggers must be non-empty");
+    }
+  }
+
   // tags is required.
   auto tags_it = obj.find("tags");
   if (tags_it == obj.end() || !tags_it->second.is<picojson::array>()) {
@@ -398,25 +474,23 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
     }
     tags.push_back(std::move(tag_format).Unwrap());
   }
-  if (tags.size() == 0) {
+  if (tags.empty()) {
     return ResultErr<ISTError>("Triggered tags format's tags must be non-empty");
   }
+
   // excludes is optional.
+  std::vector<std::variant<std::string, TokenFormat>> excludes_vec;
   auto excludes_it = obj.find("excludes");
   if (excludes_it != obj.end()) {
     if (!excludes_it->second.is<picojson::array>()) {
-      return ResultErr<ISTError>("Triggered tags format should have a excludes field with an array"
-      );
+      return ResultErr<ISTError>("Triggered tags format's excludes field must be an array");
     }
-    const auto& excludes_array = excludes_it->second.get<picojson::array>();
-    excluded_strs.reserve(excludes_array.size());
-    for (const auto& excluded_str : excludes_array) {
-      if (!excluded_str.is<std::string>() || excluded_str.get<std::string>().empty()) {
-        return ResultErr<ISTError>("Triggered tags format's excluded_strs must be non-empty strings"
-        );
-      }
-      excluded_strs.push_back(excluded_str.get<std::string>());
+    auto excludes =
+        ParseMixedStringTokenArray(excludes_it->second.get<picojson::array>(), "excludes");
+    if (excludes.IsErr()) {
+      return ResultErr<ISTError>(std::move(excludes).UnwrapErr());
     }
+    excludes_vec = std::move(excludes).Unwrap();
   }
 
   // at_least_one is optional.
@@ -438,7 +512,11 @@ Result<TriggeredTagsFormat, ISTError> StructuralTagParser::ParseTriggeredTagsFor
     stop_after_first = stop_after_first_it->second.get<bool>();
   }
   return ResultOk<TriggeredTagsFormat>(
-      std::move(triggers), std::move(tags), std::move(excluded_strs), at_least_one, stop_after_first
+      std::move(triggers_vec),
+      std::move(tags),
+      std::move(excludes_vec),
+      at_least_one,
+      stop_after_first
   );
 }
 
@@ -491,6 +569,133 @@ Result<TagsWithSeparatorFormat, ISTError> StructuralTagParser::ParseTagsWithSepa
   );
 }
 
+/************** StructuralTag Token Resolver **************/
+
+class StructuralTagTokenResolver {
+ public:
+  static std::optional<ISTError> Resolve(
+      StructuralTag* structural_tag, const TokenizerInfo* tokenizer_info
+  );
+
+ private:
+  const TokenizerInfo* tokenizer_info_;
+
+  explicit StructuralTagTokenResolver(const TokenizerInfo* ti) : tokenizer_info_(ti) {}
+
+  std::optional<ISTError> Visit(Format* format);
+
+  Result<int32_t, ISTError> ResolveToken(const TokenFormat& tf);
+
+  static void CollectTokenFormats(
+      const std::vector<std::variant<std::string, TokenFormat>>& items,
+      std::vector<int32_t>* out_ids
+  );
+};
+
+std::optional<ISTError> StructuralTagTokenResolver::Resolve(
+    StructuralTag* structural_tag, const TokenizerInfo* tokenizer_info
+) {
+  return StructuralTagTokenResolver(tokenizer_info).Visit(&structural_tag->format);
+}
+
+Result<int32_t, ISTError> StructuralTagTokenResolver::ResolveToken(const TokenFormat& tf) {
+  if (std::holds_alternative<int32_t>(tf.token)) {
+    return ResultOk(std::get<int32_t>(tf.token));
+  }
+  if (tokenizer_info_ == nullptr) {
+    return ResultErr<ISTError>(
+        "TokenFormat with string token requires tokenizer_info, but none was provided"
+    );
+  }
+  const auto& token_str = std::get<std::string>(tf.token);
+  const auto& decoded_vocab = tokenizer_info_->GetDecodedVocab();
+  for (int32_t i = 0; i < static_cast<int32_t>(decoded_vocab.size()); ++i) {
+    if (decoded_vocab[i] == token_str) {
+      return ResultOk(i);
+    }
+  }
+  return ResultErr<ISTError>("Token string \"" + token_str + "\" not found in vocabulary");
+}
+
+void StructuralTagTokenResolver::CollectTokenFormats(
+    const std::vector<std::variant<std::string, TokenFormat>>& items, std::vector<int32_t>* out_ids
+) {
+  for (const auto& item : items) {
+    if (std::holds_alternative<TokenFormat>(item)) {
+      const auto& tf = std::get<TokenFormat>(item);
+      if (std::holds_alternative<int32_t>(tf.token)) {
+        out_ids->push_back(std::get<int32_t>(tf.token));
+      }
+    }
+  }
+}
+
+std::optional<ISTError> StructuralTagTokenResolver::Visit(Format* format) {
+  return std::visit(
+      [&](auto& arg) -> std::optional<ISTError> {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, AnyTextFormat>) {
+          for (const auto& item : arg.excludes) {
+            if (std::holds_alternative<TokenFormat>(item)) {
+              auto id = ResolveToken(std::get<TokenFormat>(item));
+              if (id.IsErr()) return std::move(id).UnwrapErr();
+              arg.resolved_exclude_token_ids_.push_back(std::move(id).Unwrap());
+            }
+          }
+        } else if constexpr (std::is_same_v<T, TriggeredTagsFormat>) {
+          for (const auto& item : arg.triggers) {
+            if (std::holds_alternative<TokenFormat>(item)) {
+              auto id = ResolveToken(std::get<TokenFormat>(item));
+              if (id.IsErr()) return std::move(id).UnwrapErr();
+              arg.resolved_token_trigger_ids_.push_back(std::move(id).Unwrap());
+            }
+          }
+          for (const auto& item : arg.excludes) {
+            if (std::holds_alternative<TokenFormat>(item)) {
+              auto id = ResolveToken(std::get<TokenFormat>(item));
+              if (id.IsErr()) return std::move(id).UnwrapErr();
+              arg.resolved_exclude_token_ids_.push_back(std::move(id).Unwrap());
+            }
+          }
+          for (auto& tag : arg.tags) {
+            auto err = Visit(tag.content.get());
+            if (err.has_value()) return err;
+          }
+        } else if constexpr (std::is_same_v<T, TagFormat>) {
+          if (std::holds_alternative<TokenFormat>(arg.begin)) {
+            auto id = ResolveToken(std::get<TokenFormat>(arg.begin));
+            if (id.IsErr()) return std::move(id).UnwrapErr();
+            arg.begin = TokenFormat(std::move(id).Unwrap());
+          }
+          if (std::holds_alternative<TokenFormat>(arg.end)) {
+            auto id = ResolveToken(std::get<TokenFormat>(arg.end));
+            if (id.IsErr()) return std::move(id).UnwrapErr();
+            arg.end = TokenFormat(std::move(id).Unwrap());
+          }
+          auto err = Visit(arg.content.get());
+          if (err.has_value()) return err;
+        } else if constexpr (std::is_same_v<T, SequenceFormat>) {
+          for (auto& elem : arg.elements) {
+            auto err = Visit(&elem);
+            if (err.has_value()) return err;
+          }
+        } else if constexpr (std::is_same_v<T, OrFormat>) {
+          for (auto& elem : arg.elements) {
+            auto err = Visit(&elem);
+            if (err.has_value()) return err;
+          }
+        } else if constexpr (std::is_same_v<T, TagsWithSeparatorFormat>) {
+          for (auto& tag : arg.tags) {
+            auto err = Visit(tag.content.get());
+            if (err.has_value()) return err;
+          }
+        }
+        return std::nullopt;
+      },
+      *format
+  );
+}
+
 /************** StructuralTag Analyzer **************/
 
 /*!
@@ -533,6 +738,7 @@ class StructuralTagAnalyzer {
   std::optional<ISTError> VisitSub(TagsWithSeparatorFormat* format);
 
   std::vector<std::string> DetectEndStrings();
+  std::vector<int32_t> DetectEndTokenIds();
   bool IsUnlimited(const Format& format);
   bool IsExcluded(const Format& format);
 
@@ -547,13 +753,32 @@ std::optional<ISTError> StructuralTagAnalyzer::Analyze(StructuralTag* structural
 std::vector<std::string> StructuralTagAnalyzer::DetectEndStrings() {
   for (int i = static_cast<int>(stack_.size()) - 1; i >= 0; --i) {
     auto& format = stack_[i];
-
     if (std::holds_alternative<TagFormat*>(format)) {
       auto* tag = std::get<TagFormat*>(format);
-      return tag->end;  // Already a vector
+      if (std::holds_alternative<std::vector<std::string>>(tag->end)) {
+        return std::get<std::vector<std::string>>(tag->end);
+      }
+      return {};
     }
   }
-  return {};  // Empty vector
+  return {};
+}
+
+std::vector<int32_t> StructuralTagAnalyzer::DetectEndTokenIds() {
+  for (int i = static_cast<int>(stack_.size()) - 1; i >= 0; --i) {
+    auto& format = stack_[i];
+    if (std::holds_alternative<TagFormat*>(format)) {
+      auto* tag = std::get<TagFormat*>(format);
+      if (std::holds_alternative<TokenFormat>(tag->end)) {
+        const auto& tf = std::get<TokenFormat>(tag->end);
+        if (std::holds_alternative<int32_t>(tf.token)) {
+          return {std::get<int32_t>(tf.token)};
+        }
+      }
+      return {};
+    }
+  }
+  return {};
 }
 
 bool StructuralTagAnalyzer::IsUnlimited(const Format& format) {
@@ -583,11 +808,9 @@ bool StructuralTagAnalyzer::IsExcluded(const Format& format) {
       [&](auto&& arg) -> bool {
         using T = std::decay_t<decltype(arg)>;
         if constexpr (std::is_same_v<T, AnyTextFormat>) {
-          const auto& any_text_format = std::get<AnyTextFormat>(format);
-          return !any_text_format.excludes.empty();
+          return !arg.excludes.empty();
         } else if constexpr (std::is_same_v<T, TriggeredTagsFormat>) {
-          const auto& triggered_tags_format = std::get<TriggeredTagsFormat>(format);
-          return !triggered_tags_format.excludes.empty();
+          return !arg.excludes.empty();
         } else {
           return false;
         }
@@ -628,6 +851,7 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(JSONSchemaFormat* format
 
 std::optional<ISTError> StructuralTagAnalyzer::VisitSub(AnyTextFormat* format) {
   format->detected_end_strs_ = DetectEndStrings();
+  format->detected_end_token_ids_ = DetectEndTokenIds();
   return std::nullopt;
 }
 
@@ -696,23 +920,28 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TagFormat* format) {
   }
   auto is_content_unlimited = IsUnlimited(*(format->content));
   if (is_content_unlimited) {
-    // Check that at least one end string is non-empty
-    bool has_non_empty = false;
-    for (const auto& end_str : format->end) {
-      if (!end_str.empty()) {
-        has_non_empty = true;
-        break;
+    if (std::holds_alternative<TokenFormat>(format->end)) {
+      // Token end: always non-empty, clear it (propagated via detected_end_token_ids_)
+      format->end = std::vector<std::string>{};
+    } else {
+      auto& end_strs = std::get<std::vector<std::string>>(format->end);
+      bool has_non_empty = false;
+      for (const auto& end_str : end_strs) {
+        if (!end_str.empty()) {
+          has_non_empty = true;
+          break;
+        }
       }
-    }
-    if (!has_non_empty) {
-      if (IsExcluded(*format->content)) {
-        return std::nullopt;
-      } else {
-        return ISTError("When the content is unlimited, at least one end string must be non-empty");
+      if (!has_non_empty) {
+        if (IsExcluded(*format->content)) {
+          return std::nullopt;
+        } else {
+          return ISTError("When the content is unlimited, at least one end string must be non-empty"
+          );
+        }
       }
+      end_strs.clear();
     }
-    // Clear the end strings because they are moved to the detected_end_strs_ field.
-    format->end.clear();
   }
   return std::nullopt;
 }
@@ -725,6 +954,7 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TriggeredTagsFormat* for
     }
   }
   format->detected_end_strs_ = DetectEndStrings();
+  format->detected_end_token_ids_ = DetectEndTokenIds();
   return std::nullopt;
 }
 
@@ -736,6 +966,7 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TagsWithSeparatorFormat*
     }
   }
   format->detected_end_strs_ = DetectEndStrings();
+  format->detected_end_token_ids_ = DetectEndTokenIds();
   return std::nullopt;
 }
 
@@ -766,6 +997,9 @@ class StructuralTagGrammarConverter {
 
   bool IsPrefix(const std::string& prefix, const std::string& full_str);
 
+  int32_t BuildTagEndExpr(const TagFormat& tag);
+  int32_t BuildFullTagExpr(const TagFormat& tag, int tag_content_rule_id);
+
   GrammarBuilder grammar_builder_;
 };
 
@@ -774,6 +1008,48 @@ bool StructuralTagGrammarConverter::IsPrefix(
 ) {
   return prefix.size() <= full_str.size() &&
          std::string_view(full_str).substr(0, prefix.size()) == prefix;
+}
+
+int32_t StructuralTagGrammarConverter::BuildTagEndExpr(const TagFormat& tag) {
+  if (std::holds_alternative<TokenFormat>(tag.end)) {
+    const auto& tf = std::get<TokenFormat>(tag.end);
+    return grammar_builder_.AddTokenSet({std::get<int32_t>(tf.token)});
+  }
+  const auto& end_strs = std::get<std::vector<std::string>>(tag.end);
+  if (end_strs.empty()) {
+    return -1;
+  } else if (end_strs.size() == 1) {
+    return end_strs[0].empty() ? grammar_builder_.AddEmptyStr()
+                               : grammar_builder_.AddByteString(end_strs[0]);
+  } else {
+    std::vector<int> end_sequence_ids;
+    for (const auto& end_str : end_strs) {
+      auto end_expr = end_str.empty() ? grammar_builder_.AddEmptyStr()
+                                      : grammar_builder_.AddByteString(end_str);
+      end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr}));
+    }
+    auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
+    auto end_choices_rule_id = grammar_builder_.AddRuleWithHint("tag_end", end_choices_expr);
+    return grammar_builder_.AddRuleRef(end_choices_rule_id);
+  }
+}
+
+int32_t StructuralTagGrammarConverter::BuildFullTagExpr(
+    const TagFormat& tag, int tag_content_rule_id
+) {
+  int begin_expr;
+  if (std::holds_alternative<std::string>(tag.begin)) {
+    begin_expr = grammar_builder_.AddByteString(std::get<std::string>(tag.begin));
+  } else {
+    const auto& tf = std::get<TokenFormat>(tag.begin);
+    begin_expr = grammar_builder_.AddTokenSet({std::get<int32_t>(tf.token)});
+  }
+  auto rule_ref_expr = grammar_builder_.AddRuleRef(tag_content_rule_id);
+  auto end_expr = BuildTagEndExpr(tag);
+  if (end_expr == -1) {
+    return grammar_builder_.AddSequence({begin_expr, rule_ref_expr});
+  }
+  return grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_expr});
 }
 
 Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(const StructuralTag& structural_tag
@@ -850,23 +1126,40 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const RegexFormat&
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextFormat& format) {
-  // Filter out empty strings
-  std::vector<std::string> non_empty_ends;
+  // Build stops from detected end strings and token IDs
+  std::vector<std::variant<std::string, int32_t>> stops_v;
   for (const auto& s : format.detected_end_strs_) {
     if (!s.empty()) {
-      non_empty_ends.push_back(s);
+      stops_v.push_back(s);
     }
   }
-  if (!non_empty_ends.empty()) {
-    // TagDispatch supports multiple stop strings
+  for (int32_t tid : format.detected_end_token_ids_) {
+    stops_v.push_back(tid);
+  }
+
+  // Build excludes from string excludes and resolved token excludes
+  std::vector<std::variant<std::string, int32_t>> excludes_v;
+  for (const auto& item : format.excludes) {
+    if (std::holds_alternative<std::string>(item)) {
+      excludes_v.push_back(std::get<std::string>(item));
+    }
+  }
+  for (int32_t tid : format.resolved_exclude_token_ids_) {
+    excludes_v.push_back(tid);
+  }
+
+  bool has_stops = !stops_v.empty();
+  bool has_excludes = !excludes_v.empty();
+
+  if (has_stops) {
     auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, false, non_empty_ends, false, format.excludes}
+        Grammar::Impl::TagDispatch{{}, false, stops_v, false, excludes_v}
     );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
-  } else if (format.excludes.size() > 0) {
-    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, true, {}, false, format.excludes}
-    );
+  } else if (has_excludes) {
+    auto tag_dispatch_expr =
+        grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{{}, true, {}, false, excludes_v}
+        );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
     auto any_text_expr = grammar_builder_.AddCharacterClassStar({{0, 0x10FFFF}}, false);
@@ -913,14 +1206,33 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
     return result;
   }
   auto sub_rule_id = std::move(result).Unwrap();
-  auto begin_expr = grammar_builder_.AddByteString(format.begin);
+
+  // Build begin expression
+  int begin_expr;
+  if (std::holds_alternative<std::string>(format.begin)) {
+    begin_expr = grammar_builder_.AddByteString(std::get<std::string>(format.begin));
+  } else {
+    const auto& tf = std::get<TokenFormat>(format.begin);
+    int32_t tid = std::get<int32_t>(tf.token);
+    begin_expr = grammar_builder_.AddTokenSet({tid});
+  }
+
   auto rule_ref_expr = grammar_builder_.AddRuleRef(sub_rule_id);
 
-  if (format.end.size() > 1) {
-    // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
+  // Build end expression
+  if (std::holds_alternative<TokenFormat>(format.end)) {
+    const auto& tf = std::get<TokenFormat>(format.end);
+    int32_t tid = std::get<int32_t>(tf.token);
+    auto end_expr = grammar_builder_.AddTokenSet({tid});
+    auto sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_expr});
+    auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
+    return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
+  }
+
+  const auto& end_strs = std::get<std::vector<std::string>>(format.end);
+  if (end_strs.size() > 1) {
     std::vector<int> end_sequence_ids;
-    for (const auto& end_str : format.end) {
-      // Use AddEmptyStr() for empty strings, AddByteString() for non-empty
+    for (const auto& end_str : end_strs) {
       auto end_expr = end_str.empty() ? grammar_builder_.AddEmptyStr()
                                       : grammar_builder_.AddByteString(end_str);
       end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr}));
@@ -928,20 +1240,17 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
     auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
     auto end_choices_rule_id = grammar_builder_.AddRuleWithHint("tag_end", end_choices_expr);
     auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
-
     auto sequence_expr_id =
         grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_rule_ref_expr});
     auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
     return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
-  } else if (format.end.size() == 1) {
-    // Single end token: use directly (use AddEmptyStr() for empty strings)
-    auto end_expr = format.end[0].empty() ? grammar_builder_.AddEmptyStr()
-                                          : grammar_builder_.AddByteString(format.end[0]);
+  } else if (end_strs.size() == 1) {
+    auto end_expr = end_strs[0].empty() ? grammar_builder_.AddEmptyStr()
+                                        : grammar_builder_.AddByteString(end_strs[0]);
     auto sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_expr});
     auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
     return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
   } else {
-    // End was cleared (unlimited content case) - no end string needed
     auto sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr});
     auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
     return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
@@ -949,18 +1258,30 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTagsFormat& format) {
-  // Step 1. Visit all tags and add to grammar
+  // Step 1. Visit all tags and add to grammar. Match triggers to tags.
   std::vector<std::vector<int>> trigger_to_tag_ids(format.triggers.size());
   std::vector<int> tag_content_rule_ids;
   tag_content_rule_ids.reserve(format.tags.size());
 
   for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
     const auto& tag = format.tags[it_tag];
-    // Find matched triggers
     int matched_trigger_id = -1;
     for (int it_trigger = 0; it_trigger < static_cast<int>(format.triggers.size()); ++it_trigger) {
       const auto& trigger = format.triggers[it_trigger];
-      if (IsPrefix(trigger, tag.begin)) {
+      bool matched = false;
+      if (std::holds_alternative<std::string>(trigger) &&
+          std::holds_alternative<std::string>(tag.begin)) {
+        matched = IsPrefix(std::get<std::string>(trigger), std::get<std::string>(tag.begin));
+      } else if (std::holds_alternative<TokenFormat>(trigger) &&
+                 std::holds_alternative<TokenFormat>(tag.begin)) {
+        const auto& ttf = std::get<TokenFormat>(trigger);
+        const auto& btf = std::get<TokenFormat>(tag.begin);
+        if (std::holds_alternative<int32_t>(ttf.token) &&
+            std::holds_alternative<int32_t>(btf.token)) {
+          matched = (std::get<int32_t>(ttf.token) == std::get<int32_t>(btf.token));
+        }
+      }
+      if (matched) {
         if (matched_trigger_id != -1) {
           return ResultErr<ISTError>("One tag matches multiple triggers in a triggered tags format"
           );
@@ -973,7 +1294,6 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     }
     trigger_to_tag_ids[matched_trigger_id].push_back(it_tag);
 
-    // Add the tag content to grammar
     auto result = Visit(*tag.content);
     if (result.IsErr()) {
       return result;
@@ -981,66 +1301,36 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     tag_content_rule_ids.push_back(std::move(result).Unwrap());
   }
 
-  // at_least_one is implemented as generating any one of the tags first, then do optional
-  // triggered tags generation. That means we don't generate any text before the first tag.
-
   // Step 2. Special Case: at_least_one && stop_after_first.
-  // Then we will generate exactly one tag without text. We just do a selection between all tags.
   if (format.at_least_one && format.stop_after_first) {
     std::vector<int> choice_elements;
     for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
-      const auto& tag = format.tags[it_tag];
-      auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
-      auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
-      if (tag.end.empty()) {
-        // Unlimited content case - skip adding end string
-        choice_elements.push_back(grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id}));
-      } else if (tag.end.size() == 1) {
-        // Single end token: use directly
-        auto end_expr_id = tag.end[0].empty() ? grammar_builder_.AddEmptyStr()
-                                              : grammar_builder_.AddByteString(tag.end[0]);
-        choice_elements.push_back(
-            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
-        );
-      } else {
-        // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
-        std::vector<int> end_sequence_ids;
-        for (const auto& end_str : tag.end) {
-          auto end_expr_id = end_str.empty() ? grammar_builder_.AddEmptyStr()
-                                             : grammar_builder_.AddByteString(end_str);
-          end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr_id}));
-        }
-        auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
-        auto end_choices_rule_id = grammar_builder_.AddRuleWithHint("tag_end", end_choices_expr);
-        auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
-        choice_elements.push_back(
-            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_rule_ref_expr})
-        );
-      }
+      choice_elements.push_back(BuildFullTagExpr(format.tags[it_tag], tag_content_rule_ids[it_tag])
+      );
     }
     auto choice_expr_id = grammar_builder_.AddChoices(choice_elements);
 
-    // Handle the detected end strings.
-    if (!format.detected_end_strs_.empty()) {
+    if (!format.detected_end_strs_.empty() || !format.detected_end_token_ids_.empty()) {
       auto sub_rule_id = grammar_builder_.AddRuleWithHint("triggered_tags_sub", choice_expr_id);
       auto ref_sub_rule_expr_id = grammar_builder_.AddRuleRef(sub_rule_id);
-      if (format.detected_end_strs_.size() == 1) {
-        // Single detected end string: use directly
-        auto end_str_expr_id = format.detected_end_strs_[0].empty()
-                                   ? grammar_builder_.AddEmptyStr()
-                                   : grammar_builder_.AddByteString(format.detected_end_strs_[0]);
+      std::vector<int> end_choices;
+      for (const auto& end_str : format.detected_end_strs_) {
+        if (!end_str.empty()) {
+          end_choices.push_back(
+              grammar_builder_.AddSequence({grammar_builder_.AddByteString(end_str)})
+          );
+        }
+      }
+      for (int32_t tid : format.detected_end_token_ids_) {
+        end_choices.push_back(grammar_builder_.AddSequence({grammar_builder_.AddTokenSet({tid})}));
+      }
+      if (end_choices.size() == 1) {
+        // Unwrap single-element choices
         auto sequence_expr_id =
-            grammar_builder_.AddSequence({ref_sub_rule_expr_id, end_str_expr_id});
+            grammar_builder_.AddSequence({ref_sub_rule_expr_id, end_choices[0]});
         choice_expr_id = grammar_builder_.AddChoices({sequence_expr_id});
       } else {
-        // Multiple detected end strings: create end choices rule
-        std::vector<int> end_sequence_ids;
-        for (const auto& end_str : format.detected_end_strs_) {
-          auto end_str_expr_id = end_str.empty() ? grammar_builder_.AddEmptyStr()
-                                                 : grammar_builder_.AddByteString(end_str);
-          end_sequence_ids.push_back(grammar_builder_.AddSequence({end_str_expr_id}));
-        }
-        auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
+        auto end_choices_expr = grammar_builder_.AddChoices(end_choices);
         auto end_choices_rule_id =
             grammar_builder_.AddRuleWithHint("end_choices", end_choices_expr);
         auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
@@ -1053,113 +1343,87 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     return ResultOk(grammar_builder_.AddRuleWithHint("triggered_tags", choice_expr_id));
   }
 
-  // Step 3. Normal Case. We generate mixture of text and triggered tags.
-  // - When at_least_one is true, one tag is generated first, then we do triggered tags
-  // generation.
-  // - When stop_after_first is true, we set loop_after_dispatch of the tag dispatch to false.
-  // - When detected_end_str_ is not empty, we use that as the stop_str of the tag dispatch.
-  //   Otherwise, we set stop_eos to true to generate until EOS.
+  // Step 3. Normal Case: mixture of text and triggered tags via TagDispatch.
 
-  // Step 3.1 Get tag_rule_pairs.
-  std::vector<std::pair<std::string, int32_t>> tag_rule_pairs;
+  // Step 3.1 Build trigger_rule_pairs
+  std::vector<std::pair<std::variant<std::string, int32_t>, int32_t>> trigger_rule_pairs;
   for (int it_trigger = 0; it_trigger < static_cast<int>(format.triggers.size()); ++it_trigger) {
     const auto& trigger = format.triggers[it_trigger];
     std::vector<int> choice_elements;
     for (const auto& tag_id : trigger_to_tag_ids[it_trigger]) {
       const auto& tag = format.tags[tag_id];
-      int begin_expr_id = grammar_builder_.AddByteString(tag.begin.substr(trigger.size()));
       int rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[tag_id]);
-      if (tag.end.empty()) {
-        // Unlimited content case - skip adding end string
-        choice_elements.push_back(grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id}));
-      } else if (tag.end.size() == 1) {
-        // Single end token: use directly
-        int end_expr_id = tag.end[0].empty() ? grammar_builder_.AddEmptyStr()
-                                             : grammar_builder_.AddByteString(tag.end[0]);
-        choice_elements.push_back(
-            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
-        );
-      } else {
-        // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
-        std::vector<int> end_sequence_ids;
-        for (const auto& end_str : tag.end) {
-          int end_expr_id = end_str.empty() ? grammar_builder_.AddEmptyStr()
-                                            : grammar_builder_.AddByteString(end_str);
-          end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr_id}));
-        }
-        auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
-        auto end_choices_rule_id = grammar_builder_.AddRuleWithHint("tag_end", end_choices_expr);
-        auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
-        choice_elements.push_back(
-            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_rule_ref_expr})
-        );
+
+      // Build tag body: begin_suffix + content + end
+      std::vector<int> body_parts;
+      if (std::holds_alternative<std::string>(trigger)) {
+        const auto& trigger_str = std::get<std::string>(trigger);
+        const auto& begin_str = std::get<std::string>(tag.begin);
+        body_parts.push_back(grammar_builder_.AddByteString(begin_str.substr(trigger_str.size())));
       }
+      body_parts.push_back(rule_ref_expr_id);
+      auto end_expr = BuildTagEndExpr(tag);
+      if (end_expr != -1) {
+        body_parts.push_back(end_expr);
+      }
+      choice_elements.push_back(grammar_builder_.AddSequence(body_parts));
     }
     auto choice_expr_id = grammar_builder_.AddChoices(choice_elements);
     auto sub_rule_id = grammar_builder_.AddRuleWithHint("triggered_tags_group", choice_expr_id);
-    tag_rule_pairs.push_back(std::make_pair(trigger, sub_rule_id));
-  }
 
-  // Step 3.2 Add TagDispatch.
-  int32_t rule_expr_id;
-  bool loop_after_dispatch = !format.stop_after_first;
-  std::vector<std::string> non_empty_ends;
-  for (const auto& s : format.detected_end_strs_) {
-    if (!s.empty()) {
-      non_empty_ends.push_back(s);
+    if (std::holds_alternative<std::string>(trigger)) {
+      trigger_rule_pairs.push_back({std::get<std::string>(trigger), sub_rule_id});
+    } else {
+      const auto& tf = std::get<TokenFormat>(trigger);
+      trigger_rule_pairs.push_back({std::get<int32_t>(tf.token), sub_rule_id});
     }
   }
-  if (!non_empty_ends.empty()) {
+
+  // Step 3.2 Build stops and excludes for TagDispatch
+  std::vector<std::variant<std::string, int32_t>> stops_v;
+  for (const auto& s : format.detected_end_strs_) {
+    if (!s.empty()) {
+      stops_v.push_back(s);
+    }
+  }
+  for (int32_t tid : format.detected_end_token_ids_) {
+    stops_v.push_back(tid);
+  }
+
+  std::vector<std::variant<std::string, int32_t>> excludes_v;
+  for (const auto& item : format.excludes) {
+    if (std::holds_alternative<std::string>(item)) {
+      excludes_v.push_back(std::get<std::string>(item));
+    }
+  }
+  for (int32_t tid : format.resolved_exclude_token_ids_) {
+    excludes_v.push_back(tid);
+  }
+
+  bool loop_after_dispatch = !format.stop_after_first;
+  int32_t rule_expr_id;
+  if (!stops_v.empty()) {
     rule_expr_id = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
-        tag_rule_pairs, false, non_empty_ends, loop_after_dispatch, format.excludes
+        trigger_rule_pairs, false, stops_v, loop_after_dispatch, excludes_v
     });
   } else {
     rule_expr_id = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch, format.excludes}
+        Grammar::Impl::TagDispatch{trigger_rule_pairs, true, {}, loop_after_dispatch, excludes_v}
     );
   }
 
   // Step 3.3 Consider at_least_one
   if (format.at_least_one) {
-    // Construct the first rule
     std::vector<int> first_choice_elements;
     for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
-      const auto& tag = format.tags[it_tag];
-      auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
-      auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
-      if (tag.end.empty()) {
-        // Unlimited content case - skip adding end string
-        first_choice_elements.push_back(
-            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id})
-        );
-      } else if (tag.end.size() == 1) {
-        // Single end token: use directly
-        auto end_expr_id = tag.end[0].empty() ? grammar_builder_.AddEmptyStr()
-                                              : grammar_builder_.AddByteString(tag.end[0]);
-        first_choice_elements.push_back(
-            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_expr_id})
-        );
-      } else {
-        // Multiple end tokens: create end choices rule: Choice(Seq(end1), Seq(end2), ...)
-        std::vector<int> end_sequence_ids;
-        for (const auto& end_str : tag.end) {
-          auto end_expr_id = end_str.empty() ? grammar_builder_.AddEmptyStr()
-                                             : grammar_builder_.AddByteString(end_str);
-          end_sequence_ids.push_back(grammar_builder_.AddSequence({end_expr_id}));
-        }
-        auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
-        auto end_choices_rule_id = grammar_builder_.AddRuleWithHint("tag_end", end_choices_expr);
-        auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
-        first_choice_elements.push_back(
-            grammar_builder_.AddSequence({begin_expr_id, rule_ref_expr_id, end_rule_ref_expr})
-        );
-      }
+      first_choice_elements.push_back(
+          BuildFullTagExpr(format.tags[it_tag], tag_content_rule_ids[it_tag])
+      );
     }
     auto first_choice_expr_id = grammar_builder_.AddChoices(first_choice_elements);
     auto first_rule_id =
         grammar_builder_.AddRuleWithHint("triggered_tags_first", first_choice_expr_id);
 
-    // Construct the full rule
     auto tag_dispatch_rule_id =
         grammar_builder_.AddRuleWithHint("triggered_tags_sub", rule_expr_id);
     auto ref_first_rule_expr_id = grammar_builder_.AddRuleRef(first_rule_id);
@@ -1310,12 +1574,20 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
 
 /************** StructuralTag Conversion Public API **************/
 
-Result<Grammar, StructuralTagError> StructuralTagToGrammar(const std::string& structural_tag_json) {
+Result<Grammar, StructuralTagError> StructuralTagToGrammar(
+    const std::string& structural_tag_json, const TokenizerInfo* tokenizer_info
+) {
   auto structural_tag_result = StructuralTagParser::FromJSON(structural_tag_json);
   if (structural_tag_result.IsErr()) {
     return ResultErr(std::move(structural_tag_result).UnwrapErr());
   }
   auto structural_tag = std::move(structural_tag_result).Unwrap();
+
+  auto resolve_err = StructuralTagTokenResolver::Resolve(&structural_tag, tokenizer_info);
+  if (resolve_err.has_value()) {
+    return ResultErr(std::move(resolve_err).value());
+  }
+
   auto err = StructuralTagAnalyzer().Analyze(&structural_tag);
   if (err.has_value()) {
     return ResultErr(std::move(err).value());
