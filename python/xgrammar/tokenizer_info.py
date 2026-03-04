@@ -1,6 +1,7 @@
 """This module provides the tokenizer info class to handle the tokenizer information."""
 
 import json
+import warnings
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
@@ -16,10 +17,6 @@ except ImportError:
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 
 from .base import XGRObject, _core
-from .support import logging
-
-logging.enable_logging()
-logger = logging.getLogger(__name__)
 
 
 class VocabType(Enum):
@@ -262,7 +259,7 @@ class TokenizerInfo(XGRObject):
                 if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
                     stop_token_ids = [tokenizer.eos_token_id]
                 else:
-                    logger.warning(
+                    warnings.warn(
                         "When constructing TokenizerInfo from a huggingface tokenizer, "
                         "stop_token_ids is neither provided by user nor found from the tokenizer. "
                         "It will be automatically detected."
@@ -283,7 +280,7 @@ class TokenizerInfo(XGRObject):
                 if hasattr(tokenizer, "eos_token_id") and tokenizer.eos_token_id is not None:
                     stop_token_ids = [tokenizer.eos_token_id]
                 else:
-                    logger.warning(
+                    warnings.warn(
                         "When constructing TokenizerInfo from a huggingface tokenizer, "
                         "stop_token_ids is neither provided by user nor found from the tokenizer. "
                         "It will be automatically detected."
@@ -320,7 +317,7 @@ class TokenizerInfo(XGRObject):
                     if eos_id != -1:
                         stop_token_ids = [eos_id]
                     else:
-                        logger.warning(
+                        warnings.warn(
                             "When constructing TokenizerInfo from a huggingface tokenizer, "
                             "stop_token_ids is neither provided by user nor found from the tokenizer. "
                             "It will be automatically detected."
@@ -366,7 +363,7 @@ class TokenizerInfo(XGRObject):
 
         This property is deprecated. Use add_prefix_space instead.
         """
-        logger.warning("prepend_space_in_tokenization is deprecated. Use add_prefix_space instead.")
+        warnings.warn("prepend_space_in_tokenization is deprecated. Use add_prefix_space instead.")
         return self.add_prefix_space
 
     @property
