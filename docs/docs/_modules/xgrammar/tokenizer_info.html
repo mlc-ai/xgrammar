@@ -675,6 +675,7 @@ window.addEventListener("load", load);</script>
 <span></span><span class="sd">&quot;&quot;&quot;This module provides the tokenizer info class to handle the tokenizer information.&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
 
@@ -690,10 +691,6 @@ window.addEventListener("load", load);</script>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">PreTrainedTokenizerBase</span><span class="p">,</span> <span class="n">PreTrainedTokenizerFast</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGRObject</span><span class="p">,</span> <span class="n">_core</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.support</span><span class="w"> </span><span class="kn">import</span> <span class="n">logging</span>
-
-<span class="n">logging</span><span class="o">.</span><span class="n">enable_logging</span><span class="p">()</span>
-<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="VocabType"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.VocabType">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">VocabType</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
@@ -936,7 +933,7 @@ window.addEventListener("load", load);</script>
                 <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;eos_token_id&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">eos_token_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">stop_token_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">eos_token_id</span><span class="p">]</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                         <span class="s2">&quot;When constructing TokenizerInfo from a huggingface tokenizer, &quot;</span>
                         <span class="s2">&quot;stop_token_ids is neither provided by user nor found from the tokenizer. &quot;</span>
                         <span class="s2">&quot;It will be automatically detected.&quot;</span>
@@ -957,7 +954,7 @@ window.addEventListener("load", load);</script>
                 <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;eos_token_id&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">eos_token_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">stop_token_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">eos_token_id</span><span class="p">]</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                         <span class="s2">&quot;When constructing TokenizerInfo from a huggingface tokenizer, &quot;</span>
                         <span class="s2">&quot;stop_token_ids is neither provided by user nor found from the tokenizer. &quot;</span>
                         <span class="s2">&quot;It will be automatically detected.&quot;</span>
@@ -994,7 +991,7 @@ window.addEventListener("load", load);</script>
                     <span class="k">if</span> <span class="n">eos_id</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
                         <span class="n">stop_token_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">eos_id</span><span class="p">]</span>
                     <span class="k">else</span><span class="p">:</span>
-                        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                             <span class="s2">&quot;When constructing TokenizerInfo from a huggingface tokenizer, &quot;</span>
                             <span class="s2">&quot;stop_token_ids is neither provided by user nor found from the tokenizer. &quot;</span>
                             <span class="s2">&quot;It will be automatically detected.&quot;</span>
@@ -1040,7 +1037,7 @@ window.addEventListener("load", load);</script>
 
 <span class="sd">        This property is deprecated. Use add_prefix_space instead.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;prepend_space_in_tokenization is deprecated. Use add_prefix_space instead.&quot;</span><span class="p">)</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;prepend_space_in_tokenization is deprecated. Use add_prefix_space instead.&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_prefix_space</span>
 
     <span class="nd">@property</span>
