@@ -373,18 +373,18 @@ class TokenizerInfo(XGRObject):
         vocabulary back to the original format of the input text. E.g. for type ByteFallback,
         the token <0x1B> is converted back to "\u001b".
         """
-        return self._handle.decoded_vocab()
+        return list(self._handle.decoded_vocab())
 
     @property
     def stop_token_ids(self) -> List[int]:
         """The stop token ids."""
-        return self._handle.stop_token_ids()
+        return list(self._handle.stop_token_ids())
 
     @property
     def special_token_ids(self) -> List[int]:
         """The special token ids. Special tokens include control tokens, reserved tokens,
         padded tokens, etc. Now it is automatically detected from the vocabulary."""
-        return self._handle.special_token_ids()
+        return list(self._handle.special_token_ids())
 
     def dump_metadata(self) -> str:
         """Dump the metadata of the tokenizer to a json string. It can be used to construct the

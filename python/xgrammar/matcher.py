@@ -407,7 +407,7 @@ class GrammarMatcher(XGRObject):
         stop_token_ids : List[int]
             The ids of the stop tokens.
         """
-        return self._handle.stop_token_ids()
+        return list(self._handle.stop_token_ids())
 
     def _debug_print_internal_state(self) -> str:
         """Print the internal state of the matcher. This is used for debugging. The

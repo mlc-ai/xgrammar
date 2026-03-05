@@ -50,6 +50,25 @@ static std::vector<std::string> ArrayStringToVector(ffi::Array<ffi::String> arr)
   return out;
 }
 
+// Convert ffi::Array<ffi::Any> to vector<string>; each element can be str or bytes (like
+// accept_string).
+static std::vector<std::string> ArrayAnyToVectorString(ffi::Array<ffi::Any> arr) {
+  std::vector<std::string> out;
+  out.reserve(static_cast<size_t>(arr.size()));
+  for (int64_t i = 0; i < static_cast<int64_t>(arr.size()); ++i) {
+    ffi::AnyView view = arr[i];
+    if (view.as<ffi::Bytes>()) {
+      out.push_back(BytesToString(view.cast<ffi::Bytes>()));
+    } else if (view.as<ffi::String>()) {
+      out.push_back(view.cast<ffi::String>());
+    } else {
+      TVM_FFI_THROW(RuntimeError) << "Unsupported type in encoded_vocab: expected str or bytes";
+      XGRAMMAR_UNREACHABLE();
+    }
+  }
+  return out;
+}
+
 static ffi::Array<ffi::String> VectorStringToArray(const std::vector<std::string>& vec) {
   ffi::Array<ffi::String> arr;
   for (const auto& s : vec) {
@@ -128,7 +147,7 @@ class TokenizerInfoObj : public ffi::Object {
   explicit TokenizerInfoObj(TokenizerInfo v) : value(std::move(v)) {}
 
   TokenizerInfoObj(
-      ffi::Array<ffi::String> encoded_vocab,
+      ffi::Array<ffi::Any> encoded_vocab,
       int64_t vocab_type,
       ffi::AnyView vocab_size_opt,
       ffi::AnyView stop_token_ids_opt,
@@ -137,7 +156,7 @@ class TokenizerInfoObj : public ffi::Object {
       : value(NullObj{}) {
     XGRAMMAR_FFI_TRY_BEGIN();
     value = TokenizerInfo_Init(
-        ArrayStringToVector(encoded_vocab),
+        ArrayAnyToVectorString(encoded_vocab),
         static_cast<int>(vocab_type),
         OptionalIntFromView(vocab_size_opt),
         OptionalInt32VectorFromView(stop_token_ids_opt),
@@ -250,7 +269,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
   // TokenizerInfo: init(encoded_vocab, vocab_type, vocab_size_opt, stop_token_ids_opt,
   // add_prefix_space)
   refl::ObjectDef<TokenizerInfoObj>()
-      .def(refl::init<ffi::Array<ffi::String>, int64_t, ffi::AnyView, ffi::AnyView, bool>())
+      .def(refl::init<ffi::Array<ffi::Any>, int64_t, ffi::AnyView, ffi::AnyView, bool>())
       .def(
           "vocab_type",
           [](const TokenizerInfoObj* o) {
