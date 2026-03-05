@@ -8,9 +8,4 @@ if os.environ.get("XGRAMMAR_BUILD_DOCS") == "1":
     # During documentation builds, skip loading the native library.
     LIB = None
 else:
-    try:
-        LIB = load_lib_module("xgrammar", "xgrammar_bindings")
-    except (ImportError, OSError):
-        # In environments where the native library is not available yet,
-        # make this module a no-op instead of failing at import time.
-        LIB = None
+    LIB = load_lib_module("xgrammar", "xgrammar_bindings")
