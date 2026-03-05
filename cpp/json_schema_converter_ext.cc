@@ -108,7 +108,10 @@ std::string XMLToolCallingConverter::GetBasicAnyRuleName() const {
 
 std::string XMLToolCallingConverter::NextSeparator(bool is_end) {
   if (nested_object_level_ <= 1) {
-    return "";
+    if (is_end) {
+      return "";
+    }
+    return GetWhitespacePattern();
   }
   return JSONSchemaConverter::NextSeparator(is_end);
 }
