@@ -68,7 +68,7 @@ class CompiledGrammar(XGRObject):
         Notes
         -----
         This will check the metadata of the tokenizer info matching the serialized metadata in
-        json_str. If the metadata does not match, a RuntimeError will be raised.
+        json_str. If the metadata does not match, a DeserializeFormatError will be raised.
 
         Parameters
         ----------
@@ -85,10 +85,13 @@ class CompiledGrammar(XGRObject):
 
         Raises
         ------
-        RuntimeError
-            When the JSON string is invalid, or the JSON string does not follow the serialization
-            format of the grammar, or the tokenizer info metadata does not match, or the
-            __VERSION__ field in the JSON string is not the same as the current version.
+        InvalidJSONError
+            When the JSON string is invalid.
+        DeserializeFormatError
+            When the JSON string does not follow the serialization format of the grammar, or the
+            tokenizer info metadata does not match.
+        DeserializeVersionError
+            When the __VERSION__ field in the JSON string is not the same as the current version.
         """
         return CompiledGrammar._create_from_handle(
             _ffi_api.CompiledGrammar.deserialize_json(json_str, tokenizer_info._handle)
@@ -260,8 +263,10 @@ class GrammarCompiler(XGRObject):
 
         Raises
         ------
-        RuntimeError
-            When the structural tag is not a valid JSON string or the structural tag is not valid.
+        InvalidJSONError
+            When the structural tag is not a valid JSON string.
+        InvalidStructuralTagError
+            When the structural tag is not valid.
         TypeError
             When the arguments are invalid.
 

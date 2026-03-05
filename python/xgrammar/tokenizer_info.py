@@ -451,9 +451,12 @@ class TokenizerInfo(XGRObject):
 
         Raises
         ------
-        RuntimeError
-            When the JSON string is invalid, or does not follow the serialization format of the
-            tokenizer info, or the __VERSION__ field is not the same as the current version.
+        InvalidJSONError
+            When the JSON string is invalid.
+        DeserializeFormatError
+            When the JSON string does not follow the serialization format of the tokenizer info.
+        DeserializeVersionError
+            When the __VERSION__ field in the JSON string is not the same as the current version.
         """
         return TokenizerInfo._create_from_handle(
             _ffi_api.TokenizerInfo.deserialize_json(json_string)

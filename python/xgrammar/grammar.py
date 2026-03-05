@@ -328,8 +328,10 @@ class Grammar(XGRObject):
 
         Raises
         ------
-        RuntimeError
-            When the structural tag is not a valid JSON string or the structural tag is not valid.
+        InvalidJSONError
+            When the structural tag is not a valid JSON string.
+        InvalidStructuralTagError
+            When the structural tag is not valid.
         TypeError
             When the arguments are invalid.
 
@@ -422,8 +424,11 @@ class Grammar(XGRObject):
 
         Raises
         ------
-        RuntimeError
-            When the JSON string is invalid, or does not follow the serialization format of the
-            grammar, or the __VERSION__ field is not the same as the current version.
+        InvalidJSONError
+            When the JSON string is invalid.
+        DeserializeFormatError
+            When the JSON string does not follow the serialization format of the grammar.
+        DeserializeVersionError
+            When the __VERSION__ field in the JSON string is not the same as the current version.
         """
         return Grammar._create_from_handle(_ffi_api.Grammar.deserialize_json(json_string))
