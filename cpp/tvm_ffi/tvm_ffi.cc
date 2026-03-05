@@ -6,6 +6,7 @@
 
 #include <dlpack/dlpack.h>
 #include <tvm/ffi/any.h>
+#include <tvm/ffi/error.h>
 #include <tvm/ffi/string.h>
 #include <tvm/ffi/tvm_ffi.h>
 #include <xgrammar/xgrammar.h>
@@ -30,6 +31,8 @@ namespace ffi = tvm::ffi;
 namespace refl = tvm::ffi::reflection;
 
 namespace xgrammar {
+
+// ----- Error handling -----
 
 // ----- Helpers: convert FFI types to/from xgrammar types -----
 
@@ -109,11 +112,12 @@ static std::variant<std::string, int32_t> ParseMaxThreads(ffi::AnyView max_threa
 
 // Wrap std::exception into TVM-FFI error
 #define XGRAMMAR_FFI_TRY_BEGIN() try {
-#define XGRAMMAR_FFI_TRY_END()               \
-  }                                          \
-  catch (const std::exception& e) {          \
-    TVM_FFI_THROW(RuntimeError) << e.what(); \
-    XGRAMMAR_UNREACHABLE();                  \
+#define XGRAMMAR_FFI_TRY_END()                                                        \
+  }                                                                                   \
+  catch (const XGrammarError& e) {                                                    \
+    XGRAMMAR_LOG(INFO) << "Caught XGrammarError: " << e.GetType() << " " << e.what(); \
+    throw ffi::Error(e.GetType(), e.what(), "");                                      \
+    XGRAMMAR_UNREACHABLE();                                                           \
   }
 
 // ----- Object wrappers (hold xgrammar types, inherit ffi::Object) -----
@@ -314,8 +318,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
         XGRAMMAR_FFI_TRY_BEGIN();
         auto r = TokenizerInfo::DeserializeJSON(json_string);
         if (std::holds_alternative<SerializationError>(r)) {
-          TVM_FFI_THROW(RuntimeError)
-              << GetMessageFromVariantError(std::get<SerializationError>(r));
+          const auto& err = std::get<SerializationError>(r);
+          throw ffi::Error(GetTypeFromVariantError(err), GetMessageFromVariantError(err), "");
         }
         return ffi::ObjectRef(ffi::make_object<TokenizerInfoObj>(std::get<TokenizerInfo>(r)));
         XGRAMMAR_FFI_TRY_END();

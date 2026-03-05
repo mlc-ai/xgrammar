@@ -86,15 +86,15 @@ def test_serialize_grammar_exception():
     }
 
     expected_json["__VERSION__"] = "v1"  # Change version to trigger error
-    with pytest.raises(RuntimeError):
+    with pytest.raises(xgr.DeserializeVersionError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
 
     expected_json["__VERSION__"] = "v9"
     expected_json.pop("rules")  # Remove required field to trigger error
-    with pytest.raises(RuntimeError):
+    with pytest.raises(xgr.DeserializeFormatError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(xgr.InvalidJSONError):
         xgr.Grammar.deserialize_json("not a valid json string")
 
 

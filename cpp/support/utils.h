@@ -435,6 +435,17 @@ std::string GetMessageFromVariantError(const std::variant<Args...>& error_varian
   return std::visit([](const auto& e) { return e.what(); }, error_variant);
 }
 
+/*!
+ * \brief Get the type name from a variant of XGrammarError types (each has GetType()).
+ * \param error_variant The variant of multiple error types.
+ * \return The type string from the error variant (e.g. "DeserializeVersionError").
+ * \tparam Args The types of the error types. Each type should have GetType() const.
+ */
+template <typename... Args>
+std::string GetTypeFromVariantError(const std::variant<Args...>& error_variant) {
+  return std::visit([](const auto& e) { return e.GetType(); }, error_variant);
+}
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_SUPPORT_UTILS_H_
