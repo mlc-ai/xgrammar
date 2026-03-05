@@ -19,6 +19,7 @@ from transformers import PreTrainedTokenizerBase, PreTrainedTokenizerFast
 from .base import XGRObject
 from .tvm_ffi_binding import _ffi_api
 
+
 class VocabType(Enum):
     """The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of
     vocabularies: RAW, BYTE_FALLBACK, BYTE_LEVEL.
