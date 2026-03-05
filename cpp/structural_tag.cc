@@ -24,8 +24,39 @@ namespace xgrammar {
 // Short alias for the error type.
 using ISTError = InvalidStructuralTagError;
 
+// Forward declaration for helpers that convert Format to picojson::value.
+picojson::value FormatToJSONValue(const Format& format);
+
+picojson::value StringVectorToJSONArray(const std::vector<std::string>& vector) {
+  picojson::array array;
+  array.reserve(vector.size());
+  for (const auto& string : vector) {
+    array.push_back(picojson::value(string));
+  }
+  return picojson::value(std::move(array));
+}
+
+picojson::value FormatVectorToJSONArray(const std::vector<xgrammar::Format>& vector) {
+  picojson::array array;
+  array.reserve(vector.size());
+  for (const auto& format : vector) {
+    array.push_back(xgrammar::FormatToJSONValue(format));
+  }
+  return picojson::value(std::move(array));
+}
+
+picojson::value TagVectorToJSONArray(const std::vector<xgrammar::TagFormat>& vector) {
+  picojson::array array;
+  array.reserve(vector.size());
+  for (const auto& tag : vector) {
+    array.push_back(tag.ToJSON());
+  }
+  return picojson::value(std::move(array));
+}
+
 /******************** Format To JSON ********************/
-// Helper: convert Format variant to picojson::value (used by ToJSON() of composite formats).
+std::string FormatToJSON(const Format& format) { return FormatToJSONValue(format).serialize(); }
+
 picojson::value FormatToJSONValue(const Format& format) {
   return std::visit([&](auto&& arg) { return arg.ToJSON(); }, format);
 }
@@ -67,38 +98,22 @@ picojson::value RegexFormat::ToJSON() const {
 picojson::value AnyTextFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
-  picojson::array arr;
-  for (const auto& s : excludes) {
-    arr.push_back(picojson::value(s));
-  }
-  obj["excludes"] = picojson::value(std::move(arr));
-  picojson::array detected_end_strs_arr;
-  for (const auto& s : detected_end_strs_) {
-    detected_end_strs_arr.push_back(picojson::value(s));
-  }
-  obj["detected_end_strs"] = picojson::value(std::move(detected_end_strs_arr));
+  obj["excludes"] = StringVectorToJSONArray(excludes);
+  obj["detected_end_strs"] = StringVectorToJSONArray(detected_end_strs_);
   return picojson::value(std::move(obj));
 }
 
 picojson::value SequenceFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
-  picojson::array arr;
-  for (const auto& el : elements) {
-    arr.push_back(FormatToJSONValue(el));
-  }
-  obj["elements"] = picojson::value(std::move(arr));
+  obj["elements"] = FormatVectorToJSONArray(elements);
   return picojson::value(std::move(obj));
 }
 
 picojson::value OrFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
-  picojson::array arr;
-  for (const auto& el : elements) {
-    arr.push_back(FormatToJSONValue(el));
-  }
-  obj["elements"] = picojson::value(std::move(arr));
+  obj["elements"] = FormatVectorToJSONArray(elements);
   return picojson::value(std::move(obj));
 }
 
@@ -114,11 +129,7 @@ picojson::value TagFormat::ToJSON() const {
   if (end.size() == 1) {
     obj["end"] = picojson::value(end[0]);
   } else {
-    picojson::array end_arr;
-    for (const auto& e : end) {
-      end_arr.push_back(picojson::value(e));
-    }
-    obj["end"] = picojson::value(std::move(end_arr));
+    obj["end"] = StringVectorToJSONArray(end);
   }
   return picojson::value(std::move(obj));
 }
@@ -126,37 +137,23 @@ picojson::value TagFormat::ToJSON() const {
 picojson::value TriggeredTagsFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
-  picojson::array triggers_arr;
-  for (const auto& t : triggers) {
-    triggers_arr.push_back(picojson::value(t));
-  }
-  obj["triggers"] = picojson::value(std::move(triggers_arr));
-  picojson::array tags_arr;
-  for (const auto& tag : tags) {
-    tags_arr.push_back(tag.ToJSON());
-  }
-  obj["tags"] = picojson::value(std::move(tags_arr));
-  picojson::array excludes_arr;
-  for (const auto& e : excludes) {
-    excludes_arr.push_back(picojson::value(e));
-  }
-  obj["excludes"] = picojson::value(std::move(excludes_arr));
+  obj["triggers"] = StringVectorToJSONArray(triggers);
+  obj["tags"] = TagVectorToJSONArray(tags);
+  obj["excludes"] = StringVectorToJSONArray(excludes);
   obj["at_least_one"] = picojson::value(at_least_one);
   obj["stop_after_first"] = picojson::value(stop_after_first);
+  obj["detected_end_strs"] = StringVectorToJSONArray(detected_end_strs_);
   return picojson::value(std::move(obj));
 }
 
 picojson::value TagsWithSeparatorFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
-  picojson::array tags_arr;
-  for (const auto& tag : tags) {
-    tags_arr.push_back(tag.ToJSON());
-  }
-  obj["tags"] = picojson::value(std::move(tags_arr));
+  obj["tags"] = TagVectorToJSONArray(tags);
   obj["separator"] = picojson::value(separator);
   obj["at_least_one"] = picojson::value(at_least_one);
   obj["stop_after_first"] = picojson::value(stop_after_first);
+  obj["detected_end_strs"] = StringVectorToJSONArray(detected_end_strs_);
   return picojson::value(std::move(obj));
 }
 
@@ -886,7 +883,7 @@ class StructuralTagGrammarConverter {
    * \brief Visit a Format and return the rule id of the added rule.
    * \param format The Format to visit.
    * \return The rule id of the added rule. If the visit fails, the error is returned.
-   * \note This method uses fingerprinting to deduplicate identical formats.
+   * \note This method uses serialization to deduplicate identical formats.
    */
   Result<int, ISTError> Visit(const Format& format);
   Result<int, ISTError> VisitSub(const ConstStringFormat& format);
@@ -906,10 +903,10 @@ class StructuralTagGrammarConverter {
   GrammarBuilder grammar_builder_;
 
   /*!
-   * \brief Cache from format fingerprint to rule id.
+   * \brief Cache from format serialization to rule id.
    * This enables deduplication of identical formats to reduce grammar size.
    */
-  std::unordered_map<std::string, int> fingerprint_to_rule_id_;
+  std::unordered_map<std::string, int> serialization_to_rule_id_;
 };
 
 bool StructuralTagGrammarConverter::IsPrefix(
@@ -943,8 +940,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::Visit(const Format& format)
   std::string fingerprint = FormatToJSONValue(format).serialize();
 
   // Check if we've already processed an identical format
-  auto it = fingerprint_to_rule_id_.find(fingerprint);
-  if (it != fingerprint_to_rule_id_.end()) {
+  auto it = serialization_to_rule_id_.find(fingerprint);
+  if (it != serialization_to_rule_id_.end()) {
     return ResultOk(it->second);
   }
 
@@ -953,7 +950,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::Visit(const Format& format)
       std::visit([&](auto&& arg) -> Result<int, ISTError> { return VisitSub(arg); }, format);
   if (result.IsOk()) {
     int rule_id = std::move(result).Unwrap();
-    fingerprint_to_rule_id_[fingerprint] = rule_id;
+    serialization_to_rule_id_[fingerprint] = rule_id;
     return ResultOk(rule_id);
   }
   return result;
