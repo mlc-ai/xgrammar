@@ -7,6 +7,7 @@
 #ifndef XGRAMMAR_STRUCTURAL_TAG_H_
 #define XGRAMMAR_STRUCTURAL_TAG_H_
 
+#include <picojson.h>
 #include <xgrammar/exception.h>
 #include <xgrammar/grammar.h>
 
@@ -52,6 +53,7 @@ struct ConstStringFormat {
   static constexpr const char* type = "const_string";
   std::string value;
   ConstStringFormat(std::string value) : value(std::move(value)) {}
+  picojson::value ToJSON() const;
 };
 
 struct JSONSchemaFormat {
@@ -60,24 +62,28 @@ struct JSONSchemaFormat {
   std::string style = "json";  // "json","qwen_xml","minimax_xml"
   JSONSchemaFormat(std::string json_schema, std::string style = "json")
       : json_schema(std::move(json_schema)), style(std::move(style)) {}
+  picojson::value ToJSON() const;
 };
 
 struct GrammarFormat {
   static constexpr const char* type = "grammar";
   std::string grammar;
   GrammarFormat(std::string grammar) : grammar(std::move(grammar)) {}
+  picojson::value ToJSON() const;
 };
 
 struct RegexFormat {
   static constexpr const char* type = "regex";
   std::string pattern;
   RegexFormat(std::string pattern) : pattern(std::move(pattern)) {}
+  picojson::value ToJSON() const;
 };
 
 struct AnyTextFormat {
   static constexpr const char* type = "any_text";
   std::vector<std::string> excludes;
   AnyTextFormat(std::vector<std::string> excluded_strs) : excludes(std::move(excluded_strs)) {}
+  picojson::value ToJSON() const;
 
  private:
   // Detected in StructuralTagAnalyzer - supports multiple end strings
@@ -92,6 +98,7 @@ struct SequenceFormat {
   static constexpr const char* type = "sequence";
   std::vector<Format> elements;
   SequenceFormat(std::vector<Format> elements) : elements(std::move(elements)) {}
+  picojson::value ToJSON() const;
 
  private:
   // Detected in StructuralTagAnalyzer
@@ -104,6 +111,7 @@ struct OrFormat {
   static constexpr const char* type = "or";
   std::vector<Format> elements;
   OrFormat(std::vector<Format> elements) : elements(std::move(elements)) {}
+  picojson::value ToJSON() const;
 
  private:
   // Detected in StructuralTagAnalyzer
@@ -120,6 +128,7 @@ struct TagFormat {
 
   TagFormat(std::string begin, std::shared_ptr<Format> content, std::vector<std::string> end)
       : begin(std::move(begin)), content(std::move(content)), end(std::move(end)) {}
+  picojson::value ToJSON() const;
 };
 
 struct TriggeredTagsFormat {
@@ -142,6 +151,7 @@ struct TriggeredTagsFormat {
         excludes(std::move(excludes)),
         at_least_one(at_least_one),
         stop_after_first(stop_after_first) {}
+  picojson::value ToJSON() const;
 
  private:
   // Detected in StructuralTagAnalyzer - supports multiple end strings
@@ -164,6 +174,7 @@ struct TagsWithSeparatorFormat {
         separator(std::move(separator)),
         at_least_one(at_least_one),
         stop_after_first(stop_after_first) {}
+  picojson::value ToJSON() const;
 
  private:
   // Detected in StructuralTagAnalyzer - supports multiple end strings
