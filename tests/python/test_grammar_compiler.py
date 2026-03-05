@@ -178,7 +178,7 @@ def test_get_allow_empty_rule_ids(grammar: str, expected: List[int]):
     grammar_compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
     compiled_grammar = grammar_compiler.compile_grammar(grammar)
     allow_empty_rule_ids = _get_allow_empty_rule_ids(compiled_grammar)
-    assert list(allow_empty_rule_ids) == expected
+    assert allow_empty_rule_ids == expected
 
 
 schema_instances = [

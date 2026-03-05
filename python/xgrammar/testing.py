@@ -203,8 +203,10 @@ def _get_masked_tokens_from_bitmask(
         raise ValueError("bitmask should be on CPU.")
     if bitmask.dtype != bitmask_dtype:
         raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
-    return _testing_ffi._get_masked_tokens_from_bitmask(
-        bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
+    return list(
+        _testing_ffi._get_masked_tokens_from_bitmask(
+            bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
+        )
     )
 
 
@@ -329,7 +331,7 @@ def _get_matcher_from_grammar_and_tokenizer_info(
 
 
 def _get_allow_empty_rule_ids(compiled_grammar: CompiledGrammar) -> List[int]:
-    return _testing_ffi._get_allow_empty_rule_ids(compiled_grammar._handle)
+    return list(_testing_ffi._get_allow_empty_rule_ids(compiled_grammar._handle))
 
 
 def _generate_range_regex(start: Optional[int] = None, end: Optional[int] = None) -> str:

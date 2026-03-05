@@ -47,7 +47,7 @@ def test_get_masked_tokens_from_bitmask(token_mask_size: int, index: int):
     bool_mask = torch.randint(0, 2, (2, token_mask_size), dtype=torch.bool)
     bitmask = bool_mask_to_bitmask(bool_mask)
     expected = torch.where(~bool_mask[index])[0].tolist()
-    assert list(_get_masked_tokens_from_bitmask(bitmask, token_mask_size, index)) == expected
+    assert _get_masked_tokens_from_bitmask(bitmask, token_mask_size, index) == expected
 
 
 def test_is_single_token_bitmask():

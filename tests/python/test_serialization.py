@@ -165,15 +165,9 @@ def test_serialize_tokenizer_info_functional():
     assert original_tokenizer_info.vocab_type == recovered_tokenizer_info.vocab_type
     assert original_tokenizer_info.vocab_size == recovered_tokenizer_info.vocab_size
     assert original_tokenizer_info.add_prefix_space == recovered_tokenizer_info.add_prefix_space
-    assert list(original_tokenizer_info.stop_token_ids) == list(
-        recovered_tokenizer_info.stop_token_ids
-    )
-    assert list(original_tokenizer_info.special_token_ids) == list(
-        recovered_tokenizer_info.special_token_ids
-    )
-    assert list(original_tokenizer_info.decoded_vocab) == list(
-        recovered_tokenizer_info.decoded_vocab
-    )
+    assert original_tokenizer_info.stop_token_ids == recovered_tokenizer_info.stop_token_ids
+    assert original_tokenizer_info.special_token_ids == recovered_tokenizer_info.special_token_ids
+    assert original_tokenizer_info.decoded_vocab == recovered_tokenizer_info.decoded_vocab
 
     # Test functional equivalence with GrammarCompiler
     grammar = construct_grammar()
