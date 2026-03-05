@@ -36,36 +36,37 @@ namespace xgrammar {
 
 // ----- Helpers: convert FFI types to/from xgrammar types -----
 
-static std::string BytesToString(const tvm::ffi::Bytes& b) {
-  std::string s(b.data(), b.size());
-  return s;
+static std::string BytesToString(const tvm::ffi::Bytes& bytes) {
+  std::string result(bytes.data(), bytes.size());
+  return result;
 }
 
 // Convert ffi::Array<ffi::Any> to vector<string>; each element can be str or bytes (like
 // accept_string).
-static std::vector<std::string> ArrayAnyToVectorString(ffi::Array<ffi::Any> arr) {
-  std::vector<std::string> out;
-  out.reserve(static_cast<size_t>(arr.size()));
-  for (int64_t i = 0; i < static_cast<int64_t>(arr.size()); ++i) {
-    ffi::AnyView view = arr[i];
+static std::vector<std::string> ArrayAnyToVectorString(ffi::Array<ffi::Any> array) {
+  std::vector<std::string> result;
+  result.reserve(static_cast<size_t>(array.size()));
+  for (int64_t i = 0; i < static_cast<int64_t>(array.size()); ++i) {
+    ffi::AnyView view = array[i];
     if (view.as<ffi::Bytes>()) {
-      out.push_back(BytesToString(view.cast<ffi::Bytes>()));
+      result.push_back(BytesToString(view.cast<ffi::Bytes>()));
     } else if (view.as<ffi::String>()) {
-      out.push_back(view.cast<ffi::String>());
+      result.push_back(view.cast<ffi::String>());
     } else {
       TVM_FFI_THROW(RuntimeError) << "Unsupported type in encoded_vocab: expected str or bytes";
       XGRAMMAR_UNREACHABLE();
     }
   }
-  return out;
+  return result;
 }
 
-static ffi::Array<ffi::Bytes> VectorStringToBytesArray(const std::vector<std::string>& vec) {
-  ffi::Array<ffi::Bytes> arr;
-  for (const auto& s : vec) {
-    arr.push_back(ffi::Bytes(s));
+static ffi::Array<ffi::Bytes> VectorStringToBytesArray(const std::vector<std::string>& string_vector
+) {
+  ffi::Array<ffi::Bytes> bytes_array;
+  for (const auto& value : string_vector) {
+    bytes_array.push_back(ffi::Bytes(value));
   }
-  return arr;
+  return bytes_array;
 }
 
 static std::optional<int64_t> OptionalIntFromView(ffi::AnyView v) {
@@ -80,30 +81,30 @@ static std::optional<bool> OptionalBoolFromView(ffi::AnyView v) {
 
 static std::optional<std::vector<int32_t>> OptionalInt32VectorFromView(ffi::AnyView v) {
   if (v == nullptr) return std::nullopt;
-  ffi::Array<int64_t> a = v.cast<ffi::Array<int64_t>>();
-  std::vector<int32_t> out;
-  out.reserve(static_cast<size_t>(a.size()));
-  for (int64_t i = 0; i < static_cast<int64_t>(a.size()); ++i)
-    out.push_back(static_cast<int32_t>(a[i]));
-  return out;
+  ffi::Array<int64_t> array = v.cast<ffi::Array<int64_t>>();
+  std::vector<int32_t> result;
+  result.reserve(static_cast<size_t>(array.size()));
+  for (int64_t i = 0; i < static_cast<int64_t>(array.size()); ++i)
+    result.push_back(static_cast<int32_t>(array[i]));
+  return result;
 }
 
 static std::optional<std::vector<int>> OptionalIntVectorFromView(ffi::AnyView v) {
   if (v == nullptr) return std::nullopt;
-  ffi::Array<int64_t> a = v.cast<ffi::Array<int64_t>>();
-  std::vector<int> out;
-  out.reserve(static_cast<size_t>(a.size()));
-  for (int64_t i = 0; i < static_cast<int64_t>(a.size()); ++i)
-    out.push_back(static_cast<int>(a[i]));
-  return out;
+  ffi::Array<int64_t> array = v.cast<ffi::Array<int64_t>>();
+  std::vector<int> result;
+  result.reserve(static_cast<size_t>(array.size()));
+  for (int64_t i = 0; i < static_cast<int64_t>(array.size()); ++i)
+    result.push_back(static_cast<int>(array[i]));
+  return result;
 }
 
 static std::optional<std::pair<std::string, std::string>> OptionalSeparatorsFromView(ffi::AnyView v
 ) {
   if (v == nullptr) return std::nullopt;
-  ffi::Array<ffi::String> a = v.cast<ffi::Array<ffi::String>>();
-  if (a.size() < 2) return std::nullopt;
-  return std::make_pair(a[0], a[1]);
+  ffi::Array<ffi::String> separators_array = v.cast<ffi::Array<ffi::String>>();
+  if (separators_array.size() < 2) return std::nullopt;
+  return std::make_pair(separators_array[0], separators_array[1]);
 }
 
 static std::variant<std::string, int32_t> ParseMaxThreads(ffi::AnyView max_threads_view) {
@@ -277,26 +278,28 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "decoded_vocab",
           [](const TokenizerInfoObj* o) {
-            const auto& dv = o->value.GetDecodedVocab();
-            return VectorStringToBytesArray(dv);
+            const auto& decoded_vocab = o->value.GetDecodedVocab();
+            return VectorStringToBytesArray(decoded_vocab);
           }
       )
       .def(
           "stop_token_ids",
           [](const TokenizerInfoObj* o) {
-            const auto& ids = o->value.GetStopTokenIds();
-            ffi::Array<int64_t> arr;
-            for (int32_t x : ids) arr.push_back(static_cast<int64_t>(x));
-            return arr;
+            const auto& stop_token_ids = o->value.GetStopTokenIds();
+            ffi::Array<int64_t> stop_token_ids_array;
+            for (int32_t token_id : stop_token_ids)
+              stop_token_ids_array.push_back(static_cast<int64_t>(token_id));
+            return stop_token_ids_array;
           }
       )
       .def(
           "special_token_ids",
           [](const TokenizerInfoObj* o) {
-            const auto& ids = o->value.GetSpecialTokenIds();
-            ffi::Array<int64_t> arr;
-            for (int32_t x : ids) arr.push_back(static_cast<int64_t>(x));
-            return arr;
+            const auto& special_token_ids = o->value.GetSpecialTokenIds();
+            ffi::Array<int64_t> special_token_ids_array;
+            for (int32_t token_id : special_token_ids)
+              special_token_ids_array.push_back(static_cast<int64_t>(token_id));
+            return special_token_ids_array;
           }
       )
       .def(
@@ -381,8 +384,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           "from_structural_tag",
           [](ffi::String structural_tag_json) {
             XGRAMMAR_FFI_TRY_BEGIN();
-            Grammar g = Grammar_FromStructuralTag(structural_tag_json);
-            return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(g)));
+            Grammar grammar = Grammar_FromStructuralTag(structural_tag_json);
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(grammar)));
             XGRAMMAR_FFI_TRY_END();
           }
       )
@@ -395,23 +398,23 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def_static(
           "union",
           [](ffi::Array<O> grammars) {
-            std::vector<Grammar> vec;
-            vec.reserve(static_cast<size_t>(grammars.size()));
+            std::vector<Grammar> grammar_list;
+            grammar_list.reserve(static_cast<size_t>(grammars.size()));
             for (int64_t i = 0; i < static_cast<int64_t>(grammars.size()); ++i) {
-              vec.push_back(grammars[i].as<GrammarObj>()->value);
+              grammar_list.push_back(grammars[i].as<GrammarObj>()->value);
             }
-            return ffi::ObjectRef(ffi::make_object<GrammarObj>(Grammar::Union(vec)));
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(Grammar::Union(grammar_list)));
           }
       )
       .def_static(
           "concat",
           [](ffi::Array<O> grammars) {
-            std::vector<Grammar> vec;
-            vec.reserve(static_cast<size_t>(grammars.size()));
+            std::vector<Grammar> grammar_list;
+            grammar_list.reserve(static_cast<size_t>(grammars.size()));
             for (int64_t i = 0; i < static_cast<int64_t>(grammars.size()); ++i) {
-              vec.push_back(grammars[i].as<GrammarObj>()->value);
+              grammar_list.push_back(grammars[i].as<GrammarObj>()->value);
             }
-            return ffi::ObjectRef(ffi::make_object<GrammarObj>(Grammar::Concat(vec)));
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(Grammar::Concat(grammar_list)));
           }
       )
       .def(
@@ -420,8 +423,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       )
       .def_static("deserialize_json", [](ffi::String json_string) {
         XGRAMMAR_FFI_TRY_BEGIN();
-        Grammar g = Grammar_DeserializeJSON(json_string);
-        return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(g)));
+        Grammar grammar = Grammar_DeserializeJSON(json_string);
+        return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(grammar)));
         XGRAMMAR_FFI_TRY_END();
       });
 
@@ -451,9 +454,10 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       )
       .def_static("deserialize_json", [](ffi::String json_string, O tokenizer_ref) {
         XGRAMMAR_FFI_TRY_BEGIN();
-        const TokenizerInfo& ti = tokenizer_ref.as<TokenizerInfoObj>()->value;
-        CompiledGrammar cg = CompiledGrammar_DeserializeJSON(json_string, ti);
-        return ffi::ObjectRef(ffi::make_object<CompiledGrammarObj>(std::move(cg)));
+        const TokenizerInfo& tokenizer_info = tokenizer_ref.as<TokenizerInfoObj>()->value;
+        CompiledGrammar compiled_grammar =
+            CompiledGrammar_DeserializeJSON(json_string, tokenizer_info);
+        return ffi::ObjectRef(ffi::make_object<CompiledGrammarObj>(std::move(compiled_grammar)));
         XGRAMMAR_FFI_TRY_END();
       });
 
@@ -555,37 +559,39 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           "batch_accept_string",
           [](ffi::Array<O> matchers_ref, ffi::Array<ffi::Any> input_str_byte_union, bool debug_print
           ) {
-            std::vector<GrammarMatcher> storage;
-            storage.reserve(matchers_ref.size());
+            std::vector<GrammarMatcher> matchers;
+            matchers.reserve(matchers_ref.size());
             for (int64_t i = 0; i < static_cast<int64_t>(matchers_ref.size()); ++i) {
-              storage.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
+              matchers.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
             }
-            std::vector<std::string> strs = ArrayAnyToVectorString(input_str_byte_union);
-            std::vector<uint8_t> result =
-                BatchGrammarMatcher::BatchAcceptString(&storage, strs, debug_print);
-            ffi::Array<int64_t> arr;
-            for (uint8_t x : result) arr.push_back(static_cast<int64_t>(x));
-            return arr;
+            std::vector<std::string> input_strings = ArrayAnyToVectorString(input_str_byte_union);
+            std::vector<uint8_t> acceptance_results =
+                BatchGrammarMatcher::BatchAcceptString(&matchers, input_strings, debug_print);
+            ffi::Array<int64_t> acceptance_results_array;
+            for (uint8_t acceptance_flag : acceptance_results)
+              acceptance_results_array.push_back(static_cast<int64_t>(acceptance_flag));
+            return acceptance_results_array;
           }
       )
       .def_static(
           "batch_accept_token",
           [](ffi::Array<O> matchers_ref, ffi::Array<int64_t> token_ids, bool debug_print) {
-            std::vector<GrammarMatcher> storage;
-            storage.reserve(matchers_ref.size());
+            std::vector<GrammarMatcher> matchers;
+            matchers.reserve(matchers_ref.size());
             for (int64_t i = 0; i < static_cast<int64_t>(matchers_ref.size()); ++i) {
-              storage.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
+              matchers.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
             }
-            std::vector<int32_t> ids;
-            ids.reserve(token_ids.size());
+            std::vector<int32_t> token_id_vector;
+            token_id_vector.reserve(token_ids.size());
             for (int64_t i = 0; i < static_cast<int64_t>(token_ids.size()); ++i) {
-              ids.push_back(static_cast<int32_t>(token_ids[i]));
+              token_id_vector.push_back(static_cast<int32_t>(token_ids[i]));
             }
-            std::vector<uint8_t> result =
-                BatchGrammarMatcher::BatchAcceptToken(&storage, ids, debug_print);
-            ffi::Array<int64_t> arr;
-            for (uint8_t x : result) arr.push_back(static_cast<int64_t>(x));
-            return arr;
+            std::vector<uint8_t> acceptance_results =
+                BatchGrammarMatcher::BatchAcceptToken(&matchers, token_id_vector, debug_print);
+            ffi::Array<int64_t> acceptance_results_array;
+            for (uint8_t acceptance_flag : acceptance_results)
+              acceptance_results_array.push_back(static_cast<int64_t>(acceptance_flag));
+            return acceptance_results_array;
           }
       );
 
@@ -641,10 +647,11 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "stop_token_ids",
           [](const GrammarMatcherObj* o) {
-            const auto& ids = o->value.GetStopTokenIds();
-            ffi::Array<int64_t> arr;
-            for (int x : ids) arr.push_back(static_cast<int64_t>(x));
-            return arr;
+            const auto& stop_token_ids = o->value.GetStopTokenIds();
+            ffi::Array<int64_t> stop_token_ids_array;
+            for (int token_id : stop_token_ids)
+              stop_token_ids_array.push_back(static_cast<int64_t>(token_id));
+            return stop_token_ids_array;
           }
       )
       .def("_debug_print_internal_state", [](const GrammarMatcherObj* o) {
@@ -682,74 +689,83 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "xgrammar.tvm_ffi_binding.testing._ebnf_to_grammar_no_normalization",
           [](ffi::String ebnf_str, ffi::String root_rule_name) {
-            Grammar g = _EBNFToGrammarNoNormalization(ebnf_str, root_rule_name);
-            return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(g)));
+            Grammar grammar = _EBNFToGrammarNoNormalization(ebnf_str, root_rule_name);
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(grammar)));
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing._get_masked_tokens_from_bitmask",
           [](int64_t token_bitmask_ptr, ffi::Array<int64_t> shape, int64_t vocab_size, int64_t index
           ) {
-            std::vector<int64_t> s;
-            for (int64_t i = 0; i < static_cast<int64_t>(shape.size()); ++i) s.push_back(shape[i]);
-            std::vector<int> r = Testing_DebugGetMaskedTokensFromBitmask(
+            std::vector<int64_t> shape_vector;
+            for (int64_t i = 0; i < static_cast<int64_t>(shape.size()); ++i)
+              shape_vector.push_back(shape[i]);
+            std::vector<int> masked_tokens = Testing_DebugGetMaskedTokensFromBitmask(
                 static_cast<intptr_t>(token_bitmask_ptr),
-                s,
+                shape_vector,
                 static_cast<int32_t>(vocab_size),
                 static_cast<int32_t>(index)
             );
-            ffi::Array<int64_t> arr;
-            for (int x : r) arr.push_back(static_cast<int64_t>(x));
-            return arr;
+            ffi::Array<int64_t> masked_tokens_array;
+            for (int token_id : masked_tokens)
+              masked_tokens_array.push_back(static_cast<int64_t>(token_id));
+            return masked_tokens_array;
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing._is_single_token_bitmask",
           [](int64_t token_bitmask_ptr, ffi::Array<int64_t> shape, int64_t vocab_size, int64_t index
           ) {
-            std::vector<int64_t> s;
-            for (int64_t i = 0; i < static_cast<int64_t>(shape.size()); ++i) s.push_back(shape[i]);
-            auto p = Testing_IsSingleTokenBitmask(
+            std::vector<int64_t> shape_vector;
+            for (int64_t i = 0; i < static_cast<int64_t>(shape.size()); ++i)
+              shape_vector.push_back(shape[i]);
+            auto single_token_result = Testing_IsSingleTokenBitmask(
                 static_cast<intptr_t>(token_bitmask_ptr),
-                s,
+                shape_vector,
                 static_cast<int32_t>(vocab_size),
                 static_cast<int32_t>(index)
             );
             return ffi::Array<int64_t>{
-                static_cast<int64_t>(p.first), static_cast<int64_t>(p.second)
+                static_cast<int64_t>(single_token_result.first),
+                static_cast<int64_t>(single_token_result.second)
             };
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing._get_allow_empty_rule_ids",
           [](O compiled_grammar_ref) {
-            const auto& cg = compiled_grammar_ref.as<CompiledGrammarObj>()->value;
-            std::vector<int32_t> ids = GetAllowEmptyRuleIds(cg);
-            ffi::Array<int64_t> arr;
-            for (int32_t x : ids) arr.push_back(static_cast<int64_t>(x));
-            return arr;
+            const auto& compiled_grammar = compiled_grammar_ref.as<CompiledGrammarObj>()->value;
+            std::vector<int32_t> allow_empty_rule_ids = GetAllowEmptyRuleIds(compiled_grammar);
+            ffi::Array<int64_t> allow_empty_rule_ids_array;
+            for (int32_t rule_id : allow_empty_rule_ids)
+              allow_empty_rule_ids_array.push_back(static_cast<int64_t>(rule_id));
+            return allow_empty_rule_ids_array;
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing._generate_range_regex",
           [](ffi::AnyView start, ffi::AnyView end) {
-            std::optional<int> s = OptionalIntFromView(start);
-            std::optional<int> e = OptionalIntFromView(end);
-            std::string r = GenerateRangeRegex(s, e);
-            r.erase(std::remove(r.begin(), r.end(), '\0'), r.end());
-            return ffi::String(r);
+            std::optional<int> start_value = OptionalIntFromView(start);
+            std::optional<int> end_value = OptionalIntFromView(end);
+            std::string regex_string = GenerateRangeRegex(start_value, end_value);
+            regex_string.erase(
+                std::remove(regex_string.begin(), regex_string.end(), '\0'), regex_string.end()
+            );
+            return ffi::String(regex_string);
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing._generate_float_regex",
           [](ffi::AnyView start, ffi::AnyView end) {
-            std::optional<double> s =
+            std::optional<double> start_value =
                 start == nullptr ? std::nullopt : std::make_optional(start.cast<double>());
-            std::optional<double> e =
+            std::optional<double> end_value =
                 end == nullptr ? std::nullopt : std::make_optional(end.cast<double>());
-            std::string r = GenerateFloatRangeRegex(s, e);
-            r.erase(std::remove(r.begin(), r.end(), '\0'), r.end());
-            return ffi::String(r);
+            std::string regex_string = GenerateFloatRangeRegex(start_value, end_value);
+            regex_string.erase(
+                std::remove(regex_string.begin(), regex_string.end(), '\0'), regex_string.end()
+            );
+            return ffi::String(regex_string);
           }
       )
       .def(
@@ -821,9 +837,9 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "xgrammar.tvm_ffi_binding.testing.grammar_functor.repetition_normalizer",
           [](O grammar_ref) {
-            Grammar g = grammar_ref.as<GrammarObj>()->value;
-            RepetitionNormalizer::Apply(&g);
-            return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(g)));
+            Grammar grammar = grammar_ref.as<GrammarObj>()->value;
+            RepetitionNormalizer::Apply(&grammar);
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(grammar)));
           }
       )
       .def(
