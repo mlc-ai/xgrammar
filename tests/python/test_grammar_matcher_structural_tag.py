@@ -185,9 +185,7 @@ def test_structural_tag_compiler():
 
     compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
     compiled_grammar = compiler.compile_structural_tag(tags, triggers)
-    assert (
-        str(compiled_grammar.grammar) == expected_grammar_test_structural_tag_after_optimization
-    ), f"Expected:\n{expected_grammar_test_structural_tag_after_optimization}\nGot:\n{str(compiled_grammar.grammar)}"
+    assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag_after_optimization
 
 
 @pytest.mark.hf_token_required
