@@ -2,7 +2,6 @@
 
 from contextlib import contextmanager
 
-# Use absolute import to avoid circular import when this file is loaded as xgrammar.config
 from .tvm_ffi_binding.config import get_max_recursion_depth as _get_max_recursion_depth_impl
 from .tvm_ffi_binding.config import get_serialization_version as _get_serialization_version_impl
 from .tvm_ffi_binding.config import set_max_recursion_depth as _set_max_recursion_depth_impl
