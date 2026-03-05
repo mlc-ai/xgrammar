@@ -152,9 +152,7 @@ def test_structural_tag():
     triggers = ["<function=f", "<function=g"]
 
     grammar = xgr.Grammar.from_structural_tag(tags, triggers)
-    assert (
-        str(grammar) == expected_grammar_test_structural_tag_before_optimization
-    ), f"Expected:\n{expected_grammar_test_structural_tag_before_optimization}\nGot:\n{str(grammar)}"
+    assert str(grammar) == expected_grammar_test_structural_tag_before_optimization
 
     accepted_inputs = [
         '<function=f1>{"arg1": "abc", "arg2": 1}</function>',
