@@ -41,15 +41,6 @@ static std::string BytesToString(const tvm::ffi::Bytes& b) {
   return s;
 }
 
-static std::vector<std::string> ArrayStringToVector(ffi::Array<ffi::String> arr) {
-  std::vector<std::string> out;
-  out.reserve(static_cast<size_t>(arr.size()));
-  for (int64_t i = 0; i < static_cast<int64_t>(arr.size()); ++i) {
-    out.push_back(arr[i]);
-  }
-  return out;
-}
-
 // Convert ffi::Array<ffi::Any> to vector<string>; each element can be str or bytes (like
 // accept_string).
 static std::vector<std::string> ArrayAnyToVectorString(ffi::Array<ffi::Any> arr) {
@@ -314,10 +305,11 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       )
       .def_static(
           "from_vocab_and_metadata",
-          [](ffi::Array<ffi::String> encoded_vocab, ffi::String metadata) {
+          [](ffi::Array<ffi::Any> encoded_vocab, ffi::String metadata) {
             XGRAMMAR_FFI_TRY_BEGIN();
-            auto v =
-                TokenizerInfo::FromVocabAndMetadata(ArrayStringToVector(encoded_vocab), metadata);
+            auto v = TokenizerInfo::FromVocabAndMetadata(
+                ArrayAnyToVectorString(encoded_vocab), metadata
+            );
             return ffi::ObjectRef(ffi::make_object<TokenizerInfoObj>(std::move(v)));
             XGRAMMAR_FFI_TRY_END();
           }
@@ -568,19 +560,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             for (int64_t i = 0; i < static_cast<int64_t>(matchers_ref.size()); ++i) {
               storage.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
             }
-            std::vector<std::string> strs;
-            strs.reserve(input_str_byte_union.size());
-            for (const auto& item : input_str_byte_union) {
-              ffi::AnyView view = item;
-              if (view.as<ffi::Bytes>()) {
-                strs.push_back(BytesToString(view.cast<ffi::Bytes>()));
-              } else if (view.as<ffi::String>()) {
-                strs.push_back(view.cast<ffi::String>());
-              } else {
-                TVM_FFI_THROW(RuntimeError) << "Unsupported type in batch_accept_string";
-                XGRAMMAR_UNREACHABLE();
-              }
-            }
+            std::vector<std::string> strs = ArrayAnyToVectorString(input_str_byte_union);
             std::vector<uint8_t> result =
                 BatchGrammarMatcher::BatchAcceptString(&storage, strs, debug_print);
             ffi::Array<int64_t> arr;
