@@ -112,12 +112,11 @@ static std::variant<std::string, int32_t> ParseMaxThreads(ffi::AnyView max_threa
 
 // Wrap std::exception into TVM-FFI error
 #define XGRAMMAR_FFI_TRY_BEGIN() try {
-#define XGRAMMAR_FFI_TRY_END()                                                        \
-  }                                                                                   \
-  catch (const XGrammarError& e) {                                                    \
-    XGRAMMAR_LOG(INFO) << "Caught XGrammarError: " << e.GetType() << " " << e.what(); \
-    throw ffi::Error(e.GetType(), e.what(), "");                                      \
-    XGRAMMAR_UNREACHABLE();                                                           \
+#define XGRAMMAR_FFI_TRY_END()                   \
+  }                                              \
+  catch (const XGrammarError& e) {               \
+    throw ffi::Error(e.GetType(), e.what(), ""); \
+    XGRAMMAR_UNREACHABLE();                      \
   }
 
 // ----- Object wrappers (hold xgrammar types, inherit ffi::Object) -----
