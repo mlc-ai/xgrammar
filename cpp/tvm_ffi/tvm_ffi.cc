@@ -69,10 +69,10 @@ static std::vector<std::string> ArrayAnyToVectorString(ffi::Array<ffi::Any> arr)
   return out;
 }
 
-static ffi::Array<ffi::String> VectorStringToArray(const std::vector<std::string>& vec) {
-  ffi::Array<ffi::String> arr;
+static ffi::Array<ffi::Bytes> VectorStringToBytesArray(const std::vector<std::string>& vec) {
+  ffi::Array<ffi::Bytes> arr;
   for (const auto& s : vec) {
-    arr.push_back(ffi::String(s));
+    arr.push_back(ffi::Bytes(s));
   }
   return arr;
 }
@@ -287,7 +287,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           "decoded_vocab",
           [](const TokenizerInfoObj* o) {
             const auto& dv = o->value.GetDecodedVocab();
-            return VectorStringToArray(dv);
+            return VectorStringToBytesArray(dv);
           }
       )
       .def(

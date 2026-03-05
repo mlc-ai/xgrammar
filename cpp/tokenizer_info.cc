@@ -457,6 +457,7 @@ int TokenizerInfo::GetVocabSize() const { return pimpl_->GetVocabSize(); }
 VocabType TokenizerInfo::GetVocabType() const { return pimpl_->GetVocabType(); }
 bool TokenizerInfo::GetAddPrefixSpace() const { return pimpl_->GetAddPrefixSpace(); }
 const std::vector<std::string>& TokenizerInfo::GetDecodedVocab() const {
+  XGRAMMAR_LOG(INFO) << "Vocab type: " << static_cast<int>(GetVocabType());
   return pimpl_->GetDecodedVocab();
 }
 const std::vector<int32_t>& TokenizerInfo::GetStopTokenIds() const {
