@@ -9,8 +9,9 @@ from typing import List, Literal, Optional, Tuple, Union
 import torch
 from numpy.typing import ArrayLike
 
-from .base import XGRObject, _core
+from .base import XGRObject
 from .compiler import CompiledGrammar
+from .tvm_ffi_binding import _ffi_api
 
 bitmask_dtype = torch.int32
 """The dtype of the bitmask: int32."""
@@ -249,7 +250,7 @@ class GrammarMatcher(XGRObject):
             override_stop_tokens = [override_stop_tokens]
 
         self._init_handle(
-            _core.GrammarMatcher(
+            _ffi_api.GrammarMatcher(
                 compiled_grammar._handle,
                 override_stop_tokens,
                 terminate_without_stop_token,
@@ -406,7 +407,7 @@ class GrammarMatcher(XGRObject):
         stop_token_ids : List[int]
             The ids of the stop tokens.
         """
-        return self._handle.stop_token_ids
+        return list(self._handle.stop_token_ids())
 
     def _debug_print_internal_state(self) -> str:
         """Print the internal state of the matcher. This is used for debugging. The
@@ -436,7 +437,7 @@ class BatchGrammarMatcher(XGRObject):
             max_threads will be set to std::thread::hardware_concurrency() / 2.
         """
 
-        self._init_handle(_core.BatchGrammarMatcher(max_threads))
+        self._init_handle(_ffi_api.BatchGrammarMatcher(max_threads))
 
     def batch_fill_next_token_bitmask(
         self,
@@ -502,7 +503,10 @@ class BatchGrammarMatcher(XGRObject):
             If the sizes of matchers and tokens do not match.
         """
         matcher_handles = [matcher._handle for matcher in matchers]
-        return _core.BatchGrammarMatcher.batch_accept_token(matcher_handles, tokens, debug_print)
+        result = _ffi_api.BatchGrammarMatcher.batch_accept_token(
+            matcher_handles, tokens, debug_print
+        )
+        return [bool(result[i]) for i in range(len(result))]
 
     @staticmethod
     def batch_accept_string(
@@ -534,4 +538,7 @@ class BatchGrammarMatcher(XGRObject):
             If the sizes of matchers and strings do not match.
         """
         matcher_handles = [matcher._handle for matcher in matchers]
-        return _core.BatchGrammarMatcher.batch_accept_string(matcher_handles, strings, debug_print)
+        result = _ffi_api.BatchGrammarMatcher.batch_accept_string(
+            matcher_handles, strings, debug_print
+        )
+        return [bool(result[i]) for i in range(len(result))]

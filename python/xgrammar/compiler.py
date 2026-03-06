@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 from pydantic import BaseModel
 from typing_extensions import deprecated
 
-from .base import XGRObject, _core
+from .base import XGRObject
 from .grammar import (
     Grammar,
     StructuralTagItem,
@@ -14,6 +14,7 @@ from .grammar import (
 )
 from .structural_tag import StructuralTag
 from .tokenizer_info import TokenizerInfo
+from .tvm_ffi_binding import _ffi_api
 
 
 class CompiledGrammar(XGRObject):
@@ -31,17 +32,17 @@ class CompiledGrammar(XGRObject):
     @property
     def grammar(self) -> Grammar:
         """The original grammar."""
-        return Grammar._create_from_handle(self._handle.grammar)
+        return Grammar._create_from_handle(self._handle.grammar())
 
     @property
     def tokenizer_info(self) -> TokenizerInfo:
         """The tokenizer info associated with the compiled grammar."""
-        return TokenizerInfo._create_from_handle(self._handle.tokenizer_info)
+        return TokenizerInfo._create_from_handle(self._handle.tokenizer_info())
 
     @property
     def memory_size_bytes(self) -> int:
         """The approximate memory usage of the compiled grammar in bytes."""
-        return self._handle.memory_size_bytes
+        return self._handle.memory_size_bytes()
 
     def serialize_json(self) -> str:
         """Serialize the compiled grammar to a JSON string. It will serialize the compiled grammar
@@ -93,7 +94,7 @@ class CompiledGrammar(XGRObject):
             When the __VERSION__ field in the JSON string is not the same as the current version.
         """
         return CompiledGrammar._create_from_handle(
-            _core.CompiledGrammar.deserialize_json(json_str, tokenizer_info._handle)
+            _ffi_api.CompiledGrammar.deserialize_json(json_str, tokenizer_info._handle)
         )
 
 
@@ -136,7 +137,7 @@ class GrammarCompiler(XGRObject):
             )
 
         self._init_handle(
-            _core.GrammarCompiler(
+            _ffi_api.GrammarCompiler(
                 tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
             )
         )
@@ -317,12 +318,14 @@ class GrammarCompiler(XGRObject):
         """
         if isinstance(grammar, str):
             return CompiledGrammar._create_from_handle(
-                self._handle.compile_grammar(grammar, root_rule_name)
+                self._handle.compile_grammar_from_strings(grammar, root_rule_name)
+            )
+        elif isinstance(grammar, Grammar):
+            return CompiledGrammar._create_from_handle(
+                self._handle.compile_grammar_ebnf(grammar._handle)
             )
         else:
-            return CompiledGrammar._create_from_handle(
-                self._handle.compile_grammar(grammar._handle)
-            )
+            raise ValueError("Invalid grammar type. Please pass a string or a Grammar object.")
 
     def clear_cache(self) -> None:
         """Clear all cached compiled grammars."""
@@ -338,4 +341,4 @@ class GrammarCompiler(XGRObject):
         The maximum memory usage for the cache in bytes.
         Returns -1 if the cache has no memory limit.
         """
-        return self._handle.cache_limit_bytes
+        return self._handle.cache_limit_bytes()
