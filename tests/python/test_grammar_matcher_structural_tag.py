@@ -72,8 +72,6 @@ triggered_tags_group_1 ::= ((">" root_2 "</function>"))
 triggered_tags ::= TagDispatch(
   ("<function=f", triggered_tags_group),
   ("<function=g", triggered_tags_group_1),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -153,8 +151,6 @@ triggered_tags_group_1 ::= ((">" root_2 "</function>"))
 triggered_tags ::= TagDispatch(
   ("<function=f", triggered_tags_group),
   ("<function=g", triggered_tags_group_1),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -304,8 +300,6 @@ def test_structural_tag_mask_gen():
 
 def test_empty_tag_dispatch():
     grammar_str = """root ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true
 )
 """
@@ -314,20 +308,18 @@ def test_empty_tag_dispatch():
     assert _is_grammar_accept_string(grammar, "")
     assert _is_grammar_accept_string(grammar, "好")
 
-    grammar_with_stop_str_str = """root ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("end"),
+    grammar_with_excludes_str = """root ::= TagDispatch(
+  excludes=("end"),
   loop_after_dispatch=true
 )
 """
 
-    grammar_with_stop_str = xgr.Grammar.from_ebnf(grammar_with_stop_str_str)
+    grammar_with_excludes = xgr.Grammar.from_ebnf(grammar_with_excludes_str)
 
-    assert _is_grammar_accept_string(grammar_with_stop_str, "any stringend")
-    assert _is_grammar_accept_string(grammar_with_stop_str, "end")
-    assert _is_grammar_accept_string(grammar_with_stop_str, "好end")
-
-    assert not _is_grammar_accept_string(grammar_with_stop_str, "aaa")
+    assert _is_grammar_accept_string(grammar_with_excludes, "any string")
+    assert _is_grammar_accept_string(grammar_with_excludes, "好")
+    assert not _is_grammar_accept_string(grammar_with_excludes, "any stringend")
+    assert not _is_grammar_accept_string(grammar_with_excludes, "endaaa")
 
 
 @pytest.mark.hf_token_required
@@ -372,6 +364,211 @@ def test_pressure_structural_tag():
 
     for t in threads:
         t.join()
+
+
+_JSON_BODY_RULES = """\
+json_body ::= "{" ws kvs ws "}"
+kvs ::= kv ("," ws kv)*
+kv ::= ["] key_chars ["] ws ":" ws val
+key_chars ::= [a-zA-Z_] [a-zA-Z0-9_]*
+val ::= ["] val_chars ["] | [0-9]+ | "true" | "false"
+val_chars ::= [a-zA-Z0-9 _.+/=]*
+ws ::= [ ]*
+"""
+
+_tag_dispatch_perf_scenarios = [
+    # S1: Long exclude, normal text (baseline - most tokens hit fast path)
+    (
+        f"""root ::= TagDispatch(("<tool>", json_body), loop_after_dispatch=true, excludes=("</response>"))
+{_JSON_BODY_RULES}""",
+        (
+            "The quick brown fox jumps over the lazy dog. "
+            "Machine learning models have revolutionized natural language processing. "
+            "Transformers use self-attention mechanisms to capture long-range dependencies. "
+            '<tool>{"action": "search", "query": "test"}'
+            "After retrieving results we can summarize the findings effectively. "
+            "The experiment showed significant improvements across all benchmarks measured."
+        ),
+    ),
+    # S2: Short exclude "\n\n" (many tokens contain \n -> second_slicing_bitset fails often)
+    (
+        f"""root ::= TagDispatch(("<tool>", json_body), loop_after_dispatch=true, excludes=("\\n\\n"))
+{_JSON_BODY_RULES}""",
+        (
+            "def hello():\n    print('hello')\n"
+            "def world():\n    return 42\n"
+            "class Foo:\n    def bar(self):\n        pass\n"
+            "x = [i for i in range(10)]\n"
+            "result = sum(x)\n"
+            '<tool>{"action": "run"}'
+            "for item in collection:\n    process(item)\n"
+            "logger.info('done')\n"
+        ),
+    ),
+    # S3: Single char exclude "|" (extreme short exclude)
+    (
+        f"""root ::= TagDispatch(("<A>", json_body), loop_after_dispatch=true, excludes=("|"))
+{_JSON_BODY_RULES}""",
+        (
+            "This is a simple text without any pipe characters in the content. "
+            "We keep writing more content to have enough tokens for measurement. "
+            "The test validates single character exclude performance overhead. "
+            '<A>{"tag": "content", "value": "here"}'
+            "More text after the tag to continue the sequence to the end."
+        ),
+    ),
+    # S4: Dense partial match (FSM repeatedly enters exclude prefix -> slow path)
+    (
+        f"""root ::= TagDispatch(("<tool>", json_body), loop_after_dispatch=true, excludes=("</response>"))
+{_JSON_BODY_RULES}""",
+        (
+            "Check </r value. The </re field is important. See </res tag here. "
+            "Use </resp element. Read </respo data carefully. Got </respon value. "
+            "The </respons info shows. Almost </response but not quite yet here. "
+            "Back to normal text. Check </r again. And </re once more. "
+            "Field </res appears. Element </resp shows. Data </respo found."
+        ),
+    ),
+    # S5: 8 tags with shared prefix "<tool_" (deep trie, many tokens fail bitset)
+    (
+        f"""root ::= TagDispatch(
+  ("<tool_calc>", tc), ("<tool_search>", ts), ("<tool_code>", tcode),
+  ("<tool_file>", tf), ("<tool_web>", tw), ("<tool_db>", tdb),
+  ("<tool_api>", tapi), ("<tool_shell>", tsh),
+  loop_after_dispatch=true, excludes=("</end>")
+)
+tc ::= json_body
+ts ::= json_body
+tcode ::= json_body
+tf ::= json_body
+tw ::= json_body
+tdb ::= json_body
+tapi ::= json_body
+tsh ::= json_body
+{_JSON_BODY_RULES}""",
+        (
+            "Here is some text before any tags appear in the output. "
+            '<tool_calc>{"expr": "2+3"}'
+            "The answer is 5. Now let me search for more information. "
+            '<tool_search>{"query": "xgrammar benchmarks"}'
+            "Found some results. Let me write code to process them. "
+            '<tool_code>{"code": "print hello"}'
+            "Code executed successfully. Now checking files on disk. "
+            '<tool_file>{"path": "data.csv"}'
+            "Data loaded. Processing complete with all results verified."
+        ),
+    ),
+    # S6: 8 exclude strings (more excludes -> more tokens hit substring check)
+    (
+        f"""root ::= TagDispatch(
+  ("<tool>", json_body), loop_after_dispatch=true,
+  excludes=("</end>", "STOP", "HALT", "QUIT", "EXIT", "ABORT", "CANCEL", "TERMINATE")
+)
+{_JSON_BODY_RULES}""",
+        (
+            "Starting the process now. The system is running fine and stable. "
+            "Several steps are being executed in proper sequence order. "
+            "Have you seen the strategy that was described in the handbook? "
+            '<tool>{"action": "compute", "value": 42}'
+            "The tool returned a value. Continuing execution of the pipeline. "
+            "After checking everything looks correct and verified properly."
+        ),
+    ),
+    # S7: 10 tag dispatch loop cycles (tests loop overhead)
+    (
+        f"""root ::= TagDispatch(("<t>", json_body), loop_after_dispatch=true, excludes=("</done>"))
+{_JSON_BODY_RULES}""",
+        (
+            'A<t>{"k": "v1"}B<t>{"k": "v2"}C<t>{"k": "v3"}D<t>{"k": "v4"}E<t>{"k": "v5"}'
+            'F<t>{"k": "v6"}G<t>{"k": "v7"}H<t>{"k": "v8"}I<t>{"k": "v9"}J<t>{"k": "v10"}K'
+        ),
+    ),
+    # S8: No tags, pure AnyText (lightest TagDispatch, reference baseline)
+    (
+        """root ::= TagDispatch(loop_after_dispatch=false, excludes=("</end>"))
+""",
+        (
+            "This is purely text without any tags at all in the output. "
+            "We are testing the lightest possible TagDispatch configuration. "
+            "No tags are defined, only a single exclude string is present. "
+            "This serves as the baseline reference measurement for comparison."
+        ),
+    ),
+    # S9: Sustained exclude boundary (FSM stays in exclude prefix -> all tokens slow path)
+    (
+        f"""root ::= TagDispatch(("<tool>", json_body), loop_after_dispatch=true, excludes=("</response>"))
+{_JSON_BODY_RULES}""",
+        (
+            "Normal text. </respons</respons</respons</respons</respons"
+            "</respons</respons</respons</respons</respons</respons"
+            "</respons</respons</respons</respons</respons</respons"
+            "Back to normal text after the sustained boundary stress test."
+        ),
+    ),
+]
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("ebnf, input_str", _tag_dispatch_perf_scenarios)
+def test_tag_dispatch_perf(ebnf, input_str):
+    import statistics
+
+    tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, use_fast=True, trust_remote_code=True)
+    tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    grammar = xgr.Grammar.from_ebnf(ebnf)
+    input_tokens = tokenizer.encode(input_str, add_special_tokens=False)
+
+    warmup, rounds = 2, 10
+    compile_times = []
+    mask_times_all = []
+    accept_times_all = []
+
+    for round_idx in range(warmup + rounds):
+        is_measure = round_idx >= warmup
+        compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+
+        t0 = time.monotonic_ns()
+        compiled = compiler.compile_grammar(grammar)
+        t1 = time.monotonic_ns()
+
+        if is_measure:
+            compile_times.append((t1 - t0) / 1e6)
+
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        round_mask = []
+        round_accept = []
+
+        for tok in input_tokens:
+            t_m0 = time.monotonic_ns()
+            matcher.fill_next_token_bitmask(token_bitmask)
+            t_m1 = time.monotonic_ns()
+
+            t_a0 = time.monotonic_ns()
+            ok = matcher.accept_token(tok)
+            t_a1 = time.monotonic_ns()
+
+            if is_measure:
+                round_mask.append((t_m1 - t_m0) / 1e3)
+                round_accept.append((t_a1 - t_a0) / 1e3)
+
+            assert ok, f"token {tok} ({repr(tokenizer.decode([tok]))}) rejected"
+
+        if is_measure:
+            mask_times_all.append(round_mask)
+            accept_times_all.append(round_accept)
+
+    flat_mask = [t for rnd in mask_times_all for t in rnd]
+    flat_accept = [t for rnd in accept_times_all for t in rnd]
+
+    print(f"Tokens: {len(input_tokens)}")
+    print(
+        f"Compile: {statistics.mean(compile_times):.2f} +/- "
+        f"{statistics.stdev(compile_times) if len(compile_times) > 1 else 0:.2f} ms"
+    )
+    print(f"Mask gen: avg={statistics.mean(flat_mask):.2f} us, max={max(flat_mask):.2f} us")
+    print(f"Accept token: avg={statistics.mean(flat_accept):.2f} us, max={max(flat_accept):.2f} us")
 
 
 if __name__ == "__main__":

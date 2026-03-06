@@ -55,11 +55,9 @@ TEST(XGrammarFSMBuilderTest, TestTrieFSMBuilder) {
 }
 
 TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder1) {
-  // Case 1. stop_eos = true, loop_after_dispatch = true
+  // Case 1. loop_after_dispatch = true
   Grammar::Impl::TagDispatch tag_dispatch = {
       /* tag_rule_pairs = */ {{"hel", 1}, {"hi", 2}, {"哈", 3}},
-      /* stop_eos = */ true,
-      /* stop_str = */ {},
       /* loop_after_dispatch = */ true,
       /* excluded_str = */ {}
   };
@@ -82,11 +80,9 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder1) {
 }
 
 TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder2) {
-  // Case 2. stop_eos = true, loop_after_dispatch = false
+  // Case 2. loop_after_dispatch = false
   Grammar::Impl::TagDispatch tag_dispatch = {
       /* tag_rule_pairs = */ {{"hel", 1}, {"hi", 2}, {"哈", 3}},
-      /* stop_eos = */ true,
-      /* stop_str = */ {},
       /* loop_after_dispatch = */ false,
       /* excluded_str = */ {}
   };
@@ -112,77 +108,6 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder2) {
   EXPECT_EQ(fsm_printed, expected_fsm_printed);
 }
 
-TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder3) {
-  // Case 3. stop_eos = false, loop_after_dispatch = true
-  Grammar::Impl::TagDispatch tag_dispatch = {
-      /* tag_rule_pairs = */ {{"hel", 1}, {"hi", 2}, {"哈", 3}},
-      /* stop_eos = */ false,
-      /* stop_str = */ {"hos", "eos"},
-      /* loop_after_dispatch = */ true,
-      /* excluded_str = */ {}
-  };
-  auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
-  EXPECT_TRUE(fsm_result.has_value());
-  auto fsm = std::move(fsm_result).value();
-  auto fsm_printed = fsm.ToString();
-  std::string expected_fsm_printed = R"(FSM(num_states=13, start=0, end=[9, 12], edges=[
-0: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-1: [[\0-d]->0, 'e'->2, [f-g]->0, 'h'->1, 'i'->4, [j-n]->0, 'o'->8, [p-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-2: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-k]->0, 'l'->3, [m-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-3: [Rule(1)->0]
-4: [Rule(2)->0]
-5: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-\x92]->0, '\x93'->6, [\x94-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-6: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-\x87]->0, '\x88'->7, [\x89-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-7: [Rule(3)->0]
-8: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-r]->0, 's'->9, [t-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-9: []
-10: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-n]->0, 'o'->11, [p-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-11: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-r]->0, 's'->12, [t-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-12: []
-]))";
-
-  EXPECT_EQ(fsm_printed, expected_fsm_printed);
-}
-
-TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder4) {
-  // Case 4. stop_eos = false, loop_after_dispatch = false
-  Grammar::Impl::TagDispatch tag_dispatch = {
-      /* tag_rule_pairs = */ {{"hel", 1}, {"hi", 2}, {"哈", 3}},
-      /* stop_eos = */ false,
-      /* stop_str = */ {"hos", "eos"},
-      /* loop_after_dispatch = */ false,
-      /* excluded_str = */ {}
-  };
-  auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
-  EXPECT_TRUE(fsm_result.has_value());
-  auto fsm = std::move(fsm_result).value();
-  auto fsm_printed = fsm.ToString();
-  std::string expected_fsm_printed =
-      R"(FSM(num_states=20, start=0, end=[9, 12, 16, 19], edges=[
-0: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-1: [[\0-d]->0, 'e'->2, [f-g]->0, 'h'->1, 'i'->4, [j-n]->0, 'o'->8, [p-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-2: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-k]->0, 'l'->3, [m-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-3: [Rule(1)->13]
-4: [Rule(2)->13]
-5: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-\x92]->0, '\x93'->6, [\x94-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-6: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-\x87]->0, '\x88'->7, [\x89-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-7: [Rule(3)->13]
-8: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-r]->0, 's'->9, [t-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-9: []
-10: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-n]->0, 'o'->11, [p-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-11: [[\0-d]->0, 'e'->10, [f-g]->0, 'h'->1, [i-r]->0, 's'->12, [t-\xe4]->0, '\xe5'->5, [\xe6-\xff]->0]
-12: []
-13: ['h'->14, 'e'->17]
-14: ['o'->15]
-15: ['s'->16]
-16: []
-17: ['o'->18]
-18: ['s'->19]
-19: []
-]))";
-
-  EXPECT_EQ(fsm_printed, expected_fsm_printed);
-}
 using GrammarExpr = Grammar::Impl::GrammarExpr;
 using GrammarExprType = Grammar::Impl::GrammarExprType;
 

@@ -1087,12 +1087,6 @@ void GrammarCompilerSub::TagDispatchOptimization(
           break;
         }
       }
-      for (const auto& stop_str : tag_dispatch.stop_str) {
-        if (token.find(stop_str, 1) != std::string::npos) {
-          definite_accept_since_second_char = false;
-          break;
-        }
-      }
       for (const auto& exclude_str : tag_dispatch.excluded_str) {
         if (token.find(exclude_str, 1) != std::string::npos) {
           definite_accept_since_second_char = false;

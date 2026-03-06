@@ -696,23 +696,16 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TagFormat* format) {
   }
   auto is_content_unlimited = IsUnlimited(*(format->content));
   if (is_content_unlimited) {
-    // Check that at least one end string is non-empty
-    bool has_non_empty = false;
+    bool has_non_empty_end = false;
     for (const auto& end_str : format->end) {
       if (!end_str.empty()) {
-        has_non_empty = true;
+        has_non_empty_end = true;
         break;
       }
     }
-    if (!has_non_empty) {
-      if (IsExcluded(*format->content)) {
-        return std::nullopt;
-      } else {
-        return ISTError("When the content is unlimited, at least one end string must be non-empty");
-      }
+    if (!has_non_empty_end && !IsExcluded(*format->content)) {
+      return ISTError("When the content is unlimited, at least one end string must be non-empty");
     }
-    // Clear the end strings because they are moved to the detected_end_strs_ field.
-    format->end.clear();
   }
   return std::nullopt;
 }
@@ -735,7 +728,6 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TagsWithSeparatorFormat*
       return err;
     }
   }
-  format->detected_end_strs_ = DetectEndStrings();
   return std::nullopt;
 }
 
@@ -850,23 +842,15 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const RegexFormat&
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextFormat& format) {
-  // Filter out empty strings
-  std::vector<std::string> non_empty_ends;
+  std::vector<std::string> all_excludes = format.excludes;
   for (const auto& s : format.detected_end_strs_) {
     if (!s.empty()) {
-      non_empty_ends.push_back(s);
+      all_excludes.push_back(s);
     }
   }
-  if (!non_empty_ends.empty()) {
-    // TagDispatch supports multiple stop strings
-    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, false, non_empty_ends, false, format.excludes}
-    );
-    return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
-  } else if (format.excludes.size() > 0) {
-    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, true, {}, false, format.excludes}
-    );
+  if (!all_excludes.empty()) {
+    auto tag_dispatch_expr =
+        grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{{}, false, all_excludes});
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
     auto any_text_expr = grammar_builder_.AddCharacterClassStar({{0, 0x10FFFF}}, false);
@@ -933,16 +917,11 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
         grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_rule_ref_expr});
     auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
     return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
-  } else if (format.end.size() == 1) {
-    // Single end token: use directly (use AddEmptyStr() for empty strings)
+  } else {
+    XGRAMMAR_DCHECK(format.end.size() == 1);
     auto end_expr = format.end[0].empty() ? grammar_builder_.AddEmptyStr()
                                           : grammar_builder_.AddByteString(format.end[0]);
     auto sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr, end_expr});
-    auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
-    return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
-  } else {
-    // End was cleared (unlimited content case) - no end string needed
-    auto sequence_expr_id = grammar_builder_.AddSequence({begin_expr, rule_ref_expr});
     auto choices_expr = grammar_builder_.AddChoices({sequence_expr_id});
     return ResultOk(grammar_builder_.AddRuleWithHint("tag", choices_expr));
   }
@@ -1020,36 +999,6 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     }
     auto choice_expr_id = grammar_builder_.AddChoices(choice_elements);
 
-    // Handle the detected end strings.
-    if (!format.detected_end_strs_.empty()) {
-      auto sub_rule_id = grammar_builder_.AddRuleWithHint("triggered_tags_sub", choice_expr_id);
-      auto ref_sub_rule_expr_id = grammar_builder_.AddRuleRef(sub_rule_id);
-      if (format.detected_end_strs_.size() == 1) {
-        // Single detected end string: use directly
-        auto end_str_expr_id = format.detected_end_strs_[0].empty()
-                                   ? grammar_builder_.AddEmptyStr()
-                                   : grammar_builder_.AddByteString(format.detected_end_strs_[0]);
-        auto sequence_expr_id =
-            grammar_builder_.AddSequence({ref_sub_rule_expr_id, end_str_expr_id});
-        choice_expr_id = grammar_builder_.AddChoices({sequence_expr_id});
-      } else {
-        // Multiple detected end strings: create end choices rule
-        std::vector<int> end_sequence_ids;
-        for (const auto& end_str : format.detected_end_strs_) {
-          auto end_str_expr_id = end_str.empty() ? grammar_builder_.AddEmptyStr()
-                                                 : grammar_builder_.AddByteString(end_str);
-          end_sequence_ids.push_back(grammar_builder_.AddSequence({end_str_expr_id}));
-        }
-        auto end_choices_expr = grammar_builder_.AddChoices(end_sequence_ids);
-        auto end_choices_rule_id =
-            grammar_builder_.AddRuleWithHint("end_choices", end_choices_expr);
-        auto end_rule_ref_expr = grammar_builder_.AddRuleRef(end_choices_rule_id);
-        auto sequence_expr_id =
-            grammar_builder_.AddSequence({ref_sub_rule_expr_id, end_rule_ref_expr});
-        choice_expr_id = grammar_builder_.AddChoices({sequence_expr_id});
-      }
-    }
-
     return ResultOk(grammar_builder_.AddRuleWithHint("triggered_tags", choice_expr_id));
   }
 
@@ -1057,8 +1006,6 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   // - When at_least_one is true, one tag is generated first, then we do triggered tags
   // generation.
   // - When stop_after_first is true, we set loop_after_dispatch of the tag dispatch to false.
-  // - When detected_end_str_ is not empty, we use that as the stop_str of the tag dispatch.
-  //   Otherwise, we set stop_eos to true to generate until EOS.
 
   // Step 3.1 Get tag_rule_pairs.
   std::vector<std::pair<std::string, int32_t>> tag_rule_pairs;
@@ -1103,21 +1050,15 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   // Step 3.2 Add TagDispatch.
   int32_t rule_expr_id;
   bool loop_after_dispatch = !format.stop_after_first;
-  std::vector<std::string> non_empty_ends;
+  std::vector<std::string> all_excludes = format.excludes;
   for (const auto& s : format.detected_end_strs_) {
     if (!s.empty()) {
-      non_empty_ends.push_back(s);
+      all_excludes.push_back(s);
     }
   }
-  if (!non_empty_ends.empty()) {
-    rule_expr_id = grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{
-        tag_rule_pairs, false, non_empty_ends, loop_after_dispatch, format.excludes
-    });
-  } else {
-    rule_expr_id = grammar_builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{tag_rule_pairs, true, {}, loop_after_dispatch, format.excludes}
-    );
-  }
+  rule_expr_id = grammar_builder_.AddTagDispatch(
+      Grammar::Impl::TagDispatch{tag_rule_pairs, loop_after_dispatch, all_excludes}
+  );
 
   // Step 3.3 Consider at_least_one
   if (format.at_least_one) {
@@ -1180,15 +1121,15 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
   //   tags_rule ::= tag1 | tag2 | ... | tagN
   // Step 2. Special handling (stop_after_first is true):
   //   if at_least_one is false:
-  //     root ::= tags_rule end_str | end_str
+  //     root ::= tags_rule | ""
   //   if at_least_one is true:
-  //     root ::= tags_rule end_str
+  //     root ::= tags_rule
   // Step 3. Normal handling (stop_after_first is false):
   //   if at_least_one is false:
-  //     root ::= tags_rule tags_rule_sub | end_str
+  //     root ::= tags_rule tags_rule_sub | ""
   //   if at_least_one is true:
   //     root ::= tags_rule tags_rule_sub
-  //   tags_rule_sub ::= sep tags_rule tags_rule_sub | end_str
+  //   tags_rule_sub ::= sep tags_rule tags_rule_sub | ""
 
   // Step 1. Construct a rule representing any tag
   std::vector<int> choice_ids;
@@ -1207,57 +1148,18 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
 
   auto all_tags_rule_ref_id = grammar_builder_.AddRuleRef(all_tags_rule_id);
 
-  // Handle end strs - build a choices expr for multiple end strings
-  std::vector<int32_t> end_str_expr_ids;
-  for (const auto& end_str : format.detected_end_strs_) {
-    if (!end_str.empty()) {
-      end_str_expr_ids.push_back(grammar_builder_.AddByteString(end_str));
-    }
-  }
-  bool has_end_strs = !end_str_expr_ids.empty();
-
-  // Check if separator matches any end string
-  bool separator_matches_end = false;
-  for (const auto& end_str : format.detected_end_strs_) {
-    if (end_str == format.separator) {
-      separator_matches_end = true;
-      break;
-    }
-  }
-
   // Step 2. Special case (stop_after_first is true):
-  if (format.stop_after_first || (has_end_strs && separator_matches_end)) {
+  if (format.stop_after_first) {
     int32_t rule_body_expr_id;
     if (format.at_least_one) {
-      if (!has_end_strs) {
-        // root ::= tags_rule
-        rule_body_expr_id =
-            grammar_builder_.AddChoices({grammar_builder_.AddSequence({all_tags_rule_ref_id})});
-      } else {
-        // root ::= tags_rule end_str1 | tags_rule end_str2 | ...
-        std::vector<int> choices;
-        for (auto end_str_expr_id : end_str_expr_ids) {
-          choices.push_back(grammar_builder_.AddSequence({all_tags_rule_ref_id, end_str_expr_id}));
-        }
-        rule_body_expr_id = grammar_builder_.AddChoices(choices);
-      }
+      // root ::= tags_rule
+      rule_body_expr_id =
+          grammar_builder_.AddChoices({grammar_builder_.AddSequence({all_tags_rule_ref_id})});
     } else {
-      if (!has_end_strs) {
-        // root ::= tags_rule | ""
-        rule_body_expr_id = grammar_builder_.AddChoices(
-            {grammar_builder_.AddSequence({all_tags_rule_ref_id}), grammar_builder_.AddEmptyStr()}
-        );
-      } else {
-        // root ::= tags_rule end_str1 | tags_rule end_str2 | ... | end_str1 | end_str2 | ...
-        std::vector<int> choices;
-        for (auto end_str_expr_id : end_str_expr_ids) {
-          choices.push_back(grammar_builder_.AddSequence({all_tags_rule_ref_id, end_str_expr_id}));
-        }
-        for (auto end_str_expr_id : end_str_expr_ids) {
-          choices.push_back(grammar_builder_.AddSequence({end_str_expr_id}));
-        }
-        rule_body_expr_id = grammar_builder_.AddChoices(choices);
-      }
+      // root ::= tags_rule | ""
+      rule_body_expr_id = grammar_builder_.AddChoices(
+          {grammar_builder_.AddSequence({all_tags_rule_ref_id}), grammar_builder_.AddEmptyStr()}
+      );
     }
 
     auto rule_id = grammar_builder_.AddRuleWithHint("tags_with_separator", rule_body_expr_id);
@@ -1265,24 +1167,11 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
   }
 
   // Step 3. Normal handling (stop_after_first is false):
-  // Step 3.1 Construct sub rule
+  // Step 3.1 Construct sub rule: sub ::= sep tags sub | ""
   auto sub_rule_id = grammar_builder_.AddEmptyRuleWithHint("tags_with_separator_sub");
 
-  // Build end_str_sequence_id: empty if no end strs, otherwise choices of end strs
-  int32_t end_str_sequence_id;
-  if (!has_end_strs) {
-    end_str_sequence_id = grammar_builder_.AddEmptyStr();
-  } else if (end_str_expr_ids.size() == 1) {
-    end_str_sequence_id = grammar_builder_.AddSequence({end_str_expr_ids[0]});
-  } else {
-    std::vector<int> end_str_choices;
-    for (auto end_str_expr_id : end_str_expr_ids) {
-      end_str_choices.push_back(grammar_builder_.AddSequence({end_str_expr_id}));
-    }
-    end_str_sequence_id = grammar_builder_.AddChoices(end_str_choices);
-  }
+  auto end_str_sequence_id = grammar_builder_.AddEmptyStr();
 
-  // Build the sequence for the recursive case, handling empty separator
   std::vector<int> sub_sequence_elements;
   if (!format.separator.empty()) {
     sub_sequence_elements.push_back(grammar_builder_.AddByteString(format.separator));

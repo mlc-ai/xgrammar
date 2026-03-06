@@ -1081,32 +1081,6 @@ int32_t EBNFParser::ParseTagDispatch() {
     tag_dispatch.tag_rule_pairs.push_back({tag_str_node->value, rule_id});
   }
 
-  // stop_eos
-  tag_dispatch.stop_eos = true;
-  if (auto it = args.named_arguments.find("stop_eos"); it != args.named_arguments.end()) {
-    auto bool_node = std::get_if<MacroIR::BooleanNode>(it->second.get());
-    if (bool_node == nullptr) {
-      ReportParseError("stop_eos must be a boolean literal", delta_element);
-    }
-    tag_dispatch.stop_eos = bool_node->value;
-  }
-
-  // stop_str
-  if (auto it = args.named_arguments.find("stop_str"); it != args.named_arguments.end()) {
-    auto tuple_node = std::get_if<MacroIR::TupleNode>(it->second.get());
-    if (tuple_node == nullptr) {
-      ReportParseError("Stop strings must be a tuple", delta_element);
-    }
-
-    for (const auto& element : tuple_node->elements) {
-      auto stop_str_node = std::get_if<MacroIR::StringNode>(element.get());
-      if (stop_str_node == nullptr || stop_str_node->value.empty()) {
-        ReportParseError("Stop string must be a non-empty string literal", delta_element);
-      }
-      tag_dispatch.stop_str.push_back(stop_str_node->value);
-    }
-  }
-
   // loop_after_dispatch
   tag_dispatch.loop_after_dispatch = true;
   if (auto it = args.named_arguments.find("loop_after_dispatch");
@@ -1134,17 +1108,24 @@ int32_t EBNFParser::ParseTagDispatch() {
     }
   }
 
-  // Well formed check
-  if (!tag_dispatch.stop_eos && tag_dispatch.stop_str.empty()) {
-    ReportParseError(
-        "The TagDispatch must have stop_eos=true or stop_str is not empty", delta_element
-    );
+  // Check for deprecated and unknown named arguments
+  static const std::unordered_set<std::string> kKnownArgs = {"loop_after_dispatch", "excludes"};
+  static const std::unordered_set<std::string> kDeprecatedArgs = {"stop_eos", "stop_str"};
+  for (const auto& [name, _] : args.named_arguments) {
+    if (kDeprecatedArgs.count(name)) {
+      XGRAMMAR_LOG(WARNING) << "TagDispatch parameter \"" << name
+                            << "\" is deprecated and will be ignored";
+    } else if (!kKnownArgs.count(name)) {
+      ReportParseError("Unknown TagDispatch parameter: " + name, delta_element);
+    }
   }
-  for (const auto& exclude_str : tag_dispatch.excluded_str) {
-    for (const auto& stop_str : tag_dispatch.stop_str) {
-      if (stop_str == exclude_str) {
+
+  // Check no exclude is a prefix of any trigger
+  for (const auto& excl : tag_dispatch.excluded_str) {
+    for (const auto& [tag, rule_id] : tag_dispatch.tag_rule_pairs) {
+      if (excl.size() <= tag.size() && tag.substr(0, excl.size()) == excl) {
         ReportParseError(
-            "The TagDispatch should not have a common stop_str and exclude_str: " + stop_str,
+            "TagDispatch exclude \"" + excl + "\" is a prefix of trigger \"" + tag + "\"",
             delta_element
         );
       }
