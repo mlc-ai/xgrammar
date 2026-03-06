@@ -1030,6 +1030,10 @@ bool GrammarMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
 
 void GrammarMatcher::Reset() { pimpl_->Reset(); }
 
+GrammarMatcher GrammarMatcher::Fork() const {
+  return GrammarMatcher(std::make_shared<Impl>(*pimpl_));
+}
+
 int GrammarMatcher::GetMaxRollbackTokens() const { return pimpl_->GetMaxRollbackTokens(); }
 
 const std::vector<int>& GrammarMatcher::GetStopTokenIds() const {

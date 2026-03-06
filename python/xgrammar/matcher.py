@@ -383,6 +383,17 @@ class GrammarMatcher(XGRObject):
         """Reset the matcher to the initial state."""
         return self._handle.reset()
 
+    def fork(self) -> "GrammarMatcher":
+        """Fork the matcher. Returns a new GrammarMatcher sharing the same compiled grammar and
+        tokenizer info, with a deep copy of all other state (parsing state, token history, etc.).
+
+        Returns
+        -------
+        forked : GrammarMatcher
+            A new matcher with the same grammar but independent parsing state.
+        """
+        return GrammarMatcher._create_from_handle(self._handle.fork())
+
     @property
     def max_rollback_tokens(self) -> int:
         """Depracated. Now max_rollback_tokens is always unlimited (-1).
