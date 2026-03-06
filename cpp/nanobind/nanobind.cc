@@ -280,6 +280,15 @@ NB_MODULE(xgrammar_bindings, m) {
           "batch_accept_token",
           &BatchGrammarMatcher::BatchAcceptToken,
           nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "batch_rollback",
+          [](std::vector<GrammarMatcher>& matchers, const std::vector<int>& num_tokens) {
+            BatchGrammarMatcher::BatchRollback(&matchers, num_tokens);
+          },
+          nb::arg("matchers"),
+          nb::arg("num_tokens"),
+          nb::call_guard<nb::gil_scoped_release>()
       );
   auto pyGrammarMatcher = nb::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher
