@@ -137,6 +137,8 @@ class GrammarFunctor {
         return VisitTagDispatch(grammar_expr);
       case GrammarExprType::kRepeat:
         return VisitRepeat(grammar_expr);
+      case GrammarExprType::kTokenSet:
+        return VisitTokenSet(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -220,6 +222,9 @@ class GrammarFunctor {
 
   /*! \brief Visit a repeat GrammarExpr. */
   virtual T VisitRepeat(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
+
+  /*! \brief Visit a token set GrammarExpr. */
+  virtual T VisitTokenSet(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
 
   /*! \brief The grammar to visit or mutate. */
   Grammar base_grammar_{NullObj{}};
@@ -349,6 +354,7 @@ class GrammarFSMBuilder {
   static FSMWithStartEnd RuleRef(const GrammarExpr& expr);
   static FSMWithStartEnd CharacterClass(const GrammarExpr& expr);
   static FSMWithStartEnd ByteString(const GrammarExpr& expr);
+  static FSMWithStartEnd TokenSet(const GrammarExpr& expr);
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);

@@ -199,6 +199,9 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
     case GrammarExprType::kCharacterClass: {
       return std::make_pair(true, false);  // The element is scanable, but not completable.
     }
+    case GrammarExprType::kTokenSet: {
+      return std::make_pair(false, false);
+    }
     default: {
       XGRAMMAR_LOG(FATAL) << "The element type is not supported! The type is: "
                           << int(element_expr.type);
@@ -889,6 +892,68 @@ void EarleyParser::AdvanceFsm(const ParserState& state, const uint8_t ch) {
       Enqueue(std::move(new_state));
     }
   }
+}
+
+void EarleyParser::ScanAtomicToken(const ParserState& state, int32_t token_id) {
+  if (state.rule_id == -1) return;
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[state.rule_id].has_value());
+  const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
+  for (const auto& edge : current_fsm.GetFsm().GetEdges(state.element_id)) {
+    if (!edge.IsTokenSet()) continue;
+    auto info = current_fsm.GetFsm().GetTokenSetEdgeInfo(edge.GetAuxIndex());
+    if (!info.Contains(token_id)) continue;
+    auto new_state = state;
+    new_state.element_id = edge.target;
+    if ((!current_fsm.IsNonTerminalState(edge.target)) &&
+        (!current_fsm.IsEndState(edge.target) && current_fsm.IsScanableState(edge.target))) {
+      EnqueueWithoutProcessing(std::move(new_state));
+    } else {
+      Enqueue(std::move(new_state));
+    }
+  }
+}
+
+bool EarleyParser::AdvanceToken(int32_t token_id, bool debug_print) {
+  XGRAMMAR_DCHECK(tmp_process_state_queue_.empty())
+      << "The tmp_process_state_queue_ should be empty before AdvanceToken.";
+  tmp_states_visited_in_queue_.Clear();
+  tmp_states_to_be_added_.clear();
+  tmp_accept_stop_token_ = false;
+  const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
+  for (const auto& state : latest_states) {
+    ScanAtomicToken(state, token_id);
+  }
+  if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
+    return false;
+  }
+  rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  while (!tmp_process_state_queue_.empty()) {
+    const auto state = std::move(tmp_process_state_queue_.front());
+    tmp_process_state_queue_.pop();
+    auto [scanable, completable] = Predict(state, debug_print);
+    if (completable) {
+      Complete(state, debug_print);
+    }
+    if (scanable) {
+      tmp_states_to_be_added_.push_back(state);
+    }
+  }
+  is_completed_.push_back(tmp_accept_stop_token_);
+  scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  return true;
+}
+
+bool EarleyParser::IsTokenExcludedAtState(const ParserState& state, int32_t token_id) const {
+  if (state.rule_id == -1) return false;
+  if (!grammar_->per_rule_fsms[state.rule_id].has_value()) return false;
+  const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
+  for (const auto& edge : current_fsm.GetFsm().GetEdges(state.element_id)) {
+    if (edge.IsTokenExclude()) {
+      auto info = current_fsm.GetFsm().GetTokenExcludeEdgeInfo(edge.GetAuxIndex());
+      if (info.Contains(token_id)) return true;
+    }
+  }
+  return false;
 }
 
 bool RepeatDetector::IsVisited(const ParserState& state) const {

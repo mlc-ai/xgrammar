@@ -99,6 +99,14 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    */
   void GetFirstCharacterMask(std::bitset<256>& first_character_mask);
 
+  /*!
+   * \brief Apply kTokenSet and kTokenExclude contributions to accepted/rejected indices.
+   * kTokenSet IDs are added to accepted (override filter).
+   * kTokenExclude IDs are added to rejected (remove from accepted).
+   * \param rejected_filled Whether tmp_rejected_indices_ is fully populated.
+   */
+  void ApplyTokenEdgeContributions(bool rejected_filled);
+
   // The id of the initial rule.
   int32_t init_rule_id_;
 
@@ -681,6 +689,90 @@ void GrammarMatcherForTokenMaskCache::GetFirstCharacterMask(std::bitset<256>& fi
   }
 }
 
+void GrammarMatcherForTokenMaskCache::ApplyTokenEdgeContributions(bool rejected_filled) {
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[init_rule_id_].has_value());
+  const auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
+  const auto& edges = fsm.GetFsm().GetEdges(initial_state_.element_id);
+
+  std::vector<int32_t> token_set_ids;
+  std::vector<int32_t> token_exclude_ids;
+
+  for (const auto& edge : edges) {
+    if (edge.IsTokenSet()) {
+      auto info = fsm.GetFsm().GetTokenSetEdgeInfo(edge.GetAuxIndex());
+      for (int32_t i = 0; i < info.Count(); ++i) {
+        token_set_ids.push_back(info.TokenIds()[i]);
+      }
+    } else if (edge.IsTokenExclude()) {
+      auto info = fsm.GetFsm().GetTokenExcludeEdgeInfo(edge.GetAuxIndex());
+      for (int32_t i = 0; i < info.Count(); ++i) {
+        token_exclude_ids.push_back(info.TokenIds()[i]);
+      }
+    }
+  }
+
+  if (token_set_ids.empty() && token_exclude_ids.empty()) return;
+
+  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  int32_t vocab_size = tokenizer_info_.GetVocabSize();
+
+  // Build token_id → sorted_index map
+  std::vector<int32_t> tid_to_sorted(vocab_size, -1);
+  for (int i = 0; i < static_cast<int>(sorted_decoded_vocab.size()); ++i) {
+    tid_to_sorted[sorted_decoded_vocab[i].first] = i;
+  }
+
+  // Convert token IDs to sorted indices
+  auto to_sorted_indices = [&](const std::vector<int32_t>& token_ids) {
+    std::vector<int32_t> sorted_indices;
+    for (int32_t tid : token_ids) {
+      if (tid >= 0 && tid < vocab_size && tid_to_sorted[tid] >= 0) {
+        sorted_indices.push_back(tid_to_sorted[tid]);
+      }
+    }
+    std::sort(sorted_indices.begin(), sorted_indices.end());
+    sorted_indices.erase(
+        std::unique(sorted_indices.begin(), sorted_indices.end()), sorted_indices.end()
+    );
+    return sorted_indices;
+  };
+
+  auto token_exclude_sorted = to_sorted_indices(token_exclude_ids);
+  auto token_set_sorted = to_sorted_indices(token_set_ids);
+
+  // Step 1: Apply kTokenExclude filter — remove from accepted, add to rejected
+  if (!token_exclude_sorted.empty()) {
+    std::vector<int32_t> new_accepted;
+    std::set_difference(
+        tmp_accepted_indices_.begin(),
+        tmp_accepted_indices_.end(),
+        token_exclude_sorted.begin(),
+        token_exclude_sorted.end(),
+        std::back_inserter(new_accepted)
+    );
+    tmp_accepted_indices_ = std::move(new_accepted);
+    if (rejected_filled) {
+      IntsetUnion(&tmp_rejected_indices_, token_exclude_sorted);
+    }
+  }
+
+  // Step 2: Apply kTokenSet — remove from rejected, add to accepted (overrides filter)
+  if (!token_set_sorted.empty()) {
+    if (rejected_filled) {
+      std::vector<int32_t> new_rejected;
+      std::set_difference(
+          tmp_rejected_indices_.begin(),
+          tmp_rejected_indices_.end(),
+          token_set_sorted.begin(),
+          token_set_sorted.end(),
+          std::back_inserter(new_rejected)
+      );
+      tmp_rejected_indices_ = std::move(new_rejected);
+    }
+    IntsetUnion(&tmp_accepted_indices_, token_set_sorted);
+  }
+}
+
 AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_root_rule) {
   tmp_accepted_indices_.clear();
   tmp_rejected_indices_.clear();
@@ -740,7 +832,19 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   std::bitset<256> first_character_mask;
   GetFirstCharacterMask(first_character_mask);
 
-  bool rejected_filled = GetTokenMaskWithFirstCharacterCheck(first_character_mask, is_root_rule);
+  bool rejected_filled;
+  if (first_character_mask.none()) {
+    const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+    for (int i = 0; i < static_cast<int>(sorted_decoded_vocab.size()); ++i) {
+      tmp_rejected_indices_.push_back(i);
+    }
+    rejected_filled = true;
+  } else {
+    rejected_filled = GetTokenMaskWithFirstCharacterCheck(first_character_mask, is_root_rule);
+  }
+
+  // Apply kTokenSet and kTokenExclude contributions from token edges at this FSM state.
+  ApplyTokenEdgeContributions(rejected_filled);
   if (rejected_filled) {
     auto return_value = AdaptiveTokenMask(
         tokenizer_info_.GetVocabSize(),
@@ -1072,37 +1176,46 @@ void GrammarCompilerSub::TagDispatchOptimization(
         compiled_grammar_impl->GetGrammar()->GetTagDispatch(rule.body_expr_id);
     const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
     DynamicBitset definite_accepted_tokens_since_second_char(sorted_decoded_vocab.size());
-    for (int i = 0; i < static_cast<int32_t>(sorted_decoded_vocab.size()); i++) {
+    for (int j = 0; j < static_cast<int32_t>(sorted_decoded_vocab.size()); j++) {
       bool definite_accept_since_second_char = true;
-      const auto& token = sorted_decoded_vocab[i].second;
+      const auto& token = sorted_decoded_vocab[j].second;
       if (token.empty()) {
-        definite_accepted_tokens_since_second_char.Set(i);
+        definite_accepted_tokens_since_second_char.Set(j);
         continue;
       }
 
-      // Check if the token contains any tag or stop string after the first character.
-      for (const auto& tag : tag_dispatch.tag_rule_pairs) {
-        if (token.find(tag.first, 1) != std::string::npos) {
-          definite_accept_since_second_char = false;
-          break;
+      // Check if the token contains any string trigger or stop/exclude string after first char.
+      for (const auto& [trigger, rule_id] : tag_dispatch.trigger_rule_pairs) {
+        if (auto* str = std::get_if<std::string>(&trigger)) {
+          if (token.find(*str, 1) != std::string::npos) {
+            definite_accept_since_second_char = false;
+            break;
+          }
         }
       }
-      for (const auto& stop_str : tag_dispatch.stop_str) {
-        if (token.find(stop_str, 1) != std::string::npos) {
-          definite_accept_since_second_char = false;
-          break;
+      if (definite_accept_since_second_char) {
+        for (const auto& stop : tag_dispatch.stops) {
+          if (auto* str = std::get_if<std::string>(&stop)) {
+            if (token.find(*str, 1) != std::string::npos) {
+              definite_accept_since_second_char = false;
+              break;
+            }
+          }
         }
       }
-      for (const auto& exclude_str : tag_dispatch.excluded_str) {
-        if (token.find(exclude_str, 1) != std::string::npos) {
-          definite_accept_since_second_char = false;
-          break;
+      if (definite_accept_since_second_char) {
+        for (const auto& excl : tag_dispatch.excludes) {
+          if (auto* str = std::get_if<std::string>(&excl)) {
+            if (token.find(*str, 1) != std::string::npos) {
+              definite_accept_since_second_char = false;
+              break;
+            }
+          }
         }
       }
 
-      // If the token can be definitely accepted since the second character, set the bit.
       if (definite_accept_since_second_char) {
-        definite_accepted_tokens_since_second_char.Set(i);
+        definite_accepted_tokens_since_second_char.Set(j);
       }
     }
     (*tag_dispatch_rule_id_to_second_slicing_bitset)[i] =

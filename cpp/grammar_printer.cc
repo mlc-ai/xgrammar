@@ -44,6 +44,8 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintTagDispatch(grammar_expr);
     case GrammarExprType::kRepeat:
       return PrintRepeat(grammar_expr);
+    case GrammarExprType::kTokenSet:
+      return PrintTokenSet(grammar_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected GrammarExpr type: " << static_cast<int>(grammar_expr.type);
       XGRAMMAR_UNREACHABLE();
@@ -131,14 +133,23 @@ std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
   auto tag_dispatch = grammar_->GetTagDispatch(grammar_expr);
   std::string result = "TagDispatch(\n";
   std::string indent = "  ";
-  for (const auto& [tag, rule_id] : tag_dispatch.tag_rule_pairs) {
-    result += indent + "(" + PrintString(tag) + ", " + grammar_->GetRule(rule_id).name + "),\n";
+  for (const auto& [trigger, rule_id] : tag_dispatch.trigger_rule_pairs) {
+    if (auto* str = std::get_if<std::string>(&trigger)) {
+      result += indent + "(" + PrintString(*str) + ", " + grammar_->GetRule(rule_id).name + "),\n";
+    } else {
+      result += indent + "(" + std::to_string(std::get<int32_t>(trigger)) + ", " +
+                grammar_->GetRule(rule_id).name + "),\n";
+    }
   }
   result += indent + "stop_eos=" + PrintBoolean(tag_dispatch.stop_eos) + ",\n";
-  result += indent + "stop_str=(";
-  for (int i = 0; i < static_cast<int>(tag_dispatch.stop_str.size()); ++i) {
-    result += PrintString(tag_dispatch.stop_str[i]);
-    if (i + 1 != static_cast<int>(tag_dispatch.stop_str.size())) {
+  result += indent + "stops=(";
+  for (int i = 0; i < static_cast<int>(tag_dispatch.stops.size()); ++i) {
+    if (auto* str = std::get_if<std::string>(&tag_dispatch.stops[i])) {
+      result += PrintString(*str);
+    } else {
+      result += std::to_string(std::get<int32_t>(tag_dispatch.stops[i]));
+    }
+    if (i + 1 != static_cast<int>(tag_dispatch.stops.size())) {
       result += ", ";
     }
   }
@@ -146,9 +157,13 @@ std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
   result +=
       indent + "loop_after_dispatch=" + PrintBoolean(tag_dispatch.loop_after_dispatch) + ",\n";
   result += indent + "excludes=(";
-  for (int i = 0; i < static_cast<int>(tag_dispatch.excluded_str.size()); ++i) {
-    result += PrintString(tag_dispatch.excluded_str[i]);
-    if (i + 1 != static_cast<int>(tag_dispatch.excluded_str.size())) {
+  for (int i = 0; i < static_cast<int>(tag_dispatch.excludes.size()); ++i) {
+    if (auto* str = std::get_if<std::string>(&tag_dispatch.excludes[i])) {
+      result += PrintString(*str);
+    } else {
+      result += std::to_string(std::get<int32_t>(tag_dispatch.excludes[i]));
+    }
+    if (i + 1 != static_cast<int>(tag_dispatch.excludes.size())) {
       result += ", ";
     }
   }
@@ -164,6 +179,16 @@ std::string GrammarPrinter::PrintRepeat(const GrammarExpr& grammar_expr) {
   result += ", ";
   result += std::to_string(upper_bound);
   result += "}";
+  return result;
+}
+
+std::string GrammarPrinter::PrintTokenSet(const GrammarExpr& grammar_expr) {
+  std::string result = "Token(";
+  for (int i = 0; i < grammar_expr.data_len; ++i) {
+    if (i > 0) result += ", ";
+    result += std::to_string(grammar_expr[i]);
+  }
+  result += ")";
   return result;
 }
 
