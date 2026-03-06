@@ -548,6 +548,11 @@ class BatchGrammarMatcher(XGRObject):
         num_tokens : List[int] | int, default: 1
             The number of tokens to rollback for each matcher. If an integer is provided, it will be
             used for all matchers; if a list is provided, it must have the same length as matchers.
+
+        Raises
+        ------
+        RuntimeError
+            If the sizes of matchers and num_tokens do not match.
         """
         if isinstance(num_tokens, int):
             num_tokens = [num_tokens] * len(matchers)
