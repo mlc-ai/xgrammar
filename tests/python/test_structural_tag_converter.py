@@ -194,8 +194,6 @@ basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false,
   excludes=("</parameter>")
 )
@@ -308,8 +306,6 @@ basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false,
   excludes=("</parameter>")
 )
@@ -393,8 +389,6 @@ basic_null ::= (("null"))
 basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false,
   excludes=("</\uff5cDSML\uff5cparameter>")
 )
@@ -703,12 +697,10 @@ any_text_stag_grammar = [
     (
         {"type": "tag", "begin": "BEG", "content": {"type": "any_text"}, "end": "END"},
         r"""any_text ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("END"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("END")
 )
-tag ::= (("BEG" any_text))
+tag ::= (("BEG" any_text "END"))
 root ::= ((tag))
 """,
     )
@@ -775,8 +767,6 @@ def test_no_end_anytext_format_with_excludes(instance: str, is_accepted: bool):
         "at_least_one": True,
     }
     expected_grammar = r"""any_text ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false,
   excludes=("<END>")
 )
@@ -784,8 +774,6 @@ triggered_tags_group ::= (("" any_text))
 triggered_tags_first ::= (("<TOOL>" any_text))
 triggered_tags_sub ::= TagDispatch(
   ("<TOOL>", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -819,8 +807,6 @@ const_string_1 ::= (("L2"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -836,8 +822,6 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -853,8 +837,6 @@ const_string_1 ::= (("L2"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -917,8 +899,6 @@ test_triggered_tags_corner_case_data = [
 triggered_tags_group ::= (("" const_string "<end>"))
 triggered_tags ::= TagDispatch(
   ("<start>", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -980,12 +960,10 @@ const_string_1 ::= (("L2"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
-  stop_eos=false,
-  stop_str=("end"),
   loop_after_dispatch=true,
-  excludes=()
+  excludes=("end")
 )
-tag ::= (("begin" triggered_tags))
+tag ::= (("begin" triggered_tags "end"))
 root ::= ((tag))
 """,
     ),
@@ -998,13 +976,11 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
-  stop_eos=false,
-  stop_str=("end"),
   loop_after_dispatch=true,
-  excludes=()
+  excludes=("end")
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
-tag ::= (("begin" triggered_tags))
+tag ::= (("begin" triggered_tags "end"))
 root ::= ((tag))
 """,
     ),
@@ -1016,12 +992,10 @@ const_string_1 ::= (("L2"))
 triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags ::= TagDispatch(
   ("A", triggered_tags_group),
-  stop_eos=false,
-  stop_str=("end"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("end")
 )
-tag ::= (("begin" triggered_tags))
+tag ::= (("begin" triggered_tags "end"))
 root ::= ((tag))
 """,
     ),
@@ -1030,9 +1004,8 @@ root ::= ((tag))
         _get_triggered_tag_with_outside_tag(at_least_one=True, stop_after_first=True),
         r"""const_string ::= (("L1"))
 const_string_1 ::= (("L2"))
-triggered_tags_sub ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
-triggered_tags ::= ((triggered_tags_sub "end"))
-tag ::= (("begin" triggered_tags))
+triggered_tags ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
+tag ::= (("begin" triggered_tags "end"))
 root ::= ((tag))
 """,
     ),
@@ -1185,9 +1158,9 @@ tag ::= (("A1" const_string "A"))
 const_string_1 ::= (("L2"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
-tags_with_separator_sub ::= (("AA" tags_with_separator_tags tags_with_separator_sub) | ("end"))
-tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub) | ("end"))
-tag_2 ::= (("begin" tags_with_separator))
+tags_with_separator_sub ::= ("" | ("AA" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tag_2 ::= (("begin" tags_with_separator "end"))
 root ::= ((tag_2))
 """,
     ),
@@ -1199,9 +1172,9 @@ tag ::= (("A1" const_string "A"))
 const_string_1 ::= (("L2"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
-tags_with_separator_sub ::= (("AA" tags_with_separator_tags tags_with_separator_sub) | ("end"))
+tags_with_separator_sub ::= ("" | ("AA" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
-tag_2 ::= (("begin" tags_with_separator))
+tag_2 ::= (("begin" tags_with_separator "end"))
 root ::= ((tag_2))
 """,
     ),
@@ -1213,8 +1186,8 @@ tag ::= (("A1" const_string "A"))
 const_string_1 ::= (("L2"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
-tags_with_separator ::= ((tags_with_separator_tags "end") | ("end"))
-tag_2 ::= (("begin" tags_with_separator))
+tags_with_separator ::= ("" | (tags_with_separator_tags))
+tag_2 ::= (("begin" tags_with_separator "end"))
 root ::= ((tag_2))
 """,
     ),
@@ -1226,8 +1199,8 @@ tag ::= (("A1" const_string "A"))
 const_string_1 ::= (("L2"))
 tag_1 ::= (("A2" const_string_1 "A"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
-tags_with_separator ::= ((tags_with_separator_tags "end"))
-tag_2 ::= (("begin" tags_with_separator))
+tags_with_separator ::= ((tags_with_separator_tags))
+tag_2 ::= (("begin" tags_with_separator "end"))
 root ::= ((tag_2))
 """,
     ),
@@ -1599,13 +1572,11 @@ end_string_detector_test_data = [
         },
         r"""const_string ::= (("[TEXT]"))
 any_text ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<end>"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("<end>")
 )
 sequence ::= ((const_string any_text))
-tag ::= (("<start>" sequence))
+tag ::= (("<start>" sequence "<end>"))
 root ::= ((tag))
 """,
         [
@@ -1650,41 +1621,33 @@ root ::= ((tag))
             "end": "<end>",
         },
         r"""any_text ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<end2>"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("<end2>")
 )
-triggered_tags_group ::= ((">" any_text))
-triggered_tags_first ::= (("<start2>" any_text))
+triggered_tags_group ::= ((">" any_text "<end2>"))
+triggered_tags_first ::= (("<start2>" any_text "<end2>"))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
-  stop_eos=false,
-  stop_str=("<end>"),
   loop_after_dispatch=true,
-  excludes=()
+  excludes=("<end>")
 )
 triggered_tags ::= ((triggered_tags_first triggered_tags_sub))
 const_string ::= (("[TEXT2]"))
 any_text_1 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<end>"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("<end>")
 )
 sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<end3>"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("<end3>")
 )
-tag ::= (("<start3>" any_text_2))
+tag ::= (("<start3>" any_text_2 "<end3>"))
 tags_with_separator_tags ::= ((tag))
-tags_with_separator_sub ::= (("<sep>" tags_with_separator_tags tags_with_separator_sub) | ("<end>"))
-tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub) | ("<end>"))
+tags_with_separator_sub ::= ("" | ("<sep>" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 or ::= ((triggered_tags) | (sequence) | (tags_with_separator))
-tag_1 ::= (("<start>" or))
+tag_1 ::= (("<start>" or "<end>"))
 root ::= ((tag_1))
 """,
         [
@@ -1741,17 +1704,13 @@ root ::= ((tag_1))
             ],
         },
         r"""any_text ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<end2>"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("<end2>")
 )
-triggered_tags_group ::= ((">" any_text))
-triggered_tags_first ::= (("<start2>" any_text))
+triggered_tags_group ::= ((">" any_text "<end2>"))
+triggered_tags_first ::= (("<start2>" any_text "<end2>"))
 triggered_tags_sub ::= TagDispatch(
   ("<start2", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -1760,12 +1719,10 @@ const_string ::= (("[TEXT]"))
 any_text_1 ::= (([\0-\U0010ffff]*))
 sequence ::= ((const_string any_text_1))
 any_text_2 ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("<end3>"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("<end3>")
 )
-tag ::= (("<start3>" any_text_2))
+tag ::= (("<start3>" any_text_2 "<end3>"))
 tags_with_separator_tags ::= ((tag))
 tags_with_separator_sub ::= ("" | ("<sep>" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
@@ -2449,12 +2406,11 @@ multiple_end_tokens_any_text_stag_grammar = [
     (
         {"type": "tag", "begin": "BEG", "content": {"type": "any_text"}, "end": ["END1", "END2"]},
         r"""any_text ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("END1", "END2"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("END1", "END2")
 )
-tag ::= (("BEG" any_text))
+tag_end ::= (("END1") | ("END2"))
+tag ::= (("BEG" any_text tag_end))
 root ::= ((tag))
 """,
     )
@@ -2632,12 +2588,10 @@ def test_excluded_strings_in_any_text(instance: str, is_accepted: bool):
     }
 
     expected_grammar = r"""any_text ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("."),
   loop_after_dispatch=false,
-  excludes=("<end>", "</tag>")
+  excludes=("<end>", "</tag>", ".")
 )
-tag ::= (("" any_text))
+tag ::= (("" any_text "."))
 root ::= ((tag))
 """
 
@@ -2678,8 +2632,6 @@ triggered_tags_group ::= (("1" const_string "A") | ("2" const_string_1 "A"))
 triggered_tags_first ::= (("A1" const_string "A") | ("A2" const_string_1 "A"))
 triggered_tags_sub ::= TagDispatch(
   ("A", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=("L1", "L2")
 )
@@ -2707,8 +2659,6 @@ def test_excluded_strings_in_single_any_text(instance: str, is_accepted: bool):
     format = {"type": "any_text", "excludes": ["ABC"]}
 
     expected_grammar = r"""any_text ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false,
   excludes=("ABC")
 )
@@ -2743,8 +2693,6 @@ def test_excluded_any_text_within_sequence(instance: str, is_accepted: bool):
     }
 
     expected_grammar = r"""any_text ::= TagDispatch(
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false,
   excludes=("ABC")
 )
@@ -2785,16 +2733,12 @@ def test_excludes_triggered_tags_without_end(instance: str, is_accepted: bool):
     }
 
     expected_grammar = r"""any_text ::= TagDispatch(
-  stop_eos=false,
-  stop_str=("1"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("1")
 )
-triggered_tags_group ::= (("" any_text))
+triggered_tags_group ::= (("" any_text "1"))
 triggered_tags ::= TagDispatch(
   ("1", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=("ABC")
 )

@@ -47,53 +47,22 @@ rule2 ::= "efg" [t]*
     assert not _is_grammar_accept_string(grammar, "tag2efgtag1")
 
 
-def test_stop_str():
-    grammar_str = """root ::= root1 "w"
-root1 ::= TagDispatch(
+def test_excludes():
+    grammar_str = """root ::= TagDispatch(
   ("tag1", rule1),
   ("tag2", rule2),
-  stop_eos=false,
-  stop_str=("tag3", "ll")
+  excludes=("bad", "xx")
 )
 rule1 ::= "abcd" [p]*
 rule2 ::= "efg" [t]*
 """
 
     grammar = xgr.Grammar.from_ebnf(grammar_str)
-    assert _is_grammar_accept_string(grammar, "tag1abcdllw", debug_print=True)
-    assert _is_grammar_accept_string(grammar, "tag1abcdtag3w")
-    assert _is_grammar_accept_string(grammar, "tag1abcdqqqtag2efgtag3w")
-    assert _is_grammar_accept_string(grammar, "tag1abcd", require_termination=False)
-    assert _is_grammar_accept_string(grammar, "tag2efgttt", require_termination=False)
-    assert not _is_grammar_accept_string(grammar, "tag1abcd")
-    assert not _is_grammar_accept_string(grammar, "tag2efgttt")
+    assert _is_grammar_accept_string(grammar, "tag1abcd")
+    assert _is_grammar_accept_string(grammar, "tag1abcdqqtag2efg")
+    assert not _is_grammar_accept_string(grammar, "tag1abcdbadtag2efg")
+    assert not _is_grammar_accept_string(grammar, "tag1abcdxxqqtag2efg")
     assert not _is_grammar_accept_string(grammar, "tag1abce")
-    assert not _is_grammar_accept_string(grammar, "tag1abcdlltag3w", require_termination=False)
-
-
-def test_stop_str_no_loop():
-    grammar_str = """root ::= root1 "w"
-root1 ::= TagDispatch(
-  ("tag1", rule1),
-  ("tag2", rule2),
-  stop_eos=false,
-  stop_str=("tag3", "ll"),
-  loop_after_dispatch=false
-)
-rule1 ::= "abcd" [p]*
-rule2 ::= "efg" [t]*
-"""
-
-    grammar = xgr.Grammar.from_ebnf(grammar_str)
-    assert _is_grammar_accept_string(grammar, "tag1abcdllw")
-    assert _is_grammar_accept_string(grammar, "tag1abcdtag3w")
-    assert _is_grammar_accept_string(grammar, "tag1abcd", require_termination=False)
-    assert _is_grammar_accept_string(grammar, "tag2efgttt", require_termination=False)
-    assert not _is_grammar_accept_string(grammar, "tag1abcdqqqtag2efgtag3w")
-    assert not _is_grammar_accept_string(grammar, "tag1abcd")
-    assert not _is_grammar_accept_string(grammar, "tag2efgttt")
-    assert not _is_grammar_accept_string(grammar, "tag1abce")
-    assert not _is_grammar_accept_string(grammar, "tag1abcdlltag3w", require_termination=False)
 
 
 def test_tag_dispatch_mask_generation_correctness():
@@ -153,42 +122,34 @@ def test_regression_multiple_tag_dispatch():
 root1 ::= TagDispatch(
   ("tag1", rule1),
   ("tag2", rule2),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false
 )
 rule1 ::= TagDispatch(
   ("tag1", rule2),
   ("tag2", rule3),
-  stop_eos=false,
-  stop_str=("tag3", "ll"),
-  loop_after_dispatch=true
+  loop_after_dispatch=true,
+  excludes=("tag3", "ll")
 )
 rule2 ::= "efg" [t]*
 rule3 ::= "abcd" [p]*
 """
-    assert _is_grammar_accept_string(grammar_str, "tag1tag1efgllw")
-    assert _is_grammar_accept_string(grammar_str, "tag1tag2abcdtag3w")
-    assert not _is_grammar_accept_string(grammar_str, "tag1Ktag2abcdtag3tag1")
-    assert _is_grammar_accept_string(grammar_str, "tag1tag3w")
-    assert not _is_grammar_accept_string(grammar_str, "tag1tag3tag2abcdll")
+    assert _is_grammar_accept_string(grammar_str, "tag1tag1efgw")
+    assert _is_grammar_accept_string(grammar_str, "tag1tag2abcdw")
+    assert not _is_grammar_accept_string(grammar_str, "tag1tag1efglltag2abcdw")
+    assert not _is_grammar_accept_string(grammar_str, "tag1tag2abcdtag3tag1efgw")
 
 
 def test_excluded_str():
     grammar_str = """root ::= TagDispatch(
   ("start", rule1),
-  stop_str=("</think>"),
   excludes=("</conclude>"),
-  loop_after_dispatch=true,
-  stop_eos=false
+  loop_after_dispatch=true
 )
 rule1 ::= "12345"
 """
 
     expected = """root ::= TagDispatch(
   ("start", rule1),
-  stop_eos=false,
-  stop_str=("</think>"),
   loop_after_dispatch=true,
   excludes=("</conclude>")
 )
@@ -198,9 +159,9 @@ rule1 ::= (("12345"))
     grammar = xgr.Grammar.from_ebnf(grammar_str)
     assert str(grammar) == expected
 
-    assert _is_grammar_accept_string(grammar, "start12345</think>")
+    assert _is_grammar_accept_string(grammar, "start12345")
     assert not _is_grammar_accept_string(grammar, "start12345</conclude>")
-    assert _is_grammar_accept_string(grammar, "start12345abc</think>")
+    assert _is_grammar_accept_string(grammar, "start12345abc")
     assert not _is_grammar_accept_string(grammar, "start12345</conclude>abc")
 
 

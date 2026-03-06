@@ -83,11 +83,9 @@ class SubGrammarAdderImpl : public GrammarMutator {
   int32_t VisitTagDispatch(const GrammarExpr& grammar_expr) final {
     Grammar::Impl::TagDispatch old_tag_dispatch = base_grammar_->GetTagDispatch(grammar_expr);
     Grammar::Impl::TagDispatch new_tag_dispatch;
-    new_tag_dispatch.stop_eos = old_tag_dispatch.stop_eos;
     for (const auto& [tag, rule_id] : old_tag_dispatch.tag_rule_pairs) {
       new_tag_dispatch.tag_rule_pairs.emplace_back(tag, new_rule_ids_names[rule_id].first);
     }
-    new_tag_dispatch.stop_str = old_tag_dispatch.stop_str;
     new_tag_dispatch.loop_after_dispatch = old_tag_dispatch.loop_after_dispatch;
     new_tag_dispatch.excluded_str = old_tag_dispatch.excluded_str;
     return builder_->AddTagDispatch(new_tag_dispatch);
@@ -887,10 +885,7 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       auto rule = base_grammar_->GetRule(i);
       auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
       if (grammar_expr.type == GrammarExprType::kTagDispatch) {
-        auto tag_dispatch = base_grammar_->GetTagDispatch(grammar_expr);
-        if (tag_dispatch.stop_eos == true) {
-          empty_rule_id_set->insert(i);
-        }
+        empty_rule_id_set->insert(i);
         continue;
       }
 
@@ -1059,14 +1054,8 @@ class GrammarFSMBuilderImpl {
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
   static void AddCharacterRange(FSMWithStartEnd& fsm, int from, int to, uint32_t min, uint32_t max);
   /* Building tool funtions.*/
-  static std::optional<FSMWithStartEnd> BuildTagDispatchWithEOSStop(
+  static std::optional<FSMWithStartEnd> BuildTagDispatchFSM(
       const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
-      bool loop_after_dispatch,
-      const std::vector<std::string>& excluded_strings
-  );
-  static std::optional<FSMWithStartEnd> BuildTagDispatchWithStopString(
-      const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
-      const std::vector<std::string>& stop_strings,
       bool loop_after_dispatch,
       const std::vector<std::string>& excluded_strings
   );
@@ -1495,84 +1484,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
   return result;
 }
 
-std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithStopString(
-    const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
-    const std::vector<std::string>& stop_strings,
-    bool loop_after_dispatch,
-    const std::vector<std::string>& excluded_strings
-) {
-  XGRAMMAR_DCHECK(stop_strings.size() > 0);
-  std::vector<std::string> tag_names;
-  tag_names.reserve(tag_dispatch_rules.size());
-  for (const auto& [tag_name, tag_id] : tag_dispatch_rules) {
-    tag_names.push_back(tag_name);
-  }
-  for (const auto& stop_string : stop_strings) {
-    tag_names.push_back(stop_string);
-  }
-  std::vector<int> trie_end_states;
-  auto trie_result =
-      TrieFSMBuilder::Build(tag_names, excluded_strings, &trie_end_states, false, true);
-  if (!trie_result.has_value()) {
-    return std::nullopt;
-  }
-  auto trie_fsm = trie_result->GetFsm();
-  auto start = trie_result->GetStart();
-  std::unordered_set<int> old_ends;
-  for (int end = 0; end < trie_result->NumStates(); end++) {
-    if (trie_result->IsEndState(end)) {
-      old_ends.insert(end);
-    }
-  }
-  std::vector<bool> ends(trie_fsm.NumStates(), false);
-
-  // The final end states are the end of each stop string.
-  for (int i = static_cast<int>(tag_dispatch_rules.size());
-       i < static_cast<int>(trie_end_states.size());
-       i++) {
-    ends[trie_end_states[i]] = true;
-  }
-
-  if (loop_after_dispatch) {
-    for (int i = 0; i < static_cast<int>(tag_dispatch_rules.size()); i++) {
-      trie_fsm.AddRuleEdge(trie_end_states[i], start, tag_dispatch_rules[i].second);
-    }
-  } else {
-    // We should first build a new FSM that only contains the stop strings.
-    tag_names.clear();
-    for (const auto& stop_string : stop_strings) {
-      tag_names.push_back(stop_string);
-    }
-    std::vector<int> stop_end_states;
-    auto stop_trie_result =
-        TrieFSMBuilder::Build(tag_names, excluded_strings, nullptr, false, false);
-    XGRAMMAR_DCHECK(stop_trie_result.has_value());
-    auto stop_trie_fsm = stop_trie_result->GetFsm();
-    auto stop_trie_start = stop_trie_result->GetStart();
-    std::unordered_set<int> stop_trie_ends;
-    for (int end = 0; end < stop_trie_result->NumStates(); end++) {
-      if (stop_trie_result->IsEndState(end)) {
-        stop_trie_ends.insert(end);
-      }
-    }
-
-    std::vector<int> stop_trie_to_trie_map;
-    trie_fsm.AddFSM(stop_trie_fsm, &stop_trie_to_trie_map);
-    ends.resize(trie_fsm.NumStates(), false);
-    int start_of_stop_trie = stop_trie_to_trie_map[stop_trie_start];
-    for (auto state : stop_trie_ends) {
-      ends[stop_trie_to_trie_map[state]] = true;
-    }
-
-    for (int i = 0; i < static_cast<int>(tag_dispatch_rules.size()); i++) {
-      trie_fsm.AddRuleEdge(trie_end_states[i], start_of_stop_trie, tag_dispatch_rules[i].second);
-    }
-  }
-
-  return FSMWithStartEnd(trie_fsm, start, ends);
-}
-
-std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithEOSStop(
+std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchFSM(
     const std::vector<std::pair<std::string, int>>& tag_dispatch_rules,
     bool loop_after_dispatch,
     const std::vector<std::string>& excluded_strings
@@ -1622,18 +1534,9 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchWithEOSSto
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(
     const Grammar::Impl::TagDispatch& tag_dispatch
 ) {
-  if (tag_dispatch.stop_eos) {
-    return BuildTagDispatchWithEOSStop(
-        tag_dispatch.tag_rule_pairs, tag_dispatch.loop_after_dispatch, tag_dispatch.excluded_str
-    );
-  } else {
-    return BuildTagDispatchWithStopString(
-        tag_dispatch.tag_rule_pairs,
-        tag_dispatch.stop_str,
-        tag_dispatch.loop_after_dispatch,
-        tag_dispatch.excluded_str
-    );
-  }
+  return BuildTagDispatchFSM(
+      tag_dispatch.tag_rule_pairs, tag_dispatch.loop_after_dispatch, tag_dispatch.excluded_str
+  );
 }
 
 class RepetitionNormalizerImpl {

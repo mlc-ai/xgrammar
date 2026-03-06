@@ -134,15 +134,6 @@ std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
   for (const auto& [tag, rule_id] : tag_dispatch.tag_rule_pairs) {
     result += indent + "(" + PrintString(tag) + ", " + grammar_->GetRule(rule_id).name + "),\n";
   }
-  result += indent + "stop_eos=" + PrintBoolean(tag_dispatch.stop_eos) + ",\n";
-  result += indent + "stop_str=(";
-  for (int i = 0; i < static_cast<int>(tag_dispatch.stop_str.size()); ++i) {
-    result += PrintString(tag_dispatch.stop_str[i]);
-    if (i + 1 != static_cast<int>(tag_dispatch.stop_str.size())) {
-      result += ", ";
-    }
-  }
-  result += "),\n";
   result +=
       indent + "loop_after_dispatch=" + PrintBoolean(tag_dispatch.loop_after_dispatch) + ",\n";
   result += indent + "excludes=(";

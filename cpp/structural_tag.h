@@ -80,7 +80,6 @@ struct AnyTextFormat {
   AnyTextFormat(std::vector<std::string> excluded_strs) : excludes(std::move(excluded_strs)) {}
 
  private:
-  // Detected in StructuralTagAnalyzer - supports multiple end strings
   std::vector<std::string> detected_end_strs_;
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;
@@ -144,7 +143,6 @@ struct TriggeredTagsFormat {
         stop_after_first(stop_after_first) {}
 
  private:
-  // Detected in StructuralTagAnalyzer - supports multiple end strings
   std::vector<std::string> detected_end_strs_;
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;
@@ -166,8 +164,6 @@ struct TagsWithSeparatorFormat {
         stop_after_first(stop_after_first) {}
 
  private:
-  // Detected in StructuralTagAnalyzer - supports multiple end strings
-  std::vector<std::string> detected_end_strs_;
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;
 };

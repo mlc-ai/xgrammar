@@ -195,12 +195,6 @@ class GrammarBuilder {
       data.push_back(AddByteString(tag));
       data.push_back(rule_id);
     }
-    data.push_back(static_cast<int32_t>(tag_dispatch.stop_eos));
-    std::vector<int32_t> stop_str_expr_ids;
-    for (const auto& stop_str : tag_dispatch.stop_str) {
-      stop_str_expr_ids.push_back(AddByteString(stop_str));
-    }
-    data.push_back(AddChoices(stop_str_expr_ids));
     data.push_back(static_cast<int32_t>(tag_dispatch.loop_after_dispatch));
     std::vector<int32_t> exclude_str_expr_ids;
     for (const auto& exclude_str : tag_dispatch.excluded_str) {

@@ -119,11 +119,10 @@ class Grammar::Impl {
     kSequence,
     // data format: [grammar_expr_id0, grammar_expr_id1, ...]
     kChoices,
-    // data format: [tag_expr0, rule_id0, tag_expr1, rule_id1, ..., stop_eos, stop_str_expr_id,
-    // loop_after_dispatch]
-    // where stop_eos is a bool, stop_str_expr_id is a choices GrammarExpr id.
+    // data format: [tag_expr0, rule_id0, tag_expr1, rule_id1, ..., loop_after_dispatch,
+    // excluded_str_expr_id]
     // tag_expr should be a byte string, and rule_id should be a rule id.
-    // loop_after_dispatch is a bool.
+    // loop_after_dispatch is a bool. excluded_str_expr_id is a choices GrammarExpr id.
     kTagDispatch,
     // data format: [rule_id, min_repeat_count, max_repeat_count]
     kRepeat,
@@ -188,15 +187,11 @@ class Grammar::Impl {
   struct TagDispatch {
     /*! \brief The tag and rule id pairs. */
     std::vector<std::pair<std::string, int32_t>> tag_rule_pairs;
-    /*! \brief If true, EOS is allowed to generate and will stop the tag dispatch. */
-    bool stop_eos;
-    /*! \brief The strings that will stop the tag dispatch. Only work if stop_eos is false. */
-    std::vector<std::string> stop_str;
     /*! \brief If true, the tag dispatch will loop after dispatching. */
     bool loop_after_dispatch;
-    /*! \brief The strings that are excluded by the tap dispatch. */
+    /*! \brief The strings that are excluded by the tag dispatch. */
     std::vector<std::string> excluded_str;
-    static const int kTagDispatchExtraParameter = 4;
+    static const int kTagDispatchExtraParameter = 2;
   };
 
   /*! \brief Get the tag dispatch from the grammar expr. */
@@ -216,25 +211,12 @@ class Grammar::Impl {
       result.tag_rule_pairs.push_back({GetByteString(tag_expr_id), rule_id});
     }
 
-    result.stop_eos = static_cast<bool>(
+    result.loop_after_dispatch = static_cast<bool>(
         grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter]
     );
 
-    auto stop_str_expr = GetGrammarExpr(
-        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 1]
-    );
-    XGRAMMAR_DCHECK(stop_str_expr.type == GrammarExprType::kChoices);
-    result.stop_str.reserve(stop_str_expr.size());
-    for (int j = 0; j < stop_str_expr.size(); j++) {
-      result.stop_str.push_back(GetByteString(stop_str_expr[j]));
-    }
-
-    result.loop_after_dispatch = static_cast<bool>(
-        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 2]
-    );
-
     auto exclude_str_expr = GetGrammarExpr(
-        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 3]
+        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 1]
     );
     XGRAMMAR_DCHECK(exclude_str_expr.type == GrammarExprType::kChoices);
     result.excluded_str.reserve(exclude_str_expr.size());
