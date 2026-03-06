@@ -111,13 +111,26 @@ struct OrFormat {
   friend class StructuralTagGrammarConverter;
 };
 
+struct RegexBegin {
+  static constexpr const char* type = "regex_begin";
+  std::optional<std::string> trigger;
+  RegexFormat regex;
+  RegexBegin(std::optional<std::string> trigger, RegexFormat regex)
+      : trigger(std::move(trigger)), regex(std::move(regex)) {}
+};
+
 struct TagFormat {
   static constexpr const char* type = "tag";
-  std::string begin;
+  // begin can be a constant string or a regex pattern
+  std::variant<std::string, RegexBegin> begin;
   std::shared_ptr<Format> content;
   std::vector<std::string> end;  // Supports multiple end tokens
 
-  TagFormat(std::string begin, std::shared_ptr<Format> content, std::vector<std::string> end)
+  TagFormat(
+      std::variant<std::string, RegexBegin> begin,
+      std::shared_ptr<Format> content,
+      std::vector<std::string> end
+  )
       : begin(std::move(begin)), content(std::move(content)), end(std::move(end)) {}
 };
 
