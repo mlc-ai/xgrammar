@@ -165,5 +165,31 @@ rule1 ::= (("12345"))
     assert not _is_grammar_accept_string(grammar, "start12345</conclude>abc")
 
 
+def test_duplicate_triggers():
+    grammar_str = """root ::= TagDispatch(("tag", rule1), ("tag", rule2))
+rule1 ::= "abc"
+rule2 ::= "def"
+"""
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    assert _is_grammar_accept_string(grammar, "tagabc")
+    assert _is_grammar_accept_string(grammar, "tagdef")
+    assert _is_grammar_accept_string(grammar, "tagabctagdef")
+    assert not _is_grammar_accept_string(grammar, "tagxyz")
+
+
+def test_duplicate_excludes():
+    grammar_str = """root ::= TagDispatch(
+  ("tag1", rule1),
+  excludes=("stop", "stop")
+)
+rule1 ::= "abc"
+"""
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    assert _is_grammar_accept_string(grammar, "tag1abc")
+    assert _is_grammar_accept_string(grammar, "tag1abcqqtag1abc")
+    assert not _is_grammar_accept_string(grammar, "tag1abcstop")
+    assert not _is_grammar_accept_string(grammar, "stop")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

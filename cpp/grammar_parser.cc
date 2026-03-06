@@ -1120,6 +1120,18 @@ int32_t EBNFParser::ParseTagDispatch() {
     }
   }
 
+  // Check no exclude is a prefix of any trigger
+  for (const auto& excl : tag_dispatch.excluded_str) {
+    for (const auto& [tag, rule_id] : tag_dispatch.tag_rule_pairs) {
+      if (excl.size() <= tag.size() && tag.substr(0, excl.size()) == excl) {
+        ReportParseError(
+            "TagDispatch exclude \"" + excl + "\" is a prefix of trigger \"" + tag + "\"",
+            delta_element
+        );
+      }
+    }
+  }
+
   return builder_.AddTagDispatch(tag_dispatch);
 }
 

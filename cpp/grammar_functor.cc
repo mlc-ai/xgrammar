@@ -1495,7 +1495,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchFSM(
     tag_names.push_back(tag_name);
   }
   std::vector<int> end_states;
-  auto trie_result = TrieFSMBuilder::Build(tag_names, excluded_strings, &end_states, false, true);
+  auto trie_result = TrieFSMBuilder::Build(tag_names, excluded_strings, &end_states, true, true);
   if (!trie_result.has_value()) {
     return std::nullopt;
   }

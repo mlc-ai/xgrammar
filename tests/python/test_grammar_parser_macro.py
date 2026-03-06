@@ -188,6 +188,18 @@ ebnf_str__expected_error_regex__test_tag_dispatch_parser_errors = [
         'root ::= TagDispatch(("tag1" rule1))',
         "EBNF parser error at line 1, column 30: Expect , or \\) in tuple",
     ),
+    (
+        'root ::= TagDispatch(("tag1", rule1), excludes=(""))\nrule1 ::= "a"',
+        "Stop string must be a non-empty string literal",
+    ),
+    (
+        'root ::= TagDispatch(("<tool_calc>", rule1), excludes=("<tool"))\nrule1 ::= "a"',
+        'exclude "<tool" is a prefix of trigger "<tool_calc>"',
+    ),
+    (
+        'root ::= TagDispatch(("stop", rule1), excludes=("stop"))\nrule1 ::= "a"',
+        'exclude "stop" is a prefix of trigger "stop"',
+    ),
 ]
 
 
