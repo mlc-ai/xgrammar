@@ -201,6 +201,15 @@ class BatchGrammarMatcher {
       bool debug_print = false
   );
 
+  /*!
+   * \brief A batched version of Rollback for better efficiency.
+   * \param matchers The array of GrammarMatcher objects.
+   * \param num_tokens The array of the number of tokens to rollback for each matcher.
+   */
+  static void BatchRollback(
+      std::vector<GrammarMatcher>* matchers, const std::vector<int>& num_tokens
+  );
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(BatchGrammarMatcher);
 };
 
