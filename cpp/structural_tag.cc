@@ -1290,7 +1290,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const OptionalForm
   int content_rule_id = std::move(result).Unwrap();
   auto content_ref = grammar_builder_.AddRuleRef(content_rule_id);
   auto expr = grammar_builder_.AddChoices(
-      {grammar_builder_.AddSequence({content_ref}), grammar_builder_.AddEmptyStr()}
+      {grammar_builder_.AddEmptyStr(), grammar_builder_.AddSequence({content_ref})}
   );
   return ResultOk(grammar_builder_.AddRuleWithHint("optional", expr));
 }

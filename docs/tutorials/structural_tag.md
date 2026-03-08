@@ -329,7 +329,7 @@ The format field requires a format object. We provide several basic format objec
     tag is generated. If there are following tags, they will still be generated; otherwise, the
     generation will stop.
 
-11. `OptionalFormat`
+11. `optional`
 
     The inner format may appear **0 or 1 time** (EBNF optional). The output can either match the content once or be empty.
 
@@ -358,7 +358,7 @@ The format field requires a format object. We provide several basic format objec
 
     The above accepts either an empty string or exactly `Optional prefix: `.
 
-12. `PlusFormat`
+12. `plus`
 
     The inner format must appear **1 or more times** (EBNF plus). The output matches one or more consecutive occurrences of the content.
 
@@ -387,7 +387,7 @@ The format field requires a format object. We provide several basic format objec
 
     The above accepts `item`, `itemitem`, `itemitemitem`, and so on.
 
-13. `StarFormat`
+13. `star`
 
     The inner format may appear **0 or more times** (EBNF star). The output matches zero or more consecutive occurrences of the content.
 
