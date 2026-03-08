@@ -57,6 +57,9 @@ class StructuralTagParser {
   Result<TagsWithSeparatorFormat, ISTError> ParseTagsWithSeparatorFormat(
       const picojson::object& value
   );
+  Result<OptionalFormat, ISTError> ParseOptionalFormat(const picojson::object& value);
+  Result<PlusFormat, ISTError> ParsePlusFormat(const picojson::object& value);
+  Result<StarFormat, ISTError> ParseStarFormat(const picojson::object& value);
 
   int parse_format_recursion_depth_ = 0;
 };
@@ -123,6 +126,12 @@ Result<Format, ISTError> StructuralTagParser::ParseFormat(const picojson::value&
       return Result<Format, ISTError>::Convert(ParseTriggeredTagsFormat(obj));
     } else if (type == "tags_with_separator") {
       return Result<Format, ISTError>::Convert(ParseTagsWithSeparatorFormat(obj));
+    } else if (type == "optional") {
+      return Result<Format, ISTError>::Convert(ParseOptionalFormat(obj));
+    } else if (type == "plus") {
+      return Result<Format, ISTError>::Convert(ParsePlusFormat(obj));
+    } else if (type == "star") {
+      return Result<Format, ISTError>::Convert(ParseStarFormat(obj));
     } else if (type == "qwen_xml_parameter") {
       return Result<Format, ISTError>::Convert(ParseJSONSchemaFormat(obj, "qwen_xml"));
     } else if (type == "grammar") {
@@ -166,6 +175,18 @@ Result<Format, ISTError> StructuralTagParser::ParseFormat(const picojson::value&
   auto tags_with_separator_format = ParseTagsWithSeparatorFormat(obj);
   if (!tags_with_separator_format.IsErr()) {
     return ResultOk<Format>(std::move(tags_with_separator_format).Unwrap());
+  }
+  auto optional_format = ParseOptionalFormat(obj);
+  if (!optional_format.IsErr()) {
+    return ResultOk<Format>(std::move(optional_format).Unwrap());
+  }
+  auto plus_format = ParsePlusFormat(obj);
+  if (!plus_format.IsErr()) {
+    return ResultOk<Format>(std::move(plus_format).Unwrap());
+  }
+  auto star_format = ParseStarFormat(obj);
+  if (!star_format.IsErr()) {
+    return ResultOk<Format>(std::move(star_format).Unwrap());
   }
   return ResultErr<ISTError>("Invalid format: " + value.serialize(false));
 }
@@ -491,6 +512,44 @@ Result<TagsWithSeparatorFormat, ISTError> StructuralTagParser::ParseTagsWithSepa
   );
 }
 
+Result<OptionalFormat, ISTError> StructuralTagParser::ParseOptionalFormat(
+    const picojson::object& obj
+) {
+  auto content_it = obj.find("content");
+  if (content_it == obj.end()) {
+    return ResultErr<ISTError>("Optional format must have a content field");
+  }
+  auto content = ParseFormat(content_it->second);
+  if (content.IsErr()) {
+    return ResultErr<ISTError>(std::move(content).UnwrapErr());
+  }
+  return ResultOk<OptionalFormat>(std::make_shared<Format>(std::move(content).Unwrap()));
+}
+
+Result<PlusFormat, ISTError> StructuralTagParser::ParsePlusFormat(const picojson::object& obj) {
+  auto content_it = obj.find("content");
+  if (content_it == obj.end()) {
+    return ResultErr<ISTError>("Plus format must have a content field");
+  }
+  auto content = ParseFormat(content_it->second);
+  if (content.IsErr()) {
+    return ResultErr<ISTError>(std::move(content).UnwrapErr());
+  }
+  return ResultOk<PlusFormat>(std::make_shared<Format>(std::move(content).Unwrap()));
+}
+
+Result<StarFormat, ISTError> StructuralTagParser::ParseStarFormat(const picojson::object& obj) {
+  auto content_it = obj.find("content");
+  if (content_it == obj.end()) {
+    return ResultErr<ISTError>("Star format must have a content field");
+  }
+  auto content = ParseFormat(content_it->second);
+  if (content.IsErr()) {
+    return ResultErr<ISTError>(std::move(content).UnwrapErr());
+  }
+  return ResultOk<StarFormat>(std::make_shared<Format>(std::move(content).Unwrap()));
+}
+
 /************** StructuralTag Analyzer **************/
 
 /*!
@@ -512,7 +571,10 @@ class StructuralTagAnalyzer {
       OrFormat*,
       TagFormat*,
       TriggeredTagsFormat*,
-      TagsWithSeparatorFormat*>;
+      TagsWithSeparatorFormat*,
+      OptionalFormat*,
+      PlusFormat*,
+      StarFormat*>;
 
   // Call this if we have a pointer to a Format.
   std::optional<ISTError> Visit(Format* format);
@@ -531,6 +593,9 @@ class StructuralTagAnalyzer {
   std::optional<ISTError> VisitSub(TagFormat* format);
   std::optional<ISTError> VisitSub(TriggeredTagsFormat* format);
   std::optional<ISTError> VisitSub(TagsWithSeparatorFormat* format);
+  std::optional<ISTError> VisitSub(OptionalFormat* format);
+  std::optional<ISTError> VisitSub(PlusFormat* format);
+  std::optional<ISTError> VisitSub(StarFormat* format);
 
   std::vector<std::string> DetectEndStrings();
   bool IsUnlimited(const Format& format);
@@ -570,6 +635,10 @@ bool StructuralTagAnalyzer::IsUnlimited(const Format& format) {
           return arg.is_unlimited_;
         } else if constexpr (std::is_same_v<T, OrFormat>) {
           return arg.is_unlimited_;
+        } else if constexpr (std::is_same_v<T, OptionalFormat>) {
+          return true;
+        } else if constexpr (std::is_same_v<T, StarFormat>) {
+          return true;
         } else {
           return false;
         }
@@ -731,6 +800,18 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TagsWithSeparatorFormat*
   return std::nullopt;
 }
 
+std::optional<ISTError> StructuralTagAnalyzer::VisitSub(OptionalFormat* format) {
+  return Visit(format->content.get());
+}
+
+std::optional<ISTError> StructuralTagAnalyzer::VisitSub(PlusFormat* format) {
+  return Visit(format->content.get());
+}
+
+std::optional<ISTError> StructuralTagAnalyzer::VisitSub(StarFormat* format) {
+  return Visit(format->content.get());
+}
+
 /************** StructuralTag to Grammar Converter **************/
 
 class StructuralTagGrammarConverter {
@@ -754,6 +835,9 @@ class StructuralTagGrammarConverter {
   Result<int, ISTError> VisitSub(const TagFormat& format);
   Result<int, ISTError> VisitSub(const TriggeredTagsFormat& format);
   Result<int, ISTError> VisitSub(const TagsWithSeparatorFormat& format);
+  Result<int, ISTError> VisitSub(const OptionalFormat& format);
+  Result<int, ISTError> VisitSub(const PlusFormat& format);
+  Result<int, ISTError> VisitSub(const StarFormat& format);
   Grammar AddRootRuleAndGetGrammar(int ref_rule_id);
 
   bool IsPrefix(const std::string& prefix, const std::string& full_str);
@@ -1195,6 +1279,56 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
   auto rule_body_expr_id = grammar_builder_.AddChoices(choices);
   auto rule_id = grammar_builder_.AddRuleWithHint("tags_with_separator", rule_body_expr_id);
   return ResultOk(rule_id);
+}
+
+Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const OptionalFormat& format) {
+  // optional: 0 or 1 occurrence -> Choice(content, "")
+  auto result = Visit(*format.content);
+  if (result.IsErr()) {
+    return result;
+  }
+  int content_rule_id = std::move(result).Unwrap();
+  auto content_ref = grammar_builder_.AddRuleRef(content_rule_id);
+  auto expr = grammar_builder_.AddChoices(
+      {grammar_builder_.AddSequence({content_ref}), grammar_builder_.AddEmptyStr()}
+  );
+  return ResultOk(grammar_builder_.AddRuleWithHint("optional", expr));
+}
+
+Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const PlusFormat& format) {
+  // plus: 1 or more occurrences -> content content_star, where content_star = content content_star
+  // | ""
+  auto result = Visit(*format.content);
+  if (result.IsErr()) {
+    return result;
+  }
+  int content_rule_id = std::move(result).Unwrap();
+  auto content_ref = grammar_builder_.AddRuleRef(content_rule_id);
+  auto star_rule_id = grammar_builder_.AddEmptyRuleWithHint("plus_star");
+  auto star_ref = grammar_builder_.AddRuleRef(star_rule_id);
+  auto star_body = grammar_builder_.AddChoices(
+      {grammar_builder_.AddEmptyStr(), grammar_builder_.AddSequence({content_ref, star_ref})}
+  );
+  grammar_builder_.UpdateRuleBody(star_rule_id, star_body);
+  auto plus_expr = grammar_builder_.AddSequence({content_ref, star_ref});
+  return ResultOk(grammar_builder_.AddRuleWithHint("plus", plus_expr));
+}
+
+Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const StarFormat& format) {
+  // star: 0 or more occurrences -> content_star, where content_star = content content_star | ""
+  auto result = Visit(*format.content);
+  if (result.IsErr()) {
+    return result;
+  }
+  int content_rule_id = std::move(result).Unwrap();
+  auto content_ref = grammar_builder_.AddRuleRef(content_rule_id);
+  auto star_rule_id = grammar_builder_.AddEmptyRuleWithHint("star");
+  auto star_ref = grammar_builder_.AddRuleRef(star_rule_id);
+  auto star_body = grammar_builder_.AddChoices(
+      {grammar_builder_.AddEmptyStr(), grammar_builder_.AddSequence({content_ref, star_ref})}
+  );
+  grammar_builder_.UpdateRuleBody(star_rule_id, star_body);
+  return ResultOk(grammar_builder_.AddRuleWithHint("star", star_ref));
 }
 
 /************** StructuralTag Conversion Public API **************/
