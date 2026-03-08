@@ -33,6 +33,9 @@ struct OrFormat;
 struct TagFormat;
 struct TriggeredTagsFormat;
 struct TagsWithSeparatorFormat;
+struct OptionalFormat;
+struct PlusFormat;
+struct StarFormat;
 
 using Format = std::variant<
     ConstStringFormat,
@@ -44,7 +47,10 @@ using Format = std::variant<
     OrFormat,
     TagFormat,
     TriggeredTagsFormat,
-    TagsWithSeparatorFormat>;
+    TagsWithSeparatorFormat,
+    OptionalFormat,
+    PlusFormat,
+    StarFormat>;
 
 /******************** Basic Formats ********************/
 
@@ -166,6 +172,24 @@ struct TagsWithSeparatorFormat {
  private:
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;
+};
+
+struct OptionalFormat {
+  static constexpr const char* type = "optional";
+  std::shared_ptr<Format> content;
+  OptionalFormat(std::shared_ptr<Format> content) : content(std::move(content)) {}
+};
+
+struct PlusFormat {
+  static constexpr const char* type = "plus";
+  std::shared_ptr<Format> content;
+  PlusFormat(std::shared_ptr<Format> content) : content(std::move(content)) {}
+};
+
+struct StarFormat {
+  static constexpr const char* type = "star";
+  std::shared_ptr<Format> content;
+  StarFormat(std::shared_ptr<Format> content) : content(std::move(content)) {}
 };
 
 /******************** Top Level ********************/
