@@ -153,7 +153,6 @@ picojson::value TagsWithSeparatorFormat::ToJSON() const {
   obj["separator"] = picojson::value(separator);
   obj["at_least_one"] = picojson::value(at_least_one);
   obj["stop_after_first"] = picojson::value(stop_after_first);
-  obj["detected_end_strs"] = StringVectorToJSONArray(detected_end_strs_);
   return picojson::value(std::move(obj));
 }
 
