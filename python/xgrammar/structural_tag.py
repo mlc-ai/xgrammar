@@ -245,6 +245,42 @@ class TagsWithSeparatorFormat(BaseModel):
     """Whether to stop after the first tag is matched."""
 
 
+class OptionalFormat(BaseModel):
+    """A format that matches the content 0 or 1 time (EBNF optional).
+
+    Semantics: the inner format may appear once or not at all.
+    """
+
+    type: Literal["optional"] = "optional"
+    """The type of the format."""
+    content: "Format"
+    """The format that may appear 0 or 1 time."""
+
+
+class PlusFormat(BaseModel):
+    """A format that matches the content 1 or more times (EBNF plus).
+
+    Semantics: the inner format must appear at least once.
+    """
+
+    type: Literal["plus"] = "plus"
+    """The type of the format."""
+    content: "Format"
+    """The format that must appear at least once."""
+
+
+class StarFormat(BaseModel):
+    """A format that matches the content 0 or more times (EBNF star).
+
+    Semantics: the inner format may appear any number of times.
+    """
+
+    type: Literal["star"] = "star"
+    """The type of the format."""
+    content: "Format"
+    """The format that may appear 0 or more times."""
+
+
 # ---------- Discriminated Union ----------
 
 
@@ -261,6 +297,9 @@ Format = Annotated[
         TagFormat,
         TriggeredTagsFormat,
         TagsWithSeparatorFormat,
+        OptionalFormat,
+        PlusFormat,
+        StarFormat,
     ],
     Field(discriminator="type"),
 ]
@@ -273,12 +312,18 @@ if hasattr(BaseModel, "model_rebuild"):
     TagFormat.model_rebuild()
     TriggeredTagsFormat.model_rebuild()
     TagsWithSeparatorFormat.model_rebuild()
+    OptionalFormat.model_rebuild()
+    PlusFormat.model_rebuild()
+    StarFormat.model_rebuild()
 elif hasattr(BaseModel, "update_forward_refs"):
     # This is for backward compatibility with pydantic v1
     SequenceFormat.update_forward_refs()
     TagFormat.update_forward_refs()
     TriggeredTagsFormat.update_forward_refs()
     TagsWithSeparatorFormat.update_forward_refs()
+    OptionalFormat.update_forward_refs()
+    PlusFormat.update_forward_refs()
+    StarFormat.update_forward_refs()
 else:
     raise RuntimeError("Unsupported pydantic version")
 
@@ -366,6 +411,9 @@ __all__ = [
     "TagFormat",
     "TriggeredTagsFormat",
     "TagsWithSeparatorFormat",
+    "OptionalFormat",
+    "PlusFormat",
+    "StarFormat",
     "Format",
     "StructuralTagItem",
     "StructuralTag",
