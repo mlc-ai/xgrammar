@@ -920,6 +920,42 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is matched.&quot;&quot;&quot;</span></div>
 
 
+<span class="k">class</span><span class="w"> </span><span class="nc">OptionalFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 0 or 1 time (EBNF optional).</span>
+
+<span class="sd">    Semantics: the inner format may appear once or not at all.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;optional&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;optional&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or 1 time.&quot;&quot;&quot;</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PlusFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 1 or more times (EBNF plus).</span>
+
+<span class="sd">    Semantics: the inner format must appear at least once.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;plus&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;plus&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that must appear at least once.&quot;&quot;&quot;</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">StarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 0 or more times (EBNF star).</span>
+
+<span class="sd">    Semantics: the inner format may appear any number of times.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;star&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;star&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or more times.&quot;&quot;&quot;</span>
+
+
 <span class="c1"># ---------- Discriminated Union ----------</span>
 
 
@@ -936,6 +972,9 @@ window.runMermaid = runMermaid;</script>
         <span class="n">TagFormat</span><span class="p">,</span>
         <span class="n">TriggeredTagsFormat</span><span class="p">,</span>
         <span class="n">TagsWithSeparatorFormat</span><span class="p">,</span>
+        <span class="n">OptionalFormat</span><span class="p">,</span>
+        <span class="n">PlusFormat</span><span class="p">,</span>
+        <span class="n">StarFormat</span><span class="p">,</span>
     <span class="p">],</span>
     <span class="n">Field</span><span class="p">(</span><span class="n">discriminator</span><span class="o">=</span><span class="s2">&quot;type&quot;</span><span class="p">),</span>
 <span class="p">]</span>
@@ -948,12 +987,18 @@ window.runMermaid = runMermaid;</script>
     <span class="n">TagFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">PlusFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">StarFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
 <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;update_forward_refs&quot;</span><span class="p">):</span>
     <span class="c1"># This is for backward compatibility with pydantic v1</span>
     <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">TagFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">PlusFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">StarFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unsupported pydantic version&quot;</span><span class="p">)</span>
 
@@ -1041,6 +1086,9 @@ window.runMermaid = runMermaid;</script>
     <span class="s2">&quot;TagFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;TriggeredTagsFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;TagsWithSeparatorFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;OptionalFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PlusFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;StarFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;Format&quot;</span><span class="p">,</span>
     <span class="s2">&quot;StructuralTagItem&quot;</span><span class="p">,</span>
     <span class="s2">&quot;StructuralTag&quot;</span><span class="p">,</span>

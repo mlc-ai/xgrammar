@@ -551,6 +551,75 @@ will stop.</p>
 tag is generated. If there are following tags, they will still be generated; otherwise, the
 generation will stop.</p>
 </li>
+<li><p><code class="docutils literal notranslate"><span class="pre">optional</span></code></p>
+<p>The inner format may appear <strong>0 or 1 time</strong> (EBNF optional). The output can either match the content once or be empty.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">content</span></code></strong> (required): A format object. It can be any of the format types.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;optional&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>For example, to allow an optional prefix:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;optional&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Optional prefix: &quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The above accepts either an empty string or exactly <code class="docutils literal notranslate"><span class="pre">Optional</span> <span class="pre">prefix:</span> </code>.</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">plus</span></code></p>
+<p>The inner format must appear <strong>1 or more times</strong> (EBNF plus). The output matches one or more consecutive occurrences of the content.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">content</span></code></strong> (required): A format object. It can be any of the format types.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;plus&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>For example, to require one or more comma-separated items (simplified):</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;plus&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;item&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The above accepts <code class="docutils literal notranslate"><span class="pre">item</span></code>, <code class="docutils literal notranslate"><span class="pre">itemitem</span></code>, <code class="docutils literal notranslate"><span class="pre">itemitemitem</span></code>, and so on.</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">star</span></code></p>
+<p>The inner format may appear <strong>0 or more times</strong> (EBNF star). The output matches zero or more consecutive occurrences of the content.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">content</span></code></strong> (required): A format object. It can be any of the format types.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;star&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>For example, to allow zero or more occurrences of a fragment:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;star&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;x&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The above accepts an empty string, or <code class="docutils literal notranslate"><span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">xx</span></code>, <code class="docutils literal notranslate"><span class="pre">xxx</span></code>, and so on.</p>
+</li>
 <li><p><code class="docutils literal notranslate"><span class="pre">QwenXMLParameterFormat</span></code> <em>(not recommended)</em></p>
 <p><strong>Deprecated.</strong> This format is kept for backward compatibility only. Prefer using <code class="docutils literal notranslate"><span class="pre">json_schema</span></code> with <code class="docutils literal notranslate"><span class="pre">style:</span> <span class="pre">&quot;qwen_xml&quot;</span></code> instead (see the <code class="docutils literal notranslate"><span class="pre">json_schema</span></code> format above).</p>
 <p>This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.</p>
