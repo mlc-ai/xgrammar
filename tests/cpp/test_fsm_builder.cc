@@ -59,7 +59,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder1) {
   Grammar::Impl::TagDispatch tag_dispatch = {
       /* tag_rule_pairs = */ {{"hel", 1}, {"hi", 2}, {"哈", 3}},
       /* loop_after_dispatch = */ true,
-      /* excluded_str = */ {}
+      /* excludes = */ {}
   };
   auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());
@@ -84,7 +84,7 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder2) {
   Grammar::Impl::TagDispatch tag_dispatch = {
       /* tag_rule_pairs = */ {{"hel", 1}, {"hi", 2}, {"哈", 3}},
       /* loop_after_dispatch = */ false,
-      /* excluded_str = */ {}
+      /* excludes = */ {}
   };
   auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
   EXPECT_TRUE(fsm_result.has_value());
@@ -108,6 +108,35 @@ TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder2) {
   EXPECT_EQ(fsm_printed, expected_fsm_printed);
 }
 
+TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder3) {
+  // Case 3. string excludes are compiled into the trie
+  Grammar::Impl::TagDispatch tag_dispatch = {
+      /* tag_rule_pairs = */ {{"hel", 1}, {"hi", 2}, {"哈", 3}},
+      /* loop_after_dispatch = */ true,
+      /* excludes = */ {"hos", "eos"}
+  };
+  auto fsm_result = GrammarFSMBuilder::TagDispatch(tag_dispatch);
+  EXPECT_TRUE(fsm_result.has_value());
+  auto fsm = std::move(fsm_result).value();
+  auto fsm_printed = fsm.ToString();
+  EXPECT_NE(fsm_printed.find("Rule(1)->0"), std::string::npos);
+  EXPECT_NE(fsm_printed.find("Rule(2)->0"), std::string::npos);
+  EXPECT_NE(fsm_printed.find("Rule(3)->0"), std::string::npos);
+}
+
+TEST(XGrammarFSMBuilderTest, TestTokenTagDispatchFSMBuilder) {
+  Grammar::Impl::TokenTagDispatch ttd = {
+      /* trigger_rule_pairs = */ {{3, 1}, {5, 2}},
+      /* loop_after_dispatch = */ false,
+      /* excludes = */ {7}
+  };
+  auto fsm_result = GrammarFSMBuilder::TokenTagDispatch(ttd);
+  EXPECT_TRUE(fsm_result.has_value());
+  auto fsm = std::move(fsm_result).value();
+  auto fsm_printed = fsm.ToString();
+  EXPECT_NE(fsm_printed.find("Token"), std::string::npos);
+  EXPECT_NE(fsm_printed.find("ExcludeToken"), std::string::npos);
+}
 using GrammarExpr = Grammar::Impl::GrammarExpr;
 using GrammarExprType = Grammar::Impl::GrammarExprType;
 

@@ -121,11 +121,17 @@ class Grammar::Impl {
     kChoices,
     // data format: [tag_expr0, rule_id0, tag_expr1, rule_id1, ..., loop_after_dispatch,
     // excluded_str_expr_id]
-    // tag_expr should be a byte string, and rule_id should be a rule id.
-    // loop_after_dispatch is a bool. excluded_str_expr_id is a choices GrammarExpr id.
     kTagDispatch,
     // data format: [rule_id, min_repeat_count, max_repeat_count]
     kRepeat,
+    // data format: [token_id_0, token_id_1, ...]
+    kToken,
+    // data format: [token_id_0, token_id_1, ...]
+    kExcludeToken,
+    // data format: [trigger_cnt, (token_id, rule_id) × N,
+    //               loop_after_dispatch,
+    //               exclude_cnt, token_id × M]
+    kTokenTagDispatch,
   };
 
   /*! \brief The object representing a grammar expr. */
@@ -190,7 +196,7 @@ class Grammar::Impl {
     /*! \brief If true, the tag dispatch will loop after dispatching. */
     bool loop_after_dispatch;
     /*! \brief The strings that are excluded by the tag dispatch. */
-    std::vector<std::string> excluded_str;
+    std::vector<std::string> excludes;
     static const int kTagDispatchExtraParameter = 2;
   };
 
@@ -219,9 +225,9 @@ class Grammar::Impl {
         grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 1]
     );
     XGRAMMAR_DCHECK(exclude_str_expr.type == GrammarExprType::kChoices);
-    result.excluded_str.reserve(exclude_str_expr.size());
+    result.excludes.reserve(exclude_str_expr.size());
     for (int j = 0; j < exclude_str_expr.size(); j++) {
-      result.excluded_str.push_back(GetByteString(exclude_str_expr[j]));
+      result.excludes.push_back(GetByteString(exclude_str_expr[j]));
     }
     return result;
   }
@@ -229,6 +235,38 @@ class Grammar::Impl {
   /*! \brief Get the tag dispatch from the grammar expr with the given id. */
   TagDispatch GetTagDispatch(int32_t grammar_expr_id) {
     return GetTagDispatch(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief The object representing a token tag dispatch. */
+  struct TokenTagDispatch {
+    std::vector<std::pair<int32_t, int32_t>> trigger_rule_pairs;  // token_id → rule_id
+    bool loop_after_dispatch;
+    std::vector<int32_t> excludes;
+  };
+
+  /*! \brief Decode a kTokenTagDispatch expr into the TokenTagDispatch struct. */
+  TokenTagDispatch GetTokenTagDispatch(const GrammarExpr& grammar_expr) {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTokenTagDispatch);
+    TokenTagDispatch result;
+    int pos = 0;
+    int32_t trigger_count = grammar_expr[pos++];
+    for (int i = 0; i < trigger_count; ++i) {
+      auto token_id = grammar_expr[pos++];
+      auto rule_id = grammar_expr[pos++];
+      result.trigger_rule_pairs.push_back({token_id, rule_id});
+    }
+    result.loop_after_dispatch = static_cast<bool>(grammar_expr[pos++]);
+    int32_t exclude_count = grammar_expr[pos++];
+    for (int i = 0; i < exclude_count; ++i) {
+      result.excludes.push_back(grammar_expr[pos++]);
+    }
+    XGRAMMAR_DCHECK(pos == grammar_expr.size());
+    return result;
+  }
+
+  /*! \brief Get the token tag dispatch from the grammar expr with the given id. */
+  TokenTagDispatch GetTokenTagDispatch(int32_t grammar_expr_id) {
+    return GetTokenTagDispatch(GetGrammarExpr(grammar_expr_id));
   }
 
  private:
