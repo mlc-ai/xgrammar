@@ -19,6 +19,8 @@
 
 namespace xgrammar {
 
+class TokenizerInfo;
+
 struct StructuralTagItem {
   std::string begin;
   std::string schema;
@@ -131,9 +133,10 @@ class Grammar {
   /*!
    * \brief Construct a grammar from a structural tag string.
    * \param structural_tag_json The structural tag string.
+   * \param tokenizer_info Optional tokenizer info for resolving string token references.
    */
   static std::variant<Grammar, StructuralTagError> FromStructuralTag(
-      const std::string& structural_tag_json
+      const std::string& structural_tag_json, const TokenizerInfo* tokenizer_info = nullptr
   );
 
   /*!

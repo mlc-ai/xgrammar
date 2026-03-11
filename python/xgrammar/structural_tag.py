@@ -79,6 +79,26 @@ class AnyTextFormat(BaseModel):
     """List of strings that should not appear in the matched text."""
 
 
+class TokenFormat(BaseModel):
+    """A format that matches a single token by ID or string representation."""
+
+    type: Literal["token"] = "token"
+    """The type of the format."""
+
+    token: Union[int, str]
+    """The token ID (int) or token string (str)."""
+
+
+class AnyTokenFormat(BaseModel):
+    """A format that matches any token except those in the exclude list."""
+
+    type: Literal["any_token"] = "any_token"
+    """The type of the format."""
+
+    exclude_tokens: List[Union[int, str]] = []
+    """List of token IDs or strings to exclude."""
+
+
 class GrammarFormat(BaseModel):
     """A format that matches an ebnf grammar."""
 
@@ -146,12 +166,12 @@ class TagFormat(BaseModel):
 
     type: Literal["tag"] = "tag"
     """The type of the format."""
-    begin: str
-    """The begin tag."""
+    begin: Union[str, TokenFormat]
+    """The begin tag. Can be a string or a TokenFormat."""
     content: "Format"
     """The content of the tag. It can be any of the formats."""
-    end: Union[str, List[str]]
-    """The end tag(s). Can be a single string or a list of possible end strings."""
+    end: Union[str, List[str], TokenFormat]
+    """The end tag(s). Can be a string, list of strings, or a TokenFormat."""
 
 
 class TriggeredTagsFormat(BaseModel):
@@ -205,6 +225,26 @@ class TriggeredTagsFormat(BaseModel):
     """Whether to stop after the first tag is generated."""
     excludes: List[str] = []
     """List of strings that should not appear in the matched text."""
+
+
+class TokenTriggeredTagsFormat(BaseModel):
+    """A format that dispatches to tags based on token-level triggers.
+
+    Similar to TriggeredTagsFormat but uses token IDs instead of string triggers.
+    """
+
+    type: Literal["token_triggered_tags"] = "token_triggered_tags"
+    """The type of the format."""
+    trigger_tokens: List[Union[int, str]]
+    """The trigger token IDs or strings."""
+    tags: List[TagFormat]
+    """The tags to dispatch to."""
+    exclude_tokens: List[Union[int, str]] = []
+    """List of token IDs or strings to exclude."""
+    at_least_one: bool = False
+    """Whether at least one tag must be generated."""
+    stop_after_first: bool = False
+    """Whether to stop after the first tag is generated."""
 
 
 class TagsWithSeparatorFormat(BaseModel):
@@ -296,10 +336,13 @@ Format = Annotated[
         SequenceFormat,
         TagFormat,
         TriggeredTagsFormat,
+        TokenTriggeredTagsFormat,
         TagsWithSeparatorFormat,
         OptionalFormat,
         PlusFormat,
         StarFormat,
+        TokenFormat,
+        AnyTokenFormat,
     ],
     Field(discriminator="type"),
 ]
@@ -311,15 +354,16 @@ if hasattr(BaseModel, "model_rebuild"):
     SequenceFormat.model_rebuild()
     TagFormat.model_rebuild()
     TriggeredTagsFormat.model_rebuild()
+    TokenTriggeredTagsFormat.model_rebuild()
     TagsWithSeparatorFormat.model_rebuild()
     OptionalFormat.model_rebuild()
     PlusFormat.model_rebuild()
     StarFormat.model_rebuild()
 elif hasattr(BaseModel, "update_forward_refs"):
-    # This is for backward compatibility with pydantic v1
     SequenceFormat.update_forward_refs()
     TagFormat.update_forward_refs()
     TriggeredTagsFormat.update_forward_refs()
+    TokenTriggeredTagsFormat.update_forward_refs()
     TagsWithSeparatorFormat.update_forward_refs()
     OptionalFormat.update_forward_refs()
     PlusFormat.update_forward_refs()
@@ -406,10 +450,13 @@ __all__ = [
     "AnyTextFormat",
     "GrammarFormat",
     "RegexFormat",
+    "TokenFormat",
+    "AnyTokenFormat",
     "SequenceFormat",
     "OrFormat",
     "TagFormat",
     "TriggeredTagsFormat",
+    "TokenTriggeredTagsFormat",
     "TagsWithSeparatorFormat",
     "OptionalFormat",
     "PlusFormat",

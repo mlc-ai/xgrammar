@@ -150,9 +150,7 @@ The format field requires a format object. We provide several basic format objec
 
 7. `tag`
 
-    The output must follow `begin content end`. `begin` and `end` are strings, and `content` can be
-    any format object. This is useful for LLM outputs such as `<think>...</think>` or
-    `<function>...</function>`.
+    The output must follow `begin content end`. `begin` and `end` can be strings or `token` format objects, and `content` can be any format object. This is useful for LLM outputs such as `<think>...</think>` or `<function>...</function>`.
 
     ```json
     {
@@ -162,6 +160,17 @@ The format field requires a format object. We provide several basic format objec
             "type": "...",
         },
         "end": "..."
+    }
+    ```
+
+    `begin` and `end` can also be `token` format objects for token-level boundary matching:
+
+    ```json
+    {
+        "type": "tag",
+        "begin": {"type": "token", "token": "<|tool_call|>"},
+        "content": {"type": "json_schema", "json_schema": ...},
+        "end": {"type": "token", "token": "<|end|>"}
     }
     ```
 
@@ -484,6 +493,51 @@ The format field requires a format object. We provide several basic format objec
     ```xml
     <parameter=address><parameter=street>Main St</parameter><parameter=city>New York</parameter></parameter>
     ```
+
+15. `token`
+
+    Matches a single token by token ID or token string. Can be used standalone or as the `begin`/`end` of a `tag`.
+
+    ```json
+    {"type": "token", "token": 42}
+    {"type": "token", "token": "<|tool_call|>"}
+    ```
+
+    When `token` is a string, it is resolved to a token ID via `tokenizer_info`.
+
+16. `any_token`
+
+    Matches any single token, optionally excluding specified tokens. When wrapped in a `tag` whose `end` is a `token` format, the end token is automatically excluded.
+
+    ```json
+    {"type": "any_token"}
+    {"type": "any_token", "exclude_tokens": [42, "</s>"]}
+    ```
+
+    Elements in `exclude_tokens` can be integers (token IDs) or strings (token strings resolved via `tokenizer_info`).
+
+17. `token_triggered_tags`
+
+    Similar to `triggered_tags`, but triggers and excludes operate at the token level. When a trigger token is generated, the output dispatches to the corresponding tag. Each tag's `begin` must be a `token` format object.
+
+    ```json
+    {
+        "type": "token_triggered_tags",
+        "trigger_tokens": [100, "<|tool_call|>"],
+        "tags": [
+            {
+                "begin": {"type": "token", "token": 100},
+                "content": {"type": "json_schema", "json_schema": ...},
+                "end": {"type": "token", "token": 101}
+            }
+        ],
+        "exclude_tokens": ["</s>"],
+        "at_least_one": false,
+        "stop_after_first": false
+    }
+    ```
+
+    `trigger_tokens` and `exclude_tokens` elements can be integers or strings. `at_least_one` and `stop_after_first` have the same semantics as in `triggered_tags`.
 
 ## Examples
 
@@ -855,6 +909,40 @@ We now specify the non-thinking mode.
             },
         ],
     },
+}
+```
+
+### Example 6: Token-level tool calling
+
+Some models use special tokens (not byte strings) to delimit tool calls. The `token_triggered_tags` format handles this by dispatching on token IDs.
+
+```json
+{
+    "type": "structural_tag",
+    "format": {
+        "type": "sequence",
+        "elements": [
+            {
+                "type": "tag",
+                "begin": {"type": "token", "token": "<|think_start|>"},
+                "content": {"type": "any_token"},
+                "end": {"type": "token", "token": "<|think_end|>"}
+            },
+            {
+                "type": "token_triggered_tags",
+                "trigger_tokens": ["<|tool_call_start|>"],
+                "tags": [
+                    {
+                        "begin": {"type": "token", "token": "<|tool_call_start|>"},
+                        "content": {"type": "json_schema", "json_schema": ...},
+                        "end": {"type": "token", "token": "<|tool_call_end|>"}
+                    }
+                ],
+                "exclude_tokens": ["<|eos|>"],
+                "at_least_one": true
+            }
+        ]
+    }
 }
 ```
 

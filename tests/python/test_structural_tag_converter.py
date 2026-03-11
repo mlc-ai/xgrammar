@@ -3248,5 +3248,278 @@ def test_xml_const_enum_values(stag_format: Dict[str, Any], instance: str, is_ac
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+# ==================== Token-level Format Tests ====================
+
+
+# ---------- TokenFormat Tests ----------
+
+
+def test_token_format_basic():
+    check_stag_with_grammar(
+        {"type": "token", "token": 42},
+        r"""token ::= ((Token(42)))
+root ::= ((token))
+""",
+    )
+
+
+def test_token_format_in_tag_begin_end():
+    check_stag_with_grammar(
+        {
+            "type": "tag",
+            "begin": {"type": "token", "token": 10},
+            "content": {"type": "const_string", "value": "X"},
+            "end": {"type": "token", "token": 20},
+        },
+        r"""const_string ::= (("X"))
+tag ::= ((Token(10) const_string Token(20)))
+root ::= ((tag))
+""",
+    )
+
+
+def test_token_format_in_tag_begin_string_end():
+    check_stag_with_grammar(
+        {
+            "type": "tag",
+            "begin": {"type": "token", "token": 10},
+            "content": {"type": "const_string", "value": "Y"},
+            "end": "</end>",
+        },
+        r"""const_string ::= (("Y"))
+tag ::= ((Token(10) const_string "</end>"))
+root ::= ((tag))
+""",
+    )
+
+
+# ---------- AnyTokenFormat Tests ----------
+
+
+def test_any_token_format_no_excludes():
+    check_stag_with_grammar(
+        {"type": "any_token"},
+        r"""any_token ::= ((ExcludeToken()))
+root ::= ((any_token))
+""",
+    )
+
+
+def test_any_token_format_with_excludes():
+    check_stag_with_grammar(
+        {"type": "any_token", "exclude_tokens": [5, 10]},
+        r"""any_token ::= ((ExcludeToken(5, 10)))
+root ::= ((any_token))
+""",
+    )
+
+
+def test_any_token_detects_end_from_parent_tag():
+    """AnyTokenFormat inside a tag with token end should auto-detect end token IDs."""
+    check_stag_with_grammar(
+        {
+            "type": "tag",
+            "begin": {"type": "token", "token": 1},
+            "content": {"type": "any_token", "exclude_tokens": [5]},
+            "end": {"type": "token", "token": 99},
+        },
+        r"""any_token ::= ((ExcludeToken(5, 99)))
+tag ::= ((Token(1) any_token Token(99)))
+root ::= ((tag))
+""",
+    )
+
+
+# ---------- TokenTriggeredTagsFormat Tests ----------
+
+
+def test_token_triggered_tags_stop_after_first():
+    check_stag_with_grammar(
+        {
+            "type": "token_triggered_tags",
+            "trigger_tokens": [10, 20],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": {"type": "token", "token": 10},
+                    "content": {"type": "const_string", "value": "A"},
+                    "end": {"type": "token", "token": 99},
+                },
+                {
+                    "type": "tag",
+                    "begin": {"type": "token", "token": 20},
+                    "content": {"type": "const_string", "value": "B"},
+                    "end": {"type": "token", "token": 99},
+                },
+            ],
+            "stop_after_first": True,
+        },
+        r"""const_string ::= (("A"))
+const_string_1 ::= (("B"))
+token_triggered_tags_group ::= ((const_string Token(99)))
+token_triggered_tags_group_1 ::= ((const_string_1 Token(99)))
+token_triggered_tags ::= ((token_triggered_tags_1))
+root ::= ((token_triggered_tags))
+token_triggered_tags_1 ::= TokenTagDispatch(
+  (10, token_triggered_tags_group),
+  (20, token_triggered_tags_group_1),
+  loop_after_dispatch=false,
+  excludes=()
+)
+""",
+    )
+
+
+def test_token_triggered_tags_at_least_one_stop_after_first():
+    check_stag_with_grammar(
+        {
+            "type": "token_triggered_tags",
+            "trigger_tokens": [10],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": {"type": "token", "token": 10},
+                    "content": {"type": "const_string", "value": "A"},
+                    "end": {"type": "token", "token": 99},
+                }
+            ],
+            "at_least_one": True,
+            "stop_after_first": True,
+        },
+        r"""const_string ::= (("A"))
+token_triggered_tags ::= ((Token(10) const_string Token(99)))
+root ::= ((token_triggered_tags))
+""",
+    )
+
+
+def test_token_triggered_tags_with_excludes():
+    check_stag_with_grammar(
+        {
+            "type": "token_triggered_tags",
+            "trigger_tokens": [10],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": {"type": "token", "token": 10},
+                    "content": {"type": "const_string", "value": "C"},
+                    "end": {"type": "token", "token": 99},
+                }
+            ],
+            "exclude_tokens": [50],
+            "stop_after_first": True,
+        },
+        r"""const_string ::= (("C"))
+token_triggered_tags_group ::= ((const_string Token(99)))
+token_triggered_tags ::= ((token_triggered_tags_1))
+root ::= ((token_triggered_tags))
+token_triggered_tags_1 ::= TokenTagDispatch(
+  (10, token_triggered_tags_group),
+  loop_after_dispatch=false,
+  excludes=(50)
+)
+""",
+    )
+
+
+def test_token_triggered_tags_looping():
+    check_stag_with_grammar(
+        {
+            "type": "token_triggered_tags",
+            "trigger_tokens": [10],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": {"type": "token", "token": 10},
+                    "content": {"type": "const_string", "value": "D"},
+                    "end": {"type": "token", "token": 99},
+                }
+            ],
+        },
+        r"""const_string ::= (("D"))
+token_triggered_tags_group ::= ((const_string Token(99)))
+token_triggered_tags ::= ((token_triggered_tags_1))
+root ::= ((token_triggered_tags))
+token_triggered_tags_1 ::= TokenTagDispatch(
+  (10, token_triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=()
+)
+""",
+    )
+
+
+def test_token_triggered_tags_detects_end_from_parent():
+    """TokenTriggeredTagsFormat inside a tag should auto-detect end token IDs."""
+    check_stag_with_grammar(
+        {
+            "type": "tag",
+            "begin": {"type": "token", "token": 1},
+            "content": {
+                "type": "token_triggered_tags",
+                "trigger_tokens": [10],
+                "tags": [
+                    {
+                        "type": "tag",
+                        "begin": {"type": "token", "token": 10},
+                        "content": {"type": "const_string", "value": "E"},
+                        "end": {"type": "token", "token": 99},
+                    }
+                ],
+                "stop_after_first": True,
+            },
+            "end": {"type": "token", "token": 88},
+        },
+        r"""const_string ::= (("E"))
+token_triggered_tags_group ::= ((const_string Token(99)))
+token_triggered_tags ::= ((token_triggered_tags_1))
+tag ::= ((Token(1) token_triggered_tags Token(88)))
+root ::= ((tag))
+token_triggered_tags_1 ::= TokenTagDispatch(
+  (10, token_triggered_tags_group),
+  loop_after_dispatch=false,
+  excludes=(88)
+)
+""",
+    )
+
+
+# ---------- Token Format Parsing Error Tests ----------
+
+
+def test_token_format_missing_token_field():
+    stag = {"type": "structural_tag", "format": {"type": "token"}}
+    with pytest.raises(Exception, match="Invalid structural tag error"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_any_token_format_invalid_exclude_type():
+    stag = {"type": "structural_tag", "format": {"type": "any_token", "exclude_tokens": "bad"}}
+    with pytest.raises(Exception, match="Invalid structural tag error"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_token_triggered_tags_missing_triggers():
+    stag = {"type": "structural_tag", "format": {"type": "token_triggered_tags", "tags": []}}
+    with pytest.raises(Exception, match="Invalid structural tag error"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_token_triggered_tags_missing_tags():
+    stag = {
+        "type": "structural_tag",
+        "format": {"type": "token_triggered_tags", "trigger_tokens": [1]},
+    }
+    with pytest.raises(Exception, match="Invalid structural tag error"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_token_string_requires_tokenizer():
+    """String tokens without tokenizer should error."""
+    stag = {"type": "structural_tag", "format": {"type": "token", "token": "<|special|>"}}
+    with pytest.raises(Exception, match="Invalid structural tag error"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
