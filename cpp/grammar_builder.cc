@@ -102,6 +102,18 @@ int32_t GrammarBuilder::AddEmptyStr() {
   return AddGrammarExpr({GrammarExprType::kEmptyStr, nullptr, 0});
 }
 
+int32_t GrammarBuilder::AddTokenSet(const std::vector<int32_t>& token_ids) {
+  return AddGrammarExpr(
+      {GrammarExprType::kToken, token_ids.data(), static_cast<int32_t>(token_ids.size())}
+  );
+}
+
+int32_t GrammarBuilder::AddExcludeTokenSet(const std::vector<int32_t>& token_ids) {
+  return AddGrammarExpr(
+      {GrammarExprType::kExcludeToken, token_ids.data(), static_cast<int32_t>(token_ids.size())}
+  );
+}
+
 int32_t GrammarBuilder::AddRuleRef(int32_t rule_id) {
   std::vector<int32_t> data;
   data.push_back(rule_id);

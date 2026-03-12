@@ -96,18 +96,10 @@ class GrammarBuilder {
   int32_t AddEmptyStr();
 
   /*! \brief Add a GrammarExpr for kToken (token-level matching). */
-  int32_t AddTokenSet(const std::vector<int32_t>& token_ids) {
-    return AddGrammarExpr(
-        {GrammarExprType::kToken, token_ids.data(), static_cast<int32_t>(token_ids.size())}
-    );
-  }
+  int32_t AddTokenSet(const std::vector<int32_t>& token_ids);
 
   /*! \brief Add a GrammarExpr for kExcludeToken (excluded token-level matching). */
-  int32_t AddExcludeTokenSet(const std::vector<int32_t>& token_ids) {
-    return AddGrammarExpr(
-        {GrammarExprType::kExcludeToken, token_ids.data(), static_cast<int32_t>(token_ids.size())}
-    );
-  }
+  int32_t AddExcludeTokenSet(const std::vector<int32_t>& token_ids);
 
   /*! \brief Add a GrammarExpr for rule reference.*/
   int32_t AddRuleRef(int32_t rule_id);
