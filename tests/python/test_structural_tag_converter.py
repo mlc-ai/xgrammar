@@ -3293,38 +3293,78 @@ root ::= ((tag))
     )
 
 
-# ---------- AnyTokenFormat Tests ----------
+# ---------- ExcludeTokenFormat Tests ----------
 
 
-def test_any_token_format_no_excludes():
+def test_exclude_token_format_no_excludes():
     check_stag_with_grammar(
-        {"type": "any_token"},
-        r"""any_token ::= ((ExcludeToken()))
-root ::= ((any_token))
+        {"type": "exclude_token"},
+        r"""exclude_token ::= ((ExcludeToken()))
+root ::= ((exclude_token))
 """,
     )
 
 
-def test_any_token_format_with_excludes():
+def test_exclude_token_format_with_excludes():
     check_stag_with_grammar(
-        {"type": "any_token", "exclude_tokens": [5, 10]},
-        r"""any_token ::= ((ExcludeToken(5, 10)))
-root ::= ((any_token))
+        {"type": "exclude_token", "tokens": [5, 10]},
+        r"""exclude_token ::= ((ExcludeToken(5, 10)))
+root ::= ((exclude_token))
 """,
     )
 
 
-def test_any_token_detects_end_from_parent_tag():
-    """AnyTokenFormat inside a tag with token end should auto-detect end token IDs."""
+def test_exclude_token_detects_end_from_parent_tag():
+    """ExcludeTokenFormat inside a tag with token end should auto-detect end token IDs."""
     check_stag_with_grammar(
         {
             "type": "tag",
             "begin": {"type": "token", "token": 1},
-            "content": {"type": "any_token", "exclude_tokens": [5]},
+            "content": {"type": "exclude_token", "tokens": [5]},
             "end": {"type": "token", "token": 99},
         },
-        r"""any_token ::= ((ExcludeToken(5, 99)))
-tag ::= ((Token(1) any_token Token(99)))
+        r"""exclude_token ::= ((ExcludeToken(5, 99)))
+tag ::= ((Token(1) exclude_token Token(99)))
+root ::= ((tag))
+""",
+    )
+
+
+# ---------- AnyTokensFormat Tests ----------
+
+
+def test_any_tokens_format_no_excludes():
+    check_stag_with_grammar(
+        {"type": "any_tokens"},
+        r"""any_tokens_inner ::= ((ExcludeToken()))
+any_tokens ::= ("" | (any_tokens_inner any_tokens))
+root ::= ((any_tokens))
+""",
+    )
+
+
+def test_any_tokens_format_with_excludes():
+    check_stag_with_grammar(
+        {"type": "any_tokens", "exclude_tokens": [5, 10]},
+        r"""any_tokens_inner ::= ((ExcludeToken(5, 10)))
+any_tokens ::= ("" | (any_tokens_inner any_tokens))
+root ::= ((any_tokens))
+""",
+    )
+
+
+def test_any_tokens_detects_end_from_parent_tag():
+    """AnyTokensFormat inside a tag with token end should auto-detect end token IDs."""
+    check_stag_with_grammar(
+        {
+            "type": "tag",
+            "begin": {"type": "token", "token": 1},
+            "content": {"type": "any_tokens", "exclude_tokens": [5]},
+            "end": {"type": "token", "token": 99},
+        },
+        r"""any_tokens_inner ::= ((ExcludeToken(5, 99)))
+any_tokens ::= ("" | (any_tokens_inner any_tokens))
+tag ::= ((Token(1) any_tokens Token(99)))
 root ::= ((tag))
 """,
     )
@@ -3493,8 +3533,14 @@ def test_token_format_missing_token_field():
         xgr.Grammar.from_structural_tag(stag)
 
 
-def test_any_token_format_invalid_exclude_type():
-    stag = {"type": "structural_tag", "format": {"type": "any_token", "exclude_tokens": "bad"}}
+def test_exclude_token_format_invalid_tokens_type():
+    stag = {"type": "structural_tag", "format": {"type": "exclude_token", "tokens": "bad"}}
+    with pytest.raises(Exception, match="Invalid structural tag error"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_any_tokens_format_invalid_exclude_type():
+    stag = {"type": "structural_tag", "format": {"type": "any_tokens", "exclude_tokens": "bad"}}
     with pytest.raises(Exception, match="Invalid structural tag error"):
         xgr.Grammar.from_structural_tag(stag)
 

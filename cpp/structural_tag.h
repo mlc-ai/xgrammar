@@ -39,7 +39,8 @@ struct OptionalFormat;
 struct PlusFormat;
 struct StarFormat;
 struct TokenFormat;
-struct AnyTokenFormat;
+struct ExcludeTokenFormat;
+struct AnyTokensFormat;
 struct TokenTriggeredTagsFormat;
 
 using Format = std::variant<
@@ -57,7 +58,8 @@ using Format = std::variant<
     PlusFormat,
     StarFormat,
     TokenFormat,
-    AnyTokenFormat,
+    ExcludeTokenFormat,
+    AnyTokensFormat,
     TokenTriggeredTagsFormat>;
 
 /******************** Basic Formats ********************/
@@ -119,10 +121,25 @@ struct TokenFormat {
   friend class StructuralTagTokenResolver;
 };
 
-struct AnyTokenFormat {
-  static constexpr const char* type = "any_token";
+struct ExcludeTokenFormat {
+  static constexpr const char* type = "exclude_token";
+  std::vector<std::variant<int32_t, std::string>> tokens;
+  ExcludeTokenFormat(std::vector<std::variant<int32_t, std::string>> tokens)
+      : tokens(std::move(tokens)) {}
+  picojson::value ToJSON() const;
+
+ private:
+  std::vector<int32_t> resolved_token_ids_;
+  std::vector<int32_t> detected_end_token_ids_;
+  friend class StructuralTagTokenResolver;
+  friend class StructuralTagAnalyzer;
+  friend class StructuralTagGrammarConverter;
+};
+
+struct AnyTokensFormat {
+  static constexpr const char* type = "any_tokens";
   std::vector<std::variant<int32_t, std::string>> exclude_tokens;
-  AnyTokenFormat(std::vector<std::variant<int32_t, std::string>> exclude_tokens)
+  AnyTokensFormat(std::vector<std::variant<int32_t, std::string>> exclude_tokens)
       : exclude_tokens(std::move(exclude_tokens)) {}
   picojson::value ToJSON() const;
 

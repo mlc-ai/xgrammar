@@ -507,18 +507,29 @@ The format field requires a format object. We provide several basic format objec
 
     When `token` is a string, it is resolved to a token ID via `tokenizer_info`.
 
-16. `any_token`
+16. `exclude_token`
 
-    Matches any single token, optionally excluding specified tokens. When wrapped in a `tag` whose `end` is a `token` format, the end token is automatically excluded.
+    Matches any single token except those in the given set. When wrapped in a `tag` whose `end` is a `token` format, the end token is automatically excluded.
 
     ```json
-    {"type": "any_token"}
-    {"type": "any_token", "exclude_tokens": [42, "</s>"]}
+    {"type": "exclude_token"}
+    {"type": "exclude_token", "tokens": [42, "</s>"]}
+    ```
+
+    Elements in `tokens` can be integers (token IDs) or strings (token strings resolved via `tokenizer_info`).
+
+17. `any_tokens`
+
+    Matches zero or more tokens, excluding those in the given set. Semantically equivalent to `star(exclude_token(...))`. When wrapped in a `tag` whose `end` is a `token` format, the end token is automatically excluded.
+
+    ```json
+    {"type": "any_tokens"}
+    {"type": "any_tokens", "exclude_tokens": [42, "</s>"]}
     ```
 
     Elements in `exclude_tokens` can be integers (token IDs) or strings (token strings resolved via `tokenizer_info`).
 
-17. `token_triggered_tags`
+18. `token_triggered_tags`
 
     Similar to `triggered_tags`, but triggers and excludes operate at the token level. When a trigger token is generated, the output dispatches to the corresponding tag.
 
@@ -929,7 +940,7 @@ Some models use special tokens (not byte strings) to delimit tool calls. The `to
             {
                 "type": "tag",
                 "begin": {"type": "token", "token": "<|think_start|>"},
-                "content": {"type": "any_token"},
+                "content": {"type": "any_tokens"},
                 "end": {"type": "token", "token": "<|think_end|>"}
             },
             {

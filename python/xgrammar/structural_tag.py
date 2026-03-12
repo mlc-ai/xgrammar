@@ -89,10 +89,20 @@ class TokenFormat(BaseModel):
     """The token ID (int) or token string (str)."""
 
 
-class AnyTokenFormat(BaseModel):
-    """A format that matches any token except those in the exclude list."""
+class ExcludeTokenFormat(BaseModel):
+    """A format that matches a single token, excluding those in the given set."""
 
-    type: Literal["any_token"] = "any_token"
+    type: Literal["exclude_token"] = "exclude_token"
+    """The type of the format."""
+
+    tokens: List[Union[int, str]] = []
+    """List of token IDs or strings to exclude."""
+
+
+class AnyTokensFormat(BaseModel):
+    """A format that matches zero or more tokens, excluding those in the given set."""
+
+    type: Literal["any_tokens"] = "any_tokens"
     """The type of the format."""
 
     exclude_tokens: List[Union[int, str]] = []
@@ -342,7 +352,8 @@ Format = Annotated[
         PlusFormat,
         StarFormat,
         TokenFormat,
-        AnyTokenFormat,
+        ExcludeTokenFormat,
+        AnyTokensFormat,
     ],
     Field(discriminator="type"),
 ]
@@ -451,7 +462,8 @@ __all__ = [
     "GrammarFormat",
     "RegexFormat",
     "TokenFormat",
-    "AnyTokenFormat",
+    "ExcludeTokenFormat",
+    "AnyTokensFormat",
     "SequenceFormat",
     "OrFormat",
     "TagFormat",
