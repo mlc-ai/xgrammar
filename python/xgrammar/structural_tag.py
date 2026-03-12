@@ -99,6 +99,38 @@ class RegexFormat(BaseModel):
     """The regex pattern."""
 
 
+class RegexBegin(BaseModel):
+    """A regex begin format for tags with optional trigger support.
+
+    This is used in TagFormat.begin when you need regex pattern matching
+    with optional trigger support for TriggeredTagsFormat.
+
+    Examples
+    --------
+    Simple regex begin (no trigger):
+
+    .. code-block:: python
+
+        RegexBegin(regex=RegexFormat(pattern="<think\\d+>"))
+
+    Regex begin with trigger (for TriggeredTagsFormat):
+
+    .. code-block:: python
+
+        RegexBegin(trigger="<think", regex=RegexFormat(pattern="<think\\d+>"))
+
+    """
+
+    type: Literal["regex_begin"] = "regex_begin"
+    """The type of the format."""
+
+    trigger: str = ""
+    """Optional trigger string. Used in TriggeredTagsFormat to match the trigger prefix."""
+
+    regex: RegexFormat
+    """The regex pattern for matching the begin tag."""
+
+
 # ---------- Combinatorial Formats ----------
 
 
@@ -123,6 +155,11 @@ class OrFormat(BaseModel):
 class TagFormat(BaseModel):
     """A format that matches a tag: ``begin content end``.
 
+    The ``begin`` field can be:
+    - A string for exact matching
+    - A RegexFormat for simple regex pattern matching
+    - A RegexBegin for regex with optional trigger support (used in TriggeredTagsFormat)
+
     The ``end`` field can be a single string or a list of possible end strings.
     When multiple end strings are provided, any of them will be accepted as a valid
     ending for the tag.
@@ -130,7 +167,7 @@ class TagFormat(BaseModel):
     Examples
     --------
 
-    Single end string:
+    String begin:
 
     .. code-block:: python
 
@@ -142,12 +179,28 @@ class TagFormat(BaseModel):
 
         TagFormat(begin="<response>", content=..., end=["</response>", "</answer>"])
 
+    Simple regex begin:
+
+    .. code-block:: python
+
+        TagFormat(begin=RegexFormat(pattern="<\\w+>"), content=..., end="</tag>")
+
+    Regex begin with trigger (for TriggeredTagsFormat):
+
+    .. code-block:: python
+
+        TagFormat(
+            begin=RegexBegin(trigger="<think", regex=RegexFormat(pattern="<think\\d+>")),
+            content=...,
+            end="</think>"
+        )
+
     """
 
     type: Literal["tag"] = "tag"
     """The type of the format."""
-    begin: str
-    """The begin tag."""
+    begin: Union[str, RegexFormat, "RegexBegin"]
+    """The begin tag. Can be a string, RegexFormat for simple regex, or RegexBegin for regex with trigger."""
     content: "Format"
     """The content of the tag. It can be any of the formats."""
     end: Union[str, List[str]]
@@ -308,6 +361,7 @@ Format = Annotated[
 
 # Solve forward references
 if hasattr(BaseModel, "model_rebuild"):
+    RegexBegin.model_rebuild()
     SequenceFormat.model_rebuild()
     TagFormat.model_rebuild()
     TriggeredTagsFormat.model_rebuild()
@@ -317,6 +371,7 @@ if hasattr(BaseModel, "model_rebuild"):
     StarFormat.model_rebuild()
 elif hasattr(BaseModel, "update_forward_refs"):
     # This is for backward compatibility with pydantic v1
+    RegexBegin.update_forward_refs()
     SequenceFormat.update_forward_refs()
     TagFormat.update_forward_refs()
     TriggeredTagsFormat.update_forward_refs()
@@ -406,6 +461,7 @@ __all__ = [
     "AnyTextFormat",
     "GrammarFormat",
     "RegexFormat",
+    "RegexBegin",
     "SequenceFormat",
     "OrFormat",
     "TagFormat",
