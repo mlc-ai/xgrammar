@@ -1094,6 +1094,8 @@ void GrammarMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
 
 bool GrammarMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
 
+bool GrammarMatcher::IsCompleted() const { return pimpl_->IsCompleted(); }
+
 void GrammarMatcher::Reset() { pimpl_->Reset(); }
 
 int GrammarMatcher::GetMaxRollbackTokens() const { return pimpl_->GetMaxRollbackTokens(); }

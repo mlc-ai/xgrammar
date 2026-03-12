@@ -491,6 +491,66 @@ describe("Test GrammarMatcher E2E", () => {
     matcher.dispose();
   });
 
+  test("test isCompleted", async () => {
+    // Same vocab as "test reset and termination", with </s> as stop token (index 1)
+    const vocab = [
+      "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
+    ];
+    // Complete JSON object tokens *without* the stop token
+    const input_without_stop = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"];
+    const input_ids_without_stop: number[] = [];
+    input_without_stop.forEach((input) => {
+      input_ids_without_stop.push(vocab.indexOf(input));
+    });
+    const stop_token_id = vocab.indexOf("</s>");
+
+    // 1. Instantiate matcher (default: terminate_without_stop_token = false)
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+      vocab, "byte_level", false
+    );
+    const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+    const jsonGrammar = await compiler.compileBuiltinJSONGrammar();
+    const matcher = await GrammarMatcher.createGrammarMatcher(
+      jsonGrammar,
+      undefined,
+      undefined,
+      5
+    );
+    tokenizerInfo.dispose();
+
+    // 2. Before input: not completed, not terminated
+    expect(matcher.isCompleted()).toEqual(false);
+    expect(matcher.isTerminated()).toEqual(false);
+
+    // 3. Feed complete JSON object (no stop token)
+    for (let i = 0; i < input_ids_without_stop.length; i++) {
+      const accepted = matcher.acceptToken(input_ids_without_stop[i]);
+      expect(accepted).toEqual(true);
+    }
+
+    // 4. Completed but not terminated
+    expect(matcher.isCompleted()).toEqual(true);
+    expect(matcher.isTerminated()).toEqual(false);
+
+    // 5. Accept stop token: both completed and terminated
+    const acceptStop = matcher.acceptToken(stop_token_id);
+    expect(acceptStop).toEqual(true);
+    expect(matcher.isCompleted()).toEqual(true);
+    expect(matcher.isTerminated()).toEqual(true);
+
+    // 6. Rollback stop token: still completed, not terminated
+    matcher.rollBack(1);
+    expect(matcher.isCompleted()).toEqual(true);
+    expect(matcher.isTerminated()).toEqual(false);
+
+    // 7. Rollback further into mid-parse: neither completed nor terminated
+    matcher.rollBack(2);
+    expect(matcher.isCompleted()).toEqual(false);
+    expect(matcher.isTerminated()).toEqual(false);
+
+    matcher.dispose();
+  });
+
   test("test_get_jump_forward_string", async () => {
     const grammar_ebnf = String.raw`root ::= "abb" | "abbd" | other_rule
 other_rule ::= "a" sub_rule "b"
