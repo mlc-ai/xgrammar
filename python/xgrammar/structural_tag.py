@@ -336,6 +336,22 @@ class StarFormat(BaseModel):
     """The format that may appear 0 or more times."""
 
 
+class RepeatFormat(BaseModel):
+    """A format that matches the content between min and max times (inclusive).
+
+    Use max=-1 for unbounded upper limit (e.g. "at least min times").
+    """
+
+    type: Literal["repetition"] = "repetition"
+    """The type of the format."""
+    min: int
+    """Minimum number of occurrences (inclusive)."""
+    max: int
+    """Maximum number of occurrences (inclusive). Use -1 for unbounded."""
+    content: "Format"
+    """The format that is repeated."""
+
+
 # ---------- Discriminated Union ----------
 
 
@@ -359,6 +375,7 @@ Format = Annotated[
         TokenFormat,
         ExcludeTokenFormat,
         AnyTokensFormat,
+        RepeatFormat,
     ],
     Field(discriminator="type"),
 ]
@@ -375,6 +392,7 @@ if hasattr(BaseModel, "model_rebuild"):
     OptionalFormat.model_rebuild()
     PlusFormat.model_rebuild()
     StarFormat.model_rebuild()
+    RepeatFormat.model_rebuild()
 elif hasattr(BaseModel, "update_forward_refs"):
     SequenceFormat.update_forward_refs()
     TagFormat.update_forward_refs()
@@ -384,6 +402,7 @@ elif hasattr(BaseModel, "update_forward_refs"):
     OptionalFormat.update_forward_refs()
     PlusFormat.update_forward_refs()
     StarFormat.update_forward_refs()
+    RepeatFormat.update_forward_refs()
 else:
     raise RuntimeError("Unsupported pydantic version")
 
@@ -478,6 +497,7 @@ __all__ = [
     "OptionalFormat",
     "PlusFormat",
     "StarFormat",
+    "RepeatFormat",
     "Format",
     "StructuralTagItem",
     "StructuralTag",

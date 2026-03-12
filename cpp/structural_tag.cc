@@ -7,15 +7,20 @@
 #include <picojson.h>
 #include <xgrammar/exception.h>
 
+#include <cmath>
+#include <cstdint>
+#include <limits>
 #include <algorithm>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "grammar_impl.h"
 #include "json_schema_converter.h"
+#include "support/logging.h"
 #include "support/recursion_guard.h"
 #include "support/utils.h"
 #include "tokenizer_info_impl.h"
@@ -239,6 +244,15 @@ picojson::value StarFormat::ToJSON() const {
   return picojson::value(std::move(obj));
 }
 
+picojson::value RepeatFormat::ToJSON() const {
+  picojson::object obj;
+  obj["type"] = picojson::value(type);
+  obj["min"] = picojson::value(static_cast<int64_t>(min));
+  obj["max"] = picojson::value(static_cast<int64_t>(max));
+  obj["content"] = FormatToJSONValue(*content);
+  return picojson::value(std::move(obj));
+}
+
 /************** StructuralTag Parser **************/
 
 class StructuralTagParser {
@@ -275,6 +289,7 @@ class StructuralTagParser {
   Result<OptionalFormat, ISTError> ParseOptionalFormat(const picojson::object& value);
   Result<PlusFormat, ISTError> ParsePlusFormat(const picojson::object& value);
   Result<StarFormat, ISTError> ParseStarFormat(const picojson::object& value);
+  Result<RepeatFormat, ISTError> ParseRepeatFormat(const picojson::object& value);
   Result<TokenFormat, ISTError> ParseTokenFormat(const picojson::object& value);
   Result<ExcludeTokenFormat, ISTError> ParseExcludeTokenFormat(const picojson::object& value);
   Result<AnyTokensFormat, ISTError> ParseAnyTokensFormat(const picojson::object& value);
@@ -353,6 +368,8 @@ Result<Format, ISTError> StructuralTagParser::ParseFormat(const picojson::value&
       return Result<Format, ISTError>::Convert(ParsePlusFormat(obj));
     } else if (type == "star") {
       return Result<Format, ISTError>::Convert(ParseStarFormat(obj));
+    } else if (type == "repeat") {
+      return Result<Format, ISTError>::Convert(ParseRepeatFormat(obj));
     } else if (type == "qwen_xml_parameter") {
       return Result<Format, ISTError>::Convert(ParseJSONSchemaFormat(obj, "qwen_xml"));
     } else if (type == "grammar") {
@@ -416,6 +433,10 @@ Result<Format, ISTError> StructuralTagParser::ParseFormat(const picojson::value&
   auto star_format = ParseStarFormat(obj);
   if (!star_format.IsErr()) {
     return ResultOk<Format>(std::move(star_format).Unwrap());
+  }
+  auto repeat_format = ParseRepeatFormat(obj);
+  if (!repeat_format.IsErr()) {
+    return ResultOk<Format>(std::move(repeat_format).Unwrap());
   }
   return ResultErr<ISTError>("Invalid format: " + value.serialize(false));
 }
@@ -1101,6 +1122,51 @@ std::optional<ISTError> StructuralTagTokenResolver::ResolveFormat(Format* format
   );
 }
 
+Result<RepeatFormat, ISTError> StructuralTagParser::ParseRepeatFormat(const picojson::object& obj) {
+  auto min_it = obj.find("min");
+  if (min_it == obj.end() || !min_it->second.is<double>()) {
+    return ResultErr<ISTError>("Repeat format must have a min field (number)");
+  }
+  auto max_it = obj.find("max");
+  if (max_it == obj.end() || !max_it->second.is<double>()) {
+    return ResultErr<ISTError>("Repeat format must have a max field (number)");
+  }
+  int64_t min = min_it->second.get<int64_t>();
+  int64_t max = max_it->second.get<int64_t>();
+  int32_t max_value_int32 = std::numeric_limits<int32_t>::max();
+  if (max >= 0 && min > max) {
+    return ResultErr<ISTError>("Repeat min must be <= max");
+  }
+  if (min < 0) {
+    return ResultErr<ISTError>("Repeat min must be >= 0");
+  }
+  if (max < -1) {
+    return ResultErr<ISTError>("Repeat max must be -1 (unbounded) or >= 0");
+  }
+  if (max > static_cast<int64_t>(max_value_int32)) {
+    XGRAMMAR_LOG(WARNING) << "Repeat max is too large, will be set as not limited";
+    max = -1;  // -1 means unlimited
+  }
+  if (min > static_cast<int64_t>(max_value_int32)) {
+    return ResultErr<ISTError>(
+        "Repeat min is too large, must be <= " + std::to_string(max_value_int32)
+    );
+  }
+  auto content_it = obj.find("content");
+  if (content_it == obj.end()) {
+    return ResultErr<ISTError>("Repeat format must have a content field");
+  }
+  auto content = ParseFormat(content_it->second);
+  if (content.IsErr()) {
+    return ResultErr<ISTError>(std::move(content).UnwrapErr());
+  }
+  return ResultOk<RepeatFormat>(
+      static_cast<int32_t>(min),
+      static_cast<int32_t>(max),
+      std::make_shared<Format>(std::move(content).Unwrap())
+  );
+}
+
 /************** StructuralTag Analyzer **************/
 
 /*!
@@ -1126,6 +1192,7 @@ class StructuralTagAnalyzer {
       OptionalFormat*,
       PlusFormat*,
       StarFormat*,
+      RepeatFormat*,
       TokenFormat*,
       ExcludeTokenFormat*,
       AnyTokensFormat*,
@@ -1155,6 +1222,7 @@ class StructuralTagAnalyzer {
   std::optional<ISTError> VisitSub(ExcludeTokenFormat* format);
   std::optional<ISTError> VisitSub(AnyTokensFormat* format);
   std::optional<ISTError> VisitSub(TokenTriggeredTagsFormat* format);
+  std::optional<ISTError> VisitSub(RepeatFormat* format);
 
   std::vector<std::string> DetectEndStrings();
   std::vector<int32_t> DetectEndTokenIds();
@@ -1217,9 +1285,11 @@ bool StructuralTagAnalyzer::IsUnlimited(const Format& format) {
         } else if constexpr (std::is_same_v<T, OrFormat>) {
           return arg.is_unlimited_;
         } else if constexpr (std::is_same_v<T, OptionalFormat>) {
+          return IsUnlimited(*arg.content);
+        } else if constexpr (std::is_same_v<T, StarFormat> || std::is_same_v<T, PlusFormat>) {
           return true;
-        } else if constexpr (std::is_same_v<T, StarFormat>) {
-          return true;
+        } else if constexpr (std::is_same_v<T, RepeatFormat>) {
+          return arg.max == -1 || (arg.max != 0 && IsUnlimited(*arg.content));
         } else {
           return false;
         }
@@ -1422,6 +1492,10 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(TokenTriggeredTagsFormat
   return std::nullopt;
 }
 
+std::optional<ISTError> StructuralTagAnalyzer::VisitSub(RepeatFormat* format) {
+  return Visit(format->content.get());
+}
+
 /************** StructuralTag to Grammar Converter **************/
 
 class StructuralTagGrammarConverter {
@@ -1453,6 +1527,7 @@ class StructuralTagGrammarConverter {
   Result<int, ISTError> VisitSub(const ExcludeTokenFormat& format);
   Result<int, ISTError> VisitSub(const AnyTokensFormat& format);
   Result<int, ISTError> VisitSub(const TokenTriggeredTagsFormat& format);
+  Result<int, ISTError> VisitSub(const RepeatFormat& format);
   Grammar AddRootRuleAndGetGrammar(int ref_rule_id);
 
   bool IsPrefix(const std::string& prefix, const std::string& full_str);
@@ -2036,6 +2111,16 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TokenTrigger
   }
 
   return ResultOk(grammar_builder_.AddRuleWithHint("token_triggered_tags", rule_expr_id));
+}
+
+Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const RepeatFormat& format) {
+  auto result = Visit(*format.content);
+  if (result.IsErr()) {
+    return result;
+  }
+  int content_rule_id = std::move(result).Unwrap();
+  int repeat_expr_id = grammar_builder_.AddRepeat(content_rule_id, format.min, format.max);
+  return ResultOk(grammar_builder_.AddRuleWithHint("repeat", repeat_expr_id));
 }
 
 /************** StructuralTag Conversion Public API **************/

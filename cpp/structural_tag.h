@@ -11,6 +11,7 @@
 #include <xgrammar/exception.h>
 #include <xgrammar/grammar.h>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -43,6 +44,7 @@ struct TokenFormat;
 struct ExcludeTokenFormat;
 struct AnyTokensFormat;
 struct TokenTriggeredTagsFormat;
+struct RepeatFormat;
 
 using Format = std::variant<
     ConstStringFormat,
@@ -61,7 +63,8 @@ using Format = std::variant<
     TokenFormat,
     ExcludeTokenFormat,
     AnyTokensFormat,
-    TokenTriggeredTagsFormat>;
+    TokenTriggeredTagsFormat,
+    RepeatFormat>;
 
 /******************** Basic Formats ********************/
 
@@ -295,6 +298,16 @@ struct StarFormat {
   static constexpr const char* type = "star";
   std::shared_ptr<Format> content;
   StarFormat(std::shared_ptr<Format> content) : content(std::move(content)) {}
+  picojson::value ToJSON() const;
+};
+
+struct RepeatFormat {
+  static constexpr const char* type = "repeat";
+  int32_t min;
+  int32_t max;
+  std::shared_ptr<Format> content;
+  RepeatFormat(int32_t min, int32_t max, std::shared_ptr<Format> content)
+      : min(min), max(max), content(std::move(content)) {}
   picojson::value ToJSON() const;
 };
 

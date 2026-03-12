@@ -427,7 +427,47 @@ The format field requires a format object. We provide several basic format objec
 
     The above accepts an empty string, or `x`, `xx`, `xxx`, and so on.
 
-14. `QwenXMLParameterFormat` *(not recommended)*
+14. `repeat`
+
+    The inner format may appear **between `min` and `max` times (inclusive)**. This generalizes `plus` (min=1, unbounded) and `star` (min=0, unbounded). Use `max: -1` for an unbounded upper limit (i.e. "at least `min` times").
+
+    **`min`** (required): Minimum number of occurrences (inclusive). Must be non-negative.
+
+    **`max`** (required): Maximum number of occurrences (inclusive). Use `-1` for unbounded.
+
+    **`content`** (required): A format object. It can be any of the format types.
+
+    ```json
+    {
+        "type": "repeat",
+        "min": 1,
+        "max": 3,
+        "content": {
+            "type": "const_string",
+            "value": "item"
+        }
+    }
+    ```
+
+    The above accepts `item`, `itemitem`, or `itemitemitem` (exactly 1 to 3 times).
+
+    For "at least N times" (no upper bound), set `max` to `-1`:
+
+    ```json
+    {
+        "type": "repeat",
+        "min": 2,
+        "max": -1,
+        "content": {
+            "type": "const_string",
+            "value": "x"
+        }
+    }
+    ```
+
+    The above accepts `xx`, `xxx`, `xxxx`, and so on (2 or more times).
+
+15. `QwenXMLParameterFormat` *(not recommended)*
 
     **Deprecated.** This format is kept for backward compatibility only. Prefer using `json_schema` with `style: "qwen_xml"` instead (see the `json_schema` format above).
 
