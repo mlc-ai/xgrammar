@@ -109,24 +109,26 @@ struct AnyTextFormat {
 
 struct TokenFormat {
   static constexpr const char* type = "token";
-  int32_t token_id = -1;
   std::variant<int32_t, std::string> token;
   TokenFormat(std::variant<int32_t, std::string> token) : token(std::move(token)) {
     if (std::holds_alternative<int32_t>(this->token)) {
-      token_id = std::get<int32_t>(this->token);
+      resolved_token_id_ = std::get<int32_t>(this->token);
     }
   }
   picojson::value ToJSON() const;
 
  private:
+  int32_t resolved_token_id_ = -1;
   friend class StructuralTagTokenResolver;
+  friend class StructuralTagAnalyzer;
+  friend class StructuralTagGrammarConverter;
 };
 
 struct ExcludeTokenFormat {
   static constexpr const char* type = "exclude_token";
-  std::vector<std::variant<int32_t, std::string>> tokens;
-  ExcludeTokenFormat(std::vector<std::variant<int32_t, std::string>> tokens)
-      : tokens(std::move(tokens)) {}
+  std::vector<std::variant<int32_t, std::string>> excludes;
+  ExcludeTokenFormat(std::vector<std::variant<int32_t, std::string>> excludes)
+      : excludes(std::move(excludes)) {}
   picojson::value ToJSON() const;
 
  private:

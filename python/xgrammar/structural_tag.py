@@ -95,7 +95,7 @@ class ExcludeTokenFormat(BaseModel):
     type: Literal["exclude_token"] = "exclude_token"
     """The type of the format."""
 
-    tokens: List[Union[int, str]] = []
+    excludes: List[Union[int, str]] = []
     """List of token IDs or strings to exclude."""
 
 
