@@ -158,6 +158,20 @@ class GrammarBuilder {
   /*! \brief Add a GrammarExpr for empty string.*/
   int32_t AddEmptyStr() { return AddGrammarExpr({GrammarExprType::kEmptyStr, nullptr, 0}); }
 
+  /*! \brief Add a GrammarExpr for kToken (token-level matching). */
+  int32_t AddTokenSet(const std::vector<int32_t>& token_ids) {
+    return AddGrammarExpr(
+        {GrammarExprType::kToken, token_ids.data(), static_cast<int32_t>(token_ids.size())}
+    );
+  }
+
+  /*! \brief Add a GrammarExpr for kExcludeToken (excluded token-level matching). */
+  int32_t AddExcludeTokenSet(const std::vector<int32_t>& token_ids) {
+    return AddGrammarExpr(
+        {GrammarExprType::kExcludeToken, token_ids.data(), static_cast<int32_t>(token_ids.size())}
+    );
+  }
+
   /*! \brief Add a GrammarExpr for rule reference.*/
   int32_t AddRuleRef(int32_t rule_id) {
     std::vector<int32_t> data;
@@ -181,28 +195,40 @@ class GrammarBuilder {
     );
   }
 
-  /*!
-   * \brief Add a GrammarExpr for tag dispatch.
-   * \param tag_dispatch_list A list of pairs of tag_expr_id and rule_id.
-   */
+  /*! \brief Encode a TagDispatch struct into a kTagDispatch expr. */
   int32_t AddTagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch) {
     std::vector<int32_t> data;
-    data.reserve(
-        tag_dispatch.tag_rule_pairs.size() * 2 +
-        Grammar::Impl::TagDispatch::kTagDispatchExtraParameter
-    );
+    data.reserve(tag_dispatch.tag_rule_pairs.size() * 2 + 2);
     for (const auto& [tag, rule_id] : tag_dispatch.tag_rule_pairs) {
       data.push_back(AddByteString(tag));
       data.push_back(rule_id);
     }
     data.push_back(static_cast<int32_t>(tag_dispatch.loop_after_dispatch));
     std::vector<int32_t> exclude_str_expr_ids;
-    for (const auto& exclude_str : tag_dispatch.excluded_str) {
+    for (const auto& exclude_str : tag_dispatch.excludes) {
       exclude_str_expr_ids.push_back(AddByteString(exclude_str));
     }
     data.push_back(AddChoices(exclude_str_expr_ids));
     return AddGrammarExpr(
         {GrammarExprType::kTagDispatch, data.data(), static_cast<int32_t>(data.size())}
+    );
+  }
+
+  /*! \brief Encode a TokenTagDispatch struct into a kTokenTagDispatch expr. */
+  int32_t AddTokenTagDispatch(const Grammar::Impl::TokenTagDispatch& ttd) {
+    std::vector<int32_t> data;
+    data.push_back(static_cast<int32_t>(ttd.trigger_rule_pairs.size()));
+    for (const auto& [token_id, rule_id] : ttd.trigger_rule_pairs) {
+      data.push_back(token_id);
+      data.push_back(rule_id);
+    }
+    data.push_back(static_cast<int32_t>(ttd.loop_after_dispatch));
+    data.push_back(static_cast<int32_t>(ttd.excludes.size()));
+    for (auto token_id : ttd.excludes) {
+      data.push_back(token_id);
+    }
+    return AddGrammarExpr(
+        {GrammarExprType::kTokenTagDispatch, data.data(), static_cast<int32_t>(data.size())}
     );
   }
 

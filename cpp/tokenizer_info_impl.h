@@ -36,6 +36,9 @@ class TokenizerInfo::Impl {
     return sorted_decoded_vocab_;
   }
   const std::vector<int32_t>& GetTrieSubtreeNodesRange() const { return trie_subtree_nodes_range_; }
+  const std::vector<int32_t>& GetTokenIdToSortedVocabIndex() const {
+    return token_id_to_sorted_vocab_index_;
+  }
 
   std::string DumpMetadata() const;
   picojson::value DumpMetadataValue() const;
@@ -74,6 +77,8 @@ class TokenizerInfo::Impl {
   /*! \brief The special tokens. These tokens are ignored (masked out) during the grammar-guided
    * generation. */
   std::vector<int32_t> special_token_ids_;
+  /*! \brief Reverse mapping: token_id -> index in sorted_decoded_vocab_. -1 if not present. */
+  std::vector<int32_t> token_id_to_sorted_vocab_index_;
 
   /*!
    * \brief The tokens used to detect stop tokens from the vocabulary.

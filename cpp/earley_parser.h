@@ -121,11 +121,19 @@ struct ParserState {
   }
 
   std::string ToString() const {
-    return "ParserState(rule_id=" + std::to_string(rule_id) +
-           ", sequence_id=" + std::to_string(sequence_id) +
-           ", element_id=" + std::to_string(element_id) +
-           ", rule_start_pos=" + std::to_string(rule_start_pos) +
-           ", sub_element_id=" + std::to_string(sub_element_id) + ")";
+    std::string result = "ParserState(rule_id=" + std::to_string(rule_id) +
+                         ", sequence_id=" + std::to_string(sequence_id) +
+                         ", element_id=" + std::to_string(element_id) +
+                         ", rule_start_pos=" + std::to_string(rule_start_pos) +
+                         ", sub_element_id=" + std::to_string(sub_element_id);
+    if (repeat_count != 0) {
+      result += ", repeat_count=" + std::to_string(repeat_count);
+    }
+    if (partial_codepoint != 0) {
+      result += ", partial_codepoint=" + std::to_string(partial_codepoint);
+    }
+    result += ")";
+    return result;
   }
 };
 
@@ -376,6 +384,20 @@ class EarleyParser {
    * \return The next state, Invalid state if the character is not accepted.
    */
   void AdvanceFsm(const ParserState& state, const uint8_t ch);
+
+  /*!
+   * \brief Scan a token edge: check if token_id matches any kToken or kExcludeToken edge from
+   * state.
+   */
+  void ScanAtomicToken(const ParserState& state, int32_t token_id);
+
+  /*!
+   * \brief Advance the parser by accepting a whole token via kToken/kExcludeToken edges.
+   * \param token_id The token ID to accept.
+   * \param debug_print Whether to print debug info.
+   * \return True if any state advanced, false otherwise.
+   */
+  bool AdvanceAtomicToken(int32_t token_id, bool debug_print = false);
 
   /*!
    * \brief Enqueue the state into the queue.

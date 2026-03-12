@@ -14,8 +14,8 @@ def test_tag_dispatch():
     before = """root ::= TagDispatch(
     ("tag1", rule1),
     ("tag2", rule2),
-    loop_after_dispatch = false,
-    excludes = ("abc", "def")
+    excludes = ("abc", "def"),
+    loop_after_dispatch = false
 )
 rule1 ::= "a"
 rule2 ::= "b"
@@ -189,16 +189,16 @@ ebnf_str__expected_error_regex__test_tag_dispatch_parser_errors = [
         "EBNF parser error at line 1, column 30: Expect , or \\) in tuple",
     ),
     (
-        'root ::= TagDispatch(("tag1", rule1), excludes=(""))\nrule1 ::= "a"',
-        "Stop string must be a non-empty string literal",
+        'root ::= TagDispatch(("tag1", rule1), stop_str=true)\nrule1 ::= "a"',
+        "EBNF parser error at line 1, column 21: Unknown named argument for TagDispatch: stop_str",
     ),
     (
-        'root ::= TagDispatch(("<tool_calc>", rule1), excludes=("<tool"))\nrule1 ::= "a"',
-        'exclude "<tool" is a prefix of trigger "<tool_calc>"',
+        'root ::= TagDispatch(("tag1", rule1), stop_eos=false)\nrule1 ::= "a"',
+        "EBNF parser error at line 1, column 21: Unknown named argument for TagDispatch: stop_eos",
     ),
     (
-        'root ::= TagDispatch(("stop", rule1), excludes=("stop"))\nrule1 ::= "a"',
-        'exclude "stop" is a prefix of trigger "stop"',
+        'root ::= TagDispatch(("tag1", rule1), excludes=("tag1"))\nrule1 ::= "a"',
+        "EBNF parser error at line 1, column 21: Exclude string must not be a prefix of trigger string: tag1",
     ),
 ]
 

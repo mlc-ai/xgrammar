@@ -298,6 +298,11 @@ TokenizerInfo::Impl::Impl(
   };
   std::sort(sorted_decoded_vocab_.begin(), sorted_decoded_vocab_.end(), f_compare_token);
 
+  token_id_to_sorted_vocab_index_.assign(vocab_size_, -1);
+  for (int32_t i = 0; i < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++i) {
+    token_id_to_sorted_vocab_index_[sorted_decoded_vocab_[i].first] = i;
+  }
+
   // The value means: the subtree is [i, trie_subtree_nodes_range[i]).
   trie_subtree_nodes_range_.resize(sorted_decoded_vocab_.size(), 0);
   std::stack<std::pair<std::string, int32_t>> prefix_stack;
