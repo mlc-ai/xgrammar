@@ -528,6 +528,7 @@ _kimi_instances_no_tools = [
     "<think>123</think>",
     "<think>\n\n</think></think>",
     "<think></think>text",
+    "</think>123",
 ]
 
 kimi_instance_cases: List[InstanceCase] = [
@@ -694,7 +695,7 @@ any_text_1 ::= TagDispatch(
 sequence ::= ((tag any_text_1))
 root ::= ((sequence))
 """,
-        [False, False, True, False, True, True],
+        [False, False, True, False, True, False],
     ),
     # no tools, reasoning=True, force_empty_reasoning=True
     (
@@ -710,7 +711,7 @@ any_text ::= TagDispatch(
 sequence ::= ((const_string any_text))
 root ::= ((sequence))
 """,
-        [False, False, False, False, True, True],
+        [False, False, False, False, True, False],
     ),
 ]
 
