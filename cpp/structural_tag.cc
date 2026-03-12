@@ -793,7 +793,11 @@ Result<TokenFormat, ISTError> StructuralTagParser::ParseTokenFormat(const picojs
     return ResultErr<ISTError>("TokenFormat must have a token field");
   }
   if (token_it->second.is<double>()) {
-    int32_t id = static_cast<int32_t>(token_it->second.get<double>());
+    double d = token_it->second.get<double>();
+    if (d != static_cast<double>(static_cast<int32_t>(d))) {
+      return ResultErr<ISTError>("Token ID must be an integer");
+    }
+    int32_t id = static_cast<int32_t>(d);
     if (id < 0) {
       return ResultErr<ISTError>("Token ID must be non-negative");
     }
@@ -818,7 +822,11 @@ Result<std::vector<std::variant<int32_t, std::string>>, ISTError> ParseIntOrStri
   }
   for (const auto& v : val.get<picojson::array>()) {
     if (v.is<double>()) {
-      int32_t id = static_cast<int32_t>(v.get<double>());
+      double d = v.get<double>();
+      if (d != static_cast<double>(static_cast<int32_t>(d))) {
+        return ResultErr<ISTError>(field_name + " elements must be integers, not floats");
+      }
+      int32_t id = static_cast<int32_t>(d);
       if (id < 0) {
         return ResultErr<ISTError>(
             field_name + " elements must be non-negative integers or strings"
@@ -901,13 +909,19 @@ Result<TokenTriggeredTagsFormat, ISTError> StructuralTagParser::ParseTokenTrigge
 
   bool at_least_one = false;
   auto alo_it = obj.find("at_least_one");
-  if (alo_it != obj.end() && alo_it->second.is<bool>()) {
+  if (alo_it != obj.end()) {
+    if (!alo_it->second.is<bool>()) {
+      return ResultErr<ISTError>("at_least_one must be a boolean");
+    }
     at_least_one = alo_it->second.get<bool>();
   }
 
   bool stop_after_first = false;
   auto saf_it = obj.find("stop_after_first");
-  if (saf_it != obj.end() && saf_it->second.is<bool>()) {
+  if (saf_it != obj.end()) {
+    if (!saf_it->second.is<bool>()) {
+      return ResultErr<ISTError>("stop_after_first must be a boolean");
+    }
     stop_after_first = saf_it->second.get<bool>();
   }
 
@@ -1614,7 +1628,11 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
 
   for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
     const auto& tag = format.tags[it_tag];
-    XGRAMMAR_CHECK(std::holds_alternative<std::string>(tag.begin));
+    if (!std::holds_alternative<std::string>(tag.begin)) {
+      return ResultErr<ISTError>(
+          "Tags in triggered_tags must have a string begin, not a token format"
+      );
+    }
     const auto& tag_begin = std::get<std::string>(tag.begin);
     int matched_trigger_id = -1;
     for (int it_trigger = 0; it_trigger < static_cast<int>(format.triggers.size()); ++it_trigger) {
@@ -1879,7 +1897,11 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TokenTrigger
 
   for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
     const auto& tag = format.tags[it_tag];
-    XGRAMMAR_CHECK(std::holds_alternative<TokenFormat>(tag.begin));
+    if (!std::holds_alternative<TokenFormat>(tag.begin)) {
+      return ResultErr<ISTError>(
+          "Tags in token_triggered_tags must have a token format begin, not a string"
+      );
+    }
     auto begin_token_id = std::get<TokenFormat>(tag.begin).token_id;
 
     int matched = -1;

@@ -3521,5 +3521,51 @@ def test_token_string_requires_tokenizer():
         xgr.Grammar.from_structural_tag(stag)
 
 
+def test_triggered_tags_rejects_token_begin():
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "triggered_tags",
+            "triggers": ["<func>"],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": {"type": "token", "token": 10},
+                    "content": {"type": "const_string", "value": "X"},
+                    "end": "</func>",
+                }
+            ],
+        },
+    }
+    with pytest.raises(Exception, match="string begin"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_token_triggered_tags_rejects_string_begin():
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "token_triggered_tags",
+            "trigger_tokens": [10],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": "<func>",
+                    "content": {"type": "const_string", "value": "X"},
+                    "end": {"type": "token", "token": 99},
+                }
+            ],
+        },
+    }
+    with pytest.raises(Exception, match="token format begin"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_token_format_rejects_float():
+    stag = {"type": "structural_tag", "format": {"type": "token", "token": 3.5}}
+    with pytest.raises(Exception, match="must be an integer"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

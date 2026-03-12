@@ -210,6 +210,8 @@ The format field requires a format object. We provide several basic format objec
     Each tag should be matched by exactly one trigger. "matching" means the trigger should be a
     prefix of the begin tag. All the strings in `excludes` will not be accepted before the tag is triggerred.
 
+    **Note:** Tags inside `triggered_tags` must use **string** `begin` fields (not `token` format objects). For token-level dispatch, use `token_triggered_tags` instead.
+
     ```json
     {
         "type": "triggered_tags",
@@ -518,7 +520,9 @@ The format field requires a format object. We provide several basic format objec
 
 17. `token_triggered_tags`
 
-    Similar to `triggered_tags`, but triggers and excludes operate at the token level. When a trigger token is generated, the output dispatches to the corresponding tag. Each tag's `begin` must be a `token` format object.
+    Similar to `triggered_tags`, but triggers and excludes operate at the token level. When a trigger token is generated, the output dispatches to the corresponding tag.
+
+    **Note:** Tags inside `token_triggered_tags` must use **`token` format objects** as their `begin` fields (not strings). For string-level dispatch, use `triggered_tags` instead.
 
     ```json
     {
