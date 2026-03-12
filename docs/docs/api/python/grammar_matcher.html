@@ -177,6 +177,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.find_jump_forward_string()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.rollback()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.is_terminated()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.is_completed"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.is_completed()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.reset"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.reset()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.max_rollback_tokens"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.max_rollback_tokens</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.stop_token_ids"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.stop_token_ids</span></code></a></li>
@@ -323,7 +324,10 @@ with optimizations specific to LLM token mask generation.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_terminated</span></code></a>()</p></td>
 <td><p>Check if the matcher has terminated.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.reset" title="xgrammar.GrammarMatcher.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_completed" title="xgrammar.GrammarMatcher.is_completed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_completed</span></code></a>()</p></td>
+<td><p>Check if the input accepted so far forms a complete valid string according to the grammar.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.reset" title="xgrammar.GrammarMatcher.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
 <td><p>Reset the matcher to the initial state.</p></td>
 </tr>
 </tbody>
@@ -481,6 +485,22 @@ terminate after matching the whole grammar.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>terminated</strong> – Whether the matcher has terminated.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.is_completed">
+<span class="sig-name descname"><span class="pre">is_completed</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.is_completed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.is_completed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the input accepted so far forms a complete valid string according to the
+grammar. Unlike <a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><code class="xref py py-meth docutils literal notranslate"><span class="pre">is_terminated()</span></code></a>, this does not require the stop token to have
+been accepted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>completed</strong> – Whether the grammar’s root rule is fully matched.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)">bool</a></p>
