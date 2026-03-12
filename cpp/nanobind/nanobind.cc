@@ -202,7 +202,7 @@ NB_MODULE(xgrammar_bindings, m) {
           "from_structural_tag",
           &Grammar_FromStructuralTag,
           nb::arg("structural_tag_json"),
-          nb::arg("tokenizer_info").none() = nb::none(),
+          nb::arg("tokenizer_info") = nb::none(),
           nb::call_guard<nb::gil_scoped_release>()
       )
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)

@@ -192,6 +192,9 @@ class TriggeredTagsFormat(BaseModel):
     Each tag should be matched by exactly one trigger. "matching" means the trigger should be a
     prefix of the begin tag.
 
+    Tags must use **string** ``begin`` fields, not ``TokenFormat``.
+    For token-level dispatch, use ``TokenTriggeredTagsFormat`` instead.
+
     Examples
     --------
 
@@ -241,6 +244,8 @@ class TokenTriggeredTagsFormat(BaseModel):
     """A format that dispatches to tags based on token-level triggers.
 
     Similar to TriggeredTagsFormat but uses token IDs instead of string triggers.
+    Tags must use ``TokenFormat`` ``begin`` fields, not strings.
+    For string-level dispatch, use ``TriggeredTagsFormat`` instead.
     """
 
     type: Literal["token_triggered_tags"] = "token_triggered_tags"

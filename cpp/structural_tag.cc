@@ -964,11 +964,11 @@ Result<TokenTriggeredTagsFormat, ISTError> StructuralTagParser::ParseTokenTrigge
 class StructuralTagTokenResolver {
  public:
   static std::optional<ISTError> Resolve(
-      StructuralTag* structural_tag, const TokenizerInfo* tokenizer_info
+      StructuralTag* structural_tag, const std::optional<TokenizerInfo>& tokenizer_info
   );
 
  private:
-  explicit StructuralTagTokenResolver(const TokenizerInfo* tokenizer_info)
+  explicit StructuralTagTokenResolver(const std::optional<TokenizerInfo>& tokenizer_info)
       : tokenizer_info_(tokenizer_info) {}
 
   std::optional<ISTError> ResolveFormat(Format* format);
@@ -978,11 +978,11 @@ class StructuralTagTokenResolver {
       const std::vector<std::variant<int32_t, std::string>>& input, std::vector<int32_t>* output
   );
 
-  const TokenizerInfo* tokenizer_info_;
+  const std::optional<TokenizerInfo>& tokenizer_info_;
 };
 
 std::optional<ISTError> StructuralTagTokenResolver::Resolve(
-    StructuralTag* structural_tag, const TokenizerInfo* tokenizer_info
+    StructuralTag* structural_tag, const std::optional<TokenizerInfo>& tokenizer_info
 ) {
   return StructuralTagTokenResolver(tokenizer_info).ResolveFormat(&structural_tag->format);
 }
@@ -2042,7 +2042,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TokenTrigger
 /************** StructuralTag Conversion Public API **************/
 
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(
-    const std::string& structural_tag_json, const TokenizerInfo* tokenizer_info
+    const std::string& structural_tag_json, const std::optional<TokenizerInfo>& tokenizer_info
 ) {
   auto structural_tag_result = StructuralTagParser::FromJSON(structural_tag_json);
   if (structural_tag_result.IsErr()) {

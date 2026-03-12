@@ -12,6 +12,7 @@
 #include <xgrammar/grammar.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -312,7 +313,8 @@ struct StructuralTag {
  * \return A grammar if the JSON is valid, otherwise an error message in std::string.
  */
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(
-    const std::string& structural_tag_json, const TokenizerInfo* tokenizer_info = nullptr
+    const std::string& structural_tag_json,
+    const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt
 );
 
 }  // namespace xgrammar
