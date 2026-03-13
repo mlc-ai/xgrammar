@@ -822,7 +822,6 @@ Result<TokenFormat, ISTError> StructuralTagParser::ParseTokenFormat(const picojs
   return ResultErr<ISTError>("TokenFormat's token must be an integer or string");
 }
 
-namespace {
 Result<std::vector<std::variant<int32_t, std::string>>, ISTError> ParseIntOrStringArray(
     const picojson::value& val, const std::string& field_name
 ) {
@@ -855,7 +854,6 @@ Result<std::vector<std::variant<int32_t, std::string>>, ISTError> ParseIntOrStri
   }
   return ResultOk(std::move(result));
 }
-}  // namespace
 
 Result<ExcludeTokenFormat, ISTError> StructuralTagParser::ParseExcludeTokenFormat(
     const picojson::object& obj
