@@ -1,4 +1,4 @@
-from . import exception, structural_tag, testing
+from . import exception, load_binding, structural_tag, testing
 from .builtin_structural_tag import (
     get_builtin_structural_tag,
     get_builtin_structural_tag_supported_models,
@@ -31,7 +31,6 @@ from .structural_tag import StructuralTag
 from .tokenizer_info import TokenizerInfo, VocabType
 
 __all__ = [
-    "exception",
     "structural_tag",
     "testing",
     "CompiledGrammar",

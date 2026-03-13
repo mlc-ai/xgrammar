@@ -6,8 +6,9 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 from pydantic import BaseModel
 from typing_extensions import deprecated
 
-from .base import XGRObject, _core
+from .base import XGRObject
 from .structural_tag import StructuralTag, StructuralTagItem
+from .tvm_ffi_binding import _ffi_api
 
 
 def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]) -> str:
@@ -169,7 +170,7 @@ class Grammar(XGRObject):
         RuntimeError
             When converting the regex pattern fails, with details about the parsing error.
         """
-        return Grammar._create_from_handle(_core.Grammar.from_ebnf(ebnf_string, root_rule_name))
+        return Grammar._create_from_handle(_ffi_api.Grammar.from_ebnf(ebnf_string, root_rule_name))
 
     @staticmethod
     def from_json_schema(
@@ -244,7 +245,7 @@ class Grammar(XGRObject):
         """
         schema_str = _convert_schema_to_str(schema)
         return Grammar._create_from_handle(
-            _core.Grammar.from_json_schema(
+            _ffi_api.Grammar.from_json_schema(
                 schema_str,
                 any_whitespace,
                 indent,
@@ -279,7 +280,7 @@ class Grammar(XGRObject):
             When parsing the regex pattern fails, with details about the parsing error.
         """
         return Grammar._create_from_handle(
-            _core.Grammar.from_regex(regex_string, print_converted_ebnf)
+            _ffi_api.Grammar.from_regex(regex_string, print_converted_ebnf)
         )
 
     @overload
@@ -347,7 +348,7 @@ class Grammar(XGRObject):
         Structural Tag in XGrammar documentation for its semantic.
         """
         structural_tag_str = _get_structural_tag_str_from_args(args, kwargs)
-        return Grammar._create_from_handle(_core.Grammar.from_structural_tag(structural_tag_str))
+        return Grammar._create_from_handle(_ffi_api.Grammar.from_structural_tag(structural_tag_str))
 
     @staticmethod
     def builtin_json_grammar() -> "Grammar":
@@ -359,7 +360,7 @@ class Grammar(XGRObject):
         grammar : Grammar
             The JSON grammar.
         """
-        return Grammar._create_from_handle(_core.Grammar.builtin_json_grammar())
+        return Grammar._create_from_handle(_ffi_api.Grammar.builtin_json_grammar())
 
     @staticmethod
     def concat(*grammars: "Grammar") -> "Grammar":
@@ -377,7 +378,7 @@ class Grammar(XGRObject):
             The concatenation of the grammars.
         """
         grammar_handles = [grammar._handle for grammar in grammars]
-        return Grammar._create_from_handle(_core.Grammar.concat(grammar_handles))
+        return Grammar._create_from_handle(_ffi_api.Grammar.concat(grammar_handles))
 
     @staticmethod
     def union(*grammars: "Grammar") -> "Grammar":
@@ -395,7 +396,7 @@ class Grammar(XGRObject):
             The union of the grammars.
         """
         grammar_handles = [grammar._handle for grammar in grammars]
-        return Grammar._create_from_handle(_core.Grammar.union(grammar_handles))
+        return Grammar._create_from_handle(_ffi_api.Grammar.union(grammar_handles))
 
     def serialize_json(self) -> str:
         """Serialize the grammar to a JSON string.
@@ -430,4 +431,4 @@ class Grammar(XGRObject):
         DeserializeVersionError
             When the __VERSION__ field in the JSON string is not the same as the current version.
         """
-        return Grammar._create_from_handle(_core.Grammar.deserialize_json(json_string))
+        return Grammar._create_from_handle(_ffi_api.Grammar.deserialize_json(json_string))
