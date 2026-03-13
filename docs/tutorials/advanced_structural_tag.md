@@ -84,7 +84,7 @@ The detection works by walking up to the nearest enclosing `tag`:
 - If the tag's `end` is a **string** (or list of strings), the end strings are added to the exclude set of string-level unlimited formats (`any_text`, `triggered_tags`).
 - If the tag's `end` is a **`token` format**, the end token ID is added to the exclude set of token-level unlimited formats (`any_tokens`, `token_triggered_tags`, `exclude_token`).
 
-Currently only **string–string** and **token–token** pairs are detected. Cross-level detection (e.g. a token end for a string-level format) is not supported. If you need additional exclusions beyond what automatic detection provides, specify them explicitly via the format's own exclude field (`excludes` for `any_text`/`exclude_token`, `exclude_tokens` for `any_tokens`/`token_triggered_tags`).
+Currently only **string–string** and **token–token** pairs are detected. Cross-level detection (e.g. a token end for a string-level format) is not supported. If you need additional exclusions beyond what automatic detection provides, specify them explicitly via the format's own exclude field (`excludes` for `any_text`, `exclude_tokens` for `exclude_token`/`any_tokens`/`token_triggered_tags`).
 
 ---
 
