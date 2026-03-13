@@ -386,6 +386,15 @@ class RepetitionNormalizer {
 };
 
 /*!
+ * \brief Expand kRepeat grammar expressions using HandleRepetitionRange logic.
+ * Transforms repetition structures into explicit sequences and choices.
+ */
+class RepetitionRangeExpander {
+ public:
+  static Grammar Apply(const Grammar& grammar);
+};
+
+/*!
  * \brief Optimize the grammar when compiling.
  * \note No matter whether the grammar is optimized, grammar optimizer will
  * return a new grammar. The following optimization will be applied:
