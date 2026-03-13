@@ -8,6 +8,7 @@
 #define XGRAMMAR_GRAMMAR_H_
 
 #include <xgrammar/object.h>
+#include <xgrammar/tokenizer_info.h>
 
 #include <optional>
 #include <stdexcept>
@@ -131,9 +132,11 @@ class Grammar {
   /*!
    * \brief Construct a grammar from a structural tag string.
    * \param structural_tag_json The structural tag string.
+   * \param tokenizer_info Optional tokenizer info for resolving string token references.
    */
   static std::variant<Grammar, StructuralTagError> FromStructuralTag(
-      const std::string& structural_tag_json
+      const std::string& structural_tag_json,
+      const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt
   );
 
   /*!

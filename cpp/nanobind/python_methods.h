@@ -50,7 +50,10 @@ void Kernels_ApplyTokenBitmaskInplaceCPU(
 
 std::vector<int32_t> GetAllowEmptyRuleIds(const CompiledGrammar& compiled_grammar);
 
-Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json);
+Grammar Grammar_FromStructuralTag(
+    const std::string& structural_tag_json,
+    const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt
+);
 
 Grammar Grammar_DeserializeJSON(const std::string& json_string);
 

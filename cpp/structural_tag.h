@@ -12,11 +12,13 @@
 #include <xgrammar/grammar.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
 
 #include "support/utils.h"
+#include "xgrammar/tokenizer_info.h"
 
 namespace xgrammar {
 
@@ -37,6 +39,10 @@ struct TagsWithSeparatorFormat;
 struct OptionalFormat;
 struct PlusFormat;
 struct StarFormat;
+struct TokenFormat;
+struct ExcludeTokenFormat;
+struct AnyTokensFormat;
+struct TokenTriggeredTagsFormat;
 
 using Format = std::variant<
     ConstStringFormat,
@@ -51,7 +57,11 @@ using Format = std::variant<
     TagsWithSeparatorFormat,
     OptionalFormat,
     PlusFormat,
-    StarFormat>;
+    StarFormat,
+    TokenFormat,
+    ExcludeTokenFormat,
+    AnyTokensFormat,
+    TokenTriggeredTagsFormat>;
 
 /******************** Basic Formats ********************/
 
@@ -97,6 +107,53 @@ struct AnyTextFormat {
   friend class StructuralTagGrammarConverter;
 };
 
+struct TokenFormat {
+  static constexpr const char* type = "token";
+  std::variant<int32_t, std::string> token;
+  TokenFormat(std::variant<int32_t, std::string> token) : token(std::move(token)) {
+    if (std::holds_alternative<int32_t>(this->token)) {
+      resolved_token_id_ = std::get<int32_t>(this->token);
+    }
+  }
+  picojson::value ToJSON() const;
+
+ private:
+  int32_t resolved_token_id_ = -1;
+  friend class StructuralTagTokenResolver;
+  friend class StructuralTagAnalyzer;
+  friend class StructuralTagGrammarConverter;
+};
+
+struct ExcludeTokenFormat {
+  static constexpr const char* type = "exclude_token";
+  std::vector<std::variant<int32_t, std::string>> excludes;
+  ExcludeTokenFormat(std::vector<std::variant<int32_t, std::string>> excludes)
+      : excludes(std::move(excludes)) {}
+  picojson::value ToJSON() const;
+
+ private:
+  std::vector<int32_t> resolved_token_ids_;
+  std::vector<int32_t> detected_end_token_ids_;
+  friend class StructuralTagTokenResolver;
+  friend class StructuralTagAnalyzer;
+  friend class StructuralTagGrammarConverter;
+};
+
+struct AnyTokensFormat {
+  static constexpr const char* type = "any_tokens";
+  std::vector<std::variant<int32_t, std::string>> exclude_tokens;
+  AnyTokensFormat(std::vector<std::variant<int32_t, std::string>> exclude_tokens)
+      : exclude_tokens(std::move(exclude_tokens)) {}
+  picojson::value ToJSON() const;
+
+ private:
+  std::vector<int32_t> resolved_exclude_token_ids_;
+  std::vector<int32_t> detected_end_token_ids_;
+  friend class StructuralTagTokenResolver;
+  friend class StructuralTagAnalyzer;
+  friend class StructuralTagGrammarConverter;
+};
+
 /******************** Combinatorial Formats ********************/
 
 struct SequenceFormat {
@@ -127,11 +184,15 @@ struct OrFormat {
 
 struct TagFormat {
   static constexpr const char* type = "tag";
-  std::string begin;
+  std::variant<std::string, TokenFormat> begin;
   std::shared_ptr<Format> content;
-  std::vector<std::string> end;  // Supports multiple end tokens
+  std::variant<std::vector<std::string>, TokenFormat> end;
 
-  TagFormat(std::string begin, std::shared_ptr<Format> content, std::vector<std::string> end)
+  TagFormat(
+      std::variant<std::string, TokenFormat> begin,
+      std::shared_ptr<Format> content,
+      std::variant<std::vector<std::string>, TokenFormat> end
+  )
       : begin(std::move(begin)), content(std::move(content)), end(std::move(end)) {}
   picojson::value ToJSON() const;
 };
@@ -185,6 +246,37 @@ struct TagsWithSeparatorFormat {
   friend class StructuralTagGrammarConverter;
 };
 
+struct TokenTriggeredTagsFormat {
+  static constexpr const char* type = "token_triggered_tags";
+  std::vector<std::variant<int32_t, std::string>> trigger_tokens;
+  std::vector<TagFormat> tags;
+  std::vector<std::variant<int32_t, std::string>> exclude_tokens;
+  bool at_least_one = false;
+  bool stop_after_first = false;
+
+  TokenTriggeredTagsFormat(
+      std::vector<std::variant<int32_t, std::string>> trigger_tokens,
+      std::vector<TagFormat> tags,
+      std::vector<std::variant<int32_t, std::string>> exclude_tokens,
+      bool at_least_one,
+      bool stop_after_first
+  )
+      : trigger_tokens(std::move(trigger_tokens)),
+        tags(std::move(tags)),
+        exclude_tokens(std::move(exclude_tokens)),
+        at_least_one(at_least_one),
+        stop_after_first(stop_after_first) {}
+  picojson::value ToJSON() const;
+
+ private:
+  std::vector<int32_t> resolved_trigger_token_ids_;
+  std::vector<int32_t> resolved_exclude_token_ids_;
+  std::vector<int32_t> detected_end_token_ids_;
+  friend class StructuralTagTokenResolver;
+  friend class StructuralTagAnalyzer;
+  friend class StructuralTagGrammarConverter;
+};
+
 struct OptionalFormat {
   static constexpr const char* type = "optional";
   std::shared_ptr<Format> content;
@@ -222,7 +314,10 @@ struct StructuralTag {
  * \param structural_tag_json The JSON string of the structural tag.
  * \return A grammar if the JSON is valid, otherwise an error message in std::string.
  */
-Result<Grammar, StructuralTagError> StructuralTagToGrammar(const std::string& structural_tag_json);
+Result<Grammar, StructuralTagError> StructuralTagToGrammar(
+    const std::string& structural_tag_json,
+    const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt
+);
 
 }  // namespace xgrammar
 
