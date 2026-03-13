@@ -129,9 +129,9 @@ struct TokenFormat {
 
 struct ExcludeTokenFormat {
   static constexpr const char* type = "exclude_token";
-  std::vector<std::variant<int32_t, std::string>> excludes;
-  ExcludeTokenFormat(std::vector<std::variant<int32_t, std::string>> excludes)
-      : excludes(std::move(excludes)) {}
+  std::vector<std::variant<int32_t, std::string>> exclude_tokens;
+  ExcludeTokenFormat(std::vector<std::variant<int32_t, std::string>> exclude_tokens)
+      : exclude_tokens(std::move(exclude_tokens)) {}
   picojson::value ToJSON() const;
 
  private:

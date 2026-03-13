@@ -553,10 +553,10 @@ The format field requires a format object. We provide several basic format objec
 
     ```json
     {"type": "exclude_token"}
-    {"type": "exclude_token", "excludes": [42, "</s>"]}
+    {"type": "exclude_token", "exclude_tokens": [42, "</s>"]}
     ```
 
-    Elements in `excludes` can be integers (token IDs) or strings (token strings resolved via `tokenizer_info`).
+    Elements in `exclude_tokens` can be integers (token IDs) or strings (token strings resolved via `tokenizer_info`).
 
 17. `any_tokens`
 
