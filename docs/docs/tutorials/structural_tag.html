@@ -153,6 +153,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#example-3-think-force-tool-calling-llama-style">Example 3: Think &amp; Force tool calling (Llama style)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#example-4-think-force-tool-calling-deepseek-style">Example 4: Think &amp; force tool calling (DeepSeek style)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#example-5-force-non-thinking-mode">Example 5: Force non-thinking mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-6-token-level-tool-calling">Example 6: Token-level tool calling</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#compatibility-with-the-openai-tool-calling-api">Compatibility with the OpenAI Tool Calling API</a><ul>
@@ -395,9 +396,7 @@ structural tag, the request should be like:</p>
 </div>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">tag</span></code></p>
-<p>The output must follow <code class="docutils literal notranslate"><span class="pre">begin</span> <span class="pre">content</span> <span class="pre">end</span></code>. <code class="docutils literal notranslate"><span class="pre">begin</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> are strings, and <code class="docutils literal notranslate"><span class="pre">content</span></code> can be
-any format object. This is useful for LLM outputs such as <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code> or
-<code class="docutils literal notranslate"><span class="pre">&lt;function&gt;...&lt;/function&gt;</span></code>.</p>
+<p>The output must follow <code class="docutils literal notranslate"><span class="pre">begin</span> <span class="pre">content</span> <span class="pre">end</span></code>. <code class="docutils literal notranslate"><span class="pre">begin</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> can be strings or <code class="docutils literal notranslate"><span class="pre">token</span></code> format objects, and <code class="docutils literal notranslate"><span class="pre">content</span></code> can be any format object. This is useful for LLM outputs such as <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code> or <code class="docutils literal notranslate"><span class="pre">&lt;function&gt;...&lt;/function&gt;</span></code>.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
@@ -406,6 +405,15 @@ any format object. This is useful for LLM outputs such as <code class="docutils 
 <span class="w">    </span><span class="p">},</span>
 <span class="w">    </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
 <span class="p">}</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">begin</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> can also be <code class="docutils literal notranslate"><span class="pre">token</span></code> format objects for token-level boundary matching:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;tag&quot;,
+    &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|tool_call|&gt;&quot;},
+    &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+    &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|end|&gt;&quot;}
+}
 </pre></div>
 </div>
 </li>
@@ -437,6 +445,7 @@ encountered, then dispatch to the corresponding tag; when the end tag is encount
 grammar will allow any following output, until the next trigger is encountered.</p>
 <p>Each tag should be matched by exactly one trigger. “matching” means the trigger should be a
 prefix of the begin tag. All the strings in <code class="docutils literal notranslate"><span class="pre">excludes</span></code> will not be accepted before the tag is triggerred.</p>
+<p><strong>Note:</strong> Tags inside <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> must use <strong>string</strong> <code class="docutils literal notranslate"><span class="pre">begin</span></code> fields (not <code class="docutils literal notranslate"><span class="pre">token</span></code> format objects). For token-level dispatch, use <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> instead.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
     &quot;type&quot;: &quot;triggered_tags&quot;,
     &quot;triggers&quot;: [&quot;&lt;function=&quot;],
@@ -675,6 +684,51 @@ generation will stop.</p>
 <div class="highlight-xml notranslate"><div class="highlight"><pre><span></span>&lt;parameter=address&gt;&lt;parameter=street&gt;Main St&lt;/parameter&gt;&lt;parameter=city&gt;New York&lt;/parameter&gt;&lt;/parameter&gt;
 </pre></div>
 </div>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">token</span></code></p>
+<p>Matches a single token by token ID or token string. Can be used standalone or as the <code class="docutils literal notranslate"><span class="pre">begin</span></code>/<code class="docutils literal notranslate"><span class="pre">end</span></code> of a <code class="docutils literal notranslate"><span class="pre">tag</span></code>.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;token&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;token&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;token&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;|tool_call|&gt;&quot;</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>When <code class="docutils literal notranslate"><span class="pre">token</span></code> is a string, it is resolved to a token ID via <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>.</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">exclude_token</span></code></p>
+<p>Matches any single token except those in the given set. When wrapped in a <code class="docutils literal notranslate"><span class="pre">tag</span></code> whose <code class="docutils literal notranslate"><span class="pre">end</span></code> is a <code class="docutils literal notranslate"><span class="pre">token</span></code> format, the end token is automatically excluded.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;exclude_token&quot;</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;exclude_token&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;excludes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;&lt;/s&gt;&quot;</span><span class="p">]}</span>
+</pre></div>
+</div>
+<p>Elements in <code class="docutils literal notranslate"><span class="pre">excludes</span></code> can be integers (token IDs) or strings (token strings resolved via <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>).</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">any_tokens</span></code></p>
+<p>Matches zero or more tokens, excluding those in the given set. Semantically equivalent to <code class="docutils literal notranslate"><span class="pre">star(exclude_token(...))</span></code>. When wrapped in a <code class="docutils literal notranslate"><span class="pre">tag</span></code> whose <code class="docutils literal notranslate"><span class="pre">end</span></code> is a <code class="docutils literal notranslate"><span class="pre">token</span></code> format, the end token is automatically excluded.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_tokens&quot;</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_tokens&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;exclude_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;&lt;/s&gt;&quot;</span><span class="p">]}</span>
+</pre></div>
+</div>
+<p>Elements in <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code> can be integers (token IDs) or strings (token strings resolved via <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>).</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code></p>
+<p>Similar to <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>, but triggers and excludes operate at the token level. When a trigger token is generated, the output dispatches to the corresponding tag.</p>
+<p><strong>Note:</strong> Tags inside <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> must use <strong><code class="docutils literal notranslate"><span class="pre">token</span></code> format objects</strong> as their <code class="docutils literal notranslate"><span class="pre">begin</span></code> fields (not strings). For string-level dispatch, use <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> instead.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;token_triggered_tags&quot;,
+    &quot;trigger_tokens&quot;: [100, &quot;&lt;|tool_call|&gt;&quot;],
+    &quot;tags&quot;: [
+        {
+            &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: 100},
+            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+            &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: 101}
+        }
+    ],
+    &quot;exclude_tokens&quot;: [&quot;&lt;/s&gt;&quot;],
+    &quot;at_least_one&quot;: false,
+    &quot;stop_after_first&quot;: false
+}
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">trigger_tokens</span></code> and <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code> elements can be integers or strings. <code class="docutils literal notranslate"><span class="pre">at_least_one</span></code> and <code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> have the same semantics as in <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>.</p>
 </li>
 </ol>
 </section>
@@ -1013,6 +1067,39 @@ generation will stop.</p>
             },
         ],
     },
+}
+</pre></div>
+</div>
+</section>
+<section id="example-6-token-level-tool-calling">
+<h3>Example 6: Token-level tool calling<a class="headerlink" href="#example-6-token-level-tool-calling" title="Permalink to this heading">¶</a></h3>
+<p>Some models use special tokens (not byte strings) to delimit tool calls. The <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> format handles this by dispatching on token IDs.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;structural_tag&quot;,
+    &quot;format&quot;: {
+        &quot;type&quot;: &quot;sequence&quot;,
+        &quot;elements&quot;: [
+            {
+                &quot;type&quot;: &quot;tag&quot;,
+                &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|think_start|&gt;&quot;},
+                &quot;content&quot;: {&quot;type&quot;: &quot;any_tokens&quot;},
+                &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|think_end|&gt;&quot;}
+            },
+            {
+                &quot;type&quot;: &quot;token_triggered_tags&quot;,
+                &quot;trigger_tokens&quot;: [&quot;&lt;|tool_call_start|&gt;&quot;],
+                &quot;tags&quot;: [
+                    {
+                        &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|tool_call_start|&gt;&quot;},
+                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                        &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|tool_call_end|&gt;&quot;}
+                    }
+                ],
+                &quot;exclude_tokens&quot;: [&quot;&lt;|eos|&gt;&quot;],
+                &quot;at_least_one&quot;: true
+            }
+        ]
+    }
 }
 </pre></div>
 </div>

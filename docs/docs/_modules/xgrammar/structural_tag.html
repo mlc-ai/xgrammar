@@ -754,6 +754,36 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that should not appear in the matched text.&quot;&quot;&quot;</span></div>
 
 
+<span class="k">class</span><span class="w"> </span><span class="nc">TokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a single token by ID or string representation.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">token</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The token ID (int) or token string (str).&quot;&quot;&quot;</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ExcludeTokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a single token, excluding those in the given set.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;exclude_token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;exclude_token&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AnyTokensFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches zero or more tokens, excluding those in the given set.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;any_tokens&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;any_tokens&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span>
+
+
 <div class="viewcode-block" id="GrammarFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.GrammarFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches an ebnf grammar.&quot;&quot;&quot;</span>
 
@@ -821,12 +851,12 @@ window.runMermaid = runMermaid;</script>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;tag&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tag&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">begin</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag.&quot;&quot;&quot;</span>
+    <span class="n">begin</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">TokenFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag. Can be a string or a TokenFormat.&quot;&quot;&quot;</span>
     <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The content of the tag. It can be any of the formats.&quot;&quot;&quot;</span>
-    <span class="n">end</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag(s). Can be a single string or a list of possible end strings.&quot;&quot;&quot;</span></div>
+    <span class="n">end</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">TokenFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag(s). Can be a string, list of strings, or a TokenFormat.&quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="TriggeredTagsFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TriggeredTagsFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
@@ -836,6 +866,9 @@ window.runMermaid = runMermaid;</script>
 
 <span class="sd">    Each tag should be matched by exactly one trigger. &quot;matching&quot; means the trigger should be a</span>
 <span class="sd">    prefix of the begin tag.</span>
+
+<span class="sd">    Tags must use **string** ``begin`` fields, not ``TokenFormat``.</span>
+<span class="sd">    For token-level dispatch, use ``TokenTriggeredTagsFormat`` instead.</span>
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
@@ -880,6 +913,28 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span>
     <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that should not appear in the matched text.&quot;&quot;&quot;</span></div>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TokenTriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that dispatches to tags based on token-level triggers.</span>
+
+<span class="sd">    Similar to TriggeredTagsFormat but uses token IDs instead of string triggers.</span>
+<span class="sd">    Tags must use ``TokenFormat`` ``begin`` fields, not strings.</span>
+<span class="sd">    For string-level dispatch, use ``TriggeredTagsFormat`` instead.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token_triggered_tags&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token_triggered_tags&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">trigger_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The trigger token IDs or strings.&quot;&quot;&quot;</span>
+    <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The tags to dispatch to.&quot;&quot;&quot;</span>
+    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span>
+    <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one tag must be generated.&quot;&quot;&quot;</span>
+    <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span>
 
 
 <div class="viewcode-block" id="TagsWithSeparatorFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TagsWithSeparatorFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
@@ -971,10 +1026,14 @@ window.runMermaid = runMermaid;</script>
         <span class="n">SequenceFormat</span><span class="p">,</span>
         <span class="n">TagFormat</span><span class="p">,</span>
         <span class="n">TriggeredTagsFormat</span><span class="p">,</span>
+        <span class="n">TokenTriggeredTagsFormat</span><span class="p">,</span>
         <span class="n">TagsWithSeparatorFormat</span><span class="p">,</span>
         <span class="n">OptionalFormat</span><span class="p">,</span>
         <span class="n">PlusFormat</span><span class="p">,</span>
         <span class="n">StarFormat</span><span class="p">,</span>
+        <span class="n">TokenFormat</span><span class="p">,</span>
+        <span class="n">ExcludeTokenFormat</span><span class="p">,</span>
+        <span class="n">AnyTokensFormat</span><span class="p">,</span>
     <span class="p">],</span>
     <span class="n">Field</span><span class="p">(</span><span class="n">discriminator</span><span class="o">=</span><span class="s2">&quot;type&quot;</span><span class="p">),</span>
 <span class="p">]</span>
@@ -986,15 +1045,16 @@ window.runMermaid = runMermaid;</script>
     <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">TagFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TokenTriggeredTagsFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">PlusFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">StarFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
 <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;update_forward_refs&quot;</span><span class="p">):</span>
-    <span class="c1"># This is for backward compatibility with pydantic v1</span>
     <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">TagFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TokenTriggeredTagsFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">PlusFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
@@ -1081,10 +1141,14 @@ window.runMermaid = runMermaid;</script>
     <span class="s2">&quot;AnyTextFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;GrammarFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;RegexFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TokenFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ExcludeTokenFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;AnyTokensFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;SequenceFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;OrFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;TagFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;TriggeredTagsFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TokenTriggeredTagsFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;TagsWithSeparatorFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;OptionalFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;PlusFormat&quot;</span><span class="p">,</span>
