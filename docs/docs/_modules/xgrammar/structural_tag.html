@@ -1011,6 +1011,22 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or more times.&quot;&quot;&quot;</span>
 
 
+<span class="k">class</span><span class="w"> </span><span class="nc">RepeatFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content between min and max times (inclusive).</span>
+
+<span class="sd">    Use max=-1 for unbounded upper limit (e.g. &quot;at least min times&quot;).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;repeat&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;repeat&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="nb">min</span><span class="p">:</span> <span class="nb">int</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Minimum number of occurrences (inclusive).&quot;&quot;&quot;</span>
+    <span class="nb">max</span><span class="p">:</span> <span class="nb">int</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Maximum number of occurrences (inclusive). Use -1 for unbounded.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that is repeated.&quot;&quot;&quot;</span>
+
+
 <span class="c1"># ---------- Discriminated Union ----------</span>
 
 
@@ -1034,6 +1050,7 @@ window.runMermaid = runMermaid;</script>
         <span class="n">TokenFormat</span><span class="p">,</span>
         <span class="n">ExcludeTokenFormat</span><span class="p">,</span>
         <span class="n">AnyTokensFormat</span><span class="p">,</span>
+        <span class="n">RepeatFormat</span><span class="p">,</span>
     <span class="p">],</span>
     <span class="n">Field</span><span class="p">(</span><span class="n">discriminator</span><span class="o">=</span><span class="s2">&quot;type&quot;</span><span class="p">),</span>
 <span class="p">]</span>
@@ -1050,6 +1067,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">PlusFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">StarFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">RepeatFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
 <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;update_forward_refs&quot;</span><span class="p">):</span>
     <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">TagFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
@@ -1059,6 +1077,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">PlusFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">StarFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">RepeatFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unsupported pydantic version&quot;</span><span class="p">)</span>
 
@@ -1153,6 +1172,7 @@ window.runMermaid = runMermaid;</script>
     <span class="s2">&quot;OptionalFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;PlusFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;StarFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RepeatFormat&quot;</span><span class="p">,</span>
     <span class="s2">&quot;Format&quot;</span><span class="p">,</span>
     <span class="s2">&quot;StructuralTagItem&quot;</span><span class="p">,</span>
     <span class="s2">&quot;StructuralTag&quot;</span><span class="p">,</span>

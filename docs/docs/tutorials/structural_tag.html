@@ -629,6 +629,37 @@ generation will stop.</p>
 </div>
 <p>The above accepts an empty string, or <code class="docutils literal notranslate"><span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">xx</span></code>, <code class="docutils literal notranslate"><span class="pre">xxx</span></code>, and so on.</p>
 </li>
+<li><p><code class="docutils literal notranslate"><span class="pre">repeat</span></code></p>
+<p>The inner format may appear <strong>between <code class="docutils literal notranslate"><span class="pre">min</span></code> and <code class="docutils literal notranslate"><span class="pre">max</span></code> times (inclusive)</strong>. This generalizes <code class="docutils literal notranslate"><span class="pre">plus</span></code> (min=1, unbounded) and <code class="docutils literal notranslate"><span class="pre">star</span></code> (min=0, unbounded). Use <code class="docutils literal notranslate"><span class="pre">max:</span> <span class="pre">-1</span></code> for an unbounded upper limit (i.e. “at least <code class="docutils literal notranslate"><span class="pre">min</span></code> times”).</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">min</span></code></strong> (required): Minimum number of occurrences (inclusive). Must be non-negative.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">max</span></code></strong> (required): Maximum number of occurrences (inclusive). Use <code class="docutils literal notranslate"><span class="pre">-1</span></code> for unbounded.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">content</span></code></strong> (required): A format object. It can be any of the format types.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;repeat&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;min&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;max&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;item&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The above accepts <code class="docutils literal notranslate"><span class="pre">item</span></code>, <code class="docutils literal notranslate"><span class="pre">itemitem</span></code>, or <code class="docutils literal notranslate"><span class="pre">itemitemitem</span></code> (exactly 1 to 3 times).</p>
+<p>For “at least N times” (no upper bound), set <code class="docutils literal notranslate"><span class="pre">max</span></code> to <code class="docutils literal notranslate"><span class="pre">-1</span></code>:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;repeat&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;min&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;max&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">-1</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;x&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The above accepts <code class="docutils literal notranslate"><span class="pre">xx</span></code>, <code class="docutils literal notranslate"><span class="pre">xxx</span></code>, <code class="docutils literal notranslate"><span class="pre">xxxx</span></code>, and so on (2 or more times).</p>
+</li>
 <li><p><code class="docutils literal notranslate"><span class="pre">QwenXMLParameterFormat</span></code> <em>(not recommended)</em></p>
 <p><strong>Deprecated.</strong> This format is kept for backward compatibility only. Prefer using <code class="docutils literal notranslate"><span class="pre">json_schema</span></code> with <code class="docutils literal notranslate"><span class="pre">style:</span> <span class="pre">&quot;qwen_xml&quot;</span></code> instead (see the <code class="docutils literal notranslate"><span class="pre">json_schema</span></code> format above).</p>
 <p>This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.</p>
