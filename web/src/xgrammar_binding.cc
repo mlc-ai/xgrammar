@@ -233,6 +233,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("AcceptToken", &GrammarMatcher::AcceptToken)
       .function("GetNextTokenBitmask", &GrammarMatcher_GetNextTokenBitmask)
       .function("IsTerminated", &GrammarMatcher::IsTerminated)
+      .function("IsCompleted", &GrammarMatcher::IsCompleted)
       .function("Reset", &GrammarMatcher::Reset)
       .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
       .function("Rollback", &GrammarMatcher::Rollback)
