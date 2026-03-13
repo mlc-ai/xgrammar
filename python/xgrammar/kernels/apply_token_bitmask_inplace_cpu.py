@@ -4,7 +4,7 @@ from typing import List, Optional, Union
 
 import torch
 
-from ..base import _core
+import xgrammar.tvm_ffi_binding.kernels._ffi_api as _kernels_ffi
 
 
 def apply_token_bitmask_inplace_cpu(
@@ -48,7 +48,7 @@ def apply_token_bitmask_inplace_cpu(
         elif isinstance(indices, list):
             indices_list = indices
     if logits.dtype == torch.float32:
-        _core.kernels.apply_token_bitmask_inplace_cpu(
+        _kernels_ffi.apply_token_bitmask_inplace_cpu(
             logits.data_ptr(),
             logits_shape,
             logits_stride,
@@ -60,7 +60,7 @@ def apply_token_bitmask_inplace_cpu(
             "float32",
         )
     elif logits.dtype == torch.bfloat16:
-        _core.kernels.apply_token_bitmask_inplace_cpu(
+        _kernels_ffi.apply_token_bitmask_inplace_cpu(
             logits.data_ptr(),
             logits_shape,
             logits_stride,
@@ -72,7 +72,7 @@ def apply_token_bitmask_inplace_cpu(
             "bfloat16",
         )
     elif logits.dtype == torch.float16:
-        _core.kernels.apply_token_bitmask_inplace_cpu(
+        _kernels_ffi.apply_token_bitmask_inplace_cpu(
             logits.data_ptr(),
             logits_shape,
             logits_stride,

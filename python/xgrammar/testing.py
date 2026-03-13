@@ -9,11 +9,12 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import torch
 from pydantic import BaseModel
 
-from .base import _core
 from .compiler import CompiledGrammar, GrammarCompiler
 from .grammar import Grammar, _convert_schema_to_str
 from .matcher import GrammarMatcher, bitmask_dtype
 from .tokenizer_info import TokenizerInfo
+from .tvm_ffi_binding.testing import _ffi_api as _testing_ffi
+from .tvm_ffi_binding.testing.grammar_functor import _ffi_api as _grammar_functor_ffi
 
 
 def _json_schema_to_ebnf(
@@ -60,7 +61,7 @@ def _json_schema_to_ebnf(
         The BNF grammar string.
     """
     schema_str = _convert_schema_to_str(schema)
-    return _core.testing._json_schema_to_ebnf(
+    return _testing_ffi._json_schema_to_ebnf(
         schema_str, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt
     )
 
@@ -89,7 +90,7 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
     bnf_string : str
         The BNF grammar string converted from the input regex.
     """
-    return _core.testing._regex_to_ebnf(regex, with_rule_name)
+    return _testing_ffi._regex_to_ebnf(regex, with_rule_name)
 
 
 def _ebnf_to_grammar_no_normalization(ebnf_string: str, root_rule_name: str = "root") -> Grammar:
@@ -107,7 +108,7 @@ def _ebnf_to_grammar_no_normalization(ebnf_string: str, root_rule_name: str = "r
         The unnormalized Grammar object converted from the input BNF grammar string.
     """
     return Grammar._create_from_handle(
-        _core.testing._ebnf_to_grammar_no_normalization(ebnf_string, root_rule_name)
+        _testing_ffi._ebnf_to_grammar_no_normalization(ebnf_string, root_rule_name)
     )
 
 
@@ -202,8 +203,10 @@ def _get_masked_tokens_from_bitmask(
         raise ValueError("bitmask should be on CPU.")
     if bitmask.dtype != bitmask_dtype:
         raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
-    return _core.testing._get_masked_tokens_from_bitmask(
-        bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
+    return list(
+        _testing_ffi._get_masked_tokens_from_bitmask(
+            bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
+        )
     )
 
 
@@ -228,9 +231,10 @@ def _is_single_token_bitmask(
     token_id : int
         The id of the token if the bitmask is a single token bitmask, -1 otherwise.
     """
-    return _core.testing._is_single_token_bitmask(
+    result = _testing_ffi._is_single_token_bitmask(
         bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
     )
+    return bool(result[0]), result[1]
 
 
 def bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
@@ -327,39 +331,39 @@ def _get_matcher_from_grammar_and_tokenizer_info(
 
 
 def _get_allow_empty_rule_ids(compiled_grammar: CompiledGrammar) -> List[int]:
-    return _core.testing._get_allow_empty_rule_ids(compiled_grammar._handle)
+    return list(_testing_ffi._get_allow_empty_rule_ids(compiled_grammar._handle))
 
 
 def _generate_range_regex(start: Optional[int] = None, end: Optional[int] = None) -> str:
-    return _core.testing._generate_range_regex(start, end)
+    return _testing_ffi._generate_range_regex(start, end)
 
 
 def _generate_float_regex(start: Optional[float] = None, end: Optional[float] = None) -> str:
-    return _core.testing._generate_float_regex(start, end)
+    return _testing_ffi._generate_float_regex(start, end)
 
 
 def _print_grammar_fsms(grammar: Grammar) -> str:
     """Print the FSMs of the grammar. Now the fsms are initialized in the grammar compilation
     process."""
-    return _core.testing._print_grammar_fsms(grammar._handle)
+    return _testing_ffi._print_grammar_fsms(grammar._handle)
 
 
 def _qwen_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
     """Convert Qwen XML tool calling schema to EBNF."""
     schema_str = _convert_schema_to_str(schema)
-    return _core.testing._qwen_xml_tool_calling_to_ebnf(schema_str)
+    return _testing_ffi._qwen_xml_tool_calling_to_ebnf(schema_str)
 
 
 def _minimax_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
     """Convert MiniMax XML tool calling schema to EBNF."""
     schema_str = _convert_schema_to_str(schema)
-    return _core.testing._minimax_xml_tool_calling_to_ebnf(schema_str)
+    return _testing_ffi._minimax_xml_tool_calling_to_ebnf(schema_str)
 
 
 def _deepseek_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
     """Convert DeepSeek XML tool calling schema to EBNF."""
     schema_str = _convert_schema_to_str(schema)
-    return _core.testing._deepseek_xml_tool_calling_to_ebnf(schema_str)
+    return _testing_ffi._deepseek_xml_tool_calling_to_ebnf(schema_str)
 
 
 def _traverse_draft_tree(
@@ -396,7 +400,7 @@ def _traverse_draft_tree(
     bool
         True if the traversal completed successfully, False if it timed out.
     """
-    return _core.testing._traverse_draft_tree(
+    return _testing_ffi._traverse_draft_tree(
         retrieve_next_token,
         retrieve_next_sibling,
         draft_tokens,
@@ -414,47 +418,41 @@ class GrammarFunctor:
     def structure_normalizer(grammar: Grammar) -> Grammar:
         """Normalize the structure of the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.structure_normalizer(grammar._handle)
+            _grammar_functor_ffi.structure_normalizer(grammar._handle)
         )
 
     @staticmethod
     def rule_inliner(grammar: Grammar) -> Grammar:
         """Inline some rule references in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_functor.rule_inliner(grammar._handle)
-        )
+        return Grammar._create_from_handle(_grammar_functor_ffi.rule_inliner(grammar._handle))
 
     @staticmethod
     def byte_string_fuser(grammar: Grammar) -> Grammar:
         """Fuse the byte string elements in the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_functor.byte_string_fuser(grammar._handle)
-        )
+        return Grammar._create_from_handle(_grammar_functor_ffi.byte_string_fuser(grammar._handle))
 
     @staticmethod
     def dead_code_eliminator(grammar: Grammar) -> Grammar:
         """Eliminate the not referenced rules in the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.dead_code_eliminator(grammar._handle)
+            _grammar_functor_ffi.dead_code_eliminator(grammar._handle)
         )
 
     @staticmethod
     def lookahead_assertion_analyzer(grammar: Grammar) -> Grammar:
         """Analyze and add lookahead assertions in the grammar."""
         return Grammar._create_from_handle(
-            _core.testing.grammar_functor.lookahead_assertion_analyzer(grammar._handle)
+            _grammar_functor_ffi.lookahead_assertion_analyzer(grammar._handle)
         )
 
     @staticmethod
     def grammar_optimizer(grammar: Grammar) -> Grammar:
         """Optimize the grammar."""
-        return Grammar._create_from_handle(
-            _core.testing.grammar_functor.grammar_optimizer(grammar._handle)
-        )
+        return Grammar._create_from_handle(_grammar_functor_ffi.grammar_optimizer(grammar._handle))
 
     @staticmethod
-    def repetition_normalizer(grammar: Grammar) -> None:
+    def repetition_normalizer(grammar: Grammar) -> Grammar:
         """Normalize the repetition expression."""
-        Grammar._create_from_handle(
-            _core.testing.grammar_functor.repetition_normalizer(grammar._handle)
+        return Grammar._create_from_handle(
+            _grammar_functor_ffi.repetition_normalizer(grammar._handle)
         )
