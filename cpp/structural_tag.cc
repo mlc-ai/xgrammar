@@ -7,10 +7,10 @@
 #include <picojson.h>
 #include <xgrammar/exception.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <algorithm>
 #include <optional>
 #include <string>
 #include <string_view>
