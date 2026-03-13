@@ -342,7 +342,7 @@ class RepeatFormat(BaseModel):
     Use max=-1 for unbounded upper limit (e.g. "at least min times").
     """
 
-    type: Literal["repetition"] = "repetition"
+    type: Literal["repeat"] = "repeat"
     """The type of the format."""
     min: int
     """Minimum number of occurrences (inclusive)."""
