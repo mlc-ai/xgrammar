@@ -174,7 +174,7 @@ picojson::value TokenFormat::ToJSON() const {
 picojson::value ExcludeTokenFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
-  obj["excludes"] = IntOrStringVectorToJSONArray(excludes);
+  obj["exclude_tokens"] = IntOrStringVectorToJSONArray(exclude_tokens);
   return picojson::value(std::move(obj));
 }
 
@@ -858,16 +858,16 @@ Result<std::vector<std::variant<int32_t, std::string>>, ISTError> ParseIntOrStri
 Result<ExcludeTokenFormat, ISTError> StructuralTagParser::ParseExcludeTokenFormat(
     const picojson::object& obj
 ) {
-  std::vector<std::variant<int32_t, std::string>> excludes;
-  auto it = obj.find("excludes");
+  std::vector<std::variant<int32_t, std::string>> exclude_tokens;
+  auto it = obj.find("exclude_tokens");
   if (it != obj.end()) {
-    auto parsed = ParseIntOrStringArray(it->second, "excludes");
+    auto parsed = ParseIntOrStringArray(it->second, "exclude_tokens");
     if (parsed.IsErr()) {
       return ResultErr<ISTError>(std::move(parsed).UnwrapErr());
     }
-    excludes = std::move(parsed).Unwrap();
+    exclude_tokens = std::move(parsed).Unwrap();
   }
-  return ResultOk<ExcludeTokenFormat>(std::move(excludes));
+  return ResultOk<ExcludeTokenFormat>(std::move(exclude_tokens));
 }
 
 Result<AnyTokensFormat, ISTError> StructuralTagParser::ParseAnyTokensFormat(
@@ -1051,7 +1051,7 @@ std::optional<ISTError> StructuralTagTokenResolver::ResolveFormat(Format* format
         if constexpr (std::is_same_v<T, TokenFormat>) {
           return ResolveTokenFormat(&arg);
         } else if constexpr (std::is_same_v<T, ExcludeTokenFormat>) {
-          return ResolveIntOrStringVec(arg.excludes, &arg.resolved_token_ids_);
+          return ResolveIntOrStringVec(arg.exclude_tokens, &arg.resolved_token_ids_);
         } else if constexpr (std::is_same_v<T, AnyTokensFormat>) {
           return ResolveIntOrStringVec(arg.exclude_tokens, &arg.resolved_exclude_token_ids_);
         } else if constexpr (std::is_same_v<T, TokenTriggeredTagsFormat>) {
