@@ -3307,7 +3307,7 @@ root ::= ((exclude_token))
 
 def test_exclude_token_format_with_excludes():
     check_stag_with_grammar(
-        {"type": "exclude_token", "excludes": [5, 10]},
+        {"type": "exclude_token", "exclude_tokens": [5, 10]},
         r"""exclude_token ::= ((ExcludeToken(5, 10)))
 root ::= ((exclude_token))
 """,
@@ -3320,7 +3320,7 @@ def test_exclude_token_detects_end_from_parent_tag():
         {
             "type": "tag",
             "begin": {"type": "token", "token": 1},
-            "content": {"type": "exclude_token", "excludes": [5]},
+            "content": {"type": "exclude_token", "exclude_tokens": [5]},
             "end": {"type": "token", "token": 99},
         },
         r"""exclude_token ::= ((ExcludeToken(5, 99)))
@@ -3533,8 +3533,8 @@ def test_token_format_missing_token_field():
         xgr.Grammar.from_structural_tag(stag)
 
 
-def test_exclude_token_format_invalid_excludes_type():
-    stag = {"type": "structural_tag", "format": {"type": "exclude_token", "excludes": "bad"}}
+def test_exclude_token_format_invalid_exclude_tokens_type():
+    stag = {"type": "structural_tag", "format": {"type": "exclude_token", "exclude_tokens": "bad"}}
     with pytest.raises(Exception, match="Invalid structural tag error"):
         xgr.Grammar.from_structural_tag(stag)
 
