@@ -547,3 +547,29 @@ class BatchGrammarMatcher(XGRObject):
         """
         matcher_handles = [matcher._handle for matcher in matchers]
         return _core.BatchGrammarMatcher.batch_accept_string(matcher_handles, strings, debug_print)
+
+    @staticmethod
+    def batch_rollback(
+        matchers: List["GrammarMatcher"], num_tokens: Union[List[int], int] = 1
+    ) -> None:
+        """Rollback a batch of matchers by the given number of tokens.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to rollback.
+
+        num_tokens : List[int] | int, default: 1
+            The number of tokens to rollback for each matcher. If an integer is provided, it will be
+            used for all matchers; if a list is provided, it must have the same length as matchers.
+
+        Raises
+        ------
+        RuntimeError
+            If the sizes of matchers and num_tokens do not match.
+        """
+        if isinstance(num_tokens, int):
+            num_tokens = [num_tokens] * len(matchers)
+
+        matcher_handles = [matcher._handle for matcher in matchers]
+        _core.BatchGrammarMatcher.batch_rollback(matcher_handles, num_tokens)
