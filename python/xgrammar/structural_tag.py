@@ -352,6 +352,62 @@ class RepeatFormat(BaseModel):
     """The format that is repeated."""
 
 
+class TagDispatchPair(BaseModel):
+    """A (trigger string, content format) pair for TagDispatchFormat."""
+
+    trigger: str
+    """The trigger string. When this prefix is seen, generation dispatches to content."""
+    content: "Format"
+    """The format for the content after the trigger."""
+
+
+class TagDispatchFormat(BaseModel):
+    """A format that maps directly to a TagDispatch grammar.
+
+    Accepts a list of (trigger string, content format) pairs. When the output matches a trigger
+    string, generation continues with the corresponding content format. This is a lower-level
+    alternative to ``TriggeredTagsFormat`` when you want to specify exact trigger→rule mapping
+    without tag begin/end structure.
+    """
+
+    type: Literal["tag_dispatch"] = "tag_dispatch"
+    """The type of the format."""
+    pairs: List[TagDispatchPair]
+    """List of (trigger, content) pairs. Trigger must be a non-empty string."""
+    loop_after_dispatch: bool = True
+    """If true, after handling one dispatch the grammar allows any text until the next trigger."""
+    excludes: List[str] = []
+    """List of strings that must not appear before a trigger is seen."""
+
+
+class TokenTagDispatchPair(BaseModel):
+    """A (trigger token, content format) pair for TokenTagDispatchFormat."""
+
+    trigger: Union[int, str]
+    """The trigger token (ID or token string, resolved via tokenizer)."""
+    content: "Format"
+    """The format for the content after the trigger token."""
+
+
+class TokenTagDispatchFormat(BaseModel):
+    """A format that maps directly to a TokenTagDispatch grammar.
+
+    Accepts a list of (trigger token, content format) pairs. When the model generates the
+    trigger token, generation continues with the corresponding content format. This is a
+    lower-level alternative to ``TokenTriggeredTagsFormat`` when you want exact token→rule
+    mapping without tag begin/end structure.
+    """
+
+    type: Literal["token_tag_dispatch"] = "token_tag_dispatch"
+    """The type of the format."""
+    pairs: List[TokenTagDispatchPair]
+    """List of (trigger token, content) pairs. Trigger can be token ID (int) or token string."""
+    loop_after_dispatch: bool = True
+    """If true, after one dispatch the grammar allows more tokens until the next trigger."""
+    exclude_tokens: List[Union[int, str]] = []
+    """Token IDs or strings to exclude before a trigger is seen."""
+
+
 # ---------- Discriminated Union ----------
 
 
@@ -376,6 +432,8 @@ Format = Annotated[
         ExcludeTokenFormat,
         AnyTokensFormat,
         RepeatFormat,
+        TagDispatchFormat,
+        TokenTagDispatchFormat,
     ],
     Field(discriminator="type"),
 ]
@@ -393,6 +451,10 @@ if hasattr(BaseModel, "model_rebuild"):
     PlusFormat.model_rebuild()
     StarFormat.model_rebuild()
     RepeatFormat.model_rebuild()
+    TagDispatchPair.model_rebuild()
+    TagDispatchFormat.model_rebuild()
+    TokenTagDispatchPair.model_rebuild()
+    TokenTagDispatchFormat.model_rebuild()
 elif hasattr(BaseModel, "update_forward_refs"):
     SequenceFormat.update_forward_refs()
     TagFormat.update_forward_refs()
@@ -403,6 +465,10 @@ elif hasattr(BaseModel, "update_forward_refs"):
     PlusFormat.update_forward_refs()
     StarFormat.update_forward_refs()
     RepeatFormat.update_forward_refs()
+    TagDispatchPair.update_forward_refs()
+    TagDispatchFormat.update_forward_refs()
+    TokenTagDispatchPair.update_forward_refs()
+    TokenTagDispatchFormat.update_forward_refs()
 else:
     raise RuntimeError("Unsupported pydantic version")
 
