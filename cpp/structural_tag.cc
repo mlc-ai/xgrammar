@@ -1128,6 +1128,9 @@ Result<TokenTagDispatchFormat, ISTError> StructuralTagParser::ParseTokenTagDispa
     std::variant<int32_t, std::string> trigger;
     if (trigger_it->second.is<double>()) {
       double d = trigger_it->second.get<double>();
+      if (d != static_cast<double>(static_cast<int32_t>(d))) {
+        return ResultErr<ISTError>("Token ID must be an integer");
+      }
       trigger = static_cast<int32_t>(d);
     } else if (trigger_it->second.is<std::string>()) {
       trigger = trigger_it->second.get<std::string>();
