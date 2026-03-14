@@ -594,6 +594,54 @@ The format field requires a format object. We provide several basic format objec
 
     `trigger_tokens` and `exclude_tokens` elements can be integers or strings. `at_least_one` and `stop_after_first` have the same semantics as in `triggered_tags`.
 
+19. `tag_dispatch`
+
+    A format that maps directly to a **TagDispatch** grammar. It accepts a list of (trigger string, content format) pairs. When the output matches a trigger string, generation continues with the corresponding content format. This is a lower-level alternative to `triggered_tags` when you want exact trigger→rule mapping without tag begin/end structure.
+
+    **`pairs`** (required): Array of objects, each with:
+    * **`trigger`** (required): Non-empty string. When this prefix is seen, dispatch to the pair’s content.
+    * **`content`** (required): A format object for the content after the trigger.
+
+    **`loop_after_dispatch`** (optional, default `true`): If true, after handling one dispatch the grammar allows any text until the next trigger. If false, generation stops after the first dispatch.
+
+    **`excludes`** (optional, default `[]`): List of strings that must not appear before a trigger is seen.
+
+    ```json
+    {
+        "type": "tag_dispatch",
+        "pairs": [
+            {"trigger": "<a>", "content": {"type": "const_string", "value": "x"}},
+            {"trigger": "<b>", "content": {"type": "json_schema", "json_schema": {...}}}
+        ],
+        "loop_after_dispatch": true,
+        "excludes": ["<bad>"]
+    }
+    ```
+
+20. `token_tag_dispatch`
+
+    A format that maps directly to a **TokenTagDispatch** grammar. It accepts a list of (trigger token, content format) pairs. When the model generates the trigger token, generation continues with the corresponding content format. This is a lower-level alternative to `token_triggered_tags` when you want exact token→rule mapping without tag begin/end structure.
+
+    **`pairs`** (required): Array of objects, each with:
+    * **`trigger`** (required): Token ID (integer) or token string (resolved via `tokenizer_info`).
+    * **`content`** (required): A format object for the content after the trigger token.
+
+    **`loop_after_dispatch`** (optional, default `true`): If true, after one dispatch the grammar allows more tokens until the next trigger.
+
+    **`exclude_tokens`** (optional, default `[]`): Token IDs or strings to exclude before a trigger is seen.
+
+    ```json
+    {
+        "type": "token_tag_dispatch",
+        "pairs": [
+            {"trigger": 100, "content": {"type": "const_string", "value": "x"}},
+            {"trigger": "<|tool|>", "content": {"type": "json_schema", "json_schema": {...}}}
+        ],
+        "loop_after_dispatch": true,
+        "exclude_tokens": ["</s>"]
+    }
+    ```
+
 ## Examples
 
 ### Example 1: Tool calling
