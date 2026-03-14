@@ -4029,6 +4029,12 @@ token_tag_dispatch_1 ::= TokenTagDispatch(
     check_stag_with_grammar(stag_format, expected_grammar)
 
 
+def test_token_format_rejects_float():
+    stag = {"type": "structural_tag", "format": {"type": "token", "token": 3.5}}
+    with pytest.raises(Exception, match="must be an integer"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
 def test_token_tag_dispatch_need_tokenizer_info():
     stag = {
         "type": "structural_tag",
