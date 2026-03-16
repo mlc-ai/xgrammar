@@ -95,7 +95,7 @@ def check_stag_with_instance(
 ):
     stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
     accepted = _is_grammar_accept_string(stag_grammar, instance, debug_print=debug_print)
-    assert accepted == is_accepted
+    assert accepted == is_accepted, str(stag_grammar)
     if PROFILER_ON:
         profiler.profile_stag(structural_tag, instance)
 
@@ -192,17 +192,8 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
     ("llama", {"tools": 123}, "must be a list"),
     ("harmony", {"tools": None}, "must be a list"),
     # tool[function] must have "name" and "parameters"
-    ("llama", {"tools": [{"function": {}}]}, "must be a dictionary with 'name' and 'parameters'"),
-    (
-        "llama",
-        {"tools": [{"function": {"name": "t1"}}]},
-        "must be a dictionary with 'name' and 'parameters'",
-    ),
-    (
-        "llama",
-        {"tools": [{"function": {"parameters": {}}}]},
-        "must be a dictionary with 'name' and 'parameters'",
-    ),
+    ("llama", {"tools": [{"function": {}}]}, "'name' key"),
+    ("llama", {"tools": [{"function": {"parameters": {}}}]}, "'name' key"),
     # name must be string
     (
         "llama",
@@ -213,21 +204,21 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
     (
         "llama",
         {"tools": [{"function": {"name": "t1", "parameters": "not_a_dict"}}]},
-        "'parameters' key in each tool must be a dict",
+        "'parameters' key in each tool must be a dict or a boolean",
     ),
     (
         "llama",
         {"tools": [{"function": {"name": "t1", "parameters": []}}]},
-        "'parameters' key in each tool must be a dict",
+        "'parameters' key in each tool must be a dict or a boolean",
     ),
     # harmony: builtin_tools must be list
     ("harmony", {"tools": [], "builtin_tools": "not_list"}, "must be a list"),
     # harmony: builtin_tool[function] must have name and parameters
-    ("harmony", {"tools": [], "builtin_tools": [{"function": {}}]}, "'name' and 'parameters'"),
+    ("harmony", {"tools": [], "builtin_tools": [{"function": {}}]}, "'name' key"),
     (
         "harmony",
         {"tools": [], "builtin_tools": [{"function": {"name": "b1", "parameters": 1}}]},
-        "must be a dict",
+        "must be a dict or a boolean",
     ),
     ("qwen", {"tools": [], "reasoning": "not_bool"}, "must be a boolean"),
 ]
@@ -247,6 +238,104 @@ def test_get_builtin_structural_tag_input_validation_errors(
         ), f"Expected match for {error_substring!r} in {msg!r}"
     else:
         assert error_substring in msg, f"Expected {error_substring!r} in {msg!r}"
+
+
+@pytest.mark.parametrize(
+    "format_type, instance, is_accepted",
+    [
+        ("llama", '{"name": "t1", "parameters": {"q": "v"}}', True),
+        (
+            "kimi",
+            '123<|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+            True,
+        ),
+        (
+            "kimi",
+            '123<|tool_call_begin|>functions.t2:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+            False,
+        ),
+        (
+            "deepseek_r1",
+            'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>t1<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+            True,
+        ),
+        (
+            "deepseek_r1",
+            'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>t2{"q": "v"}<｜tool▁call▁end｜>',
+            False,
+        ),
+        (
+            "deepseek_v3_2",
+            '<｜DSML｜function_calls>\n<｜DSML｜invoke name="t1">\n<q>{"type": "string"}</q>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+            True,
+        ),
+        (
+            "deepseek_v3_2",
+            '<｜DSML｜function_calls>\n<｜DSML｜invoke name="t2">\n<q>{"type": "string"}</q>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+            False,
+        ),
+        (
+            "minimax",
+            '<minimax:tool_call>\n<invoke name="t1">\n<q>{"type": "string"}</q>\n</invoke>\n</minimax:tool_call>\n',
+            True,
+        ),
+        (
+            "minimax",
+            '<minimax:tool_call>\n<invoke name="t2">\n<q>{"type": "string"}</q>\n</invoke>\n</minimax:tool_call>\n',
+            False,
+        ),
+        (
+            "qwen_coder",
+            '<tool_call>\n<function=t1>\n<q>{"type": "string"}</q>\n</function>\n</tool_call>',
+            True,
+        ),
+        ("qwen", 'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>', True),
+        ("qwen", 'text<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>', False),
+        ("qwen", 'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>', True),
+        ("qwen", 'text<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>', False),
+        (
+            "harmony",
+            '<|channel|>commentary to=t1<|constrain|>json<|message|>{"q": "v"}<|call|>',
+            True,
+        ),
+        (
+            "harmony",
+            '<|channel|>commentary to=t2<|constrain|>json<|message|>{"q": "v"}<|call|>',
+            False,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "tool",
+    [
+        {
+            "function": {
+                "name": "t1",
+                "strict": False,
+                "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
+            }
+        },
+        # strict=False without parameters
+        {"function": {"name": "t1", "strict": False}},
+        # no strict, no parameters
+        {"function": {"name": "t1"}},
+    ],
+)
+def test_get_builtin_structural_tag_strict_or_missing_parameters_instances(
+    format_type: str, instance: str, is_accepted: bool, tool: Dict[str, Any]
+):
+    """strict=False or missing 'parameters' should still accept/reject instances correctly."""
+    if format_type == "harmony":
+        tools = [tool]
+        builtin_tools: List[Dict[str, Any]] = []
+        stag = get_builtin_structural_tag(
+            format_type, tools=tools, builtin_tools=builtin_tools, reasoning=False
+        )
+    else:
+        tools = [tool]
+        stag = get_builtin_structural_tag(format_type, tools=tools, reasoning=False)
+
+    check_stag_with_instance(stag, instance, is_accepted)
 
 
 # ---------- Test: instance positive / negative ----------
