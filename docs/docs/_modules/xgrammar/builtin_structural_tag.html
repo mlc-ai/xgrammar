@@ -680,6 +680,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">ConstStringFormat</span><span class="p">,</span>
     <span class="n">JSONSchemaFormat</span><span class="p">,</span>
     <span class="n">QwenXMLParameterFormat</span><span class="p">,</span>
+    <span class="n">RegexFormat</span><span class="p">,</span>
     <span class="n">SequenceFormat</span><span class="p">,</span>
     <span class="n">StructuralTag</span><span class="p">,</span>
     <span class="n">TagFormat</span><span class="p">,</span>
@@ -967,8 +968,14 @@ window.runMermaid = runMermaid;</script>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
-                <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&lt;|tool_call_begin|&gt;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&lt;|tool_call_argument_begin|&gt;&quot;</span><span class="p">,</span>
-                <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&lt;|tool_call_begin|&gt;functions.</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">,</span>
+                <span class="n">content</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span>
+                    <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+                        <span class="n">RegexFormat</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;\d+&quot;</span><span class="p">),</span>
+                        <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="s2">&quot;&lt;|tool_call_argument_begin|&gt;&quot;</span><span class="p">),</span>
+                        <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="p">]</span>
+                <span class="p">),</span>
                 <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;|tool_call_end|&gt;&quot;</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span>
@@ -984,7 +991,7 @@ window.runMermaid = runMermaid;</script>
         <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">force_empty_reasoning</span><span class="p">:</span>
-        <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="s2">&quot;&lt;think&gt;</span><span class="se">\n\n</span><span class="s2">&lt;/think&gt;&quot;</span><span class="p">)</span>
+        <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="s2">&quot;&lt;think&gt;&lt;/think&gt;&quot;</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;think&gt;&quot;</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/think&gt;&quot;</span><span class="p">)</span>
 
