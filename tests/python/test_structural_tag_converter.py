@@ -200,11 +200,11 @@ xml_string ::= TagDispatch(
   excludes=("</parameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
-xml_object ::= (("<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1) | ([ \n\t]*))
+xml_object ::= (([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1 [ \n\t]*) | ([ \n\t]*))
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*))
-root_part_0 ::= (("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>"))
-root_0 ::= (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0))
+root_part_0 ::= (([ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>"))
+root_0 ::= (([ \n\t]* "<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0 [ \n\t]*))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -214,7 +214,7 @@ basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
-xml_object_1 ::= ("" | ("<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1))
+xml_object_1 ::= ("" | ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1))
 root_prop_1_1 ::= ("" | ("-"))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 root ::= ((root_0))
@@ -225,7 +225,7 @@ qwen_parameter_xml_instance_is_accepted = [
     ("<parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
-    ("\n\t<parameter=name>Bob</parameter><parameter=age>100</parameter>", False),
+    ("\n\t<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
     ('<parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>', True),
     (
         """<parameter=name><!DOCTYPE html>
@@ -276,7 +276,7 @@ def test_json_schema_style_qwen_xml_format(
 # JSONSchemaFormat with style="minimax_xml" (<parameter name="key">value</parameter>)
 minimax_xml_instance_is_accepted = [
     ('<parameter name="name">Bob</parameter><parameter name="age">\t100\n</parameter>', True),
-    ('<parameter name="name">Bob</parameter>\t\n<parameter name="age">\t100\n</parameter>', False),
+    ('<parameter name="name">Bob</parameter>\t\n<parameter name="age">\t100\n</parameter>', True),
     ('<parameter name="name">Bob</parameter><parameter name="age">100</parameter>', True),
     (
         """<parameter name="name"><!DOCTYPE html>
@@ -314,11 +314,11 @@ xml_string ::= TagDispatch(
   excludes=("</parameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
-xml_object ::= (("<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1) | ([ \n\t]*))
+xml_object ::= (([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1 [ \n\t]*) | ([ \n\t]*))
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*))
-root_part_0 ::= (("<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>"))
-root_0 ::= (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0))
+root_part_0 ::= (([ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>"))
+root_0 ::= (([ \n\t]* "<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0 [ \n\t]*))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -328,7 +328,7 @@ basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
-xml_object_1 ::= ("" | ("<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1))
+xml_object_1 ::= ("" | ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_1))
 root_prop_1_1 ::= ("" | ("-"))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 root ::= ((root_0))
@@ -357,7 +357,7 @@ deepseek_xml_instance_is_accepted = [
     ),
     (
         '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>\t\n<｜DSML｜parameter name="age" string="true">\t100\n</｜DSML｜parameter>',
-        False,
+        True,
     ),
     (
         '<｜DSML｜parameter name="name" string="false">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="true">100</｜DSML｜parameter>',
@@ -399,11 +399,11 @@ xml_string ::= TagDispatch(
   excludes=("</\uff5cDSML\uff5cparameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
-xml_object ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_2 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1) | ([ \n\t]*))
+xml_object ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_2 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1 [ \n\t]*) | ([ \n\t]*))
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*))
-root_part_0 ::= (("<\uff5cDSML\uff5cparameter name=\"age\" string=\"" root_part_0_1 "\">" [ \n\t]* root_prop_1 [ \n\t]* "</\uff5cDSML\uff5cparameter>"))
-root_0 ::= (("<\uff5cDSML\uff5cparameter name=\"name\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</\uff5cDSML\uff5cparameter>" root_part_0))
+root_part_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"age\" string=\"" root_part_0_1 "\">" [ \n\t]* root_prop_1 [ \n\t]* "</\uff5cDSML\uff5cparameter>"))
+root_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"name\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\t]*))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -413,7 +413,7 @@ basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
 basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
-xml_object_1 ::= ("" | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1))
+xml_object_1 ::= ("" | ([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1))
 root_prop_1_1 ::= ("" | ("-"))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 xml_object_2 ::= (("true") | ("false"))

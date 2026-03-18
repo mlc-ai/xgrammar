@@ -41,7 +41,7 @@ def _check_deepseek_grammar(schema: dict, expected_grammar: str, instance: str, 
 
 test_string_schema_input_str_accepted = (
     ("<parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>", True),
-    ("<parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>", False),
+    ("<parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", True),
     (
         """<parameter=name><!DOCTYPE html>
@@ -67,11 +67,11 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::=  "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=   (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0))
+root_part_0 ::= [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
+root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
 
     schema = {
@@ -110,13 +110,13 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::=  "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=   (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0))
+root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
+root_part_0 ::= [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
+root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -152,13 +152,13 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 |  "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::= (  (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>" root_part_1) ) | [ \n\t]*
+root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
+root ::= ( [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>" root_part_1) [ \n\t]*) | [ \n\t]*
 """
 
     schema = {
@@ -198,13 +198,13 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 |  "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=   (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0))
+root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
+root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
 
     schema = {
@@ -255,11 +255,11 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string ""
 root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
-root ::=   (("<parameter=address>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" ""))
+root ::=  [ \n\t]* (("<parameter=address>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" "")) [ \n\t]*
 """
 
     schema = {
@@ -304,18 +304,18 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::=  "<parameter=is_student>" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
-root_part_2_2 ::= "" |  "<parameter=is_student>" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
+root_part_2_1 ::= [ \n\t]* "<parameter=is_student>" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
+root_part_2_2 ::= "" | [ \n\t]* "<parameter=is_student>" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 |  "<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 |  "<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 |  "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_2
-root ::=   (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0_1) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_1) | ("<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_1))
+root_part_1_1 ::= root_part_2_1 | [ \n\t]* "<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 | [ \n\t]* "<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_2
+root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0_1) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_1) | ("<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_1)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -380,15 +380,15 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0 ::= [^]{1,}
 root_prop_1_prop_0 ::= "\"" [0-9]{5} "\""
 root_prop_1_prop_1 ::= "\"" ( ( [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ ( "." [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ )* ) | "\\" "\"" ( "\\" [ -~] | [ !#-[\]-~] )* "\\" "\"" ) "@" ( [A-Za-z0-9] ( [\-A-Za-z0-9]* [A-Za-z0-9] )? ) ( ( "." [A-Za-z0-9] [\-A-Za-z0-9]* [A-Za-z0-9] )* ) "\""
 root_prop_1_part_0 ::= [ \n\t]* "," [ \n\t]* "\"email\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_1 ""
 root_prop_1 ::= "{" [ \n\t]* (("\"phone\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\t]* "}"
-root_part_0 ::=  "<parameter=contact_info>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=   (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0))
+root_part_0 ::= [ \n\t]* "<parameter=contact_info>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
+root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -431,10 +431,10 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0 ::= (("[" [ \n\t]* basic_string ([ \n\t]* "," [ \n\t]* basic_string)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-root ::=   (("<parameter=array>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" ""))
+root ::=  [ \n\t]* (("<parameter=array>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" "")) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -450,7 +450,7 @@ root ::=   (("<parameter=array>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" ""
 
 minimax_test_string_schema_input_str_accepted = (
     ('<parameter name="name">Bob</parameter><parameter name="age">\t100\n</parameter>', True),
-    ('<parameter name="name">Bob</parameter>\t\n<parameter name="age">\t100\n</parameter>', False),
+    ('<parameter name="name">Bob</parameter>\t\n<parameter name="age">\t100\n</parameter>', True),
     ('<parameter name="name">Bob</parameter><parameter name="age">100</parameter>', True),
     (
         """<parameter name="name"><!DOCTYPE html>
@@ -476,11 +476,11 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::=  "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=   (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0))
+root_part_0 ::= [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
+root ::=  [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
 
     schema = {
@@ -519,13 +519,13 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::=  "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=   (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0))
+root_part_1 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
+root_part_0 ::= [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
+root ::=  [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -561,13 +561,13 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 |  "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::= (  (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0) | ("<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>" root_part_1) ) | [ \n\t]*
+root_part_1 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
+root ::= ( [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0) | ("<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>" root_part_1) [ \n\t]*) | [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -609,13 +609,13 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 |  "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=   (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0))
+root_part_1 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
+root ::=  [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -664,15 +664,15 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 root_prop_0_part_1 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* root_prop_0_addl)*
 root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_1
 root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
 root_addl ::= xml_string | basic_array | basic_object
-root_part_0 ::= ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root ::=   (("<parameter name=\"address\">" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0))
+root_part_0 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
+root ::=  [ \n\t]* (("<parameter name=\"address\">" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -718,18 +718,18 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::=  "<parameter name=\"is_student\">" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
-root_part_2_2 ::= "" |  "<parameter name=\"is_student\">" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
+root_part_2_1 ::= [ \n\t]* "<parameter name=\"is_student\">" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
+root_part_2_2 ::= "" | [ \n\t]* "<parameter name=\"is_student\">" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 |  "<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 |  "<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 |  "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_2
-root ::=   (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0_1) | ("<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_1) | ("<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_1))
+root_part_1_1 ::= root_part_2_1 | [ \n\t]* "<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 | [ \n\t]* "<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 | [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_2
+root ::=  [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0_1) | ("<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_1) | ("<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_1)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -798,15 +798,15 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0 ::= [^]{1,}
 root_prop_1_prop_0 ::= "\"" [0-9]{5} "\""
 root_prop_1_prop_1 ::= "\"" ( ( [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ ( "." [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ )* ) | "\\" "\"" ( "\\" [ -~] | [ !#-[\]-~] )* "\\" "\"" ) "@" ( [A-Za-z0-9] ( [\-A-Za-z0-9]* [A-Za-z0-9] )? ) ( ( "." [A-Za-z0-9] [\-A-Za-z0-9]* [A-Za-z0-9] )* ) "\""
 root_prop_1_part_0 ::= [ \n\t]* "," [ \n\t]* "\"email\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_1 ""
 root_prop_1 ::= "{" [ \n\t]* (("\"phone\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\t]* "}"
-root_part_0 ::=  "<parameter name=\"contact_info\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=   (("<parameter name=\"name\">" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0))
+root_part_0 ::= [ \n\t]* "<parameter name=\"contact_info\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
+root ::=  [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -857,11 +857,11 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ( "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::=  "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=   (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0))
+root_part_0 ::= [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
+root ::=  [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -882,7 +882,7 @@ deepseek_test_string_schema_input_str_accepted = (
     ),
     (
         '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>\t\n<｜DSML｜parameter name="age" string="true">\t100\n</｜DSML｜parameter>',
-        False,
+        True,
     ),
     (
         '<｜DSML｜parameter name="name" string="false">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="true">100</｜DSML｜parameter>',
@@ -926,11 +926,11 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::=  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
-root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0))
+root_part_0 ::= [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
+root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -974,13 +974,13 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root_part_0 ::=  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
-root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0))
+root_part_1 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
+root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -1022,13 +1022,13 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= root_part_1 |  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
-root ::= (  (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1) | "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>" root_part_1) ) | [ \n\t]*
+root_part_1 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= root_part_1 | [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
+root ::= ( [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1) | "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>" root_part_1) [ \n\t]*) | [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -1073,13 +1073,13 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= root_part_1 |  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
-root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0))
+root_part_1 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= root_part_1 | [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
+root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -1142,15 +1142,15 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 root_prop_0_part_1 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* root_prop_0_addl)*
 root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_1
 root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
 root_addl ::= xml_string | basic_array | basic_object
-root_part_0 ::= ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root ::=   (("<｜DSML｜parameter name=\"address\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_0 [ \n\t]* "</｜DSML｜parameter>" root_part_0))
+root_part_0 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
+root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"address\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_0 [ \n\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -1199,18 +1199,18 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::=  "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
-root_part_2_2 ::= "" |  "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
+root_part_2_1 ::= [ \n\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
+root_part_2_2 ::= "" | [ \n\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 |  "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 |  "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 |  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_2
-root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0_1) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_1) | ("<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_1))
+root_part_1_1 ::= root_part_2_1 | [ \n\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 | [ \n\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 | [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_2
+root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0_1) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_1) | ("<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_1)) [ \n\t]*
 """
     schema = {
         "type": "object",
@@ -1257,11 +1257,11 @@ basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n
 basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 xml_string ::= TagDispatch(stop_eos=true,stop_str=(),loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= (  "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ( "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* ) | [ \n\t]*
+xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::=  "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
-root ::=   (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0))
+root_part_0 ::= [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
+root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_string [ \n\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
 """
     schema = {
         "type": "object",
