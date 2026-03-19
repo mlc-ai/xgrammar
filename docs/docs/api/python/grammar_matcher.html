@@ -189,6 +189,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.BatchGrammarMatcher.batch_fill_next_token_bitmask"><code class="docutils literal notranslate"><span class="pre">BatchGrammarMatcher.batch_fill_next_token_bitmask()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.BatchGrammarMatcher.batch_accept_token"><code class="docutils literal notranslate"><span class="pre">BatchGrammarMatcher.batch_accept_token()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.BatchGrammarMatcher.batch_accept_string"><code class="docutils literal notranslate"><span class="pre">BatchGrammarMatcher.batch_accept_string()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.BatchGrammarMatcher.batch_rollback"><code class="docutils literal notranslate"><span class="pre">BatchGrammarMatcher.batch_rollback()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -586,6 +587,9 @@ especially useful when the batch size is large.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.BatchGrammarMatcher.batch_accept_string" title="xgrammar.BatchGrammarMatcher.batch_accept_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">batch_accept_string</span></code></a>(matchers, strings[, ...])</p></td>
 <td><p>Accept a batch of strings for multiple matchers.</p></td>
 </tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.BatchGrammarMatcher.batch_rollback" title="xgrammar.BatchGrammarMatcher.batch_rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">batch_rollback</span></code></a>(matchers[, num_tokens])</p></td>
+<td><p>Rollback a batch of matchers by the given number of tokens.</p></td>
+</tr>
 </tbody>
 </table>
 <dl class="py method">
@@ -667,6 +671,24 @@ the bitmask [0:len(matchers))].</p></li>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><strong>RuntimeError</strong></a> – If the sizes of matchers and strings do not match.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.BatchGrammarMatcher.batch_rollback">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">batch_rollback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">matchers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.GrammarMatcher" title="xgrammar.matcher.GrammarMatcher"><span class="pre">GrammarMatcher</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#BatchGrammarMatcher.batch_rollback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.BatchGrammarMatcher.batch_rollback" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rollback a batch of matchers by the given number of tokens.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>matchers</strong> (<em>List</em><em>[</em><a class="reference internal" href="#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><em>GrammarMatcher</em></a><em>]</em>) – The list of matchers to rollback.</p></li>
+<li><p><strong>num_tokens</strong> (<em>List</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>] </em><em>| </em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>, </em><em>default: 1</em>) – The number of tokens to rollback for each matcher. If an integer is provided, it will be
+used for all matchers; if a list is provided, it must have the same length as matchers.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#RuntimeError" title="(in Python v3.12)"><strong>RuntimeError</strong></a> – If the sizes of matchers and num_tokens do not match.</p>
 </dd>
 </dl>
 </dd></dl>
