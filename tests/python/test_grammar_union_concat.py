@@ -109,8 +109,6 @@ basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 triggered_tags_group ::= (("" root_0 "end"))
 triggered_tags ::= TagDispatch(
   ("start", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -143,8 +141,6 @@ basic_number_7 ::= (("0") | ([1-9] [0-9]*))
 triggered_tags_group ::= (("" root_0 "end"))
 triggered_tags ::= TagDispatch(
   ("start", triggered_tags_group),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )

@@ -48,13 +48,13 @@ rule2 ::= "efg" [t]*
 
 
 def test_stop_str():
-    grammar_str = """root ::= root1 "w"
+    grammar_str = """root ::= root1 stop "w"
 root1 ::= TagDispatch(
   ("tag1", rule1),
   ("tag2", rule2),
-  stop_eos=false,
-  stop_str=("tag3", "ll")
+  excludes=("tag3", "ll")
 )
+stop ::= "tag3" | "ll"
 rule1 ::= "abcd" [p]*
 rule2 ::= "efg" [t]*
 """
@@ -72,14 +72,14 @@ rule2 ::= "efg" [t]*
 
 
 def test_stop_str_no_loop():
-    grammar_str = """root ::= root1 "w"
+    grammar_str = """root ::= root1 stop "w"
 root1 ::= TagDispatch(
   ("tag1", rule1),
   ("tag2", rule2),
-  stop_eos=false,
-  stop_str=("tag3", "ll"),
+  excludes=("tag3", "ll"),
   loop_after_dispatch=false
 )
+stop ::= "tag3" | "ll"
 rule1 ::= "abcd" [p]*
 rule2 ::= "efg" [t]*
 """
@@ -153,17 +153,16 @@ def test_regression_multiple_tag_dispatch():
 root1 ::= TagDispatch(
   ("tag1", rule1),
   ("tag2", rule2),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false
 )
-rule1 ::= TagDispatch(
+rule1 ::= rule1_dispatch rule1_stop
+rule1_dispatch ::= TagDispatch(
   ("tag1", rule2),
   ("tag2", rule3),
-  stop_eos=false,
-  stop_str=("tag3", "ll"),
+  excludes=("tag3", "ll"),
   loop_after_dispatch=true
 )
+rule1_stop ::= "tag3" | "ll"
 rule2 ::= "efg" [t]*
 rule3 ::= "abcd" [p]*
 """
@@ -175,28 +174,19 @@ rule3 ::= "abcd" [p]*
 
 
 def test_excluded_str():
-    grammar_str = """root ::= TagDispatch(
+    grammar_str = """root ::= root_dispatch end_tag
+root_dispatch ::= TagDispatch(
   ("start", rule1),
-  stop_str=("</think>"),
-  excludes=("</conclude>"),
-  loop_after_dispatch=true,
-  stop_eos=false
+  excludes=("</think>", "</conclude>"),
+  loop_after_dispatch=true
 )
 rule1 ::= "12345"
-"""
-
-    expected = """root ::= TagDispatch(
-  ("start", rule1),
-  stop_eos=false,
-  stop_str=("</think>"),
-  loop_after_dispatch=true,
-  excludes=("</conclude>")
-)
-rule1 ::= (("12345"))
+end_tag ::= "</think>"
 """
 
     grammar = xgr.Grammar.from_ebnf(grammar_str)
-    assert str(grammar) == expected
+    printed = str(grammar)
+    assert 'excludes=("</think>", "</conclude>")' in printed
 
     assert _is_grammar_accept_string(grammar, "start12345</think>")
     assert not _is_grammar_accept_string(grammar, "start12345</conclude>")

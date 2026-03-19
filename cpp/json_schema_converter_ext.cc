@@ -60,8 +60,6 @@ void XMLToolCallingConverter::AddBasicRules() {
   ebnf_script_creator_.AddRule(
       kXMLString,
       "TagDispatch("
-      "stop_eos=true,"
-      "stop_str=(),"
       "loop_after_dispatch=false,"
       "excludes=(\"" +
           xml_wrapper_.parameter_suffix +

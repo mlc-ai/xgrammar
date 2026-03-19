@@ -150,9 +150,7 @@ The format field requires a format object. We provide several basic format objec
 
 7. `tag`
 
-    The output must follow `begin content end`. `begin` and `end` are strings, and `content` can be
-    any format object. This is useful for LLM outputs such as `<think>...</think>` or
-    `<function>...</function>`.
+    The output must follow `begin content end`. `begin` and `end` can be strings or `token` format objects, and `content` can be any format object. This is useful for LLM outputs such as `<think>...</think>` or `<function>...</function>`.
 
     ```json
     {
@@ -162,6 +160,17 @@ The format field requires a format object. We provide several basic format objec
             "type": "...",
         },
         "end": "..."
+    }
+    ```
+
+    `begin` and `end` can also be `token` format objects for token-level boundary matching:
+
+    ```json
+    {
+        "type": "tag",
+        "begin": {"type": "token", "token": "<|tool_call|>"},
+        "content": {"type": "json_schema", "json_schema": ...},
+        "end": {"type": "token", "token": "<|end|>"}
     }
     ```
 
@@ -200,6 +209,8 @@ The format field requires a format object. We provide several basic format objec
 
     Each tag should be matched by exactly one trigger. "matching" means the trigger should be a
     prefix of the begin tag. All the strings in `excludes` will not be accepted before the tag is triggerred.
+
+    **Note:** Tags inside `triggered_tags` must use **string** `begin` fields (not `token` format objects). For token-level dispatch, use `token_triggered_tags` instead.
 
     ```json
     {
@@ -329,7 +340,134 @@ The format field requires a format object. We provide several basic format objec
     tag is generated. If there are following tags, they will still be generated; otherwise, the
     generation will stop.
 
-11. `QwenXMLParameterFormat` *(not recommended)*
+11. `optional`
+
+    The inner format may appear **0 or 1 time** (EBNF optional). The output can either match the content once or be empty.
+
+    **`content`** (required): A format object. It can be any of the format types.
+
+    ```json
+    {
+        "type": "optional",
+        "content": {
+            "type": "..."
+        }
+    }
+    ```
+
+    For example, to allow an optional prefix:
+
+    ```json
+    {
+        "type": "optional",
+        "content": {
+            "type": "const_string",
+            "value": "Optional prefix: "
+        }
+    }
+    ```
+
+    The above accepts either an empty string or exactly `Optional prefix: `.
+
+12. `plus`
+
+    The inner format must appear **1 or more times** (EBNF plus). The output matches one or more consecutive occurrences of the content.
+
+    **`content`** (required): A format object. It can be any of the format types.
+
+    ```json
+    {
+        "type": "plus",
+        "content": {
+            "type": "..."
+        }
+    }
+    ```
+
+    For example, to require one or more comma-separated items (simplified):
+
+    ```json
+    {
+        "type": "plus",
+        "content": {
+            "type": "const_string",
+            "value": "item"
+        }
+    }
+    ```
+
+    The above accepts `item`, `itemitem`, `itemitemitem`, and so on.
+
+13. `star`
+
+    The inner format may appear **0 or more times** (EBNF star). The output matches zero or more consecutive occurrences of the content.
+
+    **`content`** (required): A format object. It can be any of the format types.
+
+    ```json
+    {
+        "type": "star",
+        "content": {
+            "type": "..."
+        }
+    }
+    ```
+
+    For example, to allow zero or more occurrences of a fragment:
+
+    ```json
+    {
+        "type": "star",
+        "content": {
+            "type": "const_string",
+            "value": "x"
+        }
+    }
+    ```
+
+    The above accepts an empty string, or `x`, `xx`, `xxx`, and so on.
+
+14. `repeat`
+
+    The inner format may appear **between `min` and `max` times (inclusive)**. This generalizes `plus` (min=1, unbounded) and `star` (min=0, unbounded). Use `max: -1` for an unbounded upper limit (i.e. "at least `min` times").
+
+    **`min`** (required): Minimum number of occurrences (inclusive). Must be non-negative.
+
+    **`max`** (required): Maximum number of occurrences (inclusive). Use `-1` for unbounded.
+
+    **`content`** (required): A format object. It can be any of the format types.
+
+    ```json
+    {
+        "type": "repeat",
+        "min": 1,
+        "max": 3,
+        "content": {
+            "type": "const_string",
+            "value": "item"
+        }
+    }
+    ```
+
+    The above accepts `item`, `itemitem`, or `itemitemitem` (exactly 1 to 3 times).
+
+    For "at least N times" (no upper bound), set `max` to `-1`:
+
+    ```json
+    {
+        "type": "repeat",
+        "min": 2,
+        "max": -1,
+        "content": {
+            "type": "const_string",
+            "value": "x"
+        }
+    }
+    ```
+
+    The above accepts `xx`, `xxx`, `xxxx`, and so on (2 or more times).
+
+15. `QwenXMLParameterFormat` *(not recommended)*
 
     **Deprecated.** This format is kept for backward compatibility only. Prefer using `json_schema` with `style: "qwen_xml"` instead (see the `json_schema` format above).
 
@@ -397,6 +535,64 @@ The format field requires a format object. We provide several basic format objec
     ```xml
     <parameter=address><parameter=street>Main St</parameter><parameter=city>New York</parameter></parameter>
     ```
+
+15. `token`
+
+    Matches a single token by token ID or token string. Can be used standalone or as the `begin`/`end` of a `tag`.
+
+    ```json
+    {"type": "token", "token": 42}
+    {"type": "token", "token": "<|tool_call|>"}
+    ```
+
+    When `token` is a string, it is resolved to a token ID via `tokenizer_info`.
+
+16. `exclude_token`
+
+    Matches any single token except those in the given set. When wrapped in a `tag` whose `end` is a `token` format, the end token is automatically excluded.
+
+    ```json
+    {"type": "exclude_token"}
+    {"type": "exclude_token", "exclude_tokens": [42, "</s>"]}
+    ```
+
+    Elements in `exclude_tokens` can be integers (token IDs) or strings (token strings resolved via `tokenizer_info`).
+
+17. `any_tokens`
+
+    Matches zero or more tokens, excluding those in the given set. Semantically equivalent to `star(exclude_token(...))`. When wrapped in a `tag` whose `end` is a `token` format, the end token is automatically excluded.
+
+    ```json
+    {"type": "any_tokens"}
+    {"type": "any_tokens", "exclude_tokens": [42, "</s>"]}
+    ```
+
+    Elements in `exclude_tokens` can be integers (token IDs) or strings (token strings resolved via `tokenizer_info`).
+
+18. `token_triggered_tags`
+
+    Similar to `triggered_tags`, but triggers and excludes operate at the token level. When a trigger token is generated, the output dispatches to the corresponding tag.
+
+    **Note:** Tags inside `token_triggered_tags` must use **`token` format objects** as their `begin` fields (not strings). For string-level dispatch, use `triggered_tags` instead.
+
+    ```json
+    {
+        "type": "token_triggered_tags",
+        "trigger_tokens": [100, "<|tool_call|>"],
+        "tags": [
+            {
+                "begin": {"type": "token", "token": 100},
+                "content": {"type": "json_schema", "json_schema": ...},
+                "end": {"type": "token", "token": 101}
+            }
+        ],
+        "exclude_tokens": ["</s>"],
+        "at_least_one": false,
+        "stop_after_first": false
+    }
+    ```
+
+    `trigger_tokens` and `exclude_tokens` elements can be integers or strings. `at_least_one` and `stop_after_first` have the same semantics as in `triggered_tags`.
 
 ## Examples
 
@@ -768,6 +964,40 @@ We now specify the non-thinking mode.
             },
         ],
     },
+}
+```
+
+### Example 6: Token-level tool calling
+
+Some models use special tokens (not byte strings) to delimit tool calls. The `token_triggered_tags` format handles this by dispatching on token IDs.
+
+```json
+{
+    "type": "structural_tag",
+    "format": {
+        "type": "sequence",
+        "elements": [
+            {
+                "type": "tag",
+                "begin": {"type": "token", "token": "<|think_start|>"},
+                "content": {"type": "any_tokens"},
+                "end": {"type": "token", "token": "<|think_end|>"}
+            },
+            {
+                "type": "token_triggered_tags",
+                "trigger_tokens": ["<|tool_call_start|>"],
+                "tags": [
+                    {
+                        "begin": {"type": "token", "token": "<|tool_call_start|>"},
+                        "content": {"type": "json_schema", "json_schema": ...},
+                        "end": {"type": "token", "token": "<|tool_call_end|>"}
+                    }
+                ],
+                "exclude_tokens": ["<|eos|>"],
+                "at_least_one": true
+            }
+        ]
+    }
 }
 ```
 

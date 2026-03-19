@@ -14,8 +14,7 @@ def test_tag_dispatch():
     before = """root ::= TagDispatch(
     ("tag1", rule1),
     ("tag2", rule2),
-    stop_eos = false,
-    stop_str = ("abc", "def"),
+    excludes = ("abc", "def"),
     loop_after_dispatch = false
 )
 rule1 ::= "a"
@@ -25,10 +24,8 @@ rule2 ::= "b"
     expected = """root ::= ((TagDispatch(
   ("tag1", rule1),
   ("tag2", rule2),
-  stop_eos=false,
-  stop_str=("abc", "def"),
   loop_after_dispatch=false,
-  excludes=()
+  excludes=("abc", "def")
 )))
 rule1 ::= (("a"))
 rule2 ::= (("b"))
@@ -47,8 +44,6 @@ rule2 ::= "b"
     expected = """root ::= ((TagDispatch(
   ("tag1", rule1),
   ("tag2", rule2),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )))
@@ -75,8 +70,6 @@ rule5 ::= "" | "g" rule5 "h"
   ("tag3", rule3),
   ("tag4", rule4),
   ("tag5", rule5),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -105,8 +98,6 @@ rule3 ::= "c"
   ("tag1", rule1),
   ("tag2", rule2),
   ("tag3", rule3),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -129,8 +120,6 @@ rule3 ::= "c"
   ("tag1", rule1),
   ("tag2", rule2),
   ("tag3", rule3),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -140,24 +129,18 @@ rule3 ::= (("c"))
 rule1_1 ::= TagDispatch(
   ("tag1", rule2),
   ("tag2", rule3),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
 rule2_1 ::= TagDispatch(
   ("tag1", rule2),
   ("tag2", rule3),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
 rule2_2 ::= TagDispatch(
   ("tag3", rule2),
   ("tag4", rule3),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=true,
   excludes=()
 )
@@ -173,8 +156,6 @@ def test_e2e_tag_dispatch_roundtrip():
   ("tag1", rule1),
   ("tag2", rule2),
   ("tag3", rule3),
-  stop_eos=true,
-  stop_str=(),
   loop_after_dispatch=false,
   excludes=()
 )
@@ -209,11 +190,15 @@ ebnf_str__expected_error_regex__test_tag_dispatch_parser_errors = [
     ),
     (
         'root ::= TagDispatch(("tag1", rule1), stop_str=true)\nrule1 ::= "a"',
-        "EBNF parser error at line 1, column 21: Stop strings must be a tuple",
+        "EBNF parser error at line 1, column 21: Unknown named argument for TagDispatch: stop_str",
     ),
     (
         'root ::= TagDispatch(("tag1", rule1), stop_eos=false)\nrule1 ::= "a"',
-        "EBNF parser error at line 1, column 21: The TagDispatch must have stop_eos=true or stop_str is not empty",
+        "EBNF parser error at line 1, column 21: Unknown named argument for TagDispatch: stop_eos",
+    ),
+    (
+        'root ::= TagDispatch(("tag1", rule1), excludes=("tag1"))\nrule1 ::= "a"',
+        "EBNF parser error at line 1, column 21: Exclude string must not be a prefix of trigger string: tag1",
     ),
 ]
 
