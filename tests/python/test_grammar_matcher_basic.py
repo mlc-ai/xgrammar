@@ -372,6 +372,107 @@ def test_is_completed():
     assert matcher2.is_terminated()
 
 
+def test_fork_initial_state():
+    """Fork at initial state: forked matcher has same state and same next-token bitmask."""
+    vocab = ["<s>", "</s>", "a", "b"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" "b"')
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    forked_matcher = original_matcher.fork()
+    bitmask_original = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    bitmask_forked = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    original_matcher.fill_next_token_bitmask(bitmask_original)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    torch.testing.assert_close(bitmask_original, bitmask_forked)
+    assert not original_matcher.is_terminated() and not forked_matcher.is_terminated()
+    assert original_matcher.stop_token_ids == forked_matcher.stop_token_ids
+
+
+def test_fork_after_accept_tokens():
+    """Fork after accepting tokens: forked has same parsing state; both can then diverge."""
+    vocab = ["<s>", "</s>", "a", "abc", 'b"', '"', "{", "}", " ", ":"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    input_ids = [vocab.index(t) for t in ["{", '"', "abc", 'b"']]
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
+    for token_id in input_ids:
+        assert original_matcher.accept_token(token_id)
+    forked_matcher = original_matcher.fork()
+    bitmask_original = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    bitmask_forked = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    original_matcher.fill_next_token_bitmask(bitmask_original)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    torch.testing.assert_close(bitmask_original, bitmask_forked)
+    next_token_id = vocab.index(":")
+    assert original_matcher.accept_token(next_token_id)
+    assert forked_matcher.accept_token(next_token_id)
+    original_matcher.rollback(1)
+    forked_matcher.rollback(1)
+    original_matcher.fill_next_token_bitmask(bitmask_original)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    torch.testing.assert_close(bitmask_original, bitmask_forked)
+
+
+def test_fork_after_rollback():
+    """Fork after rollback: forked state matches current state; original and forked independent."""
+    vocab = ["<s>", "</s>", "a", "b"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" "b"')
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    assert original_matcher.accept_token(vocab.index("a"))
+    assert original_matcher.accept_token(vocab.index("b"))
+    original_matcher.rollback(1)
+    forked_matcher = original_matcher.fork()
+    bitmask_original = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    bitmask_forked = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    original_matcher.fill_next_token_bitmask(bitmask_original)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    torch.testing.assert_close(bitmask_original, bitmask_forked)
+    accepted_token_ids_forked = set(range(len(vocab))) - set(
+        _get_masked_tokens_from_bitmask(bitmask_forked, len(vocab))
+    )
+    assert vocab.index("b") in accepted_token_ids_forked
+
+
+def test_fork_when_terminated():
+    """Fork when matcher is terminated: forked is also terminated; rollback on one is independent."""
+    vocab = ["<s>", "</s>", "a", "b"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" "b"')
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    assert original_matcher.accept_token(vocab.index("a"))
+    assert original_matcher.accept_token(vocab.index("b"))
+    assert original_matcher.accept_token(vocab.index("</s>"))
+    assert original_matcher.is_terminated()
+    forked_matcher = original_matcher.fork()
+    assert forked_matcher.is_terminated()
+    original_matcher.rollback(1)
+    assert not original_matcher.is_terminated()
+    assert forked_matcher.is_terminated()
+    assert original_matcher.accept_token(vocab.index("</s>"))
+
+
+def test_fork_independent_state():
+    """Original and forked evolve independently: accept on one does not change the other."""
+    vocab = ["<s>", "</s>", "a", "b", "c"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" ("b" | "c")')
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    assert original_matcher.accept_token(vocab.index("a"))
+    forked_matcher = original_matcher.fork()
+    assert original_matcher.accept_token(vocab.index("b"))
+    assert forked_matcher.accept_token(vocab.index("c"))
+    bitmask_forked = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    accepted_after_forked = set(range(len(vocab))) - set(
+        _get_masked_tokens_from_bitmask(bitmask_forked, len(vocab))
+    )
+    assert accepted_after_forked == {vocab.index("</s>")}
+    assert original_matcher.accept_token(vocab.index("</s>"))
+    assert forked_matcher.accept_token(vocab.index("</s>"))
+    assert original_matcher.is_terminated()
+    assert forked_matcher.is_terminated()
+
+
 def test_get_jump_forward_string():
     grammar_ebnf = r"""root ::= "abb" | "abbd" | other_rule
 other_rule ::= "a" sub_rule "b"
