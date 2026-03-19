@@ -32,7 +32,7 @@ jobs:
           submodules: recursive
 
       - name: Use LLVM clang 17 on macOS
-        if: startsWith(matrix.os, 'macos-')
+        if: matrix.os == 'macos-15-intel' && matrix.arch == 'x86_64'
         run: |
           brew update
           brew install llvm@17

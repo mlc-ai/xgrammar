@@ -39,7 +39,7 @@ jobs:
           key: huggingface-${{ matrix.os }}-python-${{ matrix.python }}
 
       - name: Use LLVM clang 17 on macOS
-        if: startsWith(matrix.os, 'macos-')
+        if: matrix.os == 'macos-15-intel'
         run: |
           brew update
           brew install llvm@17
