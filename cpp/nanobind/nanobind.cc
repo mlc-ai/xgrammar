@@ -315,6 +315,7 @@ NB_MODULE(xgrammar_bindings, m) {
       .def("is_terminated", &GrammarMatcher::IsTerminated)
       .def("is_completed", &GrammarMatcher::IsCompleted)
       .def("reset", &GrammarMatcher::Reset, nb::call_guard<nb::gil_scoped_release>())
+      .def("fork", &GrammarMatcher::Fork, nb::call_guard<nb::gil_scoped_release>())
       .def_prop_ro("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens)
       .def_prop_ro("stop_token_ids", &GrammarMatcher::GetStopTokenIds)
       .def("_debug_print_internal_state", &GrammarMatcher::_DebugPrintInternalState);

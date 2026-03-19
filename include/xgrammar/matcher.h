@@ -140,6 +140,12 @@ class GrammarMatcher {
   /*! \brief Reset the matcher to the initial state. */
   void Reset();
 
+  /*!
+   * \brief Fork the matcher. Returns a new GrammarMatcher with a deep copy of all state except
+   * compiled_grammar and tokenizer_info, which are shared with this matcher.
+   */
+  GrammarMatcher Fork() const;
+
   /*! \brief Get the maximum number of rollback tokens allowed. */
   int GetMaxRollbackTokens() const;
 
