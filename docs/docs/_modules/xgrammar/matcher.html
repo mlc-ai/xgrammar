@@ -1070,6 +1070,17 @@ window.runMermaid = runMermaid;</script>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Reset the matcher to the initial state.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span></div>
 
+<div class="viewcode-block" id="GrammarMatcher.fork"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fork">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">fork</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fork the matcher. Returns a new GrammarMatcher sharing the same compiled grammar and</span>
+<span class="sd">        tokenizer info, with a deep copy of all other state (parsing state, token history, etc.).</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        forked : GrammarMatcher</span>
+<span class="sd">            A new matcher with the same grammar but independent parsing state.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">GrammarMatcher</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">fork</span><span class="p">())</span></div>
+
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">max_rollback_tokens</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Depracated. Now max_rollback_tokens is always unlimited (-1).</span>

@@ -179,6 +179,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.is_terminated()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.is_completed"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.is_completed()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.reset"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.reset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.fork"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.fork()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.max_rollback_tokens"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.max_rollback_tokens</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#xgrammar.GrammarMatcher.stop_token_ids"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.stop_token_ids</span></code></a></li>
 </ul>
@@ -329,6 +330,9 @@ with optimizations specific to LLM token mask generation.</p>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.reset" title="xgrammar.GrammarMatcher.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
 <td><p>Reset the matcher to the initial state.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.fork" title="xgrammar.GrammarMatcher.fork"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fork</span></code></a>()</p></td>
+<td><p>Fork the matcher.</p></td>
 </tr>
 </tbody>
 </table>
@@ -512,6 +516,21 @@ been accepted.</p>
 <dt class="sig sig-object py" id="xgrammar.GrammarMatcher.reset">
 <span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.reset" title="Permalink to this definition">¶</a></dt>
 <dd><p>Reset the matcher to the initial state.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.fork">
+<span class="sig-name descname"><span class="pre">fork</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.GrammarMatcher" title="xgrammar.matcher.GrammarMatcher"><span class="pre">GrammarMatcher</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.fork"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.fork" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fork the matcher. Returns a new GrammarMatcher sharing the same compiled grammar and
+tokenizer info, with a deep copy of all other state (parsing state, token history, etc.).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>forked</strong> – A new matcher with the same grammar but independent parsing state.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher">GrammarMatcher</a></p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py property">
