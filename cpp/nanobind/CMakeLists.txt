@@ -21,14 +21,6 @@ target_link_libraries(python_methods PUBLIC xgrammar)
 nanobind_add_module(xgrammar_bindings FREE_THREADED LTO nanobind.cc)
 target_link_libraries(xgrammar_bindings PRIVATE python_methods)
 
-# On some macOS CI images (notably x86_64), the final link step can miss the C++ ABI exception
-# runtime, leading to undefined symbols like: -
-# std::exception_ptr::__from_native_exception_pointer(void*) - ___cxa_init_primary_exception
-# Explicitly linking the ABI runtime makes the wheel build deterministic.
-if(APPLE)
-  target_link_libraries(xgrammar_bindings PRIVATE c++abi)
-endif()
-
 if(DEFINED SKBUILD_PROJECT_NAME)
   # Building wheel through scikit-build-core
   set(LIB_OUTPUT_DIRECTORY xgrammar)
