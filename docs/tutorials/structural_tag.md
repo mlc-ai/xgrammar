@@ -596,31 +596,24 @@ The format field requires a format object. We provide several basic format objec
 
 19. `dispatch`
 
-    A format that maps directly to a **TagDispatch** grammar. It accepts a list of (trigger string, content format) pairs. When the output matches a trigger string, generation continues with the corresponding content format. This is a lower-level alternative to `triggered_tags` when you want exact trigger→rule mapping without tag begin/end structure.
+    Accepts any string except the excluded string. But when any of the case strings is generated, the following format must follow the corresponding format. When the loop is false, after generating the format, we reach the end of the format. Otherwise, it will continue to allow generating any string and match the next case.
 
-    **`cases`** (required): Array of objects, each with:
-    * **`trigger`** (required): Non-empty string. When this prefix is seen, dispatch to the pair’s content.
-    * **`content`** (required): A format object for the content after the trigger.
+    Corresponds to an [Aho-Corasick automaton](https://en.wikipedia.org/wiki/Aho%E2%80%93Corasick_algorithm) under the hood to allow efficient and accurate pattern matching in a free-formed string.
 
-    **`loop`** (optional, default `true`): If true, after handling one dispatch the grammar allows any text until the next trigger. If false, generation stops after the first dispatch.
-
-    **`excludes`** (optional, default `[]`): List of strings that must not appear before a trigger is seen.
-
+    Common usage: Put the end string inside the exclude, and put another end string after it. E.g.
     ```json
-    {
-        "type": "dispatch",
-        "cases": [
-            {"trigger": "<a>", "content": {"type": "const_string", "value": "x"}},
-            {"trigger": "<b>", "content": {"type": "json_schema", "json_schema": {...}}}
-        ],
-        "loop": true,
-        "excludes": ["<bad>"]
-    }
+    format: sequence
+    sequence: [
+    DispatchFormat(cases=..., excludes=["abc"])
+    ConstStringFormat("abc")
+    ]
     ```
+
+    This means when the LLM generates abc, the matching of the first DispatchFormat ends and gets into the following ConstStringFormat. You can also use the "end" part of the TagFormat to achieve the same goal.
 
 20. `token_dispatch`
 
-    A format that maps directly to a **TokenTagDispatch** grammar. It accepts a list of (trigger token, content format) pairs. When the model generates the trigger token, generation continues with the corresponding content format. This is a lower-level alternative to `token_triggered_tags` when you want exact token→rule mapping without tag begin/end structure.
+    Similar to `dispatch` type, while the triggers are token IDs or token strings.
 
     **`cases`** (required): Array of objects, each with:
     * **`trigger`** (required): Token ID (integer) or token string (resolved via `tokenizer_info`).
