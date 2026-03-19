@@ -31,6 +31,16 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Use LLVM clang 17 on macOS
+        if: startsWith(matrix.os, 'macos-')
+        run: |
+          brew update
+          brew install llvm@17
+          echo "CC=$(brew --prefix llvm@17)/bin/clang" >> "$GITHUB_ENV"
+          echo "CXX=$(brew --prefix llvm@17)/bin/clang++" >> "$GITHUB_ENV"
+          echo "$(brew --prefix llvm@17)/bin" >> "$GITHUB_PATH"
+          clang++ --version
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.0
         env:
