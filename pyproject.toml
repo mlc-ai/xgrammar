@@ -154,7 +154,7 @@ archs = ["x86_64", "aarch64"]
 
 [tool.cibuildwheel.macos]
 archs = ["x86_64", "arm64"]
-environment = { MACOSX_DEPLOYMENT_TARGET = "10.14" }
+environment = { MACOSX_DEPLOYMENT_TARGET = "14", CC = "/usr/bin/clang", CXX = "/usr/bin/g++" }
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
