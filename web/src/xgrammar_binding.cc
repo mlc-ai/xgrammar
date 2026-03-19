@@ -37,7 +37,7 @@ void LogMessageImpl(const std::string& file, int lineno, int level, const std::s
  * \brief Helper that unwraps Grammar::FromStructuralTag by throwing variant errors.
  */
 Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json) {
-  auto result = Grammar::FromStructuralTag(structural_tag_json);
+  auto result = Grammar::FromStructuralTag(structural_tag_json, std::nullopt);
   if (std::holds_alternative<StructuralTagError>(result)) {
     ThrowVariantError(std::get<StructuralTagError>(result));
   }
@@ -50,7 +50,7 @@ Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json) {
 CompiledGrammar GrammarCompiler_CompileStructuralTag(
     GrammarCompiler& compiler, const std::string& structural_tag_json
 ) {
-  auto result = Grammar::FromStructuralTag(structural_tag_json);
+  auto result = Grammar::FromStructuralTag(structural_tag_json, std::nullopt);
   if (std::holds_alternative<StructuralTagError>(result)) {
     ThrowVariantError(std::get<StructuralTagError>(result));
   }
@@ -233,6 +233,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("AcceptToken", &GrammarMatcher::AcceptToken)
       .function("GetNextTokenBitmask", &GrammarMatcher_GetNextTokenBitmask)
       .function("IsTerminated", &GrammarMatcher::IsTerminated)
+      .function("IsCompleted", &GrammarMatcher::IsCompleted)
       .function("Reset", &GrammarMatcher::Reset)
       .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
       .function("Rollback", &GrammarMatcher::Rollback)

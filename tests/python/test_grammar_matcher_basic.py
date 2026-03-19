@@ -312,6 +312,66 @@ def test_termination():
     assert matcher.accept_token(input_ids[-2])
 
 
+def test_is_completed():
+    vocab = [
+        # fmt: off
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", " }", ", ", "6", ":", "\n", " ", '"a"', ':true',
+        # fmt: on
+    ]
+    # Input for a complete JSON object *without* the stop token
+    input_without_stop = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a"', ":true", " }"]
+    input_ids_without_stop = [vocab.index(t) for t in input_without_stop]
+    stop_token_id = vocab.index("</s>")
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+
+    # --- Case 1: default mode (terminate_without_stop_token=False) ---
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, max_rollback_tokens=5
+    )
+
+    # Before any input: not completed, not terminated
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    # Feed tokens for a complete JSON object (no stop token yet)
+    for i in input_ids_without_stop:
+        assert matcher.accept_token(i)
+
+    # Completed (valid JSON) but not terminated (stop token not accepted)
+    assert matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    # Accept stop token
+    assert matcher.accept_token(stop_token_id)
+    assert matcher.is_completed()
+    assert matcher.is_terminated()
+
+    # Rollback the stop token: still completed, no longer terminated
+    matcher.rollback(1)
+    assert matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    # Rollback further into mid-parse: neither completed nor terminated
+    matcher.rollback(2)
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    # --- Case 2: terminate_without_stop_token=True ---
+    matcher2 = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, terminate_without_stop_token=True
+    )
+
+    assert not matcher2.is_completed()
+    assert not matcher2.is_terminated()
+
+    for i in input_ids_without_stop:
+        assert matcher2.accept_token(i)
+
+    # In this mode, completed and terminated are the same
+    assert matcher2.is_completed()
+    assert matcher2.is_terminated()
+
+
 def test_get_jump_forward_string():
     grammar_ebnf = r"""root ::= "abb" | "abbd" | other_rule
 other_rule ::= "a" sub_rule "b"

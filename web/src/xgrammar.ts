@@ -707,6 +707,14 @@ export class GrammarMatcher {
   }
 
   /**
+   * Check if the input accepted so far forms a complete valid string according to the grammar.
+   * Unlike isTerminated(), this does not require the stop token to have been accepted.
+   */
+  isCompleted(): boolean {
+    return this.handle.IsCompleted();
+  }
+
+  /**
    * Reset the matcher to the initial state.
    */
   reset(): void {

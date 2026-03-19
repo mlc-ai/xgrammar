@@ -130,6 +130,13 @@ class GrammarMatcher {
    */
   bool IsTerminated() const;
 
+  /*!
+   * \brief Check if the grammar's root rule has been fully matched by the input accepted so far.
+   * Unlike IsTerminated(), this does not require the stop token to have been accepted.
+   * \sa IsTerminated, AcceptToken
+   */
+  bool IsCompleted() const;
+
   /*! \brief Reset the matcher to the initial state. */
   void Reset();
 

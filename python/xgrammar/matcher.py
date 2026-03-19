@@ -379,6 +379,18 @@ class GrammarMatcher(XGRObject):
         """
         return self._handle.is_terminated()
 
+    def is_completed(self) -> bool:
+        """Check if the input accepted so far forms a complete valid string according to the
+        grammar. Unlike :meth:`is_terminated`, this does not require the stop token to have
+        been accepted.
+
+        Returns
+        -------
+        completed : bool
+            Whether the grammar's root rule is fully matched.
+        """
+        return self._handle.is_completed()
+
     def reset(self) -> None:
         """Reset the matcher to the initial state."""
         return self._handle.reset()

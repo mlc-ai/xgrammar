@@ -137,6 +137,12 @@ class GrammarFunctor {
         return VisitTagDispatch(grammar_expr);
       case GrammarExprType::kRepeat:
         return VisitRepeat(grammar_expr);
+      case GrammarExprType::kToken:
+        return VisitToken(grammar_expr);
+      case GrammarExprType::kExcludeToken:
+        return VisitExcludeToken(grammar_expr);
+      case GrammarExprType::kTokenTagDispatch:
+        return VisitTokenTagDispatch(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -220,6 +226,16 @@ class GrammarFunctor {
 
   /*! \brief Visit a repeat GrammarExpr. */
   virtual T VisitRepeat(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
+
+  virtual T VisitToken(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
+
+  virtual T VisitExcludeToken(const GrammarExpr& grammar_expr) {
+    return VisitElement(grammar_expr);
+  }
+
+  virtual T VisitTokenTagDispatch(const GrammarExpr& grammar_expr) {
+    return VisitElement(grammar_expr);
+  }
 
   /*! \brief The grammar to visit or mutate. */
   Grammar base_grammar_{NullObj{}};
@@ -349,6 +365,11 @@ class GrammarFSMBuilder {
   static FSMWithStartEnd RuleRef(const GrammarExpr& expr);
   static FSMWithStartEnd CharacterClass(const GrammarExpr& expr);
   static FSMWithStartEnd ByteString(const GrammarExpr& expr);
+  static FSMWithStartEnd Token(const GrammarExpr& expr);
+  static FSMWithStartEnd ExcludeToken(const GrammarExpr& expr);
+  static std::optional<FSMWithStartEnd> TokenTagDispatch(
+      const Grammar::Impl::TokenTagDispatch& token_tag_dispatch
+  );
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
@@ -362,6 +383,15 @@ class GrammarFSMBuilder {
 class RepetitionNormalizer {
  public:
   static void Apply(Grammar* grammar);
+};
+
+/*!
+ * \brief Expand kRepeat grammar expressions using HandleRepetitionRange logic.
+ * Transforms repetition structures into explicit sequences and choices.
+ */
+class RepetitionRangeExpander {
+ public:
+  static Grammar Apply(const Grammar& grammar);
 };
 
 /*!
