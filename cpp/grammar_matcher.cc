@@ -460,6 +460,10 @@ class BatchGrammarMatcher::Impl {
       bool debug_print
   );
 
+  static void BatchRollback(
+      std::vector<GrammarMatcher>* matchers, const std::vector<int>& num_tokens
+  );
+
  private:
   std::optional<ThreadPool> thread_pool_ = std::nullopt;
   int32_t max_threads_ = 1;
@@ -1064,6 +1068,17 @@ std::vector<uint8_t> BatchGrammarMatcher::Impl::BatchAcceptToken(
   return accepted;
 }
 
+void BatchGrammarMatcher::Impl::BatchRollback(
+    std::vector<GrammarMatcher>* matchers, const std::vector<int>& num_tokens
+) {
+  XGRAMMAR_CHECK(matchers->size() == num_tokens.size())
+      << "The size of matchers (" << matchers->size() << ") and num_tokens (" << num_tokens.size()
+      << ") should be the same.";
+  for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
+    (*matchers)[i].Rollback(num_tokens[i]);
+  }
+}
+
 GrammarMatcher::GrammarMatcher(
     const CompiledGrammar& compiled_grammar,
     std::optional<std::vector<int>> override_stop_tokens,
@@ -1133,6 +1148,12 @@ std::vector<uint8_t> BatchGrammarMatcher::BatchAcceptToken(
     std::vector<GrammarMatcher>* matchers, const std::vector<int32_t>& token_ids, bool debug_print
 ) {
   return Impl::BatchAcceptToken(matchers, token_ids, debug_print);
+}
+
+void BatchGrammarMatcher::BatchRollback(
+    std::vector<GrammarMatcher>* matchers, const std::vector<int>& num_tokens
+) {
+  Impl::BatchRollback(matchers, num_tokens);
 }
 
 BatchGrammarMatcher::BatchGrammarMatcher(std::variant<std::string, int32_t> max_threads)
