@@ -45,8 +45,8 @@ struct ExcludeTokenFormat;
 struct AnyTokensFormat;
 struct TokenTriggeredTagsFormat;
 struct RepeatFormat;
-struct TagDispatchFormat;
-struct TokenTagDispatchFormat;
+struct DispatchFormat;
+struct TokenDispatchFormat;
 
 using Format = std::variant<
     ConstStringFormat,
@@ -67,8 +67,8 @@ using Format = std::variant<
     AnyTokensFormat,
     TokenTriggeredTagsFormat,
     RepeatFormat,
-    TagDispatchFormat,
-    TokenTagDispatchFormat>;
+    DispatchFormat,
+    TokenDispatchFormat>;
 
 /******************** Basic Formats ********************/
 
@@ -315,7 +315,7 @@ struct RepeatFormat {
   picojson::value ToJSON() const;
 };
 
-/*! \brief A (trigger string, content format) pair for TagDispatchFormat. */
+/*! \brief A (trigger string, content format) pair for DispatchFormat. */
 struct TagDispatchPair {
   std::string trigger;
   std::shared_ptr<Format> content;
@@ -324,26 +324,22 @@ struct TagDispatchPair {
 /*!
  * \brief A format that maps directly to a TagDispatch grammar.
  * Accepts (trigger string, content format) pairs; each content is converted to a rule and
- * the result is a single TagDispatch(loop_after_dispatch, excludes).
+ * the result is a single TagDispatch(loop, excludes).
  */
-struct TagDispatchFormat {
-  static constexpr const char* type = "tag_dispatch";
-  std::vector<TagDispatchPair> pairs;
-  bool loop_after_dispatch = true;
+struct DispatchFormat {
+  static constexpr const char* type = "dispatch";
+  std::vector<TagDispatchPair> cases;
+  bool loop = true;
   std::vector<std::string> excludes;
 
-  TagDispatchFormat(
-      std::vector<TagDispatchPair> pairs,
-      bool loop_after_dispatch = true,
-      std::vector<std::string> excludes = {}
+  DispatchFormat(
+      std::vector<TagDispatchPair> cases, bool loop = true, std::vector<std::string> excludes = {}
   )
-      : pairs(std::move(pairs)),
-        loop_after_dispatch(loop_after_dispatch),
-        excludes(std::move(excludes)) {}
+      : cases(std::move(cases)), loop(loop), excludes(std::move(excludes)) {}
   picojson::value ToJSON() const;
 };
 
-/*! \brief A (trigger token, content format) pair for TokenTagDispatchFormat. */
+/*! \brief A (trigger token, content format) pair for TokenDispatchFormat. */
 struct TokenTagDispatchPair {
   std::variant<int32_t, std::string> trigger;
   std::shared_ptr<Format> content;
@@ -354,20 +350,18 @@ struct TokenTagDispatchPair {
  * Accepts (trigger token, content format) pairs; trigger can be token ID or token string
  * (resolved via tokenizer_info). Each content is converted to a rule.
  */
-struct TokenTagDispatchFormat {
-  static constexpr const char* type = "token_tag_dispatch";
-  std::vector<TokenTagDispatchPair> pairs;
-  bool loop_after_dispatch = true;
+struct TokenDispatchFormat {
+  static constexpr const char* type = "token_dispatch";
+  std::vector<TokenTagDispatchPair> cases;
+  bool loop = true;
   std::vector<std::variant<int32_t, std::string>> exclude_tokens;
 
-  TokenTagDispatchFormat(
-      std::vector<TokenTagDispatchPair> pairs,
-      bool loop_after_dispatch = true,
+  TokenDispatchFormat(
+      std::vector<TokenTagDispatchPair> cases,
+      bool loop = true,
       std::vector<std::variant<int32_t, std::string>> exclude_tokens = {}
   )
-      : pairs(std::move(pairs)),
-        loop_after_dispatch(loop_after_dispatch),
-        exclude_tokens(std::move(exclude_tokens)) {}
+      : cases(std::move(cases)), loop(loop), exclude_tokens(std::move(exclude_tokens)) {}
   picojson::value ToJSON() const;
 
  private:

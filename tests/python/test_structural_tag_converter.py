@@ -3890,16 +3890,16 @@ def test_token_triggered_tags_rejects_string_begin():
         xgr.Grammar.from_structural_tag(stag)
 
 
-# ---------- TagDispatchFormat ----------
+# ---------- DispatchFormat ----------
 
 
 tag_dispatch_format_stag = {
-    "type": "tag_dispatch",
-    "pairs": [
+    "type": "dispatch",
+    "cases": [
         {"trigger": "tag1", "content": {"type": "const_string", "value": "abcd"}},
         {"trigger": "tag2", "content": {"type": "const_string", "value": "efg"}},
     ],
-    "loop_after_dispatch": True,
+    "loop": True,
 }
 
 tag_dispatch_format_expected_grammar = ""
@@ -3921,19 +3921,19 @@ tag_dispatch_format_instance_rejected = [
     tag_dispatch_format_instance_accepted + tag_dispatch_format_instance_rejected,
 )
 def test_tag_dispatch_format_simple(instance: str, is_accepted: bool):
-    """TagDispatchFormat: positive/negative instances (cf. test_grammar_matcher_macro.test_simple)."""
+    """DispatchFormat: positive/negative instances (cf. test_grammar_matcher_macro.test_simple)."""
     if tag_dispatch_format_expected_grammar:
         check_stag_with_grammar(tag_dispatch_format_stag, tag_dispatch_format_expected_grammar)
     check_stag_with_instance(tag_dispatch_format_stag, instance, is_accepted)
 
 
 tag_dispatch_format_no_loop_stag = {
-    "type": "tag_dispatch",
-    "pairs": [
+    "type": "dispatch",
+    "cases": [
         {"trigger": "tag1", "content": {"type": "const_string", "value": "abcd"}},
         {"trigger": "tag2", "content": {"type": "const_string", "value": "efg"}},
     ],
-    "loop_after_dispatch": False,
+    "loop": False,
 }
 
 tag_dispatch_format_no_loop_expected_grammar = r"""const_string ::= (("abcd"))
@@ -3959,7 +3959,7 @@ tag_dispatch_format_no_loop_instance_rejected = [
     tag_dispatch_format_no_loop_instance_accepted + tag_dispatch_format_no_loop_instance_rejected,
 )
 def test_tag_dispatch_format_no_loop(instance: str, is_accepted: bool):
-    """TagDispatchFormat with loop_after_dispatch=false (cf. test_grammar_matcher_macro.test_no_loop_after_dispatch)."""
+    """DispatchFormat with loop=false (cf. test_grammar_matcher_macro.test_no_loop_after_dispatch)."""
     check_stag_with_grammar(
         tag_dispatch_format_no_loop_stag, tag_dispatch_format_no_loop_expected_grammar
     )
@@ -3967,12 +3967,12 @@ def test_tag_dispatch_format_no_loop(instance: str, is_accepted: bool):
 
 
 tag_dispatch_format_with_excludes_stag = {
-    "type": "tag_dispatch",
-    "pairs": [
+    "type": "dispatch",
+    "cases": [
         {"trigger": "tag1", "content": {"type": "const_string", "value": "abcd"}},
         {"trigger": "tag2", "content": {"type": "const_string", "value": "efg"}},
     ],
-    "loop_after_dispatch": True,
+    "loop": True,
     "excludes": ["tag3", "ll"],
 }
 
@@ -4005,25 +4005,25 @@ tag_dispatch_format_with_excludes_instance_rejected = [
     + tag_dispatch_format_with_excludes_instance_rejected,
 )
 def test_tag_dispatch_format_with_excludes(instance: str, is_accepted: bool):
-    """TagDispatchFormat with excludes (cf. test_grammar_matcher_macro.test_stop_str)."""
+    """DispatchFormat with excludes (cf. test_grammar_matcher_macro.test_stop_str)."""
     check_stag_with_grammar(
         tag_dispatch_format_with_excludes_stag, tag_dispatch_format_with_excludes_expected_grammar
     )
     check_stag_with_instance(tag_dispatch_format_with_excludes_stag, instance, is_accepted)
 
 
-# ---------- TokenTagDispatchFormat ----------
+# ---------- TokenDispatchFormat ----------
 
 
 def test_token_tag_dispatch_format_simple():
-    """TokenTagDispatchFormat: two trigger tokens, each with const_string content."""
+    """TokenDispatchFormat: two trigger tokens, each with const_string content."""
     stag_format = {
-        "type": "token_tag_dispatch",
-        "pairs": [
+        "type": "token_dispatch",
+        "cases": [
             {"trigger": 10, "content": {"type": "const_string", "value": "A"}},
             {"trigger": 20, "content": {"type": "const_string", "value": "B"}},
         ],
-        "loop_after_dispatch": False,
+        "loop": False,
     }
     expected_grammar = r"""const_string ::= (("A"))
 const_string_1 ::= (("B"))
@@ -4040,11 +4040,11 @@ token_tag_dispatch_1 ::= TokenTagDispatch(
 
 
 def test_token_tag_dispatch_format_with_excludes():
-    """TokenTagDispatchFormat with exclude_tokens."""
+    """TokenDispatchFormat with exclude_tokens."""
     stag_format = {
-        "type": "token_tag_dispatch",
-        "pairs": [{"trigger": 10, "content": {"type": "const_string", "value": "C"}}],
-        "loop_after_dispatch": False,
+        "type": "token_dispatch",
+        "cases": [{"trigger": 10, "content": {"type": "const_string", "value": "C"}}],
+        "loop": False,
         "exclude_tokens": [50],
     }
     expected_grammar = r"""const_string ::= (("C"))
@@ -4060,11 +4060,11 @@ token_tag_dispatch_1 ::= TokenTagDispatch(
 
 
 def test_token_tag_dispatch_format_looping():
-    """TokenTagDispatchFormat with loop_after_dispatch=true."""
+    """TokenDispatchFormat with loop=true."""
     stag_format = {
-        "type": "token_tag_dispatch",
-        "pairs": [{"trigger": 10, "content": {"type": "const_string", "value": "D"}}],
-        "loop_after_dispatch": True,
+        "type": "token_dispatch",
+        "cases": [{"trigger": 10, "content": {"type": "const_string", "value": "D"}}],
+        "loop": True,
     }
     expected_grammar = r"""const_string ::= (("D"))
 token_tag_dispatch ::= ((token_tag_dispatch_1))
@@ -4088,8 +4088,8 @@ def test_token_tag_dispatch_need_tokenizer_info():
     stag = {
         "type": "structural_tag",
         "format": {
-            "type": "token_tag_dispatch",
-            "pairs": [{"trigger": "<|tag|>", "content": {"type": "const_string", "value": "abcd"}}],
+            "type": "token_dispatch",
+            "cases": [{"trigger": "<|tag|>", "content": {"type": "const_string", "value": "abcd"}}],
         },
     }
     with pytest.raises(Exception, match="Invalid structural tag error"):
