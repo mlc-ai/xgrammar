@@ -3896,8 +3896,8 @@ def test_token_triggered_tags_rejects_string_begin():
 tag_dispatch_format_stag = {
     "type": "dispatch",
     "cases": [
-        {"trigger": "tag1", "content": {"type": "const_string", "value": "abcd"}},
-        {"trigger": "tag2", "content": {"type": "const_string", "value": "efg"}},
+        ["tag1", {"type": "const_string", "value": "abcd"}],
+        ["tag2", {"type": "const_string", "value": "efg"}],
     ],
     "loop": True,
 }
@@ -3930,8 +3930,8 @@ def test_tag_dispatch_format_simple(instance: str, is_accepted: bool):
 tag_dispatch_format_no_loop_stag = {
     "type": "dispatch",
     "cases": [
-        {"trigger": "tag1", "content": {"type": "const_string", "value": "abcd"}},
-        {"trigger": "tag2", "content": {"type": "const_string", "value": "efg"}},
+        ["tag1", {"type": "const_string", "value": "abcd"}],
+        ["tag2", {"type": "const_string", "value": "efg"}],
     ],
     "loop": False,
 }
@@ -3969,8 +3969,8 @@ def test_tag_dispatch_format_no_loop(instance: str, is_accepted: bool):
 tag_dispatch_format_with_excludes_stag = {
     "type": "dispatch",
     "cases": [
-        {"trigger": "tag1", "content": {"type": "const_string", "value": "abcd"}},
-        {"trigger": "tag2", "content": {"type": "const_string", "value": "efg"}},
+        ["tag1", {"type": "const_string", "value": "abcd"}],
+        ["tag2", {"type": "const_string", "value": "efg"}],
     ],
     "loop": True,
     "excludes": ["tag3", "ll"],
@@ -4020,8 +4020,8 @@ def test_token_tag_dispatch_format_simple():
     stag_format = {
         "type": "token_dispatch",
         "cases": [
-            {"trigger": 10, "content": {"type": "const_string", "value": "A"}},
-            {"trigger": 20, "content": {"type": "const_string", "value": "B"}},
+            [10, {"type": "const_string", "value": "A"}],
+            [20, {"type": "const_string", "value": "B"}],
         ],
         "loop": False,
     }
@@ -4043,7 +4043,7 @@ def test_token_tag_dispatch_format_with_excludes():
     """TokenDispatchFormat with exclude_tokens."""
     stag_format = {
         "type": "token_dispatch",
-        "cases": [{"trigger": 10, "content": {"type": "const_string", "value": "C"}}],
+        "cases": [[10, {"type": "const_string", "value": "C"}]],
         "loop": False,
         "exclude_tokens": [50],
     }
@@ -4063,7 +4063,7 @@ def test_token_tag_dispatch_format_looping():
     """TokenDispatchFormat with loop=true."""
     stag_format = {
         "type": "token_dispatch",
-        "cases": [{"trigger": 10, "content": {"type": "const_string", "value": "D"}}],
+        "cases": [[10, {"type": "const_string", "value": "D"}]],
         "loop": True,
     }
     expected_grammar = r"""const_string ::= (("D"))
@@ -4089,7 +4089,7 @@ def test_token_tag_dispatch_need_tokenizer_info():
         "type": "structural_tag",
         "format": {
             "type": "token_dispatch",
-            "cases": [{"trigger": "<|tag|>", "content": {"type": "const_string", "value": "abcd"}}],
+            "cases": [["<|tag|>", {"type": "const_string", "value": "abcd"}]],
         },
     }
     with pytest.raises(Exception, match="Invalid structural tag error"):

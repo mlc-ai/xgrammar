@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -315,49 +316,39 @@ struct RepeatFormat {
   picojson::value ToJSON() const;
 };
 
-/*! \brief A (trigger string, content format) pair for DispatchFormat. */
-struct TagDispatchPair {
-  std::string trigger;
-  std::shared_ptr<Format> content;
-};
-
 /*!
  * \brief A format that maps directly to a TagDispatch grammar.
- * Accepts (trigger string, content format) pairs; each content is converted to a rule and
- * the result is a single TagDispatch(loop, excludes).
+ * Accepts ``[trigger string, content format]`` pairs in JSON; each content is converted to a rule
+ * and the result is a single TagDispatch(loop, excludes).
  */
 struct DispatchFormat {
   static constexpr const char* type = "dispatch";
-  std::vector<TagDispatchPair> cases;
+  std::vector<std::pair<std::string, std::shared_ptr<Format>>> cases;
   bool loop = true;
   std::vector<std::string> excludes;
 
   DispatchFormat(
-      std::vector<TagDispatchPair> cases, bool loop = true, std::vector<std::string> excludes = {}
+      std::vector<std::pair<std::string, std::shared_ptr<Format>>> cases,
+      bool loop = true,
+      std::vector<std::string> excludes = {}
   )
       : cases(std::move(cases)), loop(loop), excludes(std::move(excludes)) {}
   picojson::value ToJSON() const;
 };
 
-/*! \brief A (trigger token, content format) pair for TokenDispatchFormat. */
-struct TokenTagDispatchPair {
-  std::variant<int32_t, std::string> trigger;
-  std::shared_ptr<Format> content;
-};
-
 /*!
  * \brief A format that maps directly to a TokenTagDispatch grammar.
- * Accepts (trigger token, content format) pairs; trigger can be token ID or token string
- * (resolved via tokenizer_info). Each content is converted to a rule.
+ * Accepts ``[trigger token, content format]`` pairs in JSON; trigger can be token ID or token
+ * string (resolved via tokenizer_info). Each content is converted to a rule.
  */
 struct TokenDispatchFormat {
   static constexpr const char* type = "token_dispatch";
-  std::vector<TokenTagDispatchPair> cases;
+  std::vector<std::pair<std::variant<int32_t, std::string>, std::shared_ptr<Format>>> cases;
   bool loop = true;
   std::vector<std::variant<int32_t, std::string>> exclude_tokens;
 
   TokenDispatchFormat(
-      std::vector<TokenTagDispatchPair> cases,
+      std::vector<std::pair<std::variant<int32_t, std::string>, std::shared_ptr<Format>>> cases,
       bool loop = true,
       std::vector<std::variant<int32_t, std::string>> exclude_tokens = {}
   )
