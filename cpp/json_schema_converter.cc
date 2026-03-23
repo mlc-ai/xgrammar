@@ -2976,12 +2976,10 @@ std::string QwenXMLToolCallingToEBNF(const std::string& schema) {
     XGRAMMAR_LOG(FATAL) << "Expected JSON schema object, got boolean: " << json_value.to_str();
   }
   const auto& schema_obj = json_value.get<picojson::object>();
-  if (!schema_obj.count("type")) {
-    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
-                        << json_value.to_str();
-  }
-  if (schema_obj.at("type").get<std::string>() != "object") {
-    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
+  auto type_it = schema_obj.find("type");
+  if (type_it == schema_obj.end() || !type_it->second.is<std::string>() ||
+      type_it->second.get<std::string>() != "object") {
+    XGRAMMAR_LOG(FATAL) << "Function calling must have a string 'type' field of 'object': "
                         << json_value.to_str();
   }
   return JSONSchemaToEBNF(
@@ -2999,12 +2997,10 @@ std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema) {
     XGRAMMAR_LOG(FATAL) << "Expected JSON schema object, got boolean: " << json_value.to_str();
   }
   const auto& schema_obj = json_value.get<picojson::object>();
-  if (!schema_obj.count("type")) {
-    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
-                        << json_value.to_str();
-  }
-  if (schema_obj.at("type").get<std::string>() != "object") {
-    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
+  auto type_it = schema_obj.find("type");
+  if (type_it == schema_obj.end() || !type_it->second.is<std::string>() ||
+      type_it->second.get<std::string>() != "object") {
+    XGRAMMAR_LOG(FATAL) << "Function calling must have a string 'type' field of 'object': "
                         << json_value.to_str();
   }
   return JSONSchemaToEBNF(
@@ -3022,12 +3018,10 @@ std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema) {
     XGRAMMAR_LOG(FATAL) << "Expected JSON schema object, got boolean: " << json_value.to_str();
   }
   const auto& schema_obj = json_value.get<picojson::object>();
-  if (!schema_obj.count("type")) {
-    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
-                        << json_value.to_str();
-  }
-  if (schema_obj.at("type").get<std::string>() != "object") {
-    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
+  auto type_it = schema_obj.find("type");
+  if (type_it == schema_obj.end() || !type_it->second.is<std::string>() ||
+      type_it->second.get<std::string>() != "object") {
+    XGRAMMAR_LOG(FATAL) << "Function calling must have a string 'type' field of 'object': "
                         << json_value.to_str();
   }
   return JSONSchemaToEBNF(
@@ -3045,12 +3039,10 @@ std::string GlmXMLToolCallingToEBNF(const std::string& schema) {
     XGRAMMAR_LOG(FATAL) << "Expected JSON schema object, got boolean: " << json_value.to_str();
   }
   const auto& schema_obj = json_value.get<picojson::object>();
-  if (!schema_obj.count("type")) {
-    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
-                        << json_value.to_str();
-  }
-  if (schema_obj.at("type").get<std::string>() != "object") {
-    XGRAMMAR_LOG(FATAL) << "Function calling must have a 'type' field of 'object': "
+  auto type_it = schema_obj.find("type");
+  if (type_it == schema_obj.end() || !type_it->second.is<std::string>() ||
+      type_it->second.get<std::string>() != "object") {
+    XGRAMMAR_LOG(FATAL) << "Function calling must have a string 'type' field of 'object': "
                         << json_value.to_str();
   }
   return JSONSchemaToEBNF(
