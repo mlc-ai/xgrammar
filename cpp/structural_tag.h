@@ -78,7 +78,7 @@ struct ConstStringFormat {
 struct JSONSchemaFormat {
   static constexpr const char* type = "json_schema";
   std::string json_schema;
-  std::string style = "json";  // "json","qwen_xml","minimax_xml"
+  std::string style = "json";  // "json","qwen_xml","minimax_xml","deepseek_xml","glm_xml"
   JSONSchemaFormat(std::string json_schema, std::string style = "json")
       : json_schema(std::move(json_schema)), style(std::move(style)) {}
   picojson::value ToJSON() const;

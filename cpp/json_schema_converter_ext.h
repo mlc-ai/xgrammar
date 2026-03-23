@@ -77,6 +77,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   struct XMLWrapper {
     std::string key_wrapper_prefix;
     std::string key_wrapper_suffix;
+    std::string value_wrapper_prefix;
     std::string parameter_suffix;
   };
 
