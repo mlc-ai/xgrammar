@@ -5,6 +5,7 @@ import pytest
 from xgrammar import Grammar
 from xgrammar.testing import (
     _deepseek_xml_tool_calling_to_ebnf,
+    _glm_xml_tool_calling_to_ebnf,
     _is_grammar_accept_string,
     _minimax_xml_tool_calling_to_ebnf,
     _qwen_xml_tool_calling_to_ebnf,
@@ -36,6 +37,11 @@ def _check_minimax_grammar(schema: dict, expected_grammar: str, instance: str, a
 def _check_deepseek_grammar(schema: dict, expected_grammar: str, instance: str, accepted: bool):
     ebnf_grammar = _deepseek_xml_tool_calling_to_ebnf(schema)
     check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
+    check_grammar_with_instance(ebnf_grammar, instance, accepted)
+
+
+def _check_glm_grammar(schema: dict, instance: str, accepted: bool):
+    ebnf_grammar = _glm_xml_tool_calling_to_ebnf(schema)
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
@@ -222,10 +228,16 @@ def test_invalid_function_calling_schema():
     with pytest.raises(RuntimeError):
         _qwen_xml_tool_calling_to_ebnf(schema)
 
+    with pytest.raises(RuntimeError):
+        _glm_xml_tool_calling_to_ebnf(schema)
+
     schema = {"type": "string"}
 
     with pytest.raises(RuntimeError):
         _qwen_xml_tool_calling_to_ebnf(schema)
+
+    with pytest.raises(RuntimeError):
+        _glm_xml_tool_calling_to_ebnf(schema)
 
 
 test_inner_object_schema_input_str_accepted = (
@@ -1269,6 +1281,43 @@ root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "f
         "required": ["name", "age"],
     }
     _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
+
+
+# ---------- GLM XML tool calling (_glm_xml_tool_calling_to_ebnf) ----------
+# Format: <arg_key>$PARAMETER_NAME</arg_key><arg_value>$PARAMETER_VALUE</arg_value>
+
+
+glm_reject_wrong_parameter_format_input_str_accepted = (
+    ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", False),
+    ('<parameter name="name">Bob</parameter><parameter name="age">100</parameter>', False),
+    (
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">100</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        "<arg_key>name</arg_key><arg_value>Bob</arg_value>"
+        "<arg_key>age</arg_key><arg_value>100</arg_value>",
+        True,
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    "input_str, accepted", glm_reject_wrong_parameter_format_input_str_accepted
+)
+def test_glm_reject_wrong_parameter_format(input_str: str, accepted: bool):
+    """GLM grammar must use arg_key/arg_value wrappers and reject other XML styles."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name", "age"],
+    }
+    ebnf_grammar = _glm_xml_tool_calling_to_ebnf(schema)
+    grammar_str = str(ebnf_grammar)
+    assert "<arg_key>" in grammar_str
+    assert "<arg_value>" in grammar_str
+
+    _check_glm_grammar(schema, input_str, accepted)
 
 
 if __name__ == "__main__":
