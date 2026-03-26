@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import torch
 
@@ -81,7 +81,7 @@ def apply_token_bitmask_inplace_triton(
     logits: torch.Tensor,
     bitmask: torch.Tensor,
     vocab_size: Optional[int] = None,
-    indices: Optional[List[int]] = None,
+    indices: Optional[Union[List[int], torch.Tensor]] = None,
 ):
     NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
     BLOCK_SIZE = 4096
