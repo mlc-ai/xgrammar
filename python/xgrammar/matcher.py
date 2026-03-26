@@ -379,9 +379,32 @@ class GrammarMatcher(XGRObject):
         """
         return self._handle.is_terminated()
 
+    def is_completed(self) -> bool:
+        """Check if the input accepted so far forms a complete valid string according to the
+        grammar. Unlike :meth:`is_terminated`, this does not require the stop token to have
+        been accepted.
+
+        Returns
+        -------
+        completed : bool
+            Whether the grammar's root rule is fully matched.
+        """
+        return self._handle.is_completed()
+
     def reset(self) -> None:
         """Reset the matcher to the initial state."""
         return self._handle.reset()
+
+    def fork(self) -> "GrammarMatcher":
+        """Fork the matcher. Returns a new GrammarMatcher sharing the same compiled grammar and
+        tokenizer info, with a deep copy of all other state (parsing state, token history, etc.).
+
+        Returns
+        -------
+        forked : GrammarMatcher
+            A new matcher with the same grammar but independent parsing state.
+        """
+        return GrammarMatcher._create_from_handle(self._handle.fork())
 
     @property
     def max_rollback_tokens(self) -> int:
@@ -535,3 +558,29 @@ class BatchGrammarMatcher(XGRObject):
         """
         matcher_handles = [matcher._handle for matcher in matchers]
         return _core.BatchGrammarMatcher.batch_accept_string(matcher_handles, strings, debug_print)
+
+    @staticmethod
+    def batch_rollback(
+        matchers: List["GrammarMatcher"], num_tokens: Union[List[int], int] = 1
+    ) -> None:
+        """Rollback a batch of matchers by the given number of tokens.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to rollback.
+
+        num_tokens : List[int] | int, default: 1
+            The number of tokens to rollback for each matcher. If an integer is provided, it will be
+            used for all matchers; if a list is provided, it must have the same length as matchers.
+
+        Raises
+        ------
+        RuntimeError
+            If the sizes of matchers and num_tokens do not match.
+        """
+        if isinstance(num_tokens, int):
+            num_tokens = [num_tokens] * len(matchers)
+
+        matcher_handles = [matcher._handle for matcher in matchers]
+        _core.BatchGrammarMatcher.batch_rollback(matcher_handles, num_tokens)

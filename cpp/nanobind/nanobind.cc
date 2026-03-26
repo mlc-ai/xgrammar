@@ -201,6 +201,8 @@ NB_MODULE(xgrammar_bindings, m) {
       .def_static(
           "from_structural_tag",
           &Grammar_FromStructuralTag,
+          nb::arg("structural_tag_json"),
+          nb::arg("tokenizer_info") = nb::none(),
           nb::call_guard<nb::gil_scoped_release>()
       )
       .def_static("builtin_json_grammar", &Grammar::BuiltinJSONGrammar)
@@ -280,6 +282,15 @@ NB_MODULE(xgrammar_bindings, m) {
           "batch_accept_token",
           &BatchGrammarMatcher::BatchAcceptToken,
           nb::call_guard<nb::gil_scoped_release>()
+      )
+      .def_static(
+          "batch_rollback",
+          [](std::vector<GrammarMatcher>& matchers, const std::vector<int>& num_tokens) {
+            BatchGrammarMatcher::BatchRollback(&matchers, num_tokens);
+          },
+          nb::arg("matchers"),
+          nb::arg("num_tokens"),
+          nb::call_guard<nb::gil_scoped_release>()
       );
   auto pyGrammarMatcher = nb::class_<GrammarMatcher>(m, "GrammarMatcher");
   pyGrammarMatcher
@@ -311,7 +322,9 @@ NB_MODULE(xgrammar_bindings, m) {
       )
       .def("rollback", &GrammarMatcher::Rollback, nb::call_guard<nb::gil_scoped_release>())
       .def("is_terminated", &GrammarMatcher::IsTerminated)
+      .def("is_completed", &GrammarMatcher::IsCompleted)
       .def("reset", &GrammarMatcher::Reset, nb::call_guard<nb::gil_scoped_release>())
+      .def("fork", &GrammarMatcher::Fork, nb::call_guard<nb::gil_scoped_release>())
       .def_prop_ro("max_rollback_tokens", &GrammarMatcher::GetMaxRollbackTokens)
       .def_prop_ro("stop_token_ids", &GrammarMatcher::GetStopTokenIds)
       .def("_debug_print_internal_state", &GrammarMatcher::_DebugPrintInternalState);

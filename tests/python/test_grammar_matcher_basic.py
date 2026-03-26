@@ -312,6 +312,167 @@ def test_termination():
     assert matcher.accept_token(input_ids[-2])
 
 
+def test_is_completed():
+    vocab = [
+        # fmt: off
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", " }", ", ", "6", ":", "\n", " ", '"a"', ':true',
+        # fmt: on
+    ]
+    # Input for a complete JSON object *without* the stop token
+    input_without_stop = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a"', ":true", " }"]
+    input_ids_without_stop = [vocab.index(t) for t in input_without_stop]
+    stop_token_id = vocab.index("</s>")
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+
+    # --- Case 1: default mode (terminate_without_stop_token=False) ---
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, max_rollback_tokens=5
+    )
+
+    # Before any input: not completed, not terminated
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    # Feed tokens for a complete JSON object (no stop token yet)
+    for i in input_ids_without_stop:
+        assert matcher.accept_token(i)
+
+    # Completed (valid JSON) but not terminated (stop token not accepted)
+    assert matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    # Accept stop token
+    assert matcher.accept_token(stop_token_id)
+    assert matcher.is_completed()
+    assert matcher.is_terminated()
+
+    # Rollback the stop token: still completed, no longer terminated
+    matcher.rollback(1)
+    assert matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    # Rollback further into mid-parse: neither completed nor terminated
+    matcher.rollback(2)
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    # --- Case 2: terminate_without_stop_token=True ---
+    matcher2 = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, terminate_without_stop_token=True
+    )
+
+    assert not matcher2.is_completed()
+    assert not matcher2.is_terminated()
+
+    for i in input_ids_without_stop:
+        assert matcher2.accept_token(i)
+
+    # In this mode, completed and terminated are the same
+    assert matcher2.is_completed()
+    assert matcher2.is_terminated()
+
+
+def test_fork_initial_state():
+    """Fork at initial state: forked matcher has same state and same next-token bitmask."""
+    vocab = ["<s>", "</s>", "a", "b"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" "b"')
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    forked_matcher = original_matcher.fork()
+    bitmask_original = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    bitmask_forked = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    original_matcher.fill_next_token_bitmask(bitmask_original)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    torch.testing.assert_close(bitmask_original, bitmask_forked)
+    assert not original_matcher.is_terminated() and not forked_matcher.is_terminated()
+    assert original_matcher.stop_token_ids == forked_matcher.stop_token_ids
+
+
+def test_fork_after_accept_tokens():
+    """Fork after accepting tokens: forked has same parsing state; both can then diverge."""
+    vocab = ["<s>", "</s>", "a", "abc", 'b"', '"', "{", "}", " ", ":"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    input_ids = [vocab.index(t) for t in ["{", '"', "abc", 'b"']]
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
+    for token_id in input_ids:
+        assert original_matcher.accept_token(token_id)
+    forked_matcher = original_matcher.fork()
+    bitmask_original = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    bitmask_forked = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    original_matcher.fill_next_token_bitmask(bitmask_original)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    torch.testing.assert_close(bitmask_original, bitmask_forked)
+    next_token_id = vocab.index(":")
+    assert original_matcher.accept_token(next_token_id)
+    assert forked_matcher.accept_token(next_token_id)
+    original_matcher.rollback(1)
+    forked_matcher.rollback(1)
+    original_matcher.fill_next_token_bitmask(bitmask_original)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    torch.testing.assert_close(bitmask_original, bitmask_forked)
+
+
+def test_fork_after_rollback():
+    """Fork after rollback: forked state matches current state; original and forked independent."""
+    vocab = ["<s>", "</s>", "a", "b"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" "b"')
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    assert original_matcher.accept_token(vocab.index("a"))
+    assert original_matcher.accept_token(vocab.index("b"))
+    original_matcher.rollback(1)
+    forked_matcher = original_matcher.fork()
+    bitmask_original = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    bitmask_forked = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    original_matcher.fill_next_token_bitmask(bitmask_original)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    torch.testing.assert_close(bitmask_original, bitmask_forked)
+    accepted_token_ids_forked = set(range(len(vocab))) - set(
+        _get_masked_tokens_from_bitmask(bitmask_forked, len(vocab))
+    )
+    assert vocab.index("b") in accepted_token_ids_forked
+
+
+def test_fork_when_terminated():
+    """Fork when matcher is terminated: forked is also terminated; rollback on one is independent."""
+    vocab = ["<s>", "</s>", "a", "b"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" "b"')
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    assert original_matcher.accept_token(vocab.index("a"))
+    assert original_matcher.accept_token(vocab.index("b"))
+    assert original_matcher.accept_token(vocab.index("</s>"))
+    assert original_matcher.is_terminated()
+    forked_matcher = original_matcher.fork()
+    assert forked_matcher.is_terminated()
+    original_matcher.rollback(1)
+    assert not original_matcher.is_terminated()
+    assert forked_matcher.is_terminated()
+    assert original_matcher.accept_token(vocab.index("</s>"))
+
+
+def test_fork_independent_state():
+    """Original and forked evolve independently: accept on one does not change the other."""
+    vocab = ["<s>", "</s>", "a", "b", "c"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" ("b" | "c")')
+    original_matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    assert original_matcher.accept_token(vocab.index("a"))
+    forked_matcher = original_matcher.fork()
+    assert original_matcher.accept_token(vocab.index("b"))
+    assert forked_matcher.accept_token(vocab.index("c"))
+    bitmask_forked = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    forked_matcher.fill_next_token_bitmask(bitmask_forked)
+    accepted_after_forked = set(range(len(vocab))) - set(
+        _get_masked_tokens_from_bitmask(bitmask_forked, len(vocab))
+    )
+    assert accepted_after_forked == {vocab.index("</s>")}
+    assert original_matcher.accept_token(vocab.index("</s>"))
+    assert forked_matcher.accept_token(vocab.index("</s>"))
+    assert original_matcher.is_terminated()
+    assert forked_matcher.is_terminated()
+
+
 def test_get_jump_forward_string():
     grammar_ebnf = r"""root ::= "abb" | "abbd" | other_rule
 other_rule ::= "a" sub_rule "b"
@@ -456,6 +617,140 @@ def test_batch_accept_token(grammars: List[str], inputs: List[int], expecteds: L
     ]
     results = xgr.BatchGrammarMatcher.batch_accept_token(matchers, inputs)
     assert results == expecteds
+
+
+def test_batch_rollback():
+    """Batch rollback: 3 matchers with rollback lengths 0, 1, 2; re-accept yields same bitmasks."""
+    vocab = [
+        # fmt: off
+        "<s>", "</s>", "a", "abc", 'b"', '"', ':"', "{", "}", ", ", "6", ":", "\n", " ", '"a":true',
+        # fmt: on
+    ]
+    input_splitted = ["{", '"', "abc", 'b"', ":", "6", ", ", " ", '"a":true', "}"]
+    input_ids = [vocab.index(t) for t in input_splitted]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+
+    matchers = [
+        _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info),
+        _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info),
+        _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info),
+    ]
+    rollback_lengths = [0, 1, 2]
+    input_ids_pairs = [input_ids[i : i + 2] for i in range(0, len(input_ids), 2)]
+
+    for first_token_id, second_token_id in input_ids_pairs:
+        # Per matcher: bitmask_before_first_accept, bitmask_before_second_accept, bitmask_after_second_accept
+        orig_bitmasks = []
+        for matcher in matchers:
+            bitmask_before_first_accept = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+            matcher.fill_next_token_bitmask(bitmask_before_first_accept)
+            orig_bitmasks.append(bitmask_before_first_accept.clone())
+            assert matcher.accept_token(first_token_id)
+            bitmask_before_second_accept = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+            matcher.fill_next_token_bitmask(bitmask_before_second_accept)
+            orig_bitmasks.append(bitmask_before_second_accept.clone())
+            assert matcher.accept_token(second_token_id)
+            bitmask_after_second_accept = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+            matcher.fill_next_token_bitmask(bitmask_after_second_accept)
+            orig_bitmasks.append(bitmask_after_second_accept.clone())
+
+        xgr.BatchGrammarMatcher.batch_rollback(matchers, rollback_lengths)
+
+        for matcher_index, matcher in enumerate(matchers):
+            num_rollback = rollback_lengths[matcher_index]
+            base = matcher_index * 3
+            if num_rollback == 0:
+                bitmask_after_rollback = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+                matcher.fill_next_token_bitmask(bitmask_after_rollback)
+                torch.testing.assert_close(orig_bitmasks[base + 2], bitmask_after_rollback)
+            elif num_rollback == 1:
+                bitmask_after_rollback = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+                matcher.fill_next_token_bitmask(bitmask_after_rollback)
+                torch.testing.assert_close(orig_bitmasks[base + 1], bitmask_after_rollback)
+                assert matcher.accept_token(second_token_id)
+                bitmask_after_reaccept = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+                matcher.fill_next_token_bitmask(bitmask_after_reaccept)
+                torch.testing.assert_close(orig_bitmasks[base + 2], bitmask_after_reaccept)
+            else:
+                assert num_rollback == 2
+                bitmask_after_rollback = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+                matcher.fill_next_token_bitmask(bitmask_after_rollback)
+                torch.testing.assert_close(orig_bitmasks[base + 0], bitmask_after_rollback)
+                assert matcher.accept_token(first_token_id)
+                bitmask_after_first_reaccept = xgr.allocate_token_bitmask(
+                    1, tokenizer_info.vocab_size
+                )
+                matcher.fill_next_token_bitmask(bitmask_after_first_reaccept)
+                torch.testing.assert_close(orig_bitmasks[base + 1], bitmask_after_first_reaccept)
+                assert matcher.accept_token(second_token_id)
+                bitmask_after_second_reaccept = xgr.allocate_token_bitmask(
+                    1, tokenizer_info.vocab_size
+                )
+                matcher.fill_next_token_bitmask(bitmask_after_second_reaccept)
+                torch.testing.assert_close(orig_bitmasks[base + 2], bitmask_after_second_reaccept)
+
+
+def test_batch_rollback_single_matcher():
+    """Batch rollback with a single matcher (edge case)."""
+    vocab = ["<s>", "</s>", "a", "b"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" "b"')
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    assert matcher.accept_token(2) and matcher.accept_token(3)
+    xgr.BatchGrammarMatcher.batch_rollback([matcher], [2])
+    next_token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(next_token_bitmask)
+    accepted_token_ids = set(range(len(vocab))) - set(
+        _get_masked_tokens_from_bitmask(next_token_bitmask, len(vocab))
+    )
+    assert accepted_token_ids == {2}  # Only "a" allowed again
+    assert matcher.accept_token(2) and matcher.accept_token(3)
+
+
+def test_batch_rollback_zero_and_mixed():
+    """Rollback 0 for some matchers and non-zero for others."""
+    vocab = ["<s>", "</s>", "a", "b", "c"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" "b"')
+    matcher_rolled_back = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    matcher_unchanged = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    # matcher_rolled_back: accept "a","b"; matcher_unchanged: accept "a" only
+    assert matcher_rolled_back.accept_token(2) and matcher_rolled_back.accept_token(3)
+    assert matcher_unchanged.accept_token(2)
+    xgr.BatchGrammarMatcher.batch_rollback([matcher_rolled_back, matcher_unchanged], [1, 0])
+    # matcher_rolled_back rolled back 1 -> only "a" accepted; matcher_unchanged (0 rollback) -> still after "a". Both allow "b"
+    bitmask_rolled_back = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    bitmask_unchanged = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher_rolled_back.fill_next_token_bitmask(bitmask_rolled_back)
+    matcher_unchanged.fill_next_token_bitmask(bitmask_unchanged)
+    accepted_token_ids_rolled_back = set(range(len(vocab))) - set(
+        _get_masked_tokens_from_bitmask(bitmask_rolled_back, len(vocab))
+    )
+    accepted_token_ids_unchanged = set(range(len(vocab))) - set(
+        _get_masked_tokens_from_bitmask(bitmask_unchanged, len(vocab))
+    )
+    assert 3 in accepted_token_ids_rolled_back and 3 in accepted_token_ids_unchanged
+    assert matcher_rolled_back.accept_token(3) and matcher_unchanged.accept_token(3)
+
+
+def test_batch_rollback_size_mismatch():
+    """batch_rollback raises when len(matchers) != len(num_tokens)."""
+    vocab = ["<s>", "a"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf('root ::= "a"')
+    matchers = [
+        _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info),
+        _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info),
+    ]
+    with pytest.raises(RuntimeError):
+        xgr.BatchGrammarMatcher.batch_rollback(matchers, [1])
+    with pytest.raises(RuntimeError):
+        xgr.BatchGrammarMatcher.batch_rollback(matchers, [1, 1, 1])
+
+
+def test_batch_rollback_empty():
+    """batch_rollback with empty matchers and num_tokens is a no-op."""
+    xgr.BatchGrammarMatcher.batch_rollback([], [])
 
 
 def test_batch_fill_next_token_bitmask():

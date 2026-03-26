@@ -83,6 +83,50 @@ inline void IntsetIntersection(std::vector<int32_t>* lhs, const std::vector<int3
   lhs->erase(it_result, lhs->end());
 }
 
+/*!
+ * \brief Let lhs = lhs - rhs. Both sets must be sorted.
+ * \note In-place, no additional vector allocated, O(n) time.
+ */
+inline void IntsetDifference(std::vector<int32_t>* lhs, const std::vector<int32_t>& rhs) {
+  auto it_lhs = lhs->begin();
+  auto it_rhs = rhs.begin();
+  auto it_result = lhs->begin();
+
+  while (it_lhs != lhs->end() && it_rhs != rhs.end()) {
+    if (*it_lhs < *it_rhs) {
+      *it_result++ = *it_lhs++;
+    } else if (*it_lhs > *it_rhs) {
+      ++it_rhs;
+    } else {
+      ++it_lhs;
+      ++it_rhs;
+    }
+  }
+  while (it_lhs != lhs->end()) {
+    *it_result++ = *it_lhs++;
+  }
+  lhs->erase(it_result, lhs->end());
+}
+
+/*!
+ * \brief Compute result = [0, n) - excluded. excluded must be sorted with values in [0, n).
+ * \note O(n) time.
+ */
+inline void IntsetComplement(
+    std::vector<int32_t>* result, int32_t n, const std::vector<int32_t>& excluded
+) {
+  result->clear();
+  result->reserve(n - static_cast<int32_t>(excluded.size()));
+  auto it = excluded.begin();
+  for (int32_t i = 0; i < n; ++i) {
+    if (it != excluded.end() && *it == i) {
+      ++it;
+    } else {
+      result->push_back(i);
+    }
+  }
+}
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_SUPPORT_INT_SET_H_

@@ -130,8 +130,21 @@ class GrammarMatcher {
    */
   bool IsTerminated() const;
 
+  /*!
+   * \brief Check if the grammar's root rule has been fully matched by the input accepted so far.
+   * Unlike IsTerminated(), this does not require the stop token to have been accepted.
+   * \sa IsTerminated, AcceptToken
+   */
+  bool IsCompleted() const;
+
   /*! \brief Reset the matcher to the initial state. */
   void Reset();
+
+  /*!
+   * \brief Fork the matcher. Returns a new GrammarMatcher with a deep copy of all state except
+   * compiled_grammar and tokenizer_info, which are shared with this matcher.
+   */
+  GrammarMatcher Fork() const;
 
   /*! \brief Get the maximum number of rollback tokens allowed. */
   int GetMaxRollbackTokens() const;
@@ -199,6 +212,15 @@ class BatchGrammarMatcher {
       std::vector<GrammarMatcher>* matchers,
       const std::vector<int32_t>& token_ids,
       bool debug_print = false
+  );
+
+  /*!
+   * \brief A batched version of Rollback for better efficiency.
+   * \param matchers The array of GrammarMatcher objects.
+   * \param num_tokens The array of the number of tokens to rollback for each matcher.
+   */
+  static void BatchRollback(
+      std::vector<GrammarMatcher>* matchers, const std::vector<int>& num_tokens
   );
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(BatchGrammarMatcher);

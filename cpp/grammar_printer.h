@@ -62,6 +62,12 @@ class GrammarPrinter {
   std::string PrintTagDispatch(const GrammarExpr& grammar_expr);
   /*! \brief Print a GrammarExpr for repeat. */
   std::string PrintRepeat(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for token. */
+  std::string PrintToken(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for exclude token. */
+  std::string PrintExcludeToken(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for token tag dispatch. */
+  std::string PrintTokenTagDispatch(const GrammarExpr& grammar_expr);
   /*! \brief Print a string. */
   std::string PrintString(const std::string& str);
   /*! \brief Print a boolean. */

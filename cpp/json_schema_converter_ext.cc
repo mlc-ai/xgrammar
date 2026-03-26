@@ -60,8 +60,6 @@ void XMLToolCallingConverter::AddBasicRules() {
   ebnf_script_creator_.AddRule(
       kXMLString,
       "TagDispatch("
-      "stop_eos=true,"
-      "stop_str=(),"
       "loop_after_dispatch=false,"
       "excludes=(\"" +
           xml_wrapper_.parameter_suffix +
@@ -108,7 +106,7 @@ std::string XMLToolCallingConverter::GetBasicAnyRuleName() const {
 
 std::string XMLToolCallingConverter::NextSeparator(bool is_end) {
   if (nested_object_level_ <= 1) {
-    return "";
+    return GetWhitespacePattern();
   }
   return JSONSchemaConverter::NextSeparator(is_end);
 }
