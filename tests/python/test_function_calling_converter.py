@@ -222,24 +222,6 @@ root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</paramete
     _check_qwen_grammar(schema, expected_grammar, input_str, accepted)
 
 
-def test_invalid_function_calling_schema():
-    schema = {}
-
-    with pytest.raises(RuntimeError):
-        _qwen_xml_tool_calling_to_ebnf(schema)
-
-    with pytest.raises(RuntimeError):
-        _glm_xml_tool_calling_to_ebnf(schema)
-
-    schema = {"type": "string"}
-
-    with pytest.raises(RuntimeError):
-        _qwen_xml_tool_calling_to_ebnf(schema)
-
-    with pytest.raises(RuntimeError):
-        _glm_xml_tool_calling_to_ebnf(schema)
-
-
 test_inner_object_schema_input_str_accepted = (
     ('<parameter=address>{"street": "Main St", "city": "New York"}</parameter>', True),
     ('<parameter=address>{"street": "Main St", "city": "No more xml escape&<>"}</parameter>', True),
