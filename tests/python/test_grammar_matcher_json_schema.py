@@ -954,5 +954,114 @@ def test_rule_level_cache_cross_grammar():
     assert rejected_sizes[-1] == rejected_b[-1]
 
 
+def test_pattern_properties_with_properties():
+    # Regression test for https://github.com/mlc-ai/xgrammar/issues/487
+    # When both `properties` and `patternProperties` are defined,
+    # keys from `properties` should still be accepted.
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "grade": {"type": "string"}},
+        "required": ["name", "grade"],
+        "patternProperties": {"^grade$": {"type": "string"}},
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"name": "John Doe", "grade": "B"}')
+    assert not _is_grammar_accept_string(grammar, '{"grade": "B"}')
+    assert not _is_grammar_accept_string(grammar, '{"name": "John Doe", "grade": "B", "extra":"x"}')
+
+
+def test_multiple_pattern_properties():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+        "patternProperties": {"^str_.*$": {"type": "string"}, "^num_.*$": {"type": "number"}},
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"name": "John", "str_foo": "hello"}')
+    assert _is_grammar_accept_string(grammar, '{"name": "John", "num_score": 95.5}')
+    assert not _is_grammar_accept_string(grammar, '{"str_foo": "hello"}')
+    # TODO: When multiple patternProperties are present, each pattern's value schema should
+    # only apply to keys matching that specific pattern. Currently, value schemas are unioned
+    # across all patterns, so "oops" (a string) is accepted for "num_score" even though
+    # ^num_.*$ should only allow numbers. This requires per-pattern key-value enforcement.
+    # assert not _is_grammar_accept_string(grammar, '{"name": "John", "num_score": "oops"}')
+
+
+def test_pattern_properties_extra_key():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+        "patternProperties": {"^extra_.*$": {"type": "integer"}},
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"name": "John", "extra_foo": 42}')
+    assert _is_grammar_accept_string(grammar, '{"name": "John"}')
+    assert not _is_grammar_accept_string(grammar, '{"name": "John", "extra_foo": "not an int"}')
+    assert not _is_grammar_accept_string(grammar, '{"extra_foo": 42}')
+    assert not _is_grammar_accept_string(grammar, '{"name": "John", "other": 42}')
+
+
+def test_pattern_properties_value_type():
+    schema = {
+        "type": "object",
+        "properties": {"grade": {"type": "string"}},
+        "required": ["grade"],
+        "patternProperties": {"^grade$": {"type": "string"}},
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"grade": "B"}')
+    assert not _is_grammar_accept_string(grammar, '{"grade": 123}')
+
+
+def test_property_names_does_not_accept_trailing_content():
+    # Regression test for https://github.com/mlc-ai/xgrammar/issues/487
+    # When `propertyNames` uses a broad pattern like "^.*$",
+    # content after the closing brace should not be accepted.
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "grade": {"type": "string"}},
+        "required": ["name", "grade"],
+        "propertyNames": {"pattern": "^.*$"},
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert not _is_grammar_accept_string(
+        grammar, '{"name": "John Doe", "grade": "B"} and spurious llm output'
+    )
+    assert not _is_grammar_accept_string(grammar, '{"name": "John Doe"}')
+    assert not _is_grammar_accept_string(grammar, '{"name": "John Doe", "grade": 123}')
+
+
+def test_property_names_with_properties():
+    # Regression test for https://github.com/mlc-ai/xgrammar/issues/487
+    # When both `properties` and `propertyNames` are defined, `required` must still be enforced
+    # and extra keys must match the `propertyNames` pattern.
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "grade": {"type": "string"}},
+        "required": ["name", "grade"],
+        "propertyNames": {"pattern": "^[a-z]+$"},
+    }
+    grammar = xgr.Grammar.from_json_schema(schema, strict_mode=False)
+    assert _is_grammar_accept_string(grammar, '{"name": "John", "grade": "B"}')
+    assert not _is_grammar_accept_string(grammar, '{"name": "John"}')
+    assert _is_grammar_accept_string(grammar, '{"name": "John", "grade": "B", "note": "ok"}')
+    assert not _is_grammar_accept_string(grammar, '{"name": "John", "grade": "B", "UPPER": "x"}')
+
+
+def test_pattern_properties_with_additional_properties_false():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+        "patternProperties": {"^extra_.*$": {"type": "integer"}},
+        "additionalProperties": False,
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"name": "John", "extra_foo": 42}')
+    assert not _is_grammar_accept_string(grammar, '{"name": "John", "other": "anything"}')
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

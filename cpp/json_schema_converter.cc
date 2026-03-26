@@ -1570,8 +1570,11 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     const std::string& rule_name,
     const std::string& additional_suffix,
     int min_properties,
-    int max_properties
+    int max_properties,
+    const std::string& additional_key_pattern
 ) {
+  const std::string& key_pat =
+      additional_key_pattern.empty() ? GetKeyPattern() : additional_key_pattern;
   if (max_properties == 0) {
     return "";
   }
@@ -1600,7 +1603,7 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     if (allow_additional) {
       std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
       additional_prop_pattern =
-          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+          FormatOtherProperty(key_pat, add_value_rule, rule_name, additional_suffix);
       std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
       std::string last_rule_name =
           rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1);
@@ -1656,7 +1659,7 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     if (allow_additional) {
       std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
       additional_prop_pattern =
-          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+          FormatOtherProperty(key_pat, add_value_rule, rule_name, additional_suffix);
     }
 
     // Get the range of matched properties for each rule
@@ -1767,7 +1770,7 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     if (allow_additional) {
       std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
       additional_prop_pattern =
-          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+          FormatOtherProperty(key_pat, add_value_rule, rule_name, additional_suffix);
     }
 
     // Get the range of matched properties for each rule
@@ -1910,8 +1913,71 @@ std::string JSONSchemaConverter::GenerateObject(
 
   indent_manager_.StartIndent();
 
-  if (!spec.pattern_properties.empty() || spec.property_names) {
-    // Case 1: patternProperties or propertyNames defined
+  if (!spec.pattern_properties.empty() && !spec.properties.empty()) {
+    // Case 1a: both patternProperties and properties defined.
+    // Treat each patternProperty as an additional property option alongside the fixed properties,
+    // while still respecting additionalProperties / unevaluatedProperties settings for keys that
+    // match neither fixed properties nor any pattern.
+    std::vector<SchemaSpecPtr> additional_schemas;
+    for (const auto& pp : spec.pattern_properties) {
+      additional_schemas.push_back(pp.schema);
+    }
+    if (additional_property) {
+      additional_schemas.push_back(additional_property);
+    }
+    SchemaSpecPtr combined_additional;
+    if (additional_schemas.size() == 1) {
+      combined_additional = additional_schemas[0];
+    } else {
+      combined_additional = SchemaSpec::Make(AnyOfSpec{additional_schemas}, "", "pattern_any");
+    }
+
+    // When no explicit additionalProperties is set, restrict extra keys to those matching at
+    // least one patternProperties pattern. If additionalProperties is set (any key allowed),
+    // fall back to GetKeyPattern() (empty string = default).
+    std::string pattern_key;
+    if (!additional_property) {
+      if (spec.pattern_properties.size() == 1) {
+        pattern_key =
+            "\"\\\"\"" + RegexToEBNF(spec.pattern_properties[0].pattern, false) + "\"\\\"\"";
+      } else {
+        std::string inner;
+        for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
+          if (i != 0) inner += " | ";
+          inner += RegexToEBNF(spec.pattern_properties[i].pattern, false);
+        }
+        pattern_key = "\"\\\"\" (" + inner + ") \"\\\"\"";
+      }
+    }
+
+    result += " " + GetPartialRuleForProperties(
+                        spec.properties,
+                        spec.required,
+                        combined_additional,
+                        rule_name,
+                        "pattern",
+                        spec.min_properties,
+                        spec.max_properties,
+                        pattern_key
+                    );
+    could_be_empty = spec.required.empty() && spec.min_properties == 0;
+  } else if (!spec.properties.empty() && spec.property_names) {
+    // Case 1c: properties and propertyNames defined together.
+    // propertyNames restricts the names of any extra keys beyond the fixed properties.
+    std::string pn_key_pattern = CreateRule(spec.property_names, rule_name + "_name");
+    result += " " + GetPartialRuleForProperties(
+                        spec.properties,
+                        spec.required,
+                        additional_property,
+                        rule_name,
+                        additional_suffix.empty() ? "propnames" : additional_suffix,
+                        spec.min_properties,
+                        spec.max_properties,
+                        pn_key_pattern
+                    );
+    could_be_empty = spec.required.empty() && spec.min_properties == 0;
+  } else if (spec.properties.empty() && (!spec.pattern_properties.empty() || spec.property_names)) {
+    // Case 1b: patternProperties or propertyNames defined without explicit properties
     std::string beg_seq = NextSeparator();
 
     std::string property_rule_body = "(";

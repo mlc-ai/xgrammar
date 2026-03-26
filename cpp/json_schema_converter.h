@@ -359,7 +359,8 @@ class JSONSchemaConverter {
       const std::string& rule_name,
       const std::string& additional_suffix,
       int min_properties,
-      int max_properties
+      int max_properties,
+      const std::string& additional_key_pattern = ""
   );
 
   // ==================== Protected members ====================
