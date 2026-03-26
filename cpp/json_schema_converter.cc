@@ -3001,6 +3001,17 @@ std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema) {
     XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
   }
   return JSONSchemaToEBNF(
+      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kDeepSeekXML
+  );
+}
+
+std::string GlmXMLToolCallingToEBNF(const std::string& schema) {
+  picojson::value json_value;
+  std::string err = picojson::parse(json_value, schema);
+  if (!err.empty()) {
+    XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
+  }
+  return JSONSchemaToEBNF(
       json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kGlmXML
   );
 }
