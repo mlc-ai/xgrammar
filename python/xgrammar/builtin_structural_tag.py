@@ -273,9 +273,7 @@ def _get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     if force_empty_reasoning:
         prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
     else:
-        prefix_tag = TagFormat(
-            begin="<think>", content=AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS), end="</think>"
-        )
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -334,9 +332,7 @@ def _get_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     if force_empty_reasoning:
         prefix_tag = ConstStringFormat(value="<think></think>")
     else:
-        prefix_tag = TagFormat(
-            begin="<think>", content=AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS), end="</think>"
-        )
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -394,9 +390,7 @@ def _get_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     if force_empty_reasoning:
         prefix_tag = ConstStringFormat(value="</think>")
     else:
-        prefix_tag = TagFormat(
-            begin="", content=AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS), end="</think>"
-        )
+        prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end="</think>")
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -449,9 +443,7 @@ def _get_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     if force_empty_reasoning:
         prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
     else:
-        prefix_tag = TagFormat(
-            begin="<think>", content=AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS), end="</think>"
-        )
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -503,9 +495,7 @@ def _get_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     if force_empty_reasoning:
         prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
     else:
-        prefix_tag = TagFormat(
-            begin="<think>", content=AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS), end="</think>"
-        )
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
 
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
@@ -583,9 +573,7 @@ def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         )
 
     final_tag = TagFormat(
-        begin="<|channel|>final<|message|>",
-        content=AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS),
-        end="<|end|>",
+        begin="<|channel|>final<|message|>", content=AnyTextFormat(), end="<|end|>"
     )
 
     tags.append(final_tag)
@@ -641,9 +629,7 @@ def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
     if force_empty_reasoning:
         prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
     else:
-        prefix_tag = TagFormat(
-            begin="<think>", content=AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS), end="</think>"
-        )
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
 
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
@@ -697,9 +683,7 @@ def _get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     if force_empty_reasoning:
         prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
     else:
-        prefix_tag = TagFormat(
-            begin="<think>", content=AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS), end="</think>"
-        )
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
 
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
