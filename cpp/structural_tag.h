@@ -323,16 +323,16 @@ struct RepeatFormat {
  */
 struct DispatchFormat {
   static constexpr const char* type = "dispatch";
-  std::vector<std::pair<std::string, std::shared_ptr<Format>>> cases;
+  std::vector<std::pair<std::string, std::shared_ptr<Format>>> rules;
   bool loop = true;
   std::vector<std::string> excludes;
 
   DispatchFormat(
-      std::vector<std::pair<std::string, std::shared_ptr<Format>>> cases,
+      std::vector<std::pair<std::string, std::shared_ptr<Format>>> rules,
       bool loop = true,
       std::vector<std::string> excludes = {}
   )
-      : cases(std::move(cases)), loop(loop), excludes(std::move(excludes)) {}
+      : rules(std::move(rules)), loop(loop), excludes(std::move(excludes)) {}
   picojson::value ToJSON() const;
 };
 
@@ -343,16 +343,16 @@ struct DispatchFormat {
  */
 struct TokenDispatchFormat {
   static constexpr const char* type = "token_dispatch";
-  std::vector<std::pair<std::variant<int32_t, std::string>, std::shared_ptr<Format>>> cases;
+  std::vector<std::pair<std::variant<int32_t, std::string>, std::shared_ptr<Format>>> rules;
   bool loop = true;
   std::vector<std::variant<int32_t, std::string>> exclude_tokens;
 
   TokenDispatchFormat(
-      std::vector<std::pair<std::variant<int32_t, std::string>, std::shared_ptr<Format>>> cases,
+      std::vector<std::pair<std::variant<int32_t, std::string>, std::shared_ptr<Format>>> rules,
       bool loop = true,
       std::vector<std::variant<int32_t, std::string>> exclude_tokens = {}
   )
-      : cases(std::move(cases)), loop(loop), exclude_tokens(std::move(exclude_tokens)) {}
+      : rules(std::move(rules)), loop(loop), exclude_tokens(std::move(exclude_tokens)) {}
   picojson::value ToJSON() const;
 
  private:

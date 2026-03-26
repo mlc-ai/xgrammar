@@ -3895,7 +3895,7 @@ def test_token_triggered_tags_rejects_string_begin():
 
 tag_dispatch_format_stag = {
     "type": "dispatch",
-    "cases": [
+    "rules": [
         ["tag1", {"type": "const_string", "value": "abcd"}],
         ["tag2", {"type": "const_string", "value": "efg"}],
     ],
@@ -3929,7 +3929,7 @@ def test_tag_dispatch_format_simple(instance: str, is_accepted: bool):
 
 tag_dispatch_format_no_loop_stag = {
     "type": "dispatch",
-    "cases": [
+    "rules": [
         ["tag1", {"type": "const_string", "value": "abcd"}],
         ["tag2", {"type": "const_string", "value": "efg"}],
     ],
@@ -3968,7 +3968,7 @@ def test_tag_dispatch_format_no_loop(instance: str, is_accepted: bool):
 
 tag_dispatch_format_with_excludes_stag = {
     "type": "dispatch",
-    "cases": [
+    "rules": [
         ["tag1", {"type": "const_string", "value": "abcd"}],
         ["tag2", {"type": "const_string", "value": "efg"}],
     ],
@@ -4019,7 +4019,7 @@ def test_token_tag_dispatch_format_simple():
     """TokenDispatchFormat: two trigger tokens, each with const_string content."""
     stag_format = {
         "type": "token_dispatch",
-        "cases": [
+        "rules": [
             [10, {"type": "const_string", "value": "A"}],
             [20, {"type": "const_string", "value": "B"}],
         ],
@@ -4043,7 +4043,7 @@ def test_token_tag_dispatch_format_with_excludes():
     """TokenDispatchFormat with exclude_tokens."""
     stag_format = {
         "type": "token_dispatch",
-        "cases": [[10, {"type": "const_string", "value": "C"}]],
+        "rules": [[10, {"type": "const_string", "value": "C"}]],
         "loop": False,
         "exclude_tokens": [50],
     }
@@ -4063,7 +4063,7 @@ def test_token_tag_dispatch_format_looping():
     """TokenDispatchFormat with loop=true."""
     stag_format = {
         "type": "token_dispatch",
-        "cases": [[10, {"type": "const_string", "value": "D"}]],
+        "rules": [[10, {"type": "const_string", "value": "D"}]],
         "loop": True,
     }
     expected_grammar = r"""const_string ::= (("D"))
@@ -4089,7 +4089,7 @@ def test_token_tag_dispatch_need_tokenizer_info():
         "type": "structural_tag",
         "format": {
             "type": "token_dispatch",
-            "cases": [["<|tag|>", {"type": "const_string", "value": "abcd"}]],
+            "rules": [["<|tag|>", {"type": "const_string", "value": "abcd"}]],
         },
     }
     with pytest.raises(Exception, match="Invalid structural tag error"):

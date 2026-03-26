@@ -354,43 +354,63 @@ class RepeatFormat(BaseModel):
 
 
 class DispatchFormat(BaseModel):
-    """A format that maps directly to a TagDispatch grammar.
+    """Matches certain patterns in free-form text.
+    When certain strings are generated, the following content must follow the corresponding format.
+    Certain strings can be excluded from being generated in the free-form part.
 
-    Accepts a list of (trigger string, content format) pairs. In JSON, each pair is a two-element
-    array ``[trigger, content]``. When the output matches a trigger string, generation continues
-    with the corresponding content format. This is a lower-level alternative to
-    ``TriggeredTagsFormat`` when you want to specify exact trigger→rule mapping without tag
-    begin/end structure.
+    The user specifies a list of (pattern, formats). The LLM can generate any free-form text, but
+    when a pattern is matched in the text, the following output must follow the corresponding format.
+    The ``loop`` field controls whether the matching of this structure ends after accepting the first
+    pattern and format. If False, it ends. If true, the matching continues, and this format will
+    continue to allow free-form text and detect the next pattern to be generated.
+    The ``excludes`` field controls the strings that cannot be generated in the free-form text.
+    It can also control the end of the format:
+    ``SequenceFormat(DispatchFormat(..., excludes=""), ConstStringFormat(""))``
+    or
+    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=""), end="")``
+    ends the matching of the format when LLM generates <end>.
     """
 
     type: Literal["dispatch"] = "dispatch"
     """The type of the format."""
-    cases: List[Tuple[str, "Format"]]
-    """List of ``(trigger string, content format)`` pairs."""
+    rules: List[Tuple[str, "Format"]]
+    """List of ``(pattern, content format)`` pairs."""
     loop: bool = True
-    """If true, after handling one dispatch the grammar allows any text until the next trigger."""
+    """If true, after handling one dispatched format, it will continue to allow free-form text
+    and match the next pattern. Otherwise, the matching of this format ends after handling the
+    first dispatched format."""
     excludes: List[str] = []
-    """List of strings that must not appear before a trigger is seen."""
+    """List of strings that must not appear in the free-form text."""
 
 
 class TokenDispatchFormat(BaseModel):
-    """A format that maps directly to a TokenTagDispatch grammar.
+    """Matches certain patterns in free-form text.
+    When certain tokens are generated, the following content must follow the corresponding format.
+    Certain tokens can be excluded from being generated in the free-form part.
 
-    Accepts a list of (trigger token, content format) pairs. In JSON, each pair is a two-element
-    array ``[trigger, content]``. When the model generates the trigger token, generation continues
-    with the corresponding content format. This is a lower-level alternative to
-    ``TokenTriggeredTagsFormat`` when you want exact token→rule mapping without tag begin/end
-    structure.
+    The user specifies a list of (pattern token, formats). The LLM can generate any free-form text, but
+    when a pattern is matched in the text, the following output must follow the corresponding format.
+    The ``loop`` field controls whether the matching of this structure ends after accepting the first
+    pattern and format. If False, it ends. If true, the matching continues, and this format will
+    continue to allow free-form text and detect the next pattern to be generated.
+    The ``excludes`` field controls the strings that cannot be generated in the free-form text.
+    It can also control the end of the format:
+    ``SequenceFormat(DispatchFormat(..., excludes=""), ConstStringFormat(""))``
+    or
+    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=""), end="")``
+    ends the matching of the format when LLM generates <end>.
     """
 
     type: Literal["token_dispatch"] = "token_dispatch"
     """The type of the format."""
-    cases: List[Tuple[Union[int, str], "Format"]]
-    """List of ``(trigger token, content format)`` pairs. Trigger is token ID or token string."""
+    rules: List[Tuple[Union[int, str], "Format"]]
+    """List of ``(pattern token, content format)`` pairs. Pattern is token ID or token string."""
     loop: bool = True
-    """If true, after one dispatch the grammar allows more tokens until the next trigger."""
+    """If true, after one dispatched format, it will continue to allow free-form text
+    and match the next pattern. Otherwise, the matching of this format ends after handling the
+    first dispatched format."""
     exclude_tokens: List[Union[int, str]] = []
-    """Token IDs or strings to exclude before a trigger is seen."""
+    """List of tokens that must not appear in the free-form text."""
 
 
 # ---------- Discriminated Union ----------
