@@ -17,6 +17,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `"harmony"`: OpenAI Harmony Response Format (e.g. gpt-oss)
   - `"deepseek_v3_2"`: DeepSeek-V3.2-style (e.g. DeepSeek-V3.2)
   - `"minimax"`: MiniMax-style (e.g. MiniMax-M2)
+  - `"glm47"`: GLM-style (e.g. GLM-5, GLM-4.7)
 - **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags). Default `True`.
 - **tools** (`List[Dict[str, Any]]`, optional): List of tools; each item is a dict with a `"function"` key, which is a dict with `"name"` and `"parameters"` (`parameters` is a JSON Schema dict). Default `[]`.
 - **builtin_tools** (`List[Dict[str, Any]]`, optional): List of built-in tools (harmony only); same structure as `tools`. Default `[]`.

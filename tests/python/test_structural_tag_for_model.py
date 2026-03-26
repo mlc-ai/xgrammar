@@ -119,6 +119,7 @@ _tools_harmony = make_tools(["comment_tool"])
 _builtin_harmony = make_tools(["analysis_tool"])
 _tools_deepseek_v3_2 = make_tools(["search"])
 _tools_minimax = make_tools(["search"])
+_tools_glm47 = make_tools(["search"])
 
 
 # ---------- Test: unknown format type ----------
@@ -148,6 +149,7 @@ def test_get_builtin_structural_tag_supported_models_all():
         "harmony",
         "deepseek_v3_2",
         "minimax",
+        "glm47",
     }
     assert set(result.keys()) == expected_styles
     for style, models in result.items():
@@ -166,6 +168,7 @@ def test_get_builtin_structural_tag_supported_models_all():
         ("harmony", ["gpt-oss"]),
         ("deepseek_v3_2", ["DeepSeek-V3.2"]),
         ("minimax", ["MiniMax-M2.5"]),
+        ("glm47", ["GLM-5", "GLM-4.7"]),
     ],
 )
 def test_get_structural_tag_supported_models_by_style(style: str, expected_models: List[str]):
@@ -1379,6 +1382,23 @@ root ::= ((sequence))
 def test_get_minimax_structural_tag_instance():
     """get_builtin_structural_tag(minimax) accepts/rejects instance as expected."""
     _run_instance_cases_explicit("minimax", minimax_instance_cases)
+
+
+def test_get_glm47_structural_tag_instance():
+    """get_builtin_structural_tag(glm47) accepts/rejects instance as expected."""
+    stag = get_builtin_structural_tag("glm47", tools=_tools_glm47, reasoning=False)
+    grammar_str = str(xgr.Grammar.from_structural_tag(stag))
+    assert "<tool_call>" in grammar_str
+    assert "<arg_key>" in grammar_str
+    assert "<arg_value>" in grammar_str
+
+    check_stag_with_instance(
+        stag, "<tool_call>search<arg_key>q</arg_key><arg_value>v</arg_value></tool_call>", True
+    )
+    check_stag_with_instance(stag, "<tool_call>search<parameter=q>v</parameter></tool_call>", False)
+    check_stag_with_instance(
+        stag, '<tool_call>search<parameter name="q">v</parameter></tool_call>', False
+    )
 
 
 # ----- qwen_coder
