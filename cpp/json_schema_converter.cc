@@ -1997,6 +1997,9 @@ std::string JSONSchemaConverter::GenerateObject(
     }
   }
 
+  if (result.empty()) {
+    return "\"\"";
+  }
   return result;
 }
 
@@ -2018,6 +2021,9 @@ std::string JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::s
       result += " | ";
     }
     result += "(\"" + JSONStrToPrintableStr(spec.json_values[i]) + "\")";
+  }
+  if (result.empty()) {
+    return "\"\"";
   }
   return result;
 }

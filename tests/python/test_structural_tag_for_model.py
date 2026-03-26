@@ -2022,3 +2022,43 @@ root ::= ((tags_with_separator))
 def test_get_harmony_structural_tag_instance():
     """get_builtin_structural_tag(harmony) accepts/rejects instance as expected."""
     _run_instance_cases_explicit("harmony", harmony_instance_cases)
+
+
+_TOOLS: List[Dict[str, Any]] = [
+    {"function": {"name": "get_time", "parameters": {"type": "object", "properties": {}}}}
+]
+
+
+@pytest.mark.parametrize(
+    "format_type, kwargs",
+    [
+        ("llama", {"tools": _TOOLS}),
+        ("kimi", {"tools": _TOOLS}),
+        ("deepseek_r1", {"tools": _TOOLS}),
+        ("qwen_coder", {"tools": _TOOLS}),
+        ("qwen", {"tools": _TOOLS}),
+        ("deepseek_v3_2", {"tools": _TOOLS}),
+        ("minimax", {"tools": _TOOLS}),
+        (
+            "harmony",
+            {
+                "tools": _TOOLS,
+                "builtin_tools": [
+                    {
+                        "function": {
+                            "name": "builtin_get_time",
+                            "parameters": {"type": "object", "properties": {}},
+                        }
+                    }
+                ],
+            },
+        ),
+    ],
+)
+def test_get_builtin_structural_tag_build_grammar_with_no_parameter_tools(
+    format_type: str, kwargs: Dict[str, Any]
+):
+    """Smoke test: each built-in format can generate StructuralTag and build Grammar."""
+    structural_tag = get_builtin_structural_tag(format_type, **kwargs)
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    assert grammar is not None
