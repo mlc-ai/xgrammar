@@ -2087,9 +2087,6 @@ std::string JSONSchemaConverter::GenerateAnyOf(
     }
     result += CreateRule(spec.options[i], rule_name + "_case_" + std::to_string(i));
   }
-  if (result.empty()) {
-    return "\"\"";
-  }
   return result;
 }
 
@@ -2112,9 +2109,6 @@ std::string JSONSchemaConverter::GenerateTypeArray(
       result += " | ";
     }
     result += CreateRule(spec.type_schemas[i], rule_name + "_type_" + std::to_string(i));
-  }
-  if (result.empty()) {
-    return "\"\"";
   }
   return result;
 }
