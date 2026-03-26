@@ -536,9 +536,7 @@ def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         else:
             analysis_tag = TagFormat(
-                begin="<|channel|>analysis<|message|>",
-                content=AnyTextFormat(excludes=["<|end|>"]),
-                end="<|end|>",
+                begin="<|channel|>analysis<|message|>", content=AnyTextFormat(), end="<|end|>"
             )
         tags.append(analysis_tag)
 
