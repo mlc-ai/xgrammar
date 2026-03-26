@@ -692,7 +692,15 @@ window.runMermaid = runMermaid;</script>
 
 
 <span class="n">BuiltinSupportedModels</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span>
-    <span class="s2">&quot;llama&quot;</span><span class="p">,</span> <span class="s2">&quot;qwen&quot;</span><span class="p">,</span> <span class="s2">&quot;qwen_coder&quot;</span><span class="p">,</span> <span class="s2">&quot;kimi&quot;</span><span class="p">,</span> <span class="s2">&quot;deepseek_r1&quot;</span><span class="p">,</span> <span class="s2">&quot;harmony&quot;</span><span class="p">,</span> <span class="s2">&quot;deepseek_v3_2&quot;</span><span class="p">,</span> <span class="s2">&quot;minimax&quot;</span>
+    <span class="s2">&quot;llama&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;qwen&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;qwen_coder&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;kimi&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;deepseek_r1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;deepseek_v3_2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;minimax&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;glm47&quot;</span><span class="p">,</span>
 <span class="p">]</span>
 
 
@@ -1346,6 +1354,65 @@ window.runMermaid = runMermaid;</script>
 
     <span class="n">sequence_format</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">])</span>
     <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">sequence_format</span><span class="p">)</span>
+
+
+<span class="nd">@_register_builtin_structural_tag</span><span class="p">(</span><span class="s2">&quot;glm47&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;GLM-5&quot;</span><span class="p">,</span> <span class="s2">&quot;GLM-4.7&quot;</span><span class="p">])</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_glm47_structural_tag</span><span class="p">(</span><span class="n">input_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get GLM-4.7/GLM-5 style structural tag format.</span>
+
+<span class="sd">    The GLM tool calling format uses XML-like tags:</span>
+<span class="sd">    &lt;tool_call&gt;function_name</span>
+<span class="sd">    &lt;arg_key&gt;key&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;</span>
+<span class="sd">    &lt;/tool_call&gt;</span>
+
+<span class="sd">    The input_dict should be a dictionary with the following keys:</span>
+<span class="sd">    - &quot;tools&quot;: a list of tools, each tool should have a &quot;function&quot; key, which is a dictionary</span>
+<span class="sd">      containing &quot;name&quot; and &quot;parameters&quot; fields.</span>
+<span class="sd">    - &quot;reasoning&quot;: a boolean indicating whether to enable reasoning mode.</span>
+<span class="sd">    - &quot;force_empty_reasoning&quot;: a boolean; when reasoning is on, if True use empty-thinking,</span>
+<span class="sd">      if False use thinking.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    StructuralTag</span>
+<span class="sd">        A structural tag for GLM function calling format.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">tools</span> <span class="o">=</span> <span class="n">input_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tools&quot;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="n">reasoning</span> <span class="o">=</span> <span class="n">input_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reasoning&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">force_empty_reasoning</span> <span class="o">=</span> <span class="n">input_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;force_empty_reasoning&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+    <span class="n">tags</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s2">&quot;function&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">tool</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+        <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">TagFormat</span><span class="p">(</span>
+                <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&lt;tool_call&gt;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;glm_xml&quot;</span><span class="p">),</span>
+                <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/tool_call&gt;&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
+            <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;&lt;tool_call&gt;&quot;</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">excludes</span><span class="o">=</span><span class="n">_THINK_EXCLUDE_TOKENS</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">_THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">force_empty_reasoning</span><span class="p">:</span>
+        <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="s2">&quot;&lt;think&gt;</span><span class="se">\n\n</span><span class="s2">&lt;/think&gt;&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;think&gt;&quot;</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/think&gt;&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span>
 </pre></div>
 
            </div>
