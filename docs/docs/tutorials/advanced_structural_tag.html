@@ -284,8 +284,20 @@
 </ul>
 </li>
 <li><p><strong>reasoning</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): Whether to enable reasoning mode (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;</span></code>/<code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code> tags). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
-<li><p><strong>tools</strong> (<code class="docutils literal notranslate"><span class="pre">List[Dict[str,</span> <span class="pre">Any]]</span></code>, optional): List of tools; each item is a dict with a <code class="docutils literal notranslate"><span class="pre">&quot;function&quot;</span></code> key, which is a dict with <code class="docutils literal notranslate"><span class="pre">&quot;name&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;parameters&quot;</span></code> (<code class="docutils literal notranslate"><span class="pre">parameters</span></code> is a JSON Schema dict). Default <code class="docutils literal notranslate"><span class="pre">[]</span></code>.</p></li>
-<li><p><strong>builtin_tools</strong> (<code class="docutils literal notranslate"><span class="pre">List[Dict[str,</span> <span class="pre">Any]]</span></code>, optional): List of built-in tools (harmony only); same structure as <code class="docutils literal notranslate"><span class="pre">tools</span></code>. Default <code class="docutils literal notranslate"><span class="pre">[]</span></code>.</p></li>
+<li><p><strong>tools</strong> (<code class="docutils literal notranslate"><span class="pre">List[Dict[str,</span> <span class="pre">Any]]</span></code>, optional): List of tools; each item is a dict with a <code class="docutils literal notranslate"><span class="pre">&quot;function&quot;</span></code> key. The <code class="docutils literal notranslate"><span class="pre">&quot;function&quot;</span></code> dict <strong>must</strong> contain a <code class="docutils literal notranslate"><span class="pre">&quot;name&quot;</span></code> (string), and <strong>may</strong> contain:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;parameters&quot;</span></code>: JSON Schema, which can be:</p>
+<ul>
+<li><p>a <strong>dict</strong> (regular JSON Schema object), for example <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;object&quot;,</span> <span class="pre">&quot;properties&quot;:</span> <span class="pre">{...}}</span></code></p></li>
+<li><p>a <strong>bool</strong>: <code class="docutils literal notranslate"><span class="pre">True</span></code> means “any JSON value is accepted”, <code class="docutils literal notranslate"><span class="pre">False</span></code> means “no value is accepted”.
+If <code class="docutils literal notranslate"><span class="pre">&quot;parameters&quot;</span></code> is missing, the no constraint will be applied.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;strict&quot;</span></code>: <code class="docutils literal notranslate"><span class="pre">bool</span></code>. Controls whether the parameter constraints are applied. When <code class="docutils literal notranslate"><span class="pre">False</span></code>, only the function name will be enforced, but the parameters is unconstrained. Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.
+Default value is <code class="docutils literal notranslate"><span class="pre">[]</span></code>.</p></li>
+</ul>
+</li>
+<li><p><strong>builtin_tools</strong> (<code class="docutils literal notranslate"><span class="pre">List[Dict[str,</span> <span class="pre">Any]]</span></code>, optional): List of built-in tools (used only for <code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code>); each element has the same structure as items in <code class="docutils literal notranslate"><span class="pre">tools</span></code>. Default <code class="docutils literal notranslate"><span class="pre">[]</span></code>.</p></li>
 <li><p><strong>force_empty_reasoning</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): When reasoning is on, whether to force empty thinking content at the beginning. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
 </ul>
 <p>Passing an unsupported <code class="docutils literal notranslate"><span class="pre">model</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
@@ -312,10 +324,24 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_builtin_structural_tag</span><span class="p">(</span>
     <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
-        <span class="p">{</span><span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;user_tool&quot;</span><span class="p">,</span> <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;q&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}}}}},</span>
+        <span class="c1"># User tool in strict mode, with a full JSON Schema</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;user_tool&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;q&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}}},</span>
+            <span class="p">}</span>
+        <span class="p">},</span>
+        <span class="c1"># User tool in non-strict mode: name only, arguments unconstrained (equivalent to parameters=True)</span>
+        <span class="p">{</span><span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;user_tool_untyped&quot;</span><span class="p">,</span> <span class="s2">&quot;strict&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">}},</span>
     <span class="p">],</span>
     <span class="n">builtin_tools</span><span class="o">=</span><span class="p">[</span>
-        <span class="p">{</span><span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;builtin_tool&quot;</span><span class="p">,</span> <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{}}}},</span>
+        <span class="c1"># Built-in tools support the same strict / parameters combinations</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;builtin_tool&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{}},</span>
+            <span class="p">}</span>
+        <span class="p">},</span>
     <span class="p">],</span>
 <span class="p">)</span>
 <span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">)</span>

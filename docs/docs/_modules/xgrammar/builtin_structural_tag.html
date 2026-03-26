@@ -792,20 +792,26 @@ window.runMermaid = runMermaid;</script>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tools</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The &#39;tools&#39; key in the input_dict must be a list.&quot;</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Each item in the &#39;tools&#39; list must be a dictionary.&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="s2">&quot;function&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">tool</span><span class="p">:</span>
             <span class="k">continue</span>
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">function</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;name&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">function</span> <span class="ow">or</span> <span class="s2">&quot;parameters&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">function</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="s2">&quot;Each function in the &#39;tools&#39; list must be a dictionary with &#39;name&#39; and &#39;parameters&#39; keys.&quot;</span>
-            <span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;name&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">function</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Each function in the &#39;tools&#39; list must have &#39;name&#39; key.&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="nb">str</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The &#39;name&#39; key in each tool must be a string.&quot;</span><span class="p">)</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The &#39;parameters&#39; key in each tool must be a dict.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="s2">&quot;strict&quot;</span> <span class="ow">in</span> <span class="n">function</span> <span class="ow">and</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;strict&quot;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="s2">&quot;parameters&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">function</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The &#39;parameters&#39; key in each tool must be a dict or a boolean.&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">bool</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="p">(</span><span class="s2">&quot;strict&quot;</span> <span class="ow">in</span> <span class="n">function</span> <span class="ow">and</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;strict&quot;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="s2">&quot;parameters&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">function</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_register_builtin_structural_tag</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">supported_models</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
@@ -919,7 +925,7 @@ window.runMermaid = runMermaid;</script>
             <span class="k">continue</span>
 
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
@@ -972,7 +978,7 @@ window.runMermaid = runMermaid;</script>
             <span class="k">continue</span>
 
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
@@ -1034,7 +1040,7 @@ window.runMermaid = runMermaid;</script>
             <span class="k">continue</span>
 
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
@@ -1089,7 +1095,7 @@ window.runMermaid = runMermaid;</script>
             <span class="k">continue</span>
 
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
@@ -1142,7 +1148,7 @@ window.runMermaid = runMermaid;</script>
             <span class="k">continue</span>
 
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
@@ -1214,7 +1220,7 @@ window.runMermaid = runMermaid;</script>
             <span class="k">continue</span>
 
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
@@ -1229,7 +1235,7 @@ window.runMermaid = runMermaid;</script>
             <span class="k">continue</span>
 
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
@@ -1260,7 +1266,7 @@ window.runMermaid = runMermaid;</script>
             <span class="k">continue</span>
 
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
@@ -1314,7 +1320,7 @@ window.runMermaid = runMermaid;</script>
             <span class="k">continue</span>
 
         <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">TagFormat</span><span class="p">(</span>
