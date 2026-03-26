@@ -594,6 +594,51 @@ The format field requires a format object. We provide several basic format objec
 
     `trigger_tokens` and `exclude_tokens` elements can be integers or strings. `at_least_one` and `stop_after_first` have the same semantics as in `triggered_tags`.
 
+19. `dispatch`
+
+    Accepts any string except the excluded string. But when any of the case strings is generated, the following format must follow the corresponding format. When the loop is false, after generating the format, we reach the end of the format. Otherwise, it will continue to allow generating any string and match the next case.
+
+    **`rules`** (required): Non-empty array of 2-element JSON arrays. Each entry is ``[pattern, content_format]``: the pattern is a string, followed by a format object for the content after that pattern.
+
+    **`loop`** (optional, default `true`): If true, after handling one dispatched format, it will continue to allow free-form text and match the next pattern. Otherwise, the matching of this format ends after handling the first dispatched format.
+
+    **`exclude_tokens`** (optional, default `[]`): List of strings that must not appear in the free-form text.
+
+    Corresponds to an [Aho-Corasick automaton](https://en.wikipedia.org/wiki/Aho%E2%80%93Corasick_algorithm) under the hood to allow efficient and accurate pattern matching in a free-formed string.
+
+    Common usage: Put the end string inside the exclude, and put another end string after it. E.g.
+    ```json
+    format: sequence
+    sequence: [
+    DispatchFormat(cases=..., excludes=["abc"])
+    ConstStringFormat("abc")
+    ]
+    ```
+
+    This means when the LLM generates abc, the matching of the first DispatchFormat ends and gets into the following ConstStringFormat. You can also use the "end" part of the TagFormat to achieve the same goal.
+
+20. `token_dispatch`
+
+    Similar to `dispatch` type, while the patterns are token IDs or token strings.
+
+    **`rules`** (required): Non-empty array of 2-element JSON arrays. Each entry is ``[pattern_token, content_format]``: the pattern is a token ID (integer) or token string (resolved via `tokenizer_info`), followed by a format object for the content after that token.
+
+    **`loop`** (optional, default `true`): If true, after one dispatched format, it will continue to allow free-form text and match the next pattern. Otherwise, the matching of this format ends after handling the first dispatched format.
+
+    **`exclude_tokens`** (optional, default `[]`): List of Tokens that must not appear in the free-form text.
+
+    ```json
+    {
+        "type": "token_dispatch",
+        "cases": [
+            [100, {"type": "const_string", "value": "x"}],
+            ["<|tool|>", {"type": "json_schema", "json_schema": {...}}]
+        ],
+        "loop": true,
+        "exclude_tokens": ["</s>"]
+    }
+    ```
+
 ## Examples
 
 ### Example 1: Tool calling

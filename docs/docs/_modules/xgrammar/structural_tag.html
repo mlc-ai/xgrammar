@@ -676,7 +676,7 @@ window.runMermaid = runMermaid;</script>
 <span></span><span class="sd">&quot;&quot;&quot;Defines all structural tag formats.&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="k">try</span><span class="p">:</span>
     <span class="c1"># Python 3.9+</span>
@@ -1028,6 +1028,66 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that is repeated.&quot;&quot;&quot;</span>
 
 
+<span class="k">class</span><span class="w"> </span><span class="nc">DispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Matches certain patterns in free-form text.</span>
+<span class="sd">    When certain strings are generated, the following content must follow the corresponding format.</span>
+<span class="sd">    Certain strings can be excluded from being generated in the free-form part.</span>
+
+<span class="sd">    The user specifies a list of (pattern, formats). The LLM can generate any free-form text, but</span>
+<span class="sd">    when a pattern is matched in the text, the following output must follow the corresponding format.</span>
+<span class="sd">    The ``loop`` field controls whether the matching of this structure ends after accepting the first</span>
+<span class="sd">    pattern and format. If False, it ends. If true, the matching continues, and this format will</span>
+<span class="sd">    continue to allow free-form text and detect the next pattern to be generated.</span>
+<span class="sd">    The ``excludes`` field controls the strings that cannot be generated in the free-form text.</span>
+<span class="sd">    It can also control the end of the format:</span>
+<span class="sd">    ``SequenceFormat(DispatchFormat(..., excludes=&quot;&quot;), ConstStringFormat(&quot;&quot;))``</span>
+<span class="sd">    or</span>
+<span class="sd">    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=&quot;&quot;), end=&quot;&quot;)``</span>
+<span class="sd">    ends the matching of the format when LLM generates &lt;end&gt;.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;dispatch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;dispatch&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;Format&quot;</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of ``(pattern, content format)`` pairs.&quot;&quot;&quot;</span>
+    <span class="n">loop</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If true, after handling one dispatched format, it will continue to allow free-form text</span>
+<span class="sd">    and match the next pattern. Otherwise, the matching of this format ends after handling the</span>
+<span class="sd">    first dispatched format.&quot;&quot;&quot;</span>
+    <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that must not appear in the free-form text.&quot;&quot;&quot;</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TokenDispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Matches certain patterns in free-form text.</span>
+<span class="sd">    When certain tokens are generated, the following content must follow the corresponding format.</span>
+<span class="sd">    Certain tokens can be excluded from being generated in the free-form part.</span>
+
+<span class="sd">    The user specifies a list of (pattern token, formats). The LLM can generate any free-form text, but</span>
+<span class="sd">    when a pattern is matched in the text, the following output must follow the corresponding format.</span>
+<span class="sd">    The ``loop`` field controls whether the matching of this structure ends after accepting the first</span>
+<span class="sd">    pattern and format. If False, it ends. If true, the matching continues, and this format will</span>
+<span class="sd">    continue to allow free-form text and detect the next pattern to be generated.</span>
+<span class="sd">    The ``excludes`` field controls the strings that cannot be generated in the free-form text.</span>
+<span class="sd">    It can also control the end of the format:</span>
+<span class="sd">    ``SequenceFormat(DispatchFormat(..., excludes=&quot;&quot;), ConstStringFormat(&quot;&quot;))``</span>
+<span class="sd">    or</span>
+<span class="sd">    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=&quot;&quot;), end=&quot;&quot;)``</span>
+<span class="sd">    ends the matching of the format when LLM generates &lt;end&gt;.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token_dispatch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token_dispatch&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="s2">&quot;Format&quot;</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of ``(pattern token, content format)`` pairs. Pattern is token ID or token string.&quot;&quot;&quot;</span>
+    <span class="n">loop</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If true, after one dispatched format, it will continue to allow free-form text</span>
+<span class="sd">    and match the next pattern. Otherwise, the matching of this format ends after handling the</span>
+<span class="sd">    first dispatched format.&quot;&quot;&quot;</span>
+    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of tokens that must not appear in the free-form text.&quot;&quot;&quot;</span>
+
+
 <span class="c1"># ---------- Discriminated Union ----------</span>
 
 
@@ -1052,6 +1112,8 @@ window.runMermaid = runMermaid;</script>
         <span class="n">ExcludeTokenFormat</span><span class="p">,</span>
         <span class="n">AnyTokensFormat</span><span class="p">,</span>
         <span class="n">RepeatFormat</span><span class="p">,</span>
+        <span class="n">DispatchFormat</span><span class="p">,</span>
+        <span class="n">TokenDispatchFormat</span><span class="p">,</span>
     <span class="p">],</span>
     <span class="n">Field</span><span class="p">(</span><span class="n">discriminator</span><span class="o">=</span><span class="s2">&quot;type&quot;</span><span class="p">),</span>
 <span class="p">]</span>
@@ -1069,6 +1131,8 @@ window.runMermaid = runMermaid;</script>
     <span class="n">PlusFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">StarFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
     <span class="n">RepeatFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">DispatchFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TokenDispatchFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
 <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;update_forward_refs&quot;</span><span class="p">):</span>
     <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">TagFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
@@ -1079,6 +1143,8 @@ window.runMermaid = runMermaid;</script>
     <span class="n">PlusFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">StarFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
     <span class="n">RepeatFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">DispatchFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TokenDispatchFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unsupported pydantic version&quot;</span><span class="p">)</span>
 

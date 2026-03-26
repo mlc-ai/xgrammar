@@ -761,6 +761,39 @@ generation will stop.</p>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">trigger_tokens</span></code> and <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code> elements can be integers or strings. <code class="docutils literal notranslate"><span class="pre">at_least_one</span></code> and <code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> have the same semantics as in <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>.</p>
 </li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dispatch</span></code></p>
+<p>Accepts any string except the excluded string. But when any of the case strings is generated, the following format must follow the corresponding format. When the loop is false, after generating the format, we reach the end of the format. Otherwise, it will continue to allow generating any string and match the next case.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">rules</span></code></strong> (required): Non-empty array of 2-element JSON arrays. Each entry is <code class="docutils literal notranslate"><span class="pre">[pattern,</span> <span class="pre">content_format]</span></code>: the pattern is a string, followed by a format object for the content after that pattern.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">loop</span></code></strong> (optional, default <code class="docutils literal notranslate"><span class="pre">true</span></code>): If true, after handling one dispatched format, it will continue to allow free-form text and match the next pattern. Otherwise, the matching of this format ends after handling the first dispatched format.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code></strong> (optional, default <code class="docutils literal notranslate"><span class="pre">[]</span></code>): List of strings that must not appear in the free-form text.</p>
+<p>Corresponds to an <a class="reference external" href="https://en.wikipedia.org/wiki/Aho%E2%80%93Corasick_algorithm">Aho-Corasick automaton</a> under the hood to allow efficient and accurate pattern matching in a free-formed string.</p>
+<p>Common usage: Put the end string inside the exclude, and put another end string after it. E.g.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>format: sequence
+sequence: [
+DispatchFormat(cases=..., excludes=[&quot;abc&quot;])
+ConstStringFormat(&quot;abc&quot;)
+]
+</pre></div>
+</div>
+<p>This means when the LLM generates abc, the matching of the first DispatchFormat ends and gets into the following ConstStringFormat. You can also use the “end” part of the TagFormat to achieve the same goal.</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">token_dispatch</span></code></p>
+<p>Similar to <code class="docutils literal notranslate"><span class="pre">dispatch</span></code> type, while the patterns are token IDs or token strings.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">rules</span></code></strong> (required): Non-empty array of 2-element JSON arrays. Each entry is <code class="docutils literal notranslate"><span class="pre">[pattern_token,</span> <span class="pre">content_format]</span></code>: the pattern is a token ID (integer) or token string (resolved via <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>), followed by a format object for the content after that token.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">loop</span></code></strong> (optional, default <code class="docutils literal notranslate"><span class="pre">true</span></code>): If true, after one dispatched format, it will continue to allow free-form text and match the next pattern. Otherwise, the matching of this format ends after handling the first dispatched format.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code></strong> (optional, default <code class="docutils literal notranslate"><span class="pre">[]</span></code>): List of Tokens that must not appear in the free-form text.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;token_dispatch&quot;,
+    &quot;cases&quot;: [
+        [100, {&quot;type&quot;: &quot;const_string&quot;, &quot;value&quot;: &quot;x&quot;}],
+        [&quot;&lt;|tool|&gt;&quot;, {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: {...}}]
+    ],
+    &quot;loop&quot;: true,
+    &quot;exclude_tokens&quot;: [&quot;&lt;/s&gt;&quot;]
+}
+</pre></div>
+</div>
+</li>
 </ol>
 </section>
 <section id="examples">
