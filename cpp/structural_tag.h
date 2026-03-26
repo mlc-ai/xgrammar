@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -45,6 +46,8 @@ struct ExcludeTokenFormat;
 struct AnyTokensFormat;
 struct TokenTriggeredTagsFormat;
 struct RepeatFormat;
+struct DispatchFormat;
+struct TokenDispatchFormat;
 
 using Format = std::variant<
     ConstStringFormat,
@@ -64,7 +67,9 @@ using Format = std::variant<
     ExcludeTokenFormat,
     AnyTokensFormat,
     TokenTriggeredTagsFormat,
-    RepeatFormat>;
+    RepeatFormat,
+    DispatchFormat,
+    TokenDispatchFormat>;
 
 /******************** Basic Formats ********************/
 
@@ -309,6 +314,52 @@ struct RepeatFormat {
   RepeatFormat(int32_t min, int32_t max, std::shared_ptr<Format> content)
       : min(min), max(max), content(std::move(content)) {}
   picojson::value ToJSON() const;
+};
+
+/*!
+ * \brief A format that maps directly to a TagDispatch grammar.
+ * Accepts ``[trigger string, content format]`` pairs in JSON; each content is converted to a rule
+ * and the result is a single TagDispatch(loop, excludes).
+ */
+struct DispatchFormat {
+  static constexpr const char* type = "dispatch";
+  std::vector<std::pair<std::string, std::shared_ptr<Format>>> rules;
+  bool loop = true;
+  std::vector<std::string> excludes;
+
+  DispatchFormat(
+      std::vector<std::pair<std::string, std::shared_ptr<Format>>> rules,
+      bool loop = true,
+      std::vector<std::string> excludes = {}
+  )
+      : rules(std::move(rules)), loop(loop), excludes(std::move(excludes)) {}
+  picojson::value ToJSON() const;
+};
+
+/*!
+ * \brief A format that maps directly to a TokenTagDispatch grammar.
+ * Accepts ``[trigger token, content format]`` pairs in JSON; trigger can be token ID or token
+ * string (resolved via tokenizer_info). Each content is converted to a rule.
+ */
+struct TokenDispatchFormat {
+  static constexpr const char* type = "token_dispatch";
+  std::vector<std::pair<std::variant<int32_t, std::string>, std::shared_ptr<Format>>> rules;
+  bool loop = true;
+  std::vector<std::variant<int32_t, std::string>> exclude_tokens;
+
+  TokenDispatchFormat(
+      std::vector<std::pair<std::variant<int32_t, std::string>, std::shared_ptr<Format>>> rules,
+      bool loop = true,
+      std::vector<std::variant<int32_t, std::string>> exclude_tokens = {}
+  )
+      : rules(std::move(rules)), loop(loop), exclude_tokens(std::move(exclude_tokens)) {}
+  picojson::value ToJSON() const;
+
+ private:
+  std::vector<int32_t> resolved_trigger_token_ids_;
+  std::vector<int32_t> resolved_exclude_token_ids_;
+  friend class StructuralTagTokenResolver;
+  friend class StructuralTagGrammarConverter;
 };
 
 /******************** Top Level ********************/

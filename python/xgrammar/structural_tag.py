@@ -1,7 +1,7 @@
 """Defines all structural tag formats."""
 
 import json
-from typing import Any, Dict, List, Literal, Type, Union
+from typing import Any, Dict, List, Literal, Tuple, Type, Union
 
 try:
     # Python 3.9+
@@ -353,6 +353,66 @@ class RepeatFormat(BaseModel):
     """The format that is repeated."""
 
 
+class DispatchFormat(BaseModel):
+    """Matches certain patterns in free-form text.
+    When certain strings are generated, the following content must follow the corresponding format.
+    Certain strings can be excluded from being generated in the free-form part.
+
+    The user specifies a list of (pattern, formats). The LLM can generate any free-form text, but
+    when a pattern is matched in the text, the following output must follow the corresponding format.
+    The ``loop`` field controls whether the matching of this structure ends after accepting the first
+    pattern and format. If False, it ends. If true, the matching continues, and this format will
+    continue to allow free-form text and detect the next pattern to be generated.
+    The ``excludes`` field controls the strings that cannot be generated in the free-form text.
+    It can also control the end of the format:
+    ``SequenceFormat(DispatchFormat(..., excludes=""), ConstStringFormat(""))``
+    or
+    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=""), end="")``
+    ends the matching of the format when LLM generates <end>.
+    """
+
+    type: Literal["dispatch"] = "dispatch"
+    """The type of the format."""
+    rules: List[Tuple[str, "Format"]]
+    """List of ``(pattern, content format)`` pairs."""
+    loop: bool = True
+    """If true, after handling one dispatched format, it will continue to allow free-form text
+    and match the next pattern. Otherwise, the matching of this format ends after handling the
+    first dispatched format."""
+    excludes: List[str] = []
+    """List of strings that must not appear in the free-form text."""
+
+
+class TokenDispatchFormat(BaseModel):
+    """Matches certain patterns in free-form text.
+    When certain tokens are generated, the following content must follow the corresponding format.
+    Certain tokens can be excluded from being generated in the free-form part.
+
+    The user specifies a list of (pattern token, formats). The LLM can generate any free-form text, but
+    when a pattern is matched in the text, the following output must follow the corresponding format.
+    The ``loop`` field controls whether the matching of this structure ends after accepting the first
+    pattern and format. If False, it ends. If true, the matching continues, and this format will
+    continue to allow free-form text and detect the next pattern to be generated.
+    The ``excludes`` field controls the strings that cannot be generated in the free-form text.
+    It can also control the end of the format:
+    ``SequenceFormat(DispatchFormat(..., excludes=""), ConstStringFormat(""))``
+    or
+    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=""), end="")``
+    ends the matching of the format when LLM generates <end>.
+    """
+
+    type: Literal["token_dispatch"] = "token_dispatch"
+    """The type of the format."""
+    rules: List[Tuple[Union[int, str], "Format"]]
+    """List of ``(pattern token, content format)`` pairs. Pattern is token ID or token string."""
+    loop: bool = True
+    """If true, after one dispatched format, it will continue to allow free-form text
+    and match the next pattern. Otherwise, the matching of this format ends after handling the
+    first dispatched format."""
+    exclude_tokens: List[Union[int, str]] = []
+    """List of tokens that must not appear in the free-form text."""
+
+
 # ---------- Discriminated Union ----------
 
 
@@ -377,6 +437,8 @@ Format = Annotated[
         ExcludeTokenFormat,
         AnyTokensFormat,
         RepeatFormat,
+        DispatchFormat,
+        TokenDispatchFormat,
     ],
     Field(discriminator="type"),
 ]
@@ -394,6 +456,8 @@ if hasattr(BaseModel, "model_rebuild"):
     PlusFormat.model_rebuild()
     StarFormat.model_rebuild()
     RepeatFormat.model_rebuild()
+    DispatchFormat.model_rebuild()
+    TokenDispatchFormat.model_rebuild()
 elif hasattr(BaseModel, "update_forward_refs"):
     SequenceFormat.update_forward_refs()
     TagFormat.update_forward_refs()
@@ -404,6 +468,8 @@ elif hasattr(BaseModel, "update_forward_refs"):
     PlusFormat.update_forward_refs()
     StarFormat.update_forward_refs()
     RepeatFormat.update_forward_refs()
+    DispatchFormat.update_forward_refs()
+    TokenDispatchFormat.update_forward_refs()
 else:
     raise RuntimeError("Unsupported pydantic version")
 
