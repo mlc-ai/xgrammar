@@ -330,7 +330,7 @@ def test_empty():
         pass
 
     ebnf_grammar = basic_json_rules_ebnf_no_space + (
-        r"""root ::= "{" "}"
+        r"""root ::= ("{" "}") | "{" "}"
 """
     )
 
