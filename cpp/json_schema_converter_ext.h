@@ -73,10 +73,11 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::optional<std::string> GetCache(const std::string& key) const override;
 
  private:
-  // Wrapper strings for XML parameter tags (prefix, suffix, closing tag)
+  // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
   struct XMLWrapper {
     std::string key_wrapper_prefix;
     std::string key_wrapper_suffix;
+    std::string value_wrapper_prefix;
     std::string parameter_suffix;
   };
 

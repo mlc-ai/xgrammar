@@ -362,6 +362,12 @@ def _deepseek_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[
     return _core.testing._deepseek_xml_tool_calling_to_ebnf(schema_str)
 
 
+def _glm_xml_tool_calling_to_ebnf(schema: Union[str, Type[BaseModel], Dict[str, Any]]) -> str:
+    """Convert GLM XML tool calling schema to EBNF."""
+    schema_str = _convert_schema_to_str(schema)
+    return _core.testing._glm_xml_tool_calling_to_ebnf(schema_str)
+
+
 def _traverse_draft_tree(
     retrieve_next_token: torch.Tensor,
     retrieve_next_sibling: torch.Tensor,

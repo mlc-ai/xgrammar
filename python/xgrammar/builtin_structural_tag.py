@@ -17,7 +17,15 @@ from .structural_tag import (
 
 
 BuiltinSupportedModels = Literal[
-    "llama", "qwen", "qwen_coder", "kimi", "deepseek_r1", "harmony", "deepseek_v3_2", "minimax"
+    "llama",
+    "qwen",
+    "qwen_coder",
+    "kimi",
+    "deepseek_r1",
+    "harmony",
+    "deepseek_v3_2",
+    "minimax",
+    "glm47",
 ]
 
 
@@ -109,20 +117,26 @@ def _validate_tool_function(tools: Any) -> None:
     if not isinstance(tools, list):
         raise ValueError("The 'tools' key in the input_dict must be a list.")
     for tool in tools:
-        if not isinstance(tool, dict):
-            raise ValueError("Each item in the 'tools' list must be a dictionary.")
         if "function" not in tool:
             continue
         function = tool["function"]
-        if not isinstance(function, dict) or "name" not in function or "parameters" not in function:
-            raise ValueError(
-                "Each function in the 'tools' list must be a dictionary with 'name' and 'parameters' keys."
-            )
+        if "name" not in function:
+            raise ValueError("Each function in the 'tools' list must have 'name' key.")
         if not isinstance(function["name"], str):
             raise ValueError("The 'name' key in each tool must be a string.")
-        parameters = function["parameters"]
-        if not isinstance(parameters, dict):
-            raise ValueError("The 'parameters' key in each tool must be a dict.")
+
+        if ("strict" in function and function["strict"] is False) or ("parameters" not in function):
+            continue
+        else:
+            parameters = function["parameters"]
+            if not (isinstance(parameters, dict) or isinstance(parameters, bool)):
+                raise ValueError("The 'parameters' key in each tool must be a dict or a boolean.")
+
+
+def _get_function_parameters(function: Dict[str, Any]) -> Union[Dict[str, Any], bool]:
+    if ("strict" in function and function["strict"] is False) or ("parameters" not in function):
+        return True
+    return function["parameters"]
 
 
 def _register_builtin_structural_tag(name: str, supported_models: List[str]):
@@ -236,7 +250,7 @@ def _get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-        parameters = function["parameters"]
+        parameters = _get_function_parameters(function)
         name = function["name"]
         tags.append(
             TagFormat(
@@ -289,7 +303,7 @@ def _get_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-        parameters = function["parameters"]
+        parameters = _get_function_parameters(function)
         name = function["name"]
         tags.append(
             TagFormat(
@@ -351,7 +365,7 @@ def _get_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-        parameters = function["parameters"]
+        parameters = _get_function_parameters(function)
         name = function["name"]
         tags.append(
             TagFormat(
@@ -406,7 +420,7 @@ def _get_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-        parameters = function["parameters"]
+        parameters = _get_function_parameters(function)
         name = function["name"]
         tags.append(
             TagFormat(
@@ -459,7 +473,7 @@ def _get_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-        parameters = function["parameters"]
+        parameters = _get_function_parameters(function)
         name = function["name"]
         tags.append(
             TagFormat(
@@ -531,7 +545,7 @@ def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-        parameters = function["parameters"]
+        parameters = _get_function_parameters(function)
         name = function["name"]
         tags.append(
             TagFormat(
@@ -546,7 +560,7 @@ def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-        parameters = function["parameters"]
+        parameters = _get_function_parameters(function)
         name = function["name"]
         tags.append(
             TagFormat(
@@ -577,7 +591,7 @@ def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
             continue
 
         function = tool["function"]
-        parameters = function["parameters"]
+        parameters = _get_function_parameters(function)
         name = function["name"]
         tags.append(
             TagFormat(
@@ -631,7 +645,7 @@ def _get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             continue
 
         function = tool["function"]
-        parameters = function["parameters"]
+        parameters = _get_function_parameters(function)
         name = function["name"]
         tags.append(
             TagFormat(
@@ -671,3 +685,62 @@ def _get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
+
+
+@_register_builtin_structural_tag("glm47", ["GLM-5", "GLM-4.7"])
+def _get_glm47_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    """Get GLM-4.7/GLM-5 style structural tag format.
+
+    The GLM tool calling format uses XML-like tags:
+    <tool_call>function_name
+    <arg_key>key</arg_key><arg_value>value</arg_value>
+    </tool_call>
+
+    The input_dict should be a dictionary with the following keys:
+    - "tools": a list of tools, each tool should have a "function" key, which is a dictionary
+      containing "name" and "parameters" fields.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
+    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking,
+      if False use thinking.
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for GLM function calling format.
+    """
+    tools = input_dict.get("tools", [])
+    reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+
+    tags = []
+    for tool in tools:
+        if "function" not in tool:
+            continue
+
+        function = tool["function"]
+        parameters = function["parameters"]
+        name = function["name"]
+        tags.append(
+            TagFormat(
+                begin=f"<tool_call>{name}",
+                content=JSONSchemaFormat(json_schema=parameters, style="glm_xml"),
+                end="</tool_call>",
+            )
+        )
+
+    if len(tags) > 0:
+        suffix_tag = TriggeredTagsFormat(
+            triggers=["<tool_call>"], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
+        )
+    else:
+        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+    else:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))

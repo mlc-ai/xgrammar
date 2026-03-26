@@ -95,7 +95,7 @@ def check_stag_with_instance(
 ):
     stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
     accepted = _is_grammar_accept_string(stag_grammar, instance, debug_print=debug_print)
-    assert accepted == is_accepted
+    assert accepted == is_accepted, str(stag_grammar)
     if PROFILER_ON:
         profiler.profile_stag(structural_tag, instance)
 
@@ -119,6 +119,7 @@ _tools_harmony = make_tools(["comment_tool"])
 _builtin_harmony = make_tools(["analysis_tool"])
 _tools_deepseek_v3_2 = make_tools(["search"])
 _tools_minimax = make_tools(["search"])
+_tools_glm47 = make_tools(["search"])
 
 
 # ---------- Test: unknown format type ----------
@@ -148,6 +149,7 @@ def test_get_builtin_structural_tag_supported_models_all():
         "harmony",
         "deepseek_v3_2",
         "minimax",
+        "glm47",
     }
     assert set(result.keys()) == expected_styles
     for style, models in result.items():
@@ -166,6 +168,7 @@ def test_get_builtin_structural_tag_supported_models_all():
         ("harmony", ["gpt-oss"]),
         ("deepseek_v3_2", ["DeepSeek-V3.2"]),
         ("minimax", ["MiniMax-M2.5"]),
+        ("glm47", ["GLM-5", "GLM-4.7"]),
     ],
 )
 def test_get_structural_tag_supported_models_by_style(style: str, expected_models: List[str]):
@@ -189,17 +192,8 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
     ("llama", {"tools": 123}, "must be a list"),
     ("harmony", {"tools": None}, "must be a list"),
     # tool[function] must have "name" and "parameters"
-    ("llama", {"tools": [{"function": {}}]}, "must be a dictionary with 'name' and 'parameters'"),
-    (
-        "llama",
-        {"tools": [{"function": {"name": "t1"}}]},
-        "must be a dictionary with 'name' and 'parameters'",
-    ),
-    (
-        "llama",
-        {"tools": [{"function": {"parameters": {}}}]},
-        "must be a dictionary with 'name' and 'parameters'",
-    ),
+    ("llama", {"tools": [{"function": {}}]}, "'name' key"),
+    ("llama", {"tools": [{"function": {"parameters": {}}}]}, "'name' key"),
     # name must be string
     (
         "llama",
@@ -210,21 +204,21 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
     (
         "llama",
         {"tools": [{"function": {"name": "t1", "parameters": "not_a_dict"}}]},
-        "'parameters' key in each tool must be a dict",
+        "'parameters' key in each tool must be a dict or a boolean",
     ),
     (
         "llama",
         {"tools": [{"function": {"name": "t1", "parameters": []}}]},
-        "'parameters' key in each tool must be a dict",
+        "'parameters' key in each tool must be a dict or a boolean",
     ),
     # harmony: builtin_tools must be list
     ("harmony", {"tools": [], "builtin_tools": "not_list"}, "must be a list"),
     # harmony: builtin_tool[function] must have name and parameters
-    ("harmony", {"tools": [], "builtin_tools": [{"function": {}}]}, "'name' and 'parameters'"),
+    ("harmony", {"tools": [], "builtin_tools": [{"function": {}}]}, "'name' key"),
     (
         "harmony",
         {"tools": [], "builtin_tools": [{"function": {"name": "b1", "parameters": 1}}]},
-        "must be a dict",
+        "must be a dict or a boolean",
     ),
     ("qwen", {"tools": [], "reasoning": "not_bool"}, "must be a boolean"),
 ]
@@ -244,6 +238,104 @@ def test_get_builtin_structural_tag_input_validation_errors(
         ), f"Expected match for {error_substring!r} in {msg!r}"
     else:
         assert error_substring in msg, f"Expected {error_substring!r} in {msg!r}"
+
+
+@pytest.mark.parametrize(
+    "format_type, instance, is_accepted",
+    [
+        ("llama", '{"name": "t1", "parameters": {"q": "v"}}', True),
+        (
+            "kimi",
+            '123<|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+            True,
+        ),
+        (
+            "kimi",
+            '123<|tool_call_begin|>functions.t2:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+            False,
+        ),
+        (
+            "deepseek_r1",
+            'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>t1<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+            True,
+        ),
+        (
+            "deepseek_r1",
+            'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>t2{"q": "v"}<｜tool▁call▁end｜>',
+            False,
+        ),
+        (
+            "deepseek_v3_2",
+            '<｜DSML｜function_calls>\n<｜DSML｜invoke name="t1">\n<q>{"type": "string"}</q>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+            True,
+        ),
+        (
+            "deepseek_v3_2",
+            '<｜DSML｜function_calls>\n<｜DSML｜invoke name="t2">\n<q>{"type": "string"}</q>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+            False,
+        ),
+        (
+            "minimax",
+            '<minimax:tool_call>\n<invoke name="t1">\n<q>{"type": "string"}</q>\n</invoke>\n</minimax:tool_call>\n',
+            True,
+        ),
+        (
+            "minimax",
+            '<minimax:tool_call>\n<invoke name="t2">\n<q>{"type": "string"}</q>\n</invoke>\n</minimax:tool_call>\n',
+            False,
+        ),
+        (
+            "qwen_coder",
+            '<tool_call>\n<function=t1>\n<q>{"type": "string"}</q>\n</function>\n</tool_call>',
+            True,
+        ),
+        ("qwen", 'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>', True),
+        ("qwen", 'text<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>', False),
+        ("qwen", 'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>', True),
+        ("qwen", 'text<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>', False),
+        (
+            "harmony",
+            '<|channel|>commentary to=t1<|constrain|>json<|message|>{"q": "v"}<|call|>',
+            True,
+        ),
+        (
+            "harmony",
+            '<|channel|>commentary to=t2<|constrain|>json<|message|>{"q": "v"}<|call|>',
+            False,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "tool",
+    [
+        {
+            "function": {
+                "name": "t1",
+                "strict": False,
+                "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
+            }
+        },
+        # strict=False without parameters
+        {"function": {"name": "t1", "strict": False}},
+        # no strict, no parameters
+        {"function": {"name": "t1"}},
+    ],
+)
+def test_get_builtin_structural_tag_strict_or_missing_parameters_instances(
+    format_type: str, instance: str, is_accepted: bool, tool: Dict[str, Any]
+):
+    """strict=False or missing 'parameters' should still accept/reject instances correctly."""
+    if format_type == "harmony":
+        tools = [tool]
+        builtin_tools: List[Dict[str, Any]] = []
+        stag = get_builtin_structural_tag(
+            format_type, tools=tools, builtin_tools=builtin_tools, reasoning=False
+        )
+    else:
+        tools = [tool]
+        stag = get_builtin_structural_tag(format_type, tools=tools, reasoning=False)
+
+    check_stag_with_instance(stag, instance, is_accepted)
 
 
 # ---------- Test: instance positive / negative ----------
@@ -1381,6 +1473,23 @@ def test_get_minimax_structural_tag_instance():
     _run_instance_cases_explicit("minimax", minimax_instance_cases)
 
 
+def test_get_glm47_structural_tag_instance():
+    """get_builtin_structural_tag(glm47) accepts/rejects instance as expected."""
+    stag = get_builtin_structural_tag("glm47", tools=_tools_glm47, reasoning=False)
+    grammar_str = str(xgr.Grammar.from_structural_tag(stag))
+    assert "<tool_call>" in grammar_str
+    assert "<arg_key>" in grammar_str
+    assert "<arg_value>" in grammar_str
+
+    check_stag_with_instance(
+        stag, "<tool_call>search<arg_key>q</arg_key><arg_value>v</arg_value></tool_call>", True
+    )
+    check_stag_with_instance(stag, "<tool_call>search<parameter=q>v</parameter></tool_call>", False)
+    check_stag_with_instance(
+        stag, '<tool_call>search<parameter name="q">v</parameter></tool_call>', False
+    )
+
+
 # ----- qwen_coder
 
 _qwen_coder_instances_with_tools = [
@@ -2002,3 +2111,43 @@ root ::= ((tags_with_separator))
 def test_get_harmony_structural_tag_instance():
     """get_builtin_structural_tag(harmony) accepts/rejects instance as expected."""
     _run_instance_cases_explicit("harmony", harmony_instance_cases)
+
+
+_TOOLS: List[Dict[str, Any]] = [
+    {"function": {"name": "get_time", "parameters": {"type": "object", "properties": {}}}}
+]
+
+
+@pytest.mark.parametrize(
+    "format_type, kwargs",
+    [
+        ("llama", {"tools": _TOOLS}),
+        ("kimi", {"tools": _TOOLS}),
+        ("deepseek_r1", {"tools": _TOOLS}),
+        ("qwen_coder", {"tools": _TOOLS}),
+        ("qwen", {"tools": _TOOLS}),
+        ("deepseek_v3_2", {"tools": _TOOLS}),
+        ("minimax", {"tools": _TOOLS}),
+        (
+            "harmony",
+            {
+                "tools": _TOOLS,
+                "builtin_tools": [
+                    {
+                        "function": {
+                            "name": "builtin_get_time",
+                            "parameters": {"type": "object", "properties": {}},
+                        }
+                    }
+                ],
+            },
+        ),
+    ],
+)
+def test_get_builtin_structural_tag_build_grammar_with_no_parameter_tools(
+    format_type: str, kwargs: Dict[str, Any]
+):
+    """Smoke test: each built-in format can generate StructuralTag and build Grammar."""
+    structural_tag = get_builtin_structural_tag(format_type, **kwargs)
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    assert grammar is not None

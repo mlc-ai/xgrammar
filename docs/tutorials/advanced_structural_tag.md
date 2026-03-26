@@ -17,9 +17,16 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `"harmony"`: OpenAI Harmony Response Format (e.g. gpt-oss)
   - `"deepseek_v3_2"`: DeepSeek-V3.2-style (e.g. DeepSeek-V3.2)
   - `"minimax"`: MiniMax-style (e.g. MiniMax-M2)
+  - `"glm47"`: GLM-style (e.g. GLM-5, GLM-4.7)
 - **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags). Default `True`.
-- **tools** (`List[Dict[str, Any]]`, optional): List of tools; each item is a dict with a `"function"` key, which is a dict with `"name"` and `"parameters"` (`parameters` is a JSON Schema dict). Default `[]`.
-- **builtin_tools** (`List[Dict[str, Any]]`, optional): List of built-in tools (harmony only); same structure as `tools`. Default `[]`.
+- **tools** (`List[Dict[str, Any]]`, optional): List of tools; each item is a dict with a `"function"` key. The `"function"` dict **must** contain a `"name"` (string), and **may** contain:
+  - `"parameters"`: JSON Schema, which can be:
+    - a **dict** (regular JSON Schema object), for example `{"type": "object", "properties": {...}}`
+    - a **bool**: `True` means "any JSON value is accepted", `False` means "no value is accepted".
+    If `"parameters"` is missing, the no constraint will be applied.
+  - `"strict"`: `bool`. Controls whether the parameter constraints are applied. When `False`, only the function name will be enforced, but the parameters is unconstrained. Default: `True`.
+  Default value is `[]`.
+- **builtin_tools** (`List[Dict[str, Any]]`, optional): List of built-in tools (used only for `"harmony"`); each element has the same structure as items in `tools`. Default `[]`.
 - **force_empty_reasoning** (`bool`, optional): When reasoning is on, whether to force empty thinking content at the beginning. Default `False`.
 
 Passing an unsupported `model` raises `ValueError`.
@@ -49,10 +56,24 @@ For the Harmony format you must provide both `tools` and `builtin_tools`:
 structural_tag = get_builtin_structural_tag(
     "harmony",
     tools=[
-        {"function": {"name": "user_tool", "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}},
+        # User tool in strict mode, with a full JSON Schema
+        {
+            "function": {
+                "name": "user_tool",
+                "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
+            }
+        },
+        # User tool in non-strict mode: name only, arguments unconstrained (equivalent to parameters=True)
+        {"function": {"name": "user_tool_untyped", "strict": False}},
     ],
     builtin_tools=[
-        {"function": {"name": "builtin_tool", "parameters": {"type": "object", "properties": {}}}},
+        # Built-in tools support the same strict / parameters combinations
+        {
+            "function": {
+                "name": "builtin_tool",
+                "parameters": {"type": "object", "properties": {}},
+            }
+        },
     ],
 )
 grammar = Grammar.from_structural_tag(structural_tag)
