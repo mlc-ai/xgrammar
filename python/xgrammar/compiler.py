@@ -31,17 +31,17 @@ class CompiledGrammar(XGRObject):
     @property
     def grammar(self) -> Grammar:
         """The original grammar."""
-        return Grammar._create_from_handle(self._handle.grammar())
+        return Grammar._create_from_handle(self._handle.grammar)
 
     @property
     def tokenizer_info(self) -> TokenizerInfo:
         """The tokenizer info associated with the compiled grammar."""
-        return TokenizerInfo._create_from_handle(self._handle.tokenizer_info())
+        return TokenizerInfo._create_from_handle(self._handle.tokenizer_info)
 
     @property
     def memory_size_bytes(self) -> int:
         """The approximate memory usage of the compiled grammar in bytes."""
-        return self._handle.memory_size_bytes()
+        return self._handle.memory_size_bytes
 
     def serialize_json(self) -> str:
         """Serialize the compiled grammar to a JSON string. It will serialize the compiled grammar
@@ -317,14 +317,12 @@ class GrammarCompiler(XGRObject):
         """
         if isinstance(grammar, str):
             return CompiledGrammar._create_from_handle(
-                self._handle.compile_grammar_from_strings(grammar, root_rule_name)
-            )
-        elif isinstance(grammar, Grammar):
-            return CompiledGrammar._create_from_handle(
-                self._handle.compile_grammar_ebnf(grammar._handle)
+                self._handle.compile_grammar(grammar, root_rule_name)
             )
         else:
-            raise ValueError("Invalid grammar type. Please pass a string or a Grammar object.")
+            return CompiledGrammar._create_from_handle(
+                self._handle.compile_grammar(grammar._handle)
+            )
 
     def clear_cache(self) -> None:
         """Clear all cached compiled grammars."""
@@ -340,4 +338,4 @@ class GrammarCompiler(XGRObject):
         The maximum memory usage for the cache in bytes.
         Returns -1 if the cache has no memory limit.
         """
-        return self._handle.cache_limit_bytes()
+        return self._handle.cache_limit_bytes

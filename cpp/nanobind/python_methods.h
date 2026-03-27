@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2024 by Contributors
- * \file xgrammar/tvm_ffi/python_methods.h
+ * \file xgrammar/nanobind/python_methods.h
  * \brief The header for the support of grammar-guided generation.
  */
 

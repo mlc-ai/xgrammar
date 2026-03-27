@@ -202,10 +202,8 @@ def _get_masked_tokens_from_bitmask(
         raise ValueError("bitmask should be on CPU.")
     if bitmask.dtype != bitmask_dtype:
         raise ValueError(f"bitmask should be of type {bitmask_dtype}.")
-    return list(
-        _core.testing._get_masked_tokens_from_bitmask(
-            bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
-        )
+    return _core.testing._get_masked_tokens_from_bitmask(
+        bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
     )
 
 
@@ -230,10 +228,9 @@ def _is_single_token_bitmask(
     token_id : int
         The id of the token if the bitmask is a single token bitmask, -1 otherwise.
     """
-    result = _core.testing._is_single_token_bitmask(
+    return _core.testing._is_single_token_bitmask(
         bitmask.data_ptr(), list(bitmask.shape), vocab_size, index
     )
-    return bool(result[0]), result[1]
 
 
 def bool_mask_to_bitmask(bool_mask: torch.Tensor) -> torch.Tensor:
@@ -330,7 +327,7 @@ def _get_matcher_from_grammar_and_tokenizer_info(
 
 
 def _get_allow_empty_rule_ids(compiled_grammar: CompiledGrammar) -> List[int]:
-    return list(_core.testing._get_allow_empty_rule_ids(compiled_grammar._handle))
+    return _core.testing._get_allow_empty_rule_ids(compiled_grammar._handle)
 
 
 def _generate_range_regex(start: Optional[int] = None, end: Optional[int] = None) -> str:
@@ -462,8 +459,8 @@ class GrammarFunctor:
         )
 
     @staticmethod
-    def repetition_normalizer(grammar: Grammar) -> Grammar:
+    def repetition_normalizer(grammar: Grammar) -> None:
         """Normalize the repetition expression."""
-        return Grammar._create_from_handle(
+        Grammar._create_from_handle(
             _core.testing.grammar_functor.repetition_normalizer(grammar._handle)
         )

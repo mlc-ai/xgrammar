@@ -429,7 +429,7 @@ class GrammarMatcher(XGRObject):
         stop_token_ids : List[int]
             The ids of the stop tokens.
         """
-        return list(self._handle.stop_token_ids())
+        return self._handle.stop_token_ids
 
     def _debug_print_internal_state(self) -> str:
         """Print the internal state of the matcher. This is used for debugging. The
@@ -525,8 +525,7 @@ class BatchGrammarMatcher(XGRObject):
             If the sizes of matchers and tokens do not match.
         """
         matcher_handles = [matcher._handle for matcher in matchers]
-        result = _core.BatchGrammarMatcher.batch_accept_token(matcher_handles, tokens, debug_print)
-        return [bool(result[i]) for i in range(len(result))]
+        return _core.BatchGrammarMatcher.batch_accept_token(matcher_handles, tokens, debug_print)
 
     @staticmethod
     def batch_accept_string(
@@ -558,10 +557,7 @@ class BatchGrammarMatcher(XGRObject):
             If the sizes of matchers and strings do not match.
         """
         matcher_handles = [matcher._handle for matcher in matchers]
-        result = _core.BatchGrammarMatcher.batch_accept_string(
-            matcher_handles, strings, debug_print
-        )
-        return [bool(result[i]) for i in range(len(result))]
+        return _core.BatchGrammarMatcher.batch_accept_string(matcher_handles, strings, debug_print)
 
     @staticmethod
     def batch_rollback(

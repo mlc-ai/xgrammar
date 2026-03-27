@@ -75,7 +75,7 @@ set(XGRAMMAR_INCLUDE_PATH ${PROJECT_SOURCE_DIR}/3rdparty/picojson
 )
 
 file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH "${PROJECT_SOURCE_DIR}/cpp/*.cc")
-list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/tvm_ffi/.*\\.cc")
+list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/nanobind/.*\\.cc")
 
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
 target_include_directories(xgrammar PUBLIC include)
@@ -106,7 +106,8 @@ install(
 )
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/cpp)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/cpp/nanobind)
+  install(TARGETS xgrammar_bindings DESTINATION .)
 endif()
 
 if(XGRAMMAR_BUILD_CXX_TESTS)

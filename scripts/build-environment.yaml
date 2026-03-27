@@ -15,6 +15,6 @@ dependencies:
   - pytest
   - pip
   - cython
-  - apache-tvm-ffi
+  - nanobind
   - pytorch
   - cpuonly
