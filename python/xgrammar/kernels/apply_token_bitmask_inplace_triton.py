@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import torch
 
@@ -81,7 +81,7 @@ def apply_token_bitmask_inplace_triton(
     logits: torch.Tensor,
     bitmask: torch.Tensor,
     vocab_size: Optional[int] = None,
-    indices: Optional[List[int]] = None,
+    indices: Optional[Union[List[int], torch.Tensor]] = None,
 ):
     NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
     BLOCK_SIZE = 4096
@@ -106,8 +106,11 @@ def apply_token_bitmask_inplace_triton(
     num_rows = len(indices) if indices is not None else logits.shape[0] if logits.ndim == 2 else 1
 
     if indices is not None:
-        indices_cpu = torch.tensor(indices, dtype=torch.int32)
-        indices = indices_cpu.to(device=logits.device, non_blocking=True)
+        if isinstance(indices, torch.Tensor):
+            indices = indices.to(dtype=torch.int32, device=logits.device, non_blocking=True)
+        else:
+            indices_cpu = torch.tensor(indices, dtype=torch.int32)
+            indices = indices_cpu.to(device=logits.device, non_blocking=True)
 
     grid = (NUM_SMS,)
 
