@@ -1,6 +1,6 @@
 # source files
 /include @Ubospica  @Seven-Streams @DarkSharpness
-/cpp/nanobind @Ubospica
+/cpp/tvm_ffi @Ubospica @Seven-Streams
 /cpp/support @Ubospica @DarkSharpness
 /cpp/*.cc @Ubospica @Seven-Streams @DarkSharpness
 /cpp/*.h @Ubospica @Seven-Streams @DarkSharpness
