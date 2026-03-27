@@ -401,3 +401,84 @@ def _get_builtin_structural_tag_from_cpp(
 ) -> StructuralTag:
     structural_tag_json = _core.get_builtin_structural_tag_json(model, json.dumps(input_dict))
     return StructuralTag.from_json(structural_tag_json)
+
+
+# It's also welcomed to contribute new builtin structural tags in Python. Here is
+# an example:
+# @_register_builtin_structural_tag("harmony", ["gpt-oss"])
+# def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+#     """Get harmony(gpt-oss) style structural tag format.
+#     Reference: https://developers.openai.com/cookbook/articles/openai-harmony
+#     Reference: https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja
+#     The input_dict should be a dictionary with the following keys:
+#     - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
+#     - "builtin_tools": a list of builtin tools, each builtin tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
+#     - "reasoning": a boolean indicating whether to enable reasoning mode.
+#     - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
+
+#     Returns
+#     -------
+#     StructuralTag
+#         A structural tag template.
+#         This format is in OpenAI Harmony Response Format, which is used by GPT-oss
+#         and other models that follow the same style.
+
+#     """
+#     from .structural_tag import StructuralTag, TagFormat, AnyTextFormat, JSONSchemaFormat, TagsWithSeparatorFormat, ConstStringFormat
+#     tools = input_dict.get("tools", [])
+#     reasoning = input_dict.get("reasoning", True)
+#     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+#     builtin_tools = input_dict.get("builtin_tools", [])
+
+#     tags = []
+
+#     if reasoning:
+#         if force_empty_reasoning:
+#             analysis_tag = TagFormat(
+#                 begin="<|channel|>analysis<|message|>",
+#                 content=ConstStringFormat(value="<|end|>"),
+#                 end="",
+#             )
+#         else:
+#             analysis_tag = TagFormat(
+#                 begin="<|channel|>analysis<|message|>", content=AnyTextFormat(), end="<|end|>"
+#             )
+#         tags.append(analysis_tag)
+
+#     for tool in tools:
+#         if "function" not in tool:
+#             continue
+
+#         function = tool["function"]
+#         parameters = _get_function_parameters(function)
+#         name = function["name"]
+#         tags.append(
+#             TagFormat(
+#                 begin=f"<|channel|>commentary to={name}<|constrain|>json<|message|>",
+#                 content=JSONSchemaFormat(json_schema=parameters),
+#                 end="<|call|>",
+#             )
+#         )
+
+#     for tool in builtin_tools:
+#         if "function" not in tool:
+#             continue
+
+#         function = tool["function"]
+#         parameters = _get_function_parameters(function)
+#         name = function["name"]
+#         tags.append(
+#             TagFormat(
+#                 begin=f"<|channel|>analysis to={name}<|message|>",
+#                 content=JSONSchemaFormat(json_schema=parameters),
+#                 end="<|call|>",
+#             )
+#         )
+
+#     final_tag = TagFormat(
+#         begin="<|channel|>final<|message|>", content=AnyTextFormat(), end="<|end|>"
+#     )
+
+#     tags.append(final_tag)
+#     tags_with_separator = TagsWithSeparatorFormat(tags=tags, separator="<|start|>assistant")
+#     return StructuralTag(format=tags_with_separator)
