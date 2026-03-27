@@ -343,18 +343,18 @@ class TokenizerInfo(XGRObject):
     @property
     def vocab_type(self) -> VocabType:
         """The type of the vocabulary."""
-        return VocabType(self._handle.vocab_type)
+        return VocabType(self._handle.vocab_type())
 
     @property
     def vocab_size(self) -> int:
         """The size of the vocabulary."""
-        return self._handle.vocab_size
+        return self._handle.vocab_size()
 
     @property
     def add_prefix_space(self) -> bool:
         """Whether the tokenizer will prepend a space before the text in the tokenization
         process."""
-        return self._handle.add_prefix_space
+        return self._handle.add_prefix_space()
 
     @property
     def prepend_space_in_tokenization(self) -> bool:
@@ -372,18 +372,18 @@ class TokenizerInfo(XGRObject):
         vocabulary back to the original format of the input text. E.g. for type ByteFallback,
         the token <0x1B> is converted back to "\u001b".
         """
-        return self._handle.decoded_vocab
+        return list(self._handle.decoded_vocab())
 
     @property
     def stop_token_ids(self) -> List[int]:
         """The stop token ids."""
-        return self._handle.stop_token_ids
+        return list(self._handle.stop_token_ids())
 
     @property
     def special_token_ids(self) -> List[int]:
         """The special token ids. Special tokens include control tokens, reserved tokens,
         padded tokens, etc. Now it is automatically detected from the vocabulary."""
-        return self._handle.special_token_ids
+        return list(self._handle.special_token_ids())
 
     def dump_metadata(self) -> str:
         """Dump the metadata of the tokenizer to a json string. It can be used to construct the

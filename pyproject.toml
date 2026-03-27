@@ -15,6 +15,7 @@ classifiers = [
 keywords = ["machine learning", "inference"]
 requires-python = ">=3.8, <4"
 dependencies = [
+  "apache-tvm-ffi>=0.1.9",
   "pydantic",
   "torch>=1.10.0",
   "transformers>=4.38.0",
@@ -41,7 +42,7 @@ test = [
 metal = ["mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'"]
 
 [build-system]
-requires = ["scikit-build-core>=0.10.0", "nanobind==2.5.0"]
+requires = ["scikit-build-core>=0.10.0", "apache-tvm-ffi>=0.1.9"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
@@ -151,10 +152,19 @@ test-extras = ["test"]
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64"]
+# Exclude libtvm_ffi.so: provided by apache-tvm-ffi at import time (see TVM-FFI Python Packaging docs)
+repair-wheel-command = "auditwheel repair --exclude libtvm_ffi.so -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.macos]
 archs = ["x86_64", "arm64"]
 environment = { MACOSX_DEPLOYMENT_TARGET = "10.14" }
+# Exclude libtvm_ffi.dylib: it is provided by apache-tvm-ffi at import time (see TVM-FFI Python Packaging docs).
+# --ignore-missing-dependencies is needed because delocate fails when resolving @rpath/libtvm_ffi.dylib
+# before the copy step; exclude only filters which found libs to copy.
+repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v --exclude libtvm_ffi.dylib --ignore-missing-dependencies {wheel}"
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
+before-build = "pip install delvewheel"
+# Exclude tvm_ffi.dll: provided by apache-tvm-ffi at import time (see TVM-FFI Python Packaging docs)
+repair-wheel-command = "delvewheel repair --exclude tvm_ffi.dll -w {dest_dir} {wheel}"
