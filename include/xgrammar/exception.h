@@ -13,41 +13,52 @@ namespace xgrammar {
  * \brief Exception thrown when the version in the serialized data does not follow the current
  * serialization version.
  */
-struct DeserializeVersionError : std::runtime_error {
+
+struct XGrammarError : std::runtime_error {
+  XGrammarError(const std::string& message) : std::runtime_error(message) {}
+  virtual std::string GetType() const { return "XGrammarError"; }
+};
+
+struct DeserializeVersionError : XGrammarError {
   DeserializeVersionError(const std::string& message)
-      : std::runtime_error(std::string("Deserialize version error: ") + message) {}
+      : XGrammarError(std::string("Deserialize version error: ") + message) {}
+  std::string GetType() const override { return "DeserializeVersionError"; }
 };
 
 /*!
  * \brief Exception thrown when the JSON is invalid.
  */
-struct InvalidJSONError : std::runtime_error {
+struct InvalidJSONError : XGrammarError {
   InvalidJSONError(const std::string& message)
-      : std::runtime_error(std::string("Invalid JSON error: ") + message) {}
+      : XGrammarError(std::string("Invalid JSON error: ") + message) {}
+  std::string GetType() const override { return "InvalidJSONError"; }
 };
 
 /*!
  * \brief Exception thrown when the serialized data does not follow the expected format.
  */
-struct DeserializeFormatError : std::runtime_error {
+struct DeserializeFormatError : XGrammarError {
   DeserializeFormatError(const std::string& message)
-      : std::runtime_error(std::string("Deserialize format error: ") + message) {}
+      : XGrammarError(std::string("Deserialize format error: ") + message) {}
+  std::string GetType() const override { return "DeserializeFormatError"; }
 };
 
 /*!
  * \brief Exception thrown when the JSON schema is invalid or not satisfiable.
  */
-struct InvalidJSONSchemaError : std::runtime_error {
+struct InvalidJSONSchemaError : XGrammarError {
   InvalidJSONSchemaError(const std::string& message)
-      : std::runtime_error(std::string("Invalid JSON schema error: ") + message) {}
+      : XGrammarError(std::string("Invalid JSON schema error: ") + message) {}
+  std::string GetType() const override { return "InvalidJSONSchemaError"; }
 };
 
 /*!
  * \brief Exception thrown when the structural tag is invalid.
  */
-struct InvalidStructuralTagError : std::runtime_error {
+struct InvalidStructuralTagError : XGrammarError {
   InvalidStructuralTagError(const std::string& message)
-      : std::runtime_error(std::string("Invalid structural tag error: ") + message) {}
+      : XGrammarError(std::string("Invalid structural tag error: ") + message) {}
+  std::string GetType() const override { return "InvalidStructuralTagError"; }
 };
 
 /************** Union Exceptions **************/
