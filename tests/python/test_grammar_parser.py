@@ -178,6 +178,33 @@ root_1 ::= "a"
     assert after == expected
 
 
+def test_repetition_range_unbounded_roundtrip():
+    """PrintRepeat emits {n, -1}; verify the parser accepts it on re-parse."""
+    before = """root ::= "a"{2,}
+"""
+    grammar_1 = xgr.Grammar.from_ebnf(before)
+    output_1 = str(grammar_1)
+    assert "{2, -1}" in output_1
+
+    grammar_2 = xgr.Grammar.from_ebnf(output_1)
+    output_2 = str(grammar_2)
+    assert output_1 == output_2
+
+
+def test_repetition_range_unbounded_roundtrip_json_schema():
+    """JSON schema with minLength produces {n, -1}; verify the round-trip."""
+    import json
+
+    schema = json.dumps({"type": "string", "minLength": 2})
+    grammar_1 = xgr.Grammar.from_json_schema(schema)
+    output_1 = str(grammar_1)
+    assert "{2, -1}" in output_1
+
+    grammar_2 = xgr.Grammar.from_ebnf(output_1)
+    output_2 = str(grammar_2)
+    assert output_1 == output_2
+
+
 def test_lookahead_assertion_simple():
     """Test lookahead assertion."""
     before = """root ::= "a" (="b")
