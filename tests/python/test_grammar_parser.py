@@ -179,29 +179,25 @@ root_1 ::= "a"
 
 
 def test_repetition_range_unbounded_roundtrip():
-    """PrintRepeat emits {n, -1}; verify the parser accepts it on re-parse."""
+    """Printed {n, -1} can be re-parsed (str -> compile_grammar round-trip)."""
     before = """root ::= "a"{2,}
 """
     grammar_1 = xgr.Grammar.from_ebnf(before)
     output_1 = str(grammar_1)
     assert "{2, -1}" in output_1
-
-    grammar_2 = xgr.Grammar.from_ebnf(output_1)
-    output_2 = str(grammar_2)
+    output_2 = str(xgr.Grammar.from_ebnf(output_1))
     assert output_1 == output_2
 
 
-def test_repetition_range_unbounded_roundtrip_json_schema():
-    """JSON schema with minLength produces {n, -1}; verify the round-trip."""
+def test_repetition_range_unbounded_json_schema():
+    """JSON schema minLength produces {n, -1} which round-trips through the parser."""
     import json
 
     schema = json.dumps({"type": "string", "minLength": 2})
     grammar_1 = xgr.Grammar.from_json_schema(schema)
     output_1 = str(grammar_1)
     assert "{2, -1}" in output_1
-
-    grammar_2 = xgr.Grammar.from_ebnf(output_1)
-    output_2 = str(grammar_2)
+    output_2 = str(xgr.Grammar.from_ebnf(output_1))
     assert output_1 == output_2
 
 
