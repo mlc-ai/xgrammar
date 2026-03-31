@@ -709,6 +709,15 @@ std::pair<int64_t, int64_t> EBNFParser::ParseRepetitionRange() {
       Consume();
       return {lower, -1};
     }
+    // The grammar printer emits {n, -1} for unbounded upper bounds, and
+    // '-' is a valid identifier-start char (IsNameChar), so the lexer
+    // produces Identifier("-1") rather than IntegerLiteral.  Accept it
+    // as equivalent to {n,}.
+    if (Peek().type == TokenType::Identifier && Peek().lexeme == "-1") {
+      Consume();
+      PeekAndConsume(TokenType::RBrace, "Expect }");
+      return {lower, -1};
+    }
     int64_t upper = ParseInteger();
     if (upper < lower) {
       ReportParseError(
