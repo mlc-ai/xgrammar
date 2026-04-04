@@ -1527,6 +1527,8 @@ bool StructuralTagAnalyzer::IsExcluded(const Format& format) {
           return !arg.excludes.empty();
         } else if constexpr (std::is_same_v<T, TokenDispatchFormat>) {
           return !arg.exclude_tokens.empty();
+        } else if constexpr (std::is_same_v<T, AnyTokensFormat>) {
+          return !arg.exclude_tokens.empty();
         } else {
           return false;
         }

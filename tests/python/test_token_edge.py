@@ -1556,3 +1556,75 @@ def test_stag_repeated_token_triggered_tags_different_tags():
         _accept_tokens(m, [5, 7, 6])
     assert m.accept_token(STAG_STOP)
     assert m.is_terminated()
+
+
+def test_stag_any_tokens_excludes_allow_empty_end():
+    """Tags with any_tokens content + exclude_tokens should allow end: "".
+
+    Models a dispatch loop where channels have no explicit end delimiter —
+    the content stops when an excluded trigger token appears, and the
+    dispatch loop handles the transition.
+
+    Pattern:
+        <tool>  hello world  <tool>  x y  </s>
+        ^trigger  ^content    ^next trigger
+
+    Each tag is: begin=<tool>, content=any_tokens(exclude=[<tool>,<bad>]), end=""
+    The content stops naturally when the next <tool> appears. The dispatch
+    loop re-triggers.
+    """
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "token_triggered_tags",
+            "trigger_tokens": ["<tool>"],
+            "tags": [
+                {
+                    "begin": {"type": "token", "token": "<tool>"},
+                    "content": {"type": "any_tokens", "exclude_tokens": ["<tool>", "<bad>"]},
+                    "end": "",
+                }
+            ],
+        },
+    }
+    m, b, ti = _stag_matcher(stag)
+
+    # First dispatch: <tool> hello world
+    _accept_tokens(m, [2, 7, 8])  # <tool> hello world
+
+    # Second dispatch: <tool> x y
+    _accept_tokens(m, [2, 13, 14])  # <tool> x y
+
+    # Stop
+    assert m.accept_token(STAG_STOP)
+    assert m.is_terminated()
+
+
+def test_stag_any_tokens_exclude_redispatch():
+    """any_tokens(exclude=[<tool>]) stops content when <tool> appears, allowing re-dispatch."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "token_triggered_tags",
+            "trigger_tokens": ["<tool>"],
+            "tags": [
+                {
+                    "begin": {"type": "token", "token": "<tool>"},
+                    "content": {"type": "any_tokens", "exclude_tokens": ["<tool>"]},
+                    "end": "",
+                }
+            ],
+        },
+    }
+    m, b, ti = _stag_matcher(stag)
+
+    # First tag: <tool> hello
+    _accept_tokens(m, [2, 7])  # <tool> hello
+
+    # <tool> re-triggers (content excluded <tool>, so dispatch takes over)
+    _accept_tokens(m, [2, 8])  # <tool> world
+
+    # Third round then stop
+    _accept_tokens(m, [2, 13])  # <tool> x
+    assert m.accept_token(STAG_STOP)
+    assert m.is_terminated()
