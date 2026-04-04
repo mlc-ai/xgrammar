@@ -110,9 +110,6 @@ If you find XGrammar useful in your research, please consider citing our paper:
   journal={Proceedings of Machine Learning and Systems 7},
   year={2024}
 }
-```
-
-```bibtex
 @misc{li2026xgrammar2efficientdynamicstructured,
       title={XGrammar-2: Efficient Dynamic Structured Generation Engine for Agentic LLMs},
       author={Linzhang Li and Yixin Dong and Guanjie Wang and Ziyi Xu and Alexander Jiang and Tianqi Chen},
