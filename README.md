@@ -101,7 +101,7 @@ XGrammar has been widely adopted in industry, open-source projects, and academia
 
 ## Citation
 
-If you find XGrammar useful in your research, please consider citing our paper:
+If you find XGrammar useful in your research, please consider citing our papers:
 
 ```bibtex
 @article{dong2024xgrammar,
