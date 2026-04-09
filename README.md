@@ -101,7 +101,7 @@ XGrammar has been widely adopted in industry, open-source projects, and academia
 
 ## Citation
 
-If you find XGrammar useful in your research, please consider citing our paper:
+If you find XGrammar useful in your research, please consider citing our papers:
 
 ```bibtex
 @article{dong2024xgrammar,
@@ -109,5 +109,14 @@ If you find XGrammar useful in your research, please consider citing our paper:
   author={Dong, Yixin and Ruan, Charlie F and Cai, Yaxing and Lai, Ruihang and Xu, Ziyi and Zhao, Yilong and Chen, Tianqi},
   journal={Proceedings of Machine Learning and Systems 7},
   year={2024}
+}
+@misc{li2026xgrammar2efficientdynamicstructured,
+  title={XGrammar-2: Efficient Dynamic Structured Generation Engine for Agentic LLMs},
+  author={Linzhang Li and Yixin Dong and Guanjie Wang and Ziyi Xu and Alexander Jiang and Tianqi Chen},
+  year={2026},
+  eprint={2601.04426},
+  archivePrefix={arXiv},
+  primaryClass={cs.AI},
+  url={https://arxiv.org/abs/2601.04426},
 }
 ```
