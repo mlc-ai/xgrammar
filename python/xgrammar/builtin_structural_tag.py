@@ -26,6 +26,7 @@ BuiltinSupportedModels = Literal[
     "deepseek_v3_2",
     "minimax",
     "glm47",
+    "gemma4",
 ]
 
 
@@ -111,6 +112,7 @@ _structural_tag_registry: Dict[
 ] = {}
 _structural_tag_supported_models: Dict[BuiltinSupportedModels, List[str]] = {}
 _THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
+_GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>"]
 
 
 def _validate_tool_function(tools: Any) -> None:
@@ -202,6 +204,8 @@ def _get_builtin_structural_tag_function(
           Supported Models: Deepseek-V3.1, Deepseek-R1, Deepseek-V3.2-exp and other models that follow the same style.
         - "harmony": OpenAI Harmony Response Format (gpt-oss).
           Supported Models: GPT-oss and other models that follow the same style.
+        - "gemma4": Gemma 4 style structural tag format.
+          Supported Models: Gemma-4 and other models that follow the same style.
 
     Returns
     -------
@@ -742,5 +746,74 @@ def _get_glm47_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
     else:
         prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+
+
+@_register_builtin_structural_tag(
+    "gemma4",
+    ["Gemma-4", "gemma-4-12b-it", "gemma-4-26b-a4b-it", "gemma-4-31b-it", "gemma-4-e2b-it"],
+)
+def _get_gemma4_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    """Get Gemma 4 style structural tag format.
+
+    Gemma 4 uses channel markers for reasoning and tool calls instead of
+    ``<think>``/``</think>``:
+
+    - Thinking: ``<|channel>thought\\n...thinking...<channel|>``
+    - Tool calls: ``<|tool_call>call:func_name{...}<tool_call|>``
+    - Turn end: ``<turn|>``
+
+    Reference: https://ai.google.dev/gemma/docs/core/prompt-formatting-gemma4
+
+    The input_dict should be a dictionary with the following keys:
+
+    - "tools": a list of tools, each tool should have a "function" key,
+      which is a dictionary containing "name" and "parameters" fields.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
+    - "force_empty_reasoning": a boolean; when reasoning is on, if True
+      use empty-thinking (pre-closed channel), if False use thinking.
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for Gemma 4 function calling format.
+    """
+    tools = input_dict.get("tools", [])
+    reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+
+    tags = []
+    for tool in tools:
+        if "function" not in tool:
+            continue
+
+        function = tool["function"]
+        parameters = _get_function_parameters(function)
+        name = function["name"]
+        tags.append(
+            TagFormat(
+                begin=f"<|tool_call>call:{name}",
+                content=JSONSchemaFormat(json_schema=parameters),
+                end="<tool_call|>",
+            )
+        )
+
+    if len(tags) > 0:
+        suffix_tag = TriggeredTagsFormat(
+            triggers=["<|tool_call>"], tags=tags, excludes=_GEMMA4_EXCLUDE_TOKENS
+        )
+    else:
+        suffix_tag = AnyTextFormat(excludes=_GEMMA4_EXCLUDE_TOKENS)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="<|channel>thought\n<channel|>")
+    else:
+        prefix_tag = TagFormat(
+            begin="<|channel>thought\n", content=AnyTextFormat(), end="<channel|>"
+        )
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
