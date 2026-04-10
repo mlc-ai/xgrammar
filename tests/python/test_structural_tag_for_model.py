@@ -151,6 +151,7 @@ def test_get_builtin_structural_tag_supported_models_all():
         "deepseek_v3_2",
         "minimax",
         "glm47",
+        "gemma4",
     }
     assert set(result.keys()) == expected_styles
     for style, models in result.items():
@@ -170,6 +171,16 @@ def test_get_builtin_structural_tag_supported_models_all():
         ("deepseek_v3_2", ["DeepSeek-V3.2"]),
         ("minimax", ["MiniMax-M2.5"]),
         ("glm47", ["GLM-5", "GLM-4.7"]),
+        (
+            "gemma4",
+            [
+                "Gemma-4",
+                "gemma-4-12b-it",
+                "gemma-4-26b-a4b-it",
+                "gemma-4-31b-it",
+                "gemma-4-e2b-it",
+            ],
+        ),
     ],
 )
 def test_get_structural_tag_supported_models_by_style(style: str, expected_models: List[str]):
@@ -2196,6 +2207,14 @@ def test_get_gemma4_structural_tag_instance():
     # Wrong function name should be rejected
     check_stag_with_instance(
         stag, '<|tool_call>call:unknown_func{"q": "x"}<tool_call|>', False
+    )
+
+    # --- Multiple tool calls ---
+    check_stag_with_instance(
+        stag,
+        '<|tool_call>call:get_weather{"q": "Paris"}<tool_call|>'
+        '<|tool_call>call:get_weather{"q": "London"}<tool_call|>',
+        True,
     )
 
     # --- With tools, reasoning enabled ---
