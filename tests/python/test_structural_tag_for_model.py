@@ -1,5 +1,4 @@
-"""Tests for get_structural_tag_for_model and generated structural tags.
-"""
+"""Tests for get_structural_tag_for_model and generated structural tags."""
 
 import re
 import time
@@ -173,13 +172,7 @@ def test_get_builtin_structural_tag_supported_models_all():
         ("glm47", ["GLM-5", "GLM-4.7"]),
         (
             "gemma4",
-            [
-                "Gemma-4",
-                "gemma-4-12b-it",
-                "gemma-4-26b-a4b-it",
-                "gemma-4-31b-it",
-                "gemma-4-e2b-it",
-            ],
+            ["Gemma-4", "gemma-4-12b-it", "gemma-4-26b-a4b-it", "gemma-4-31b-it", "gemma-4-e2b-it"],
         ),
     ],
 )
@@ -2182,32 +2175,22 @@ def test_get_gemma4_structural_tag_instance():
     check_stag_with_instance(
         stag, "<|channel>thought\nLet me think...<channel|>The answer is 42.", True
     )
-    check_stag_with_instance(
-        stag, "<|channel>thought\n<channel|>Quick answer.", True
-    )
+    check_stag_with_instance(stag, "<|channel>thought\n<channel|>Quick answer.", True)
     # Missing thinking prefix should be rejected
     check_stag_with_instance(stag, "No thinking here.", False)
 
     # --- No tools, reasoning with force_empty_reasoning ---
     stag = get_builtin_structural_tag("gemma4", reasoning=True, force_empty_reasoning=True)
-    check_stag_with_instance(
-        stag, "<|channel>thought\n<channel|>Direct answer.", True
-    )
+    check_stag_with_instance(stag, "<|channel>thought\n<channel|>Direct answer.", True)
     # Non-empty thinking should be rejected when force_empty
-    check_stag_with_instance(
-        stag, "<|channel>thought\nSome reasoning<channel|>Answer.", False
-    )
+    check_stag_with_instance(stag, "<|channel>thought\nSome reasoning<channel|>Answer.", False)
 
     # --- With tools, no reasoning ---
     stag = get_builtin_structural_tag("gemma4", tools=_tools_gemma4, reasoning=False)
-    check_stag_with_instance(
-        stag, '<|tool_call>call:get_weather{"q": "Paris"}<tool_call|>', True
-    )
+    check_stag_with_instance(stag, '<|tool_call>call:get_weather{"q": "Paris"}<tool_call|>', True)
     check_stag_with_instance(stag, "Plain text without tool call.", True)
     # Wrong function name should be rejected
-    check_stag_with_instance(
-        stag, '<|tool_call>call:unknown_func{"q": "x"}<tool_call|>', False
-    )
+    check_stag_with_instance(stag, '<|tool_call>call:unknown_func{"q": "x"}<tool_call|>', False)
 
     # --- Multiple tool calls ---
     check_stag_with_instance(
@@ -2221,14 +2204,12 @@ def test_get_gemma4_structural_tag_instance():
     stag = get_builtin_structural_tag("gemma4", tools=_tools_gemma4, reasoning=True)
     check_stag_with_instance(
         stag,
-        '<|channel>thought\nI should check the weather.<channel|>'
+        "<|channel>thought\nI should check the weather.<channel|>"
         '<|tool_call>call:get_weather{"q": "Paris"}<tool_call|>',
         True,
     )
     check_stag_with_instance(
-        stag,
-        "<|channel>thought\nThinking...<channel|>Just text, no tool call.",
-        True,
+        stag, "<|channel>thought\nThinking...<channel|>Just text, no tool call.", True
     )
 
 
