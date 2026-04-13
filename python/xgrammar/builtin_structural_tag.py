@@ -36,13 +36,14 @@ def get_builtin_structural_tag(
     tools: List[Dict[str, Any]] = [],
     builtin_tools: List[Dict[str, Any]] = [],
     force_empty_reasoning: bool = False,
+    tool_choice: Literal["auto", "required"] = "auto",
 ) -> StructuralTag:
     r"""Get structural tag for model. This function can generate structural tag for the given model
     with the given tools, builtin tools and reasoning mode.
 
     Parameters
     ----------
-    model : BuiltinModels
+    model : BuiltinSupportedModels
         The model type of the structural tag template.
     reasoning : bool
         Whether to enable reasoning mode. i.e. whether to enable the <think>
@@ -59,7 +60,11 @@ def get_builtin_structural_tag(
         the empty thinking content at the beginning of the response.
         Some models like Qwen3, DeepSeek-R1 and etc. prefer empty-thinking mode to disable
         reasoning mode instead of non-thinking mode.
-
+    tool_choice : Literal["auto", "required"]
+        How tool calls are constrained relative to the provided tools list.
+        "auto" means whether to call a tool(s) and which tool(s) to call is determined by the model,
+        and these calling will appear in any-form text.
+        "required" means that the model must call a tool(s) and other form outputs are not allowed.
 
     Returns
     -------
@@ -70,6 +75,7 @@ def get_builtin_structural_tag(
         raise ValueError("The 'reasoning' key in the input_dict must be a boolean.")
     if not isinstance(force_empty_reasoning, bool):
         raise ValueError("The 'force_empty_reasoning' key in the input_dict must be a boolean.")
+    _validate_tool_choice_params(tool_choice)
     _validate_tool_function(tools)
     _validate_tool_function(builtin_tools)
 
@@ -79,6 +85,7 @@ def get_builtin_structural_tag(
         "builtin_tools": builtin_tools,
         "reasoning": reasoning,
         "force_empty_reasoning": force_empty_reasoning,
+        "tool_choice": tool_choice,
     }
     return func(input_dict)
 
@@ -91,7 +98,7 @@ def get_builtin_structural_tag_supported_models(
 
     Parameters
     ----------
-    strucutural_tag_style : Optional[BuiltinModels]
+    strucutural_tag_style : Optional[BuiltinSupportedModels]
         The structural tag style.
     Returns
     -------
@@ -113,6 +120,16 @@ _structural_tag_registry: Dict[
 _structural_tag_supported_models: Dict[BuiltinSupportedModels, List[str]] = {}
 _THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 _GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>"]
+_REQUIRED_TOOLS_ERROR = (
+    "The 'tools' list is empty, which is not allowed when 'tool_choice' is 'required'."
+)
+
+
+def _validate_tool_choice_params(tool_choice: Literal["auto", "required"]) -> None:
+    if tool_choice not in ("auto", "required"):
+        raise ValueError(
+            "The 'tool_choice' must be one of " f"['auto', 'required'], got {tool_choice!r}."
+        )
 
 
 def _validate_tool_function(tools: Any) -> None:
@@ -163,6 +180,8 @@ def _get_builtin_structural_tag_function(
     key, which is a dictionary containing "name" and "parameters" fields. In addition, for the "qwen",
     "deepseek_r1" and "harmony" formats, "reasoning" key can be provided to enable/disable reasoning mode.
     By default, reasoning mode is enabled.
+    The ``input_dict`` may also include ``tool_choice`` (``"auto"`` or ``"required"``),
+    as set by :func:`get_builtin_structural_tag`.
 
     Examples
     --------
@@ -189,7 +208,7 @@ def _get_builtin_structural_tag_function(
 
     Parameters
     ----------
-    format_type : BuiltinModels
+    format_type : BuiltinSupportedModels
         The format type of the structural tag template.
         Currently supported format types are:
         - "llama": Llama3.1 style structural tag format.
@@ -244,40 +263,70 @@ def _get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         This format is used by Llama 3 and other models that follow the same style.
 
     """
+    TOOL_OBJECT_BEGIN_PREFIX = '{"name": "'
+    TOOL_OBJECT_PARAMETERS_PREFIX = '", "parameters": '
+    TOOLS_TRIGGER = '{"name": '
+    THINK_TAG_BEGIN = "<think>"
+    THINK_TAG_END = "</think>"
+    EMPTY_THINK_CONTENT = "<think>\n\n</think>"
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+    tool_choice = input_dict.get("tool_choice", "auto")
 
-    tags = []
-    for tool in tools:
-        if "function" not in tool:
-            continue
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
 
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin=('{"name": "' + name + '", "parameters": '),
-                content=JSONSchemaFormat(json_schema=parameters),
-                end="}",
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=(TOOL_OBJECT_BEGIN_PREFIX + name + TOOL_OBJECT_PARAMETERS_PREFIX),
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end="}",
+                )
             )
-        )
 
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(
-            triggers=['{"name": '], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
-        )
-    else:
-        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOLS_TRIGGER], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
+
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=(TOOL_OBJECT_BEGIN_PREFIX + name + TOOL_OBJECT_PARAMETERS_PREFIX),
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end="}",
+                )
+            )
+        if len(tags) > 0:
+            suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
     if force_empty_reasoning:
-        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     else:
-        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -297,46 +346,83 @@ def _get_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         A structural tag template.
         This format is used by Kimi-K2 and other models that follow the same style.
     """
+    TOOL_CALL_BEGIN_PREFIX = "<|tool_call_begin|>functions."
+    TOOL_CALL_SUFFIX = ":"
+    TOOL_CALL_ARGUMENT_BEGIN = "<|tool_call_argument_begin|>"
+    TOOL_CALL_END = "<|tool_call_end|>"
+    TOOL_CALL_TRIGGER = "<|tool_call_begin|>"
+    THINK_TAG_BEGIN = "<think>"
+    THINK_TAG_END = "</think>"
+    EMPTY_THINK_CONTENT = "<think></think>"
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+    tool_choice = input_dict.get("tool_choice", "auto")
 
-    tags = []
-    for tool in tools:
-        if "function" not in tool:
-            continue
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
 
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin=f"<|tool_call_begin|>functions.{name}:",
-                content=SequenceFormat(
-                    elements=[
-                        RegexFormat(pattern=r"\d+"),
-                        ConstStringFormat(value="<|tool_call_argument_begin|>"),
-                        JSONSchemaFormat(json_schema=parameters),
-                    ]
-                ),
-                end="<|tool_call_end|>",
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_SUFFIX}",
+                    content=SequenceFormat(
+                        elements=[
+                            RegexFormat(pattern=r"\d+"),
+                            ConstStringFormat(value=TOOL_CALL_ARGUMENT_BEGIN),
+                            JSONSchemaFormat(json_schema=parameters),
+                        ]
+                    ),
+                    end=TOOL_CALL_END,
+                )
             )
-        )
 
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(
-            triggers=["<|tool_call_begin|>"], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
-        )
-    else:
-        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_SUFFIX}",
+                    content=SequenceFormat(
+                        elements=[
+                            RegexFormat(pattern=r"\d+"),
+                            ConstStringFormat(value=TOOL_CALL_ARGUMENT_BEGIN),
+                            JSONSchemaFormat(json_schema=parameters),
+                        ]
+                    ),
+                    end=TOOL_CALL_END,
+                )
+            )
+        if len(tags) > 0:
+            suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
     if force_empty_reasoning:
-        prefix_tag = ConstStringFormat(value="<think></think>")
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     else:
-        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -359,42 +445,70 @@ def _get_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         This format is used by DeepSeek-R1 and other models that follow the same style.
 
     """
+    TOOL_CALLS_PREFIX = "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"
+    TOOL_SEP = "<｜tool▁sep｜>"
+    TOOL_CALL_END = "<｜tool▁call▁end｜>"
+    TOOL_CALL_TRIGGER = "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"
+    THINK_TAG_END = "</think>"
+    EMPTY_THINK_CONTENT = "</think>"
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+    tool_choice = input_dict.get("tool_choice", "auto")
 
-    tags = []
-    for tool in tools:
-        if "function" not in tool:
-            continue
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
 
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin=f"<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>{name}<｜tool▁sep｜>",
-                content=JSONSchemaFormat(json_schema=parameters),
-                end="<｜tool▁call▁end｜>",
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{TOOL_CALLS_PREFIX}{name}{TOOL_SEP}",
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
             )
-        )
 
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(
-            triggers=["<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"],
-            tags=tags,
-            excludes=_THINK_EXCLUDE_TOKENS,
-        )
-    else:
-        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{TOOL_CALLS_PREFIX}{name}{TOOL_SEP}",
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
+            )
+
+        if len(tags) > 0:
+            suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
     if force_empty_reasoning:
-        prefix_tag = ConstStringFormat(value="</think>")
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     else:
-        prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end="</think>")
+        prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -414,40 +528,71 @@ def _get_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         A structural tag for function calling format.
         This format is used by Qwen3-Coder and other models that follow the same style.
     """
+    TOOL_CALL_BEGIN_PREFIX = "<tool_call>\n<function="
+    TOOL_CALL_BEGIN_SUFFIX = ">\n"
+    TOOL_CALL_END = "\n</function>\n</tool_call>"
+    TOOL_CALL_TRIGGER = "<tool_call>\n<function="
+    THINK_TAG_BEGIN = "<think>"
+    THINK_TAG_END = "</think>"
+    EMPTY_THINK_CONTENT = "<think>\n\n</think>"
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+    tool_choice = input_dict.get("tool_choice", "auto")
 
-    tags = []
-    for tool in tools:
-        if "function" not in tool:
-            continue
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
 
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin=f"<tool_call>\n<function={name}>\n",
-                content=QwenXMLParameterFormat(json_schema=parameters),
-                end="\n</function>\n</tool_call>",
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
+                    content=QwenXMLParameterFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
             )
-        )
 
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(
-            triggers=["<tool_call>\n<function="], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
-        )
-    else:
-        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
+                    content=QwenXMLParameterFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
+            )
+
+        if len(tags) > 0:
+            suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
     if force_empty_reasoning:
-        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     else:
-        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -467,39 +612,70 @@ def _get_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         This format is used by Qwen3 and other models that follow the same style.
 
     """
+    TOOL_CALL_BEGIN_PREFIX = '<tool_call>\n{"name": "'
+    ARGUMENTS_FIELD_PREFIX = '", "arguments": '
+    TOOL_CALL_END = "}\n</tool_call>"
+    TOOL_CALL_TRIGGER = "<tool_call>"
+    THINK_TAG_BEGIN = "<think>"
+    THINK_TAG_END = "</think>"
+    EMPTY_THINK_CONTENT = "<think>\n\n</think>"
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+    tool_choice = input_dict.get("tool_choice", "auto")
 
-    tags = []
-    for tool in tools:
-        if "function" not in tool:
-            continue
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
 
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin=('<tool_call>\n{"name": "' + name + '", "arguments": '),
-                content=JSONSchemaFormat(json_schema=parameters),
-                end="}\n</tool_call>",
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=(TOOL_CALL_BEGIN_PREFIX + name + ARGUMENTS_FIELD_PREFIX),
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
             )
-        )
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(
-            triggers=["<tool_call>"], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
-        )
-    else:
-        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=(TOOL_CALL_BEGIN_PREFIX + name + ARGUMENTS_FIELD_PREFIX),
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
+            )
+
+        if len(tags) > 0:
+            suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
     if force_empty_reasoning:
-        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     else:
-        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
 
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
@@ -524,114 +700,188 @@ def _get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         and other models that follow the same style.
 
     """
+    COMMENTARY_CHANNEL_PREFIX = "<|channel|>commentary to="
+    ANALYSIS_CHANNEL_PREFIX = "<|channel|>analysis to="
+    JSON_CONSTRAIN_SUFFIX = "<|constrain|>json<|message|>"
+    ANALYSIS_MESSAGE_SUFFIX = "<|message|>"
+    CALL_END = "<|call|>"
+    FINAL_BEGIN = "<|channel|>final<|message|>"
+    FINAL_END = "<|end|>"
+    ANALYSIS_BEGIN = "<|channel|>analysis<|message|>"
+    TAG_SEPARATOR = "<|start|>assistant"
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     builtin_tools = input_dict.get("builtin_tools", [])
-
+    tool_choice = input_dict.get("tool_choice", "auto")
     tags = []
+
+    if tool_choice == "auto":
+
+        for tool in tools:
+            if "function" not in tool:
+                continue
+
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{COMMENTARY_CHANNEL_PREFIX}{name}{JSON_CONSTRAIN_SUFFIX}",
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=CALL_END,
+                )
+            )
+
+        for tool in builtin_tools:
+            if "function" not in tool:
+                continue
+
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{ANALYSIS_CHANNEL_PREFIX}{name}{ANALYSIS_MESSAGE_SUFFIX}",
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=CALL_END,
+                )
+            )
+        final_tag = TagFormat(begin=FINAL_BEGIN, content=AnyTextFormat(), end=FINAL_END)
+        tags.append(final_tag)
+
+    elif tool_choice == "required":
+        for tool in builtin_tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{ANALYSIS_CHANNEL_PREFIX}{name}{ANALYSIS_MESSAGE_SUFFIX}",
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=CALL_END,
+                )
+            )
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{COMMENTARY_CHANNEL_PREFIX}{name}{JSON_CONSTRAIN_SUFFIX}",
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=CALL_END,
+                )
+            )
+        if len(tags) <= 0:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if reasoning:
         if force_empty_reasoning:
             analysis_tag = TagFormat(
-                begin="<|channel|>analysis<|message|>",
-                content=ConstStringFormat(value="<|end|>"),
-                end="",
+                begin=ANALYSIS_BEGIN, content=ConstStringFormat(value=FINAL_END), end=""
             )
         else:
-            analysis_tag = TagFormat(
-                begin="<|channel|>analysis<|message|>", content=AnyTextFormat(), end="<|end|>"
-            )
+            analysis_tag = TagFormat(begin=ANALYSIS_BEGIN, content=AnyTextFormat(), end=FINAL_END)
         tags.append(analysis_tag)
 
-    for tool in tools:
-        if "function" not in tool:
-            continue
-
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin=f"<|channel|>commentary to={name}<|constrain|>json<|message|>",
-                content=JSONSchemaFormat(json_schema=parameters),
-                end="<|call|>",
-            )
-        )
-
-    for tool in builtin_tools:
-        if "function" not in tool:
-            continue
-
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin=f"<|channel|>analysis to={name}<|message|>",
-                content=JSONSchemaFormat(json_schema=parameters),
-                end="<|call|>",
-            )
-        )
-
-    final_tag = TagFormat(
-        begin="<|channel|>final<|message|>", content=AnyTextFormat(), end="<|end|>"
-    )
-
-    tags.append(final_tag)
-    tags_with_separator = TagsWithSeparatorFormat(tags=tags, separator="<|start|>assistant")
+    tags_with_separator = TagsWithSeparatorFormat(tags=tags, separator=TAG_SEPARATOR)
     return StructuralTag(format=tags_with_separator)
 
 
 @_register_builtin_structural_tag("deepseek_v3_2", ["DeepSeek-V3.2"])
 def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    INVOKE_BEGIN_PREFIX = '<｜DSML｜invoke name="'
+    INVOKE_BEGIN_SUFFIX = '">\n'
+    INVOKE_END = "</｜DSML｜invoke>\n"
+    FUNCTION_CALLS_BEGIN = "<｜DSML｜function_calls>\n"
+    FUNCTION_CALLS_END = "</｜DSML｜function_calls>\n"
+    FUNCTION_CALLS_TRIGGER = "<｜DSML｜function_calls>"
+    THINK_TAG_BEGIN = "<think>"
+    THINK_TAG_END = "</think>"
+    EMPTY_THINK_CONTENT = "<think>\n\n</think>"
+    XML_STYLE = "deepseek_xml"
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+    tool_choice = input_dict.get("tool_choice", "auto")
 
-    tags = []
-    for tool in tools:
-        if "function" not in tool:
-            continue
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
 
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin='<｜DSML｜invoke name="' + name + '">\n',
-                content=JSONSchemaFormat(json_schema=parameters, style="deepseek_xml"),
-                end="</｜DSML｜invoke>\n",
-            )
-        )
-
-    # generate function calling triggered tag
-    if len(tags) > 0:
-        function_calling_tags = TagsWithSeparatorFormat(
-            tags=tags, separator="\n", at_least_one=True
-        )
-
-        suffix_tag = TriggeredTagsFormat(
-            triggers=["<｜DSML｜function_calls>"],
-            tags=[
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
                 TagFormat(
-                    begin="<｜DSML｜function_calls>\n",
-                    content=function_calling_tags,
-                    end="</｜DSML｜function_calls>\n",
+                    begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
+                    content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                    end=INVOKE_END,
                 )
-            ],
-            excludes=_THINK_EXCLUDE_TOKENS,
-        )
-    else:
-        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+            )
+
+        # generate function calling triggered tag
+        if len(tags) > 0:
+            function_calling_tags = TagsWithSeparatorFormat(
+                tags=tags, separator="\n", at_least_one=True
+            )
+
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[FUNCTION_CALLS_TRIGGER],
+                tags=[
+                    TagFormat(
+                        begin=FUNCTION_CALLS_BEGIN,
+                        content=function_calling_tags,
+                        end=FUNCTION_CALLS_END,
+                    )
+                ],
+                excludes=_THINK_EXCLUDE_TOKENS,
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
+                    content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                    end=INVOKE_END,
+                )
+            )
+        if len(tags) > 0:
+            suffix_tag = SequenceFormat(
+                elements=[
+                    ConstStringFormat(value=FUNCTION_CALLS_BEGIN),
+                    TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True),
+                    ConstStringFormat(value=FUNCTION_CALLS_END),
+                ]
+            )
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
     if force_empty_reasoning:
-        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     else:
-        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
 
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
@@ -639,53 +889,90 @@ def _get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralT
 
 @_register_builtin_structural_tag("minimax", ["MiniMax-M2.5"])
 def _get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    INVOKE_BEGIN_PREFIX = '<invoke name="'
+    INVOKE_BEGIN_SUFFIX = '">\n'
+    INVOKE_END = "</invoke>\n"
+    TOOL_CALL_BEGIN = "<minimax:tool_call>\n"
+    TOOL_CALL_END = "</minimax:tool_call>\n"
+    TOOL_CALL_TRIGGER = "<minimax:tool_call>"
+    THINK_TAG_BEGIN = "<think>"
+    THINK_TAG_END = "</think>"
+    EMPTY_THINK_CONTENT = "<think>\n\n</think>"
+    XML_STYLE = "minimax_xml"
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+    tool_choice = input_dict.get("tool_choice", "auto")
 
-    tags = []
-    for tool in tools:
-        if "function" not in tool:
-            continue
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
 
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin='<invoke name="' + name + '">\n',
-                content=JSONSchemaFormat(json_schema=parameters, style="minimax_xml"),
-                end="</invoke>\n",
-            )
-        )
-
-    # generate function calling triggered tag
-    if len(tags) > 0:
-        function_calling_tags = TagsWithSeparatorFormat(
-            tags=tags, separator="\n", at_least_one=True
-        )
-
-        suffix_tag = TriggeredTagsFormat(
-            triggers=["<minimax:tool_call>"],
-            tags=[
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
                 TagFormat(
-                    begin="<minimax:tool_call>\n",
-                    content=function_calling_tags,
-                    end="</minimax:tool_call>\n",
+                    begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
+                    content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                    end=INVOKE_END,
                 )
-            ],
-            excludes=_THINK_EXCLUDE_TOKENS,
-        )
-    else:
-        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+            )
+
+        # generate function calling triggered tag
+        if len(tags) > 0:
+            function_calling_tags = TagsWithSeparatorFormat(
+                tags=tags, separator="\n", at_least_one=True
+            )
+
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALL_TRIGGER],
+                tags=[
+                    TagFormat(
+                        begin=TOOL_CALL_BEGIN, content=function_calling_tags, end=TOOL_CALL_END
+                    )
+                ],
+                excludes=_THINK_EXCLUDE_TOKENS,
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
+                    content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                    end=INVOKE_END,
+                )
+            )
+        if len(tags) > 0:
+            suffix_tag = SequenceFormat(
+                elements=[
+                    ConstStringFormat(value=TOOL_CALL_BEGIN),
+                    TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True),
+                    ConstStringFormat(value=TOOL_CALL_END),
+                ]
+            )
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
     if force_empty_reasoning:
-        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     else:
-        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
 
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
@@ -712,40 +999,70 @@ def _get_glm47_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     StructuralTag
         A structural tag for GLM function calling format.
     """
+    TOOL_CALL_BEGIN_PREFIX = "<tool_call>"
+    TOOL_CALL_END = "</tool_call>"
+    TOOL_CALL_TRIGGER = "<tool_call>"
+    THINK_TAG_BEGIN = "<think>"
+    THINK_TAG_END = "</think>"
+    EMPTY_THINK_CONTENT = "<think>\n\n</think>"
+    XML_STYLE = "glm_xml"
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+    tool_choice = input_dict.get("tool_choice", "auto")
 
-    tags = []
-    for tool in tools:
-        if "function" not in tool:
-            continue
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
 
-        function = tool["function"]
-        parameters = function["parameters"]
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin=f"<tool_call>{name}",
-                content=JSONSchemaFormat(json_schema=parameters, style="glm_xml"),
-                end="</tool_call>",
+            function = tool["function"]
+            parameters = function["parameters"]
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}",
+                    content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                    end=TOOL_CALL_END,
+                )
             )
-        )
 
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(
-            triggers=["<tool_call>"], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
-        )
-    else:
-        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}",
+                    content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                    end=TOOL_CALL_END,
+                )
+            )
+        if len(tags) > 0:
+            suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
     if force_empty_reasoning:
-        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     else:
-        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -773,47 +1090,76 @@ def _get_gemma4_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     - "reasoning": a boolean indicating whether to enable reasoning mode.
     - "force_empty_reasoning": a boolean; when reasoning is on, if True
       use empty-thinking (pre-closed channel), if False use thinking.
+    - "tool_choice": ``"auto"`` or ``"required"``; ``"required"`` forces at least one tool call.
 
     Returns
     -------
     StructuralTag
         A structural tag for Gemma 4 function calling format.
     """
+    TOOL_CALL_BEGIN_PREFIX = "<|tool_call>call:"
+    TOOL_CALL_END = "<tool_call|>"
+    TOOL_CALL_TRIGGER = "<|tool_call>"
+    THINK_TAG_BEGIN = "<|channel>thought\n"
+    THINK_TAG_END = "<channel|>"
+    EMPTY_THINK_CONTENT = THINK_TAG_BEGIN + THINK_TAG_END
+
     tools = input_dict.get("tools", [])
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+    tool_choice = input_dict.get("tool_choice", "auto")
 
-    tags = []
-    for tool in tools:
-        if "function" not in tool:
-            continue
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
 
-        function = tool["function"]
-        parameters = _get_function_parameters(function)
-        name = function["name"]
-        tags.append(
-            TagFormat(
-                begin=f"<|tool_call>call:{name}",
-                content=JSONSchemaFormat(json_schema=parameters),
-                end="<tool_call|>",
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=TOOL_CALL_BEGIN_PREFIX + name,
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
             )
-        )
 
-    if len(tags) > 0:
-        suffix_tag = TriggeredTagsFormat(
-            triggers=["<|tool_call>"], tags=tags, excludes=_GEMMA4_EXCLUDE_TOKENS
-        )
-    else:
-        suffix_tag = AnyTextFormat(excludes=_GEMMA4_EXCLUDE_TOKENS)
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=_GEMMA4_EXCLUDE_TOKENS
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_GEMMA4_EXCLUDE_TOKENS)
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            if "function" not in tool:
+                continue
+
+            function = tool["function"]
+            parameters = _get_function_parameters(function)
+            name = function["name"]
+            tags.append(
+                TagFormat(
+                    begin=TOOL_CALL_BEGIN_PREFIX + name,
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
+            )
+        if len(tags) > 0:
+            suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
     if force_empty_reasoning:
-        prefix_tag = ConstStringFormat(value="<|channel>thought\n<channel|>")
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     else:
-        prefix_tag = TagFormat(
-            begin="<|channel>thought\n", content=AnyTextFormat(), end="<channel|>"
-        )
+        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))

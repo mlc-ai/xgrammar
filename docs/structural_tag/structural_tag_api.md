@@ -69,7 +69,7 @@ When one of these formats appears inside a `tag`, the compiler automatically use
 - token end -> token-level unlimited format
 
 This is why a format like `tag("<think>", any_text, "</think>")` can stop cleanly at
-`</think>`. For more details, see [Advanced Topics of the Structural Tag](advanced_structural_tag).
+`</think>`. For more details, see [Advanced Topics of the Structural Tag](advanced_usage).
 
 ## Quick Start
 
@@ -804,7 +804,7 @@ helper instead of hand-writing every wrapper:
 - Harmony
 - MiniMax
 
-See [Advanced Topics of the Structural Tag](advanced_structural_tag) for
+See [Advanced Topics of the Structural Tag](advanced_usage) for
 `get_builtin_structural_tag` and the list of supported models.
 
 ## Mapping to OpenAI Tool Calling Options
@@ -823,5 +823,6 @@ cleanly:
 ## Next Steps
 
 - For API reference, see [Structural Tag API Reference](../api/python/structural_tag).
-- For built-in helpers, automatic end detection details, and deprecated APIs, see
-  [Advanced Topics of the Structural Tag](advanced_structural_tag).
+- For Builtin Structural Tag, see [Builtin Structural Tag](builtin_structural_tag).
+- For automatic end detection details, and deprecated APIs, see
+  [Advanced Topics of the Structural Tag](advanced_usage).
