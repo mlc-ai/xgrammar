@@ -1,5 +1,4 @@
-"""Tests for get_structural_tag_for_model and generated structural tags.
-"""
+"""Tests for get_structural_tag_for_model and generated structural tags."""
 
 import re
 import time
@@ -120,6 +119,7 @@ _builtin_harmony = make_tools(["analysis_tool"])
 _tools_deepseek_v3_2 = make_tools(["search"])
 _tools_minimax = make_tools(["search"])
 _tools_glm47 = make_tools(["search"])
+_tools_gemma4 = make_tools(["get_weather"])
 
 
 # ---------- Test: unknown format type ----------
@@ -150,6 +150,7 @@ def test_get_builtin_structural_tag_supported_models_all():
         "deepseek_v3_2",
         "minimax",
         "glm47",
+        "gemma4",
     }
     assert set(result.keys()) == expected_styles
     for style, models in result.items():
@@ -169,6 +170,10 @@ def test_get_builtin_structural_tag_supported_models_all():
         ("deepseek_v3_2", ["DeepSeek-V3.2"]),
         ("minimax", ["MiniMax-M2.5"]),
         ("glm47", ["GLM-5", "GLM-4.7"]),
+        (
+            "gemma4",
+            ["Gemma-4", "gemma-4-12b-it", "gemma-4-26b-a4b-it", "gemma-4-31b-it", "gemma-4-e2b-it"],
+        ),
     ],
 )
 def test_get_structural_tag_supported_models_by_style(style: str, expected_models: List[str]):
@@ -2128,6 +2133,7 @@ _TOOLS: List[Dict[str, Any]] = [
         ("qwen", {"tools": _TOOLS}),
         ("deepseek_v3_2", {"tools": _TOOLS}),
         ("minimax", {"tools": _TOOLS}),
+        ("gemma4", {"tools": _TOOLS}),
         (
             "harmony",
             {
@@ -2151,3 +2157,65 @@ def test_get_builtin_structural_tag_build_grammar_with_no_parameter_tools(
     structural_tag = get_builtin_structural_tag(format_type, **kwargs)
     grammar = xgr.Grammar.from_structural_tag(structural_tag)
     assert grammar is not None
+
+
+# ----- gemma4
+
+
+def test_get_gemma4_structural_tag_instance():
+    """get_builtin_structural_tag(gemma4) accepts/rejects instances as expected."""
+
+    # --- No tools, no reasoning: plain text only ---
+    stag = get_builtin_structural_tag("gemma4", reasoning=False)
+    check_stag_with_instance(stag, "Hello world", True)
+    check_stag_with_instance(stag, "", True)
+
+    # --- No tools, reasoning enabled ---
+    stag = get_builtin_structural_tag("gemma4", reasoning=True)
+    check_stag_with_instance(
+        stag, "<|channel>thought\nLet me think...<channel|>The answer is 42.", True
+    )
+    check_stag_with_instance(stag, "<|channel>thought\n<channel|>Quick answer.", True)
+    # Missing thinking prefix should be rejected
+    check_stag_with_instance(stag, "No thinking here.", False)
+
+    # --- No tools, reasoning with force_empty_reasoning ---
+    stag = get_builtin_structural_tag("gemma4", reasoning=True, force_empty_reasoning=True)
+    check_stag_with_instance(stag, "<|channel>thought\n<channel|>Direct answer.", True)
+    # Non-empty thinking should be rejected when force_empty
+    check_stag_with_instance(stag, "<|channel>thought\nSome reasoning<channel|>Answer.", False)
+
+    # --- With tools, no reasoning ---
+    stag = get_builtin_structural_tag("gemma4", tools=_tools_gemma4, reasoning=False)
+    check_stag_with_instance(stag, '<|tool_call>call:get_weather{"q": "Paris"}<tool_call|>', True)
+    check_stag_with_instance(stag, "Plain text without tool call.", True)
+    # Wrong function name should be rejected
+    check_stag_with_instance(stag, '<|tool_call>call:unknown_func{"q": "x"}<tool_call|>', False)
+
+    # --- Multiple tool calls ---
+    check_stag_with_instance(
+        stag,
+        '<|tool_call>call:get_weather{"q": "Paris"}<tool_call|>'
+        '<|tool_call>call:get_weather{"q": "London"}<tool_call|>',
+        True,
+    )
+
+    # --- With tools, reasoning enabled ---
+    stag = get_builtin_structural_tag("gemma4", tools=_tools_gemma4, reasoning=True)
+    check_stag_with_instance(
+        stag,
+        "<|channel>thought\nI should check the weather.<channel|>"
+        '<|tool_call>call:get_weather{"q": "Paris"}<tool_call|>',
+        True,
+    )
+    check_stag_with_instance(
+        stag, "<|channel>thought\nThinking...<channel|>Just text, no tool call.", True
+    )
+
+
+def test_get_gemma4_structural_tag_supported_models():
+    """gemma4 is listed in supported models."""
+    all_models = get_builtin_structural_tag_supported_models()
+    assert "gemma4" in all_models
+    gemma4_models = get_builtin_structural_tag_supported_models("gemma4")
+    assert "Gemma-4" in gemma4_models
