@@ -31,9 +31,6 @@ namespace xgrammar {
 // Short alias for the error type.
 using ISTError = InvalidStructuralTagError;
 
-// Forward declaration for helpers that convert Format to picojson::value.
-picojson::value FormatToJSONValue(const Format& format);
-
 picojson::value StringVectorToJSONArray(const std::vector<std::string>& vector) {
   picojson::array array;
   array.reserve(vector.size());
@@ -78,10 +75,6 @@ picojson::value IntOrStringVectorToJSONArray(
 
 /******************** Format To JSON ********************/
 std::string FormatToJSON(const Format& format) { return FormatToJSONValue(format).serialize(); }
-
-picojson::value FormatToJSONValue(const Format& format) {
-  return std::visit([&](auto&& arg) { return arg.ToJSON(); }, format);
-}
 
 picojson::value ConstStringFormat::ToJSON() const {
   picojson::object obj;

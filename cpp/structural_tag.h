@@ -371,6 +371,10 @@ struct StructuralTag {
   StructuralTag(Format format) : format(std::move(format)) {}
 };
 
+inline picojson::value FormatToJSONValue(const Format& format) {
+  return std::visit([&](auto&& arg) { return arg.ToJSON(); }, format);
+}
+
 /******************** Conversion API ********************/
 
 /*!

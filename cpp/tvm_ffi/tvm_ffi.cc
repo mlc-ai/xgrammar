@@ -24,6 +24,7 @@
 #include "../support/utils.h"
 #include "../testing.h"
 #include "python_methods.h"
+#include "xgrammar/builtin_structural_tag.h"
 #include "xgrammar/exception.h"
 #include "xgrammar/matcher.h"
 
@@ -680,6 +681,12 @@ TVM_FFI_STATIC_INIT_BLOCK() {
 
   // ----- Global functions: testing, kernels, config, exceptions -----
   refl::GlobalDef()
+      .def(
+          "xgrammar.tvm_ffi_binding.get_builtin_structural_tag_json",
+          [](ffi::String model, ffi::String input_dict_json) {
+            return ffi::String(GetBuiltinStructuralTagJSON(model, input_dict_json));
+          }
+      )
       .def(
           "xgrammar.tvm_ffi_binding.testing._json_schema_to_ebnf",
           [](ffi::String schema,
