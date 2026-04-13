@@ -2627,23 +2627,6 @@ def test_structural_tag_json_format_errors(json_input: str, expected_error: str)
 
 
 structural_tag_error_test_data = [
-    # Analyzer Errors - Only last element in sequence can be unlimited
-    {
-        "type": "sequence",
-        "elements": [
-            {"type": "const_string", "value": "start"},
-            {"type": "any_text"},  # This unlimited element in middle will cause error
-            {"type": "const_string", "value": "end"},
-        ],
-    },
-    # Analyzer Errors - Or format with mixed unlimited and limited elements
-    {
-        "type": "or",
-        "elements": [
-            {"type": "const_string", "value": "limited"},  # Limited element
-            {"type": "any_text"},  # Unlimited element - mix not allowed
-        ],
-    },
     # Analyzer Errors - Tag format with unlimited content but empty end
     {
         "type": "tag",
@@ -2665,42 +2648,6 @@ structural_tag_error_test_data = [
         "triggers": ["X", "Y"],  # Neither matches "ABC" begin
         "tags": [
             {"begin": "ABC", "content": {"type": "const_string", "value": "hello"}, "end": "end"}
-        ],
-    },
-    # Cannot detect end string of tags_with_separator in sequence
-    {
-        "type": "sequence",
-        "elements": [
-            {
-                "type": "tags_with_separator",
-                "tags": [
-                    {
-                        "begin": "<start>",
-                        "content": {"type": "const_string", "value": "[TEXT]"},
-                        "end": "<end>",
-                    }
-                ],
-                "separator": "<sep>",
-            },
-            {"type": "const_string", "value": "[TEXT]"},
-        ],
-    },
-    # Cannot detect end string of tags_with_separator in or
-    {
-        "type": "or",
-        "elements": [
-            {
-                "type": "tags_with_separator",
-                "tags": [
-                    {
-                        "begin": "<start>",
-                        "content": {"type": "const_string", "value": "[TEXT]"},
-                        "end": "<end>",
-                    }
-                ],
-                "separator": "<sep>",
-            },
-            {"type": "const_string", "value": "[TEXT]"},
         ],
     },
     # Original test cases - Detected end string of tags_with_separator is empty

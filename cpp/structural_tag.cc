@@ -1581,51 +1581,27 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(RegexFormat* format) {
 }
 
 std::optional<ISTError> StructuralTagAnalyzer::VisitSub(SequenceFormat* format) {
-  for (size_t i = 0; i < format->elements.size() - 1; ++i) {
-    auto& element = format->elements[i];
-    auto err = Visit(&element);
-    if (err.has_value()) {
-      return err;
-    }
-    if (IsUnlimited(element)) {
-      if (!IsExcluded(element)) {
-        return ISTError(
-            "Only the last element in a sequence can be unlimited, but the " + std::to_string(i) +
-            "th element of sequence format is unlimited"
-        );
-      }
-    }
-  }
-
-  auto& element = format->elements.back();
-  auto err = Visit(&element);
-  if (err.has_value()) {
-    return err;
-  }
-  format->is_unlimited_ = IsUnlimited(element) && !IsExcluded(element);
-  return std::nullopt;
-}
-
-std::optional<ISTError> StructuralTagAnalyzer::VisitSub(OrFormat* format) {
   bool is_any_unlimited = false;
-  bool is_all_unlimited = true;
   for (auto& element : format->elements) {
     auto err = Visit(&element);
     if (err.has_value()) {
       return err;
     }
-    auto is_unlimited = IsUnlimited(element) && !IsExcluded(element);
-    is_any_unlimited |= is_unlimited;
-    is_all_unlimited &= is_unlimited;
+    is_any_unlimited |= IsUnlimited(element) && !IsExcluded(element);
   }
+  format->is_unlimited_ = is_any_unlimited;
+  return std::nullopt;
+}
 
-  if (is_any_unlimited && !is_all_unlimited) {
-    return ISTError(
-        "Now we only support all elements in an or format to be unlimited or all limited, but the "
-        "or format has both unlimited and limited elements"
-    );
+std::optional<ISTError> StructuralTagAnalyzer::VisitSub(OrFormat* format) {
+  bool is_any_unlimited = false;
+  for (auto& element : format->elements) {
+    auto err = Visit(&element);
+    if (err.has_value()) {
+      return err;
+    }
+    is_any_unlimited |= IsUnlimited(element) && !IsExcluded(element);
   }
-
   format->is_unlimited_ = is_any_unlimited;
   return std::nullopt;
 }
