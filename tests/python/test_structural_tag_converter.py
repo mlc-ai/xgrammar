@@ -57,11 +57,10 @@ tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
 def disable_profiler(request):
     global PROFILER_ON
     global profiler
-    markexpr = getattr(request.config.option, "markexpr", "") or request.config.getoption(
-        "markexpr", ""
-    )
-    hf_token_not_provided = "not hf_token_required" in (markexpr or "")
-    if hf_token_not_provided:
+    # Import shared token check from conftest (handles env vars + cached login)
+    from conftest import _hf_token_available
+
+    if not _hf_token_available():
         PROFILER_ON = False
     else:
         profiler = Profiler(tokenizer_id)
