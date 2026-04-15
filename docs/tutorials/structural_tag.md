@@ -1,20 +1,18 @@
 # Structural Tag Usage
 
-The structural tag API aims to provide a JSON-config-based way to precisely describe the output format of an LLM. It is more flexible and dynamic than the OpenAI API:
+Structural tags describe LLM outputs as a tree of composable format objects. Use them when a
+plain JSON schema is not enough, such as:
 
-* **Flexible**: supports various structures, including tool calling, reasoning (\<think\>...\</think\>), etc.
-* **Dynamic**: allows a mixture of free-form text and structures such as tool calls, entering constrained generation when a pre-set trigger is met.
+- tool calling with model-specific wrappers
+- reasoning tags like `<think>...</think>`
+- responses that mix free-form text with structured fragments
+- token-level delimiters that are not represented as normal text
 
-It can also be used in the LLM engine to implement the OpenAI Tool Calling API with strict
-format constraints, with these benefits:
+Structural tags are also compatible with the OpenAI-style `response_format` request shape.
 
-* Support the advanced tool calling features, such as forced tool calling, parallel tool calling, etc.
-* Support the tool calling format of most of the LLMs available in the market with minimal effort.
+## Request Shape
 
-## Usage
-
-The structural tag is a response format. It's compatible with the OpenAI API. With the
-structural tag, the request should be like:
+Pass a structural tag as the `response_format`:
 
 ```json
 {
@@ -32,1117 +30,800 @@ structural tag, the request should be like:
 }
 ```
 
-The format field requires a format object. We provide several basic format objects, and they can be composed to allow for more complex formats. Each format object represent a "chunk" of text.
-
-## Format Types
-
-1. `const_string`
-
-    The LLM output must exactly match the given string.
-
-    This is useful for like force reasoning, where the LLM output must start with "Let's think step by step".
-
-    ```json
-    {
-        "type": "const_string",
-        "value": "..."
-    }
-    ```
-
-2. `json_schema`
-
-    The output should be a valid JSON object that matches the JSON schema.
-
-    **`style`** (optional, default: `"json"`): Controls how the content is parsed. Supported values:
-
-    * `"json"`: Standard JSON format. The output must be valid JSON that conforms to the schema.
-    * `"qwen_xml"`: Qwen-coder XML style format. The output uses XML-style tags such as `<parameter=name>value</parameter>` to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy `qwen_xml_parameter` format.
-    * `"minimax_xml"`: MiniMax XML style format. The output uses XML-style tags such as `<parameter name="key">value</parameter>` (attribute form) to represent schema properties, as used in MiniMax tool-calling formats. Same semantics as `qwen_xml` except the tag format is `<parameter name="key">` instead of `<parameter=key>`.
-    * `"deepseek_xml"`: DeepSeek-v3.2 XML style format. The output should be in the format of `<{dsml_token}parameter name=\"key\" string=\"true|false\">value</{dsml_token}parameter>`.
-
-    When `style` is omitted, it defaults to `"json"`.
-
-    ```json
-    {
-        "type": "json_schema",
-        "json_schema": {
-            ...
-        },
-        "style": "json"
-    }
-    ```
-
-    For Qwen / MiniMax / Deepseek XML style output, set `style` to `qwen_xml` / `minimax_xml` / `deepseek_xml`:
-
-    ```json
-    {
-        "type": "json_schema",
-        "json_schema": {
-            ...
-        },
-        "style": "qwen_xml" / "minimax_xml" / "deepseek_xml"
-    }
-    ```
-
-3. `grammar`
-
-    This format can be used to match a given ebnf grammar.
-
-    ```json
-    {
-        "type": "grammar",
-        "grammar": "..."
-    }
-    ```
-
-    We can use it as the context of other structural tags as well. When using grammar constraints, you need to be especially careful. If the grammar is too general (for example .*), it will cause the subsequent constraints to become ineffective.
-
-4. `regex`
-
-    This format can be used to match a given ebnf grammar.
-
-    ```json
-    {
-        "type": "regex",
-        "pattern": "..."
-    }
-    ```
-
-    We can use it as the context of other structural tags as well. As GrammarFormat, if the regex pattern is too general, it will cause the subsequent constraints to become inefficient as well.
-
-5. `sequence`
-
-    The output should match a sequence of elements.
-
-    ```json
-    {
-        "type": "sequence",
-        "elements": [
-            {
-                "type": "...",
-            },
-            {
-                "type": "...",
-            },
-            ...
-        ]
-    }
-    ```
-
-6. `or`
-
-    The output should follow any of the elements.
-
-    ```json
-    {
-        "type": "or",
-        "elements": [
-            {
-                "type": "...",
-            },
-            {
-                "type": "...",
-            },
-            ...
-        ]
-    }
-    ```
-
-7. `tag`
-
-    The output must follow `begin content end`. `begin` and `end` can be strings or `token` format objects, and `content` can be any format object. This is useful for LLM outputs such as `<think>...</think>` or `<function>...</function>`.
-
-    ```json
-    {
-        "type": "tag",
-        "begin": "...",
-        "content": {
-            "type": "...",
-        },
-        "end": "..."
-    }
-    ```
-
-    `begin` and `end` can also be `token` format objects for token-level boundary matching:
-
-    ```json
-    {
-        "type": "tag",
-        "begin": {"type": "token", "token": "<|tool_call|>"},
-        "content": {"type": "json_schema", "json_schema": ...},
-        "end": {"type": "token", "token": "<|end|>"}
-    }
-    ```
-
-8. `any_text`
-
-    The any_text format allows any text.
-
-    ```json
-    {
-        "type": "any_text",
-        "excludes": ["...", ]
-    }
-    ```
-
-    We will handle it as a special case when wrapped in a tag:
-
-    ```json
-    {
-        "type": "tag",
-        "begin": "...",
-        "content": {
-            "type": "any_text",
-            "excludes": ["...", ]
-        },
-        "end": "...",
-    }
-    ```
-
-    It first accepts the begin tag (can be empty), then any text **except the end tag** and the **excludes**, then the end tag.
-
-9. `triggered_tags`
-
-    The output will match triggered tags. It can allow any output until a trigger is
-    encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
-    grammar will allow any following output, until the next trigger is encountered.
-
-    Each tag should be matched by exactly one trigger. "matching" means the trigger should be a
-    prefix of the begin tag. All the strings in `excludes` will not be accepted before the tag is triggerred.
-
-    **Note:** Tags inside `triggered_tags` must use **string** `begin` fields (not `token` format objects). For token-level dispatch, use `token_triggered_tags` instead.
-
-    ```json
-    {
-        "type": "triggered_tags",
-        "triggers": ["<function="],
-        "tags": [
-            {
-                "begin": "...",
-                "content": {
-                    ...
-                },
-                "end": "..."
-            },
-            {
-                "begin": "...",
-                "content": {
-                    ...
-                },
-                "end": "..."
-            },
-        ],
-        "at_least_one": bool,
-        "stop_after_first": bool,
-        "excludes": ["...", ]
-    }
-    ```
-
-    For example,
-
-    ```json
-    {
-        "type": "triggered_tags",
-        "triggers": ["<function="],
-        "tags": [
-            {
-                "begin": "<function=func1>",
-                "content": {
-                    "type": "json_schema",
-                    "json_schema": ...
-                },
-                "end": "</function>",
-            },
-            {
-                "begin": "<function=func2>",
-                "content": {
-                    "type": "json_schema",
-                    "json_schema": ...
-                },
-                "end": "</function>",
-            },
-        ],
-        "at_least_one": false,
-        "stop_after_first": false,
-    }
-    ```
-
-    The above structural tag can accept the following outputs:
-
-    ```text
-    <function=func1>{"name": "John", "age": 30}</function>
-    <function=func2>{"name": "Jane", "age": 25}</function>
-    any_text<function=func1>{"name": "John", "age": 30}</function>any_text1<function=func2>{"name": "Jane", "age": 25}</function>any_text2
-    ```
-
-    `at_least_one` makes sure at least one of the tags must be generated. The first tag will
-    be generated at the beginning of the output.
-
-    `stop_after_first` will reach the end of the `triggered_tags` structure after the first tag is generated. If there are following tags, they will still be generated; otherwise, the generation
-    will stop.
-
-10. `tags_with_separator`
-
-    The output should match zero, one, or more tags, separated by the separator, with no other text allowed.
-
-    ```json
-    {
-        "type": "tags_with_separator",
-        "tags": [
-            {
-                "type": "tag",
-                "begin": "...",
-                "content": {
-                    "type": "...",
-                },
-                "end": "...",
-            },
-        ],
-        "separator": "...",
-        "at_least_one": bool,
-        "stop_after_first": bool,
-    }
-    ```
-
-    For example,
-
-    ```json
-    {
-        "type": "tags_with_separator",
-        "tags": [
-            {
-                "type": "tag",
-                "begin": "<function=func1>",
-                "content": {
-                    "type": "json_schema",
-                    "json_schema": ...
-                },
-                "end": "</function>",
-            },
-        ],
-        "separator": ",",
-        "at_least_one": false,
-        "stop_after_first": false,
-    }
-    ```
-
-    The above structural tag can accept an empty string, or the following outputs:
-
-    ```text
-    <function=func1>{"name": "John", "age": 30}</function>
-    <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>
-    <function=func1>{"name": "John", "age": 30}</function>,<function=func2>{"name": "Jane", "age": 25}</function>,<function=func1>{"name": "John", "age": 30}</function>
-    ```
-
-    `at_least_one` makes sure at least one of the tags must be generated.
-
-    `stop_after_first` will reach the end of the `tags_with_separator` structure after the first
-    tag is generated. If there are following tags, they will still be generated; otherwise, the
-    generation will stop.
-
-11. `optional`
-
-    The inner format may appear **0 or 1 time** (EBNF optional). The output can either match the content once or be empty.
-
-    **`content`** (required): A format object. It can be any of the format types.
-
-    ```json
-    {
-        "type": "optional",
-        "content": {
-            "type": "..."
-        }
-    }
-    ```
-
-    For example, to allow an optional prefix:
-
-    ```json
-    {
-        "type": "optional",
-        "content": {
-            "type": "const_string",
-            "value": "Optional prefix: "
-        }
-    }
-    ```
-
-    The above accepts either an empty string or exactly `Optional prefix: `.
-
-12. `plus`
-
-    The inner format must appear **1 or more times** (EBNF plus). The output matches one or more consecutive occurrences of the content.
-
-    **`content`** (required): A format object. It can be any of the format types.
-
-    ```json
-    {
-        "type": "plus",
-        "content": {
-            "type": "..."
-        }
-    }
-    ```
-
-    For example, to require one or more comma-separated items (simplified):
-
-    ```json
-    {
-        "type": "plus",
-        "content": {
-            "type": "const_string",
-            "value": "item"
-        }
-    }
-    ```
-
-    The above accepts `item`, `itemitem`, `itemitemitem`, and so on.
-
-13. `star`
-
-    The inner format may appear **0 or more times** (EBNF star). The output matches zero or more consecutive occurrences of the content.
-
-    **`content`** (required): A format object. It can be any of the format types.
-
-    ```json
-    {
-        "type": "star",
-        "content": {
-            "type": "..."
-        }
-    }
-    ```
-
-    For example, to allow zero or more occurrences of a fragment:
-
-    ```json
-    {
-        "type": "star",
-        "content": {
-            "type": "const_string",
-            "value": "x"
-        }
-    }
-    ```
-
-    The above accepts an empty string, or `x`, `xx`, `xxx`, and so on.
-
-14. `repeat`
-
-    The inner format may appear **between `min` and `max` times (inclusive)**. This generalizes `plus` (min=1, unbounded) and `star` (min=0, unbounded). Use `max: -1` for an unbounded upper limit (i.e. "at least `min` times").
-
-    **`min`** (required): Minimum number of occurrences (inclusive). Must be non-negative.
-
-    **`max`** (required): Maximum number of occurrences (inclusive). Use `-1` for unbounded.
-
-    **`content`** (required): A format object. It can be any of the format types.
-
-    ```json
-    {
-        "type": "repeat",
-        "min": 1,
-        "max": 3,
-        "content": {
-            "type": "const_string",
-            "value": "item"
-        }
-    }
-    ```
-
-    The above accepts `item`, `itemitem`, or `itemitemitem` (exactly 1 to 3 times).
-
-    For "at least N times" (no upper bound), set `max` to `-1`:
-
-    ```json
-    {
-        "type": "repeat",
-        "min": 2,
-        "max": -1,
-        "content": {
-            "type": "const_string",
-            "value": "x"
-        }
-    }
-    ```
-
-    The above accepts `xx`, `xxx`, `xxxx`, and so on (2 or more times).
-
-15. `QwenXMLParameterFormat` *(not recommended)*
-
-    **Deprecated.** This format is kept for backward compatibility only. Prefer using `json_schema` with `style: "qwen_xml"` instead (see the `json_schema` format above).
-
-    This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.
-
-    ```json
-    {
-        "type": "qwen_xml_parameter",
-        "json_schema": {
-            ...
-        }
-    }
-    ```
-
-    For example,
-
-    ```json
-    {
-        "type": "qwen_xml_parameter",
-        "json_schema": {
-            "type": "object",
-            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
-            "required": ["name", "age"],
-        },
-    }
-    ```
-
-    This can accept outputs such like:
-
-    ```xml
-    <parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>
-    <parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>
-    <parameter=name>Bob</parameter><parameter=age>100</parameter>
-    <parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>
-    ```
-
-    Note that strings here are in XML style. Moreover, if the parameter's type is `object`, the inner `object` will still be in JSON style. For example:
-
-    ```json
-    {
-        "type": "qwen_xml_parameter",
-        "json_schema": {
-            "type": "object",
-            "properties": {
-                "address": {
+The `format` field is required. It contains one format object, and that object can recursively nest
+other format objects.
+
+## How Structural Tags Work
+
+Think of a structural tag as a tree of chunks:
+
+- **Primitive formats** match one chunk directly, such as an exact string or a JSON payload.
+- **Composition formats** combine other formats, such as "A then B" or "A or B".
+- **Tagging and dispatch formats** wrap content in delimiters or switch into constrained generation
+  only after a trigger is seen.
+- **Token-level formats** do the same kinds of matching, but at the tokenizer level instead of the
+  string level.
+
+### Format Categories
+
+| Category | Formats | What they do |
+| --- | --- | --- |
+| Primitive | `const_string`, `json_schema`, `grammar`, `regex`, `any_text` | Match one text fragment |
+| Composition | `sequence`, `or`, `optional`, `plus`, `star`, `repeat` | Build larger structures from smaller ones |
+| Tagging / dispatch | `tag`, `triggered_tags`, `tags_with_separator`, `dispatch` | Wrap content or switch between free text and structured regions |
+| Token-level | `token`, `exclude_token`, `any_tokens`, `token_triggered_tags`, `token_dispatch` | Constrain output at token boundaries |
+| Deprecated | `qwen_xml_parameter` | Kept for backward compatibility |
+
+### Unlimited Formats and End Detection
+
+Some formats can consume an unbounded amount of output:
+
+- `any_text`
+- `any_tokens`
+- `triggered_tags`
+- `token_triggered_tags`
+
+When one of these formats appears inside a `tag`, the compiler automatically uses the enclosing
+`end` marker as part of the stop condition when the levels match:
+
+- string end -> string-level unlimited format
+- token end -> token-level unlimited format
+
+This is why a format like `tag("<think>", any_text, "</think>")` can stop cleanly at
+`</think>`. For more details, see [Advanced Topics of the Structural Tag](advanced_structural_tag).
+
+## Quick Start
+
+### Minimal `tag`
+
+Use `tag` when the output must look like `begin + content + end`.
+
+```json
+{
+    "type": "tag",
+    "begin": "<think>",
+    "content": {
+        "type": "any_text"
+    },
+    "end": "</think>"
+}
+```
+
+This matches `<think>...</think>`.
+
+### Minimal `triggered_tags`
+
+Use `triggered_tags` when the model should be free to emit normal text, but switch into a
+structured region after seeing a trigger.
+
+```json
+{
+    "type": "triggered_tags",
+    "triggers": ["<function="],
+    "tags": [
+        {
+            "type": "tag",
+            "begin": "<function=get_weather>",
+            "content": {
+                "type": "json_schema",
+                "json_schema": {
                     "type": "object",
-                    "properties": {"street": {"type": "string"}, "city": {"type": "string"}},
-                    "required": ["street", "city"],
+                    "properties": {
+                        "city": {"type": "string"}
+                    },
+                    "required": ["city"]
                 }
             },
-            "required": ["address"],
-        },
-    }
-    ```
-
-    These are valid outputs:
-
-    ```xml
-    <parameter=address>{"street": "Main St", "city": "New York"}</parameter>
-    <parameter=address>{"street": "Main St", "city": "No more xml escape&<>"}</parameter>
-    ```
-
-    And this is an invalid output:
-
-    ```xml
-    <parameter=address><parameter=street>Main St</parameter><parameter=city>New York</parameter></parameter>
-    ```
-
-15. `token`
-
-    Matches a single token by token ID or token string. Can be used standalone or as the `begin`/`end` of a `tag`.
-
-    ```json
-    {"type": "token", "token": 42}
-    {"type": "token", "token": "<|tool_call|>"}
-    ```
-
-    When `token` is a string, it is resolved to a token ID via `tokenizer_info`.
-
-16. `exclude_token`
-
-    Matches any single token except those in the given set. When wrapped in a `tag` whose `end` is a `token` format, the end token is automatically excluded.
-
-    ```json
-    {"type": "exclude_token"}
-    {"type": "exclude_token", "exclude_tokens": [42, "</s>"]}
-    ```
-
-    Elements in `exclude_tokens` can be integers (token IDs) or strings (token strings resolved via `tokenizer_info`).
-
-17. `any_tokens`
-
-    Matches zero or more tokens, excluding those in the given set. Semantically equivalent to `star(exclude_token(...))`. When wrapped in a `tag` whose `end` is a `token` format, the end token is automatically excluded.
-
-    ```json
-    {"type": "any_tokens"}
-    {"type": "any_tokens", "exclude_tokens": [42, "</s>"]}
-    ```
-
-    Elements in `exclude_tokens` can be integers (token IDs) or strings (token strings resolved via `tokenizer_info`).
-
-18. `token_triggered_tags`
-
-    Similar to `triggered_tags`, but triggers and excludes operate at the token level. When a trigger token is generated, the output dispatches to the corresponding tag.
-
-    **Note:** Tags inside `token_triggered_tags` must use **`token` format objects** as their `begin` fields (not strings). For string-level dispatch, use `triggered_tags` instead.
-
-    ```json
-    {
-        "type": "token_triggered_tags",
-        "trigger_tokens": [100, "<|tool_call|>"],
-        "tags": [
-            {
-                "begin": {"type": "token", "token": 100},
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": {"type": "token", "token": 101}
-            }
-        ],
-        "exclude_tokens": ["</s>"],
-        "at_least_one": false,
-        "stop_after_first": false
-    }
-    ```
-
-    `trigger_tokens` and `exclude_tokens` elements can be integers or strings. `at_least_one` and `stop_after_first` have the same semantics as in `triggered_tags`.
-
-19. `dispatch`
-
-    Accepts any string except the excluded string. But when any of the case strings is generated, the following format must follow the corresponding format. When the loop is false, after generating the format, we reach the end of the format. Otherwise, it will continue to allow generating any string and match the next case.
-
-    **`rules`** (required): Non-empty array of 2-element JSON arrays. Each entry is ``[pattern, content_format]``: the pattern is a string, followed by a format object for the content after that pattern.
-
-    **`loop`** (optional, default `true`): If true, after handling one dispatched format, it will continue to allow free-form text and match the next pattern. Otherwise, the matching of this format ends after handling the first dispatched format.
-
-    **`exclude_tokens`** (optional, default `[]`): List of strings that must not appear in the free-form text.
-
-    Corresponds to an [Aho-Corasick automaton](https://en.wikipedia.org/wiki/Aho%E2%80%93Corasick_algorithm) under the hood to allow efficient and accurate pattern matching in a free-formed string.
-
-    Common usage: Put the end string inside the exclude, and put another end string after it. E.g.
-    ```json
-    format: sequence
-    sequence: [
-    DispatchFormat(cases=..., excludes=["abc"])
-    ConstStringFormat("abc")
+            "end": "</function>"
+        }
     ]
-    ```
+}
+```
 
-    This means when the LLM generates abc, the matching of the first DispatchFormat ends and gets into the following ConstStringFormat. You can also use the "end" part of the TagFormat to achieve the same goal.
+This accepts output like:
 
-20. `token_dispatch`
+```text
+I will call a tool now. <function=get_weather>{"city": "San Francisco"}</function>
+```
 
-    Similar to `dispatch` type, while the patterns are token IDs or token strings.
+## Format Reference
 
-    **`rules`** (required): Non-empty array of 2-element JSON arrays. Each entry is ``[pattern_token, content_format]``: the pattern is a token ID (integer) or token string (resolved via `tokenizer_info`), followed by a format object for the content after that token.
+### Primitive Formats
 
-    **`loop`** (optional, default `true`): If true, after one dispatched format, it will continue to allow free-form text and match the next pattern. Otherwise, the matching of this format ends after handling the first dispatched format.
+#### `const_string`
 
-    **`exclude_tokens`** (optional, default `[]`): List of Tokens that must not appear in the free-form text.
+Matches one exact string.
 
-    ```json
-    {
-        "type": "token_dispatch",
-        "cases": [
-            [100, {"type": "const_string", "value": "x"}],
-            ["<|tool|>", {"type": "json_schema", "json_schema": {...}}]
+| Field | Type | Default |
+| --- | --- | --- |
+| `value` | `string` | (required) |
+
+- **Use it when**: the output must contain a fixed literal
+
+```json
+{
+    "type": "const_string",
+    "value": "Let's think step by step."
+}
+```
+
+#### `json_schema`
+
+Matches content that conforms to a JSON Schema.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `json_schema` | `object` | (required) |
+| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"deepseek_xml"` | `"json"` |
+
+- **Use it when**: the structured part is naturally expressed as schema-constrained data
+
+`style` values:
+
+- `"json"`: standard JSON
+- `"qwen_xml"`: Qwen-style XML parameters, such as `<parameter=name>value</parameter>`
+- `"minimax_xml"`: MiniMax-style XML parameters, such as `<parameter name="name">value</parameter>`
+- `"deepseek_xml"`: DeepSeek-v3.2 XML parameter format
+
+```json
+{
+    "type": "json_schema",
+    "json_schema": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "age": {"type": "integer"}
+        },
+        "required": ["name", "age"]
+    }
+}
+```
+
+Use a non-JSON style only when the surrounding model format expects it:
+
+```json
+{
+    "type": "json_schema",
+    "json_schema": {
+        "type": "object",
+        "properties": {
+            "location": {"type": "string"}
+        },
+        "required": ["location"]
+    },
+    "style": "qwen_xml"
+}
+```
+
+#### `grammar`
+
+Matches text with an EBNF grammar.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `grammar` | `string` | (required) |
+
+- **Use it when**: JSON Schema is too restrictive or the structure is better described directly as a grammar
+
+```json
+{
+    "type": "grammar",
+    "grammar": "root ::= (\"yes\" | \"no\")"
+}
+```
+
+If the grammar is too broad, it can make later constraints ineffective. Avoid patterns that can
+consume almost anything when you still need precise structure afterward.
+
+#### `regex`
+
+Matches text with a regular expression.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `pattern` | `string` | (required) |
+
+- **Use it when**: a small local text fragment is easiest to describe with regex
+
+```json
+{
+    "type": "regex",
+    "pattern": "[A-Z]{3}-[0-9]{4}"
+}
+```
+
+As with `grammar`, avoid overly broad patterns when later structure still needs to be enforced.
+
+#### `any_text`
+
+Matches arbitrary text.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `excludes` | `string[]` | `[]` |
+
+- **Use it when**: the content should remain free-form until some enclosing boundary is reached
+
+```json
+{
+    "type": "any_text",
+    "excludes": ["<function="]
+}
+```
+
+When `any_text` appears inside a string-level `tag`, the enclosing end string is automatically
+treated as a stop condition.
+
+### Composition Formats
+
+#### `sequence`
+
+Matches several formats in order.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `elements` | `format[]` | (required) |
+
+- **Use it when**: the output is "first this, then that"
+
+```json
+{
+    "type": "sequence",
+    "elements": [
+        {
+            "type": "const_string",
+            "value": "Answer: "
+        },
+        {
+            "type": "json_schema",
+            "json_schema": {
+                "type": "object"
+            }
+        }
+    ]
+}
+```
+
+#### `or`
+
+Matches any one of several alternatives.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `elements` | `format[]` | (required) |
+
+- **Use it when**: multiple shapes are valid at the same position
+
+```json
+{
+    "type": "or",
+    "elements": [
+        {
+            "type": "const_string",
+            "value": "yes"
+        },
+        {
+            "type": "const_string",
+            "value": "no"
+        }
+    ]
+}
+```
+
+#### `optional`
+
+Matches the inner format zero or one time.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `content` | `format` | (required) |
+
+- **Use it when**: a fragment may be present or omitted
+
+```json
+{
+    "type": "optional",
+    "content": {
+        "type": "const_string",
+        "value": "Optional prefix: "
+    }
+}
+```
+
+#### `plus`
+
+Matches the inner format one or more times.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `content` | `format` | (required) |
+
+- **Use it when**: at least one repetition is required
+
+```json
+{
+    "type": "plus",
+    "content": {
+        "type": "const_string",
+        "value": "item"
+    }
+}
+```
+
+#### `star`
+
+Matches the inner format zero or more times.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `content` | `format` | (required) |
+
+- **Use it when**: repetition is allowed but not required
+
+```json
+{
+    "type": "star",
+    "content": {
+        "type": "const_string",
+        "value": "x"
+    }
+}
+```
+
+#### `repeat`
+
+Matches the inner format between `min` and `max` times, inclusive. Use `max: -1` for an unbounded
+upper limit.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `min` | `int` | (required) |
+| `max` | `int` | (required, `-1` = unbounded) |
+| `content` | `format` | (required) |
+
+- **Use it when**: repetition needs an explicit range
+
+```json
+{
+    "type": "repeat",
+    "min": 1,
+    "max": 3,
+    "content": {
+        "type": "const_string",
+        "value": "item"
+    }
+}
+```
+
+### Tagging and Dispatch Formats
+
+#### `tag`
+
+Matches `begin + content + end`.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `begin` | `string` \| `token` | (required) |
+| `content` | `format` | (required) |
+| `end` | `string` \| `string[]` \| `token` | (required) |
+
+- **Use it when**: one region is wrapped by known delimiters
+
+```json
+{
+    "type": "tag",
+    "begin": "<response>",
+    "content": {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object"
+        }
+    },
+    "end": ["</response>", "</answer>"]
+}
+```
+
+#### `triggered_tags`
+
+Allows arbitrary text until a trigger is encountered, then dispatches to one of several tags.
+After the tag ends, arbitrary text is allowed again until the next trigger.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `triggers` | `string[]` | (required) |
+| `tags` | `tag[]` | (required) |
+| `at_least_one` | `bool` | `false` |
+| `stop_after_first` | `bool` | `false` |
+| `excludes` | `string[]` | `[]` |
+
+- **Use it when**: tool calls or other structured regions can appear inside otherwise free-form text
+
+Important rules:
+
+- tags inside `triggered_tags` must use string `begin` fields
+- each tag should match exactly one trigger
+- each trigger should be an unambiguous prefix of the tag(s) it dispatches to
+
+```json
+{
+    "type": "triggered_tags",
+    "triggers": ["<function="],
+    "tags": [
+        {
+            "type": "tag",
+            "begin": "<function=get_weather>",
+            "content": {
+                "type": "json_schema",
+                "json_schema": {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string"}
+                    },
+                    "required": ["city"]
+                }
+            },
+            "end": "</function>"
+        },
+        {
+            "type": "tag",
+            "begin": "<function=get_time>",
+            "content": {
+                "type": "json_schema",
+                "json_schema": {
+                    "type": "object",
+                    "properties": {
+                        "timezone": {"type": "string"}
+                    },
+                    "required": ["timezone"]
+                }
+            },
+            "end": "</function>"
+        }
+    ],
+    "at_least_one": false,
+    "stop_after_first": false
+}
+```
+
+Semantics of the two control flags:
+
+- `at_least_one: true` requires at least one dispatched tag and therefore disallows leading free text
+- `stop_after_first: true` finishes the `triggered_tags` structure after the first dispatched tag
+
+#### `tags_with_separator`
+
+Matches zero, one, or more tags separated by a fixed separator, with no extra text outside the tag
+sequence.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `tags` | `tag[]` | (required) |
+| `separator` | `string` | (required) |
+| `at_least_one` | `bool` | `false` |
+| `stop_after_first` | `bool` | `false` |
+
+- **Use it when**: the output is a pure list of tagged fragments
+
+```json
+{
+    "type": "tags_with_separator",
+    "tags": [
+        {
+            "type": "tag",
+            "begin": "<item>",
+            "content": {
+                "type": "json_schema",
+                "json_schema": {"type": "object"}
+            },
+            "end": "</item>"
+        }
+    ],
+    "separator": ",",
+    "at_least_one": false,
+    "stop_after_first": false
+}
+```
+
+#### `dispatch`
+
+Allows free-form text, but when a specified pattern string appears, the following output must
+conform to the corresponding format. Uses Aho-Corasick matching internally for efficient
+multi-pattern detection.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `rules` | `[string, format][]` | (required) |
+| `loop` | `bool` | `true` |
+| `excludes` | `string[]` | `[]` |
+
+- **Use it when**: you need pattern-triggered structured regions inside free-form text, with
+  string-level pattern matching
+
+```json
+{
+    "type": "dispatch",
+    "rules": [
+        ["<function=func1>", {"type": "json_schema", "json_schema": ...}],
+        ["<function=func2>", {"type": "json_schema", "json_schema": ...}]
+    ],
+    "loop": true,
+    "excludes": ["</end>"]
+}
+```
+
+To end matching at a specific string, put it in `excludes` and follow the `dispatch` with a
+`const_string` in a `sequence`, or use the `end` of an enclosing `tag`:
+
+```json
+{
+    "type": "tag",
+    "begin": "<response>",
+    "content": {
+        "type": "dispatch",
+        "rules": [
+            ["<function=func1>", {"type": "json_schema", "json_schema": ...}],
+            ["<function=func2>", {"type": "json_schema", "json_schema": ...}]
         ],
         "loop": true,
-        "exclude_tokens": ["</s>"]
-    }
-    ```
-
-## Examples
-
-### Example 1: Tool calling
-
-The structural tag can support most common tool calling formats.
-
-Llama JSON-based tool calling, Gemma:
-
-```json
-{"name": "function_name", "parameters": params}
-```
-
-Corresponding structural tag:
-
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "triggered_tags",
-        "triggers": ["{\"name\":"],
-        "tags": [
-            {
-                "begin": "{\"name\": \"func1\", \"parameters\": ",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "}"
-            },
-            {
-                "begin": "{\"name\": \"func2\", \"parameters\": ",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "}"
-            },
-        ],
+        "excludes": ["</response>"]
     },
+    "end": "</response>"
 }
 ```
 
-Llama user-defined custom tool calling:
+Here `dispatch` allows free text and tool calls inside `<response>...</response>`, but
+stops when `</response>` appears because it is in `excludes`. The enclosing `tag` then
+consumes that end delimiter.
 
-```xml
-<function=function_name>params</function>
+### Token-level Formats
+
+#### `token`
+
+Matches one token by token ID or token string.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `token` | `int` \| `string` | (required) |
+
+- **Use it when**: the delimiter is a tokenizer-level symbol rather than normal text
+
+```json
+{"type": "token", "token": 42}
+{"type": "token", "token": "<|tool_call|>"}
 ```
 
-Corresponding structural tag:
+When `token` is a string, it is resolved with `tokenizer_info`.
+
+#### `exclude_token`
+
+Matches any single token except those in `exclude_tokens`.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `exclude_tokens` | `(int \| string)[]` | `[]` |
+
+- **Use it when**: one token is needed, but some token values must be blocked
+
+```json
+{"type": "exclude_token", "exclude_tokens": [42, "</s>"]}
+```
+
+When used inside a token-level `tag`, the enclosing end token is automatically excluded.
+
+#### `any_tokens`
+
+Matches zero or more tokens, excluding those in `exclude_tokens`.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `exclude_tokens` | `(int \| string)[]` | `[]` |
+
+- **Use it when**: content should remain unconstrained until a token-level boundary is reached
+
+```json
+{"type": "any_tokens", "exclude_tokens": ["<|eos|>"]}
+```
+
+Semantically, `any_tokens` is equivalent to `star(exclude_token(...))`.
+
+#### `token_triggered_tags`
+
+Token-level version of `triggered_tags`.
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `trigger_tokens` | `(int \| string)[]` | (required) |
+| `tags` | `tag[]` | (required) |
+| `exclude_tokens` | `(int \| string)[]` | `[]` |
+| `at_least_one` | `bool` | `false` |
+| `stop_after_first` | `bool` | `false` |
+
+- **Use it when**: dispatch must happen on special tokens rather than text prefixes
+
+Important rules:
+
+- tags inside `token_triggered_tags` must use `token` format objects as their `begin`
+- elements of `trigger_tokens` and `exclude_tokens` can be token IDs or token strings
 
 ```json
 {
-    "type": "structural_tag",
-    "format": {
-        "type": "triggered_tags",
-        "triggers": ["<function="],
-        "tags": [
-            {
-                "begin": "<function=func1>",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "</function>",
-            },
-            {
-                "begin": "<function=func2>",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "</function>",
-            },
-        ],
-    },
-}
-```
-
-Qwen 2.5/3, Hermes:
-
-```text
-<tool_call>
-{"name": "get_current_temperature", "arguments": {"location": "San Francisco, CA, USA"}}
-</tool_call>
-```
-
-Corresponding structural tag:
-
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "triggered_tags",
-        "triggers": ["<tool_call>"],
-        "tags": [
-            {
-                "begin": "<tool_call>\n{\"name\": \"func1\", \"arguments\": ",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "}\n</tool_call>",
-            },
-            {
-                "begin": "<tool_call>\n{\"name\": \"func2\", \"arguments\": ",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "}\n</tool_call>",
-            },
-        ],
-    },
-}
-```
-
-DeepSeek:
-
-There is a special tag `<｜tool▁calls▁begin｜> ... <｜tool▁calls▁end｜>` quotes the whole tool calling part.
-
-````text
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>function_name_1
-```jsonc
-{params}
-```<｜tool▁call▁end｜>
-
-```jsonc
-{params}
-```<｜tool▁call▁end｜><｜tool▁calls▁end｜>
-````
-
-Corresponding structural tag:
-
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "triggered_tags",
-        "triggers": ["<｜tool▁calls▁begin｜>"],
-        "tags": [
-            {
-                "begin": "<｜tool▁calls▁begin｜>",
-                "end": "<｜tool▁calls▁end｜>",
-                "content": {
-                    "type": "tags_with_separator",
-                    "separator": "\n",
-                    "tags": [
-                        {
-                            "begin": "<｜tool▁call▁begin｜>function<｜tool▁sep｜>function_name_1\n```jsonc\n",
-                            "content": {"type": "json_schema", "json_schema": ...},
-                            "end": "\n```<｜tool▁call▁end｜>",
-                        },
-                        {
-                            "begin": "<｜tool▁call▁begin｜>function<｜tool▁sep｜>function_name_2\n```jsonc\n",
-                            "content": {"type": "json_schema", "json_schema": ...},
-                            "end": "\n```<｜tool▁call▁end｜>",
-                        }
-                    ]
+    "type": "token_triggered_tags",
+    "trigger_tokens": ["<|tool_call_start|>"],
+    "tags": [
+        {
+            "type": "tag",
+            "begin": {"type": "token", "token": "<|tool_call_start|>"},
+            "content": {
+                "type": "json_schema",
+                "json_schema": {
+                    "type": "object"
                 }
-            }
-        ],
-        "stop_after_first": true,
-
-    },
+            },
+            "end": {"type": "token", "token": "<|tool_call_end|>"}
+        }
+    ],
+    "exclude_tokens": ["<|eos|>"],
+    "at_least_one": false,
+    "stop_after_first": false
 }
 ```
 
-Phi-4-mini:
+#### `token_dispatch`
 
-Similar to DeepSeek-V3, but the tool calling part is wrapped in `<|tool_call|>...<|/tool_call|>` and organized in a list.
+Token-level version of `dispatch`. Patterns are token IDs or token strings instead of text
+strings.
 
-```text
-<|tool_call|>[{"name": "function_name_1", "arguments": params}, {"name": "function_name_2", "arguments": params}]<|/tool_call|>
-```
+| Field | Type | Default |
+| --- | --- | --- |
+| `rules` | `[int \| string, format][]` | (required) |
+| `loop` | `bool` | `true` |
+| `exclude_tokens` | `(int \| string)[]` | `[]` |
 
-Corresponding structural tag:
+- **Use it when**: dispatch must happen on special tokens rather than text patterns
 
 ```json
 {
-    "type": "structural_tag",
-    "format": {
-        "type": "triggered_tags",
-        "triggers": ["<|tool_call|>"],
-        "tags": [
-            {
-                "begin": "<|tool_call|>[",
-                "end": "]<|/tool_call|>",
-                "content": {
-                    "type": "tags_with_separator",
-                    "separator": ", ",
-                    "tags": [
-                        {
-                            "begin": "{\"name\": \"function_name_1\", \"arguments\": ",
-                            "content": {"type": "json_schema", "json_schema": ...},
-                            "end": "}",
-                        },
-                        {
-                            "begin": "{\"name\": \"function_name_2\", \"arguments\": ",
-                            "content": {"type": "json_schema", "json_schema": ...},
-                            "end": "}",
-                        }
-                    ]
+    "type": "token_dispatch",
+    "rules": [
+        [100, {"type": "const_string", "value": "x"}],
+        ["<|tool|>", {"type": "json_schema", "json_schema": ...}]
+    ],
+    "loop": true,
+    "exclude_tokens": ["</s>"]
+}
+```
+
+## Common Recipes
+
+### Force Exactly One Tool Call
+
+To require exactly one tool call from a tool set, use `triggered_tags` with both control flags:
+
+```json
+{
+    "type": "triggered_tags",
+    "triggers": ["<function="],
+    "tags": [
+        {
+            "type": "tag",
+            "begin": "<function=func1>",
+            "content": {"type": "json_schema", "json_schema": ...},
+            "end": "</function>"
+        },
+        {
+            "type": "tag",
+            "begin": "<function=func2>",
+            "content": {"type": "json_schema", "json_schema": ...},
+            "end": "</function>"
+        }
+    ],
+    "at_least_one": true,
+    "stop_after_first": true
+}
+```
+
+If the function is fixed in advance, a single `tag` is simpler.
+
+### Mix Reasoning, Free Text, and Tool Calls
+
+Use `sequence` to force an initial reasoning region, then allow later tool calls inside normal text:
+
+```json
+{
+    "type": "sequence",
+    "elements": [
+        {
+            "type": "tag",
+            "begin": "<think>",
+            "content": {"type": "any_text"},
+            "end": "</think>"
+        },
+        {
+            "type": "triggered_tags",
+            "triggers": ["<function="],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": "<function=func1>",
+                    "content": {"type": "json_schema", "json_schema": ...},
+                    "end": "</function>"
+                },
+                {
+                    "type": "tag",
+                    "begin": "<function=func2>",
+                    "content": {"type": "json_schema", "json_schema": ...},
+                    "end": "</function>"
                 }
-            }
-        ],
-        "stop_after_first": true,
-    },
+            ]
+        }
+    ]
 }
 ```
 
-### Example 2: Force think
+### Token-level Delimiters
 
-The output should start with a reasoning part (`<think>...</think>`), then can generate a mix of text and tool calls.
-
-Format:
-
-```text
-<think> any_text </think> any_text <function=func1> params </function> any_text
-```
-
-Corresponding structural tag:
+Some models use special tokens instead of literal strings to start or end a structured region.
+Combine `tag`, `any_tokens`, and `token_triggered_tags` for that case:
 
 ```json
 {
-    "type": "structural_tag",
-    "format": {
-        "type": "sequence",
-        "elements": [
-            {
-                "type": "tag",
-                "begin": "<think>",
-                "content": {"type": "any_text"},
-                "end": "</think>",
-            },
-            {
-                "type": "triggered_tags",
-                "triggers": ["<function="],
-                "tags": [
-                    {
-                        "begin": "<function=func1>",
-                        "content": {"type": "json_schema", "json_schema": ...},
-                        "end": "</function>",
-                    },
-                    {
-                        "begin": "<function=func2>",
-                        "content": {"type": "json_schema", "json_schema": ...},
-                        "end": "</function>",
-                    },
-                ],
-            },
-        ],
-    },
+    "type": "sequence",
+    "elements": [
+        {
+            "type": "tag",
+            "begin": {"type": "token", "token": "<|think_start|>"},
+            "content": {"type": "any_tokens"},
+            "end": {"type": "token", "token": "<|think_end|>"}
+        },
+        {
+            "type": "token_triggered_tags",
+            "trigger_tokens": ["<|tool_call_start|>"],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": {"type": "token", "token": "<|tool_call_start|>"},
+                    "content": {"type": "json_schema", "json_schema": ...},
+                    "end": {"type": "token", "token": "<|tool_call_end|>"}
+                }
+            ],
+            "exclude_tokens": ["<|eos|>"],
+            "at_least_one": true
+        }
+    ]
 }
 ```
 
-### Example 3: Think & Force tool calling (Llama style)
+### Built-in Model Styles
 
-The output should start with a reasoning part (`<think>...</think>`), then need to generate exactly one tool call in the tool set.
+If you only need a standard tool-calling layout for a supported model family, prefer the built-in
+helper instead of hand-writing every wrapper:
 
-Format:
+- Llama / Gemma-style text wrappers
+- Qwen and Qwen Coder variants
+- Kimi
+- DeepSeek variants
+- Harmony
+- MiniMax
 
-```text
-<think> any_text </think> <function=func1> params </function>
-```
+See [Advanced Topics of the Structural Tag](advanced_structural_tag) for
+`get_builtin_structural_tag` and the list of supported models.
 
-Corresponding structural tag:
+## Mapping to OpenAI Tool Calling Options
 
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "sequence",
-        "elements": [
-            {
-                "type": "tag",
-                "begin": "<think>",
-                "content": {"type": "any_text"},
-                "end": "</think>",
-            },
-            {
-                "type": "triggered_tags",
-                "triggers": ["<function="],
-                "tags": [
-                    {
-                        "begin": "<function=func1>",
-                        "content": {"type": "json_schema", "json_schema": ...},
-                        "end": "</function>",
-                    },
-                    {
-                        "begin": "<function=func2>",
-                        "content": {"type": "json_schema", "json_schema": ...},
-                        "end": "</function>",
-                    },
-                ],
-                "stop_after_first": true,
-                "at_least_one": true,
-            },
-        ],
-    },
-}
-```
+Structural tags are flexible enough to implement the strict-format parts of the OpenAI tool-calling
+API. The exact wrapper still depends on the target model's syntax, but the control knobs map
+cleanly:
 
-### Example 4: Think & force tool calling (DeepSeek style)
-
-The output should start with a reasoning part (`<think>...</think>`), then must generate a tool call following the DeepSeek style.
-
-Config:
-
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "sequence",
-        "elements": [
-            {
-                "type": "tag",
-                "begin": "<think>",
-                "content": {"type": "any_text"},
-                "end": "</think>",
-            },
-            {
-                "type": "tag_and_text",
-                "triggers": ["<｜tool▁calls▁begin｜>"],
-                "tags": [
-                    {
-                        "begin": "<｜tool▁calls▁begin｜>",
-                        "end": "<｜tool▁calls▁end｜>",
-                        "content": {
-                            "type": "tags_with_separator",
-                            "separator": "\n",
-                            "tags": [
-                                {
-                                    "begin": "<｜tool▁call▁begin｜>function<｜tool▁sep｜>function_name_1\n```jsonc\n",
-                                    "content": {"type": "json_schema", "json_schema": ...},
-                                    "end": "\n```<｜tool▁call▁end｜>",
-                                },
-                                {
-                                    "begin": "<｜tool▁call▁begin｜>function<｜tool▁sep｜>function_name_2\n```jsonc\n",
-                                    "content": {"type": "json_schema", "json_schema": ...},
-                                    "end": "\n```<｜tool▁call▁end｜>",
-                                }
-                            ],
-                            "at_least_one": true, // Note this line!
-                            "stop_after_first": true, // Note this line!
-                        }
-                    }
-                ],
-                "stop_after_first": true,
-            },
-        ],
-    },
-},
-```
-
-### Example 5: Force non-thinking mode
-
-Qwen-3 has a hybrid thinking mode that allows switching between thinking and non-thinking mode. Thinking mode is the same as above, while in non-thinking mode, the output would start with a empty thinking part `<think></think>`, and then can generate any text.
-
-We now specify the non-thinking mode.
-
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "sequence",
-        "elements": [
-            {
-                "type": "const_string",
-                "text": "<think></think>"
-            },
-            {
-                "type": "triggered_tags",
-                "triggers": ["<tool_call>"],
-                "tags": [
-                    {
-                        "begin": "<tool_call>\n{\"name\": \"func1\", \"arguments\": ",
-                        "content": {"type": "json_schema", "json_schema": ...},
-                        "end": "}\n</tool_call>",
-                    },
-                    {
-                        "begin": "<tool_call>\n{\"name\": \"func2\", \"arguments\": ",
-                        "content": {"type": "json_schema", "json_schema": ...},
-                        "end": "}\n</tool_call>",
-                    },
-                ],
-            },
-        ],
-    },
-}
-```
-
-### Example 6: Token-level tool calling
-
-Some models use special tokens (not byte strings) to delimit tool calls. The `token_triggered_tags` format handles this by dispatching on token IDs.
-
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "sequence",
-        "elements": [
-            {
-                "type": "tag",
-                "begin": {"type": "token", "token": "<|think_start|>"},
-                "content": {"type": "any_tokens"},
-                "end": {"type": "token", "token": "<|think_end|>"}
-            },
-            {
-                "type": "token_triggered_tags",
-                "trigger_tokens": ["<|tool_call_start|>"],
-                "tags": [
-                    {
-                        "begin": {"type": "token", "token": "<|tool_call_start|>"},
-                        "content": {"type": "json_schema", "json_schema": ...},
-                        "end": {"type": "token", "token": "<|tool_call_end|>"}
-                    }
-                ],
-                "exclude_tokens": ["<|eos|>"],
-                "at_least_one": true
-            }
-        ]
-    }
-}
-```
-
-## Compatibility with the OpenAI Tool Calling API
-
-The structural tag can be used to implement the OpenAI Tool Calling API with strict format
-constraints. In LLM serving engines, you can use the `xgrammar` Python package to construct the
-structural tag and apply it to constrained decoding.
-
-In the OpenAI Tool Calling API, a set of tools is provided using JSON schema. There are also several
-features: tool choice (control at least one tool or exactly one tool is called),
-parallel tool calling (allow only one tool or multiple tools can be called in one round), etc.
-
-You can construct the structural tag according to the provided tools, and the LLM's specific tool
-calling format. The structural tag can be used in XGrammar's constrained decoding workflow to
-enable strict format constraints.
-
-### Tool Choice
-
-`tool_choice` is a parameter in the OpenAI API. It can be
-
-* `auto`: Let the model decide which tool to use
-* `required`: Call at least one tool in the tool set
-* `{"type": "function", "function": {"name": "function_name"}}`: The forced mode, call exactly one specific function
-
-The required mode can be implemented by
-
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "triggered_tags",
-        "triggers": ["<function="],
-        "tags": [
-            {
-                "begin": "<function=func1>",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "</function>",
-            },
-            {
-                "begin": "<function=func2>",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "</function>",
-            },
-        ],
-        "at_least_one": true,
-    },
-}
-```
-
-The forced mode can be implemented by
-
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "tag",
-        "begin": "<function=func1>",
-        "content": {"type": "json_schema", "json_schema": ...},
-        "end": "</function>",
-    },
-}
-```
-
-### Parallel Tool Calling
-
-OAI's `parallel_tool_calls` parameter controls if the model can call multiple functions in one round.
-
-* If `true`, the model can call multiple functions in one round. (This is default)
-* If `false`, the model can call at most one function in one round.
-
-`triggered_tags` and `tags_with_separator` has a parameter `stop_after_first` to control if the
-generation should stop after the first tag is generated. So the `false` mode can be implemented by:
-
-```json
-{
-    "type": "structural_tag",
-    "format": {
-        "type": "triggered_tags",
-        "triggers": ["<function="],
-        "tags": [
-            {
-                "begin": "<function=func1>",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "</function>",
-            },
-            {
-                "begin": "<function=func2>",
-                "content": {"type": "json_schema", "json_schema": ...},
-                "end": "</function>",
-            },
-        ],
-        "stop_after_first": true,
-    },
-}
-```
-
-The `true` mode can be implemented by setting `stop_after_first` to `false`.
+- `tool_choice = "auto"`: use `triggered_tags` with `at_least_one: false`
+- `tool_choice = "required"`: use `triggered_tags` with `at_least_one: true`
+- `tool_choice = {"type": "function", "function": {"name": ...}}`: use a fixed `tag`, or a
+  single-entry `triggered_tags`
+- `parallel_tool_calls = false`: set `stop_after_first: true`
+- `parallel_tool_calls = true`: keep `stop_after_first: false`, or use `tags_with_separator` if
+  the model expects a pure separated list of calls
 
 ## Next Steps
 
-* For API reference, see [Structural Tag API Reference](../api/python/structural_tag).
-* For advanced usage, see [Advanced Topics of the Structural Tag](advanced_structural_tag).
+- For API reference, see [Structural Tag API Reference](../api/python/structural_tag).
+- For built-in helpers, automatic end detection details, and deprecated APIs, see
+  [Advanced Topics of the Structural Tag](advanced_structural_tag).
