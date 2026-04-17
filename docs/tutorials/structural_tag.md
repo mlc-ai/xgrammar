@@ -30,8 +30,7 @@ Pass a structural tag as the `response_format`:
 }
 ```
 
-The `format` field is required. It contains one format object, and that object can recursively nest
-other format objects.
+The `format` field is required. It contains one format object, and that object can recursively nest other format objects. Each format object represents a "chunk" of text.
 
 ## How Structural Tags Work
 
@@ -815,9 +814,8 @@ API. The exact wrapper still depends on the target model's syntax, but the contr
 cleanly:
 
 - `tool_choice = "auto"`: use `triggered_tags` with `at_least_one: false`
-- `tool_choice = "required"`: use `triggered_tags` with `at_least_one: true`
-- `tool_choice = {"type": "function", "function": {"name": ...}}`: use a fixed `tag`, or a
-  single-entry `triggered_tags`
+- `tool_choice = "required"`: use `TagsWithSeparatorFormat` or `OrFormat`.
+- `tool_choice = {"type": "function", "function": {"name": ...}}`: use a fixed `tag` format to describe the tool-calling format.
 - `parallel_tool_calls = false`: set `stop_after_first: true`
 - `parallel_tool_calls = true`: keep `stop_after_first: false`, or use `tags_with_separator` if
   the model expects a pure separated list of calls
