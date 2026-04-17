@@ -145,22 +145,60 @@
 <li class="toctree-l1"><a class="reference internal" href="workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
 <li class="toctree-l1"><a class="reference internal" href="advanced_topics.html">Advanced Topics</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Structural Tag Usage</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#usage">Usage</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#format-types">Format Types</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#example-1-tool-calling">Example 1: Tool calling</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#example-2-force-think">Example 2: Force think</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#example-3-think-force-tool-calling-llama-style">Example 3: Think &amp; Force tool calling (Llama style)</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#example-4-think-force-tool-calling-deepseek-style">Example 4: Think &amp; force tool calling (DeepSeek style)</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#example-5-force-non-thinking-mode">Example 5: Force non-thinking mode</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#example-6-token-level-tool-calling">Example 6: Token-level tool calling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#request-shape">Request Shape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#how-structural-tags-work">How Structural Tags Work</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#format-categories">Format Categories</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#unlimited-formats-and-end-detection">Unlimited Formats and End Detection</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#compatibility-with-the-openai-tool-calling-api">Compatibility with the OpenAI Tool Calling API</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#tool-choice">Tool Choice</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#parallel-tool-calling">Parallel Tool Calling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#quick-start">Quick Start</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#minimal-tag">Minimal <code class="docutils literal notranslate"><span class="pre">tag</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#minimal-triggered-tags">Minimal <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#format-reference">Format Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#primitive-formats">Primitive Formats</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#const-string"><code class="docutils literal notranslate"><span class="pre">const_string</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#json-schema"><code class="docutils literal notranslate"><span class="pre">json_schema</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#grammar"><code class="docutils literal notranslate"><span class="pre">grammar</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#regex"><code class="docutils literal notranslate"><span class="pre">regex</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#any-text"><code class="docutils literal notranslate"><span class="pre">any_text</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#composition-formats">Composition Formats</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#sequence"><code class="docutils literal notranslate"><span class="pre">sequence</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#or"><code class="docutils literal notranslate"><span class="pre">or</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#optional"><code class="docutils literal notranslate"><span class="pre">optional</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#plus"><code class="docutils literal notranslate"><span class="pre">plus</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#star"><code class="docutils literal notranslate"><span class="pre">star</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#repeat"><code class="docutils literal notranslate"><span class="pre">repeat</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#tagging-and-dispatch-formats">Tagging and Dispatch Formats</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#tag"><code class="docutils literal notranslate"><span class="pre">tag</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#triggered-tags"><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tags-with-separator"><code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dispatch"><code class="docutils literal notranslate"><span class="pre">dispatch</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#token-level-formats">Token-level Formats</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#token"><code class="docutils literal notranslate"><span class="pre">token</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#exclude-token"><code class="docutils literal notranslate"><span class="pre">exclude_token</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#any-tokens"><code class="docutils literal notranslate"><span class="pre">any_tokens</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#token-triggered-tags"><code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#token-dispatch"><code class="docutils literal notranslate"><span class="pre">token_dispatch</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#common-recipes">Common Recipes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#force-exactly-one-tool-call">Force Exactly One Tool Call</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#mix-reasoning-free-text-and-tool-calls">Mix Reasoning, Free Text, and Tool Calls</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#token-level-delimiters">Token-level Delimiters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#built-in-model-styles">Built-in Model Styles</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#mapping-to-openai-tool-calling-options">Mapping to OpenAI Tool Calling Options</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
@@ -266,21 +304,18 @@
             
   <section class="tex2jax_ignore mathjax_ignore" id="structural-tag-usage">
 <h1>Structural Tag Usage<a class="headerlink" href="#structural-tag-usage" title="Permalink to this heading">¶</a></h1>
-<p>The structural tag API aims to provide a JSON-config-based way to precisely describe the output format of an LLM. It is more flexible and dynamic than the OpenAI API:</p>
+<p>Structural tags describe LLM outputs as a tree of composable format objects. Use them when a
+plain JSON schema is not enough, such as:</p>
 <ul class="simple">
-<li><p><strong>Flexible</strong>: supports various structures, including tool calling, reasoning (&lt;think&gt;…&lt;/think&gt;), etc.</p></li>
-<li><p><strong>Dynamic</strong>: allows a mixture of free-form text and structures such as tool calls, entering constrained generation when a pre-set trigger is met.</p></li>
+<li><p>tool calling with model-specific wrappers</p></li>
+<li><p>reasoning tags like <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code></p></li>
+<li><p>responses that mix free-form text with structured fragments</p></li>
+<li><p>token-level delimiters that are not represented as normal text</p></li>
 </ul>
-<p>It can also be used in the LLM engine to implement the OpenAI Tool Calling API with strict
-format constraints, with these benefits:</p>
-<ul class="simple">
-<li><p>Support the advanced tool calling features, such as forced tool calling, parallel tool calling, etc.</p></li>
-<li><p>Support the tool calling format of most of the LLMs available in the market with minimal effort.</p></li>
-</ul>
-<section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Permalink to this heading">¶</a></h2>
-<p>The structural tag is a response format. It’s compatible with the OpenAI API. With the
-structural tag, the request should be like:</p>
+<p>Structural tags are also compatible with the OpenAI-style <code class="docutils literal notranslate"><span class="pre">response_format</span></code> request shape.</p>
+<section id="request-shape">
+<h2>Request Shape<a class="headerlink" href="#request-shape" title="Permalink to this heading">¶</a></h2>
+<p>Pass a structural tag as the <code class="docutils literal notranslate"><span class="pre">response_format</span></code>:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
     &quot;model&quot;: &quot;...&quot;,
     &quot;messages&quot;: [
@@ -296,282 +331,394 @@ structural tag, the request should be like:</p>
 }
 </pre></div>
 </div>
-<p>The format field requires a format object. We provide several basic format objects, and they can be composed to allow for more complex formats. Each format object represent a “chunk” of text.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">format</span></code> field is required. It contains one format object, and that object can recursively nest other format objects. Each format object represents a “chunk” of text.</p>
 </section>
-<section id="format-types">
-<h2>Format Types<a class="headerlink" href="#format-types" title="Permalink to this heading">¶</a></h2>
-<ol class="arabic">
-<li><p><code class="docutils literal notranslate"><span class="pre">const_string</span></code></p>
-<p>The LLM output must exactly match the given string.</p>
-<p>This is useful for like force reasoning, where the LLM output must start with “Let’s think step by step”.</p>
+<section id="how-structural-tags-work">
+<h2>How Structural Tags Work<a class="headerlink" href="#how-structural-tags-work" title="Permalink to this heading">¶</a></h2>
+<p>Think of a structural tag as a tree of chunks:</p>
+<ul class="simple">
+<li><p><strong>Primitive formats</strong> match one chunk directly, such as an exact string or a JSON payload.</p></li>
+<li><p><strong>Composition formats</strong> combine other formats, such as “A then B” or “A or B”.</p></li>
+<li><p><strong>Tagging and dispatch formats</strong> wrap content in delimiters or switch into constrained generation
+only after a trigger is seen.</p></li>
+<li><p><strong>Token-level formats</strong> do the same kinds of matching, but at the tokenizer level instead of the
+string level.</p></li>
+</ul>
+<section id="format-categories">
+<h3>Format Categories<a class="headerlink" href="#format-categories" title="Permalink to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Category</p></th>
+<th class="head"><p>Formats</p></th>
+<th class="head"><p>What they do</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Primitive</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">const_string</span></code>, <code class="docutils literal notranslate"><span class="pre">json_schema</span></code>, <code class="docutils literal notranslate"><span class="pre">grammar</span></code>, <code class="docutils literal notranslate"><span class="pre">regex</span></code>, <code class="docutils literal notranslate"><span class="pre">any_text</span></code></p></td>
+<td><p>Match one text fragment</p></td>
+</tr>
+<tr class="row-odd"><td><p>Composition</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sequence</span></code>, <code class="docutils literal notranslate"><span class="pre">or</span></code>, <code class="docutils literal notranslate"><span class="pre">optional</span></code>, <code class="docutils literal notranslate"><span class="pre">plus</span></code>, <code class="docutils literal notranslate"><span class="pre">star</span></code>, <code class="docutils literal notranslate"><span class="pre">repeat</span></code></p></td>
+<td><p>Build larger structures from smaller ones</p></td>
+</tr>
+<tr class="row-even"><td><p>Tagging / dispatch</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tag</span></code>, <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>, <code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code>, <code class="docutils literal notranslate"><span class="pre">dispatch</span></code></p></td>
+<td><p>Wrap content or switch between free text and structured regions</p></td>
+</tr>
+<tr class="row-odd"><td><p>Token-level</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">token</span></code>, <code class="docutils literal notranslate"><span class="pre">exclude_token</span></code>, <code class="docutils literal notranslate"><span class="pre">any_tokens</span></code>, <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code>, <code class="docutils literal notranslate"><span class="pre">token_dispatch</span></code></p></td>
+<td><p>Constrain output at token boundaries</p></td>
+</tr>
+<tr class="row-even"><td><p>Deprecated</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qwen_xml_parameter</span></code></p></td>
+<td><p>Kept for backward compatibility</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="unlimited-formats-and-end-detection">
+<h3>Unlimited Formats and End Detection<a class="headerlink" href="#unlimited-formats-and-end-detection" title="Permalink to this heading">¶</a></h3>
+<p>Some formats can consume an unbounded amount of output:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">any_text</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">any_tokens</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code></p></li>
+</ul>
+<p>When one of these formats appears inside a <code class="docutils literal notranslate"><span class="pre">tag</span></code>, the compiler automatically uses the enclosing
+<code class="docutils literal notranslate"><span class="pre">end</span></code> marker as part of the stop condition when the levels match:</p>
+<ul class="simple">
+<li><p>string end -&gt; string-level unlimited format</p></li>
+<li><p>token end -&gt; token-level unlimited format</p></li>
+</ul>
+<p>This is why a format like <code class="docutils literal notranslate"><span class="pre">tag(&quot;&lt;think&gt;&quot;,</span> <span class="pre">any_text,</span> <span class="pre">&quot;&lt;/think&gt;&quot;)</span></code> can stop cleanly at
+<code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code>. For more details, see <a class="reference internal" href="advanced_structural_tag.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a>.</p>
+</section>
+</section>
+<section id="quick-start">
+<h2>Quick Start<a class="headerlink" href="#quick-start" title="Permalink to this heading">¶</a></h2>
+<section id="minimal-tag">
+<h3>Minimal <code class="docutils literal notranslate"><span class="pre">tag</span></code><a class="headerlink" href="#minimal-tag" title="Permalink to this heading">¶</a></h3>
+<p>Use <code class="docutils literal notranslate"><span class="pre">tag</span></code> when the output must look like <code class="docutils literal notranslate"><span class="pre">begin</span> <span class="pre">+</span> <span class="pre">content</span> <span class="pre">+</span> <span class="pre">end</span></code>.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;think&gt;&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_text&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;/think&gt;&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This matches <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>.</p>
+</section>
+<section id="minimal-triggered-tags">
+<h3>Minimal <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code><a class="headerlink" href="#minimal-triggered-tags" title="Permalink to this heading">¶</a></h3>
+<p>Use <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> when the model should be free to emit normal text, but switch into a
+structured region after seeing a trigger.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;triggered_tags&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;triggers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;function=&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;tags&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;function=get_weather&gt;&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<span class="w">                    </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="nt">&quot;city&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">}</span>
+<span class="w">                    </span><span class="p">},</span>
+<span class="w">                    </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;city&quot;</span><span class="p">]</span>
+<span class="w">                </span><span class="p">}</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;/function&gt;&quot;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This accepts output like:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>I will call a tool now. &lt;function=get_weather&gt;{&quot;city&quot;: &quot;San Francisco&quot;}&lt;/function&gt;
+</pre></div>
+</div>
+</section>
+</section>
+<section id="format-reference">
+<h2>Format Reference<a class="headerlink" href="#format-reference" title="Permalink to this heading">¶</a></h2>
+<section id="primitive-formats">
+<h3>Primitive Formats<a class="headerlink" href="#primitive-formats" title="Permalink to this heading">¶</a></h3>
+<section id="const-string">
+<h4><code class="docutils literal notranslate"><span class="pre">const_string</span></code><a class="headerlink" href="#const-string" title="Permalink to this heading">¶</a></h4>
+<p>Matches one exact string.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">value</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: the output must contain a fixed literal</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="w">    </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Let&#39;s think step by step.&quot;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">json_schema</span></code></p>
-<p>The output should be a valid JSON object that matches the JSON schema.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">style</span></code></strong> (optional, default: <code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>): Controls how the content is parsed. Supported values:</p>
+</section>
+<section id="json-schema">
+<h4><code class="docutils literal notranslate"><span class="pre">json_schema</span></code><a class="headerlink" href="#json-schema" title="Permalink to this heading">¶</a></h4>
+<p>Matches content that conforms to a JSON Schema.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">json_schema</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">object</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">style</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;minimax_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_xml&quot;</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code></p></td>
+</tr>
+</tbody>
+</table>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>: Standard JSON format. The output must be valid JSON that conforms to the schema.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code>: Qwen-coder XML style format. The output uses XML-style tags such as <code class="docutils literal notranslate"><span class="pre">&lt;parameter=name&gt;value&lt;/parameter&gt;</span></code> to represent schema properties, as used in Qwen tool-calling formats. Use this when you need the same behavior as the legacy <code class="docutils literal notranslate"><span class="pre">qwen_xml_parameter</span></code> format.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;minimax_xml&quot;</span></code>: MiniMax XML style format. The output uses XML-style tags such as <code class="docutils literal notranslate"><span class="pre">&lt;parameter</span> <span class="pre">name=&quot;key&quot;&gt;value&lt;/parameter&gt;</span></code> (attribute form) to represent schema properties, as used in MiniMax tool-calling formats. Same semantics as <code class="docutils literal notranslate"><span class="pre">qwen_xml</span></code> except the tag format is <code class="docutils literal notranslate"><span class="pre">&lt;parameter</span> <span class="pre">name=&quot;key&quot;&gt;</span></code> instead of <code class="docutils literal notranslate"><span class="pre">&lt;parameter=key&gt;</span></code>.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;deepseek_xml&quot;</span></code>: DeepSeek-v3.2 XML style format. The output should be in the format of <code class="docutils literal notranslate"><span class="pre">&lt;{dsml_token}parameter</span> <span class="pre">name=\&quot;key\&quot;</span> <span class="pre">string=\&quot;true|false\&quot;&gt;value&lt;/{dsml_token}parameter&gt;</span></code>.</p></li>
+<li><p><strong>Use it when</strong>: the structured part is naturally expressed as schema-constrained data</p></li>
 </ul>
-<p>When <code class="docutils literal notranslate"><span class="pre">style</span></code> is omitted, it defaults to <code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;json_schema&quot;,
-    &quot;json_schema&quot;: {
-        ...
-    },
-    &quot;style&quot;: &quot;json&quot;
-}
-</pre></div>
-</div>
-<p>For Qwen / MiniMax / Deepseek XML style output, set <code class="docutils literal notranslate"><span class="pre">style</span></code> to <code class="docutils literal notranslate"><span class="pre">qwen_xml</span></code> / <code class="docutils literal notranslate"><span class="pre">minimax_xml</span></code> / <code class="docutils literal notranslate"><span class="pre">deepseek_xml</span></code>:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;json_schema&quot;,
-    &quot;json_schema&quot;: {
-        ...
-    },
-    &quot;style&quot;: &quot;qwen_xml&quot; / &quot;minimax_xml&quot; / &quot;deepseek_xml&quot;
-}
-</pre></div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">grammar</span></code></p>
-<p>This format can be used to match a given ebnf grammar.</p>
+<p><code class="docutils literal notranslate"><span class="pre">style</span></code> values:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code>: standard JSON</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code>: Qwen-style XML parameters, such as <code class="docutils literal notranslate"><span class="pre">&lt;parameter=name&gt;value&lt;/parameter&gt;</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;minimax_xml&quot;</span></code>: MiniMax-style XML parameters, such as <code class="docutils literal notranslate"><span class="pre">&lt;parameter</span> <span class="pre">name=&quot;name&quot;&gt;value&lt;/parameter&gt;</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;deepseek_xml&quot;</span></code>: DeepSeek-v3.2 XML parameter format</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;grammar&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;grammar&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<p>We can use it as the context of other structural tags as well. When using grammar constraints, you need to be especially careful. If the grammar is too general (for example .*), it will cause the subsequent constraints to become ineffective.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">regex</span></code></p>
-<p>This format can be used to match a given ebnf grammar.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;regex&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;pattern&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<p>We can use it as the context of other structural tags as well. As GrammarFormat, if the regex pattern is too general, it will cause the subsequent constraints to become inefficient as well.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">sequence</span></code></p>
-<p>The output should match a sequence of elements.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;sequence&quot;,
-    &quot;elements&quot;: [
-        {
-            &quot;type&quot;: &quot;...&quot;,
-        },
-        {
-            &quot;type&quot;: &quot;...&quot;,
-        },
-        ...
-    ]
-}
-</pre></div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">or</span></code></p>
-<p>The output should follow any of the elements.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;or&quot;,
-    &quot;elements&quot;: [
-        {
-            &quot;type&quot;: &quot;...&quot;,
-        },
-        {
-            &quot;type&quot;: &quot;...&quot;,
-        },
-        ...
-    ]
-}
-</pre></div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">tag</span></code></p>
-<p>The output must follow <code class="docutils literal notranslate"><span class="pre">begin</span> <span class="pre">content</span> <span class="pre">end</span></code>. <code class="docutils literal notranslate"><span class="pre">begin</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> can be strings or <code class="docutils literal notranslate"><span class="pre">token</span></code> format objects, and <code class="docutils literal notranslate"><span class="pre">content</span></code> can be any format object. This is useful for LLM outputs such as <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code> or <code class="docutils literal notranslate"><span class="pre">&lt;function&gt;...&lt;/function&gt;</span></code>.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="p">},</span>
-<span class="w">    </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">begin</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> can also be <code class="docutils literal notranslate"><span class="pre">token</span></code> format objects for token-level boundary matching:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;tag&quot;,
-    &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|tool_call|&gt;&quot;},
-    &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-    &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|end|&gt;&quot;}
-}
-</pre></div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">any_text</span></code></p>
-<p>The any_text format allows any text.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_text&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;excludes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">]</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<p>We will handle it as a special case when wrapped in a tag:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_text&quot;</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;excludes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">]</span>
-<span class="w">    </span><span class="p">},</span>
-<span class="w">    </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<p>It first accepts the begin tag (can be empty), then any text <strong>except the end tag</strong> and the <strong>excludes</strong>, then the end tag.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code></p>
-<p>The output will match triggered tags. It can allow any output until a trigger is
-encountered, then dispatch to the corresponding tag; when the end tag is encountered, the
-grammar will allow any following output, until the next trigger is encountered.</p>
-<p>Each tag should be matched by exactly one trigger. “matching” means the trigger should be a
-prefix of the begin tag. All the strings in <code class="docutils literal notranslate"><span class="pre">excludes</span></code> will not be accepted before the tag is triggerred.</p>
-<p><strong>Note:</strong> Tags inside <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> must use <strong>string</strong> <code class="docutils literal notranslate"><span class="pre">begin</span></code> fields (not <code class="docutils literal notranslate"><span class="pre">token</span></code> format objects). For token-level dispatch, use <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> instead.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;triggered_tags&quot;,
-    &quot;triggers&quot;: [&quot;&lt;function=&quot;],
-    &quot;tags&quot;: [
-        {
-            &quot;begin&quot;: &quot;...&quot;,
-            &quot;content&quot;: {
-                ...
-            },
-            &quot;end&quot;: &quot;...&quot;
-        },
-        {
-            &quot;begin&quot;: &quot;...&quot;,
-            &quot;content&quot;: {
-                ...
-            },
-            &quot;end&quot;: &quot;...&quot;
-        },
-    ],
-    &quot;at_least_one&quot;: bool,
-    &quot;stop_after_first&quot;: bool,
-    &quot;excludes&quot;: [&quot;...&quot;, ]
-}
-</pre></div>
-</div>
-<p>For example,</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;triggered_tags&quot;,
-    &quot;triggers&quot;: [&quot;&lt;function=&quot;],
-    &quot;tags&quot;: [
-        {
-            &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
-            &quot;content&quot;: {
-                &quot;type&quot;: &quot;json_schema&quot;,
-                &quot;json_schema&quot;: ...
-            },
-            &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-        },
-        {
-            &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
-            &quot;content&quot;: {
-                &quot;type&quot;: &quot;json_schema&quot;,
-                &quot;json_schema&quot;: ...
-            },
-            &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-        },
-    ],
-    &quot;at_least_one&quot;: false,
-    &quot;stop_after_first&quot;: false,
-}
-</pre></div>
-</div>
-<p>The above structural tag can accept the following outputs:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;
-&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;
-any_text&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;any_text1&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;any_text2
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">at_least_one</span></code> makes sure at least one of the tags must be generated. The first tag will
-be generated at the beginning of the output.</p>
-<p><code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> will reach the end of the <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> structure after the first tag is generated. If there are following tags, they will still be generated; otherwise, the generation
-will stop.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code></p>
-<p>The output should match zero, one, or more tags, separated by the separator, with no other text allowed.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;tags_with_separator&quot;,
-    &quot;tags&quot;: [
-        {
-            &quot;type&quot;: &quot;tag&quot;,
-            &quot;begin&quot;: &quot;...&quot;,
-            &quot;content&quot;: {
-                &quot;type&quot;: &quot;...&quot;,
-            },
-            &quot;end&quot;: &quot;...&quot;,
-        },
-    ],
-    &quot;separator&quot;: &quot;...&quot;,
-    &quot;at_least_one&quot;: bool,
-    &quot;stop_after_first&quot;: bool,
-}
-</pre></div>
-</div>
-<p>For example,</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;tags_with_separator&quot;,
-    &quot;tags&quot;: [
-        {
-            &quot;type&quot;: &quot;tag&quot;,
-            &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
-            &quot;content&quot;: {
-                &quot;type&quot;: &quot;json_schema&quot;,
-                &quot;json_schema&quot;: ...
-            },
-            &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-        },
-    ],
-    &quot;separator&quot;: &quot;,&quot;,
-    &quot;at_least_one&quot;: false,
-    &quot;stop_after_first&quot;: false,
-}
-</pre></div>
-</div>
-<p>The above structural tag can accept an empty string, or the following outputs:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;
-&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;
-&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;,&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">at_least_one</span></code> makes sure at least one of the tags must be generated.</p>
-<p><code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> will reach the end of the <code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code> structure after the first
-tag is generated. If there are following tags, they will still be generated; otherwise, the
-generation will stop.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">optional</span></code></p>
-<p>The inner format may appear <strong>0 or 1 time</strong> (EBNF optional). The output can either match the content once or be empty.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">content</span></code></strong> (required): A format object. It can be any of the format types.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;optional&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">},</span>
+<span class="w">            </span><span class="nt">&quot;age&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integer&quot;</span><span class="p">}</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;age&quot;</span><span class="p">]</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>For example, to allow an optional prefix:</p>
+<p>Use a non-JSON style only when the surrounding model format expects it:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;location&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">}</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;location&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;style&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;qwen_xml&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="grammar">
+<h4><code class="docutils literal notranslate"><span class="pre">grammar</span></code><a class="headerlink" href="#grammar" title="Permalink to this heading">¶</a></h4>
+<p>Matches text with an EBNF grammar.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">grammar</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: JSON Schema is too restrictive or the structure is better described directly as a grammar</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;grammar&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;grammar&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;root ::= (\&quot;yes\&quot; | \&quot;no\&quot;)&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>If the grammar is too broad, it can make later constraints ineffective. Avoid patterns that can
+consume almost anything when you still need precise structure afterward.</p>
+</section>
+<section id="regex">
+<h4><code class="docutils literal notranslate"><span class="pre">regex</span></code><a class="headerlink" href="#regex" title="Permalink to this heading">¶</a></h4>
+<p>Matches text with a regular expression.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pattern</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: a small local text fragment is easiest to describe with regex</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;regex&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;pattern&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;[A-Z]{3}-[0-9]{4}&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>As with <code class="docutils literal notranslate"><span class="pre">grammar</span></code>, avoid overly broad patterns when later structure still needs to be enforced.</p>
+</section>
+<section id="any-text">
+<h4><code class="docutils literal notranslate"><span class="pre">any_text</span></code><a class="headerlink" href="#any-text" title="Permalink to this heading">¶</a></h4>
+<p>Matches arbitrary text.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">excludes</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string[]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[]</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: the content should remain free-form until some enclosing boundary is reached</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_text&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;excludes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;function=&quot;</span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>When <code class="docutils literal notranslate"><span class="pre">any_text</span></code> appears inside a string-level <code class="docutils literal notranslate"><span class="pre">tag</span></code>, the enclosing end string is automatically
+treated as a stop condition.</p>
+</section>
+</section>
+<section id="composition-formats">
+<h3>Composition Formats<a class="headerlink" href="#composition-formats" title="Permalink to this heading">¶</a></h3>
+<section id="sequence">
+<h4><code class="docutils literal notranslate"><span class="pre">sequence</span></code><a class="headerlink" href="#sequence" title="Permalink to this heading">¶</a></h4>
+<p>Matches several formats in order.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">elements</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">format[]</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: the output is “first this, then that”</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sequence&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;elements&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Answer: &quot;</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="or">
+<h4><code class="docutils literal notranslate"><span class="pre">or</span></code><a class="headerlink" href="#or" title="Permalink to this heading">¶</a></h4>
+<p>Matches any one of several alternatives.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">elements</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">format[]</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: multiple shapes are valid at the same position</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;or&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;elements&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;yes&quot;</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;no&quot;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="optional">
+<h4><code class="docutils literal notranslate"><span class="pre">optional</span></code><a class="headerlink" href="#optional" title="Permalink to this heading">¶</a></h4>
+<p>Matches the inner format zero or one time.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">content</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">format</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: a fragment may be present or omitted</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;optional&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
@@ -581,20 +728,27 @@ generation will stop.</p>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>The above accepts either an empty string or exactly <code class="docutils literal notranslate"><span class="pre">Optional</span> <span class="pre">prefix:</span> </code>.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">plus</span></code></p>
-<p>The inner format must appear <strong>1 or more times</strong> (EBNF plus). The output matches one or more consecutive occurrences of the content.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">content</span></code></strong> (required): A format object. It can be any of the format types.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;plus&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
-<span class="w">    </span><span class="p">}</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<p>For example, to require one or more comma-separated items (simplified):</p>
+</section>
+<section id="plus">
+<h4><code class="docutils literal notranslate"><span class="pre">plus</span></code><a class="headerlink" href="#plus" title="Permalink to this heading">¶</a></h4>
+<p>Matches the inner format one or more times.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">content</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">format</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: at least one repetition is required</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;plus&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
@@ -604,20 +758,27 @@ generation will stop.</p>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>The above accepts <code class="docutils literal notranslate"><span class="pre">item</span></code>, <code class="docutils literal notranslate"><span class="pre">itemitem</span></code>, <code class="docutils literal notranslate"><span class="pre">itemitemitem</span></code>, and so on.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">star</span></code></p>
-<p>The inner format may appear <strong>0 or more times</strong> (EBNF star). The output matches zero or more consecutive occurrences of the content.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">content</span></code></strong> (required): A format object. It can be any of the format types.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;star&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
-<span class="w">    </span><span class="p">}</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<p>For example, to allow zero or more occurrences of a fragment:</p>
+</section>
+<section id="star">
+<h4><code class="docutils literal notranslate"><span class="pre">star</span></code><a class="headerlink" href="#star" title="Permalink to this heading">¶</a></h4>
+<p>Matches the inner format zero or more times.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">content</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">format</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: repetition is allowed but not required</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;star&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
@@ -627,13 +788,36 @@ generation will stop.</p>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>The above accepts an empty string, or <code class="docutils literal notranslate"><span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">xx</span></code>, <code class="docutils literal notranslate"><span class="pre">xxx</span></code>, and so on.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">repeat</span></code></p>
-<p>The inner format may appear <strong>between <code class="docutils literal notranslate"><span class="pre">min</span></code> and <code class="docutils literal notranslate"><span class="pre">max</span></code> times (inclusive)</strong>. This generalizes <code class="docutils literal notranslate"><span class="pre">plus</span></code> (min=1, unbounded) and <code class="docutils literal notranslate"><span class="pre">star</span></code> (min=0, unbounded). Use <code class="docutils literal notranslate"><span class="pre">max:</span> <span class="pre">-1</span></code> for an unbounded upper limit (i.e. “at least <code class="docutils literal notranslate"><span class="pre">min</span></code> times”).</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">min</span></code></strong> (required): Minimum number of occurrences (inclusive). Must be non-negative.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">max</span></code></strong> (required): Maximum number of occurrences (inclusive). Use <code class="docutils literal notranslate"><span class="pre">-1</span></code> for unbounded.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">content</span></code></strong> (required): A format object. It can be any of the format types.</p>
+</section>
+<section id="repeat">
+<h4><code class="docutils literal notranslate"><span class="pre">repeat</span></code><a class="headerlink" href="#repeat" title="Permalink to this heading">¶</a></h4>
+<p>Matches the inner format between <code class="docutils literal notranslate"><span class="pre">min</span></code> and <code class="docutils literal notranslate"><span class="pre">max</span></code> times, inclusive. Use <code class="docutils literal notranslate"><span class="pre">max:</span> <span class="pre">-1</span></code> for an unbounded
+upper limit.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">min</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">max</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code></p></td>
+<td><p>(required, <code class="docutils literal notranslate"><span class="pre">-1</span></code> = unbounded)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">content</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">format</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: repetition needs an explicit range</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;repeat&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;min&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
@@ -645,624 +829,576 @@ generation will stop.</p>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>The above accepts <code class="docutils literal notranslate"><span class="pre">item</span></code>, <code class="docutils literal notranslate"><span class="pre">itemitem</span></code>, or <code class="docutils literal notranslate"><span class="pre">itemitemitem</span></code> (exactly 1 to 3 times).</p>
-<p>For “at least N times” (no upper bound), set <code class="docutils literal notranslate"><span class="pre">max</span></code> to <code class="docutils literal notranslate"><span class="pre">-1</span></code>:</p>
+</section>
+</section>
+<section id="tagging-and-dispatch-formats">
+<h3>Tagging and Dispatch Formats<a class="headerlink" href="#tagging-and-dispatch-formats" title="Permalink to this heading">¶</a></h3>
+<section id="tag">
+<h4><code class="docutils literal notranslate"><span class="pre">tag</span></code><a class="headerlink" href="#tag" title="Permalink to this heading">¶</a></h4>
+<p>Matches <code class="docutils literal notranslate"><span class="pre">begin</span> <span class="pre">+</span> <span class="pre">content</span> <span class="pre">+</span> <span class="pre">end</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">begin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string</span></code> | <code class="docutils literal notranslate"><span class="pre">token</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">content</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">format</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">end</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string</span></code> | <code class="docutils literal notranslate"><span class="pre">string[]</span></code> | <code class="docutils literal notranslate"><span class="pre">token</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: one region is wrapped by known delimiters</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;repeat&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;min&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;max&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">-1</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;response&gt;&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;const_string&quot;</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;x&quot;</span>
-<span class="w">    </span><span class="p">}</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;/response&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;&lt;/answer&gt;&quot;</span><span class="p">]</span>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>The above accepts <code class="docutils literal notranslate"><span class="pre">xx</span></code>, <code class="docutils literal notranslate"><span class="pre">xxx</span></code>, <code class="docutils literal notranslate"><span class="pre">xxxx</span></code>, and so on (2 or more times).</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">QwenXMLParameterFormat</span></code> <em>(not recommended)</em></p>
-<p><strong>Deprecated.</strong> This format is kept for backward compatibility only. Prefer using <code class="docutils literal notranslate"><span class="pre">json_schema</span></code> with <code class="docutils literal notranslate"><span class="pre">style:</span> <span class="pre">&quot;qwen_xml&quot;</span></code> instead (see the <code class="docutils literal notranslate"><span class="pre">json_schema</span></code> format above).</p>
-<p>This is designed for the parameter format of Qwen3-coder. The output should match the given JSON schema in XML style.</p>
+</section>
+<section id="triggered-tags">
+<h4><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code><a class="headerlink" href="#triggered-tags" title="Permalink to this heading">¶</a></h4>
+<p>Allows arbitrary text until a trigger is encountered, then dispatches to one of several tags.
+After the tag ends, arbitrary text is allowed again until the next trigger.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">triggers</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string[]</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tags</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tag[]</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">at_least_one</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">excludes</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string[]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[]</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: tool calls or other structured regions can appear inside otherwise free-form text</p></li>
+</ul>
+<p>Important rules:</p>
+<ul class="simple">
+<li><p>tags inside <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> must use string <code class="docutils literal notranslate"><span class="pre">begin</span></code> fields</p></li>
+<li><p>each tag should match exactly one trigger</p></li>
+<li><p>each trigger should be an unambiguous prefix of the tag(s) it dispatches to</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;triggered_tags&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;triggers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;function=&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;tags&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;function=get_weather&gt;&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<span class="w">                    </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="nt">&quot;city&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">}</span>
+<span class="w">                    </span><span class="p">},</span>
+<span class="w">                    </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;city&quot;</span><span class="p">]</span>
+<span class="w">                </span><span class="p">}</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;/function&gt;&quot;</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;function=get_time&gt;&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<span class="w">                    </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="nt">&quot;timezone&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">}</span>
+<span class="w">                    </span><span class="p">},</span>
+<span class="w">                    </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;timezone&quot;</span><span class="p">]</span>
+<span class="w">                </span><span class="p">}</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;/function&gt;&quot;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;at_least_one&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;stop_after_first&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Semantics of the two control flags:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">at_least_one:</span> <span class="pre">true</span></code> requires at least one dispatched tag and therefore disallows leading free text</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stop_after_first:</span> <span class="pre">true</span></code> finishes the <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> structure after the first dispatched tag</p></li>
+</ul>
+</section>
+<section id="tags-with-separator">
+<h4><code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code><a class="headerlink" href="#tags-with-separator" title="Permalink to this heading">¶</a></h4>
+<p>Matches zero, one, or more tags separated by a fixed separator, with no extra text outside the tag
+sequence.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tags</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tag[]</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">separator</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">at_least_one</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: the output is a pure list of tagged fragments</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tags_with_separator&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;tags&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;item&gt;&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">}</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;/item&gt;&quot;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;separator&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;,&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;at_least_one&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;stop_after_first&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="dispatch">
+<h4><code class="docutils literal notranslate"><span class="pre">dispatch</span></code><a class="headerlink" href="#dispatch" title="Permalink to this heading">¶</a></h4>
+<p>Allows free-form text, but when a specified pattern string appears, the following output must
+conform to the corresponding format. Uses Aho-Corasick matching internally for efficient
+multi-pattern detection.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">rules</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[string,</span> <span class="pre">format][]</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">loop</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">true</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">excludes</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string[]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[]</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: you need pattern-triggered structured regions inside free-form text, with
+string-level pattern matching</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;qwen_xml_parameter&quot;,
-    &quot;json_schema&quot;: {
-        ...
-    }
+    &quot;type&quot;: &quot;dispatch&quot;,
+    &quot;rules&quot;: [
+        [&quot;&lt;function=func1&gt;&quot;, {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...}],
+        [&quot;&lt;function=func2&gt;&quot;, {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...}]
+    ],
+    &quot;loop&quot;: true,
+    &quot;excludes&quot;: [&quot;&lt;/end&gt;&quot;]
 }
 </pre></div>
 </div>
-<p>For example,</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;qwen_xml_parameter&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;age&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integer&quot;</span><span class="p">}},</span>
-<span class="w">        </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;age&quot;</span><span class="p">],</span>
-<span class="w">    </span><span class="p">},</span>
-<span class="p">}</span>
+<p>To end matching at a specific string, put it in <code class="docutils literal notranslate"><span class="pre">excludes</span></code> and follow the <code class="docutils literal notranslate"><span class="pre">dispatch</span></code> with a
+<code class="docutils literal notranslate"><span class="pre">const_string</span></code> in a <code class="docutils literal notranslate"><span class="pre">sequence</span></code>, or use the <code class="docutils literal notranslate"><span class="pre">end</span></code> of an enclosing <code class="docutils literal notranslate"><span class="pre">tag</span></code>:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
+    &quot;type&quot;: &quot;tag&quot;,
+    &quot;begin&quot;: &quot;&lt;response&gt;&quot;,
+    &quot;content&quot;: {
+        &quot;type&quot;: &quot;dispatch&quot;,
+        &quot;rules&quot;: [
+            [&quot;&lt;function=func1&gt;&quot;, {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...}],
+            [&quot;&lt;function=func2&gt;&quot;, {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...}]
+        ],
+        &quot;loop&quot;: true,
+        &quot;excludes&quot;: [&quot;&lt;/response&gt;&quot;]
+    },
+    &quot;end&quot;: &quot;&lt;/response&gt;&quot;
+}
 </pre></div>
 </div>
-<p>This can accept outputs such like:</p>
-<div class="highlight-xml notranslate"><div class="highlight"><pre><span></span>&lt;parameter=name&gt;Bob&lt;/parameter&gt;&lt;parameter=age&gt;\t100\n&lt;/parameter&gt;
-&lt;parameter=name&gt;Bob&lt;/parameter&gt;\t\n&lt;parameter=age&gt;\t100\n&lt;/parameter&gt;
-&lt;parameter=name&gt;Bob&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;
-&lt;parameter=name&gt;&quot;Bob&amp;lt;&quot;&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;
-</pre></div>
-</div>
-<p>Note that strings here are in XML style. Moreover, if the parameter’s type is <code class="docutils literal notranslate"><span class="pre">object</span></code>, the inner <code class="docutils literal notranslate"><span class="pre">object</span></code> will still be in JSON style. For example:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;qwen_xml_parameter&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">            </span><span class="nt">&quot;address&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">                </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
-<span class="w">                </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;street&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;city&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">}},</span>
-<span class="w">                </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;street&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;city&quot;</span><span class="p">],</span>
-<span class="w">            </span><span class="p">}</span>
-<span class="w">        </span><span class="p">},</span>
-<span class="w">        </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;address&quot;</span><span class="p">],</span>
-<span class="w">    </span><span class="p">},</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<p>These are valid outputs:</p>
-<div class="highlight-xml notranslate"><div class="highlight"><pre><span></span>&lt;parameter=address&gt;{&quot;street&quot;: &quot;Main St&quot;, &quot;city&quot;: &quot;New York&quot;}&lt;/parameter&gt;
-&lt;parameter=address&gt;{&quot;street&quot;: &quot;Main St&quot;, &quot;city&quot;: &quot;No more xml escape&amp;&lt;&gt;&quot;}&lt;/parameter&gt;
-</pre></div>
-</div>
-<p>And this is an invalid output:</p>
-<div class="highlight-xml notranslate"><div class="highlight"><pre><span></span>&lt;parameter=address&gt;&lt;parameter=street&gt;Main St&lt;/parameter&gt;&lt;parameter=city&gt;New York&lt;/parameter&gt;&lt;/parameter&gt;
-</pre></div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">token</span></code></p>
-<p>Matches a single token by token ID or token string. Can be used standalone or as the <code class="docutils literal notranslate"><span class="pre">begin</span></code>/<code class="docutils literal notranslate"><span class="pre">end</span></code> of a <code class="docutils literal notranslate"><span class="pre">tag</span></code>.</p>
+<p>Here <code class="docutils literal notranslate"><span class="pre">dispatch</span></code> allows free text and tool calls inside <code class="docutils literal notranslate"><span class="pre">&lt;response&gt;...&lt;/response&gt;</span></code>, but
+stops when <code class="docutils literal notranslate"><span class="pre">&lt;/response&gt;</span></code> appears because it is in <code class="docutils literal notranslate"><span class="pre">excludes</span></code>. The enclosing <code class="docutils literal notranslate"><span class="pre">tag</span></code> then
+consumes that end delimiter.</p>
+</section>
+</section>
+<section id="token-level-formats">
+<h3>Token-level Formats<a class="headerlink" href="#token-level-formats" title="Permalink to this heading">¶</a></h3>
+<section id="token">
+<h4><code class="docutils literal notranslate"><span class="pre">token</span></code><a class="headerlink" href="#token" title="Permalink to this heading">¶</a></h4>
+<p>Matches one token by token ID or token string.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">token</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code> | <code class="docutils literal notranslate"><span class="pre">string</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: the delimiter is a tokenizer-level symbol rather than normal text</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;token&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;token&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">}</span>
 <span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;token&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;|tool_call|&gt;&quot;</span><span class="p">}</span>
 </pre></div>
 </div>
-<p>When <code class="docutils literal notranslate"><span class="pre">token</span></code> is a string, it is resolved to a token ID via <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">exclude_token</span></code></p>
-<p>Matches any single token except those in the given set. When wrapped in a <code class="docutils literal notranslate"><span class="pre">tag</span></code> whose <code class="docutils literal notranslate"><span class="pre">end</span></code> is a <code class="docutils literal notranslate"><span class="pre">token</span></code> format, the end token is automatically excluded.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;exclude_token&quot;</span><span class="p">}</span>
-<span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;exclude_token&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;exclude_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;&lt;/s&gt;&quot;</span><span class="p">]}</span>
+<p>When <code class="docutils literal notranslate"><span class="pre">token</span></code> is a string, it is resolved with <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>.</p>
+</section>
+<section id="exclude-token">
+<h4><code class="docutils literal notranslate"><span class="pre">exclude_token</span></code><a class="headerlink" href="#exclude-token" title="Permalink to this heading">¶</a></h4>
+<p>Matches any single token except those in <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(int</span> <span class="pre">|</span> <span class="pre">string)[]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[]</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: one token is needed, but some token values must be blocked</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;exclude_token&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;exclude_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;&lt;/s&gt;&quot;</span><span class="p">]}</span>
 </pre></div>
 </div>
-<p>Elements in <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code> can be integers (token IDs) or strings (token strings resolved via <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>).</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">any_tokens</span></code></p>
-<p>Matches zero or more tokens, excluding those in the given set. Semantically equivalent to <code class="docutils literal notranslate"><span class="pre">star(exclude_token(...))</span></code>. When wrapped in a <code class="docutils literal notranslate"><span class="pre">tag</span></code> whose <code class="docutils literal notranslate"><span class="pre">end</span></code> is a <code class="docutils literal notranslate"><span class="pre">token</span></code> format, the end token is automatically excluded.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_tokens&quot;</span><span class="p">}</span>
-<span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_tokens&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;exclude_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;&lt;/s&gt;&quot;</span><span class="p">]}</span>
+<p>When used inside a token-level <code class="docutils literal notranslate"><span class="pre">tag</span></code>, the enclosing end token is automatically excluded.</p>
+</section>
+<section id="any-tokens">
+<h4><code class="docutils literal notranslate"><span class="pre">any_tokens</span></code><a class="headerlink" href="#any-tokens" title="Permalink to this heading">¶</a></h4>
+<p>Matches zero or more tokens, excluding those in <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(int</span> <span class="pre">|</span> <span class="pre">string)[]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[]</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: content should remain unconstrained until a token-level boundary is reached</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;any_tokens&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;exclude_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;|eos|&gt;&quot;</span><span class="p">]}</span>
 </pre></div>
 </div>
-<p>Elements in <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code> can be integers (token IDs) or strings (token strings resolved via <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>).</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code></p>
-<p>Similar to <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>, but triggers and excludes operate at the token level. When a trigger token is generated, the output dispatches to the corresponding tag.</p>
-<p><strong>Note:</strong> Tags inside <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> must use <strong><code class="docutils literal notranslate"><span class="pre">token</span></code> format objects</strong> as their <code class="docutils literal notranslate"><span class="pre">begin</span></code> fields (not strings). For string-level dispatch, use <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> instead.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;token_triggered_tags&quot;,
-    &quot;trigger_tokens&quot;: [100, &quot;&lt;|tool_call|&gt;&quot;],
-    &quot;tags&quot;: [
-        {
-            &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: 100},
-            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-            &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: 101}
-        }
-    ],
-    &quot;exclude_tokens&quot;: [&quot;&lt;/s&gt;&quot;],
-    &quot;at_least_one&quot;: false,
-    &quot;stop_after_first&quot;: false
-}
+<p>Semantically, <code class="docutils literal notranslate"><span class="pre">any_tokens</span></code> is equivalent to <code class="docutils literal notranslate"><span class="pre">star(exclude_token(...))</span></code>.</p>
+</section>
+<section id="token-triggered-tags">
+<h4><code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code><a class="headerlink" href="#token-triggered-tags" title="Permalink to this heading">¶</a></h4>
+<p>Token-level version of <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">trigger_tokens</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(int</span> <span class="pre">|</span> <span class="pre">string)[]</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tags</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tag[]</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(int</span> <span class="pre">|</span> <span class="pre">string)[]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[]</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">at_least_one</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: dispatch must happen on special tokens rather than text prefixes</p></li>
+</ul>
+<p>Important rules:</p>
+<ul class="simple">
+<li><p>tags inside <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> must use <code class="docutils literal notranslate"><span class="pre">token</span></code> format objects as their <code class="docutils literal notranslate"><span class="pre">begin</span></code></p></li>
+<li><p>elements of <code class="docutils literal notranslate"><span class="pre">trigger_tokens</span></code> and <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code> can be token IDs or token strings</p></li>
+</ul>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;token_triggered_tags&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;trigger_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;|tool_call_start|&gt;&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;tags&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tag&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;begin&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;token&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;|tool_call_start|&gt;&quot;</span><span class="p">},</span>
+<span class="w">            </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span>
+<span class="w">                </span><span class="p">}</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;token&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;|tool_call_end|&gt;&quot;</span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;exclude_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;|eos|&gt;&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;at_least_one&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;stop_after_first&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="p">}</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">trigger_tokens</span></code> and <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code> elements can be integers or strings. <code class="docutils literal notranslate"><span class="pre">at_least_one</span></code> and <code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> have the same semantics as in <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dispatch</span></code></p>
-<p>Accepts any string except the excluded string. But when any of the case strings is generated, the following format must follow the corresponding format. When the loop is false, after generating the format, we reach the end of the format. Otherwise, it will continue to allow generating any string and match the next case.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">rules</span></code></strong> (required): Non-empty array of 2-element JSON arrays. Each entry is <code class="docutils literal notranslate"><span class="pre">[pattern,</span> <span class="pre">content_format]</span></code>: the pattern is a string, followed by a format object for the content after that pattern.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">loop</span></code></strong> (optional, default <code class="docutils literal notranslate"><span class="pre">true</span></code>): If true, after handling one dispatched format, it will continue to allow free-form text and match the next pattern. Otherwise, the matching of this format ends after handling the first dispatched format.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code></strong> (optional, default <code class="docutils literal notranslate"><span class="pre">[]</span></code>): List of strings that must not appear in the free-form text.</p>
-<p>Corresponds to an <a class="reference external" href="https://en.wikipedia.org/wiki/Aho%E2%80%93Corasick_algorithm">Aho-Corasick automaton</a> under the hood to allow efficient and accurate pattern matching in a free-formed string.</p>
-<p>Common usage: Put the end string inside the exclude, and put another end string after it. E.g.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>format: sequence
-sequence: [
-DispatchFormat(cases=..., excludes=[&quot;abc&quot;])
-ConstStringFormat(&quot;abc&quot;)
-]
-</pre></div>
-</div>
-<p>This means when the LLM generates abc, the matching of the first DispatchFormat ends and gets into the following ConstStringFormat. You can also use the “end” part of the TagFormat to achieve the same goal.</p>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">token_dispatch</span></code></p>
-<p>Similar to <code class="docutils literal notranslate"><span class="pre">dispatch</span></code> type, while the patterns are token IDs or token strings.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">rules</span></code></strong> (required): Non-empty array of 2-element JSON arrays. Each entry is <code class="docutils literal notranslate"><span class="pre">[pattern_token,</span> <span class="pre">content_format]</span></code>: the pattern is a token ID (integer) or token string (resolved via <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>), followed by a format object for the content after that token.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">loop</span></code></strong> (optional, default <code class="docutils literal notranslate"><span class="pre">true</span></code>): If true, after one dispatched format, it will continue to allow free-form text and match the next pattern. Otherwise, the matching of this format ends after handling the first dispatched format.</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code></strong> (optional, default <code class="docutils literal notranslate"><span class="pre">[]</span></code>): List of Tokens that must not appear in the free-form text.</p>
+</section>
+<section id="token-dispatch">
+<h4><code class="docutils literal notranslate"><span class="pre">token_dispatch</span></code><a class="headerlink" href="#token-dispatch" title="Permalink to this heading">¶</a></h4>
+<p>Token-level version of <code class="docutils literal notranslate"><span class="pre">dispatch</span></code>. Patterns are token IDs or token strings instead of text
+strings.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">rules</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[int</span> <span class="pre">|</span> <span class="pre">string,</span> <span class="pre">format][]</span></code></p></td>
+<td><p>(required)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">loop</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">true</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(int</span> <span class="pre">|</span> <span class="pre">string)[]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[]</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Use it when</strong>: dispatch must happen on special tokens rather than text patterns</p></li>
+</ul>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
     &quot;type&quot;: &quot;token_dispatch&quot;,
-    &quot;cases&quot;: [
+    &quot;rules&quot;: [
         [100, {&quot;type&quot;: &quot;const_string&quot;, &quot;value&quot;: &quot;x&quot;}],
-        [&quot;&lt;|tool|&gt;&quot;, {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: {...}}]
+        [&quot;&lt;|tool|&gt;&quot;, {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...}]
     ],
     &quot;loop&quot;: true,
     &quot;exclude_tokens&quot;: [&quot;&lt;/s&gt;&quot;]
 }
 </pre></div>
 </div>
-</li>
-</ol>
 </section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Permalink to this heading">¶</a></h2>
-<section id="example-1-tool-calling">
-<h3>Example 1: Tool calling<a class="headerlink" href="#example-1-tool-calling" title="Permalink to this heading">¶</a></h3>
-<p>The structural tag can support most common tool calling formats.</p>
-<p>Llama JSON-based tool calling, Gemma:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{&quot;name&quot;: &quot;function_name&quot;, &quot;parameters&quot;: params}
-</pre></div>
-</div>
-<p>Corresponding structural tag:</p>
+</section>
+</section>
+<section id="common-recipes">
+<h2>Common Recipes<a class="headerlink" href="#common-recipes" title="Permalink to this heading">¶</a></h2>
+<section id="force-exactly-one-tool-call">
+<h3>Force Exactly One Tool Call<a class="headerlink" href="#force-exactly-one-tool-call" title="Permalink to this heading">¶</a></h3>
+<p>To require exactly one tool call from a tool set, use <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> with both control flags:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;triggered_tags&quot;,
-        &quot;triggers&quot;: [&quot;{\&quot;name\&quot;:&quot;],
-        &quot;tags&quot;: [
-            {
-                &quot;begin&quot;: &quot;{\&quot;name\&quot;: \&quot;func1\&quot;, \&quot;parameters\&quot;: &quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;}&quot;
-            },
-            {
-                &quot;begin&quot;: &quot;{\&quot;name\&quot;: \&quot;func2\&quot;, \&quot;parameters\&quot;: &quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;}&quot;
-            },
-        ],
-    },
+    &quot;type&quot;: &quot;triggered_tags&quot;,
+    &quot;triggers&quot;: [&quot;&lt;function=&quot;],
+    &quot;tags&quot;: [
+        {
+            &quot;type&quot;: &quot;tag&quot;,
+            &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+            &quot;end&quot;: &quot;&lt;/function&gt;&quot;
+        },
+        {
+            &quot;type&quot;: &quot;tag&quot;,
+            &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
+            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+            &quot;end&quot;: &quot;&lt;/function&gt;&quot;
+        }
+    ],
+    &quot;at_least_one&quot;: true,
+    &quot;stop_after_first&quot;: true
 }
 </pre></div>
 </div>
-<p>Llama user-defined custom tool calling:</p>
-<div class="highlight-xml notranslate"><div class="highlight"><pre><span></span>&lt;function=function_name&gt;params&lt;/function&gt;
-</pre></div>
-</div>
-<p>Corresponding structural tag:</p>
+<p>If the function is fixed in advance, a single <code class="docutils literal notranslate"><span class="pre">tag</span></code> is simpler.</p>
+</section>
+<section id="mix-reasoning-free-text-and-tool-calls">
+<h3>Mix Reasoning, Free Text, and Tool Calls<a class="headerlink" href="#mix-reasoning-free-text-and-tool-calls" title="Permalink to this heading">¶</a></h3>
+<p>Use <code class="docutils literal notranslate"><span class="pre">sequence</span></code> to force an initial reasoning region, then allow later tool calls inside normal text:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;triggered_tags&quot;,
-        &quot;triggers&quot;: [&quot;&lt;function=&quot;],
-        &quot;tags&quot;: [
-            {
-                &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-            },
-            {
-                &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-            },
-        ],
-    },
-}
-</pre></div>
-</div>
-<p>Qwen 2.5/3, Hermes:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;tool_call&gt;
-{&quot;name&quot;: &quot;get_current_temperature&quot;, &quot;arguments&quot;: {&quot;location&quot;: &quot;San Francisco, CA, USA&quot;}}
-&lt;/tool_call&gt;
-</pre></div>
-</div>
-<p>Corresponding structural tag:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;triggered_tags&quot;,
-        &quot;triggers&quot;: [&quot;&lt;tool_call&gt;&quot;],
-        &quot;tags&quot;: [
-            {
-                &quot;begin&quot;: &quot;&lt;tool_call&gt;\n{\&quot;name\&quot;: \&quot;func1\&quot;, \&quot;arguments\&quot;: &quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;}\n&lt;/tool_call&gt;&quot;,
-            },
-            {
-                &quot;begin&quot;: &quot;&lt;tool_call&gt;\n{\&quot;name\&quot;: \&quot;func2\&quot;, \&quot;arguments\&quot;: &quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;}\n&lt;/tool_call&gt;&quot;,
-            },
-        ],
-    },
-}
-</pre></div>
-</div>
-<p>DeepSeek:</p>
-<p>There is a special tag <code class="docutils literal notranslate"><span class="pre">&lt;｜tool▁calls▁begin｜&gt;</span> <span class="pre">...</span> <span class="pre">&lt;｜tool▁calls▁end｜&gt;</span></code> quotes the whole tool calling part.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;｜tool▁calls▁begin｜&gt;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_1
-```jsonc
-{params}
-```&lt;｜tool▁call▁end｜&gt;
-
-```jsonc
-{params}
-```&lt;｜tool▁call▁end｜&gt;&lt;｜tool▁calls▁end｜&gt;
-</pre></div>
-</div>
-<p>Corresponding structural tag:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;triggered_tags&quot;,
-        &quot;triggers&quot;: [&quot;&lt;｜tool▁calls▁begin｜&gt;&quot;],
-        &quot;tags&quot;: [
-            {
-                &quot;begin&quot;: &quot;&lt;｜tool▁calls▁begin｜&gt;&quot;,
-                &quot;end&quot;: &quot;&lt;｜tool▁calls▁end｜&gt;&quot;,
-                &quot;content&quot;: {
-                    &quot;type&quot;: &quot;tags_with_separator&quot;,
-                    &quot;separator&quot;: &quot;\n&quot;,
-                    &quot;tags&quot;: [
-                        {
-                            &quot;begin&quot;: &quot;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_1\n```jsonc\n&quot;,
-                            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                            &quot;end&quot;: &quot;\n```&lt;｜tool▁call▁end｜&gt;&quot;,
-                        },
-                        {
-                            &quot;begin&quot;: &quot;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_2\n```jsonc\n&quot;,
-                            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                            &quot;end&quot;: &quot;\n```&lt;｜tool▁call▁end｜&gt;&quot;,
-                        }
-                    ]
+    &quot;type&quot;: &quot;sequence&quot;,
+    &quot;elements&quot;: [
+        {
+            &quot;type&quot;: &quot;tag&quot;,
+            &quot;begin&quot;: &quot;&lt;think&gt;&quot;,
+            &quot;content&quot;: {&quot;type&quot;: &quot;any_text&quot;},
+            &quot;end&quot;: &quot;&lt;/think&gt;&quot;
+        },
+        {
+            &quot;type&quot;: &quot;triggered_tags&quot;,
+            &quot;triggers&quot;: [&quot;&lt;function=&quot;],
+            &quot;tags&quot;: [
+                {
+                    &quot;type&quot;: &quot;tag&quot;,
+                    &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
+                    &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                    &quot;end&quot;: &quot;&lt;/function&gt;&quot;
+                },
+                {
+                    &quot;type&quot;: &quot;tag&quot;,
+                    &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
+                    &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                    &quot;end&quot;: &quot;&lt;/function&gt;&quot;
                 }
-            }
-        ],
-        &quot;stop_after_first&quot;: true,
-
-    },
+            ]
+        }
+    ]
 }
 </pre></div>
 </div>
-<p>Phi-4-mini:</p>
-<p>Similar to DeepSeek-V3, but the tool calling part is wrapped in <code class="docutils literal notranslate"><span class="pre">&lt;|tool_call|&gt;...&lt;|/tool_call|&gt;</span></code> and organized in a list.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;|tool_call|&gt;[{&quot;name&quot;: &quot;function_name_1&quot;, &quot;arguments&quot;: params}, {&quot;name&quot;: &quot;function_name_2&quot;, &quot;arguments&quot;: params}]&lt;|/tool_call|&gt;
-</pre></div>
-</div>
-<p>Corresponding structural tag:</p>
+</section>
+<section id="token-level-delimiters">
+<h3>Token-level Delimiters<a class="headerlink" href="#token-level-delimiters" title="Permalink to this heading">¶</a></h3>
+<p>Some models use special tokens instead of literal strings to start or end a structured region.
+Combine <code class="docutils literal notranslate"><span class="pre">tag</span></code>, <code class="docutils literal notranslate"><span class="pre">any_tokens</span></code>, and <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> for that case:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;triggered_tags&quot;,
-        &quot;triggers&quot;: [&quot;&lt;|tool_call|&gt;&quot;],
-        &quot;tags&quot;: [
-            {
-                &quot;begin&quot;: &quot;&lt;|tool_call|&gt;[&quot;,
-                &quot;end&quot;: &quot;]&lt;|/tool_call|&gt;&quot;,
-                &quot;content&quot;: {
-                    &quot;type&quot;: &quot;tags_with_separator&quot;,
-                    &quot;separator&quot;: &quot;, &quot;,
-                    &quot;tags&quot;: [
-                        {
-                            &quot;begin&quot;: &quot;{\&quot;name\&quot;: \&quot;function_name_1\&quot;, \&quot;arguments\&quot;: &quot;,
-                            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                            &quot;end&quot;: &quot;}&quot;,
-                        },
-                        {
-                            &quot;begin&quot;: &quot;{\&quot;name\&quot;: \&quot;function_name_2\&quot;, \&quot;arguments\&quot;: &quot;,
-                            &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                            &quot;end&quot;: &quot;}&quot;,
-                        }
-                    ]
+    &quot;type&quot;: &quot;sequence&quot;,
+    &quot;elements&quot;: [
+        {
+            &quot;type&quot;: &quot;tag&quot;,
+            &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|think_start|&gt;&quot;},
+            &quot;content&quot;: {&quot;type&quot;: &quot;any_tokens&quot;},
+            &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|think_end|&gt;&quot;}
+        },
+        {
+            &quot;type&quot;: &quot;token_triggered_tags&quot;,
+            &quot;trigger_tokens&quot;: [&quot;&lt;|tool_call_start|&gt;&quot;],
+            &quot;tags&quot;: [
+                {
+                    &quot;type&quot;: &quot;tag&quot;,
+                    &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|tool_call_start|&gt;&quot;},
+                    &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
+                    &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|tool_call_end|&gt;&quot;}
                 }
-            }
-        ],
-        &quot;stop_after_first&quot;: true,
-    },
+            ],
+            &quot;exclude_tokens&quot;: [&quot;&lt;|eos|&gt;&quot;],
+            &quot;at_least_one&quot;: true
+        }
+    ]
 }
 </pre></div>
 </div>
 </section>
-<section id="example-2-force-think">
-<h3>Example 2: Force think<a class="headerlink" href="#example-2-force-think" title="Permalink to this heading">¶</a></h3>
-<p>The output should start with a reasoning part (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>), then can generate a mix of text and tool calls.</p>
-<p>Format:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;think&gt; any_text &lt;/think&gt; any_text &lt;function=func1&gt; params &lt;/function&gt; any_text
-</pre></div>
-</div>
-<p>Corresponding structural tag:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;sequence&quot;,
-        &quot;elements&quot;: [
-            {
-                &quot;type&quot;: &quot;tag&quot;,
-                &quot;begin&quot;: &quot;&lt;think&gt;&quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;any_text&quot;},
-                &quot;end&quot;: &quot;&lt;/think&gt;&quot;,
-            },
-            {
-                &quot;type&quot;: &quot;triggered_tags&quot;,
-                &quot;triggers&quot;: [&quot;&lt;function=&quot;],
-                &quot;tags&quot;: [
-                    {
-                        &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
-                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-                    },
-                    {
-                        &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
-                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-                    },
-                ],
-            },
-        ],
-    },
-}
-</pre></div>
-</div>
-</section>
-<section id="example-3-think-force-tool-calling-llama-style">
-<h3>Example 3: Think &amp; Force tool calling (Llama style)<a class="headerlink" href="#example-3-think-force-tool-calling-llama-style" title="Permalink to this heading">¶</a></h3>
-<p>The output should start with a reasoning part (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>), then need to generate exactly one tool call in the tool set.</p>
-<p>Format:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;think&gt; any_text &lt;/think&gt; &lt;function=func1&gt; params &lt;/function&gt;
-</pre></div>
-</div>
-<p>Corresponding structural tag:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;sequence&quot;,
-        &quot;elements&quot;: [
-            {
-                &quot;type&quot;: &quot;tag&quot;,
-                &quot;begin&quot;: &quot;&lt;think&gt;&quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;any_text&quot;},
-                &quot;end&quot;: &quot;&lt;/think&gt;&quot;,
-            },
-            {
-                &quot;type&quot;: &quot;triggered_tags&quot;,
-                &quot;triggers&quot;: [&quot;&lt;function=&quot;],
-                &quot;tags&quot;: [
-                    {
-                        &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
-                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-                    },
-                    {
-                        &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
-                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-                    },
-                ],
-                &quot;stop_after_first&quot;: true,
-                &quot;at_least_one&quot;: true,
-            },
-        ],
-    },
-}
-</pre></div>
-</div>
-</section>
-<section id="example-4-think-force-tool-calling-deepseek-style">
-<h3>Example 4: Think &amp; force tool calling (DeepSeek style)<a class="headerlink" href="#example-4-think-force-tool-calling-deepseek-style" title="Permalink to this heading">¶</a></h3>
-<p>The output should start with a reasoning part (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>), then must generate a tool call following the DeepSeek style.</p>
-<p>Config:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;sequence&quot;,
-        &quot;elements&quot;: [
-            {
-                &quot;type&quot;: &quot;tag&quot;,
-                &quot;begin&quot;: &quot;&lt;think&gt;&quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;any_text&quot;},
-                &quot;end&quot;: &quot;&lt;/think&gt;&quot;,
-            },
-            {
-                &quot;type&quot;: &quot;tag_and_text&quot;,
-                &quot;triggers&quot;: [&quot;&lt;｜tool▁calls▁begin｜&gt;&quot;],
-                &quot;tags&quot;: [
-                    {
-                        &quot;begin&quot;: &quot;&lt;｜tool▁calls▁begin｜&gt;&quot;,
-                        &quot;end&quot;: &quot;&lt;｜tool▁calls▁end｜&gt;&quot;,
-                        &quot;content&quot;: {
-                            &quot;type&quot;: &quot;tags_with_separator&quot;,
-                            &quot;separator&quot;: &quot;\n&quot;,
-                            &quot;tags&quot;: [
-                                {
-                                    &quot;begin&quot;: &quot;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_1\n```jsonc\n&quot;,
-                                    &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                                    &quot;end&quot;: &quot;\n```&lt;｜tool▁call▁end｜&gt;&quot;,
-                                },
-                                {
-                                    &quot;begin&quot;: &quot;&lt;｜tool▁call▁begin｜&gt;function&lt;｜tool▁sep｜&gt;function_name_2\n```jsonc\n&quot;,
-                                    &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                                    &quot;end&quot;: &quot;\n```&lt;｜tool▁call▁end｜&gt;&quot;,
-                                }
-                            ],
-                            &quot;at_least_one&quot;: true, // Note this line!
-                            &quot;stop_after_first&quot;: true, // Note this line!
-                        }
-                    }
-                ],
-                &quot;stop_after_first&quot;: true,
-            },
-        ],
-    },
-},
-</pre></div>
-</div>
-</section>
-<section id="example-5-force-non-thinking-mode">
-<h3>Example 5: Force non-thinking mode<a class="headerlink" href="#example-5-force-non-thinking-mode" title="Permalink to this heading">¶</a></h3>
-<p>Qwen-3 has a hybrid thinking mode that allows switching between thinking and non-thinking mode. Thinking mode is the same as above, while in non-thinking mode, the output would start with a empty thinking part <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;&lt;/think&gt;</span></code>, and then can generate any text.</p>
-<p>We now specify the non-thinking mode.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;sequence&quot;,
-        &quot;elements&quot;: [
-            {
-                &quot;type&quot;: &quot;const_string&quot;,
-                &quot;text&quot;: &quot;&lt;think&gt;&lt;/think&gt;&quot;
-            },
-            {
-                &quot;type&quot;: &quot;triggered_tags&quot;,
-                &quot;triggers&quot;: [&quot;&lt;tool_call&gt;&quot;],
-                &quot;tags&quot;: [
-                    {
-                        &quot;begin&quot;: &quot;&lt;tool_call&gt;\n{\&quot;name\&quot;: \&quot;func1\&quot;, \&quot;arguments\&quot;: &quot;,
-                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                        &quot;end&quot;: &quot;}\n&lt;/tool_call&gt;&quot;,
-                    },
-                    {
-                        &quot;begin&quot;: &quot;&lt;tool_call&gt;\n{\&quot;name\&quot;: \&quot;func2\&quot;, \&quot;arguments\&quot;: &quot;,
-                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                        &quot;end&quot;: &quot;}\n&lt;/tool_call&gt;&quot;,
-                    },
-                ],
-            },
-        ],
-    },
-}
-</pre></div>
-</div>
-</section>
-<section id="example-6-token-level-tool-calling">
-<h3>Example 6: Token-level tool calling<a class="headerlink" href="#example-6-token-level-tool-calling" title="Permalink to this heading">¶</a></h3>
-<p>Some models use special tokens (not byte strings) to delimit tool calls. The <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> format handles this by dispatching on token IDs.</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;sequence&quot;,
-        &quot;elements&quot;: [
-            {
-                &quot;type&quot;: &quot;tag&quot;,
-                &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|think_start|&gt;&quot;},
-                &quot;content&quot;: {&quot;type&quot;: &quot;any_tokens&quot;},
-                &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|think_end|&gt;&quot;}
-            },
-            {
-                &quot;type&quot;: &quot;token_triggered_tags&quot;,
-                &quot;trigger_tokens&quot;: [&quot;&lt;|tool_call_start|&gt;&quot;],
-                &quot;tags&quot;: [
-                    {
-                        &quot;begin&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|tool_call_start|&gt;&quot;},
-                        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                        &quot;end&quot;: {&quot;type&quot;: &quot;token&quot;, &quot;token&quot;: &quot;&lt;|tool_call_end|&gt;&quot;}
-                    }
-                ],
-                &quot;exclude_tokens&quot;: [&quot;&lt;|eos|&gt;&quot;],
-                &quot;at_least_one&quot;: true
-            }
-        ]
-    }
-}
-</pre></div>
-</div>
-</section>
-</section>
-<section id="compatibility-with-the-openai-tool-calling-api">
-<h2>Compatibility with the OpenAI Tool Calling API<a class="headerlink" href="#compatibility-with-the-openai-tool-calling-api" title="Permalink to this heading">¶</a></h2>
-<p>The structural tag can be used to implement the OpenAI Tool Calling API with strict format
-constraints. In LLM serving engines, you can use the <code class="docutils literal notranslate"><span class="pre">xgrammar</span></code> Python package to construct the
-structural tag and apply it to constrained decoding.</p>
-<p>In the OpenAI Tool Calling API, a set of tools is provided using JSON schema. There are also several
-features: tool choice (control at least one tool or exactly one tool is called),
-parallel tool calling (allow only one tool or multiple tools can be called in one round), etc.</p>
-<p>You can construct the structural tag according to the provided tools, and the LLM’s specific tool
-calling format. The structural tag can be used in XGrammar’s constrained decoding workflow to
-enable strict format constraints.</p>
-<section id="tool-choice">
-<h3>Tool Choice<a class="headerlink" href="#tool-choice" title="Permalink to this heading">¶</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">tool_choice</span></code> is a parameter in the OpenAI API. It can be</p>
+<section id="built-in-model-styles">
+<h3>Built-in Model Styles<a class="headerlink" href="#built-in-model-styles" title="Permalink to this heading">¶</a></h3>
+<p>If you only need a standard tool-calling layout for a supported model family, prefer the built-in
+helper instead of hand-writing every wrapper:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">auto</span></code>: Let the model decide which tool to use</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">required</span></code>: Call at least one tool in the tool set</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;function&quot;:</span> <span class="pre">{&quot;name&quot;:</span> <span class="pre">&quot;function_name&quot;}}</span></code>: The forced mode, call exactly one specific function</p></li>
+<li><p>Llama / Gemma-style text wrappers</p></li>
+<li><p>Qwen and Qwen Coder variants</p></li>
+<li><p>Kimi</p></li>
+<li><p>DeepSeek variants</p></li>
+<li><p>Harmony</p></li>
+<li><p>MiniMax</p></li>
 </ul>
-<p>The required mode can be implemented by</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;triggered_tags&quot;,
-        &quot;triggers&quot;: [&quot;&lt;function=&quot;],
-        &quot;tags&quot;: [
-            {
-                &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-            },
-            {
-                &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-            },
-        ],
-        &quot;at_least_one&quot;: true,
-    },
-}
-</pre></div>
-</div>
-<p>The forced mode can be implemented by</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;tag&quot;,
-        &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
-        &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-        &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-    },
-}
-</pre></div>
-</div>
+<p>See <a class="reference internal" href="advanced_structural_tag.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a> for
+<code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag</span></code> and the list of supported models.</p>
 </section>
-<section id="parallel-tool-calling">
-<h3>Parallel Tool Calling<a class="headerlink" href="#parallel-tool-calling" title="Permalink to this heading">¶</a></h3>
-<p>OAI’s <code class="docutils literal notranslate"><span class="pre">parallel_tool_calls</span></code> parameter controls if the model can call multiple functions in one round.</p>
+</section>
+<section id="mapping-to-openai-tool-calling-options">
+<h2>Mapping to OpenAI Tool Calling Options<a class="headerlink" href="#mapping-to-openai-tool-calling-options" title="Permalink to this heading">¶</a></h2>
+<p>Structural tags are flexible enough to implement the strict-format parts of the OpenAI tool-calling
+API. The exact wrapper still depends on the target model’s syntax, but the control knobs map
+cleanly:</p>
 <ul class="simple">
-<li><p>If <code class="docutils literal notranslate"><span class="pre">true</span></code>, the model can call multiple functions in one round. (This is default)</p></li>
-<li><p>If <code class="docutils literal notranslate"><span class="pre">false</span></code>, the model can call at most one function in one round.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tool_choice</span> <span class="pre">=</span> <span class="pre">&quot;auto&quot;</span></code>: use <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> with <code class="docutils literal notranslate"><span class="pre">at_least_one:</span> <span class="pre">false</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tool_choice</span> <span class="pre">=</span> <span class="pre">&quot;required&quot;</span></code>: use <code class="docutils literal notranslate"><span class="pre">TagsWithSeparatorFormat</span></code> or <code class="docutils literal notranslate"><span class="pre">OrFormat</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tool_choice</span> <span class="pre">=</span> <span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;function&quot;:</span> <span class="pre">{&quot;name&quot;:</span> <span class="pre">...}}</span></code>: use a fixed <code class="docutils literal notranslate"><span class="pre">tag</span></code> format to describe the tool-calling format.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">parallel_tool_calls</span> <span class="pre">=</span> <span class="pre">false</span></code>: set <code class="docutils literal notranslate"><span class="pre">stop_after_first:</span> <span class="pre">true</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">parallel_tool_calls</span> <span class="pre">=</span> <span class="pre">true</span></code>: keep <code class="docutils literal notranslate"><span class="pre">stop_after_first:</span> <span class="pre">false</span></code>, or use <code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code> if
+the model expects a pure separated list of calls</p></li>
 </ul>
-<p><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> and <code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code> has a parameter <code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> to control if the
-generation should stop after the first tag is generated. So the <code class="docutils literal notranslate"><span class="pre">false</span></code> mode can be implemented by:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{
-    &quot;type&quot;: &quot;structural_tag&quot;,
-    &quot;format&quot;: {
-        &quot;type&quot;: &quot;triggered_tags&quot;,
-        &quot;triggers&quot;: [&quot;&lt;function=&quot;],
-        &quot;tags&quot;: [
-            {
-                &quot;begin&quot;: &quot;&lt;function=func1&gt;&quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-            },
-            {
-                &quot;begin&quot;: &quot;&lt;function=func2&gt;&quot;,
-                &quot;content&quot;: {&quot;type&quot;: &quot;json_schema&quot;, &quot;json_schema&quot;: ...},
-                &quot;end&quot;: &quot;&lt;/function&gt;&quot;,
-            },
-        ],
-        &quot;stop_after_first&quot;: true,
-    },
-}
-</pre></div>
-</div>
-<p>The <code class="docutils literal notranslate"><span class="pre">true</span></code> mode can be implemented by setting <code class="docutils literal notranslate"><span class="pre">stop_after_first</span></code> to <code class="docutils literal notranslate"><span class="pre">false</span></code>.</p>
-</section>
 </section>
 <section id="next-steps">
 <h2>Next Steps<a class="headerlink" href="#next-steps" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>For API reference, see <a class="reference internal" href="../api/python/structural_tag.html"><span class="doc std std-doc">Structural Tag API Reference</span></a>.</p></li>
-<li><p>For advanced usage, see <a class="reference internal" href="advanced_structural_tag.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a>.</p></li>
+<li><p>For built-in helpers, automatic end detection details, and deprecated APIs, see
+<a class="reference internal" href="advanced_structural_tag.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a>.</p></li>
 </ul>
 </section>
 </section>
