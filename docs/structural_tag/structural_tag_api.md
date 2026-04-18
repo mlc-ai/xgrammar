@@ -804,8 +804,7 @@ helper instead of hand-writing every wrapper:
 - Harmony
 - MiniMax
 
-See [Advanced Topics of the Structural Tag](advanced_usage) for
-`get_builtin_structural_tag` and the list of supported models.
+See [Builtin Structural Tag](builtin_structural_tag) for `get_builtin_structural_tag` and the list of supported models.
 
 ## Mapping to OpenAI Tool Calling Options
 
@@ -819,6 +818,8 @@ cleanly:
 - `parallel_tool_calls = false`: set `stop_after_first: true`
 - `parallel_tool_calls = true`: keep `stop_after_first: false`, or use `tags_with_separator` if
   the model expects a pure separated list of calls
+
+See [Builtin Structural Tag](builtin_structural_tag) for the mapping from `builtin_structural_tag` to OpenAI Tool Calling Options.
 
 ## Next Steps
 

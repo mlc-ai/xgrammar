@@ -122,6 +122,14 @@ In Python (`python/xgrammar/builtin_structural_tag.py`), `BuiltinSupportedModels
 
 `get_builtin_structural_tag_supported_models` returns the supported model list for each built-in structural tag function. Call it with no args to get `Dict[str, List[str]]` (style → models), or pass a style name (e.g. `"llama"`, `"qwen"`) to get `List[str]` for that style. Use it to confirm which style a model uses before calling `get_builtin_structural_tag`.
 
+## Mapping to OpenAI Tool Calling Options
+
+Builtin Structural tags also support the strict-format parts of the OpenAI tool-calling API.
+
+- `tool_choice = "auto"`: use `tool_choice = "auto"` in `get_builtin_structural_tag`.
+- `tool_choice = "required"`: use `tool_choice = "required"` in `get_builtin_structural_tag`.
+- `tool_choice = {"type": "function", "function": {"name": ...}}`: pass the only function as the tools, and use `tool_choice = "required"`.
+
 ## Next Steps
 
 * For API reference, see [Structural Tag API Reference](../api/python/builtin_structural_tag).
