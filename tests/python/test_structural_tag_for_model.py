@@ -370,8 +370,7 @@ def _run_instance_cases_explicit(format_type: str, cases: List[InstanceCase]):
             tools=input_dict.get("tools", []),
             builtin_tools=input_dict.get("builtin_tools", []),
         )
-        if expected_grammar_ebnf != "":
-            check_stag_with_grammar(stag, expected_grammar_ebnf)
+        check_stag_with_grammar(stag, expected_grammar_ebnf)
         for j, instance in enumerate(instances):
             check_stag_with_instance(stag, instance, expected_accept_per_instance[j])
 
@@ -609,7 +608,7 @@ def test_get_llama_structural_tag_instance():
     _run_instance_cases_explicit("llama", llama_instance_cases)
 
 
-# ----- llama_customed (expected_grammar_ebnf left "" — fill in from str(Grammar.from_structural_tag(stag)))
+# ----- llama_customed
 
 _llama_customed_instances_with_tools = [
     '<function=t1>{"q": "v"}</function>',
@@ -625,7 +624,35 @@ llama_customed_instance_cases: List[InstanceCase] = [
         _llama_customed_instances_with_tools,
         False,
         False,
-        "",
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("t1>" root_0 "</function>"))
+triggered_tags ::= TagDispatch(
+  ("<function=", triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=("<think>", "</think>")
+)
+root ::= ((triggered_tags))
+""",
         [True, True, False, False, False],
     ),
     (
@@ -633,7 +660,41 @@ llama_customed_instance_cases: List[InstanceCase] = [
         _llama_customed_instances_with_tools,
         True,
         False,
-        "",
+        r"""any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</think>")
+)
+tag ::= (("<think>" any_text "</think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("t1>" root_0 "</function>"))
+triggered_tags ::= TagDispatch(
+  ("<function=", triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((tag triggered_tags))
+root ::= ((sequence))
+""",
         [False, False, True, False, True],
     ),
     (
@@ -641,12 +702,86 @@ llama_customed_instance_cases: List[InstanceCase] = [
         _llama_customed_instances_with_tools,
         True,
         True,
-        "",
+        r"""const_string ::= (("<think>\n\n</think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("t1>" root_0 "</function>"))
+triggered_tags ::= TagDispatch(
+  ("<function=", triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((const_string triggered_tags))
+root ::= ((sequence))
+""",
         [False, False, False, False, True],
     ),
-    ({}, _llama_instances_no_tools, False, False, "", [True, True, False, False, False]),
-    ({}, _llama_instances_no_tools, True, False, "", [False, False, True, False, True]),
-    ({}, _llama_instances_no_tools, True, True, "", [False, False, False, False, True]),
+    (
+        {},
+        _llama_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
+root ::= ((any_text))
+""",
+        [True, True, False, False, False],
+    ),
+    (
+        {},
+        _llama_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</think>")
+)
+tag ::= (("<think>" any_text "</think>"))
+any_text_1 ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((tag any_text_1))
+root ::= ((sequence))
+""",
+        [False, False, True, False, True],
+    ),
+    (
+        {},
+        _llama_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
+any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((const_string any_text))
+root ::= ((sequence))
+""",
+        [False, False, False, False, True],
+    ),
 ]
 
 
