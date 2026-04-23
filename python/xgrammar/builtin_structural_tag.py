@@ -18,7 +18,7 @@ from .structural_tag import (
 
 BuiltinSupportedModels = Literal[
     "llama",
-    "llama_customed",
+    "llama_custom",
     "qwen",
     "qwen_coder",
     "kimi",
@@ -195,7 +195,7 @@ def _get_builtin_structural_tag_function(
         Currently supported format types are:
         - "llama": Llama3.1 style structural tag format.
           Supported Models: Llama 3, Llama 4 and other models that follow the same style.
-        - "llama_customed": Llama 3.1 user-defined custom tool-call tag format
+        - "llama_custom": Llama 3.1 user-defined custom tool-call tag format
           ``<function=name>{...}</function>`` where ``{...}`` matches the tool's parameters JSON Schema.
           Same reasoning tags as ``llama``. See
           https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/#user-defined-custom-tool-calling
@@ -288,9 +288,9 @@ def _get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
 
 
 @_register_builtin_structural_tag(
-    "llama_customed", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]
+    "llama_custom", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]
 )
-def _get_llama_customed_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+def _get_llama_custom_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     """Get Llama user-defined ``<function=name>{...}</function>`` structural tag format.
 
     Reference: https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/#user-defined-custom-tool-calling

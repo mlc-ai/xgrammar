@@ -10,6 +10,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 - **model** (`BuiltinModels`): The model type. Supported values:
   - `"llama"`: Llama-style (e.g. Llama 3, Llama 4)
+  - `"llama_custom"`: Llama user-defined custom tool-call style `<function=name>{...}</function>` (parameters constrained by JSON Schema)
   - `"qwen"`: Qwen-style (e.g. Qwen3)
   - `"qwen_coder"`: Qwen Coder-style (e.g. Qwen3-Coder, Qwen3-Coder-Next)
   - `"kimi"`: Kimi-style (e.g. Kimi-K2, Kimi-K2.5)

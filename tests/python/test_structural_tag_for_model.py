@@ -142,7 +142,7 @@ def test_get_builtin_structural_tag_supported_models_all():
     assert isinstance(result, dict)
     expected_styles = {
         "llama",
-        "llama_customed",
+        "llama_custom",
         "qwen",
         "qwen_coder",
         "kimi",
@@ -163,7 +163,7 @@ def test_get_builtin_structural_tag_supported_models_all():
     "style, expected_models",
     [
         ("llama", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]),
-        ("llama_customed", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]),
+        ("llama_custom", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]),
         ("kimi", ["Kimi-K2", "Kimi-K2.5"]),
         ("deepseek_r1", ["DeepSeek-V3.1", "DeepSeek-R1", "DeepSeek-V3.2-exp"]),
         ("qwen_coder", ["Qwen3-Coder", "Qwen3-Coder-Next"]),
@@ -251,8 +251,8 @@ def test_get_builtin_structural_tag_input_validation_errors(
     "format_type, instance, is_accepted",
     [
         ("llama", '{"name": "t1", "parameters": {"q": "v"}}', True),
-        ("llama_customed", '<function=t1>{"q": "v"}</function>', True),
-        ("llama_customed", '<function=t2>{"q": "v"}</function>', False),
+        ("llama_custom", '<function=t1>{"q": "v"}</function>', True),
+        ("llama_custom", '<function=t2>{"q": "v"}</function>', False),
         (
             "kimi",
             '123<|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
@@ -608,9 +608,9 @@ def test_get_llama_structural_tag_instance():
     _run_instance_cases_explicit("llama", llama_instance_cases)
 
 
-# ----- llama_customed
+# ----- llama_custom
 
-_llama_customed_instances_with_tools = [
+_llama_custom_instances_with_tools = [
     '<function=t1>{"q": "v"}</function>',
     "text<function=t1>{}</function>",
     '<think>123</think>text<function=t1>{"q": ""}</function>',
@@ -618,10 +618,10 @@ _llama_customed_instances_with_tools = [
     '<think>\n\n</think>text<function=t1>{"q": "v"}</function>',
 ]
 
-llama_customed_instance_cases: List[InstanceCase] = [
+llama_custom_instance_cases: List[InstanceCase] = [
     (
         {"tools": _tools_llama},
-        _llama_customed_instances_with_tools,
+        _llama_custom_instances_with_tools,
         False,
         False,
         r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
@@ -657,7 +657,7 @@ root ::= ((triggered_tags))
     ),
     (
         {"tools": _tools_llama},
-        _llama_customed_instances_with_tools,
+        _llama_custom_instances_with_tools,
         True,
         False,
         r"""any_text ::= TagDispatch(
@@ -699,7 +699,7 @@ root ::= ((sequence))
     ),
     (
         {"tools": _tools_llama},
-        _llama_customed_instances_with_tools,
+        _llama_custom_instances_with_tools,
         True,
         True,
         r"""const_string ::= (("<think>\n\n</think>"))
@@ -785,9 +785,9 @@ root ::= ((sequence))
 ]
 
 
-def test_get_llama_customed_structural_tag_instance():
-    """get_builtin_structural_tag(llama_customed) accepts/rejects instance as expected."""
-    _run_instance_cases_explicit("llama_customed", llama_customed_instance_cases)
+def test_get_llama_custom_structural_tag_instance():
+    """get_builtin_structural_tag(llama_custom) accepts/rejects instance as expected."""
+    _run_instance_cases_explicit("llama_custom", llama_custom_instance_cases)
 
 
 # ----- kimi
@@ -2313,7 +2313,7 @@ _TOOLS: List[Dict[str, Any]] = [
     "format_type, kwargs",
     [
         ("llama", {"tools": _TOOLS}),
-        ("llama_customed", {"tools": _TOOLS}),
+        ("llama_custom", {"tools": _TOOLS}),
         ("kimi", {"tools": _TOOLS}),
         ("deepseek_r1", {"tools": _TOOLS}),
         ("qwen_coder", {"tools": _TOOLS}),
