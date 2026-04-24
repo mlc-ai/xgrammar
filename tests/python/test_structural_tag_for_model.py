@@ -8,10 +8,7 @@ import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.builtin_structural_tag import (
-    get_builtin_structural_tag,
-    get_builtin_structural_tag_supported_models,
-)
+from xgrammar.builtin_structural_tag import get_builtin_structural_tag
 from xgrammar.structural_tag import StructuralTag
 from xgrammar.testing import _is_grammar_accept_string
 
@@ -148,61 +145,6 @@ def test_get_structural_tag_for_model_unknown_format():
         get_builtin_structural_tag("unknown_format")
     assert "Unknown format type" in str(exc_info.value)
     assert "unknown_format" in str(exc_info.value)
-
-
-# ---------- Test: get_builtin_structural_tag_supported_models ----------
-
-
-def test_get_builtin_structural_tag_supported_models_all():
-    """get_structural_tag_supported_models() returns dict of all styles to model lists."""
-    result = get_builtin_structural_tag_supported_models()
-    assert isinstance(result, dict)
-    expected_styles = {
-        "llama",
-        "qwen",
-        "qwen_coder",
-        "kimi",
-        "deepseek_r1",
-        "harmony",
-        "deepseek_v3_2",
-        "minimax",
-        "glm47",
-        "gemma4",
-    }
-    assert set(result.keys()) == expected_styles
-    for style, models in result.items():
-        assert isinstance(models, list)
-        assert all(isinstance(m, str) for m in models)
-
-
-@pytest.mark.parametrize(
-    "style, expected_models",
-    [
-        ("llama", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]),
-        ("kimi", ["Kimi-K2", "Kimi-K2.5"]),
-        ("deepseek_r1", ["DeepSeek-V3.1", "DeepSeek-R1", "DeepSeek-V3.2-exp"]),
-        ("qwen_coder", ["Qwen3-Coder", "Qwen3-Coder-Next"]),
-        ("qwen", ["Qwen3"]),
-        ("harmony", ["gpt-oss"]),
-        ("deepseek_v3_2", ["DeepSeek-V3.2"]),
-        ("minimax", ["MiniMax-M2.5"]),
-        ("glm47", ["GLM-5", "GLM-4.7"]),
-        (
-            "gemma4",
-            ["Gemma-4", "gemma-4-12b-it", "gemma-4-26b-a4b-it", "gemma-4-31b-it", "gemma-4-e2b-it"],
-        ),
-    ],
-)
-def test_get_structural_tag_supported_models_by_style(style: str, expected_models: List[str]):
-    """get_structural_tag_supported_models(style) returns list of supported models for that style."""
-    result = get_builtin_structural_tag_supported_models(style)
-    assert result == expected_models
-
-
-def test_get_structural_tag_supported_models_unknown_style():
-    """get_structural_tag_supported_models(unknown_style) raises KeyError."""
-    with pytest.raises(KeyError):
-        get_builtin_structural_tag_supported_models("unknown_style")
 
 
 # ---------- Test: input validation errors ----------
@@ -2703,11 +2645,3 @@ def test_get_gemma4_structural_tag_instance():
     check_stag_with_instance(
         stag, "<|channel>thought\nThinking...<channel|>Just text, no tool call.", True
     )
-
-
-def test_get_gemma4_structural_tag_supported_models():
-    """gemma4 is listed in supported models."""
-    all_models = get_builtin_structural_tag_supported_models()
-    assert "gemma4" in all_models
-    gemma4_models = get_builtin_structural_tag_supported_models("gemma4")
-    assert "Gemma-4" in gemma4_models

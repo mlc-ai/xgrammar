@@ -17,7 +17,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`BuiltinSupportedModels`): The structural-tag style. The valid string values and the corresponding supported models are listed in supported models below.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen"`, `"qwen_coder"`, `"kimi"`, `"deepseek_r1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm47"`, `"gemma4"`. The corresponding supported model names are listed below.
 - **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags). Default `True`.
 - **tools** (`List[Dict[str, Any]]`, optional): List of tools; each item is a dict with a `"function"` key. The `"function"` dict **must** contain a `"name"` (string), and **may** contain:
   - `"parameters"`: JSON Schema, which can be:
@@ -102,10 +102,10 @@ structural_tag = get_builtin_structural_tag(
 
 ---
 
-## Supported models: `BuiltinSupportedModels` and `get_builtin_structural_tag_supported_models`
+## Supported models
 
 
-In Python (`python/xgrammar/builtin_structural_tag.py`), `BuiltinSupportedModels` is a `Literal[...]` type alias: the strings below are the only valid values for the `model` argument of `get_builtin_structural_tag`. Each style is registered together with the model name strings returned by `get_builtin_structural_tag_supported_models` for that style:
+The `model` argument of `get_builtin_structural_tag` accepts the style names below:
 
 | `model` (style) | Supported models |
 |-----------------|-------------------|
@@ -119,8 +119,6 @@ In Python (`python/xgrammar/builtin_structural_tag.py`), `BuiltinSupportedModels
 | `"minimax"` | MiniMax-M2.5 |
 | `"glm47"` | GLM-5, GLM-4.7 |
 | `"gemma4"` | Gemma-4, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it, gemma-4-e2b-it |
-
-`get_builtin_structural_tag_supported_models` returns the supported model list for each built-in structural tag function. Call it with no args to get `Dict[str, List[str]]` (style → models), or pass a style name (e.g. `"llama"`, `"qwen"`) to get `List[str]` for that style. Use it to confirm which style a model uses before calling `get_builtin_structural_tag`.
 
 ## Mapping to OpenAI Tool Calling Options
 
