@@ -28,7 +28,11 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   Default value is `[]`.
 - **builtin_tools** (`List[Dict[str, Any]]`, optional): List of built-in tools (used only for `"harmony"`); each element has the same structure as items in `tools`. Default `[]`.
 - **force_empty_reasoning** (`bool`, optional): When reasoning is on, whether to force empty thinking content at the beginning. Default `False`.
-- **tool_choice** (`Literal["auto", "required"]`, optional): How tool calling is constrained relative to the `tools` list (e.g. optional tools vs. requiring a tool call). `"auto"` means whether to call a tool(s) and which tool(s) to call is determined by the model,and these calling will appear in any-form text. `"required"` means that the model must call a tool(s) and other form outputs are not allowed.
+- **tool_choice** (`Literal["auto", "forced", "required"]`, optional): How tool calling is constrained relative to the `tools` list.
+  - `"auto"`: whether to call a tool(s), and which one(s), is determined by the model; tool calls can appear inside free-form text.
+  - `"forced"`: the model must call the specified tool (`forced_function_name`) exactly once in function-call format.
+  - `"required"`: the model must call one or more tools; non-tool plain-text outputs are not allowed.
+- **forced_function_name** (`Optional[str]`, optional): Required when `tool_choice="forced"`. The value must match a function name in `tools`.
 
 Passing an unsupported `model`, an invalid `tool_choice` will raise `ValueError`.
 
@@ -126,7 +130,7 @@ Builtin Structural tags also support the strict-format parts of the OpenAI tool-
 
 - `tool_choice = "auto"`: use `tool_choice = "auto"` in `get_builtin_structural_tag`.
 - `tool_choice = "required"`: use `tool_choice = "required"` in `get_builtin_structural_tag`.
-- `tool_choice = {"type": "function", "function": {"name": ...}}`: pass the only function as the tools, and use `tool_choice = "required"`.
+- `tool_choice = {"type": "function", "function": {"name": ...}}`: use `tool_choice = "forced"` and pass that name via `forced_function_name`.
 
 ## Next Steps
 
