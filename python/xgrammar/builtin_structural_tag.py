@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Literal, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
 from .structural_tag import (
     AnyTextFormat,
@@ -22,7 +22,8 @@ def get_builtin_structural_tag(
     tools: List[Dict[str, Any]] = [],
     builtin_tools: List[Dict[str, Any]] = [],
     force_empty_reasoning: bool = False,
-    tool_choice: Literal["auto", "required"] = "auto",
+    tool_choice: Literal["auto", "forced", "required"] = "auto",
+    forced_function_name: Optional[str] = None,
 ) -> StructuralTag:
     r"""Get structural tag for model. This function can generate structural tag for the given model
     with the given tools, builtin tools and reasoning mode.
@@ -56,11 +57,15 @@ def get_builtin_structural_tag(
         the empty thinking content at the beginning of the response.
         Some models like Qwen3, DeepSeek-R1 and etc. prefer empty-thinking mode to disable
         reasoning mode instead of non-thinking mode.
-    tool_choice : Literal["auto", "required"]
+    tool_choice : Literal["auto", "forced", "required"]
         How tool calls are constrained relative to the provided tools list.
         "auto" means whether to call a tool(s) and which tool(s) to call is determined by the model,
         and these calling will appear in any-form text.
+        "forced" means that the model must call the specified tool
+        (`forced_function_name`) exactly once in function-call format.
         "required" means that the model must call a tool(s) and other form outputs are not allowed.
+    forced_function_name : Optional[str]
+        When ``tool_choice`` implies a single forced tool, the name of that function.
 
     Returns
     -------
@@ -71,7 +76,7 @@ def get_builtin_structural_tag(
         raise ValueError("The 'reasoning' key in the input_dict must be a boolean.")
     if not isinstance(force_empty_reasoning, bool):
         raise ValueError("The 'force_empty_reasoning' key in the input_dict must be a boolean.")
-    _validate_tool_choice_params(tool_choice)
+    _validate_tool_choice_params(tool_choice, forced_function_name)
     _validate_tool_function(tools)
     _validate_tool_function(builtin_tools)
 
@@ -82,6 +87,7 @@ def get_builtin_structural_tag(
         "reasoning": reasoning,
         "force_empty_reasoning": force_empty_reasoning,
         "tool_choice": tool_choice,
+        "forced_function_name": forced_function_name,
     }
     return func(input_dict)
 
@@ -92,16 +98,23 @@ def get_builtin_structural_tag(
 _structural_tag_registry: Dict[str, Callable[[Dict[str, Any]], StructuralTag]] = {}
 _THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 _GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>"]
+_VALID_BUILTIN_TOOL_CHOICES: List[str] = ["auto", "forced", "required"]
+_FORCED_TOOL_ERROR = "The 'forced_function_name' is required when 'tool_choice' is 'forced'."
 _REQUIRED_TOOLS_ERROR = (
     "The 'tools' list is empty, which is not allowed when 'tool_choice' is 'required'."
 )
 
 
-def _validate_tool_choice_params(tool_choice: Literal["auto", "required"]) -> None:
-    if tool_choice not in ("auto", "required"):
+def _validate_tool_choice_params(
+    tool_choice: Literal["auto", "forced", "required"], forced_function_name: Optional[str]
+) -> None:
+    if tool_choice not in _VALID_BUILTIN_TOOL_CHOICES:
         raise ValueError(
-            "The 'tool_choice' must be one of " f"['auto', 'required'], got {tool_choice!r}."
+            "The 'tool_choice' must be one of "
+            f"{list(_VALID_BUILTIN_TOOL_CHOICES)}, got {tool_choice!r}."
         )
+    if forced_function_name is not None and not isinstance(forced_function_name, str):
+        raise ValueError("The 'forced_function_name' must be a string or None.")
 
 
 def _validate_tool_function(tools: Any) -> None:
@@ -151,8 +164,8 @@ def _get_builtin_structural_tag_function(
     key, which is a dictionary containing "name" and "parameters" fields. In addition, for the "qwen",
     "deepseek_r1" and "harmony" formats, "reasoning" key can be provided to enable/disable reasoning mode.
     By default, reasoning mode is enabled.
-    The ``input_dict`` may also include ``tool_choice`` (``"auto"`` or ``"required"``),
-    as set by :func:`get_builtin_structural_tag`.
+    The ``input_dict`` may also include ``tool_choice`` (``"auto"``, ``"forced"``, or ``"required"``)
+    and ``forced_function_name`` (optional string), as set by :func:`get_builtin_structural_tag`.
 
     Examples
     --------
@@ -241,6 +254,8 @@ def get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         This format is used by Llama 3 and other models that follow the same style.
 
     """
+    TOOL_NAME_PREFIX = '{"name": "'
+    PARAMETERS_FIELD_PREFIX = '", "parameters": '
     TOOL_OBJECT_BEGIN_PREFIX = '{"name": "'
     TOOL_OBJECT_PARAMETERS_PREFIX = '", "parameters": '
     TOOLS_TRIGGER = '{"name": '
@@ -252,6 +267,7 @@ def get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     tool_choice = input_dict.get("tool_choice", "auto")
+    forced_function_name = input_dict.get("forced_function_name")
 
     if tool_choice == "auto":
         tags = []
@@ -276,6 +292,30 @@ def get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         else:
             suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "forced":
+        suffix_tag = None
+
+        if forced_function_name is None:
+            raise ValueError(_FORCED_TOOL_ERROR)
+
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            if function["name"] == forced_function_name:
+                parameters = _get_function_parameters(function)
+                suffix_tag = TagFormat(
+                    begin=(TOOL_NAME_PREFIX + forced_function_name + PARAMETERS_FIELD_PREFIX),
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end="}",
+                )
+                break
+
+        if suffix_tag is None:
+            raise ValueError(
+                f"The tool with name '{forced_function_name}' is not found in the tools list."
+            )
 
     elif tool_choice == "required":
         tags = []
@@ -342,6 +382,7 @@ def get_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     tool_choice = input_dict.get("tool_choice", "auto")
+    forced_function_name = input_dict.get("forced_function_name")
 
     if tool_choice == "auto":
         tags = []
@@ -373,6 +414,32 @@ def get_kimi_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         else:
             suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
+    elif tool_choice == "forced":
+        suffix_tag = None
+        if forced_function_name is None:
+            raise ValueError(_FORCED_TOOL_ERROR)
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            if function["name"] == forced_function_name:
+                parameters = _get_function_parameters(function)
+                suffix_tag = TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{forced_function_name}{TOOL_CALL_SUFFIX}",
+                    content=SequenceFormat(
+                        elements=[
+                            RegexFormat(pattern=r"\d+"),
+                            ConstStringFormat(value=TOOL_CALL_ARGUMENT_BEGIN),
+                            JSONSchemaFormat(json_schema=parameters),
+                        ]
+                    ),
+                    end=TOOL_CALL_END,
+                )
+                break
+        if suffix_tag is None:
+            raise ValueError(
+                f"The tool with name '{forced_function_name}' is not found in the tools list."
+            )
     elif tool_choice == "required":
         tags = []
         for tool in tools:
@@ -443,6 +510,7 @@ def get_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     tool_choice = input_dict.get("tool_choice", "auto")
+    forced_function_name = input_dict.get("forced_function_name")
 
     if tool_choice == "auto":
         tags = []
@@ -467,6 +535,30 @@ def get_deepseek_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         else:
             suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "forced":
+        suffix_tag = None
+
+        if forced_function_name is None:
+            raise ValueError(_FORCED_TOOL_ERROR)
+
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            if function["name"] == forced_function_name:
+                parameters = _get_function_parameters(function)
+                suffix_tag = TagFormat(
+                    begin=f"{TOOL_CALLS_PREFIX}{forced_function_name}{TOOL_SEP}",
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
+                break
+
+        if suffix_tag is None:
+            raise ValueError(
+                f"The tool with name '{forced_function_name}' is not found in the tools list."
+            )
 
     elif tool_choice == "required":
         tags = []
@@ -532,6 +624,7 @@ def get_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     tool_choice = input_dict.get("tool_choice", "auto")
+    forced_function_name = input_dict.get("forced_function_name")
 
     if tool_choice == "auto":
         tags = []
@@ -556,6 +649,30 @@ def get_qwen_coder_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         else:
             suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "forced":
+        suffix_tag = None
+
+        if forced_function_name is None:
+            raise ValueError(_FORCED_TOOL_ERROR)
+
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            if function["name"] == forced_function_name:
+                parameters = _get_function_parameters(function)
+                suffix_tag = TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{forced_function_name}{TOOL_CALL_BEGIN_SUFFIX}",
+                    content=QwenXMLParameterFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
+                break
+
+        if suffix_tag is None:
+            raise ValueError(
+                f"The tool with name '{forced_function_name}' is not found in the tools list."
+            )
 
     elif tool_choice == "required":
         tags = []
@@ -620,6 +737,7 @@ def get_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     tool_choice = input_dict.get("tool_choice", "auto")
+    forced_function_name = input_dict.get("forced_function_name")
 
     if tool_choice == "auto":
         tags = []
@@ -643,6 +761,29 @@ def get_qwen_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         else:
             suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "forced":
+        suffix_tag = None
+        if forced_function_name is None:
+            raise ValueError(_FORCED_TOOL_ERROR)
+
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            if function["name"] == forced_function_name:
+                parameters = _get_function_parameters(function)
+                suffix_tag = TagFormat(
+                    begin=(TOOL_CALL_BEGIN_PREFIX + forced_function_name + ARGUMENTS_FIELD_PREFIX),
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=TOOL_CALL_END,
+                )
+                break
+
+        if suffix_tag is None:
+            raise ValueError(
+                f"The tool with name '{forced_function_name}' is not found in the tools list."
+            )
 
     elif tool_choice == "required":
         tags = []
@@ -715,6 +856,7 @@ def get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     builtin_tools = input_dict.get("builtin_tools", [])
     tool_choice = input_dict.get("tool_choice", "auto")
+    forced_function_name = input_dict.get("forced_function_name")
     tags = []
 
     if tool_choice == "auto":
@@ -750,6 +892,46 @@ def get_harmony_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
             )
         final_tag = TagFormat(begin=FINAL_BEGIN, content=AnyTextFormat(), end=FINAL_END)
         tags.append(final_tag)
+
+    elif tool_choice == "forced":
+        forced_tag = None
+
+        if forced_function_name is None:
+            raise ValueError(_FORCED_TOOL_ERROR)
+
+        for tool in builtin_tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            if function["name"] == forced_function_name:
+                parameters = _get_function_parameters(function)
+                forced_tag = TagFormat(
+                    begin=f"{ANALYSIS_CHANNEL_PREFIX}{forced_function_name}{ANALYSIS_MESSAGE_SUFFIX}",
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=CALL_END,
+                )
+                break
+
+        if forced_tag is None:
+            for tool in tools:
+                if "function" not in tool:
+                    continue
+                function = tool["function"]
+                if function["name"] == forced_function_name:
+                    parameters = _get_function_parameters(function)
+                    forced_tag = TagFormat(
+                        begin=f"{COMMENTARY_CHANNEL_PREFIX}{forced_function_name}{JSON_CONSTRAIN_SUFFIX}",
+                        content=JSONSchemaFormat(json_schema=parameters),
+                        end=CALL_END,
+                    )
+                    break
+
+        if forced_tag is None:
+            raise ValueError(
+                f"The tool with name '{forced_function_name}' is not found in the tools list."
+            )
+
+        tags.append(forced_tag)
 
     elif tool_choice == "required":
         for tool in builtin_tools:
@@ -817,6 +999,7 @@ def get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     tool_choice = input_dict.get("tool_choice", "auto")
+    forced_function_name = input_dict.get("forced_function_name")
 
     if tool_choice == "auto":
         tags = []
@@ -855,6 +1038,37 @@ def get_deepseek_v3_2_structural_tag(input_dict: Dict[str, Any]) -> StructuralTa
         else:
             suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
+    elif tool_choice == "forced":
+        suffix_tag = None
+
+        if forced_function_name is None:
+            raise ValueError(_FORCED_TOOL_ERROR)
+
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            if function["name"] == forced_function_name:
+                parameters = _get_function_parameters(function)
+                suffix_tag = SequenceFormat(
+                    elements=[
+                        ConstStringFormat(value=FUNCTION_CALLS_BEGIN),
+                        TagFormat(
+                            begin=(
+                                INVOKE_BEGIN_PREFIX + forced_function_name + INVOKE_BEGIN_SUFFIX
+                            ),
+                            content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                            end=INVOKE_END,
+                        ),
+                        ConstStringFormat(value=FUNCTION_CALLS_END),
+                    ]
+                )
+                break
+
+        if suffix_tag is None:
+            raise ValueError(
+                f"The tool with name '{forced_function_name}' is not found in the tools list."
+            )
     elif tool_choice == "required":
         tags = []
         for tool in tools:
@@ -916,6 +1130,7 @@ def get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     tool_choice = input_dict.get("tool_choice", "auto")
+    forced_function_name = input_dict.get("forced_function_name")
 
     if tool_choice == "auto":
         tags = []
@@ -952,6 +1167,34 @@ def get_minimax_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         else:
             suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
+    elif tool_choice == "forced":
+        suffix_tag = None
+        if forced_function_name is None:
+            raise ValueError(_FORCED_TOOL_ERROR)
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            if function["name"] == forced_function_name:
+                parameters = _get_function_parameters(function)
+                suffix_tag = SequenceFormat(
+                    elements=[
+                        ConstStringFormat(value=TOOL_CALL_BEGIN),
+                        TagFormat(
+                            begin=(
+                                INVOKE_BEGIN_PREFIX + forced_function_name + INVOKE_BEGIN_SUFFIX
+                            ),
+                            content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                            end=INVOKE_END,
+                        ),
+                        ConstStringFormat(value=TOOL_CALL_END),
+                    ]
+                )
+                break
+        if suffix_tag is None:
+            raise ValueError(
+                f"The tool with name '{forced_function_name}' is not found in the tools list."
+            )
     elif tool_choice == "required":
         tags = []
         for tool in tools:
@@ -1028,6 +1271,7 @@ def get_glm47_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     reasoning = input_dict.get("reasoning", True)
     force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
     tool_choice = input_dict.get("tool_choice", "auto")
+    forced_function_name = input_dict.get("forced_function_name")
 
     if tool_choice == "auto":
         tags = []
@@ -1053,6 +1297,26 @@ def get_glm47_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
         else:
             suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
 
+    elif tool_choice == "forced":
+        suffix_tag = None
+        if forced_function_name is None:
+            raise ValueError(_FORCED_TOOL_ERROR)
+        for tool in tools:
+            if "function" not in tool:
+                continue
+            function = tool["function"]
+            if function["name"] == forced_function_name:
+                parameters = _get_function_parameters(function)
+                suffix_tag = TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{forced_function_name}",
+                    content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                    end=TOOL_CALL_END,
+                )
+                break
+        if suffix_tag is None:
+            raise ValueError(
+                f"The tool with name '{forced_function_name}' is not found in the tools list."
+            )
     elif tool_choice == "required":
         tags = []
         for tool in tools:
