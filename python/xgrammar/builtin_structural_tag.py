@@ -652,6 +652,8 @@ def get_deepseek_structural_tag(
     TOOL_CALL_BEGIN = "<｜tool▁call▁begin｜>"
     TOOL_CALL_END = "<｜tool▁call▁end｜>"
     TOOL_SEP = "<｜tool▁sep｜>"
+    JSON_RENDER_BEGIN = "\n```json\n"
+    JSON_RENDER_END = "\n```\n"
     THINK_TAG_END = "</think>"
     EMPTY_THINK_CONTENT = "</think>"
 
@@ -665,9 +667,9 @@ def get_deepseek_structural_tag(
             name = function.name
             tags.append(
                 TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN}{tool.type}{TOOL_SEP}{name}\n",
+                    begin=f"{TOOL_CALL_BEGIN}{tool.type}{TOOL_SEP}{name}{JSON_RENDER_BEGIN}",
                     content=JSONSchemaFormat(json_schema=parameters),
-                    end=TOOL_CALL_END,
+                    end=f"{JSON_RENDER_END}{TOOL_CALL_END}",
                 )
             )
 
@@ -686,10 +688,11 @@ def get_deepseek_structural_tag(
         if not tools:
             raise ValueError("Forced tool choice must resolve to exactly one tool.")
         function = tools[0].function
+        parameters = _get_function_parameters(function)
         suffix_tag = TagFormat(
-            begin=f"{TOOL_CALLS_BEGIN}{TOOL_CALL_BEGIN}{tools[0].type}{TOOL_SEP}{function.name}\n",
+            begin=f"{TOOL_CALLS_BEGIN}{TOOL_CALL_BEGIN}{tools[0].type}{TOOL_SEP}{function.name}{JSON_RENDER_BEGIN}",
             content=JSONSchemaFormat(json_schema=parameters),
-            end=f"{TOOL_CALL_END}{TOOL_CALLS_END}",
+            end=f"{JSON_RENDER_END}{TOOL_CALL_END}{TOOL_CALLS_END}",
         )
 
     elif tool_choice == "required":
@@ -700,9 +703,9 @@ def get_deepseek_structural_tag(
             name = function.name
             tags.append(
                 TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN}{tool.type}{TOOL_SEP}{name}\n",
+                    begin=f"{TOOL_CALL_BEGIN}{tool.type}{TOOL_SEP}{name}{JSON_RENDER_BEGIN}",
                     content=JSONSchemaFormat(json_schema=parameters),
-                    end=TOOL_CALL_END,
+                    end=f"{JSON_RENDER_END}{TOOL_CALL_END}",
                 )
             )
 

@@ -552,7 +552,7 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
         ),
         (
             "deepseek_r1",
-            'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>t1<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+            'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>t1\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
             True,
         ),
         (
@@ -1104,11 +1104,11 @@ def test_kimi_instances(case: InstanceCase):
 # ----- deepseek_r1
 
 _deepseek_r1_instances_with_tools = [
-    'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
-    '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
-    'thinking</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+    'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+    '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+    'thinking</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
     "</think>text<think>123</think>",
-    '</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+    '</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
 ]
 _deepseek_r1_instances_no_tools = ["", "text", "123</think>123", "</think></think>", "</think>text"]
 
@@ -1140,9 +1140,13 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("search<\uff5ctool\u2581sep\uff5c>" root_0 "<\uff5ctool\u2581call\u2581end\uff5c>"))
+tag ::= (("<\uff5ctool\u2581call\u2581begin\uff5c>function<\uff5ctool\u2581sep\uff5c>search\n```json\n" root_0 "\n```\n<\uff5ctool\u2581call\u2581end\uff5c>"))
+tags_with_separator_tags ::= ((tag))
+tags_with_separator_sub ::= ("" | ("\n" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+triggered_tags_group ::= (("" tags_with_separator "<\uff5ctool\u2581calls\u2581end\uff5c>"))
 triggered_tags ::= TagDispatch(
-  ("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>", triggered_tags_group),
+  ("<\uff5ctool\u2581calls\u2581begin\uff5c>", triggered_tags_group),
   loop_after_dispatch=true,
   excludes=("<think>", "</think>")
 )
@@ -1182,9 +1186,13 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("search<\uff5ctool\u2581sep\uff5c>" root_0 "<\uff5ctool\u2581call\u2581end\uff5c>"))
+tag_1 ::= (("<\uff5ctool\u2581call\u2581begin\uff5c>function<\uff5ctool\u2581sep\uff5c>search\n```json\n" root_0 "\n```\n<\uff5ctool\u2581call\u2581end\uff5c>"))
+tags_with_separator_tags ::= ((tag_1))
+tags_with_separator_sub ::= ("" | ("\n" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+triggered_tags_group ::= (("" tags_with_separator "<\uff5ctool\u2581calls\u2581end\uff5c>"))
 triggered_tags ::= TagDispatch(
-  ("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>", triggered_tags_group),
+  ("<\uff5ctool\u2581calls\u2581begin\uff5c>", triggered_tags_group),
   loop_after_dispatch=true,
   excludes=("<think>", "</think>")
 )
@@ -1221,9 +1229,13 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-triggered_tags_group ::= (("search<\uff5ctool\u2581sep\uff5c>" root_0 "<\uff5ctool\u2581call\u2581end\uff5c>"))
+tag ::= (("<\uff5ctool\u2581call\u2581begin\uff5c>function<\uff5ctool\u2581sep\uff5c>search\n```json\n" root_0 "\n```\n<\uff5ctool\u2581call\u2581end\uff5c>"))
+tags_with_separator_tags ::= ((tag))
+tags_with_separator_sub ::= ("" | ("\n" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+triggered_tags_group ::= (("" tags_with_separator "<\uff5ctool\u2581calls\u2581end\uff5c>"))
 triggered_tags ::= TagDispatch(
-  ("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>", triggered_tags_group),
+  ("<\uff5ctool\u2581calls\u2581begin\uff5c>", triggered_tags_group),
   loop_after_dispatch=true,
   excludes=("<think>", "</think>")
 )
@@ -2580,7 +2592,7 @@ root ::= ((tag))
             {"tools": _tools_deepseek_pair, "tool_choice": "required"},
             [
                 "",
-                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
             ],
             False,
             False,
@@ -2605,12 +2617,13 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-tag ::= (("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>search<\uff5ctool\u2581sep\uff5c>" root_0 "<\uff5ctool\u2581call\u2581end\uff5c>"))
-tag_1 ::= (("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>alt<\uff5ctool\u2581sep\uff5c>" root_0 "<\uff5ctool\u2581call\u2581end\uff5c>"))
+tag ::= (("<\uff5ctool\u2581call\u2581begin\uff5c>function<\uff5ctool\u2581sep\uff5c>search\n```json\n" root_0 "\n```\n<\uff5ctool\u2581call\u2581end\uff5c>"))
+tag_1 ::= (("<\uff5ctool\u2581call\u2581begin\uff5c>function<\uff5ctool\u2581sep\uff5c>alt\n```json\n" root_0 "\n```\n<\uff5ctool\u2581call\u2581end\uff5c>"))
 tags_with_separator_tags ::= ((tag) | (tag_1))
-tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator_sub ::= ("" | ("\n" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
-root ::= ((tags_with_separator))
+tag_2 ::= (("<\uff5ctool\u2581calls\u2581begin\uff5c>" tags_with_separator "<\uff5ctool\u2581calls\u2581end\uff5c>"))
+root ::= ((tag_2))
 """,
             [False, True],
         ),
@@ -2625,8 +2638,8 @@ root ::= ((tags_with_separator))
                 "forced_function_name": "search",
             },
             [
-                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
-                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>alt<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜>',
+                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>alt\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
             ],
             False,
             False,
@@ -2651,7 +2664,7 @@ basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
 basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
 basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
 basic_number_7 ::= (("0") | ([1-9] [0-9]*))
-tag ::= (("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>search<\uff5ctool\u2581sep\uff5c>" root_0 "<\uff5ctool\u2581call\u2581end\uff5c>"))
+tag ::= (("<\uff5ctool\u2581calls\u2581begin\uff5c><\uff5ctool\u2581call\u2581begin\uff5c>function<\uff5ctool\u2581sep\uff5c>search\n```json\n" root_0 "\n```\n<\uff5ctool\u2581call\u2581end\uff5c><\uff5ctool\u2581calls\u2581end\uff5c>"))
 root ::= ((tag))
 """,
             [True, False],
