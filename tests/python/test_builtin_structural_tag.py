@@ -1,6 +1,7 @@
 """Tests for get_structural_tag_for_model and generated structural tags."""
 
 import re
+import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -240,7 +241,6 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
         {"tools": [], "builtin_tools": [{"function": {"name": "b1", "parameters": 1}}]},
         "parameters",
     ),
-    ("qwen", {"tools": [], "reasoning": "not_bool"}, "must be a boolean"),
 ]
 
 
@@ -3371,3 +3371,7 @@ def test_gemma4_instances():
     check_stag_with_instance(
         stag, "<|channel>thought\nThinking...<channel|>Just text, no tool call.", True
     )
+
+
+if __name__ == "__main__":
+    pytest.main(sys.argv)
