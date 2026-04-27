@@ -13,6 +13,14 @@ The mission of this project is to bring flexible zero-overhead structure generat
 
 .. toctree::
    :maxdepth: 1
+   :caption: Structural Tag
+
+   structural_tag/structural_tag_api
+   structural_tag/tool_calling_and_reasoning
+   structural_tag/advanced_usage
+
+.. toctree::
+   :maxdepth: 1
    :caption: Tutorials
 
    tutorials/constrained_decoding
@@ -29,14 +37,6 @@ The mission of this project is to bring flexible zero-overhead structure generat
    xgrammar_features/runtime_safeguards
    xgrammar_features/serialization
    xgrammar_features/javascript_api
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Structural Tag
-
-   structural_tag/structural_tag_api
-   structural_tag/tool_calling_and_reasoning
-   structural_tag/advanced_usage
 
 .. toctree::
    :maxdepth: 1

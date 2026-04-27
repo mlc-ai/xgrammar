@@ -10,6 +10,16 @@ This page contains the API reference for the structural tag template function. F
 
 .. autofunction:: register_model_structural_tag
 
+.. data:: get_builtin_structural_tag
+
+   Deprecated alias for :func:`get_model_structural_tag`.
+
+Registered Structural Tag Templates
+-----------------------------------
+
+The following model-specific APIs are registered via
+:func:`register_model_structural_tag`.
+
 .. autofunction:: get_llama_structural_tag
 
 .. autofunction:: get_kimi_structural_tag
@@ -29,7 +39,3 @@ This page contains the API reference for the structural tag template function. F
 .. autofunction:: get_glm47_structural_tag
 
 .. autofunction:: get_gemma4_structural_tag
-
-.. data:: get_builtin_structural_tag
-
-   Deprecated alias for :func:`get_model_structural_tag`.

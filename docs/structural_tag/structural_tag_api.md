@@ -803,7 +803,7 @@ helper instead of hand-writing every wrapper:
 - Harmony
 - MiniMax
 
-See [Builtin Structural Tag](builtin_structural_tag) for `get_model_structural_tag` and the list of supported models.
+See [Tool Calling and Reasoning](tool_calling_and_reasoning) for `get_model_structural_tag` and the list of supported models.
 
 ## Mapping to OpenAI Tool Calling Options
 
@@ -818,11 +818,11 @@ cleanly:
 - `parallel_tool_calls = true`: keep `stop_after_first: false`, or use `tags_with_separator` if
   the model expects a pure separated list of calls
 
-See [Builtin Structural Tag](builtin_structural_tag) for the mapping from `builtin_structural_tag` to OpenAI Tool Calling Options.
+See [Tool Calling and Reasoning](tool_calling_and_reasoning) for the mapping from `get_model_structural_tag` to OpenAI Tool Calling Options.
 
 ## Next Steps
 
 - For API reference, see [Structural Tag API Reference](../api/python/structural_tag).
-- For Builtin Structural Tag, see [Builtin Structural Tag](builtin_structural_tag).
+- For tool calling and reasoning, see [Tool Calling and Reasoning](tool_calling_and_reasoning).
 - For automatic end detection details, and deprecated APIs, see
   [Advanced Topics of the Structural Tag](advanced_usage).
