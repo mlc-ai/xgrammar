@@ -1,5 +1,7 @@
 """Tests for Token() edge support in grammar parsing, matching, and bitmask generation."""
 
+import sys
+
 import pytest
 
 import xgrammar as xgr
@@ -1628,3 +1630,7 @@ def test_stag_any_tokens_exclude_redispatch():
     _accept_tokens(m, [2, 13])  # <tool> x
     assert m.accept_token(STAG_STOP)
     assert m.is_terminated()
+
+
+if __name__ == "__main__":
+    pytest.main(sys.argv)

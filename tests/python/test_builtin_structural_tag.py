@@ -1,6 +1,7 @@
 """Tests for get_structural_tag_for_model and generated structural tags."""
 
 import re
+import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -3371,3 +3372,7 @@ def test_gemma4_instances():
     check_stag_with_instance(
         stag, "<|channel>thought\nThinking...<channel|>Just text, no tool call.", True
     )
+
+
+if __name__ == "__main__":
+    pytest.main(sys.argv)
