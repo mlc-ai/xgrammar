@@ -49,7 +49,7 @@ std::string _PrintGrammarFSMs(const Grammar& grammar) {
   for (int i = 0; i < grammar->NumRules(); i++) {
     result += "Rule " + std::to_string(i) + ": " + grammar->GetRule(i).name + ", FSM: ";
     if (grammar->per_rule_fsms[i].has_value()) {
-      result += grammar->per_rule_fsms[i]->ToString();
+      result += grammar->per_rule_fsms[i]->GetFsm().ToString();
     } else {
       result += "None";
     }

@@ -870,7 +870,7 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
     for (const auto& state : states) {
       XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
       const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
-      const auto& current_edges = fsm.GetFsm().GetEdges(state.element_id);
+      const auto& current_edges = fsm.GetFsm().GetFsm().GetEdges(state.element_id);
       for (const auto& edge : current_edges) {
         if (!edge.IsCharRange()) {
           continue;
