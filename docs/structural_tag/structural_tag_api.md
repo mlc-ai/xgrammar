@@ -52,24 +52,6 @@ Think of a structural tag as a tree of chunks:
 | Tagging / dispatch | `tag`, `triggered_tags`, `tags_with_separator`, `dispatch` | Wrap content or switch between free text and structured regions |
 | Token-level | `token`, `exclude_token`, `any_tokens`, `token_triggered_tags`, `token_dispatch` | Constrain output at token boundaries |
 
-### Unlimited Formats and End Detection
-
-Some formats can consume an unbounded amount of output:
-
-- `any_text`
-- `any_tokens`
-- `triggered_tags`
-- `token_triggered_tags`
-
-When one of these formats appears inside a `tag`, the compiler automatically uses the enclosing
-`end` marker as part of the stop condition when the levels match:
-
-- string end -> string-level unlimited format
-- token end -> token-level unlimited format
-
-This is why a format like `tag("<think>", any_text, "</think>")` can stop cleanly at
-`</think>`. For more details, see [Advanced Topics of the Structural Tag](advanced_usage).
-
 ## Quick Start
 
 ### Minimal `tag`
@@ -123,6 +105,24 @@ This accepts output like:
 ```text
 I will call a tool now. <function=get_weather>{"city": "San Francisco"}</function>
 ```
+
+### Unlimited Formats and End Detection
+
+Some formats can consume an unbounded amount of output:
+
+- `any_text`
+- `any_tokens`
+- `triggered_tags`
+- `token_triggered_tags`
+
+When one of these formats appears inside a `tag`, the compiler automatically uses the enclosing
+`end` marker as part of the stop condition when the levels match:
+
+- string end -> string-level unlimited format
+- token end -> token-level unlimited format
+
+This is why a format like `tag("<think>", any_text, "</think>")` can stop cleanly at
+`</think>`. For more details, see [Advanced Topics of the Structural Tag](advanced_usage).
 
 ## Format Reference
 
@@ -803,7 +803,7 @@ helper instead of hand-writing every wrapper:
 - Harmony
 - MiniMax
 
-See [Builtin Structural Tag](builtin_structural_tag) for `get_builtin_structural_tag` and the list of supported models.
+See [Builtin Structural Tag](builtin_structural_tag) for `get_model_structural_tag` and the list of supported models.
 
 ## Mapping to OpenAI Tool Calling Options
 

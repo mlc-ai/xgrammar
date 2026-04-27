@@ -28,7 +28,7 @@ from .structural_tag import (
 # ---------- API Functions ----------
 
 
-def get_builtin_structural_tag(
+def get_model_structural_tag(
     model: str,
     tools: Optional[List[Union[ToolParam, dict]]] = None,
     tool_choice: Union[ToolChoiceOptionParam, dict, None] = "auto",
@@ -61,7 +61,7 @@ def get_builtin_structural_tag(
 
     .. code-block:: python
 
-        structural_tag = get_builtin_structural_tag(
+        structural_tag = get_model_structural_tag(
             "llama",
             tools=[
                 {
@@ -81,7 +81,7 @@ def get_builtin_structural_tag(
 
     .. code-block:: python
 
-        structural_tag = get_builtin_structural_tag(
+        structural_tag = get_model_structural_tag(
             "harmony",
             tools=[
                 {
@@ -100,7 +100,7 @@ def get_builtin_structural_tag(
 
     .. code-block:: python
 
-        structural_tag = get_builtin_structural_tag(
+        structural_tag = get_model_structural_tag(
             "llama",
             tools=[
                 {
@@ -124,7 +124,7 @@ def get_builtin_structural_tag(
 
     .. code-block:: python
 
-        structural_tag = get_builtin_structural_tag(
+        structural_tag = get_model_structural_tag(
             "harmony",
             tools=[...],
             tool_choice={"type": "web_search_preview"},
@@ -134,7 +134,7 @@ def get_builtin_structural_tag(
 
     .. code-block:: python
 
-        structural_tag = get_builtin_structural_tag(
+        structural_tag = get_model_structural_tag(
             "harmony",
             tools=[...],
             tool_choice={
@@ -345,11 +345,11 @@ def _filter_allowed_tools(
     return filtered_tools, filtered_builtin_tools
 
 
-def register_builtin_structural_tag(name: str):
+def register_model_structural_tag(name: str):
     """Register a model-specific structural tag function under *name*.
 
     The decorated function is stored in the internal registry so that
-    :func:`get_builtin_structural_tag` can look it up by the ``model``
+    :func:`get_model_structural_tag` can look it up by the ``model``
     argument. Use this to add support for a new model format.
 
     Parameters
@@ -361,7 +361,7 @@ def register_builtin_structural_tag(name: str):
     --------
     .. code-block:: python
 
-        @register_builtin_structural_tag("my_model")
+        @register_model_structural_tag("my_model")
         def get_my_model_structural_tag(
             tools=None, builtin_tools=None, tool_choice="auto",
             reasoning=True, force_empty_reasoning=False, **kwargs,
@@ -379,7 +379,7 @@ def register_builtin_structural_tag(name: str):
 # ---------- Each Built-in Structural Tag Function ----------
 
 
-@register_builtin_structural_tag("llama")
+@register_model_structural_tag("llama")
 def get_llama_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -389,14 +389,22 @@ def get_llama_structural_tag(
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Llama style structural tag format.
-    Reference: https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/
-    Parameters are normalized by get_builtin_structural_tag before this function is called:
-    - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "reasoning": a boolean indicating whether to enable reasoning mode.
-    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
-    Supported models
-    ----------------
+    Corresponding model key: ``"llama"``.
+
+    Reference: https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: whether to enable reasoning mode.
+    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking
+      if ``True`` and regular thinking if ``False``.
+
+    Supported models:
+
     - Meta-Llama-3
     - Llama-3.1
     - Llama-3.2
@@ -407,7 +415,6 @@ def get_llama_structural_tag(
     StructuralTag
         A structural tag for function calling format.
         This format is used by Llama 3 and other models that follow the same style.
-
     """
     TOOL_NAME_PREFIX = '{"name": "'
     PARAMETERS_FIELD_PREFIX = '", "parameters": '
@@ -480,7 +487,7 @@ def get_llama_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@register_builtin_structural_tag("kimi")
+@register_model_structural_tag("kimi")
 def get_kimi_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -490,14 +497,22 @@ def get_kimi_structural_tag(
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Kimi-K2 style structural tag format.
-    Reference: https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/docs/tool_call_guidance.md
-    Parameters are normalized by get_builtin_structural_tag before this function is called:
-    - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "reasoning": a boolean indicating whether to enable reasoning mode.
-    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
-    Supported models
-    ----------------
+    Corresponding model key: ``"kimi"``.
+
+    Reference: https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/docs/tool_call_guidance.md
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: whether to enable reasoning mode.
+    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking
+      if ``True`` and regular thinking if ``False``.
+
+    Supported models:
+
     - Kimi-K2
     - Kimi-K2.5
 
@@ -595,7 +610,7 @@ def get_kimi_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@register_builtin_structural_tag("deepseek_r1")
+@register_model_structural_tag("deepseek_r1")
 def get_deepseek_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -605,14 +620,22 @@ def get_deepseek_structural_tag(
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-R1 style structural tag format.
-    Reference: https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json
-    Parameters are normalized by get_builtin_structural_tag before this function is called:
-    - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "reasoning": a boolean indicating whether to enable reasoning mode.
-    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
-    Supported models
-    ----------------
+    Corresponding model key: ``"deepseek_r1"``.
+
+    Reference: https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: whether to enable reasoning mode.
+    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking
+      if ``True`` and regular thinking if ``False``.
+
+    Supported models:
+
     - DeepSeek-V3.1
     - DeepSeek-R1
     - DeepSeek-V3.2-exp
@@ -694,7 +717,7 @@ def get_deepseek_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@register_builtin_structural_tag("qwen_coder")
+@register_model_structural_tag("qwen_coder")
 def get_qwen_coder_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -704,14 +727,22 @@ def get_qwen_coder_structural_tag(
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen3-Coder style structural tag format.
-    Reference: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja
-    Parameters are normalized by get_builtin_structural_tag before this function is called:
-    - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "reasoning": a boolean indicating whether to enable reasoning mode.
-    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
-    Supported models
-    ----------------
+    Corresponding model key: ``"qwen_coder"``.
+
+    Reference: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: whether to enable reasoning mode.
+    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking
+      if ``True`` and regular thinking if ``False``.
+
+    Supported models:
+
     - Qwen3-Coder
     - Qwen3-Coder-Next
 
@@ -792,7 +823,7 @@ def get_qwen_coder_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@register_builtin_structural_tag("qwen")
+@register_model_structural_tag("qwen")
 def get_qwen_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -802,13 +833,22 @@ def get_qwen_structural_tag(
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen3 style structural tag format.
-    Reference: https://qwen.readthedocs.io/en/latest/framework/function_call.html
-    Parameters are normalized by get_builtin_structural_tag before this function is called:
-    - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "reasoning": a boolean indicating whether to enable reasoning mode.
 
-    Supported models
-    ----------------
+    Corresponding model key: ``"qwen"``.
+
+    Reference: https://qwen.readthedocs.io/en/latest/framework/function_call.html
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: whether to enable reasoning mode.
+    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking
+      if ``True`` and regular thinking if ``False``.
+
+    Supported models:
+
     - Qwen3
 
     Returns
@@ -816,7 +856,6 @@ def get_qwen_structural_tag(
     StructuralTag
         A structural tag template.
         This format is used by Qwen3 and other models that follow the same style.
-
     """
     TOOL_CALL_BEGIN_PREFIX = '<tool_call>\n{"name": "'
     ARGUMENTS_FIELD_PREFIX = '", "arguments": '
@@ -889,7 +928,7 @@ def get_qwen_structural_tag(
     return StructuralTag(format=sequence_format)
 
 
-@register_builtin_structural_tag("harmony")
+@register_model_structural_tag("harmony")
 def get_harmony_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -899,16 +938,25 @@ def get_harmony_structural_tag(
     **kwargs: Any,
 ) -> StructuralTag:
     """Get harmony(gpt-oss) style structural tag format.
+
+    Corresponding model key: ``"harmony"``.
+
     Reference: https://developers.openai.com/cookbook/articles/openai-harmony
     Reference: https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja
-    Parameters are normalized by get_builtin_structural_tag before this function is called:
-    - "tools": a list of tools, each tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "builtin_tools": a list of builtin tools, each builtin tool should have a "function" key, which is a dictionary containing "name" and "parameters" fields.
-    - "reasoning": a boolean indicating whether to enable reasoning mode.
-    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
 
-    Supported models
-    ----------------
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``builtin_tools``: a list of builtin tools. Each builtin tool should
+      provide ``type``, optional ``name``, and ``parameters`` fields.
+    - ``reasoning``: whether to enable reasoning mode.
+    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking
+      if ``True`` and regular thinking if ``False``.
+
+    Supported models:
+
     - gpt-oss
 
     Returns
@@ -917,7 +965,6 @@ def get_harmony_structural_tag(
         A structural tag template.
         This format is in OpenAI Harmony Response Format, which is used by GPT-oss
         and other models that follow the same style.
-
     """
     COMMENTARY_CHANNEL_PREFIX = "<|channel|>commentary to="
     ANALYSIS_CHANNEL_PREFIX = "<|channel|>analysis to="
@@ -1018,7 +1065,7 @@ def get_harmony_structural_tag(
     return StructuralTag(format=tags_with_separator)
 
 
-@register_builtin_structural_tag("deepseek_v3_2")
+@register_model_structural_tag("deepseek_v3_2")
 def get_deepseek_v3_2_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -1029,8 +1076,10 @@ def get_deepseek_v3_2_structural_tag(
 ) -> StructuralTag:
     """Get DeepSeek-V3.2 style structural tag format.
 
-    Supported models
-    ----------------
+    Corresponding model key: ``"deepseek_v3_2"``.
+
+    Supported models:
+
     - DeepSeek-V3.2
     """
     INVOKE_BEGIN_PREFIX = '<｜DSML｜invoke name="'
@@ -1133,7 +1182,7 @@ def get_deepseek_v3_2_structural_tag(
     return StructuralTag(format=sequence_format)
 
 
-@register_builtin_structural_tag("minimax")
+@register_model_structural_tag("minimax")
 def get_minimax_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -1144,8 +1193,10 @@ def get_minimax_structural_tag(
 ) -> StructuralTag:
     """Get MiniMax-M2.5 style structural tag format.
 
-    Supported models
-    ----------------
+    Corresponding model key: ``"minimax"``.
+
+    Supported models:
+
     - MiniMax-M2.5
     """
     INVOKE_BEGIN_PREFIX = '<invoke name="'
@@ -1246,7 +1297,7 @@ def get_minimax_structural_tag(
     return StructuralTag(format=sequence_format)
 
 
-@register_builtin_structural_tag("glm47")
+@register_model_structural_tag("glm47")
 def get_glm47_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -1258,19 +1309,23 @@ def get_glm47_structural_tag(
     """Get GLM-4.7/GLM-5 style structural tag format.
 
     The GLM tool calling format uses XML-like tags:
-    <tool_call>function_name
-    <arg_key>key</arg_key><arg_value>value</arg_value>
-    </tool_call>
+    ``<tool_call>function_name``
+    ``<arg_key>key</arg_key><arg_value>value</arg_value>``
+    ``</tool_call>``
 
-    Parameters are normalized by get_builtin_structural_tag before this function is called:
-    - "tools": a list of tools, each tool should have a "function" key, which is a dictionary
-      containing "name" and "parameters" fields.
-    - "reasoning": a boolean indicating whether to enable reasoning mode.
-    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking,
-      if False use thinking.
+    Corresponding model key: ``"glm47"``.
 
-    Supported models
-    ----------------
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: whether to enable reasoning mode.
+    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking
+      if ``True`` and regular thinking if ``False``.
+
+    Supported models:
+
     - GLM-5
     - GLM-4.7
 
@@ -1350,7 +1405,7 @@ def get_glm47_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-@register_builtin_structural_tag("gemma4")
+@register_model_structural_tag("gemma4")
 def get_gemma4_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -1368,19 +1423,23 @@ def get_gemma4_structural_tag(
     - Tool calls: ``<|tool_call>call:func_name{...}<tool_call|>``
     - Turn end: ``<turn|>``
 
+    Corresponding model key: ``"gemma4"``.
+
     Reference: https://ai.google.dev/gemma/docs/core/prompt-formatting-gemma4
 
-    Parameters are normalized by get_builtin_structural_tag before this function is called:
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
 
-    - "tools": a list of tools, each tool should have a "function" key,
-      which is a dictionary containing "name" and "parameters" fields.
-    - "reasoning": a boolean indicating whether to enable reasoning mode.
-    - "force_empty_reasoning": a boolean; when reasoning is on, if True
-      use empty-thinking (pre-closed channel), if False use thinking.
-    - "tool_choice": ``"auto"`` or ``"required"``; ``"required"`` forces at least one tool call.
+    - ``tools``: a list of function tools. Each tool should have a
+      ``function`` object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: whether to enable reasoning mode.
+    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking
+      (pre-closed channel) if ``True`` and regular thinking if ``False``.
+    - ``tool_choice``: ``"auto"`` or ``"required"``. ``"required"`` forces at
+      least one tool call.
 
-    Supported models
-    ----------------
+    Supported models:
+
     - Gemma-4
     - gemma-4-12b-it
     - gemma-4-26b-a4b-it
@@ -1459,3 +1518,8 @@ def get_gemma4_structural_tag(
         prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+
+
+# Backward-compatible alias
+get_builtin_structural_tag = get_model_structural_tag
+"""Alias for :func:`get_model_structural_tag`. Deprecated."""

@@ -15,9 +15,9 @@ The `tool_choice` parameter controls how tool calls and text are mixed:
 
 The `reasoning` parameter independently controls whether the reasoning section is present, and `force_empty_reasoning` can force it to be empty.
 
-## Basic API: `get_builtin_structural_tag`
+## Basic API: `get_model_structural_tag`
 
-`get_builtin_structural_tag` generates a `StructuralTag` for the given model type with the specified tools and options. The returned `StructuralTag` can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain the corresponding grammar.
+`get_model_structural_tag` generates a `StructuralTag` for the given model type with the specified tools and options. The returned `StructuralTag` can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain the corresponding grammar.
 
 Use it when you need to constrain the model to output in a fixed pattern such as "tool name + parameter JSON", e.g. for Llama, Qwen, Kimi, DeepSeek, OpenAI Harmony, etc.
 
@@ -61,7 +61,7 @@ Passing an unsupported `model` or an invalid `tool_choice` will raise `ValueErro
 ### Function tools
 
 ```python
-from xgrammar import Grammar, get_builtin_structural_tag
+from xgrammar import Grammar, get_model_structural_tag
 
 tools = [
     {
@@ -83,7 +83,7 @@ tools = [
     },
 ]
 
-structural_tag = get_builtin_structural_tag("llama", tools=tools)
+structural_tag = get_model_structural_tag("llama", tools=tools)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
@@ -92,7 +92,7 @@ grammar = Grammar.from_structural_tag(structural_tag)
 For models that support builtin tools (e.g. Harmony / gpt-oss), include builtin tools in the same `tools` list:
 
 ```python
-structural_tag = get_builtin_structural_tag(
+structural_tag = get_model_structural_tag(
     "harmony",
     tools=[
         {
@@ -121,7 +121,7 @@ grammar = Grammar.from_structural_tag(structural_tag)
 For formats that support reasoning (like Qwen3, DeepSeek-R1, Kimi-K2), pass `reasoning` to enable/disable:
 
 ```python
-structural_tag = get_builtin_structural_tag("qwen", tools=tools, reasoning=True)
+structural_tag = get_model_structural_tag("qwen", tools=tools, reasoning=True)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
@@ -132,7 +132,7 @@ If `reasoning` is not passed, reasoning mode is enabled by default. When `reason
 Force a specific function tool:
 
 ```python
-structural_tag = get_builtin_structural_tag(
+structural_tag = get_model_structural_tag(
     "llama",
     tools=tools,
     tool_choice={"type": "function", "function": {"name": "get_weather"}},
@@ -142,7 +142,7 @@ structural_tag = get_builtin_structural_tag(
 Force a builtin tool by type:
 
 ```python
-structural_tag = get_builtin_structural_tag(
+structural_tag = get_model_structural_tag(
     "harmony",
     tools=[...],
     tool_choice={"type": "web_search_preview"},
@@ -152,7 +152,7 @@ structural_tag = get_builtin_structural_tag(
 Allow only a subset of tools:
 
 ```python
-structural_tag = get_builtin_structural_tag(
+structural_tag = get_model_structural_tag(
     "harmony",
     tools=[...],
     tool_choice={
@@ -172,7 +172,7 @@ structural_tag = get_builtin_structural_tag(
 
 ## Supported models
 
-The `model` argument of `get_builtin_structural_tag` accepts the style names below:
+The `model` argument of `get_model_structural_tag` accepts the style names below:
 
 | `model` (style) | Supported models |
 |-----------------|-------------------|
@@ -189,7 +189,7 @@ The `model` argument of `get_builtin_structural_tag` accepts the style names bel
 
 ## Extending with custom models
 
-Use `register_builtin_structural_tag` to add support for a new model format. See the [Builtin Structural Tag API Reference](../api/python/builtin_structural_tag) for details.
+Use `register_model_structural_tag` to add support for a new model format. See the [Builtin Structural Tag API Reference](../api/python/builtin_structural_tag) for details.
 
 ## Next Steps
 

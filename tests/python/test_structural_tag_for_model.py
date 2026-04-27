@@ -9,7 +9,6 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.builtin_structural_tag import (
-    get_builtin_structural_tag,
     get_deepseek_structural_tag,
     get_deepseek_v3_2_structural_tag,
     get_gemma4_structural_tag,
@@ -18,6 +17,7 @@ from xgrammar.builtin_structural_tag import (
     get_kimi_structural_tag,
     get_llama_structural_tag,
     get_minimax_structural_tag,
+    get_model_structural_tag,
     get_qwen_coder_structural_tag,
     get_qwen_structural_tag,
 )
@@ -209,7 +209,7 @@ _tools_gemma4_pair = make_tools(["search", "alt"])
 def test_unknown_format():
     """get_structural_tag_for_model raises ValueError for unknown format type."""
     with pytest.raises(ValueError) as exc_info:
-        get_builtin_structural_tag("unknown_format")
+        get_model_structural_tag("unknown_format")
     assert "Unknown format type" in str(exc_info.value)
     assert "unknown_format" in str(exc_info.value)
 
@@ -248,9 +248,9 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
 def test_input_validation_errors(
     format_type: str, input_dict: Dict[str, Any], error_substring: str
 ):
-    """get_builtin_structural_tag raises ValueError for invalid input."""
+    """get_model_structural_tag raises ValueError for invalid input."""
     with pytest.raises(ValueError) as exc_info:
-        get_builtin_structural_tag(**_input_dict_to_get_stag_kwargs(format_type, input_dict))
+        get_model_structural_tag(**_input_dict_to_get_stag_kwargs(format_type, input_dict))
     msg = str(exc_info.value)
     if ".*" in error_substring:
         assert re.search(
@@ -323,14 +323,14 @@ def test_public_api_validation_errors(kwargs: Dict[str, Any], error_substring: s
     """Public API rejects invalid tool and tool_choice combinations."""
 
     with pytest.raises(ValueError) as exc_info:
-        get_builtin_structural_tag("harmony", **kwargs)
+        get_model_structural_tag("harmony", **kwargs)
     assert error_substring in str(exc_info.value)
 
 
 def test_public_tool_shapes():
     """Public tools accepts dict, FunctionToolParam, and BuiltinToolParam values."""
 
-    structural_tag = get_builtin_structural_tag(
+    structural_tag = get_model_structural_tag(
         "harmony",
         tools=[
             {"type": "function", "function": {"name": "get_weather", "parameters": SIMPLE_SCHEMA}},
@@ -356,7 +356,7 @@ def test_public_tool_shapes():
 def test_named_choice_forces_function():
     """Named function tool_choice is normalized to one forced function tool."""
 
-    structural_tag = get_builtin_structural_tag(
+    structural_tag = get_model_structural_tag(
         "llama",
         tools=make_tools(["get_weather", "get_time"]),
         tool_choice={"type": "function", "function": {"name": "get_weather"}},
@@ -371,7 +371,7 @@ def test_named_choice_forces_function():
 def test_builtin_choice_forces_builtin():
     """Builtin tool_choice is normalized to one forced builtin tool."""
 
-    structural_tag = get_builtin_structural_tag(
+    structural_tag = get_model_structural_tag(
         "harmony",
         tools=[
             *make_tools(["get_weather"]),
@@ -399,7 +399,7 @@ def test_builtin_choice_forces_builtin():
 def test_allowed_choice_filters_tools():
     """Allowed tools filters both function tools and builtin tools."""
 
-    structural_tag = get_builtin_structural_tag(
+    structural_tag = get_model_structural_tag(
         "harmony",
         tools=[
             *make_tools(["get_weather", "get_time"]),
@@ -437,7 +437,7 @@ def test_allowed_choice_filters_tools():
 def test_none_parameters_unconstrained():
     """None parameters are converted to the True JSON schema."""
 
-    structural_tag = get_builtin_structural_tag(
+    structural_tag = get_model_structural_tag(
         "llama",
         tools=[{"type": "function", "function": {"name": "ping", "parameters": None}}],
         reasoning=False,
@@ -623,10 +623,10 @@ def test_strict_or_missing_parameters(
     """strict=False or missing 'parameters' should still accept/reject instances correctly."""
     if format_type == "harmony":
         tools = [tool]
-        stag = get_builtin_structural_tag(format_type, tools=tools, reasoning=False)
+        stag = get_model_structural_tag(format_type, tools=tools, reasoning=False)
     else:
         tools = [tool]
-        stag = get_builtin_structural_tag(format_type, tools=tools, reasoning=False)
+        stag = get_model_structural_tag(format_type, tools=tools, reasoning=False)
 
     check_stag_with_instance(stag, instance, is_accepted)
 
@@ -652,7 +652,7 @@ def run_instance_case(format_type: str, case: InstanceCase):
     kwargs = _input_dict_to_get_stag_kwargs(format_type, input_dict)
     kwargs["reasoning"] = reasoning
     kwargs["force_empty_reasoning"] = force_empty_reasoning
-    stag = get_builtin_structural_tag(**kwargs)
+    stag = get_model_structural_tag(**kwargs)
     check_stag_with_grammar(stag, expected_grammar_ebnf)
     for j, instance in enumerate(instances):
         check_stag_with_instance(stag, instance, expected_accept_per_instance[j])
@@ -682,7 +682,7 @@ def _run_instance_cases_for_style(
             kwargs = _input_dict_to_get_stag_kwargs(format_type, input_dict)
             kwargs["reasoning"] = reasoning
             kwargs["force_empty_reasoning"] = force_empty_reasoning
-            stag = get_builtin_structural_tag(**kwargs)
+            stag = get_model_structural_tag(**kwargs)
             check_stag_with_grammar(stag, current_grammar)
             for j in range(len(instances)):
                 instance = instances[j]
@@ -882,7 +882,7 @@ root ::= ((sequence))
 
 @pytest.mark.parametrize("case", llama_instance_cases)
 def test_llama_instances(case: InstanceCase):
-    """get_builtin_structural_tag(llama) accepts/rejects instance as expected."""
+    """get_model_structural_tag(llama) accepts/rejects instance as expected."""
     run_instance_case("llama", case)
 
 
@@ -1097,7 +1097,7 @@ root ::= ((sequence))
 
 @pytest.mark.parametrize("case", kimi_instance_cases)
 def test_kimi_instances(case: InstanceCase):
-    """get_builtin_structural_tag(kimi) accepts/rejects instance as expected."""
+    """get_model_structural_tag(kimi) accepts/rejects instance as expected."""
     run_instance_case("kimi", case)
 
 
@@ -1287,7 +1287,7 @@ root ::= ((sequence))
 
 @pytest.mark.parametrize("case", deepseek_r1_instance_cases)
 def test_deepseek_r1_instances(case: InstanceCase):
-    """get_builtin_structural_tag(deepseek_r1) accepts/rejects instance as expected."""
+    """get_model_structural_tag(deepseek_r1) accepts/rejects instance as expected."""
     run_instance_case("deepseek_r1", case)
 
 
@@ -1528,7 +1528,7 @@ root ::= ((sequence))
 
 @pytest.mark.parametrize("case", deepseek_v3_2_instance_cases)
 def test_deepseek_v3_2_instances(case: InstanceCase):
-    """get_builtin_structural_tag(deepseek_v3_2) accepts/rejects instance as expected."""
+    """get_model_structural_tag(deepseek_v3_2) accepts/rejects instance as expected."""
     run_instance_case("deepseek_v3_2", case)
 
 
@@ -1760,13 +1760,13 @@ root ::= ((sequence))
 
 @pytest.mark.parametrize("case", minimax_instance_cases)
 def test_minimax_instances(case: InstanceCase):
-    """get_builtin_structural_tag(minimax) accepts/rejects instance as expected."""
+    """get_model_structural_tag(minimax) accepts/rejects instance as expected."""
     run_instance_case("minimax", case)
 
 
 def test_glm47_instances():
-    """get_builtin_structural_tag(glm47) accepts/rejects instance as expected."""
-    stag = get_builtin_structural_tag("glm47", tools=_tools_glm47, reasoning=False)
+    """get_model_structural_tag(glm47) accepts/rejects instance as expected."""
+    stag = get_model_structural_tag("glm47", tools=_tools_glm47, reasoning=False)
     grammar_str = str(xgr.Grammar.from_structural_tag(stag))
     assert "<tool_call>" in grammar_str
     assert "<arg_key>" in grammar_str
@@ -1997,7 +1997,7 @@ root ::= ((sequence))
 
 @pytest.mark.parametrize("case", qwen_coder_instance_cases)
 def test_qwen_coder_instances(case: InstanceCase):
-    """get_builtin_structural_tag(qwen_coder) accepts/rejects instance as expected."""
+    """get_model_structural_tag(qwen_coder) accepts/rejects instance as expected."""
     run_instance_case("qwen_coder", case)
 
 
@@ -2192,7 +2192,7 @@ root ::= ((sequence))
 
 @pytest.mark.parametrize("case", qwen_instance_cases)
 def test_qwen_instances(case: InstanceCase):
-    """get_builtin_structural_tag(qwen) accepts/rejects instance as expected."""
+    """get_model_structural_tag(qwen) accepts/rejects instance as expected."""
     run_instance_case("qwen", case)
 
 
@@ -2403,7 +2403,7 @@ root ::= ((tags_with_separator))
 
 @pytest.mark.parametrize("case", harmony_instance_cases)
 def test_harmony_instances(case: InstanceCase):
-    """get_builtin_structural_tag(harmony) accepts/rejects instance as expected."""
+    """get_model_structural_tag(harmony) accepts/rejects instance as expected."""
     run_instance_case("harmony", case)
 
 
@@ -3314,7 +3314,7 @@ _TOOLS: List[Dict[str, Any]] = [
 )
 def test_no_parameter_tools_build_grammar(format_type: str, kwargs: Dict[str, Any]):
     """Smoke test: each built-in format can generate StructuralTag and build Grammar."""
-    structural_tag = get_builtin_structural_tag(format_type, **kwargs)
+    structural_tag = get_model_structural_tag(format_type, **kwargs)
     grammar = xgr.Grammar.from_structural_tag(structural_tag)
     assert grammar is not None
 
@@ -3323,15 +3323,15 @@ def test_no_parameter_tools_build_grammar(format_type: str, kwargs: Dict[str, An
 
 
 def test_gemma4_instances():
-    """get_builtin_structural_tag(gemma4) accepts/rejects instances as expected."""
+    """get_model_structural_tag(gemma4) accepts/rejects instances as expected."""
 
     # --- No tools, no reasoning: plain text only ---
-    stag = get_builtin_structural_tag("gemma4", reasoning=False)
+    stag = get_model_structural_tag("gemma4", reasoning=False)
     check_stag_with_instance(stag, "Hello world", True)
     check_stag_with_instance(stag, "", True)
 
     # --- No tools, reasoning enabled ---
-    stag = get_builtin_structural_tag("gemma4", reasoning=True)
+    stag = get_model_structural_tag("gemma4", reasoning=True)
     check_stag_with_instance(
         stag, "<|channel>thought\nLet me think...<channel|>The answer is 42.", True
     )
@@ -3340,13 +3340,13 @@ def test_gemma4_instances():
     check_stag_with_instance(stag, "No thinking here.", False)
 
     # --- No tools, reasoning with force_empty_reasoning ---
-    stag = get_builtin_structural_tag("gemma4", reasoning=True, force_empty_reasoning=True)
+    stag = get_model_structural_tag("gemma4", reasoning=True, force_empty_reasoning=True)
     check_stag_with_instance(stag, "<|channel>thought\n<channel|>Direct answer.", True)
     # Non-empty thinking should be rejected when force_empty
     check_stag_with_instance(stag, "<|channel>thought\nSome reasoning<channel|>Answer.", False)
 
     # --- With tools, no reasoning ---
-    stag = get_builtin_structural_tag("gemma4", tools=_tools_gemma4, reasoning=False)
+    stag = get_model_structural_tag("gemma4", tools=_tools_gemma4, reasoning=False)
     check_stag_with_instance(stag, '<|tool_call>call:get_weather{"q": "Paris"}<tool_call|>', True)
     check_stag_with_instance(stag, "Plain text without tool call.", True)
     # Wrong function name should be rejected
@@ -3361,7 +3361,7 @@ def test_gemma4_instances():
     )
 
     # --- With tools, reasoning enabled ---
-    stag = get_builtin_structural_tag("gemma4", tools=_tools_gemma4, reasoning=True)
+    stag = get_model_structural_tag("gemma4", tools=_tools_gemma4, reasoning=True)
     check_stag_with_instance(
         stag,
         "<|channel>thought\nI should check the weather.<channel|>"

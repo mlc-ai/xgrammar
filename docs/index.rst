@@ -35,7 +35,7 @@ The mission of this project is to bring flexible zero-overhead structure generat
    :caption: Structural Tag
 
    structural_tag/structural_tag_api
-   structural_tag/builtin_structural_tag
+   structural_tag/tool_calling_and_reasoning
    structural_tag/advanced_usage
 
 .. toctree::
