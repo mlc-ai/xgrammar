@@ -35,11 +35,13 @@ def get_builtin_structural_tag(
     reasoning: bool = True,
     force_empty_reasoning: bool = False,
 ) -> StructuralTag:
-    r"""Get a structural tag for a model's tool-call output format.
+    r"""Get a structural tag for a model's reasoning and tool-call output format.
 
     Use this function when a serving engine needs a structural tag that matches
     a model's tool-call syntax. Pass the model format, the available tools, and
     the desired tool choice policy.
+
+    This API is designed to resemble OpenAI Chat Completions API.
 
     Function tools use the OpenAI Chat Completions shape:
     ``{"type": "function", "function": {...}}``.
@@ -254,7 +256,10 @@ def get_builtin_structural_tag(
     if simplified_tool_choice == "forced" and len(function_tools) + len(builtin_tools) != 1:
         raise ValueError("Forced tool choice must resolve to exactly one tool.")
 
-    func = _get_builtin_structural_tag_function(model)
+    func = _structural_tag_registry.get(model)
+    if func is None:
+        supported = list(_structural_tag_registry.keys())
+        raise ValueError(f"Unknown format type: {model}, supported types: {supported}")
     return func(
         function_tools, builtin_tools, simplified_tool_choice, reasoning, force_empty_reasoning
     )
@@ -341,85 +346,34 @@ def _filter_allowed_tools(
 
 
 def register_builtin_structural_tag(name: str):
-    """Register a structural tag template."""
+    """Register a model-specific structural tag function under *name*.
+
+    The decorated function is stored in the internal registry so that
+    :func:`get_builtin_structural_tag` can look it up by the ``model``
+    argument. Use this to add support for a new model format.
+
+    Parameters
+    ----------
+    name : str
+        The model format key, e.g. ``"llama"``, ``"harmony"``.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        @register_builtin_structural_tag("my_model")
+        def get_my_model_structural_tag(
+            tools=None, builtin_tools=None, tool_choice="auto",
+            reasoning=True, force_empty_reasoning=False, **kwargs,
+        ):
+            ...
+    """
 
     def decorator(func):
         _structural_tag_registry[name] = func
         return func
 
     return decorator
-
-
-def _get_builtin_structural_tag_function(format_type: str) -> BuiltinStructuralTagFn:
-    """Get builtin structural tag template function by format type.
-    In all the structural tag template formats, users should provide
-    a list of tools, each tool should have a "function" key, which is a dictionary
-    containing "name" and "parameters" fields. Besides, for the OpenAI Harmony Response Format,
-    users should also provide a list of builtin tools, each builtin tool should have a "function"
-    key, which is a dictionary containing "name" and "parameters" fields. In addition, for the "qwen",
-    "deepseek_r1" and "harmony" formats, "reasoning" key can be provided to enable/disable reasoning mode.
-    By default, reasoning mode is enabled.
-    Registered functions receive explicit normalized parameters from :func:`get_builtin_structural_tag`.
-
-    Examples
-    --------
-
-    .. code-block:: python
-
-        from xgrammar import get_builtin_structural_tag_template_function, Grammar
-        tools = [
-            {"function": {"name": "tool1", "parameters": {"param1": {"type": "string"}}}},
-            {"function": {"name": "tool2", "parameters": {"param2": {"type": "integer"}}}},
-        ]
-        builtin_tools = [
-            {"function": {"name": "builtin_tool1", "parameters": {"param1": {"type": "string"}}}},
-            {"function": {"name": "builtin_tool2", "parameters": {"param2": {"type": "integer"}}}},
-        ]
-        template_structural_tag = get_builtin_structural_tag_template_function("harmony")
-        structural_tag = template_structural_tag({"tools": tools, "builtin_tools": builtin_tools})
-        grammar = Grammar.from_structural_tag(structural_tag)
-
-    The above grammar can be used to construct a grammar that matches the function calling
-    format of the specified model.
-
-
-
-    Parameters
-    ----------
-    format_type : str
-        The format type of the structural tag template.
-        Currently supported format types are:
-        - "llama": Llama3.1 style structural tag format.
-          Supported Models: Llama 3, Llama 4 and other models that follow the same style.
-        - "qwen": Qwen3 style structural tag format.
-          Supported Models: Qwen3 and other models that follow the same style.
-        - "qwen_coder": Qwen-Coder style structural tag format.
-          Supported Models: Qwen3-Coder, Qwen3-Coder-Next and other models that follow the same style.
-        - "kimi": Kimi-K2 style structural tag format.
-          Supported Models: Kimi-K2, Kimi-K2.5 and other models that follow the same style.
-        - "deepseek_r1": Deepseek-R1 style structural tag format.
-          Supported Models: Deepseek-V3.1, Deepseek-R1, Deepseek-V3.2-exp and other models that follow the same style.
-        - "harmony": OpenAI Harmony Response Format (gpt-oss).
-          Supported Models: GPT-oss and other models that follow the same style.
-        - "gemma4": Gemma 4 style structural tag format.
-          Supported Models: Gemma-4 and other models that follow the same style.
-
-    Returns
-    -------
-    Callable[[Dict[str, Any]], StructuralTag]
-        The corresponding structural tag template function for the given format type.
-
-    Raises
-    ------
-    ValueError
-        If the format type is unknown.
-
-    """
-    func = _structural_tag_registry.get(format_type)
-    if func is None:
-        support_types = list(_structural_tag_registry.keys())
-        raise ValueError(f"Unknown format type: {format_type}, support types: {support_types}")
-    return func
 
 
 # ---------- Each Built-in Structural Tag Function ----------
