@@ -14,6 +14,7 @@ XGrammar Python API
    testing
    structural_tag
    builtin_structural_tag
+   openai_tool_call_schema
    bitmask_ops
    config
    exception
