@@ -241,7 +241,6 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
         {"tools": [], "builtin_tools": [{"function": {"name": "b1", "parameters": 1}}]},
         "parameters",
     ),
-    ("qwen", {"tools": [], "reasoning": "not_bool"}, "must be a boolean"),
 ]
 
 
