@@ -18,6 +18,7 @@ from .structural_tag import (
 
 BuiltinSupportedModels = Literal[
     "llama",
+    "llama_custom",
     "qwen",
     "qwen_coder",
     "kimi",
@@ -194,6 +195,10 @@ def _get_builtin_structural_tag_function(
         Currently supported format types are:
         - "llama": Llama3.1 style structural tag format.
           Supported Models: Llama 3, Llama 4 and other models that follow the same style.
+        - "llama_custom": Llama 3.1 user-defined custom tool-call tag format
+          ``<function=name>{...}</function>`` where ``{...}`` matches the tool's parameters JSON Schema.
+          Same reasoning tags as ``llama``. See
+          https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/#user-defined-custom-tool-calling
         - "qwen": Qwen3 style structural tag format.
           Supported Models: Qwen3 and other models that follow the same style.
         - "qwen_coder": Qwen-Coder style structural tag format.
@@ -267,6 +272,58 @@ def _get_llama_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
     if len(tags) > 0:
         suffix_tag = TriggeredTagsFormat(
             triggers=['{"name": '], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
+        )
+    else:
+        suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value="<think>\n\n</think>")
+    else:
+        prefix_tag = TagFormat(begin="<think>", content=AnyTextFormat(), end="</think>")
+
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+
+
+@_register_builtin_structural_tag(
+    "llama_custom", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]
+)
+def _get_llama_custom_structural_tag(input_dict: Dict[str, Any]) -> StructuralTag:
+    """Get Llama user-defined ``<function=name>{...}</function>`` structural tag format.
+
+    Reference: https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/#user-defined-custom-tool-calling
+
+    The input_dict should be a dictionary with the following keys:
+    - "tools": a list of tools, each tool should have a "function" key, which is a dictionary
+      containing "name" and "parameters" fields.
+    - "reasoning": a boolean indicating whether to enable reasoning mode.
+    - "force_empty_reasoning": a boolean; when reasoning is on, if True use empty-thinking, if False use thinking.
+    """
+    tools = input_dict.get("tools", [])
+    reasoning = input_dict.get("reasoning", True)
+    force_empty_reasoning = input_dict.get("force_empty_reasoning", False)
+
+    tags = []
+    for tool in tools:
+        if "function" not in tool:
+            continue
+
+        function = tool["function"]
+        parameters = _get_function_parameters(function)
+        name = function["name"]
+        tags.append(
+            TagFormat(
+                begin="<function=" + name + ">",
+                content=JSONSchemaFormat(json_schema=parameters),
+                end="</function>",
+            )
+        )
+
+    if len(tags) > 0:
+        suffix_tag = TriggeredTagsFormat(
+            triggers=["<function="], tags=tags, excludes=_THINK_EXCLUDE_TOKENS
         )
     else:
         suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)

@@ -69,11 +69,11 @@ def disable_profiler(request):
     global PROFILER_ON
     global profiler
     # Import shared token check from conftest (handles env vars + cached login)
-    from conftest import _hf_token_available
+    from conftest import _hf_token_available, _hf_token_explicitly_disabled
 
-    if not _hf_token_available():
-        PROFILER_ON = False
-    else:
+    # Explicit mark expression has higher priority than token auto-detection.
+    PROFILER_ON = (not _hf_token_explicitly_disabled(request.config)) and _hf_token_available()
+    if PROFILER_ON:
         profiler = Profiler(tokenizer_id)
 
 
@@ -141,6 +141,7 @@ def test_get_builtin_structural_tag_supported_models_all():
     assert isinstance(result, dict)
     expected_styles = {
         "llama",
+        "llama_custom",
         "qwen",
         "qwen_coder",
         "kimi",
@@ -161,6 +162,7 @@ def test_get_builtin_structural_tag_supported_models_all():
     "style, expected_models",
     [
         ("llama", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]),
+        ("llama_custom", ["Meta-Llama-3", "Llama-3.1", "Llama-3.2", "Llama-4"]),
         ("kimi", ["Kimi-K2", "Kimi-K2.5"]),
         ("deepseek_r1", ["DeepSeek-V3.1", "DeepSeek-R1", "DeepSeek-V3.2-exp"]),
         ("qwen_coder", ["Qwen3-Coder", "Qwen3-Coder-Next"]),
@@ -248,6 +250,8 @@ def test_get_builtin_structural_tag_input_validation_errors(
     "format_type, instance, is_accepted",
     [
         ("llama", '{"name": "t1", "parameters": {"q": "v"}}', True),
+        ("llama_custom", '<function=t1>{"q": "v"}</function>', True),
+        ("llama_custom", '<function=t2>{"q": "v"}</function>', False),
         (
             "kimi",
             '123<|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
@@ -601,6 +605,188 @@ root ::= ((sequence))
 def test_get_llama_structural_tag_instance():
     """get_builtin_structural_tag(llama) accepts/rejects instance as expected."""
     _run_instance_cases_explicit("llama", llama_instance_cases)
+
+
+# ----- llama_custom
+
+_llama_custom_instances_with_tools = [
+    '<function=t1>{"q": "v"}</function>',
+    "text<function=t1>{}</function>",
+    '<think>123</think>text<function=t1>{"q": ""}</function>',
+    "<think>\n\n</think></think>",
+    '<think>\n\n</think>text<function=t1>{"q": "v"}</function>',
+]
+
+llama_custom_instance_cases: List[InstanceCase] = [
+    (
+        {"tools": _tools_llama},
+        _llama_custom_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("t1>" root_0 "</function>"))
+triggered_tags ::= TagDispatch(
+  ("<function=", triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=("<think>", "</think>")
+)
+root ::= ((triggered_tags))
+""",
+        [True, True, False, False, False],
+    ),
+    (
+        {"tools": _tools_llama},
+        _llama_custom_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</think>")
+)
+tag ::= (("<think>" any_text "</think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("t1>" root_0 "</function>"))
+triggered_tags ::= TagDispatch(
+  ("<function=", triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((tag triggered_tags))
+root ::= ((sequence))
+""",
+        [False, False, True, False, True],
+    ),
+    (
+        {"tools": _tools_llama},
+        _llama_custom_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+triggered_tags_group ::= (("t1>" root_0 "</function>"))
+triggered_tags ::= TagDispatch(
+  ("<function=", triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((const_string triggered_tags))
+root ::= ((sequence))
+""",
+        [False, False, False, False, True],
+    ),
+    (
+        {},
+        _llama_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
+root ::= ((any_text))
+""",
+        [True, True, False, False, False],
+    ),
+    (
+        {},
+        _llama_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</think>")
+)
+tag ::= (("<think>" any_text "</think>"))
+any_text_1 ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((tag any_text_1))
+root ::= ((sequence))
+""",
+        [False, False, True, False, True],
+    ),
+    (
+        {},
+        _llama_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
+any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((const_string any_text))
+root ::= ((sequence))
+""",
+        [False, False, False, False, True],
+    ),
+]
+
+
+def test_get_llama_custom_structural_tag_instance():
+    """get_builtin_structural_tag(llama_custom) accepts/rejects instance as expected."""
+    _run_instance_cases_explicit("llama_custom", llama_custom_instance_cases)
 
 
 # ----- kimi
@@ -2126,6 +2312,7 @@ _TOOLS: List[Dict[str, Any]] = [
     "format_type, kwargs",
     [
         ("llama", {"tools": _TOOLS}),
+        ("llama_custom", {"tools": _TOOLS}),
         ("kimi", {"tools": _TOOLS}),
         ("deepseek_r1", {"tools": _TOOLS}),
         ("qwen_coder", {"tools": _TOOLS}),
