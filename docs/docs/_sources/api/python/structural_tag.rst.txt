@@ -4,7 +4,7 @@ Structural Tag
 .. currentmodule:: xgrammar.structural_tag
 
 This page contains the API reference for the structural tag. For its usage, see
-:doc:`Structural Tag Usage <../../tutorials/structural_tag>`.
+:doc:`Structural Tag Usage <../../structural_tag/structural_tag_api>`.
 
 
 Top Level Classes

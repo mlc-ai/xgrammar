@@ -52,8 +52,8 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Advanced Topics of the Structural Tag" href="advanced_structural_tag.html" />
-    <link rel="prev" title="Advanced Topics" href="advanced_topics.html" /> 
+    <link rel="next" title="Tool Calling and Reasoning" href="tool_calling_and_reasoning.html" />
+    <link rel="prev" title="Quick Start" href="../start/quick_start.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -139,21 +139,18 @@
 <li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="constrained_decoding.html">Constrained Decoding</a></li>
-<li class="toctree-l1"><a class="reference internal" href="workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="advanced_topics.html">Advanced Topics</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Structural Tag Usage</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#request-shape">Request Shape</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#how-structural-tags-work">How Structural Tags Work</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#format-categories">Format Categories</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#unlimited-formats-and-end-detection">Unlimited Formats and End Detection</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#quick-start">Quick Start</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#minimal-tag">Minimal <code class="docutils literal notranslate"><span class="pre">tag</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#minimal-triggered-tags">Minimal <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#unlimited-formats-and-end-detection">Unlimited Formats and End Detection</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#format-reference">Format Reference</a><ul>
@@ -202,10 +199,17 @@
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="advanced_structural_tag.html">Advanced Topics of the Structural Tag</a></li>
-<li class="toctree-l1"><a class="reference internal" href="engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tool_calling_and_reasoning.html">Tool Calling and Reasoning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced_usage.html">Advanced Topics of Structural Tag</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
@@ -288,7 +292,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/tutorials/structural_tag.md" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/structural_tag/structural_tag_api.md" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -370,30 +374,8 @@ string level.</p></li>
 <td><p><code class="docutils literal notranslate"><span class="pre">token</span></code>, <code class="docutils literal notranslate"><span class="pre">exclude_token</span></code>, <code class="docutils literal notranslate"><span class="pre">any_tokens</span></code>, <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code>, <code class="docutils literal notranslate"><span class="pre">token_dispatch</span></code></p></td>
 <td><p>Constrain output at token boundaries</p></td>
 </tr>
-<tr class="row-even"><td><p>Deprecated</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">qwen_xml_parameter</span></code></p></td>
-<td><p>Kept for backward compatibility</p></td>
-</tr>
 </tbody>
 </table>
-</section>
-<section id="unlimited-formats-and-end-detection">
-<h3>Unlimited Formats and End Detection<a class="headerlink" href="#unlimited-formats-and-end-detection" title="Permalink to this heading">¶</a></h3>
-<p>Some formats can consume an unbounded amount of output:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">any_text</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">any_tokens</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code></p></li>
-</ul>
-<p>When one of these formats appears inside a <code class="docutils literal notranslate"><span class="pre">tag</span></code>, the compiler automatically uses the enclosing
-<code class="docutils literal notranslate"><span class="pre">end</span></code> marker as part of the stop condition when the levels match:</p>
-<ul class="simple">
-<li><p>string end -&gt; string-level unlimited format</p></li>
-<li><p>token end -&gt; token-level unlimited format</p></li>
-</ul>
-<p>This is why a format like <code class="docutils literal notranslate"><span class="pre">tag(&quot;&lt;think&gt;&quot;,</span> <span class="pre">any_text,</span> <span class="pre">&quot;&lt;/think&gt;&quot;)</span></code> can stop cleanly at
-<code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code>. For more details, see <a class="reference internal" href="advanced_structural_tag.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a>.</p>
 </section>
 </section>
 <section id="quick-start">
@@ -444,6 +426,24 @@ structured region after seeing a trigger.</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>I will call a tool now. &lt;function=get_weather&gt;{&quot;city&quot;: &quot;San Francisco&quot;}&lt;/function&gt;
 </pre></div>
 </div>
+</section>
+<section id="unlimited-formats-and-end-detection">
+<h3>Unlimited Formats and End Detection<a class="headerlink" href="#unlimited-formats-and-end-detection" title="Permalink to this heading">¶</a></h3>
+<p>Some formats can consume an unbounded amount of output:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">any_text</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">any_tokens</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code></p></li>
+</ul>
+<p>When one of these formats appears inside a <code class="docutils literal notranslate"><span class="pre">tag</span></code>, the compiler automatically uses the enclosing
+<code class="docutils literal notranslate"><span class="pre">end</span></code> marker as part of the stop condition when the levels match:</p>
+<ul class="simple">
+<li><p>string end -&gt; string-level unlimited format</p></li>
+<li><p>token end -&gt; token-level unlimited format</p></li>
+</ul>
+<p>This is why a format like <code class="docutils literal notranslate"><span class="pre">tag(&quot;&lt;think&gt;&quot;,</span> <span class="pre">any_text,</span> <span class="pre">&quot;&lt;/think&gt;&quot;)</span></code> can stop cleanly at
+<code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code>. For more details, see <a class="reference internal" href="advanced_usage.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a>.</p>
 </section>
 </section>
 <section id="format-reference">
@@ -1375,8 +1375,7 @@ helper instead of hand-writing every wrapper:</p>
 <li><p>Harmony</p></li>
 <li><p>MiniMax</p></li>
 </ul>
-<p>See <a class="reference internal" href="advanced_structural_tag.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a> for
-<code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag</span></code> and the list of supported models.</p>
+<p>See <a class="reference internal" href="tool_calling_and_reasoning.html"><span class="doc std std-doc">Tool Calling and Reasoning</span></a> for <code class="docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code> and the list of supported models.</p>
 </section>
 </section>
 <section id="mapping-to-openai-tool-calling-options">
@@ -1392,13 +1391,15 @@ cleanly:</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">parallel_tool_calls</span> <span class="pre">=</span> <span class="pre">true</span></code>: keep <code class="docutils literal notranslate"><span class="pre">stop_after_first:</span> <span class="pre">false</span></code>, or use <code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code> if
 the model expects a pure separated list of calls</p></li>
 </ul>
+<p>See <a class="reference internal" href="tool_calling_and_reasoning.html"><span class="doc std std-doc">Tool Calling and Reasoning</span></a> for the mapping from <code class="docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code> to OpenAI Tool Calling Options.</p>
 </section>
 <section id="next-steps">
 <h2>Next Steps<a class="headerlink" href="#next-steps" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>For API reference, see <a class="reference internal" href="../api/python/structural_tag.html"><span class="doc std std-doc">Structural Tag API Reference</span></a>.</p></li>
-<li><p>For built-in helpers, automatic end detection details, and deprecated APIs, see
-<a class="reference internal" href="advanced_structural_tag.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a>.</p></li>
+<li><p>For tool calling and reasoning, see <a class="reference internal" href="tool_calling_and_reasoning.html"><span class="doc std std-doc">Tool Calling and Reasoning</span></a>.</p></li>
+<li><p>For automatic end detection details, and deprecated APIs, see
+<a class="reference internal" href="advanced_usage.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a>.</p></li>
 </ul>
 </section>
 </section>
@@ -1413,10 +1414,10 @@ the model expects a pure separated list of calls</p></li>
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="advanced_structural_tag.html" class="btn btn-neutral float-right" title="Advanced Topics of the Structural Tag" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="tool_calling_and_reasoning.html" class="btn btn-neutral float-right" title="Tool Calling and Reasoning" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="advanced_topics.html" class="btn btn-neutral float-left" title="Advanced Topics" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="../start/quick_start.html" class="btn btn-neutral float-left" title="Quick Start" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

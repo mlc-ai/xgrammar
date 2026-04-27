@@ -51,25 +51,6 @@ Think of a structural tag as a tree of chunks:
 | Composition | `sequence`, `or`, `optional`, `plus`, `star`, `repeat` | Build larger structures from smaller ones |
 | Tagging / dispatch | `tag`, `triggered_tags`, `tags_with_separator`, `dispatch` | Wrap content or switch between free text and structured regions |
 | Token-level | `token`, `exclude_token`, `any_tokens`, `token_triggered_tags`, `token_dispatch` | Constrain output at token boundaries |
-| Deprecated | `qwen_xml_parameter` | Kept for backward compatibility |
-
-### Unlimited Formats and End Detection
-
-Some formats can consume an unbounded amount of output:
-
-- `any_text`
-- `any_tokens`
-- `triggered_tags`
-- `token_triggered_tags`
-
-When one of these formats appears inside a `tag`, the compiler automatically uses the enclosing
-`end` marker as part of the stop condition when the levels match:
-
-- string end -> string-level unlimited format
-- token end -> token-level unlimited format
-
-This is why a format like `tag("<think>", any_text, "</think>")` can stop cleanly at
-`</think>`. For more details, see [Advanced Topics of the Structural Tag](advanced_structural_tag).
 
 ## Quick Start
 
@@ -124,6 +105,24 @@ This accepts output like:
 ```text
 I will call a tool now. <function=get_weather>{"city": "San Francisco"}</function>
 ```
+
+### Unlimited Formats and End Detection
+
+Some formats can consume an unbounded amount of output:
+
+- `any_text`
+- `any_tokens`
+- `triggered_tags`
+- `token_triggered_tags`
+
+When one of these formats appears inside a `tag`, the compiler automatically uses the enclosing
+`end` marker as part of the stop condition when the levels match:
+
+- string end -> string-level unlimited format
+- token end -> token-level unlimited format
+
+This is why a format like `tag("<think>", any_text, "</think>")` can stop cleanly at
+`</think>`. For more details, see [Advanced Topics of the Structural Tag](advanced_usage).
 
 ## Format Reference
 
@@ -804,8 +803,7 @@ helper instead of hand-writing every wrapper:
 - Harmony
 - MiniMax
 
-See [Advanced Topics of the Structural Tag](advanced_structural_tag) for
-`get_builtin_structural_tag` and the list of supported models.
+See [Tool Calling and Reasoning](tool_calling_and_reasoning) for `get_model_structural_tag` and the list of supported models.
 
 ## Mapping to OpenAI Tool Calling Options
 
@@ -820,8 +818,11 @@ cleanly:
 - `parallel_tool_calls = true`: keep `stop_after_first: false`, or use `tags_with_separator` if
   the model expects a pure separated list of calls
 
+See [Tool Calling and Reasoning](tool_calling_and_reasoning) for the mapping from `get_model_structural_tag` to OpenAI Tool Calling Options.
+
 ## Next Steps
 
 - For API reference, see [Structural Tag API Reference](../api/python/structural_tag).
-- For built-in helpers, automatic end detection details, and deprecated APIs, see
-  [Advanced Topics of the Structural Tag](advanced_structural_tag).
+- For tool calling and reasoning, see [Tool Calling and Reasoning](tool_calling_and_reasoning).
+- For automatic end detection details, and deprecated APIs, see
+  [Advanced Topics of the Structural Tag](advanced_usage).

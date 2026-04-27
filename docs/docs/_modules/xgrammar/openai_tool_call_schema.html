@@ -11,7 +11,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>xgrammar.exception &mdash; XGrammar 0.1.33 documentation</title>
+  <title>xgrammar.openai_tool_call_schema &mdash; XGrammar 0.1.33 documentation</title>
   
 
   
@@ -660,7 +660,7 @@ window.runMermaid = runMermaid;</script>
         
           <li><a href="../index.html">Module code</a> <span class="br-arrow">></span></li>
         
-      <li>xgrammar.exception</li>
+      <li>xgrammar.openai_tool_call_schema</li>
     
     
     
@@ -676,32 +676,270 @@ window.runMermaid = runMermaid;</script>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <h1>Source code for xgrammar.exception</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Exceptions in XGrammar.&quot;&quot;&quot;</span>
+  <h1>Source code for xgrammar.openai_tool_call_schema</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;OpenAI Chat Completions API tool call schema definitions.</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">tvm_ffi</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_error</span>
+<span class="sd">Pydantic models aligned with the official openai-python SDK</span>
+<span class="sd">(generated from OpenAPI spec by Stainless).</span>
+
+<span class="sd">This module models the Chat Completions tool-call shape. The Responses API uses</span>
+<span class="sd">different flat tool and tool_choice shapes; see the class docstrings below.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c1"># Adapted from openai-python, licensed under Apache License 2.0.</span>
+<span class="c1"># Original project: https://github.com/openai/openai-python</span>
+<span class="c1"># Modified for XGrammar.</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+
+<span class="c1"># ============================================================</span>
+<span class="c1"># tools: list[FunctionToolParam]</span>
+<span class="c1"># ============================================================</span>
 
 
-<div class="viewcode-block" id="DeserializeFormatError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.DeserializeFormatError">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">DeserializeFormatError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the deserialization format is invalid.&quot;&quot;&quot;</span></div>
+<div class="viewcode-block" id="FunctionDefinition"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionDefinition">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">FunctionDefinition</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A JSON-Schema-based function definition.</span>
+
+<span class="sd">    Corresponds to ``openai.types.shared_params.FunctionDefinition``.</span>
+
+<span class="sd">    In Chat Completions this object is nested under</span>
+<span class="sd">    ``tools[].function``. In the Responses API, the function tool fields are</span>
+<span class="sd">    flat on the tool object itself and correspond to</span>
+<span class="sd">    ``openai.types.responses.FunctionToolParam``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The name of the function to be called.</span>
+
+<span class="sd">    Must be a-z, A-Z, 0-9, or contain underscores and dashes, with a maximum</span>
+<span class="sd">    length of 64.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">description</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A description of what the function does, used by the model to choose when and</span>
+<span class="sd">    how to call the function.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">parameters</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The parameters the functions accepts, described as a JSON Schema object.</span>
+
+<span class="sd">    If omitted or set to ``None``, the generated function arguments will be unconstrained.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">strict</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to enable strict schema adherence when generating the function call.</span>
+
+<span class="sd">    If set to true, the model will follow the exact schema defined in the</span>
+<span class="sd">    ``parameters`` field.</span>
+<span class="sd">    &quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="DeserializeVersionError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.DeserializeVersionError">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">DeserializeVersionError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the serialization format is invalid.&quot;&quot;&quot;</span></div>
+<div class="viewcode-block" id="FunctionToolParam"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">FunctionToolParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A function tool that can be used to generate a response.</span>
+
+<span class="sd">    Corresponds to ``openai.types.chat.ChatCompletionFunctionToolParam``.</span>
+
+<span class="sd">    Chat Completions shape::</span>
+
+<span class="sd">        {&quot;type&quot;: &quot;function&quot;, &quot;function&quot;: {&quot;name&quot;: &quot;...&quot;, &quot;parameters&quot;: {...}}}</span>
+
+<span class="sd">    Responses API shape is flat and corresponds to</span>
+<span class="sd">    ``openai.types.responses.FunctionToolParam``::</span>
+
+<span class="sd">        {&quot;type&quot;: &quot;function&quot;, &quot;name&quot;: &quot;...&quot;, &quot;parameters&quot;: {...}}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;function&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the tool. Currently, only ``function`` is supported.&quot;&quot;&quot;</span>
+    <span class="n">function</span><span class="p">:</span> <span class="n">FunctionDefinition</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The function definition.&quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="InvalidStructuralTagError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.InvalidStructuralTagError">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">InvalidStructuralTagError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the structural tag is invalid.&quot;&quot;&quot;</span></div>
+<div class="viewcode-block" id="BuiltinToolParam"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">BuiltinToolParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A builtin tool whose output should be constrained.</span>
+
+<span class="sd">    This mirrors hosted/server tool declarations used by APIs such as OpenAI</span>
+<span class="sd">    Responses or Anthropic Messages. ``type`` is the provider-facing builtin</span>
+<span class="sd">    tool type. ``name`` is the tool name that appears in the model output; when</span>
+<span class="sd">    omitted, callers should use ``type`` as the output name. ``parameters`` is</span>
+<span class="sd">    the JSON schema required by XGrammar and serving engines for constrained</span>
+<span class="sd">    decoding.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The provider-facing builtin tool type.&quot;&quot;&quot;</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The output tool name for model. XGrammar-specific field.</span>
+
+<span class="sd">    Used to constrain the tool name. Use this when the model emits a tool name that</span>
+<span class="sd">    differs from the provider ``type``. For example, an OpenAI-style</span>
+<span class="sd">    ``web_search_preview`` builtin may be emitted as ``browser.search`` by a</span>
+<span class="sd">    Harmony-style model. Defaults to ``type`` when omitted.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">parameters</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Argument schema for the builtin tool. XGrammar-specific field.</span>
+
+<span class="sd">    Hosted/server tool APIs often do not require users to provide this schema,</span>
+<span class="sd">    but XGrammar and serving engines need it to constrain the arguments emitted</span>
+<span class="sd">    by the model.</span>
+<span class="sd">    &quot;&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="InvalidJSONError"><a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.InvalidJSONError">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">InvalidJSONError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the JSON is invalid.&quot;&quot;&quot;</span></div>
+<span class="n">ToolParam</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">,</span> <span class="n">BuiltinToolParam</span><span class="p">]</span>
+<span class="sd">&quot;&quot;&quot;A function or builtin tool accepted by builtin structural tag APIs.&quot;&quot;&quot;</span>
 
 
-<span class="n">register_error</span><span class="p">(</span><span class="s2">&quot;DeserializeFormatError&quot;</span><span class="p">,</span> <span class="n">DeserializeFormatError</span><span class="p">)</span>
-<span class="n">register_error</span><span class="p">(</span><span class="s2">&quot;DeserializeVersionError&quot;</span><span class="p">,</span> <span class="n">DeserializeVersionError</span><span class="p">)</span>
-<span class="n">register_error</span><span class="p">(</span><span class="s2">&quot;InvalidStructuralTagError&quot;</span><span class="p">,</span> <span class="n">InvalidStructuralTagError</span><span class="p">)</span>
-<span class="n">register_error</span><span class="p">(</span><span class="s2">&quot;InvalidJSONError&quot;</span><span class="p">,</span> <span class="n">InvalidJSONError</span><span class="p">)</span>
+<span class="c1"># ============================================================</span>
+<span class="c1"># tool_choice: ToolChoiceOptionParam</span>
+<span class="c1"># ============================================================</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">NamedToolChoiceFunction</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The nested function reference used by Chat Completions named tool choice.</span>
+
+<span class="sd">    Corresponds to</span>
+<span class="sd">    ``openai.types.chat.chat_completion_named_tool_choice_param.Function``.</span>
+
+<span class="sd">    Responses API named function choice is flat and corresponds to</span>
+<span class="sd">    ``openai.types.responses.ToolChoiceFunctionParam``; it uses</span>
+<span class="sd">    ``{&quot;type&quot;: &quot;function&quot;, &quot;name&quot;: &quot;...&quot;}`` without this nested object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The name of the function to call.&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="NamedToolChoiceParam"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceParam">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">NamedToolChoiceParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Specifies a tool the model should use.</span>
+
+<span class="sd">    Use to force the model to call a specific function.</span>
+
+<span class="sd">    Corresponds to ``openai.types.chat.ChatCompletionNamedToolChoiceParam``.</span>
+
+<span class="sd">    Chat Completions shape::</span>
+
+<span class="sd">        {&quot;type&quot;: &quot;function&quot;, &quot;function&quot;: {&quot;name&quot;: &quot;...&quot;}}</span>
+
+<span class="sd">    Responses API shape is flat and corresponds to</span>
+<span class="sd">    ``openai.types.responses.ToolChoiceFunctionParam``::</span>
+
+<span class="sd">        {&quot;type&quot;: &quot;function&quot;, &quot;name&quot;: &quot;...&quot;}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;function&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;function&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;For function calling, the type is always ``function``.&quot;&quot;&quot;</span>
+    <span class="n">function</span><span class="p">:</span> <span class="n">NamedToolChoiceFunction</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The function to call.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="BuiltinToolChoiceParam"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">BuiltinToolChoiceParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Specifies a builtin tool the model should use.</span>
+
+<span class="sd">    ``type`` matches the builtin tool type in ``tools``. Matching is based on</span>
+<span class="sd">    ``type``; ``name`` is accepted for API compatibility but is not used for</span>
+<span class="sd">    matching.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The builtin tool type.&quot;&quot;&quot;</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Optional model-output tool name. Builtin choices are matched by ``type``.&quot;&quot;&quot;</span></div>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AllowedToolRef</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A reference to a function or builtin tool allowed in this turn.</span>
+
+<span class="sd">    Corresponds to one item in</span>
+<span class="sd">    ``openai.types.chat.ChatCompletionAllowedToolsParam.tools``.</span>
+
+<span class="sd">    Chat Completions tool refs are nested, for example</span>
+<span class="sd">    ``{&quot;type&quot;: &quot;function&quot;, &quot;function&quot;: {&quot;name&quot;: &quot;get_weather&quot;}}``.</span>
+<span class="sd">    Responses API refs are flat dictionaries in</span>
+<span class="sd">    ``openai.types.responses.ToolChoiceAllowedParam.tools``, for example</span>
+<span class="sd">    ``{&quot;type&quot;: &quot;function&quot;, &quot;name&quot;: &quot;get_weather&quot;}``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The allowed tool type.&quot;&quot;&quot;</span>
+    <span class="n">function</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">NamedToolChoiceFunction</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The function reference when ``type`` is ``&quot;function&quot;``.&quot;&quot;&quot;</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Optional model-output builtin tool name. Builtin refs are matched by ``type``.&quot;&quot;&quot;</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AllowedToolsParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Constrains the tools available to the model to a pre-defined set.</span>
+
+<span class="sd">    Corresponds to ``openai.types.chat.ChatCompletionAllowedToolsParam``.</span>
+<span class="sd">    In Chat Completions this object is nested under</span>
+<span class="sd">    ``ChatCompletionAllowedToolChoiceParam.allowed_tools``. In the Responses API,</span>
+<span class="sd">    the equivalent fields are directly on</span>
+<span class="sd">    ``openai.types.responses.ToolChoiceAllowedParam``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Constrains the tools available to the model to a pre-defined set.</span>
+
+<span class="sd">    ``auto`` allows the model to pick from among the allowed tools and generate a</span>
+<span class="sd">    message.</span>
+
+<span class="sd">    ``required`` requires the model to call one or more of the allowed tools.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">AllowedToolRef</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A list of tool definitions that the model should be allowed to call.</span>
+
+<span class="sd">    For the Chat Completions API, the list of tool definitions might look like:</span>
+
+<span class="sd">    .. code-block:: json</span>
+
+<span class="sd">        [</span>
+<span class="sd">          { &quot;type&quot;: &quot;function&quot;, &quot;function&quot;: { &quot;name&quot;: &quot;get_weather&quot; } },</span>
+<span class="sd">          { &quot;type&quot;: &quot;function&quot;, &quot;function&quot;: { &quot;name&quot;: &quot;get_time&quot; } }</span>
+<span class="sd">        ]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="AllowedToolChoiceParam"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AllowedToolChoiceParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Constrains the tools available to the model to a pre-defined set.</span>
+
+<span class="sd">    Corresponds to ``openai.types.chat.ChatCompletionAllowedToolChoiceParam``.</span>
+
+<span class="sd">    Chat Completions shape::</span>
+
+<span class="sd">        {&quot;type&quot;: &quot;allowed_tools&quot;, &quot;allowed_tools&quot;: {&quot;mode&quot;: &quot;...&quot;, &quot;tools&quot;: [...]}}</span>
+
+<span class="sd">    Responses API shape is flat and corresponds to</span>
+<span class="sd">    ``openai.types.responses.ToolChoiceAllowedParam``::</span>
+
+<span class="sd">        {&quot;type&quot;: &quot;allowed_tools&quot;, &quot;mode&quot;: &quot;...&quot;, &quot;tools&quot;: [...]}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;allowed_tools&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;allowed_tools&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Allowed tool configuration type. Always ``allowed_tools``.&quot;&quot;&quot;</span>
+    <span class="n">allowed_tools</span><span class="p">:</span> <span class="n">AllowedToolsParam</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Constrains the tools available to the model to a pre-defined set.&quot;&quot;&quot;</span></div>
+
+
+<span class="n">ToolChoiceOptionParam</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span>
+    <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;none&quot;</span><span class="p">,</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">],</span>
+    <span class="n">NamedToolChoiceParam</span><span class="p">,</span>
+    <span class="n">AllowedToolChoiceParam</span><span class="p">,</span>
+    <span class="n">BuiltinToolChoiceParam</span><span class="p">,</span>
+<span class="p">]</span>
+<span class="sd">&quot;&quot;&quot;Controls which (if any) tool is called by the model.</span>
+
+<span class="sd">``none`` means the model will not call any tool and instead generates a message.</span>
+
+<span class="sd">``auto`` means the model can pick between generating a message or calling one or</span>
+<span class="sd">more tools.</span>
+
+<span class="sd">``required`` means the model must call one or more tools.</span>
+
+<span class="sd">Specifying a particular tool via</span>
+<span class="sd">``{&quot;type&quot;: &quot;function&quot;, &quot;function&quot;: {&quot;name&quot;: &quot;my_function&quot;}}`` forces the model</span>
+<span class="sd">to call that tool.</span>
+
+<span class="sd">Corresponds to openai.types.chat.ChatCompletionToolChoiceOptionParam.</span>
+<span class="sd">&quot;&quot;&quot;</span>
 </pre></div>
 
            </div>

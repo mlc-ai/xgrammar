@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Advanced Topics of the Structural Tag &mdash; XGrammar 0.1.33 documentation</title>
+  <title>Advanced Topics of Structural Tag &mdash; XGrammar 0.1.33 documentation</title>
   
 
   
@@ -52,8 +52,8 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Integration with LLM Engine" href="engine_integration.html" />
-    <link rel="prev" title="Structural Tag Usage" href="structural_tag.html" /> 
+    <link rel="next" title="Constrained Decoding" href="../tutorials/constrained_decoding.html" />
+    <link rel="prev" title="Tool Calling and Reasoning" href="tool_calling_and_reasoning.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -139,20 +139,11 @@
 <li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="constrained_decoding.html">Constrained Decoding</a></li>
-<li class="toctree-l1"><a class="reference internal" href="workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="advanced_topics.html">Advanced Topics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="structural_tag.html">Structural Tag Usage</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Advanced Topics of the Structural Tag</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#built-in-structural-tag-get-builtin-structural-tag">Built-in Structural Tag: <code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#parameters">Parameters</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#returns">Returns</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#example">Example</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#supported-models-get-builtin-structural-tag-supported-models">Supported models: <code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag_supported_models</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="structural_tag_api.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tool_calling_and_reasoning.html">Tool Calling and Reasoning</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Advanced Topics of Structural Tag</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#automatic-end-detection">Automatic End Detection</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#deprecated-api-grammar-from-structural-tag-tags-triggers">Deprecated API: <code class="docutils literal notranslate"><span class="pre">Grammar.from_structural_tag(tags,</span> <span class="pre">triggers)</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#parameters-deprecated">Parameters (deprecated)</a></li>
@@ -162,9 +153,15 @@
 </li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
 <ul>
@@ -236,7 +233,7 @@
     
       <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>Advanced Topics of the Structural Tag</li>
+      <li>Advanced Topics of Structural Tag</li>
     
     
       
@@ -247,7 +244,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/tutorials/advanced_structural_tag.md" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/structural_tag/advanced_usage.md" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -261,106 +258,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="advanced-topics-of-the-structural-tag">
-<h1>Advanced Topics of the Structural Tag<a class="headerlink" href="#advanced-topics-of-the-structural-tag" title="Permalink to this heading">¶</a></h1>
-<section id="built-in-structural-tag-get-builtin-structural-tag">
-<h2>Built-in Structural Tag: <code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag</span></code><a class="headerlink" href="#built-in-structural-tag-get-builtin-structural-tag" title="Permalink to this heading">¶</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag</span></code> generates a <code class="docutils literal notranslate"><span class="pre">StructuralTag</span></code> for the given model type with the specified tools and options. The returned structural tag can be used with <code class="docutils literal notranslate"><span class="pre">Grammar.from_structural_tag</span></code> or <code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_structural_tag</span></code> to obtain a grammar that matches the function-calling format in the corresponding model’s style within any-form text.</p>
-<p>Use it when you need to constrain the model to output in a fixed pattern such as “tool name + parameter JSON”, e.g. for Llama, Qwen, Kimi, DeepSeek, or OpenAI Harmony, etc.</p>
-<section id="parameters">
-<h3>Parameters<a class="headerlink" href="#parameters" title="Permalink to this heading">¶</a></h3>
-<ul class="simple">
-<li><p><strong>model</strong> (<code class="docutils literal notranslate"><span class="pre">BuiltinModels</span></code>): The model type. Supported values:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;llama&quot;</span></code>: Llama-style (e.g. Llama 3, Llama 4)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;qwen&quot;</span></code>: Qwen-style (e.g. Qwen3)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;qwen_coder&quot;</span></code>: Qwen Coder-style (e.g. Qwen3-Coder, Qwen3-Coder-Next)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;kimi&quot;</span></code>: Kimi-style (e.g. Kimi-K2, Kimi-K2.5)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;deepseek_r1&quot;</span></code>: DeepSeek-style (e.g. DeepSeek-V3.1, DeepSeek-R1, DeepSeek-V3.2-exp)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code>: OpenAI Harmony Response Format (e.g. gpt-oss)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v3_2&quot;</span></code>: DeepSeek-V3.2-style (e.g. DeepSeek-V3.2)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;minimax&quot;</span></code>: MiniMax-style (e.g. MiniMax-M2)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;glm47&quot;</span></code>: GLM-style (e.g. GLM-5, GLM-4.7)</p></li>
-</ul>
-</li>
-<li><p><strong>reasoning</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): Whether to enable reasoning mode (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;</span></code>/<code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code> tags). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
-<li><p><strong>tools</strong> (<code class="docutils literal notranslate"><span class="pre">List[Dict[str,</span> <span class="pre">Any]]</span></code>, optional): List of tools; each item is a dict with a <code class="docutils literal notranslate"><span class="pre">&quot;function&quot;</span></code> key. The <code class="docutils literal notranslate"><span class="pre">&quot;function&quot;</span></code> dict <strong>must</strong> contain a <code class="docutils literal notranslate"><span class="pre">&quot;name&quot;</span></code> (string), and <strong>may</strong> contain:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;parameters&quot;</span></code>: JSON Schema, which can be:</p>
-<ul>
-<li><p>a <strong>dict</strong> (regular JSON Schema object), for example <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;object&quot;,</span> <span class="pre">&quot;properties&quot;:</span> <span class="pre">{...}}</span></code></p></li>
-<li><p>a <strong>bool</strong>: <code class="docutils literal notranslate"><span class="pre">True</span></code> means “any JSON value is accepted”, <code class="docutils literal notranslate"><span class="pre">False</span></code> means “no value is accepted”.
-If <code class="docutils literal notranslate"><span class="pre">&quot;parameters&quot;</span></code> is missing, the no constraint will be applied.</p></li>
-</ul>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;strict&quot;</span></code>: <code class="docutils literal notranslate"><span class="pre">bool</span></code>. Controls whether the parameter constraints are applied. When <code class="docutils literal notranslate"><span class="pre">False</span></code>, only the function name will be enforced, but the parameters is unconstrained. Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.
-Default value is <code class="docutils literal notranslate"><span class="pre">[]</span></code>.</p></li>
-</ul>
-</li>
-<li><p><strong>builtin_tools</strong> (<code class="docutils literal notranslate"><span class="pre">List[Dict[str,</span> <span class="pre">Any]]</span></code>, optional): List of built-in tools (used only for <code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code>); each element has the same structure as items in <code class="docutils literal notranslate"><span class="pre">tools</span></code>. Default <code class="docutils literal notranslate"><span class="pre">[]</span></code>.</p></li>
-<li><p><strong>force_empty_reasoning</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): When reasoning is on, whether to force empty thinking content at the beginning. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
-</ul>
-<p>Passing an unsupported <code class="docutils literal notranslate"><span class="pre">model</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
-</section>
-<section id="returns">
-<h3>Returns<a class="headerlink" href="#returns" title="Permalink to this heading">¶</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">StructuralTag</span></code>: The structural tag for the given model’s function-calling format.</p>
-</section>
-<section id="example">
-<h3>Example<a class="headerlink" href="#example" title="Permalink to this heading">¶</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">Grammar</span><span class="p">,</span> <span class="n">get_builtin_structural_tag</span>
-
-<span class="n">tools</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="p">{</span><span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">,</span> <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}}}}},</span>
-    <span class="p">{</span><span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_time&quot;</span><span class="p">,</span> <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{}}}},</span>
-<span class="p">]</span>
-
-<span class="c1"># Get the Llama-style structural tag and build a grammar</span>
-<span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_builtin_structural_tag</span><span class="p">(</span><span class="s2">&quot;llama&quot;</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">)</span>
-<span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>For the Harmony format you must provide both <code class="docutils literal notranslate"><span class="pre">tools</span></code> and <code class="docutils literal notranslate"><span class="pre">builtin_tools</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_builtin_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
-    <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
-        <span class="c1"># User tool in strict mode, with a full JSON Schema</span>
-        <span class="p">{</span>
-            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;user_tool&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;q&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}}},</span>
-            <span class="p">}</span>
-        <span class="p">},</span>
-        <span class="c1"># User tool in non-strict mode: name only, arguments unconstrained (equivalent to parameters=True)</span>
-        <span class="p">{</span><span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;user_tool_untyped&quot;</span><span class="p">,</span> <span class="s2">&quot;strict&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">}},</span>
-    <span class="p">],</span>
-    <span class="n">builtin_tools</span><span class="o">=</span><span class="p">[</span>
-        <span class="c1"># Built-in tools support the same strict / parameters combinations</span>
-        <span class="p">{</span>
-            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;builtin_tool&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{}},</span>
-            <span class="p">}</span>
-        <span class="p">},</span>
-    <span class="p">],</span>
-<span class="p">)</span>
-<span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>For formats that support reasoning (like Qwen3, Deepseek-R1, Kimi-k2-thinking ), pass <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> to enable/disable the reasoning mode:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_builtin_structural_tag</span><span class="p">(</span><span class="s2">&quot;qwen&quot;</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span> <span class="n">reasoning</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>If <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> is not passed, reasoning mode is enabled by default. Besides, when <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, you can also set <code class="docutils literal notranslate"><span class="pre">force_empty_reasoning</span></code> to constrain the reasoning content.</p>
-</section>
-</section>
-<hr class="docutils" />
-<section id="supported-models-get-builtin-structural-tag-supported-models">
-<h2>Supported models: <code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag_supported_models</span></code><a class="headerlink" href="#supported-models-get-builtin-structural-tag-supported-models" title="Permalink to this heading">¶</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag_supported_models</span></code> returns the supported model list for each built-in structural tag function. Call it with no args to get <code class="docutils literal notranslate"><span class="pre">Dict[str,</span> <span class="pre">List[str]]</span></code> (style → models), or pass a style name (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;llama&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;qwen&quot;</span></code>) to get <code class="docutils literal notranslate"><span class="pre">List[str]</span></code> for that style. Use it to confirm which style a model uses before calling <code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag</span></code>.</p>
-</section>
-<hr class="docutils" />
+  <section class="tex2jax_ignore mathjax_ignore" id="advanced-topics-of-structural-tag">
+<h1>Advanced Topics of Structural Tag<a class="headerlink" href="#advanced-topics-of-structural-tag" title="Permalink to this heading">¶</a></h1>
 <section id="automatic-end-detection">
 <h2>Automatic End Detection<a class="headerlink" href="#automatic-end-detection" title="Permalink to this heading">¶</a></h2>
 <p>Certain “unlimited” formats — <code class="docutils literal notranslate"><span class="pre">any_text</span></code>, <code class="docutils literal notranslate"><span class="pre">any_tokens</span></code>, <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>, and <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> — can consume an unbounded amount of output. To know when to stop, the structural tag compiler automatically detects the <strong>end condition</strong> of the enclosing <code class="docutils literal notranslate"><span class="pre">tag</span></code> and adds it to the format’s internal exclude set.</p>
@@ -432,10 +331,10 @@ This pattern consists of three parts: a begin tag (<code class="docutils literal
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="engine_integration.html" class="btn btn-neutral float-right" title="Integration with LLM Engine" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="../tutorials/constrained_decoding.html" class="btn btn-neutral float-right" title="Constrained Decoding" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="structural_tag.html" class="btn btn-neutral float-left" title="Structural Tag Usage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="tool_calling_and_reasoning.html" class="btn btn-neutral float-left" title="Tool Calling and Reasoning" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

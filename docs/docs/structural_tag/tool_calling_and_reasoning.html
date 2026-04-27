@@ -1,0 +1,564 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Tool Calling and Reasoning &mdash; XGrammar 0.1.33 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/autodoc_pydantic.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+        <script src="../_static/clipboard.min.js"></script>
+        <script src="../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Advanced Topics of Structural Tag" href="advanced_usage.html" />
+    <link rel="prev" title="Structural Tag Usage" href="structural_tag_api.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html">
+          
+
+          
+            
+            <img src="../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.1.33
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="structural_tag_api.html">Structural Tag Usage</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Tool Calling and Reasoning</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#basic-api-get-model-structural-tag">Basic API: <code class="docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#returns">Returns</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#function-tools">Function tools</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#builtin-tools">Builtin tools</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#reasoning-mode">Reasoning mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#tool-choice">Tool choice</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#supported-models">Supported models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#extending-with-custom-models">Extending with custom models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="advanced_usage.html">Advanced Topics of Structural Tag</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/python/index.html">XGrammar Python API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+      <li>Tool Calling and Reasoning</li>
+    
+    
+      
+      
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/structural_tag/tool_calling_and_reasoning.md" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section class="tex2jax_ignore mathjax_ignore" id="tool-calling-and-reasoning">
+<h1>Tool Calling and Reasoning<a class="headerlink" href="#tool-calling-and-reasoning" title="Permalink to this heading">¶</a></h1>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Permalink to this heading">¶</a></h2>
+<p>An LLM response can mix up to three parts: a <strong>reasoning</strong> section (e.g. <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>), <strong>plain text</strong> output, and one or more <strong>tool calls</strong>. Different models use different tags and orderings for these parts. XGrammar provides <strong>Builtin Structural Tag</strong> to generate a <code class="docutils literal notranslate"><span class="pre">StructuralTag</span></code> that describes the full output structure for a given model, so all three parts can be constrained during decoding.</p>
+<p>The API accepts <code class="docutils literal notranslate"><span class="pre">tools</span></code> and <code class="docutils literal notranslate"><span class="pre">tool_choice</span></code> in the <a class="reference external" href="https://platform.openai.com/docs/api-reference/chat">OpenAI Chat Completions</a> convention. Serving engines already using that format can adopt XGrammar with minimal changes. For builtin / hosted tools (e.g. <code class="docutils literal notranslate"><span class="pre">web_search_preview</span></code>), the API extends the convention with XGrammar-specific fields; see <a class="reference internal" href="../api/python/openai_tool_call_schema.html"><span class="doc std std-doc">OpenAI Tool Call Schema</span></a> for type definitions.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">tool_choice</span></code> parameter controls how tool calls and text are mixed:</p>
+<ul class="simple">
+<li><p><strong>Auto</strong> (<code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>): the model may output plain text, tool calls, or both.</p></li>
+<li><p><strong>Required</strong> (<code class="docutils literal notranslate"><span class="pre">&quot;required&quot;</span></code>): at least one tool call is required; plain-text-only output is not allowed.</p></li>
+<li><p><strong>Forced</strong> (named choice): exactly one specified tool must be called.</p></li>
+<li><p><strong>None</strong> (<code class="docutils literal notranslate"><span class="pre">&quot;none&quot;</span></code>): tool calls are disabled; only text and reasoning are allowed.</p></li>
+</ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> parameter independently controls whether the reasoning section is present, and <code class="docutils literal notranslate"><span class="pre">force_empty_reasoning</span></code> can force it to be empty.</p>
+</section>
+<section id="basic-api-get-model-structural-tag">
+<h2>Basic API: <code class="docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code><a class="headerlink" href="#basic-api-get-model-structural-tag" title="Permalink to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code> generates a <code class="docutils literal notranslate"><span class="pre">StructuralTag</span></code> for the given model type with the specified tools and options. The returned <code class="docutils literal notranslate"><span class="pre">StructuralTag</span></code> can be used with <code class="docutils literal notranslate"><span class="pre">Grammar.from_structural_tag</span></code> or <code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_structural_tag</span></code> to obtain the corresponding grammar.</p>
+<p>Use it when you need to constrain the model to output in a fixed pattern such as “tool name + parameter JSON”, e.g. for Llama, Qwen, Kimi, DeepSeek, OpenAI Harmony, etc.</p>
+<section id="parameters">
+<h3>Parameters<a class="headerlink" href="#parameters" title="Permalink to this heading">¶</a></h3>
+<ul>
+<li><p><strong>model</strong> (<code class="docutils literal notranslate"><span class="pre">str</span></code>): The structural-tag style. Valid values are <code class="docutils literal notranslate"><span class="pre">&quot;llama&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;qwen&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;qwen_coder&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;kimi&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_r1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v3_2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;minimax&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;glm47&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;gemma4&quot;</span></code>.</p></li>
+<li><p><strong>tools</strong> (<code class="docutils literal notranslate"><span class="pre">List[ToolParam</span> <span class="pre">|</span> <span class="pre">dict]</span></code>, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:</p>
+<ul>
+<li><p><strong>Function tools</strong> use the OpenAI Chat Completions shape:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{&quot;type&quot;: &quot;function&quot;, &quot;function&quot;: {&quot;name&quot;: &quot;...&quot;, &quot;parameters&quot;: {...}}}
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">&quot;parameters&quot;</span></code> field accepts a JSON Schema dict, <code class="docutils literal notranslate"><span class="pre">True</span></code> (any JSON), or can be omitted (unconstrained). When <code class="docutils literal notranslate"><span class="pre">&quot;strict&quot;</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>, the parameters constraint is skipped.</p>
+</li>
+<li><p><strong>Builtin tools</strong> use a compact shape with XGrammar-specific fields:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>{&quot;type&quot;: &quot;web_search_preview&quot;, &quot;name&quot;: &quot;browser.search&quot;, &quot;parameters&quot;: {...}}
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span></code>: the provider-level builtin tool type.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>: the model-output tool name (defaults to <code class="docutils literal notranslate"><span class="pre">type</span></code> if omitted).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">parameters</span></code>: the JSON schema for constrained decoding of the builtin tool arguments.</p></li>
+</ul>
+</li>
+</ul>
+<p>Default <code class="docutils literal notranslate"><span class="pre">None</span></code> (treated as empty list).</p>
+</li>
+<li><p><strong>tool_choice</strong> (<code class="docutils literal notranslate"><span class="pre">ToolChoiceOptionParam</span> <span class="pre">|</span> <span class="pre">dict</span> <span class="pre">|</span> <span class="pre">None</span></code>, optional): Controls whether the model may or must call tools. Default <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>: the model chooses between text output and tool calls.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">None</span></code>: treated the same as <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;none&quot;</span></code>: disables all tools.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;required&quot;</span></code>: requires at least one tool call.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;function&quot;:</span> <span class="pre">{&quot;name&quot;:</span> <span class="pre">...}}</span></code>: forces one function tool.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&lt;builtin_type&gt;}</span></code>: forces one builtin tool (matched by <code class="docutils literal notranslate"><span class="pre">type</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;allowed_tools&quot;,</span> <span class="pre">&quot;allowed_tools&quot;:</span> <span class="pre">{&quot;mode&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;tools&quot;:</span> <span class="pre">[...]}}</span></code>: limits available tools before applying its <code class="docutils literal notranslate"><span class="pre">mode</span></code>. The <code class="docutils literal notranslate"><span class="pre">tools</span></code> list may contain both function refs and builtin refs (matched by <code class="docutils literal notranslate"><span class="pre">type</span></code>).</p></li>
+</ul>
+</li>
+<li><p><strong>reasoning</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): Whether to enable reasoning mode (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;</span></code>/<code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code> tags or model-specific equivalents). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>force_empty_reasoning</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): When reasoning is on, whether to force empty thinking content at the beginning. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+</ul>
+<p>Passing an unsupported <code class="docutils literal notranslate"><span class="pre">model</span></code> or an invalid <code class="docutils literal notranslate"><span class="pre">tool_choice</span></code> will raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
+</section>
+<section id="returns">
+<h3>Returns<a class="headerlink" href="#returns" title="Permalink to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">StructuralTag</span></code>: The structural tag for the given model’s function-calling format.</p>
+</section>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Permalink to this heading">¶</a></h2>
+<section id="function-tools">
+<h3>Function tools<a class="headerlink" href="#function-tools" title="Permalink to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="kn">import</span> <span class="n">Grammar</span><span class="p">,</span> <span class="n">get_model_structural_tag</span>
+
+<span class="n">tools</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+            <span class="p">},</span>
+        <span class="p">},</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_time&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{}},</span>
+        <span class="p">},</span>
+    <span class="p">},</span>
+<span class="p">]</span>
+
+<span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;llama&quot;</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">)</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="builtin-tools">
+<h3>Builtin tools<a class="headerlink" href="#builtin-tools" title="Permalink to this heading">¶</a></h3>
+<p>For models that support builtin tools (e.g. Harmony / gpt-oss), include builtin tools in the same <code class="docutils literal notranslate"><span class="pre">tools</span></code> list:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;user_tool&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;q&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}}},</span>
+            <span class="p">},</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;browser.search&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;query&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+                <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;query&quot;</span><span class="p">],</span>
+            <span class="p">},</span>
+        <span class="p">},</span>
+    <span class="p">],</span>
+<span class="p">)</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="reasoning-mode">
+<h3>Reasoning mode<a class="headerlink" href="#reasoning-mode" title="Permalink to this heading">¶</a></h3>
+<p>For formats that support reasoning (like Qwen3, DeepSeek-R1, Kimi-K2), pass <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> to enable/disable:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;qwen&quot;</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span> <span class="n">reasoning</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> is not passed, reasoning mode is enabled by default. When <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, you can also set <code class="docutils literal notranslate"><span class="pre">force_empty_reasoning</span></code> to constrain the reasoning content.</p>
+</section>
+<section id="tool-choice">
+<h3>Tool choice<a class="headerlink" href="#tool-choice" title="Permalink to this heading">¶</a></h3>
+<p>Force a specific function tool:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;llama&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span> <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">}},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Force a builtin tool by type:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Allow only a subset of tools:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;allowed_tools&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;allowed_tools&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;tools&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span> <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">}},</span>
+                <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">},</span>
+            <span class="p">],</span>
+        <span class="p">},</span>
+    <span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="supported-models">
+<h2>Supported models<a class="headerlink" href="#supported-models" title="Permalink to this heading">¶</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">model</span></code> argument of <code class="docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code> accepts the style names below:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">model</span></code> (style)</p></th>
+<th class="head"><p>Supported models</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;llama&quot;</span></code></p></td>
+<td><p>Meta-Llama-3, Llama-3.1, Llama-3.2, Llama-4</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;qwen&quot;</span></code></p></td>
+<td><p>Qwen3</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;qwen_coder&quot;</span></code></p></td>
+<td><p>Qwen3-Coder, Qwen3-Coder-Next</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;kimi&quot;</span></code></p></td>
+<td><p>Kimi-K2, Kimi-K2.5</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;deepseek_r1&quot;</span></code></p></td>
+<td><p>DeepSeek-V3.1, DeepSeek-R1, DeepSeek-V3.2-exp</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code></p></td>
+<td><p>gpt-oss</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v3_2&quot;</span></code></p></td>
+<td><p>DeepSeek-V3.2</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;minimax&quot;</span></code></p></td>
+<td><p>MiniMax-M2.5</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;glm47&quot;</span></code></p></td>
+<td><p>GLM-5, GLM-4.7</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;gemma4&quot;</span></code></p></td>
+<td><p>Gemma-4, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it, gemma-4-e2b-it</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="extending-with-custom-models">
+<h2>Extending with custom models<a class="headerlink" href="#extending-with-custom-models" title="Permalink to this heading">¶</a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">register_model_structural_tag</span></code> to add support for a new model format. See the <a class="reference internal" href="../api/python/builtin_structural_tag.html"><span class="doc std std-doc">Builtin Structural Tag API Reference</span></a> for details.</p>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Permalink to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>For function and tool choice schema definitions, see <a class="reference internal" href="../api/python/openai_tool_call_schema.html"><span class="doc std std-doc">OpenAI Tool Call Schema API Reference</span></a>.</p></li>
+<li><p>For builtin structural tag API reference, see <a class="reference internal" href="../api/python/builtin_structural_tag.html"><span class="doc std std-doc">Builtin Structural Tag API Reference</span></a>.</p></li>
+<li><p>For advanced usage, see <a class="reference internal" href="advanced_usage.html"><span class="doc std std-doc">Advanced Topics of the Structural Tag</span></a>.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="advanced_usage.html" class="btn btn-neutral float-right" title="Advanced Topics of Structural Tag" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="structural_tag_api.html" class="btn btn-neutral float-left" title="Structural Tag Usage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+
+<div id="button" class="backtop"><img src="../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>
