@@ -1,113 +1,176 @@
-# Builtin Structural Tag
+# Tool Calling and Reasoning
 
 ## Introduction
 
-XGrammar can be used to force different LLMs to output in correct format. In general, there are two common scenarios:
+An LLM response can mix up to three parts: a **reasoning** section (e.g. `<think>...</think>`), **plain text** output, and one or more **tool calls**. Different models use different tags and orderings for these parts. XGrammar provides **Builtin Structural Tag** to generate a `StructuralTag` that describes the full output structure for a given model, so all three parts can be constrained during decoding.
 
-- LLMs can decide whether to call a tool and which tool to call, and output these tool-calling formats within any-form text.
-- LLMs are forced to output one or more tools, and any other text are not allowed.
+The API accepts `tools` and `tool_choice` in the [OpenAI Chat Completions](https://platform.openai.com/docs/api-reference/chat) convention. Serving engines already using that format can adopt XGrammar with minimal changes. For builtin / hosted tools (e.g. `web_search_preview`), the API extends the convention with XGrammar-specific fields; see [OpenAI Tool Call Schema](../api/python/openai_tool_call_schema) for type definitions.
 
-Moreover, different LLMs usually have different tool-calling tags. To support these scenarios naturally, we provide **Builtin Structural tag** to generate the `StructuralTag` for different scenarios, and different models. The generated `StructuralTag` can be used to constrain the output of LLMs.
+The `tool_choice` parameter controls how tool calls and text are mixed:
+
+- **Auto** (`"auto"`): the model may output plain text, tool calls, or both.
+- **Required** (`"required"`): at least one tool call is required; plain-text-only output is not allowed.
+- **Forced** (named choice): exactly one specified tool must be called.
+- **None** (`"none"`): tool calls are disabled; only text and reasoning are allowed.
+
+The `reasoning` parameter independently controls whether the reasoning section is present, and `force_empty_reasoning` can force it to be empty.
 
 ## Basic API: `get_builtin_structural_tag`
 
 `get_builtin_structural_tag` generates a `StructuralTag` for the given model type with the specified tools and options. The returned `StructuralTag` can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain the corresponding grammar.
 
-Use it when you need to constrain the model to output in a fixed pattern such as "tool name + parameter JSON", e.g. for Llama, Qwen, Kimi, DeepSeek, or OpenAI Harmony, etc.
+Use it when you need to constrain the model to output in a fixed pattern such as "tool name + parameter JSON", e.g. for Llama, Qwen, Kimi, DeepSeek, OpenAI Harmony, etc.
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen"`, `"qwen_coder"`, `"kimi"`, `"deepseek_r1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm47"`, `"gemma4"`. The corresponding supported model names are listed below.
-- **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags). Default `True`.
-- **tools** (`List[Dict[str, Any]]`, optional): List of tools; each item is a dict with a `"function"` key. The `"function"` dict **must** contain a `"name"` (string), and **may** contain:
-  - `"parameters"`: JSON Schema, which can be:
-    - a **dict** (regular JSON Schema object), for example `{"type": "object", "properties": {...}}`
-    - a **bool**: `True` means "any JSON value is accepted", `False` means "no value is accepted".
-    If `"parameters"` is missing, the no constraint will be applied.
-  - `"strict"`: `bool`. Controls whether the parameter constraints are applied. When `False`, only the function name will be enforced, but the parameters is unconstrained. Default: `True`.
-  Default value is `[]`.
-- **builtin_tools** (`List[Dict[str, Any]]`, optional): List of built-in tools (used only for `"harmony"`); each element has the same structure as items in `tools`. Default `[]`.
-- **force_empty_reasoning** (`bool`, optional): When reasoning is on, whether to force empty thinking content at the beginning. Default `False`.
-- **tool_choice** (`Literal["auto", "forced", "required"]`, optional): How tool calling is constrained relative to the `tools` list.
-  - `"auto"`: whether to call a tool(s), and which one(s), is determined by the model; tool calls can appear inside free-form text.
-  - `"forced"`: the model must call the specified tool (`forced_function_name`) exactly once in function-call format.
-  - `"required"`: the model must call one or more tools; non-tool plain-text outputs are not allowed.
-- **forced_function_name** (`Optional[str]`, optional): Required when `tool_choice="forced"`. The value must match a function name in `tools`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen"`, `"qwen_coder"`, `"kimi"`, `"deepseek_r1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm47"`, `"gemma4"`.
+- **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
+  - **Function tools** use the OpenAI Chat Completions shape:
+    ```json
+    {"type": "function", "function": {"name": "...", "parameters": {...}}}
+    ```
+    The `"parameters"` field accepts a JSON Schema dict, `True` (any JSON), or can be omitted (unconstrained). When `"strict"` is `False`, the parameters constraint is skipped.
+  - **Builtin tools** use a compact shape with XGrammar-specific fields:
+    ```json
+    {"type": "web_search_preview", "name": "browser.search", "parameters": {...}}
+    ```
+    - `type`: the provider-level builtin tool type.
+    - `name`: the model-output tool name (defaults to `type` if omitted).
+    - `parameters`: the JSON schema for constrained decoding of the builtin tool arguments.
 
-Passing an unsupported `model`, an invalid `tool_choice` will raise `ValueError`.
+  Default `None` (treated as empty list).
+- **tool_choice** (`ToolChoiceOptionParam | dict | None`, optional): Controls whether the model may or must call tools. Default `"auto"`.
+  - `"auto"`: the model chooses between text output and tool calls.
+  - `None`: treated the same as `"auto"`.
+  - `"none"`: disables all tools.
+  - `"required"`: requires at least one tool call.
+  - `{"type": "function", "function": {"name": ...}}`: forces one function tool.
+  - `{"type": <builtin_type>}`: forces one builtin tool (matched by `type`).
+  - `{"type": "allowed_tools", "allowed_tools": {"mode": ..., "tools": [...]}}`: limits available tools before applying its `mode`. The `tools` list may contain both function refs and builtin refs (matched by `type`).
+- **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags or model-specific equivalents). Default `True`.
+- **force_empty_reasoning** (`bool`, optional): When reasoning is on, whether to force empty thinking content at the beginning. Default `False`.
+
+Passing an unsupported `model` or an invalid `tool_choice` will raise `ValueError`.
 
 ### Returns
 
 `StructuralTag`: The structural tag for the given model's function-calling format.
 
-## Example
+## Examples
+
+### Function tools
 
 ```python
 from xgrammar import Grammar, get_builtin_structural_tag
 
 tools = [
-    {"function": {"name": "get_weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}}},
-    {"function": {"name": "get_time", "parameters": {"type": "object", "properties": {}}}},
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_time",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
-# Get the Llama-style structural tag and build a grammar
 structural_tag = get_builtin_structural_tag("llama", tools=tools)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
-For the Harmony format you must provide both `tools` and `builtin_tools`:
+### Builtin tools
+
+For models that support builtin tools (e.g. Harmony / gpt-oss), include builtin tools in the same `tools` list:
 
 ```python
 structural_tag = get_builtin_structural_tag(
     "harmony",
     tools=[
-        # User tool in strict mode, with a full JSON Schema
         {
+            "type": "function",
             "function": {
                 "name": "user_tool",
                 "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
-            }
+            },
         },
-        # User tool in non-strict mode: name only, arguments unconstrained (equivalent to parameters=True)
-        {"function": {"name": "user_tool_untyped", "strict": False}},
-    ],
-    builtin_tools=[
-        # Built-in tools support the same strict / parameters combinations
         {
-            "function": {
-                "name": "builtin_tool",
-                "parameters": {"type": "object", "properties": {}},
-            }
+            "type": "web_search_preview",
+            "name": "browser.search",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
         },
     ],
 )
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
-For formats that support reasoning (like Qwen3, Deepseek-R1, Kimi-k2-thinking ), pass `reasoning` to enable/disable the reasoning mode:
+### Reasoning mode
+
+For formats that support reasoning (like Qwen3, DeepSeek-R1, Kimi-K2), pass `reasoning` to enable/disable:
 
 ```python
 structural_tag = get_builtin_structural_tag("qwen", tools=tools, reasoning=True)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
-If `reasoning` is not passed, reasoning mode is enabled by default. Besides, when `reasoning` is `True`, you can also set `force_empty_reasoning` to constrain the reasoning content.
+If `reasoning` is not passed, reasoning mode is enabled by default. When `reasoning` is `True`, you can also set `force_empty_reasoning` to constrain the reasoning content.
 
-You can pass **tool choice** options when building the structural_tag; they are included in the internal input passed to each built-in style handler:
+### Tool choice
+
+Force a specific function tool:
 
 ```python
 structural_tag = get_builtin_structural_tag(
     "llama",
     tools=tools,
-    tool_choice="forced",
-    forced_function_name="get_weather",
+    tool_choice={"type": "function", "function": {"name": "get_weather"}},
+)
+```
+
+Force a builtin tool by type:
+
+```python
+structural_tag = get_builtin_structural_tag(
+    "harmony",
+    tools=[...],
+    tool_choice={"type": "web_search_preview"},
+)
+```
+
+Allow only a subset of tools:
+
+```python
+structural_tag = get_builtin_structural_tag(
+    "harmony",
+    tools=[...],
+    tool_choice={
+        "type": "allowed_tools",
+        "allowed_tools": {
+            "mode": "auto",
+            "tools": [
+                {"type": "function", "function": {"name": "get_weather"}},
+                {"type": "web_search_preview"},
+            ],
+        },
+    },
 )
 ```
 
 ---
 
 ## Supported models
-
 
 The `model` argument of `get_builtin_structural_tag` accepts the style names below:
 
@@ -124,15 +187,12 @@ The `model` argument of `get_builtin_structural_tag` accepts the style names bel
 | `"glm47"` | GLM-5, GLM-4.7 |
 | `"gemma4"` | Gemma-4, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it, gemma-4-e2b-it |
 
-## Mapping to OpenAI Tool Calling Options
+## Extending with custom models
 
-Builtin Structural tags also support the strict-format parts of the OpenAI tool-calling API.
-
-- `tool_choice = "auto"`: use `tool_choice = "auto"` in `get_builtin_structural_tag`.
-- `tool_choice = "required"`: use `tool_choice = "required"` in `get_builtin_structural_tag`.
-- `tool_choice = {"type": "function", "function": {"name": ...}}`: use `tool_choice = "forced"` and pass that name via `forced_function_name`.
+Use `register_builtin_structural_tag` to add support for a new model format. See the [Builtin Structural Tag API Reference](../api/python/builtin_structural_tag) for details.
 
 ## Next Steps
 
-* For API reference, see [Structural Tag API Reference](../api/python/builtin_structural_tag).
+* For function and tool choice schema definitions, see [OpenAI Tool Call Schema API Reference](../api/python/openai_tool_call_schema).
+* For builtin structural tag API reference, see [Builtin Structural Tag API Reference](../api/python/builtin_structural_tag).
 * For advanced usage, see [Advanced Topics of the Structural Tag](advanced_usage).

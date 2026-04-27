@@ -51,7 +51,6 @@ Think of a structural tag as a tree of chunks:
 | Composition | `sequence`, `or`, `optional`, `plus`, `star`, `repeat` | Build larger structures from smaller ones |
 | Tagging / dispatch | `tag`, `triggered_tags`, `tags_with_separator`, `dispatch` | Wrap content or switch between free text and structured regions |
 | Token-level | `token`, `exclude_token`, `any_tokens`, `token_triggered_tags`, `token_dispatch` | Constrain output at token boundaries |
-| Deprecated | `qwen_xml_parameter` | Kept for backward compatibility |
 
 ### Unlimited Formats and End Detection
 
