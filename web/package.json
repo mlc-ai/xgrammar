@@ -43,9 +43,5 @@
     "typescript-eslint": "^8.47.0",
     "typescript": "^5.9.3",
     "@mlc-ai/web-tokenizers": "^0.1.6"
-  },
-  "overrides": {
-    "test-exclude": "^7.0.1",
-    "minimatch": "^9.0.9"
   }
 }
