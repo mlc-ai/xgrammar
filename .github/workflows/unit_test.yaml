@@ -34,6 +34,8 @@ jobs:
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14, macos-15-intel]
         python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.14t']
         exclude:
+          - os: macos-14
+            python: '3.14t'
           - os: macos-15-intel
             python: '3.13'
           - os: macos-15-intel
