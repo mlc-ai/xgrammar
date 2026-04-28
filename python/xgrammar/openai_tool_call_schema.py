@@ -11,7 +11,7 @@ different flat tool and tool_choice shapes; see the class docstrings below.
 # Original project: https://github.com/openai/openai-python
 # Modified for XGrammar.
 
-from typing import Any, Literal, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 
 from pydantic import BaseModel
 
@@ -41,7 +41,7 @@ class FunctionDefinition(BaseModel):
     """A description of what the function does, used by the model to choose when and
     how to call the function.
     """
-    parameters: Optional[dict[str, Any]] = None
+    parameters: Optional[Dict[str, Any]] = None
     """The parameters the functions accepts, described as a JSON Schema object.
 
     If omitted or set to ``None``, the generated function arguments will be unconstrained.
@@ -96,7 +96,7 @@ class BuiltinToolParam(BaseModel):
     ``web_search_preview`` builtin may be emitted as ``browser.search`` by a
     Harmony-style model. Defaults to ``type`` when omitted.
     """
-    parameters: Optional[dict[str, Any]] = None
+    parameters: Optional[Dict[str, Any]] = None
     """Argument schema for the builtin tool. XGrammar-specific field.
 
     Hosted/server tool APIs often do not require users to provide this schema,
