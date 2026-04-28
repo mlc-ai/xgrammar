@@ -12,6 +12,7 @@ import xgrammar as xgr
 from xgrammar.builtin_structural_tag import (
     get_deepseek_structural_tag,
     get_deepseek_v3_2_structural_tag,
+    get_deepseek_v4_structural_tag,
     get_gemma4_structural_tag,
     get_glm47_structural_tag,
     get_harmony_structural_tag,
@@ -187,6 +188,7 @@ _tools_qwen = make_tools(["t1"])
 _tools_harmony = make_tools(["comment_tool"])
 _builtin_harmony = make_tools(["analysis_tool"])
 _tools_deepseek_v3_2 = make_tools(["search"])
+_tools_deepseek_v4 = make_tools(["search"])
 _tools_minimax = make_tools(["search"])
 _tools_glm47 = make_tools(["search"])
 _tools_gemma4 = make_tools(["get_weather"])
@@ -196,6 +198,7 @@ _tools_llama_pair = make_tools(["t1", "t2"])
 _tools_kimi_pair = make_tools(["t1", "t2"])
 _tools_deepseek_pair = make_tools(["search", "alt"])
 _tools_deepseek_v3_2_pair = make_tools(["search", "alt"])
+_tools_deepseek_v4_pair = make_tools(["search", "alt"])
 _tools_minimax_pair = make_tools(["search", "alt"])
 _tools_qwen_coder_pair = make_tools(["run_sql", "run_py"])
 _tools_qwen_pair = make_tools(["t1", "t2"])
@@ -458,6 +461,7 @@ def test_none_parameters_unconstrained():
         get_qwen_structural_tag,
         get_harmony_structural_tag,
         get_deepseek_v3_2_structural_tag,
+        get_deepseek_v4_structural_tag,
         get_minimax_structural_tag,
         get_glm47_structural_tag,
         get_gemma4_structural_tag,
@@ -568,6 +572,16 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
         (
             "deepseek_v3_2",
             '<｜DSML｜function_calls>\n<｜DSML｜invoke name="t2">\n<q>{"type": "string"}</q>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+            False,
+        ),
+        (
+            "deepseek_v4",
+            '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="t1">\n<q>{"type": "string"}</q>\n</｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+            True,
+        ),
+        (
+            "deepseek_v4",
+            '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="t2">\n<q>{"type": "string"}</q>\n</｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
             False,
         ),
         (
@@ -1530,6 +1544,247 @@ root ::= ((sequence))
 def test_deepseek_v3_2_instances(case: InstanceCase):
     """get_model_structural_tag(deepseek_v3_2) accepts/rejects instance as expected."""
     run_instance_case("deepseek_v3_2", case)
+
+
+# ----- deepseek_v4
+
+_deepseek_v4_instances_with_tools = [
+    'text<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+    '<think>123</think><｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+    '<think>123</think>text<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+    "<think>\n\n</think>text<think>123</think>",
+    '<think>\n\n</think>text<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+]
+_deepseek_v4_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think></think></think>",
+    "<think>\n\n</think>text",
+]
+
+deepseek_v4_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False, force_empty_reasoning=False
+    (
+        {"tools": _tools_deepseek_v4},
+        _deepseek_v4_instances_with_tools,
+        False,
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any ::= ((xml_string) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_2 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1 [ \n\t]*) | ([ \n\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+root_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"q\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</\uff5cDSML\uff5cparameter>" [ \n\t]*) | ([ \n\t]*))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+xml_object_1 ::= ("" | ([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+xml_object_2 ::= (("true") | ("false"))
+root_1 ::= (("true") | ("false"))
+xml_object_1_1 ::= (("true") | ("false"))
+tag ::= (("<\uff5cDSML\uff5cinvoke name=\"search\">\n" root_0 "</\uff5cDSML\uff5cinvoke>\n"))
+tags_with_separator_tags ::= ((tag))
+tags_with_separator_sub ::= ("" | ("\n" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+triggered_tags_group ::= (("\n" tags_with_separator "</\uff5cDSML\uff5ctool_calls>\n"))
+triggered_tags ::= TagDispatch(
+  ("<\uff5cDSML\uff5ctool_calls>", triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=("<think>", "</think>")
+)
+root ::= ((triggered_tags))
+""",
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=False
+    (
+        {"tools": _tools_deepseek_v4},
+        _deepseek_v4_instances_with_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</think>")
+)
+tag ::= (("<think>" any_text "</think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any ::= ((xml_string) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_2 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1 [ \n\t]*) | ([ \n\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+root_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"q\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</\uff5cDSML\uff5cparameter>" [ \n\t]*) | ([ \n\t]*))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+xml_object_1 ::= ("" | ([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+xml_object_2 ::= (("true") | ("false"))
+root_1 ::= (("true") | ("false"))
+xml_object_1_1 ::= (("true") | ("false"))
+tag_1 ::= (("<\uff5cDSML\uff5cinvoke name=\"search\">\n" root_0 "</\uff5cDSML\uff5cinvoke>\n"))
+tags_with_separator_tags ::= ((tag_1))
+tags_with_separator_sub ::= ("" | ("\n" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+triggered_tags_group ::= (("\n" tags_with_separator "</\uff5cDSML\uff5ctool_calls>\n"))
+triggered_tags ::= TagDispatch(
+  ("<\uff5cDSML\uff5ctool_calls>", triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((tag triggered_tags))
+root ::= ((sequence))
+""",
+        [False, True, True, False, True],
+    ),
+    # with tools, reasoning=True, force_empty_reasoning=True
+    (
+        {"tools": _tools_deepseek_v4},
+        _deepseek_v4_instances_with_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any ::= ((xml_string) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_2 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1 [ \n\t]*) | ([ \n\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+root_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"q\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</\uff5cDSML\uff5cparameter>" [ \n\t]*) | ([ \n\t]*))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+xml_object_1 ::= ("" | ([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+xml_object_2 ::= (("true") | ("false"))
+root_1 ::= (("true") | ("false"))
+xml_object_1_1 ::= (("true") | ("false"))
+tag ::= (("<\uff5cDSML\uff5cinvoke name=\"search\">\n" root_0 "</\uff5cDSML\uff5cinvoke>\n"))
+tags_with_separator_tags ::= ((tag))
+tags_with_separator_sub ::= ("" | ("\n" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+triggered_tags_group ::= (("\n" tags_with_separator "</\uff5cDSML\uff5ctool_calls>\n"))
+triggered_tags ::= TagDispatch(
+  ("<\uff5cDSML\uff5ctool_calls>", triggered_tags_group),
+  loop_after_dispatch=true,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((const_string triggered_tags))
+root ::= ((sequence))
+""",
+        [False, False, False, False, True],
+    ),
+    # no tools, reasoning=False, force_empty_reasoning=False
+    (
+        {},
+        _deepseek_v4_instances_no_tools,
+        False,
+        False,
+        r"""any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
+root ::= ((any_text))
+""",
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=False
+    (
+        {},
+        _deepseek_v4_instances_no_tools,
+        True,
+        False,
+        r"""any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</think>")
+)
+tag ::= (("<think>" any_text "</think>"))
+any_text_1 ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((tag any_text_1))
+root ::= ((sequence))
+""",
+        [False, False, True, False, True],
+    ),
+    # no tools, reasoning=True, force_empty_reasoning=True
+    (
+        {},
+        _deepseek_v4_instances_no_tools,
+        True,
+        True,
+        r"""const_string ::= (("<think>\n\n</think>"))
+any_text ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("<think>", "</think>")
+)
+sequence ::= ((const_string any_text))
+root ::= ((sequence))
+""",
+        [False, False, False, False, True],
+    ),
+]
+
+
+@pytest.mark.parametrize("case", deepseek_v4_instance_cases)
+def test_deepseek_v4_instances(case: InstanceCase):
+    """get_model_structural_tag(deepseek_v4) accepts/rejects instance as expected."""
+    run_instance_case("deepseek_v4", case)
 
 
 # ----- minimax
@@ -2715,6 +2970,62 @@ root ::= ((sequence))
         id="deepseek_v3_2-required",
     ),
     pytest.param(
+        "deepseek_v4",
+        (
+            {"tools": _tools_deepseek_v4_pair, "tool_choice": "required"},
+            [
+                "",
+                '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+            ],
+            False,
+            False,
+            r"""const_string ::= (("<\uff5cDSML\uff5ctool_calls>\n"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any ::= ((xml_string) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_2 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1 [ \n\t]*) | ([ \n\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+root_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"q\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</\uff5cDSML\uff5cparameter>" [ \n\t]*) | ([ \n\t]*))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+xml_object_1 ::= ("" | ([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+xml_object_2 ::= (("true") | ("false"))
+root_1 ::= (("true") | ("false"))
+xml_object_1_1 ::= (("true") | ("false"))
+tag ::= (("<\uff5cDSML\uff5cinvoke name=\"search\">\n" root_0 "</\uff5cDSML\uff5cinvoke>\n"))
+tag_1 ::= (("<\uff5cDSML\uff5cinvoke name=\"alt\">\n" root_0 "</\uff5cDSML\uff5cinvoke>\n"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator_sub ::= ("" | ("\n" tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+const_string_1 ::= (("</\uff5cDSML\uff5ctool_calls>\n"))
+sequence ::= ((const_string tags_with_separator const_string_1))
+root ::= ((sequence))
+""",
+            [False, True],
+        ),
+        id="deepseek_v4-required",
+    ),
+    pytest.param(
         "deepseek_v3_2",
         (
             {
@@ -2769,6 +3080,62 @@ root ::= ((sequence))
             [True, False],
         ),
         id="deepseek_v3_2-forced",
+    ),
+    pytest.param(
+        "deepseek_v4",
+        (
+            {
+                "tools": _tools_deepseek_v4_pair,
+                "tool_choice": "forced",
+                "forced_function_name": "search",
+            },
+            [
+                '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+                '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="alt">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+            ],
+            False,
+            False,
+            r"""const_string ::= (("<\uff5cDSML\uff5ctool_calls>\n"))
+basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any ::= ((xml_string) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_2 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1 [ \n\t]*) | ([ \n\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+root_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"q\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</\uff5cDSML\uff5cparameter>" [ \n\t]*) | ([ \n\t]*))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+xml_object_1 ::= ("" | ([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+xml_object_2 ::= (("true") | ("false"))
+root_1 ::= (("true") | ("false"))
+xml_object_1_1 ::= (("true") | ("false"))
+tag ::= (("<\uff5cDSML\uff5cinvoke name=\"search\">\n" root_0 "</\uff5cDSML\uff5cinvoke>\n"))
+const_string_1 ::= (("</\uff5cDSML\uff5ctool_calls>\n"))
+sequence ::= ((const_string tag const_string_1))
+root ::= ((sequence))
+""",
+            [True, False],
+        ),
+        id="deepseek_v4-forced",
     ),
     pytest.param(
         "minimax",
@@ -3295,6 +3662,7 @@ _TOOLS: List[Dict[str, Any]] = [
         ("qwen_coder", {"tools": _TOOLS}),
         ("qwen", {"tools": _TOOLS}),
         ("deepseek_v3_2", {"tools": _TOOLS}),
+        ("deepseek_v4", {"tools": _TOOLS}),
         ("minimax", {"tools": _TOOLS}),
         ("gemma4", {"tools": _TOOLS}),
         (

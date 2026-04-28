@@ -1520,6 +1520,123 @@ def get_gemma4_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
+@register_model_structural_tag("deepseek_v4")
+def get_deepseek_v4_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: bool = True,
+    force_empty_reasoning: bool = False,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get DeepSeek-V4 style structural tag format.
+
+    Corresponding model key: ``"deepseek_v4"``.
+
+    Supported models:
+
+    - DeepSeek-V4
+    """
+    INVOKE_BEGIN_PREFIX = '<｜DSML｜invoke name="'
+    INVOKE_BEGIN_SUFFIX = '">\n'
+    INVOKE_END = "</｜DSML｜invoke>\n"
+    FUNCTION_CALLS_BEGIN = "<｜DSML｜tool_calls>\n"
+    FUNCTION_CALLS_END = "</｜DSML｜tool_calls>\n"
+    FUNCTION_CALLS_TRIGGER = "<｜DSML｜tool_calls>"
+    THINK_TAG_BEGIN = "<think>"
+    THINK_TAG_END = "</think>"
+    EMPTY_THINK_CONTENT = "<think>\n\n</think>"
+    XML_STYLE = "deepseek_xml"
+
+    tools = tools or []
+    builtin_tools = builtin_tools or []
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            function = tool.function
+            parameters = _get_function_parameters(function)
+            name = function.name
+            tags.append(
+                TagFormat(
+                    begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
+                    content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                    end=INVOKE_END,
+                )
+            )
+
+        # generate function calling triggered tag
+        if len(tags) > 0:
+            function_calling_tags = TagsWithSeparatorFormat(
+                tags=tags, separator="\n", at_least_one=True
+            )
+
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[FUNCTION_CALLS_TRIGGER],
+                tags=[
+                    TagFormat(
+                        begin=FUNCTION_CALLS_BEGIN,
+                        content=function_calling_tags,
+                        end=FUNCTION_CALLS_END,
+                    )
+                ],
+                excludes=_THINK_EXCLUDE_TOKENS,
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=_THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "forced":
+        if not tools:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        function = tools[0].function
+        suffix_tag = SequenceFormat(
+            elements=[
+                ConstStringFormat(value=FUNCTION_CALLS_BEGIN),
+                TagFormat(
+                    begin=(INVOKE_BEGIN_PREFIX + function.name + INVOKE_BEGIN_SUFFIX),
+                    content=JSONSchemaFormat(
+                        json_schema=_get_function_parameters(function), style=XML_STYLE
+                    ),
+                    end=INVOKE_END,
+                ),
+                ConstStringFormat(value=FUNCTION_CALLS_END),
+            ]
+        )
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            function = tool.function
+            parameters = _get_function_parameters(function)
+            name = function.name
+            tags.append(
+                TagFormat(
+                    begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
+                    content=JSONSchemaFormat(json_schema=parameters, style=XML_STYLE),
+                    end=INVOKE_END,
+                )
+            )
+        if len(tags) > 0:
+            suffix_tag = SequenceFormat(
+                elements=[
+                    ConstStringFormat(value=FUNCTION_CALLS_BEGIN),
+                    TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True),
+                    ConstStringFormat(value=FUNCTION_CALLS_END),
+                ]
+            )
+        else:
+            raise ValueError(_REQUIRED_TOOLS_ERROR)
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    if force_empty_reasoning:
+        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
+    else:
+        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
+
+    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
+    return StructuralTag(format=sequence_format)
+
+
 # Backward-compatible alias
 get_builtin_structural_tag = get_model_structural_tag
 """Alias for :func:`get_model_structural_tag`. Deprecated."""

@@ -23,7 +23,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen"`, `"qwen_coder"`, `"kimi"`, `"deepseek_r1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm47"`, `"gemma4"`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen"`, `"qwen_coder"`, `"kimi"`, `"deepseek_r1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm47"`, `"gemma4"`, `"deepseek_v4"`.
 - **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
   - **Function tools** use the OpenAI Chat Completions shape:
     ```json
@@ -186,6 +186,7 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"minimax"` | MiniMax-M2.5 |
 | `"glm47"` | GLM-5, GLM-4.7 |
 | `"gemma4"` | Gemma-4, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it, gemma-4-e2b-it |
+| `"deepseek_v4"` | DeepSeek-V4 |
 
 ## Extending with custom models
 
