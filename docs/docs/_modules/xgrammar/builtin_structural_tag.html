@@ -2199,6 +2199,123 @@ window.runMermaid = runMermaid;</script>
     <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
 
 
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;deepseek_v4&quot;</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_deepseek_v4_structural_tag</span><span class="p">(</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">force_empty_reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get DeepSeek-V4 style structural tag format.</span>
+
+<span class="sd">    Corresponding model key: ``&quot;deepseek_v4&quot;``.</span>
+
+<span class="sd">    Supported models:</span>
+
+<span class="sd">    - DeepSeek-V4</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">=</span> <span class="s1">&#39;&lt;｜DSML｜invoke name=&quot;&#39;</span>
+    <span class="n">INVOKE_BEGIN_SUFFIX</span> <span class="o">=</span> <span class="s1">&#39;&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">INVOKE_END</span> <span class="o">=</span> <span class="s2">&quot;&lt;/｜DSML｜invoke&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">FUNCTION_CALLS_BEGIN</span> <span class="o">=</span> <span class="s2">&quot;&lt;｜DSML｜tool_calls&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">FUNCTION_CALLS_END</span> <span class="o">=</span> <span class="s2">&quot;&lt;/｜DSML｜tool_calls&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">FUNCTION_CALLS_TRIGGER</span> <span class="o">=</span> <span class="s2">&quot;&lt;｜DSML｜tool_calls&gt;&quot;</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">&quot;&lt;think&gt;&quot;</span>
+    <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">&quot;&lt;/think&gt;&quot;</span>
+    <span class="n">EMPTY_THINK_CONTENT</span> <span class="o">=</span> <span class="s2">&quot;&lt;think&gt;</span><span class="se">\n\n</span><span class="s2">&lt;/think&gt;&quot;</span>
+    <span class="n">XML_STYLE</span> <span class="o">=</span> <span class="s2">&quot;deepseek_xml&quot;</span>
+
+    <span class="n">tools</span> <span class="o">=</span> <span class="n">tools</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">builtin_tools</span> <span class="o">=</span> <span class="n">builtin_tools</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
+        <span class="n">tags</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">:</span>
+            <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="o">.</span><span class="n">function</span>
+            <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span>
+            <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">TagFormat</span><span class="p">(</span>
+                    <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+        <span class="c1"># generate function calling triggered tag</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">function_calling_tags</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
+            <span class="p">)</span>
+
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">FUNCTION_CALLS_TRIGGER</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="p">[</span>
+                    <span class="n">TagFormat</span><span class="p">(</span>
+                        <span class="n">begin</span><span class="o">=</span><span class="n">FUNCTION_CALLS_BEGIN</span><span class="p">,</span>
+                        <span class="n">content</span><span class="o">=</span><span class="n">function_calling_tags</span><span class="p">,</span>
+                        <span class="n">end</span><span class="o">=</span><span class="n">FUNCTION_CALLS_END</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="p">],</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">_THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Forced tool choice must resolve to exactly one tool.&quot;</span><span class="p">)</span>
+        <span class="n">function</span> <span class="o">=</span> <span class="n">tools</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">function</span>
+        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
+            <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">FUNCTION_CALLS_BEGIN</span><span class="p">),</span>
+                <span class="n">TagFormat</span><span class="p">(</span>
+                    <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span>
+                    <span class="p">),</span>
+                    <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">FUNCTION_CALLS_END</span><span class="p">),</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+    <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;required&quot;</span><span class="p">:</span>
+        <span class="n">tags</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">:</span>
+            <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="o">.</span><span class="n">function</span>
+            <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span>
+            <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">TagFormat</span><span class="p">(</span>
+                    <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
+                <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+                    <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">FUNCTION_CALLS_BEGIN</span><span class="p">),</span>
+                    <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                    <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">FUNCTION_CALLS_END</span><span class="p">),</span>
+                <span class="p">]</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">_REQUIRED_TOOLS_ERROR</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">force_empty_reasoning</span><span class="p">:</span>
+        <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">EMPTY_THINK_CONTENT</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
+
+    <span class="n">sequence_format</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">sequence_format</span><span class="p">)</span>
+
+
 <span class="c1"># Backward-compatible alias</span>
 <span class="n">get_builtin_structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span>
 <span class="sd">&quot;&quot;&quot;Alias for :func:`get_model_structural_tag`. Deprecated.&quot;&quot;&quot;</span>
