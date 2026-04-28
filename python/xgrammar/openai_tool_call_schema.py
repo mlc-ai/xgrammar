@@ -11,7 +11,7 @@ different flat tool and tool_choice shapes; see the class docstrings below.
 # Original project: https://github.com/openai/openai-python
 # Modified for XGrammar.
 
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel
 
@@ -205,7 +205,7 @@ class AllowedToolsParam(BaseModel):
 
     ``required`` requires the model to call one or more of the allowed tools.
     """
-    tools: list[AllowedToolRef]
+    tools: List[AllowedToolRef]
     """A list of tool definitions that the model should be allowed to call.
 
     For the Chat Completions API, the list of tool definitions might look like:
