@@ -1529,7 +1529,7 @@ def get_deepseek_v4_structural_tag(
     force_empty_reasoning: bool = False,
     **kwargs: Any,
 ) -> StructuralTag:
-    """Get DeepSeek-V3.2 style structural tag format.
+    """Get DeepSeek-V4 style structural tag format.
 
     Corresponding model key: ``"deepseek_v4"``.
 
