@@ -2327,6 +2327,52 @@ window.runMermaid = runMermaid;</script>
     <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">sequence_format</span><span class="p">)</span>
 
 
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;qwen3_6&quot;</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_qwen3_6_structural_tag</span><span class="p">(</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">force_empty_reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Qwen 3.6 style structural tag format.</span>
+
+<span class="sd">    Corresponding model key: ``&quot;qwen3_6&quot;``.</span>
+
+<span class="sd">    Reference: https://huggingface.co/Qwen/Qwen3.6-27B/blob/main/chat_template.jinja</span>
+
+<span class="sd">    Parameters are normalized by :func:`get_model_structural_tag` before this</span>
+<span class="sd">    function is called:</span>
+
+<span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
+<span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
+<span class="sd">    - ``reasoning``: whether to enable reasoning mode.</span>
+<span class="sd">    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking</span>
+<span class="sd">      if ``True`` and regular thinking if ``False``.</span>
+
+<span class="sd">    Supported models:</span>
+
+<span class="sd">    - Qwen3.6</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    StructuralTag</span>
+<span class="sd">        A structural tag for function calling format.</span>
+<span class="sd">        This format is used by Qwen3.6 and other models that follow the same style.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Qwen3.6 is the same as Qwen3-Coder, so we can use the same structural tag format.</span>
+    <span class="k">return</span> <span class="n">get_qwen_coder_structural_tag</span><span class="p">(</span>
+        <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+        <span class="n">builtin_tools</span><span class="o">=</span><span class="n">builtin_tools</span><span class="p">,</span>
+        <span class="n">tool_choice</span><span class="o">=</span><span class="n">tool_choice</span><span class="p">,</span>
+        <span class="n">reasoning</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">force_empty_reasoning</span><span class="o">=</span><span class="n">force_empty_reasoning</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
 <span class="c1"># Backward-compatible alias</span>
 <span class="n">get_builtin_structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span>
 <span class="sd">&quot;&quot;&quot;Alias for :func:`get_model_structural_tag`. Deprecated.&quot;&quot;&quot;</span>
