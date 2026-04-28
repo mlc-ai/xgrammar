@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Literal, Optional, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import TypeAdapter
 
@@ -308,7 +308,7 @@ def _filter_allowed_tools(
     tools: List[FunctionToolParam],
     builtin_tools: List[BuiltinToolParam],
     tool_choice: AllowedToolChoiceParam,
-) -> tuple[List[FunctionToolParam], List[BuiltinToolParam]]:
+) -> Tuple[List[FunctionToolParam], List[BuiltinToolParam]]:
     """Filter tools according to a public allowed-tools tool choice."""
 
     allowed_function_names = set()
