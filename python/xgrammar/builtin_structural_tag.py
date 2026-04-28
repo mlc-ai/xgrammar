@@ -1669,7 +1669,7 @@ def get_qwen3_6_structural_tag(
     -------
     StructuralTag
         A structural tag for function calling format.
-        This format is used by Qwen3-Coder and other models that follow the same style.
+        This format is used by Qwen3.6 and other models that follow the same style.
     """
 
     # Qwen3.6 is the same as Qwen3-Coder, so we can use the same structural tag format.
@@ -1679,6 +1679,7 @@ def get_qwen3_6_structural_tag(
         tool_choice=tool_choice,
         reasoning=reasoning,
         force_empty_reasoning=force_empty_reasoning,
+        **kwargs,
     )
 
 
