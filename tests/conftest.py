@@ -21,8 +21,8 @@ def _hf_token_available() -> bool:
 
 def _hf_token_explicitly_disabled(config) -> bool:
     """Return whether pytest mark expression explicitly excludes hf-token tests."""
-    markexpr = getattr(config.option, "markexpr", "") or config.getoption("markexpr", "")
-    return "not hf_token_required" in (markexpr or "")
+    markexpr = config.getoption("markexpr", "")
+    return "not hf_token_required" in markexpr
 
 
 def pytest_configure(config):
