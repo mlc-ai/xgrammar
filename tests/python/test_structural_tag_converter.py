@@ -58,9 +58,9 @@ def disable_profiler(request):
     global PROFILER_ON
     global profiler
     # Import shared token check from conftest (handles env vars + cached login)
-    from conftest import _hf_token_available
+    from conftest import _hf_token_available, _hf_token_explicitly_disabled
 
-    if not _hf_token_available():
+    if not _hf_token_available() or _hf_token_explicitly_disabled(request.config):
         PROFILER_ON = False
     else:
         profiler = Profiler(tokenizer_id)

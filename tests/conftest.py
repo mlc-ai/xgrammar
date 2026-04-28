@@ -19,6 +19,12 @@ def _hf_token_available() -> bool:
     return Path.home().joinpath(".cache", "huggingface", "token").is_file()
 
 
+def _hf_token_explicitly_disabled(config) -> bool:
+    """Return whether pytest mark expression explicitly excludes hf-token tests."""
+    markexpr = getattr(config.option, "markexpr", "") or config.getoption("markexpr", "")
+    return "not hf_token_required" in (markexpr or "")
+
+
 def pytest_configure(config):
     if not PARALLEL_RUN_AVAILABLE:
         config.addinivalue_line(
