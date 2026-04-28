@@ -690,7 +690,7 @@ window.runMermaid = runMermaid;</script>
 <span class="c1"># Original project: https://github.com/openai/openai-python</span>
 <span class="c1"># Modified for XGrammar.</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
 
@@ -720,7 +720,7 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A description of what the function does, used by the model to choose when and</span>
 <span class="sd">    how to call the function.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">parameters</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">parameters</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The parameters the functions accepts, described as a JSON Schema object.</span>
 
 <span class="sd">    If omitted or set to ``None``, the generated function arguments will be unconstrained.</span>
@@ -775,7 +775,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">    ``web_search_preview`` builtin may be emitted as ``browser.search`` by a</span>
 <span class="sd">    Harmony-style model. Defaults to ``type`` when omitted.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">parameters</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">parameters</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Argument schema for the builtin tool. XGrammar-specific field.</span>
 
 <span class="sd">    Hosted/server tool APIs often do not require users to provide this schema,</span>
@@ -884,7 +884,7 @@ window.runMermaid = runMermaid;</script>
 
 <span class="sd">    ``required`` requires the model to call one or more of the allowed tools.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">AllowedToolRef</span><span class="p">]</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">AllowedToolRef</span><span class="p">]</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A list of tool definitions that the model should be allowed to call.</span>
 
 <span class="sd">    For the Chat Completions API, the list of tool definitions might look like:</span>
