@@ -1637,6 +1637,51 @@ def get_deepseek_v4_structural_tag(
     return StructuralTag(format=sequence_format)
 
 
+@register_model_structural_tag("qwen3_6")
+def get_qwen3_6_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: bool = True,
+    force_empty_reasoning: bool = False,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get Qwen 3.6 style structural tag format.
+
+    Corresponding model key: ``"qwen3_6"``.
+
+    Reference: https://huggingface.co/Qwen/Qwen3.6-27B/blob/main/chat_template.jinja
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: whether to enable reasoning mode.
+    - ``force_empty_reasoning``: when reasoning is enabled, use empty thinking
+      if ``True`` and regular thinking if ``False``.
+
+    Supported models:
+
+    - Qwen3.6
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for function calling format.
+        This format is used by Qwen3-Coder and other models that follow the same style.
+    """
+
+    # Qwen3.6 is the same as Qwen3-Coder, so we can use the same structural tag format.
+    return get_qwen_coder_structural_tag(
+        tools=tools,
+        builtin_tools=builtin_tools,
+        tool_choice=tool_choice,
+        reasoning=reasoning,
+        force_empty_reasoning=force_empty_reasoning,
+    )
+
+
 # Backward-compatible alias
 get_builtin_structural_tag = get_model_structural_tag
 """Alias for :func:`get_model_structural_tag`. Deprecated."""
